@@ -47,7 +47,9 @@ class FifoResourceWithQ(
     capacity: Int,
     queue: RequestQ,
 ) : ResourceWithQ(parent, name, capacity, queue) {
+    private val requestQ = queue
     private var allocationPending = false
+    private var queryingNonPendingRequests = false
 
     init {
         waitingQ.addQueueListener(object : QueueListenerIfc<ProcessModel.Entity.Request> {
@@ -70,9 +72,19 @@ class FifoResourceWithQ(
 
     override val numAvailableUnits: Int
         get() {
+            if (queryingNonPendingRequests) return Int.MAX_VALUE
             val available = super.numAvailableUnits
             if (allocationPending) return available
-            val head = waitingQ.immutableList.firstOrNull() ?: return available
+            val head = firstNonPendingRequest() ?: return available
             return if (head.amountRequested <= available) available else 0
         }
+
+    private fun firstNonPendingRequest(): ProcessModel.Entity.Request? {
+        queryingNonPendingRequests = true
+        return try {
+            requestQ.filterRequestsByResource(this).firstOrNull()
+        } finally {
+            queryingNonPendingRequests = false
+        }
+    }
 }

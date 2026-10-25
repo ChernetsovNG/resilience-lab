@@ -155,14 +155,35 @@ class BoundedRequestQTest {
         assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
     }
 
+    @Test
+    fun `single release wakes head and fitting successor in FIFO order`() {
+        val rig = simulate(
+            waitingCapacity = 2,
+            resourceCapacity = 3,
+            holderReleaseTimes = listOf(10.0),
+            holderAmount = 3,
+            attempts = listOf(
+                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
+            ),
+        )
+
+        assertEquals(mapOf("two-units" to 10.0, "one-unit" to 10.0), rig.admissionTimes)
+        assertEquals(listOf("two-units", "one-unit"), rig.admissionTimes.keys.toList())
+        assertTrue(rig.rejectionTimes.isEmpty())
+        assertEquals(2, rig.maxObservedWaitingQSize)
+        assertEquals(3.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+    }
+
     private fun simulate(
         waitingCapacity: Int,
         resourceCapacity: Int = 1,
         holderReleaseTimes: List<Double> = listOf(10.0),
+        holderAmount: Int = 1,
         attempts: List<AttemptSpec>,
     ): QueueRig {
         val model = Model("BoundedRequestQTest", autoCSVReports = false)
-        val rig = QueueRig(model, waitingCapacity, resourceCapacity, holderReleaseTimes, attempts)
+        val rig = QueueRig(model, waitingCapacity, resourceCapacity, holderReleaseTimes, holderAmount, attempts)
         model.numberOfReplications = 1
         model.lengthOfReplication = 100.0
         model.simulate()
@@ -180,6 +201,7 @@ class BoundedRequestQTest {
         waitingCapacity: Int,
         resourceCapacity: Int,
         private val holderReleaseTimes: List<Double>,
+        private val holderAmount: Int,
         private val attempts: List<AttemptSpec>,
     ) : ProcessModel(parent, null) {
         val resource: ResourceWithQ
@@ -241,7 +263,7 @@ class BoundedRequestQTest {
 
         inner class Holder(private val releaseAt: Double) : Entity() {
             val work = process {
-                val allocation = seize(resource)
+                val allocation = seize(resource, amountNeeded = holderAmount)
                 holderAdmissionTimes += time
                 delay(releaseAt)
                 release(allocation)
