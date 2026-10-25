@@ -251,6 +251,19 @@ class ScenarioValidatorTest {
     }
 
     @Test
+    fun `retry base must be positive and finite`() {
+        val scenario = TestData.simpleScenario()
+
+        listOf(0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY).forEach { base ->
+            val retry = scenario.links[0].retry.copy(base = base)
+            val document = experimentDocument(
+                scenario.withLink(0, scenario.links[0].copy(retry = retry)),
+            )
+            assertExperimentPaths(listOf("variants[0].scenario.links[0].retry.base"), document)
+        }
+    }
+
+    @Test
     fun `nonpositive arrival rate is rejected`() {
         val scenario = TestData.simpleScenario()
 
@@ -458,6 +471,7 @@ class ScenarioValidatorTest {
                         retry = scenario.links[0].retry.copy(
                             baseBackoffMs = Double.NaN,
                             maxBackoffMs = Double.POSITIVE_INFINITY,
+                            base = Double.NaN,
                         ),
                     ),
                 ),
@@ -496,6 +510,7 @@ class ScenarioValidatorTest {
                 "variants[0].scenario.links[0].timeoutMs",
                 "variants[0].scenario.links[0].retry.baseBackoffMs",
                 "variants[0].scenario.links[0].retry.maxBackoffMs",
+                "variants[0].scenario.links[0].retry.base",
                 "variants[0].scenario.workload.arrivalRate",
                 "variants[0].scenario.workload.requestDeadlineMs",
                 "variants[0].scenario.degradation.startMs",

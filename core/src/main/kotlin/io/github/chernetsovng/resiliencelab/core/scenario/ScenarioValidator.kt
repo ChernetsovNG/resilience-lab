@@ -133,6 +133,7 @@ object ScenarioValidator {
         }
         validateFiniteNonNegative(link.retry.baseBackoffMs, "$prefix.retry.baseBackoffMs", issues)
         validateFiniteNonNegative(link.retry.maxBackoffMs, "$prefix.retry.maxBackoffMs", issues)
+        validateFinitePositive(link.retry.base, "$prefix.retry.base", issues)
     }
 
     private fun validateDistribution(

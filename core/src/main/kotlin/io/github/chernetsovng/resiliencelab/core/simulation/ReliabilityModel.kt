@@ -8,13 +8,15 @@ import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
 
-class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) : ProcessModel(model) {
+class ReliabilityModel(model: Model, private val scenario: Scenario, execution: Execution) : ProcessModel(model) {
     private val randomStreams = model.streamProvider.apply {
         initialSeed(SeedFactory.seedVector(execution.seed))
     }
     val metrics = MetricsCollector(scenario.services.map { it.id })
     private val outgoingLinks = scenario.links.mapIndexed { index, link ->
-        link.from to (link to scenario.services.size * 2 + index + 1)
+        val networkStreamNum = scenario.services.size * 2 + index + 1
+        val jitterStreamNum = scenario.services.size * 2 + scenario.links.size + index + 1
+        link.from to Triple(link, networkStreamNum, jitterStreamNum)
     }.toMap()
     private val runtimes = scenario.services.mapIndexed { index, service ->
         val outgoing = outgoingLinks[service.id]
@@ -26,6 +28,7 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
             failureStreamNum = index * 2 + 2,
             outgoingLink = outgoing?.first,
             networkStreamNum = outgoing?.second,
+            jitterStreamNum = outgoing?.third,
             onAdmitted = ::recordAdmission,
         )
     }.associateBy { it.serviceId }
@@ -48,17 +51,26 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
         serviceId: String,
         timeUntilActivation: Double = 0.0,
         originalRequest: Boolean = false,
-    ): ServiceInvocation = createInvocation(
-        serviceId = serviceId,
-        timeUntilActivation = timeUntilActivation,
-        originalRequest = originalRequest,
-        incomingNetwork = null,
-    )
+    ): ServiceInvocation {
+        val arrivalTimeMs = time + timeUntilActivation
+        return createInvocation(
+            serviceId = serviceId,
+            timeUntilActivation = timeUntilActivation,
+            originalRequest = originalRequest,
+            originalDeadlineMs = if (originalRequest) {
+                arrivalTimeMs + scenario.workload.requestDeadlineMs
+            } else {
+                Double.POSITIVE_INFINITY
+            },
+            incomingNetwork = null,
+        )
+    }
 
     private fun createInvocation(
         serviceId: String,
         timeUntilActivation: Double,
         originalRequest: Boolean,
+        originalDeadlineMs: Double,
         incomingNetwork: ServiceRuntime?,
     ): ServiceInvocation {
         val runtime = requireNotNull(runtimes[serviceId]) { "Unknown service '$serviceId'" }
@@ -66,6 +78,7 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
             runtime = runtime,
             originalRequest = originalRequest,
             arrivalTimeMs = time + timeUntilActivation,
+            originalDeadlineMs = originalDeadlineMs,
             incomingNetwork = incomingNetwork,
         )
         activate(invocation.work, timeUntilActivation)
@@ -104,22 +117,72 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
         private val runtime: ServiceRuntime,
         private val originalRequest: Boolean,
         private val arrivalTimeMs: Double,
+        private val originalDeadlineMs: Double,
         private val incomingNetwork: ServiceRuntime?,
     ) : Entity() {
         private var currentOutcome: AttemptOutcome = AttemptOutcome.PENDING
+        private var originalOutcome: AttemptOutcome? = null
+        private var originalClientActive = false
         private var admitted = false
+
+        private val deadlineEvent: KSLEvent<*>? = if (originalRequest) {
+            schedule(
+                eventAction = ModelElement.EventActionIfc<Nothing> { onOriginalDeadline() },
+                timeToEvent = originalDeadlineMs - this@ReliabilityModel.time,
+                priority = KSLEvent.VERY_HIGH_PRIORITY,
+            )
+        } else {
+            null
+        }
 
         internal var callAttempt: CallAttempt? = null
             private set
 
         val outcome: AttemptOutcome
-            get() = currentOutcome
+            get() = originalOutcome ?: currentOutcome
 
         internal fun recordAdmission() {
             check(!admitted) { "Invocation was already admitted" }
             admitted = true
             activeInvocations++
             metrics.recordAdmitted(runtime.serviceId)
+        }
+
+        private fun onOriginalDeadline() {
+            if (!originalClientActive || originalOutcome != null) return
+            originalOutcome = AttemptOutcome.DEADLINE_EXCEEDED
+            recordOriginalCompletion()
+        }
+
+        private fun completeOriginalProcess() {
+            if (!originalClientActive) return
+            if (currentOutcome == AttemptOutcome.PENDING) {
+                originalClientActive = false
+                activeOriginalRequests--
+                return
+            }
+            if (originalOutcome == null) {
+                originalOutcome = if (time >= originalDeadlineMs) {
+                    AttemptOutcome.DEADLINE_EXCEEDED
+                } else {
+                    currentOutcome
+                }
+            }
+            recordOriginalCompletion()
+            if (deadlineEvent?.isScheduled == true) {
+                deadlineEvent.cancel = true
+            }
+        }
+
+        private fun recordOriginalCompletion() {
+            val completedOutcome = requireNotNull(originalOutcome)
+            originalClientActive = false
+            activeOriginalRequests--
+            metrics.recordOriginalCompletion(
+                arrivalTimeMs = arrivalTimeMs,
+                completionTimeMs = time,
+                succeeded = completedOutcome == AttemptOutcome.SUCCEEDED,
+            )
         }
 
         internal val work: KSLProcess = process("service:${runtime.serviceId}") {
@@ -129,6 +192,7 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
                 }
                 metrics.recordOffered(runtime.serviceId)
                 if (originalRequest) {
+                    originalClientActive = true
                     activeOriginalRequests++
                     metrics.recordOriginalArrival(arrivalTimeMs)
                 }
@@ -145,25 +209,56 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
                             val link = runtime.outgoingLink
                             if (link == null) {
                                 currentOutcome = AttemptOutcome.SUCCEEDED
+                            } else if (time >= originalDeadlineMs) {
+                                currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
                             } else {
-                                val child = createInvocation(
-                                    serviceId = link.to,
-                                    timeUntilActivation = 0.0,
-                                    originalRequest = false,
-                                    incomingNetwork = runtime,
-                                )
-                                val attempt = createCallAttempt(
-                                    caller = this@ServiceInvocation,
-                                    child = child,
-                                    callingServiceId = runtime.serviceId,
-                                    timeoutMs = link.timeoutMs,
-                                )
-                                callAttempt = attempt
-                                blockUntilCompleted(child.work)
-                                if (attempt.status == AttemptOutcome.PENDING) {
-                                    attempt.onChildCompleted()
+                                var attemptNumber = 1
+                                while (true) {
+                                    if (time >= originalDeadlineMs) {
+                                        currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
+                                        break
+                                    }
+                                    if (attemptNumber > 1) {
+                                        metrics.recordRetry(runtime.serviceId)
+                                    }
+                                    val child = createInvocation(
+                                        serviceId = link.to,
+                                        timeUntilActivation = 0.0,
+                                        originalRequest = false,
+                                        originalDeadlineMs = originalDeadlineMs,
+                                        incomingNetwork = runtime,
+                                    )
+                                    val attempt = createCallAttempt(
+                                        caller = this@ServiceInvocation,
+                                        child = child,
+                                        callingServiceId = runtime.serviceId,
+                                        timeoutMs = minOf(link.timeoutMs, originalDeadlineMs - time),
+                                    )
+                                    callAttempt = attempt
+                                    blockUntilCompleted(child.work)
+                                    if (attempt.status == AttemptOutcome.PENDING) {
+                                        attempt.onChildCompleted()
+                                    }
+                                    if (attempt.status == AttemptOutcome.SUCCEEDED) {
+                                        currentOutcome = AttemptOutcome.SUCCEEDED
+                                        break
+                                    }
+                                    if (attemptNumber == link.maxAttempts) {
+                                        currentOutcome = attempt.status
+                                        break
+                                    }
+                                    if (time >= originalDeadlineMs) {
+                                        currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
+                                        break
+                                    }
+                                    val backoffMs = RetryPolicyEvaluator.backoffMs(
+                                        retry = link.retry,
+                                        failedAttemptNumber = attemptNumber,
+                                        jitter = { runtime.nextJitter() },
+                                    )
+                                    delay(minOf(backoffMs, originalDeadlineMs - time))
+                                    attemptNumber++
                                 }
-                                currentOutcome = attempt.status
                             }
                         }
                     } finally {
@@ -185,14 +280,7 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
                     admitted = false
                 }
                 if (originalRequest) {
-                    activeOriginalRequests--
-                    if (currentOutcome != AttemptOutcome.PENDING) {
-                        metrics.recordOriginalCompletion(
-                            arrivalTimeMs = arrivalTimeMs,
-                            completionTimeMs = time,
-                            succeeded = currentOutcome == AttemptOutcome.SUCCEEDED,
-                        )
-                    }
+                    completeOriginalProcess()
                 }
             }
         }

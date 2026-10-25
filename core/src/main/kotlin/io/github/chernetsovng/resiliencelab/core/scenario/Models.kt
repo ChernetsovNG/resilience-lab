@@ -43,6 +43,7 @@ data class RetrySpec(
     val kind: RetryKind,
     val baseBackoffMs: Double,
     val maxBackoffMs: Double,
+    val base: Double = 2.0,
 )
 
 @Serializable

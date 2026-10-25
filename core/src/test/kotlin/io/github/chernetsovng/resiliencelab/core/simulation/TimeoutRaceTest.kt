@@ -417,7 +417,7 @@ class TimeoutRaceTest {
                 ),
             ),
             links = listOf(
-                base.links.single().copy(network = network, timeoutMs = timeoutMs),
+                base.links.single().copy(network = network, timeoutMs = timeoutMs, maxAttempts = 1),
             ),
         )
     }

@@ -10,11 +10,26 @@ import kotlin.test.assertTrue
 class ScenarioCodecTest {
     @Test
     fun `scenario round trip preserves every configured value`() {
-        val scenario = TestData.simpleScenario()
+        val base = TestData.simpleScenario()
+        val scenario = base.copy(
+            links = listOf(
+                base.links.single().copy(retry = base.links.single().retry.copy(base = 3.0)),
+            ),
+        )
 
         val decoded = ScenarioCodec.decodeScenario(ScenarioCodec.encodeScenario(scenario))
 
         assertEquals(scenario, decoded)
+    }
+
+    @Test
+    fun `legacy scenario without retry base decodes with the default`() {
+        val encoded = ScenarioCodec.encodeScenario(TestData.simpleScenario())
+        assertFalse(encoded.contains("\"base\""))
+
+        val decoded = ScenarioCodec.decodeScenario(encoded)
+
+        assertEquals(2.0, decoded.links.single().retry.base, 0.0)
     }
 
     @Test

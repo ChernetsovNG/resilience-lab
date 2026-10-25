@@ -72,10 +72,15 @@ class MetricsCollector(serviceIds: List<String>) {
         serviceMetrics.getValue(serviceId).timeouts++
     }
 
+    internal fun recordRetry(serviceId: String) {
+        serviceMetrics.getValue(serviceId).retries++
+    }
+
     private class MutableServiceMetrics {
         var offeredAttempts = 0
         var admittedAttempts = 0
         var timeouts = 0
+        var retries = 0
         var failures = 0
         var queueRejections = 0
 
@@ -83,6 +88,7 @@ class MetricsCollector(serviceIds: List<String>) {
             offeredAttempts = 0
             admittedAttempts = 0
             timeouts = 0
+            retries = 0
             failures = 0
             queueRejections = 0
         }
@@ -91,7 +97,7 @@ class MetricsCollector(serviceIds: List<String>) {
             offeredAttempts = offeredAttempts,
             admittedAttempts = admittedAttempts,
             timeouts = timeouts,
-            retries = 0,
+            retries = retries,
             failures = failures,
             queueRejections = queueRejections,
             handlerUtilization = 0.0,

@@ -19,6 +19,7 @@ internal class ServiceRuntime(
     failureStreamNum: Int,
     val outgoingLink: LinkSpec?,
     networkStreamNum: Int?,
+    jitterStreamNum: Int?,
     onAdmitted: (ProcessModel.Entity) -> Unit,
 ) {
     val serviceId: String = spec.id
@@ -26,6 +27,9 @@ internal class ServiceRuntime(
     private val failureSampler = UniformRV(0.0, 1.0, failureStreamNum, streamProvider)
     private val networkSampler = outgoingLink?.let {
         DurationSamplerFactory.create(it.network, requireNotNull(networkStreamNum), streamProvider)
+    }
+    private val jitterSampler = outgoingLink?.let {
+        UniformRV(0.0, 1.0, requireNotNull(jitterStreamNum), streamProvider)
     }
 
     val resource: ResourceWithQ
@@ -61,4 +65,6 @@ internal class ServiceRuntime(
     fun nextLocalFailure(): Boolean = failureSampler.value < spec.failureRate
 
     fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
+
+    fun nextJitter(): Double = requireNotNull(jitterSampler).value
 }
