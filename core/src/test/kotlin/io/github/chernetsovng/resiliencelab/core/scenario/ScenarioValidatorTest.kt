@@ -635,6 +635,66 @@ class ScenarioValidatorTest {
     }
 
     @Test
+    fun `max attempts sweep values must be exact integers within Int range`() {
+        val values = listOf(
+            0.0,
+            -1.0,
+            1.5,
+            Double.NaN,
+            Double.POSITIVE_INFINITY,
+            Double.NEGATIVE_INFINITY,
+            Int.MAX_VALUE.toDouble() + 1.0,
+        )
+        val document = sweepDocument(
+            parameter = SweepParameter.MAX_ATTEMPTS,
+            values = values,
+        )
+
+        assertSweepPaths(values.indices.map { "sweep.values[$it]" }, document)
+        assertEquals(
+            emptyList(),
+            ScenarioValidator.validate(
+                sweepDocument(
+                    parameter = SweepParameter.MAX_ATTEMPTS,
+                    values = listOf(1.0, Int.MAX_VALUE.toDouble()),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `degradation sweep requires an existing base degradation`() {
+        val document = sweepDocument(
+            parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+            serviceId = "backend",
+            linkId = null,
+        )
+
+        assertSweepPaths(listOf("sweep.serviceId"), document)
+    }
+
+    @Test
+    fun `degradation sweep service must match the base degradation service`() {
+        val scenario = TestData.simpleScenario().copy(
+            degradation = DegradationSpec(
+                serviceId = "backend",
+                startMs = 10.0,
+                endMs = 100.0,
+                processingMultiplier = 2.0,
+                failureRate = null,
+            ),
+        )
+        val document = sweepDocument(
+            scenario = scenario,
+            parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+            serviceId = "entry",
+            linkId = null,
+        )
+
+        assertSweepPaths(listOf("sweep.serviceId"), document)
+    }
+
+    @Test
     fun `sweep values must not be empty`() {
         val document = sweepDocument(values = emptyList())
 

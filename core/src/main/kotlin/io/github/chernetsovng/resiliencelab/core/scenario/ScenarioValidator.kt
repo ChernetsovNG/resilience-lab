@@ -274,14 +274,18 @@ object ScenarioValidator {
             SweepParameter.MAX_ATTEMPTS,
             SweepParameter.BACKOFF_BASE,
             -> validateLinkTarget(document, issues)
-            SweepParameter.DEGRADATION_MULTIPLIER -> validateServiceTarget(document, issues)
+            SweepParameter.DEGRADATION_MULTIPLIER -> validateDegradationTarget(document, issues)
         }
 
         if (document.sweep.values.isEmpty()) {
             issues += ValidationIssue("sweep.values", "must not be empty")
         }
         document.sweep.values.forEachIndexed { index, value ->
-            validateFinite(value, "sweep.values[$index]", issues)
+            if (document.sweep.parameter == SweepParameter.MAX_ATTEMPTS) {
+                validateMaxAttemptsValue(value, "sweep.values[$index]", issues)
+            } else {
+                validateFinite(value, "sweep.values[$index]", issues)
+            }
         }
     }
 
@@ -294,12 +298,35 @@ object ScenarioValidator {
         }
     }
 
-    private fun validateServiceTarget(document: SweepDocument, issues: MutableList<ValidationIssue>) {
+    private fun validateDegradationTarget(document: SweepDocument, issues: MutableList<ValidationIssue>) {
         val serviceId = document.sweep.serviceId
-        if (serviceId == null) {
-            issues += ValidationIssue("sweep.serviceId", "is required for ${document.sweep.parameter}")
-        } else if (document.baseScenario.services.none { it.id == serviceId }) {
-            issues += ValidationIssue("sweep.serviceId", "must reference an existing service")
+        val degradation = document.baseScenario.degradation
+        when {
+            serviceId == null -> issues += ValidationIssue(
+                "sweep.serviceId",
+                "is required for ${document.sweep.parameter}",
+            )
+            degradation == null -> issues += ValidationIssue(
+                "sweep.serviceId",
+                "must reference baseScenario.degradation.serviceId",
+            )
+            serviceId != degradation.serviceId -> issues += ValidationIssue(
+                "sweep.serviceId",
+                "must match baseScenario.degradation.serviceId",
+            )
+        }
+    }
+
+    private fun validateMaxAttemptsValue(
+        value: Double,
+        path: String,
+        issues: MutableList<ValidationIssue>,
+    ) {
+        when {
+            !value.isFinite() -> issues += ValidationIssue(path, "must be finite")
+            value < 1.0 || value > Int.MAX_VALUE.toDouble() ->
+                issues += ValidationIssue(path, "must be in 1..${Int.MAX_VALUE}")
+            value % 1.0 != 0.0 -> issues += ValidationIssue(path, "must be an exact integer")
         }
     }
 
