@@ -112,6 +112,88 @@ class ScenarioValidatorTest {
     }
 
     @Test
+    fun `unknown endpoints do not hide an independent cycle`() {
+        val scenario = TestData.simpleScenario()
+        val malformed = scenario.links[0].copy(
+            id = "malformed",
+            from = "missing-from",
+            to = "missing-to",
+        )
+        val document = experimentDocument(
+            scenario.copy(
+                links = listOf(
+                    scenario.links[0],
+                    scenario.links[0].copy(
+                        id = "backend-to-entry",
+                        from = "backend",
+                        to = "entry",
+                    ),
+                    malformed,
+                ),
+            ),
+        )
+
+        assertExperimentPaths(
+            listOf(
+                "variants[0].scenario.links[1].to",
+                "variants[0].scenario.links[2].from",
+                "variants[0].scenario.links[2].to",
+            ),
+            document,
+        )
+    }
+
+    @Test
+    fun `unknown endpoints do not hide an independent excess outgoing link`() {
+        val scenario = threeServiceScenario()
+        val malformed = scenario.links[0].copy(
+            id = "malformed",
+            from = "missing-from",
+            to = "missing-to",
+        )
+        val document = experimentDocument(
+            scenario.copy(
+                links = listOf(
+                    scenario.links[0],
+                    scenario.links[1].copy(from = "entry"),
+                    malformed,
+                ),
+            ),
+        )
+
+        assertExperimentPaths(
+            listOf(
+                "variants[0].scenario.links[1].from",
+                "variants[0].scenario.links[2].from",
+                "variants[0].scenario.links[2].to",
+            ),
+            document,
+        )
+    }
+
+    @Test
+    fun `unknown endpoints do not hide an independent disconnected segment`() {
+        val scenario = threeServiceScenario()
+        val malformed = scenario.links[0].copy(
+            id = "malformed",
+            from = "missing-from",
+            to = "missing-to",
+        )
+        val document = experimentDocument(
+            scenario.copy(links = listOf(scenario.links[0], malformed)),
+        )
+
+        assertExperimentPaths(
+            listOf(
+                "variants[0].scenario.services[2].id",
+                "variants[0].scenario.links[1].from",
+                "variants[0].scenario.links[1].to",
+            ),
+            document,
+        )
+    }
+
+    @Test
     fun `zero handlers are rejected at the service field`() {
         val scenario = TestData.simpleScenario()
         val document = experimentDocument(

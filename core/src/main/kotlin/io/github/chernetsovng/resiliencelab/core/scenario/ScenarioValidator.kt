@@ -78,15 +78,7 @@ object ScenarioValidator {
         validateWorkload(scenario.workload, "$prefix.workload", issues)
         validateDegradation(scenario.degradation, "$prefix.degradation", scenario.services, issues)
 
-        val endpointsAreValid = scenario.links.all { link ->
-            scenario.services.any { it.id == link.from } && scenario.services.any { it.id == link.to }
-        }
-        if (
-            scenario.services.isNotEmpty() &&
-            duplicateServiceIds.isEmpty() &&
-            scenario.services.any { it.id == scenario.entry } &&
-            endpointsAreValid
-        ) {
+        if (scenario.services.isNotEmpty() && duplicateServiceIds.isEmpty()) {
             validateTopology(scenario, prefix, issues)
         }
     }
@@ -208,8 +200,13 @@ object ScenarioValidator {
         prefix: String,
         issues: MutableList<ValidationIssue>,
     ) {
-        val outgoing = scenario.links.withIndex().groupBy { it.value.from }
-        val incoming = scenario.links.withIndex().groupBy { it.value.to }
+        val serviceIds = scenario.services.map { it.id }.toSet()
+        val indexedLinks = scenario.links.withIndex().toList()
+        val outgoing = indexedLinks.filter { it.value.from in serviceIds }.groupBy { it.value.from }
+        val incoming = indexedLinks.filter { it.value.to in serviceIds }.groupBy { it.value.to }
+        val validOutgoing = indexedLinks.filter {
+            it.value.from in serviceIds && it.value.to in serviceIds
+        }.groupBy { it.value.from }
 
         outgoing.values.forEach { links ->
             links.drop(1).forEach { link ->
@@ -231,7 +228,7 @@ object ScenarioValidator {
         val states = mutableMapOf<String, Int>()
         fun visit(serviceId: String) {
             states[serviceId] = 1
-            outgoing[serviceId].orEmpty().forEach { link ->
+            validOutgoing[serviceId].orEmpty().forEach { link ->
                 when (states[link.value.to]) {
                     1 -> issues += ValidationIssue(
                         "$prefix.links[${link.index}].to",
@@ -243,26 +240,28 @@ object ScenarioValidator {
             states[serviceId] = 2
         }
 
-        visit(scenario.entry)
+        if (scenario.entry in serviceIds) visit(scenario.entry)
         scenario.services.forEach { service ->
             if (service.id !in states) visit(service.id)
         }
 
-        val reachable = mutableSetOf<String>()
-        val pending = ArrayDeque<String>()
-        pending += scenario.entry
-        while (pending.isNotEmpty()) {
-            val serviceId = pending.removeFirst()
-            if (reachable.add(serviceId)) {
-                outgoing[serviceId].orEmpty().forEach { link -> pending += link.value.to }
+        if (scenario.entry in serviceIds) {
+            val reachable = mutableSetOf<String>()
+            val pending = ArrayDeque<String>()
+            pending += scenario.entry
+            while (pending.isNotEmpty()) {
+                val serviceId = pending.removeFirst()
+                if (reachable.add(serviceId)) {
+                    validOutgoing[serviceId].orEmpty().forEach { link -> pending += link.value.to }
+                }
             }
-        }
-        scenario.services.forEachIndexed { index, service ->
-            if (service.id !in reachable) {
-                issues += ValidationIssue(
-                    "$prefix.services[$index].id",
-                    "service must be connected to the entry chain",
-                )
+            scenario.services.forEachIndexed { index, service ->
+                if (service.id !in reachable) {
+                    issues += ValidationIssue(
+                        "$prefix.services[$index].id",
+                        "service must be connected to the entry chain",
+                    )
+                }
             }
         }
     }
