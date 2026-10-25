@@ -1,5 +1,6 @@
 package io.github.chernetsovng.resiliencelab.core.simulation
 
+import io.github.chernetsovng.resiliencelab.core.scenario.DegradationSpec
 import io.github.chernetsovng.resiliencelab.core.scenario.LinkSpec
 import io.github.chernetsovng.resiliencelab.core.scenario.ServiceSpec
 import ksl.modeling.entity.ProcessModel
@@ -14,6 +15,7 @@ import ksl.utilities.random.rvariable.UniformRV
 internal class ServiceRuntime(
     parent: ModelElement,
     private val spec: ServiceSpec,
+    private val degradation: DegradationSpec?,
     streamProvider: RNStreamProvider,
     durationStreamNum: Int,
     failureStreamNum: Int,
@@ -31,6 +33,7 @@ internal class ServiceRuntime(
     private val jitterSampler = outgoingLink?.let {
         UniformRV(0.0, 1.0, requireNotNull(jitterStreamNum), streamProvider)
     }
+    private var degradationActive = false
 
     val resource: ResourceWithQ
     val queue: RequestQ = BoundedRequestQ(
@@ -60,9 +63,27 @@ internal class ServiceRuntime(
         })
     }
 
-    fun nextDurationMs(): Double = durationSampler.next()
+    fun resetDegradation() {
+        degradationActive = false
+    }
 
-    fun nextLocalFailure(): Boolean = failureSampler.value < spec.failureRate
+    fun startDegradation() {
+        degradationActive = true
+    }
+
+    fun endDegradation() {
+        degradationActive = false
+    }
+
+    fun nextDurationMs(): Double {
+        val multiplier = if (degradationActive) degradation?.processingMultiplier ?: 1.0 else 1.0
+        return durationSampler.next() * multiplier
+    }
+
+    fun nextLocalFailure(): Boolean {
+        val failureRate = if (degradationActive) degradation?.failureRate ?: spec.failureRate else spec.failureRate
+        return failureSampler.value < failureRate
+    }
 
     fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
 

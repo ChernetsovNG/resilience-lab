@@ -1,5 +1,6 @@
 package io.github.chernetsovng.resiliencelab.core.simulation
 
+import io.github.chernetsovng.resiliencelab.core.experiment.ReplicationResult
 import io.github.chernetsovng.resiliencelab.core.scenario.Execution
 import io.github.chernetsovng.resiliencelab.core.scenario.Scenario
 import ksl.modeling.entity.KSLProcess
@@ -7,8 +8,13 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
+import kotlin.time.Duration.Companion.seconds
 
-class ReliabilityModel(model: Model, private val scenario: Scenario, execution: Execution) : ProcessModel(model) {
+class ReliabilityModel(
+    model: Model,
+    private val scenario: Scenario,
+    private val execution: Execution,
+) : ProcessModel(model) {
     private val randomStreams = model.streamProvider.apply {
         initialSeed(SeedFactory.seedVector(execution.seed))
     }
@@ -23,6 +29,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
         ServiceRuntime(
             parent = this,
             spec = service,
+            degradation = scenario.degradation?.takeIf { it.serviceId == service.id },
             streamProvider = randomStreams,
             durationStreamNum = index * 2 + 1,
             failureStreamNum = index * 2 + 2,
@@ -40,23 +47,66 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
     var activeDownstreamProcesses: Int = 0
         private set
 
+    init {
+        model.lengthOfReplication = Double.POSITIVE_INFINITY
+        model.maximumAllowedExecutionTimePerReplication = execution.maxRealTimeSeconds.seconds
+    }
+
     override fun initialize() {
         metrics.reset()
         activeInvocations = 0
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
+        runtimes.values.forEach { it.resetDegradation() }
+        val degradation = scenario.degradation
+        if (degradation != null) {
+            val runtime = runtimes.getValue(degradation.serviceId)
+            schedule(
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.startDegradation() },
+                timeToEvent = degradation.startMs,
+                priority = KSLEvent.DEFAULT_PRIORITY - 1,
+            )
+            schedule(
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.endDegradation() },
+                timeToEvent = degradation.endMs,
+                priority = KSLEvent.DEFAULT_PRIORITY - 1,
+            )
+        }
+    }
+
+    fun runReplication(): ReplicationResult {
+        ArrivalGenerator(
+            reliabilityModel = this,
+            entryServiceId = scenario.entry,
+            arrivalRate = scenario.workload.arrivalRate,
+            warmupMs = execution.warmupMs,
+            measurementMs = execution.measurementMs,
+            streamNum = scenario.services.size * 2 + scenario.links.size * 2 + 1,
+        )
+        CompletionMonitor(
+            reliabilityModel = this,
+            arrivalEndMs = execution.warmupMs + execution.measurementMs,
+        )
+        model.numberOfReplications = 1
+        model.simulate()
+        if (executive.isExecutionTimeExceeded) {
+            throw ExperimentExecutionException("Replication exceeded its real-time cap before full drain")
+        }
+        return metrics.replicationResult()
     }
 
     fun invoke(
         serviceId: String,
         timeUntilActivation: Double = 0.0,
         originalRequest: Boolean = false,
+        measurementCohort: Boolean = true,
     ): ServiceInvocation {
         val arrivalTimeMs = time + timeUntilActivation
         return createInvocation(
             serviceId = serviceId,
             timeUntilActivation = timeUntilActivation,
             originalRequest = originalRequest,
+            measurementCohort = measurementCohort,
             originalDeadlineMs = if (originalRequest) {
                 arrivalTimeMs + scenario.workload.requestDeadlineMs
             } else {
@@ -70,6 +120,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
         serviceId: String,
         timeUntilActivation: Double,
         originalRequest: Boolean,
+        measurementCohort: Boolean,
         originalDeadlineMs: Double,
         incomingNetwork: ServiceRuntime?,
     ): ServiceInvocation {
@@ -77,6 +128,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
         val invocation = ServiceInvocation(
             runtime = runtime,
             originalRequest = originalRequest,
+            measurementCohort = measurementCohort,
             arrivalTimeMs = time + timeUntilActivation,
             originalDeadlineMs = originalDeadlineMs,
             incomingNetwork = incomingNetwork,
@@ -104,7 +156,11 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
             child = child,
             timeoutEvent = timeoutEvent,
             caller = caller,
-            recordTimeout = { metrics.recordTimeout(callingServiceId) },
+            recordTimeout = {
+                if (caller.measurementCohort) {
+                    metrics.recordTimeout(callingServiceId)
+                }
+            },
         )
         return attempt
     }
@@ -116,6 +172,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
     inner class ServiceInvocation internal constructor(
         private val runtime: ServiceRuntime,
         private val originalRequest: Boolean,
+        internal val measurementCohort: Boolean,
         private val arrivalTimeMs: Double,
         private val originalDeadlineMs: Double,
         private val incomingNetwork: ServiceRuntime?,
@@ -145,7 +202,9 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
             check(!admitted) { "Invocation was already admitted" }
             admitted = true
             activeInvocations++
-            metrics.recordAdmitted(runtime.serviceId)
+            if (measurementCohort) {
+                metrics.recordAdmitted(runtime.serviceId)
+            }
         }
 
         private fun onOriginalDeadline() {
@@ -178,11 +237,13 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
             val completedOutcome = requireNotNull(originalOutcome)
             originalClientActive = false
             activeOriginalRequests--
-            metrics.recordOriginalCompletion(
-                arrivalTimeMs = arrivalTimeMs,
-                completionTimeMs = time,
-                succeeded = completedOutcome == AttemptOutcome.SUCCEEDED,
-            )
+            if (measurementCohort) {
+                metrics.recordOriginalCompletion(
+                    arrivalTimeMs = arrivalTimeMs,
+                    completionTimeMs = time,
+                    succeeded = completedOutcome == AttemptOutcome.SUCCEEDED,
+                )
+            }
         }
 
         internal val work: KSLProcess = process("service:${runtime.serviceId}") {
@@ -190,11 +251,15 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                 if (incomingNetwork != null) {
                     delay(incomingNetwork.nextNetworkDelayMs())
                 }
-                metrics.recordOffered(runtime.serviceId)
+                if (measurementCohort) {
+                    metrics.recordOffered(runtime.serviceId)
+                }
                 if (originalRequest) {
                     originalClientActive = true
                     activeOriginalRequests++
-                    metrics.recordOriginalArrival(arrivalTimeMs)
+                    if (measurementCohort) {
+                        metrics.recordOriginalArrival(arrivalTimeMs)
+                    }
                 }
                 try {
                     val allocation = seize(runtime.resource)
@@ -204,7 +269,9 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                         delay(durationMs)
                         if (localFailure) {
                             currentOutcome = AttemptOutcome.LOCAL_FAILURE
-                            metrics.recordLocalFailure(runtime.serviceId)
+                            if (measurementCohort) {
+                                metrics.recordLocalFailure(runtime.serviceId)
+                            }
                         } else {
                             val link = runtime.outgoingLink
                             if (link == null) {
@@ -218,13 +285,14 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                                         currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
                                         break
                                     }
-                                    if (attemptNumber > 1) {
+                                    if (attemptNumber > 1 && measurementCohort) {
                                         metrics.recordRetry(runtime.serviceId)
                                     }
                                     val child = createInvocation(
                                         serviceId = link.to,
                                         timeUntilActivation = 0.0,
                                         originalRequest = false,
+                                        measurementCohort = measurementCohort,
                                         originalDeadlineMs = originalDeadlineMs,
                                         incomingNetwork = runtime,
                                     )
@@ -266,7 +334,9 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                     }
                 } catch (exception: QueueFullException) {
                     currentOutcome = AttemptOutcome.QUEUE_REJECTED
-                    metrics.recordQueueRejection(runtime.serviceId)
+                    if (measurementCohort) {
+                        metrics.recordQueueRejection(runtime.serviceId)
+                    }
                 }
                 if (incomingNetwork != null) {
                     delay(incomingNetwork.nextNetworkDelayMs())
