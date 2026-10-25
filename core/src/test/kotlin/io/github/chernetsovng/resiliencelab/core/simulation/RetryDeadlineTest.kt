@@ -305,6 +305,40 @@ class RetryDeadlineTest {
     }
 
     @Test
+    fun `response at capped timeout and original deadline wins once without timeout`() {
+        val rig = simulate(
+            scenario = scenario(
+                backendProcessingMs = 40.0,
+                timeoutMs = 500.0,
+                maxAttempts = 1,
+                requestDeadlineMs = 40.0,
+            ),
+            requests = listOf(InvocationSpec()),
+            replicationLengthMs = 100.0,
+        )
+
+        val caller = rig.invocations.single()
+        val attempt = assertNotNull(caller.callAttempt)
+        assertEquals(40.0, attempt.timeoutEvent.time, 0.0)
+        assertEquals(40.0, attempt.child.work.processCompletionTime, 0.0)
+        assertEquals(AttemptOutcome.SUCCEEDED, attempt.status)
+        assertTrue(attempt.timeoutEvent.cancel)
+        assertFalse(attempt.timeoutEvent.isScheduled)
+        assertEquals(AttemptOutcome.SUCCEEDED, caller.outcome)
+        assertEquals(40.0, caller.work.processCompletionTime, 0.0)
+
+        val result = rig.result()
+        assertEquals(1, result.originalArrivals)
+        assertEquals(1, result.successes)
+        assertEquals(0, result.failures)
+        assertEquals(listOf(40.0), result.allLatenciesMs)
+        assertEquals(listOf(40.0), result.successfulLatenciesMs)
+        assertEquals(emptyList(), result.failedLatenciesMs)
+        assertEquals(0, result.services.getValue("entry").timeouts)
+        assertDrained(rig)
+    }
+
+    @Test
     fun `original deadline is propagated to nested attempt timeouts and orphan drain`() {
         val rig = simulate(
             scenario = threeServiceScenario(),

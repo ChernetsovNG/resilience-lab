@@ -129,7 +129,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
             schedule(
                 eventAction = ModelElement.EventActionIfc<Nothing> { onOriginalDeadline() },
                 timeToEvent = originalDeadlineMs - this@ReliabilityModel.time,
-                priority = KSLEvent.VERY_HIGH_PRIORITY,
+                priority = KSLEvent.DEFAULT_PRIORITY + 2,
             )
         } else {
             null
@@ -162,7 +162,7 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                 return
             }
             if (originalOutcome == null) {
-                originalOutcome = if (time >= originalDeadlineMs) {
+                originalOutcome = if (time > originalDeadlineMs) {
                     AttemptOutcome.DEADLINE_EXCEEDED
                 } else {
                     currentOutcome
