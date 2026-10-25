@@ -1,8 +1,11 @@
 package io.github.chernetsovng.resiliencelab.core.simulation
 
+import ksl.modeling.entity.Allocation
+import ksl.modeling.entity.AllocationListenerIfc
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
 import ksl.modeling.entity.Resource
+import ksl.modeling.entity.ResourceWithQ
 import ksl.modeling.queue.Queue
 import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.ModelElement
@@ -36,4 +39,40 @@ private class AdmissionListener(
             throw QueueFullException(qObject.resource.name)
         }
     }
+}
+
+class FifoResourceWithQ(
+    parent: ModelElement,
+    name: String?,
+    capacity: Int,
+    queue: RequestQ,
+) : ResourceWithQ(parent, name, capacity, queue) {
+    private var allocationPending = false
+
+    init {
+        waitingQ.addQueueListener(object : QueueListenerIfc<ProcessModel.Entity.Request> {
+            override fun update(
+                status: Queue.Status,
+                queue: Queue<ProcessModel.Entity.Request>,
+                qObject: ProcessModel.Entity.Request?,
+            ) {
+                allocationPending = status == Queue.Status.DEQUEUED
+            }
+        })
+        addAllocationListener(object : AllocationListenerIfc {
+            override fun allocate(allocation: Allocation) {
+                allocationPending = false
+            }
+
+            override fun deallocate(allocation: Allocation) = Unit
+        })
+    }
+
+    override val numAvailableUnits: Int
+        get() {
+            val available = super.numAvailableUnits
+            if (allocationPending) return available
+            val head = waitingQ.immutableList.firstOrNull() ?: return available
+            return if (head.amountRequested <= available) available else 0
+        }
 }

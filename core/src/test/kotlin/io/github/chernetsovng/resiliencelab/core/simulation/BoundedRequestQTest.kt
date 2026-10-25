@@ -95,10 +95,64 @@ class BoundedRequestQTest {
 
         assertEquals(mapOf("two-units" to 20.0), rig.admissionTimes)
         assertEquals(mapOf("one-unit" to 11.0), rig.rejectionTimes)
-        assertEquals(listOf(true), rig.resourceCanAllocateAtRejection)
+        assertEquals(listOf(true), rig.resourceHasSpareCapacityAtRejection)
         assertEquals(listOf(1), rig.queueSizeAtRejection)
         assertEquals(1, rig.maxObservedWaitingQSize)
         assertEquals(3.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+    }
+
+    @Test
+    fun `later fitting arrival waits behind oversized head with spare waiting capacity`() {
+        val rig = simulate(
+            waitingCapacity = 2,
+            resourceCapacity = 2,
+            holderReleaseTimes = listOf(10.0, 20.0),
+            attempts = listOf(
+                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                AttemptSpec("one-unit", arrivalTime = 11.0, amount = 1),
+            ),
+        )
+
+        assertEquals(mapOf("two-units" to 20.0, "one-unit" to 21.0), rig.admissionTimes)
+        assertTrue(rig.rejectionTimes.isEmpty())
+        assertEquals(2, rig.maxObservedWaitingQSize)
+        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+    }
+
+    @Test
+    fun `release does not bypass oversized head with spare waiting capacity`() {
+        val rig = simulate(
+            waitingCapacity = 2,
+            resourceCapacity = 2,
+            holderReleaseTimes = listOf(10.0, 20.0),
+            attempts = listOf(
+                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
+            ),
+        )
+
+        assertEquals(mapOf("two-units" to 20.0, "one-unit" to 21.0), rig.admissionTimes)
+        assertTrue(rig.rejectionTimes.isEmpty())
+        assertEquals(2, rig.maxObservedWaitingQSize)
+        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+    }
+
+    @Test
+    fun `dequeued head allocates before a larger later request`() {
+        val rig = simulate(
+            waitingCapacity = 2,
+            resourceCapacity = 3,
+            holderReleaseTimes = listOf(10.0, 20.0),
+            attempts = listOf(
+                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                AttemptSpec("three-units", arrivalTime = 2.0, amount = 3),
+            ),
+        )
+
+        assertEquals(mapOf("two-units" to 10.0, "three-units" to 20.0), rig.admissionTimes)
+        assertTrue(rig.rejectionTimes.isEmpty())
+        assertEquals(2, rig.maxObservedWaitingQSize)
+        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
     }
 
     private fun simulate(
@@ -142,12 +196,12 @@ class BoundedRequestQTest {
         val queueSizeAfterAdmission = mutableMapOf<String, Int>()
         val queueSizeAtRejection = mutableListOf<Int>()
         val resourceBusyAtRejection = mutableListOf<Int>()
-        val resourceCanAllocateAtRejection = mutableListOf<Boolean>()
+        val resourceHasSpareCapacityAtRejection = mutableListOf<Boolean>()
         var maxObservedWaitingQSize = 0
             private set
 
         init {
-            resource = ResourceWithQ(
+            resource = FifoResourceWithQ(
                 parent = this,
                 name = "service",
                 capacity = resourceCapacity,
@@ -175,7 +229,7 @@ class BoundedRequestQTest {
             queueSizeAfterAdmission.clear()
             queueSizeAtRejection.clear()
             resourceBusyAtRejection.clear()
-            resourceCanAllocateAtRejection.clear()
+            resourceHasSpareCapacityAtRejection.clear()
             maxObservedWaitingQSize = 0
             holderReleaseTimes.forEach { releaseAt ->
                 activate(Holder(releaseAt).work)
@@ -206,7 +260,7 @@ class BoundedRequestQTest {
                     rejectionTimes[spec.label] = time
                     queueSizeAtRejection += resource.waitingQ.size
                     resourceBusyAtRejection += resource.numBusy
-                    resourceCanAllocateAtRejection += resource.canAllocate(spec.amount)
+                    resourceHasSpareCapacityAtRejection += resource.capacity - resource.numBusy >= spec.amount
                 }
             }
         }
