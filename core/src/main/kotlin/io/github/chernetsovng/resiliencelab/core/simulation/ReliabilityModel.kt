@@ -14,6 +14,7 @@ class ReliabilityModel(
     model: Model,
     private val scenario: Scenario,
     private val execution: Execution,
+    private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
 ) : ProcessModel(model) {
     private val randomStreams = model.streamProvider.apply {
         initialSeed(SeedFactory.seedVector(execution.seed))
@@ -107,7 +108,10 @@ class ReliabilityModel(
         }
     }
 
-    fun runReplication(): ReplicationResult {
+    private var workloadPrepared = false
+
+    internal fun prepareWorkload() {
+        if (workloadPrepared) return
         ArrivalGenerator(
             reliabilityModel = this,
             entryServiceId = scenario.entry,
@@ -120,11 +124,31 @@ class ReliabilityModel(
             reliabilityModel = this,
             arrivalEndMs = execution.warmupMs + execution.measurementMs,
         )
-        model.numberOfReplications = 1
-        model.simulate()
+        workloadPrepared = true
+    }
+
+    override fun afterReplication() {
+        val fullyDrained = isFullyDrained()
+        super.afterReplication()
         if (executive.isExecutionTimeExceeded) {
             throw ExperimentExecutionException("Replication exceeded its real-time cap before full drain")
         }
+        if (workloadPrepared && !fullyDrained) {
+            throw ExperimentExecutionException("Replication ended before the workload fully drained")
+        }
+        onReplicationCompleted?.invoke(model.currentReplicationNumber, metrics.replicationResult())
+    }
+
+    private fun isFullyDrained(): Boolean =
+        time >= execution.warmupMs + execution.measurementMs &&
+            activeOriginalRequests == 0 &&
+            activeInvocations == 0 &&
+            activeDownstreamProcesses == 0
+
+    fun runReplication(): ReplicationResult {
+        prepareWorkload()
+        model.numberOfReplications = 1
+        model.simulate()
         return metrics.replicationResult()
     }
 

@@ -1,6 +1,25 @@
 package io.github.chernetsovng.resiliencelab.core.experiment
 
+import io.github.chernetsovng.resiliencelab.core.scenario.SweepParameter
 import kotlinx.serialization.Serializable
+
+@Serializable
+data class ExperimentResult(
+    val schemaVersion: Int,
+    val applicationVersion: String,
+    val kslVersion: String,
+    val variants: List<VariantResult>,
+)
+
+@Serializable
+data class VariantResult(
+    val id: String,
+    val label: String,
+    val sweepParameter: SweepParameter? = null,
+    val sweepValue: Double? = null,
+    val replications: List<ReplicationResult>,
+    val aggregate: AggregateMetrics,
+)
 
 @Serializable
 data class ReplicationResult(
