@@ -123,15 +123,15 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
         }
 
         internal val work: KSLProcess = process("service:${runtime.serviceId}") {
-            if (incomingNetwork != null) {
-                delay(incomingNetwork.nextNetworkDelayMs())
-            }
-            metrics.recordOffered(runtime.serviceId)
-            if (originalRequest) {
-                activeOriginalRequests++
-                metrics.recordOriginalArrival(arrivalTimeMs)
-            }
             try {
+                if (incomingNetwork != null) {
+                    delay(incomingNetwork.nextNetworkDelayMs())
+                }
+                metrics.recordOffered(runtime.serviceId)
+                if (originalRequest) {
+                    activeOriginalRequests++
+                    metrics.recordOriginalArrival(arrivalTimeMs)
+                }
                 try {
                     val allocation = seize(runtime.resource)
                     try {

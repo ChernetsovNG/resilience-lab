@@ -350,6 +350,48 @@ class TimeoutRaceTest {
         assertEquals(0, rig.handlerBusy("backend"))
     }
 
+    @Test
+    fun `replication termination during request network balances downstream liveness`() {
+        val rig = simulate(
+            scenario = scenario(
+                entryProcessingMs = 0.0,
+                backendProcessingMs = 5.0,
+                network = fixed(20.0),
+                timeoutMs = 10.0,
+            ),
+            requests = listOf(InvocationSpec()),
+            replicationLengthMs = 15.0,
+        )
+
+        val caller = rig.invocations.single()
+        val attempt = assertNotNull(caller.callAttempt)
+        val child = attempt.child
+        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
+        assertEquals(10.0, caller.work.processCompletionTime, 0.0)
+        assertEquals(AttemptOutcome.PENDING, child.outcome)
+        assertTrue(child.work.isTerminated)
+        assertFalse(child.work.isCompleted)
+        assertTrue(child.isProcessEnded)
+        assertEquals(0, rig.reliabilityModel.activeDownstreamProcesses)
+        assertEquals(0, rig.reliabilityModel.activeInvocations)
+        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+
+        val result = rig.result()
+        assertEquals(listOf(0.0), result.arrivalTimesMs)
+        assertEquals(listOf(10.0), result.allLatenciesMs)
+        assertEquals(emptyList(), result.successfulLatenciesMs)
+        assertEquals(listOf(10.0), result.failedLatenciesMs)
+        assertEquals(1, result.originalArrivals)
+        assertEquals(0, result.successes)
+        assertEquals(1, result.failures)
+        assertEquals(1, result.services.getValue("entry").offeredAttempts)
+        assertEquals(1, result.services.getValue("entry").admittedAttempts)
+        assertEquals(1, result.services.getValue("entry").timeouts)
+        assertEquals(0, result.services.getValue("backend").offeredAttempts)
+        assertEquals(0, result.services.getValue("backend").admittedAttempts)
+        assertEquals(0, result.services.getValue("backend").queueRejections)
+    }
+
     private fun networkSamples(meanMs: Double): Pair<Double, Double> {
         val provider = RNStreamProvider().apply {
             initialSeed(SeedFactory.seedVector(42L))
