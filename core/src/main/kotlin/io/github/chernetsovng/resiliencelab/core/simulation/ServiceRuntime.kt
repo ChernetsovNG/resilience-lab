@@ -3,6 +3,8 @@ package io.github.chernetsovng.resiliencelab.core.simulation
 import io.github.chernetsovng.resiliencelab.core.scenario.DegradationSpec
 import io.github.chernetsovng.resiliencelab.core.scenario.LinkSpec
 import io.github.chernetsovng.resiliencelab.core.scenario.ServiceSpec
+import ksl.modeling.entity.Allocation
+import ksl.modeling.entity.AllocationListenerIfc
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
 import ksl.modeling.entity.ResourceWithQ
@@ -23,6 +25,8 @@ internal class ServiceRuntime(
     networkStreamNum: Int?,
     jitterStreamNum: Int?,
     onAdmitted: (ProcessModel.Entity) -> Unit,
+    onQueueLengthChanged: (Int) -> Unit,
+    onBusyHandlersChanged: (Int) -> Unit,
 ) {
     val serviceId: String = spec.id
     private val durationSampler = DurationSamplerFactory.create(spec.processing, durationStreamNum, streamProvider)
@@ -56,9 +60,19 @@ internal class ServiceRuntime(
                 queue: Queue<ProcessModel.Entity.Request>,
                 qObject: ProcessModel.Entity.Request?,
             ) {
+                onQueueLengthChanged(queue.size)
                 if (status == Queue.Status.ENQUEUED && qObject != null) {
                     onAdmitted(qObject.entity)
                 }
+            }
+        })
+        resource.addAllocationListener(object : AllocationListenerIfc {
+            override fun allocate(allocation: Allocation) {
+                onBusyHandlersChanged(resource.numBusy)
+            }
+
+            override fun deallocate(allocation: Allocation) {
+                onBusyHandlersChanged(resource.numBusy)
             }
         })
     }

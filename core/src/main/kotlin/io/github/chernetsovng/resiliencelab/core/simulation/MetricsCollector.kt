@@ -2,8 +2,15 @@ package io.github.chernetsovng.resiliencelab.core.simulation
 
 import io.github.chernetsovng.resiliencelab.core.experiment.ReplicationResult
 import io.github.chernetsovng.resiliencelab.core.experiment.ServiceMetrics
+import io.github.chernetsovng.resiliencelab.core.experiment.TimeWeightedSeries
+import io.github.chernetsovng.resiliencelab.core.scenario.ServiceSpec
 
-class MetricsCollector(serviceIds: List<String>) {
+class MetricsCollector(
+    services: List<ServiceSpec>,
+    private val measurementStartMs: Double,
+    private val measurementEndMs: Double,
+    private val currentTimeMs: () -> Double,
+) {
     private val arrivalTimesMs = mutableListOf<Double>()
     private val allLatenciesMs = mutableListOf<Double>()
     private val successfulLatenciesMs = mutableListOf<Double>()
@@ -11,18 +18,26 @@ class MetricsCollector(serviceIds: List<String>) {
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
-    private val serviceMetrics = serviceIds.associateTo(linkedMapOf()) { it to MutableServiceMetrics() }
+    private val serviceMetrics = services.associateTo(linkedMapOf()) { service ->
+        service.id to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
+    }
 
-    fun replicationResult(): ReplicationResult = ReplicationResult(
-        arrivalTimesMs = arrivalTimesMs.toList(),
-        allLatenciesMs = allLatenciesMs.toList(),
-        successfulLatenciesMs = successfulLatenciesMs.toList(),
-        failedLatenciesMs = failedLatenciesMs.toList(),
-        originalArrivals = originalArrivals,
-        successes = successes,
-        failures = failures,
-        services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
-    )
+    fun replicationResult(): ReplicationResult {
+        val timeMs = currentTimeMs()
+        if (timeMs >= measurementEndMs) {
+            finishMeasurement(timeMs)
+        }
+        return ReplicationResult(
+            arrivalTimesMs = arrivalTimesMs.toList(),
+            allLatenciesMs = allLatenciesMs.toList(),
+            successfulLatenciesMs = successfulLatenciesMs.toList(),
+            failedLatenciesMs = failedLatenciesMs.toList(),
+            originalArrivals = originalArrivals,
+            successes = successes,
+            failures = failures,
+            services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
+        )
+    }
 
     internal fun reset() {
         arrivalTimesMs.clear()
@@ -33,6 +48,24 @@ class MetricsCollector(serviceIds: List<String>) {
         successes = 0
         failures = 0
         serviceMetrics.values.forEach { it.reset() }
+    }
+
+    internal fun startMeasurement(serviceId: String, queueLength: Int, busyHandlers: Int) {
+        val metrics = serviceMetrics.getValue(serviceId)
+        metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
+        metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
+    }
+
+    internal fun recordQueueLength(serviceId: String, timeMs: Double, queueLength: Int) {
+        serviceMetrics.getValue(serviceId).queueLengthSeries.record(timeMs, queueLength.toDouble())
+    }
+
+    internal fun recordBusyHandlers(serviceId: String, timeMs: Double, busyHandlers: Int) {
+        serviceMetrics.getValue(serviceId).busyHandlerSeries.record(timeMs, busyHandlers.toDouble())
+    }
+
+    internal fun finishMeasurement(timeMs: Double) {
+        serviceMetrics.values.forEach { it.finish(timeMs) }
     }
 
     internal fun recordOriginalArrival(timeMs: Double) {
@@ -76,13 +109,19 @@ class MetricsCollector(serviceIds: List<String>) {
         serviceMetrics.getValue(serviceId).retries++
     }
 
-    private class MutableServiceMetrics {
+    private class MutableServiceMetrics(
+        private val configuredHandlers: Int,
+        private val measurementStartMs: Double,
+        private val measurementEndMs: Double,
+    ) {
         var offeredAttempts = 0
         var admittedAttempts = 0
         var timeouts = 0
         var retries = 0
         var failures = 0
         var queueRejections = 0
+        var queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
+        var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
 
         fun reset() {
             offeredAttempts = 0
@@ -91,6 +130,13 @@ class MetricsCollector(serviceIds: List<String>) {
             retries = 0
             failures = 0
             queueRejections = 0
+            queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
+            busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
+        }
+
+        fun finish(timeMs: Double) {
+            queueLengthSeries.finish(timeMs)
+            busyHandlerSeries.finish(timeMs)
         }
 
         fun snapshot(): ServiceMetrics = ServiceMetrics(
@@ -100,9 +146,9 @@ class MetricsCollector(serviceIds: List<String>) {
             retries = retries,
             failures = failures,
             queueRejections = queueRejections,
-            handlerUtilization = 0.0,
-            meanQueueLength = 0.0,
-            p95QueueLength = 0.0,
+            handlerUtilization = busyHandlerSeries.average / configuredHandlers,
+            meanQueueLength = queueLengthSeries.average,
+            p95QueueLength = queueLengthSeries.p95,
         )
     }
 }

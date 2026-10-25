@@ -26,3 +26,42 @@ data class ServiceMetrics(
     val meanQueueLength: Double,
     val p95QueueLength: Double,
 )
+
+@Serializable
+data class AggregateMetrics(
+    val pooledLatency: LatencySummary,
+    val successRate: MetricSummary?,
+    val p95LatencyMs: MetricSummary?,
+    val p99LatencyMs: MetricSummary?,
+    val services: Map<String, AggregateServiceMetrics>,
+)
+
+@Serializable
+data class LatencySummary(
+    val all: LatencyDistribution?,
+    val successful: LatencyDistribution?,
+    val failed: LatencyDistribution?,
+)
+
+@Serializable
+data class LatencyDistribution(
+    val meanMs: Double,
+    val p95Ms: Double,
+    val p99Ms: Double,
+)
+
+@Serializable
+data class MetricSummary(
+    val mean: Double,
+    val stdDev: Double?,
+    val ci95Low: Double?,
+    val ci95High: Double?,
+    val min: Double,
+    val max: Double,
+)
+
+@Serializable
+data class AggregateServiceMetrics(
+    val admittedAmplification: MetricSummary?,
+    val offeredAmplification: MetricSummary?,
+)

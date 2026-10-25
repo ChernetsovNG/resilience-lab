@@ -42,7 +42,7 @@ class SingleServiceInvocationTest {
                 retries = 0,
                 failures = 0,
                 queueRejections = 0,
-                handlerUtilization = 0.0,
+                handlerUtilization = 0.2,
                 meanQueueLength = 0.0,
                 p95QueueLength = 0.0,
             ),

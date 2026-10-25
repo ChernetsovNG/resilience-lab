@@ -18,7 +18,12 @@ class ReliabilityModel(
     private val randomStreams = model.streamProvider.apply {
         initialSeed(SeedFactory.seedVector(execution.seed))
     }
-    val metrics = MetricsCollector(scenario.services.map { it.id })
+    val metrics = MetricsCollector(
+        services = scenario.services,
+        measurementStartMs = execution.warmupMs,
+        measurementEndMs = execution.warmupMs + execution.measurementMs,
+        currentTimeMs = { time },
+    )
     private val outgoingLinks = scenario.links.mapIndexed { index, link ->
         val networkStreamNum = scenario.services.size * 2 + index + 1
         val jitterStreamNum = scenario.services.size * 2 + scenario.links.size + index + 1
@@ -37,6 +42,12 @@ class ReliabilityModel(
             networkStreamNum = outgoing?.second,
             jitterStreamNum = outgoing?.third,
             onAdmitted = ::recordAdmission,
+            onQueueLengthChanged = { queueLength ->
+                metrics.recordQueueLength(service.id, this@ReliabilityModel.time, queueLength)
+            },
+            onBusyHandlersChanged = { busyHandlers ->
+                metrics.recordBusyHandlers(service.id, this@ReliabilityModel.time, busyHandlers)
+            },
         )
     }.associateBy { it.serviceId }
 
@@ -58,6 +69,28 @@ class ReliabilityModel(
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
         runtimes.values.forEach { it.resetDegradation() }
+        val measurementStartMs = execution.warmupMs
+        val measurementEndMs = execution.warmupMs + execution.measurementMs
+        schedule(
+            eventAction = ModelElement.EventActionIfc<Nothing> {
+                runtimes.values.forEach { runtime ->
+                    metrics.startMeasurement(
+                        serviceId = runtime.serviceId,
+                        queueLength = runtime.queue.size,
+                        busyHandlers = runtime.resource.numBusy,
+                    )
+                }
+            },
+            timeToEvent = measurementStartMs,
+            priority = KSLEvent.DEFAULT_PRIORITY - 1,
+        )
+        schedule(
+            eventAction = ModelElement.EventActionIfc<Nothing> {
+                metrics.finishMeasurement(measurementEndMs)
+            },
+            timeToEvent = measurementEndMs,
+            priority = KSLEvent.DEFAULT_PRIORITY - 1,
+        )
         val degradation = scenario.degradation
         if (degradation != null) {
             val runtime = runtimes.getValue(degradation.serviceId)
