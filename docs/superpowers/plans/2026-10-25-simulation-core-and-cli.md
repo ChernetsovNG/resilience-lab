@@ -22,6 +22,25 @@
 - Не помещать в репозиторий секреты, производственные адреса или реальные конфиденциальные данные.
 - Каждая задача завершается focused checks и коммитом; перед финальным — полные `build`, `test`, `lint`-эквиваленты toolchain.
 
+## MiSim Adaptation Map
+
+MiSim (`D:\Education\Programming\MiSim`) используется как справочная предметная модель, а не как источник DES-инфраструктуры. DESMO-J сущности не копируются; каждый блок отображается на KSL-процессы, ресурсы и события с сохранением согласованной семантики из дизайна.
+
+| MiSim | Resilience Lab / KSL |
+|---|---|
+| `Operation`, `DependencyDescription`, `ServiceDependencyInstance` | `ServiceSpec`/`LinkSpec` сейчас; вероятностные/иерархические зависимости — при расширении топологии после MVP |
+| `MicroserviceInstance.handleIncomingRequest` | `ServiceInvocation`: admission → local processing → downstream dependencies → outcome; `ResourceWithQ` заменяет только CPU capacity, а не все DESMO-J события |
+| `CPU` и `CPUProcessScheduler` | `ResourceWithQ` и `BoundedRequestQ` для MVP; отдельные burst-scheduling стратегии не переносятся без отдельной задачи |
+| `NetworkRequestSendEvent`, `NetworkRequestReceiveEvent`, `NetworkRequestTimeoutEvent` | `CallAttempt` и KSL `KSLEvent`/`blockUntilCompleted`/`resumeProcess`; таймаут настраивается, общий deadline добавляется отдельно |
+| `Retry` и `IRetryStrategy` | `RetryPolicyEvaluator`: exponential formula совпадает; `FIXED` остаётся константным, MiSim `linear` — отдельная возрастающая стратегия вне MVP |
+| `JitteringExponentialBackoffRetryStrategy` | Full jitter `random(0, cappedBackoff)`, но случайные значения идут через назначенные KSL streams, а не общий `Random` класса |
+| `CircuitBreaker` и `TimingWindowCircuitBreakerState` | Только справочник для последующего этапа; circuit breaker не добавляется в MVP |
+| `LoadGeneratorDescription` и `ArrivalRateModel` | `ArrivalGenerator`: Poisson arrivals сейчас, trace/LIMBO-подобные профили — позднее |
+| `MultiDataPointReporter` и генераторские метрики | `MetricsCollector` с нашими когортой, offered/admitted и amplification; формулы MiSim не заменяют наши определения |
+| `Examples/Evaluation/scenario4.json`, `paper_architecture.json`, `calibrated_arch.json` | Источники delay/retry-конфигураций и synthetic-вариантов; произвольные зависимости упрощаются до линейной цепочки для MVP, без переноса JSON-формата один-к-одному |
+
+MiSim `RetryTest` и `ScenarioTests` помечены `@Disabled`, поэтому не служат готовым набором «золотых» результатов. Эталонами являются явно вычисленные формулы, детерминированные lifecycle-тесты, аналитический M/M/1 и воспроизводимость. Если фактический код MiSim будет скопирован, а не только перечитан, сохраняются уведомления Apache-2.0 об авторстве.
+
 ## Review Focus
 
 - Одновременные arrivals при заполнении очереди: `seize()` делает `yield` до `enqueue`, поэтому capacity проверяется только в `BoundedRequestQ.enqueue` (Task 4, `rejects attempts above waiting capacity`).
@@ -41,7 +60,7 @@
 // T04: assertFailsWith<QueueFullException> { secondAttempt.join() }; assertEquals(waitingCapacity, resource.waitingQ.size)
 // T05: assertEquals(20.0, result.allLatenciesMs.single()); assertEquals(1, result.services.getValue("entry").offeredAttempts)
 // T06: assertEquals(SUCCEEDED, responseAt50ms); assertEquals(TIMED_OUT, callerAt50ms); assertEquals(SUCCEEDED, downstreamAt80ms)
-// T07: assertEquals(2, result.services.getValue("entry").offeredAttempts); assertEquals(0, attemptsAfterDeadline); assertTrue(handlerHeldDuringBackoff)
+// T07: assertEquals(listOf(100.0, 300.0, 900.0, 2700.0, 7000.0, 7000.0), exponentialDelays); assertEquals(5, result.services.getValue("entry").offeredAttempts); assertEquals(0, attemptsAfterDeadline); assertTrue(handlerHeldDuringBackoff)
 // T08: assertEquals(4.0, processingMultiplierAt11ms); assertFailsWith<ExperimentExecutionException> { runWithRealTimeCapBeforeDrain() }
 // T09: series.record(0.0, 1.0); series.record(5.0, 2.0); series.record(10.0, 4.0); series.finish(20.0); assertEquals(3.0, series.average, 1e-9)
 // T10: assertEquals(firstRun, secondRun); assertNotEquals(firstRun.variants.single().replications.single().arrivalTimesMs, differentSeedRun.variants.single().replications.single().arrivalTimesMs)
@@ -300,7 +319,7 @@ git commit -m "feat: add non-cancelling downstream timeouts"
 
 - [ ] **Step 1: Write the failing retry/deadline tests**
 
-Assert two attempts happen after one retryable failure and success follows. Verify fixed backoff, exponential cap, and full jitter `0 <= value <= cap` with stubbed deterministic jitter values `0.0` and `0.999`. Use one handler and a second request to prove the handler remains occupied during backoff. Set a deadline during backoff and assert no new attempt is created; assert queued orphaned work still executes.
+Assert two attempts happen after one retryable failure and success follows. Verify fixed backoff, exponential cap, and full jitter `0 <= value <= cap` with stubbed deterministic jitter values `0.0` and `0.999`. Using MiSim's paper example converted to milliseconds (`baseBackoff = 100`, `base = 3`, `maxBackoff = 7000`), assert delays `100, 300, 900, 2700, 7000, 7000` and `maxAttempts = 5` meaning five total attempts. Use one handler and a second request to prove the handler remains occupied during backoff. Set a deadline during backoff and assert no new attempt is created; assert queued orphaned work still executes.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
