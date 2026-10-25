@@ -34,11 +34,14 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
         private set
     var activeOriginalRequests: Int = 0
         private set
+    var activeDownstreamProcesses: Int = 0
+        private set
 
     override fun initialize() {
         metrics.reset()
         activeInvocations = 0
         activeOriginalRequests = 0
+        activeDownstreamProcesses = 0
     }
 
     fun invoke(
@@ -66,6 +69,9 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
             incomingNetwork = incomingNetwork,
         )
         activate(invocation.work, timeUntilActivation)
+        if (incomingNetwork != null) {
+            activeDownstreamProcesses++
+        }
         return invocation
     }
 
@@ -171,6 +177,9 @@ class ReliabilityModel(model: Model, scenario: Scenario, execution: Execution) :
                     delay(incomingNetwork.nextNetworkDelayMs())
                 }
             } finally {
+                if (incomingNetwork != null) {
+                    activeDownstreamProcesses--
+                }
                 if (admitted) {
                     activeInvocations--
                     admitted = false
