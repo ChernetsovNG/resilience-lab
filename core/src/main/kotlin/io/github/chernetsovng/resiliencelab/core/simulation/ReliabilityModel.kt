@@ -243,12 +243,12 @@ class ReliabilityModel(model: Model, private val scenario: Scenario, execution: 
                                         currentOutcome = AttemptOutcome.SUCCEEDED
                                         break
                                     }
-                                    if (attemptNumber == link.maxAttempts) {
-                                        currentOutcome = attempt.status
-                                        break
-                                    }
                                     if (time >= originalDeadlineMs) {
                                         currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
+                                        break
+                                    }
+                                    if (attemptNumber == link.maxAttempts) {
+                                        currentOutcome = attempt.status
                                         break
                                     }
                                     val backoffMs = RetryPolicyEvaluator.backoffMs(

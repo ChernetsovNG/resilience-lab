@@ -339,6 +339,52 @@ class RetryDeadlineTest {
     }
 
     @Test
+    fun `capped timeout without response at deadline keeps deadline outcome`() {
+        val rig = simulate(
+            scenario = scenario(
+                backendProcessingMs = 80.0,
+                timeoutMs = 500.0,
+                maxAttempts = 1,
+                requestDeadlineMs = 40.0,
+            ),
+            requests = listOf(InvocationSpec()),
+            observationTimesMs = listOf(40.5),
+            replicationLengthMs = 100.0,
+        )
+
+        val caller = rig.invocations.single()
+        val attempt = assertNotNull(caller.callAttempt)
+        assertEquals(AttemptOutcome.DEADLINE_EXCEEDED, caller.outcome)
+        assertEquals(40.0, caller.work.processCompletionTime, 0.0)
+        assertEquals(40.0, attempt.timeoutEvent.time, 0.0)
+        assertEquals(AttemptOutcome.TIMED_OUT, attempt.status)
+        assertFalse(attempt.timeoutEvent.cancel)
+        assertEquals(AttemptOutcome.SUCCEEDED, attempt.child.outcome)
+        assertTrue(attempt.child.work.isCompleted)
+        assertEquals(80.0, attempt.child.work.processCompletionTime, 0.0)
+
+        val result = rig.result()
+        assertOriginalFailureOnce(result, 40.0)
+        assertEquals(1, result.services.getValue("entry").timeouts)
+        assertEquals(0, result.services.getValue("entry").retries)
+        assertEquals(
+            listOf(
+                Snapshot(
+                    timeMs = 40.5,
+                    activeInvocations = 1,
+                    activeOriginalRequests = 0,
+                    activeDownstreamProcesses = 1,
+                    entryHandlerBusy = 0,
+                    backendHandlerBusy = 1,
+                    originalCompletions = 1,
+                ),
+            ),
+            rig.observations,
+        )
+        assertDrained(rig)
+    }
+
+    @Test
     fun `original deadline is propagated to nested attempt timeouts and orphan drain`() {
         val rig = simulate(
             scenario = threeServiceScenario(),
