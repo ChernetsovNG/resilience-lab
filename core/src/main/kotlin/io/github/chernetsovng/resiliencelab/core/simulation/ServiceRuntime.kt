@@ -1,5 +1,6 @@
 package io.github.chernetsovng.resiliencelab.core.simulation
 
+import io.github.chernetsovng.resiliencelab.core.scenario.LinkSpec
 import io.github.chernetsovng.resiliencelab.core.scenario.ServiceSpec
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
@@ -16,11 +17,16 @@ internal class ServiceRuntime(
     streamProvider: RNStreamProvider,
     durationStreamNum: Int,
     failureStreamNum: Int,
+    val outgoingLink: LinkSpec?,
+    networkStreamNum: Int?,
     onAdmitted: (ProcessModel.Entity) -> Unit,
 ) {
     val serviceId: String = spec.id
     private val durationSampler = DurationSamplerFactory.create(spec.processing, durationStreamNum, streamProvider)
     private val failureSampler = UniformRV(0.0, 1.0, failureStreamNum, streamProvider)
+    private val networkSampler = outgoingLink?.let {
+        DurationSamplerFactory.create(it.network, requireNotNull(networkStreamNum), streamProvider)
+    }
 
     val resource: ResourceWithQ
     val queue: RequestQ = BoundedRequestQ(
@@ -53,4 +59,6 @@ internal class ServiceRuntime(
     fun nextDurationMs(): Double = durationSampler.next()
 
     fun nextLocalFailure(): Boolean = failureSampler.value < spec.failureRate
+
+    fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
 }

@@ -68,15 +68,21 @@ class MetricsCollector(serviceIds: List<String>) {
         serviceMetrics.getValue(serviceId).queueRejections++
     }
 
+    internal fun recordTimeout(serviceId: String) {
+        serviceMetrics.getValue(serviceId).timeouts++
+    }
+
     private class MutableServiceMetrics {
         var offeredAttempts = 0
         var admittedAttempts = 0
+        var timeouts = 0
         var failures = 0
         var queueRejections = 0
 
         fun reset() {
             offeredAttempts = 0
             admittedAttempts = 0
+            timeouts = 0
             failures = 0
             queueRejections = 0
         }
@@ -84,7 +90,7 @@ class MetricsCollector(serviceIds: List<String>) {
         fun snapshot(): ServiceMetrics = ServiceMetrics(
             offeredAttempts = offeredAttempts,
             admittedAttempts = admittedAttempts,
-            timeouts = 0,
+            timeouts = timeouts,
             retries = 0,
             failures = failures,
             queueRejections = queueRejections,
