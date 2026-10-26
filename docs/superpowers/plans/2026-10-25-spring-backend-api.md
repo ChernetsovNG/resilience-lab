@@ -48,10 +48,10 @@
 
 **Files:**
 - Create: `apps/server/build.gradle.kts`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/ResilienceLabApplication.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/HealthController.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/ResilienceLabApplication.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/HealthController.kt`
 - Create: `apps/server/src/main/resources/application.yml`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/HealthControllerTest.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/HealthControllerTest.kt`
 - Modify: `settings.gradle.kts`
 
 **Interfaces:**
@@ -90,12 +90,12 @@ git commit -m "feat: add Spring Boot server health endpoint"
 ### Task 2: Submission codec, validation endpoint and API errors
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentSubmission.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentSubmissionCodec.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentService.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ScenarioController.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ApiExceptionHandler.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/ScenarioControllerTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentSubmission.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentSubmissionCodec.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentService.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ScenarioController.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ApiExceptionHandler.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/ScenarioControllerTest.kt`
 
 **Interfaces:**
 - Produces: `ExperimentSubmission(experiment: ExperimentDocument? = null, sweep: SweepDocument? = null)`; exactly one field must be non-null.
@@ -130,11 +130,11 @@ git commit -m "feat: validate scenarios through the API"
 ### Task 3: Bounded experiment job manager
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentExecutor.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJob.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJobManager.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/SimulationExecutorConfig.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJobManagerTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentExecutor.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentJob.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentJobManager.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/SimulationExecutorConfig.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/experiment/ExperimentJobManagerTest.kt`
 
 **Interfaces:**
 - Produces: `ExperimentExecutor.execute(document: ExperimentDocument): ExperimentResult`, implemented in production by delegating to `ExperimentRunner.run`.
@@ -169,9 +169,9 @@ git commit -m "feat: manage asynchronous experiment jobs"
 ### Task 4: Experiment API and real result integration
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentController.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentControllerTest.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/RealExperimentApiTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentController.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/ExperimentControllerTest.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/RealExperimentApiTest.kt`
 
 **Interfaces:**
 - Consumes: `ExperimentSubmissionCodec`, `ExperimentService.prepare`, `ExperimentJobManager`.

@@ -7,6 +7,7 @@ plugins {
 val coverageFloors = mapOf(
     ":core" to ("0.95" to "0.85"),
     ":apps:cli" to ("0.85" to "0.60"),
+    ":apps:server" to ("0.75" to "0.60"),
 )
 
 subprojects {
