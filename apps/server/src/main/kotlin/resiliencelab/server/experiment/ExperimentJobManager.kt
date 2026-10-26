@@ -23,7 +23,7 @@ class ExperimentJobManager(
         try {
             executor.execute { execute(id, document) }
         } catch (exception: RejectedExecutionException) {
-            val error = exception.message ?: "Experiment execution failed"
+            val error = "Experiment execution failed"
             transition(id) {
                 it.copy(status = ExperimentJobStatus.FAILED, result = null, error = error)
             }
@@ -45,7 +45,7 @@ class ExperimentJobManager(
                 it.copy(status = ExperimentJobStatus.COMPLETED, result = result, error = null)
             }
         } catch (exception: Exception) {
-            val error = exception.message ?: "Experiment execution failed"
+            val error = "Experiment execution failed"
             transition(id) {
                 it.copy(status = ExperimentJobStatus.FAILED, result = null, error = error)
             }

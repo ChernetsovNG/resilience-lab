@@ -101,6 +101,8 @@ class ExperimentJobManagerTest {
         val executor = recordingExecutor(threads = 2)
         val successStarted = CountDownLatch(1)
         val releaseSuccess = CountDownLatch(1)
+        val hostileMessage =
+            "simulation failed safely\njava.lang.IllegalStateException: internal detail\n\tat resiliencelab.Secret.run"
         val manager =
             ExperimentJobManager(
                 executor,
@@ -110,7 +112,7 @@ class ExperimentJobManagerTest {
                         check(releaseSuccess.await(5, SECONDS))
                         result
                     } else {
-                        throw IllegalStateException("simulation failed safely")
+                        throw IllegalStateException(hostileMessage)
                     }
                 },
             )
@@ -122,9 +124,14 @@ class ExperimentJobManagerTest {
         assertThat(executor.awaitCompletion(1)).isTrue()
         val failed = manager.get(failedId)
         assertThat(failed).isEqualTo(
-            ExperimentJob(failedId, ExperimentJobStatus.FAILED, null, "simulation failed safely"),
+            ExperimentJob(failedId, ExperimentJobStatus.FAILED, null, "Experiment execution failed"),
         )
-        assertThat(failed?.error).doesNotContain("IllegalStateException", "at resiliencelab", "\n\tat ")
+        assertThat(failed?.error).doesNotContain(
+            hostileMessage,
+            "IllegalStateException",
+            "at resiliencelab",
+            "\n\tat ",
+        )
         assertThat(manager.get(successId)).isEqualTo(ExperimentJob(successId, ExperimentJobStatus.RUNNING, null, null))
 
         releaseSuccess.countDown()
@@ -152,16 +159,25 @@ class ExperimentJobManagerTest {
 
     @Test
     fun `rejected submission becomes failed instead of remaining queued`() {
+        val hostileMessage =
+            "simulation capacity exhausted\njava.util.concurrent.RejectedExecutionException: pool detail\n\tat org.springframework.Secret.execute"
         val manager =
             ExperimentJobManager(
-                Executor { throw RejectedExecutionException("simulation capacity exhausted") },
+                Executor { throw RejectedExecutionException(hostileMessage) },
                 ExperimentExecutor { result },
             )
 
         val id = manager.submit(document())
+        val failed = manager.get(id)
 
-        assertThat(manager.get(id)).isEqualTo(
-            ExperimentJob(id, ExperimentJobStatus.FAILED, null, "simulation capacity exhausted"),
+        assertThat(failed).isEqualTo(
+            ExperimentJob(id, ExperimentJobStatus.FAILED, null, "Experiment execution failed"),
+        )
+        assertThat(failed?.error).doesNotContain(
+            hostileMessage,
+            "RejectedExecutionException",
+            "at org.springframework",
+            "\n\tat ",
         )
     }
 
