@@ -19,8 +19,32 @@ jobs:
         with:
           distribution: microsoft
           java-version: '25'
-      - name: Build and verify
+      - name: Set up Node.js 25.5.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25.5.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build and verify JVM modules
         run: ./gradlew --no-daemon clean build
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Lint frontend
+        working-directory: web
+        run: npm run lint
+      - name: Test frontend
+        working-directory: web
+        run: npm test -- --run
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+      - name: Install Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Run real browser workflows
+        working-directory: web
+        run: npm run test:e2e
       - name: Upload JaCoCo reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -31,3 +55,12 @@ jobs:
             apps/cli/build/reports/jacoco/test
             apps/server/build/reports/jacoco/test
           if-no-files-found: error
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            web/test-results
+            web/playwright-report
+          if-no-files-found: warn

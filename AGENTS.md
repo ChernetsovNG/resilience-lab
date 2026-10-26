@@ -2,31 +2,50 @@
 
 ## Текущее состояние
 
-Текущий срез включает модули `core`, `apps:cli` и `apps:server`:
+Текущий срез включает модули `core`, `apps:cli`, `apps:server` и `web`:
 
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
 - `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
+- `web` — Vite/React SPA с типизированным API client, health badge, controlled Xyflow editor, формами параметров, baseline/candidate-сравнением, sweep, Recharts-графиками и импортом/экспортом JSON.
 
-Браузерный web UI ещё не реализован; полный MVP не завершён.
+Первый полный MVP завершён: core, CLI, Spring API и браузерный UI реализованы; реальный Chromium-сценарий проходит через editor, API, polling, charts и download без mock API.
 
 ## Стандартные команды сборки и проверки
 
-Все команды выполняются из корня репозитория; для всех JVM-модулей требуется JDK 25 (`jvmToolchain(25)`).
+Gradle-команды выполняются из корня репозитория, команды web — из каталога `web`; для всех JVM-модулей требуется JDK 25 (`jvmToolchain(25)`), для web — Node.js 25.5.0 и npm 11.8.0.
 
-- `./gradlew test` — все тесты.
-- `./gradlew clean build` — чистая полная сборка и все доступные проверки.
+- `./gradlew test` — все JVM-тесты.
+- `./gradlew clean build` — чистая полная сборка и все доступные JVM-проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
+- `npm ci` — воспроизводимая установка frontend-зависимостей из `package-lock.json`.
+- `npm test -- --run` — web unit-тесты.
+- `npm run build` — type-check и production-сборка web в `web/dist/`.
+- `npm run lint` — ESLint для web.
+- `npm run dev` — Vite dev server с proxy `/api` на `http://127.0.0.1:8080`.
+- `npx playwright install chromium` — локальная установка Chromium; CI использует `npx playwright install --with-deps chromium`.
+- `npm run test:e2e` — Playwright запускает изолированные `./gradlew :apps:server:bootRun` из корня и `npm run dev -- --host 127.0.0.1` из `web`, ждёт `http://127.0.0.1:8080/api/v1/health` и `http://127.0.0.1:5173`, не использует уже запущенные серверы и останавливает browser/server processes после прогона. Trace и screenshot при ошибках сохраняются в `web/test-results/`; CI также загружает `web/playwright-report/`, если он сформирован.
 
-Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test` и `apps/server/build/reports/jacoco/test` сохраняются как артефакты workflow.
+Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml`: сохраняет `./gradlew --no-daemon clean build`, затем выполняет Node.js 25.5.0 setup, `npm ci`, lint, unit tests, production build, установку Playwright Chromium и E2E. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и Playwright artifacts сохраняются как артефакты workflow.
+
+### Локальный Docker Compose
+
+- `docker compose up --build -d` — собрать production-like образы и запустить backend и frontend из корня репозитория.
+- Frontend: `http://127.0.0.1:5173`; backend health: `http://127.0.0.1:8080/api/v1/health`. Оба host-порта опубликованы только на loopback (`127.0.0.1`), без configurable LAN access.
+- `docker compose down` — остановить и удалить только контейнеры этого Compose-проекта; volumes, образы и исходники не удаляются.
+- Браузер обращается к same-origin `/api`, Nginx передаёт запросы сервису `backend:8080`. Контейнеры работают от non-root пользователей; секреты и persistent volumes не используются.
+- Задания остаются process-local: перезапуск backend удаляет их, поэтому Compose не обеспечивает сохранение результатов между перезапусками.
+- Проверено 2026-10-26: оба образа реально собраны и запущены; host health вернул 200, proxied missing-job — API JSON 404, отсутствующий asset — Nginx 404. Установленный Playwright Chromium без mock API и локальных webServers прошёл comparison с двумя репликациями до `COMPLETED` и показал Baseline/Candidate metrics. После `docker compose down` список `docker compose ps` пуст.
 
 ### Проверка quality (2026-10-26)
 
 Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+
+Полная web-команда `npm run lint && npm test -- --run && npm run build && npm run test:e2e` завершилась успешно: ESLint без ошибок, 119 unit-тестов в 14 файлах, production build и 6 реальных Chromium E2E-тестов. E2E проверяют add/delete/reconnect, независимое редактирование baseline/candidate, degradation multiplier 2, две репликации, COMPLETED, baseline/candidate success/p95/p99/admitted amplification, различия submitted configurations и численные метрики в полном JSON download, отсутствие POST при invalid или неприменённом sweep draft и ровно две точки `LINK_TIMEOUT` sweep для `25, 50`.
 
 ### Backend API
 
