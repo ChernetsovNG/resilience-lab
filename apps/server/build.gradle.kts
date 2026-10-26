@@ -12,6 +12,9 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm") {
+        version { strictly("1.11.0") }
+    }
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 

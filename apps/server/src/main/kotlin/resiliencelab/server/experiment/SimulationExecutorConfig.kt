@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 
 /** Configures the bounded pool used to keep simulations off request threads. */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 class SimulationExecutorConfig {
     /** Creates a Spring-managed pool with bounded parallelism, queueing, and graceful shutdown. */
     @Bean
