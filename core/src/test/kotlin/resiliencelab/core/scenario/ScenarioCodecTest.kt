@@ -1,11 +1,10 @@
 package resiliencelab.core.scenario
 
 import kotlinx.serialization.SerializationException
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ScenarioCodecTest {
     @Test
@@ -19,17 +18,17 @@ class ScenarioCodecTest {
 
         val decoded = ScenarioCodec.decodeScenario(ScenarioCodec.encodeScenario(scenario))
 
-        assertEquals(scenario, decoded)
+        assertThat(decoded).isEqualTo(scenario)
     }
 
     @Test
     fun `legacy scenario without retry base decodes with the default`() {
         val encoded = ScenarioCodec.encodeScenario(TestData.simpleScenario())
-        assertFalse(encoded.contains("\"base\""))
+        assertThat(encoded).doesNotContain("\"base\"")
 
         val decoded = ScenarioCodec.decodeScenario(encoded)
 
-        assertEquals(2.0, decoded.links.single().retry.base, 0.0)
+        assertThat(decoded.links.single().retry.base).isCloseTo(2.0, offset(0.0))
     }
 
     @Test
@@ -38,8 +37,8 @@ class ScenarioCodecTest {
 
         val decoded = ScenarioCodec.decodeExperiment(ScenarioCodec.encodeExperiment(document))
 
-        assertEquals(document, decoded)
-        assertEquals(1, decoded.schemaVersion)
+        assertThat(decoded).isEqualTo(document)
+        assertThat(decoded.schemaVersion).isEqualTo(1)
     }
 
     @Test
@@ -47,9 +46,8 @@ class ScenarioCodecTest {
         val encoded = ScenarioCodec.encodeScenario(TestData.simpleScenario())
         val withUnknownKey = encoded.replaceFirst("{", "{\n    \"unexpected\": true,")
 
-        assertFailsWith<SerializationException> {
-            ScenarioCodec.decodeScenario(withUnknownKey)
-        }
+        assertThatThrownBy { ScenarioCodec.decodeScenario(withUnknownKey) }
+            .isInstanceOf(SerializationException::class.java)
     }
 
     @Test
@@ -68,17 +66,17 @@ class ScenarioCodecTest {
 
         val encoded = ScenarioCodec.encodeExperiment(document)
 
-        assertFalse(encoded.contains("\"degradation\""))
-        assertFalse(encoded.contains("\"stdDevMs\""))
-        assertFalse(encoded.contains("\"sweepParameter\""))
-        assertFalse(encoded.contains("\"sweepValue\""))
+        assertThat(encoded).doesNotContain("\"degradation\"")
+        assertThat(encoded).doesNotContain("\"stdDevMs\"")
+        assertThat(encoded).doesNotContain("\"sweepParameter\"")
+        assertThat(encoded).doesNotContain("\"sweepValue\"")
     }
 
     @Test
     fun `scenario encoder pretty prints JSON`() {
         val encoded = ScenarioCodec.encodeScenario(TestData.simpleScenario())
 
-        assertTrue(encoded.contains("\n    \"entry\": \"entry\""))
+        assertThat(encoded).contains("\n    \"entry\": \"entry\"")
     }
 
     @Test
@@ -90,9 +88,8 @@ class ScenarioCodecTest {
                 "\"schemaVersion\": 1",
                 "\"schemaVersion\": $version",
             )
-            assertFailsWith<IllegalArgumentException> {
-                ScenarioCodec.decodeExperiment(unsupported)
-            }
+            assertThatThrownBy { ScenarioCodec.decodeExperiment(unsupported) }
+                .isInstanceOf(IllegalArgumentException::class.java)
         }
     }
 
@@ -100,9 +97,8 @@ class ScenarioCodecTest {
     fun `experiment encoder rejects unsupported schema versions`() {
         val document = experimentDocument().copy(schemaVersion = 2)
 
-        assertFailsWith<IllegalArgumentException> {
-            ScenarioCodec.encodeExperiment(document)
-        }
+        assertThatThrownBy { ScenarioCodec.encodeExperiment(document) }
+            .isInstanceOf(IllegalArgumentException::class.java)
     }
 
     @Test
@@ -111,8 +107,8 @@ class ScenarioCodecTest {
 
         val decoded = ScenarioCodec.decodeSweep(ScenarioCodec.encodeSweep(document))
 
-        assertEquals(document, decoded)
-        assertEquals(1, decoded.schemaVersion)
+        assertThat(decoded).isEqualTo(document)
+        assertThat(decoded.schemaVersion).isEqualTo(1)
     }
 
     @Test
@@ -120,9 +116,8 @@ class ScenarioCodecTest {
         val encoded = ScenarioCodec.encodeSweep(sweepDocument())
         val withUnknownKey = encoded.replaceFirst("{", "{\n    \"unexpected\": true,")
 
-        assertFailsWith<SerializationException> {
-            ScenarioCodec.decodeSweep(withUnknownKey)
-        }
+        assertThatThrownBy { ScenarioCodec.decodeSweep(withUnknownKey) }
+            .isInstanceOf(SerializationException::class.java)
     }
 
     @Test
@@ -134,9 +129,8 @@ class ScenarioCodecTest {
                 "\"schemaVersion\": 1",
                 "\"schemaVersion\": $version",
             )
-            assertFailsWith<IllegalArgumentException> {
-                ScenarioCodec.decodeSweep(unsupported)
-            }
+            assertThatThrownBy { ScenarioCodec.decodeSweep(unsupported) }
+                .isInstanceOf(IllegalArgumentException::class.java)
         }
     }
 
@@ -144,9 +138,8 @@ class ScenarioCodecTest {
     fun `sweep encoder rejects unsupported schema versions`() {
         val document = sweepDocument().copy(schemaVersion = 2)
 
-        assertFailsWith<IllegalArgumentException> {
-            ScenarioCodec.encodeSweep(document)
-        }
+        assertThatThrownBy { ScenarioCodec.encodeSweep(document) }
+            .isInstanceOf(IllegalArgumentException::class.java)
     }
 
     private fun sweepDocument(): SweepDocument = SweepDocument(

@@ -6,9 +6,9 @@ import resiliencelab.core.scenario.Execution
 import resiliencelab.core.scenario.TestData
 import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class ServiceMetricsIntegrationTest {
     @Test
@@ -55,19 +55,19 @@ class ServiceMetricsIntegrationTest {
         model.simulate()
         val result = reliabilityModel.metrics.replicationResult()
 
-        assertEquals(listOf(12.0), result.arrivalTimesMs)
-        assertEquals(listOf(10.0), result.allLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(1, result.successes)
-        assertEquals(0, result.failures)
-        assertTrue(result.arrivalTimesMs[0] + result.allLatenciesMs[0] > 15.0)
+        assertThat(result.arrivalTimesMs).containsExactly(12.0)
+        assertThat(result.allLatenciesMs).containsExactly(10.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isEqualTo(1)
+        assertThat(result.failures).isZero()
+        assertThat(result.arrivalTimesMs[0] + result.allLatenciesMs[0]).isGreaterThan(15.0)
         val service = result.services.getValue("entry")
-        assertEquals(1, service.offeredAttempts)
-        assertEquals(1, service.admittedAttempts)
-        assertEquals(0, service.queueRejections)
-        assertEquals(0.95, service.handlerUtilization, 1e-9)
-        assertEquals(0.5, service.meanQueueLength, 1e-9)
-        assertEquals(1.0, service.p95QueueLength, 1e-9)
+        assertThat(service.offeredAttempts).isEqualTo(1)
+        assertThat(service.admittedAttempts).isEqualTo(1)
+        assertThat(service.queueRejections).isZero()
+        assertThat(service.handlerUtilization).isCloseTo(0.95, offset(1e-9))
+        assertThat(service.meanQueueLength).isCloseTo(0.5, offset(1e-9))
+        assertThat(service.p95QueueLength).isCloseTo(1.0, offset(1e-9))
     }
 
     private data class Request(

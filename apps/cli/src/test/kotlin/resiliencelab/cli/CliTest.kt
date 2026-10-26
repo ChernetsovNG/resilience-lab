@@ -21,10 +21,8 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.io.path.readText
+import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class CliTest {
     @TempDir
@@ -43,9 +41,9 @@ class CliTest {
         invocations.forEach { args ->
             val result = execute(args)
 
-            assertEquals(2, result.exitCode, args.toString())
-            assertEquals("", result.stdout, args.toString())
-            assertTrue(result.stderr.contains("Usage:"), args.toString())
+            assertThat(result.exitCode).describedAs(args.toString()).isEqualTo(2)
+            assertThat(result.stdout).describedAs(args.toString()).isEmpty()
+            assertThat(result.stderr).describedAs(args.toString()).contains("Usage:")
         }
     }
 
@@ -55,9 +53,9 @@ class CliTest {
 
         val result = execute(listOf("validate", path.toString()))
 
-        assertEquals(0, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("Valid experiment"))
+        assertThat(result.exitCode).isZero()
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("Valid experiment")
     }
 
     @Test
@@ -66,10 +64,10 @@ class CliTest {
 
         val result = execute(listOf("validate", path.toString()))
 
-        assertEquals(2, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("execution.replications"))
-        assertFalse(result.stderr.contains("\n\tat "))
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("execution.replications")
+        assertThat(result.stderr).doesNotContain("\n\tat ")
     }
 
     @Test
@@ -78,10 +76,10 @@ class CliTest {
 
         val result = execute(listOf("run", path.toString()))
 
-        assertEquals(2, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("Invalid input"))
-        assertFalse(result.stderr.contains("\n\tat "))
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("Invalid input")
+        assertThat(result.stderr).doesNotContain("\n\tat ")
     }
 
     @Test
@@ -91,40 +89,38 @@ class CliTest {
 
         val result = execute(listOf("run", path.toString()))
 
-        assertEquals(2, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("schemaVersion"))
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("schemaVersion")
     }
 
     @Test
     fun `missing input file returns 2 without result output`() {
         val result = execute(listOf("validate", tempDir.resolve("missing.json").toString()))
 
-        assertEquals(2, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("Invalid input"))
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("Invalid input")
     }
 
     @Test
     fun `run executes retry storm example and returns a complete result JSON round trip`() {
         val result = execute(listOf("run", "examples/retry-storm.json"))
 
-        assertEquals(0, result.exitCode, result.stderr)
-        assertEquals("", result.stderr)
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        assertThat(result.stderr).isEmpty()
         val decoded = Json.decodeFromString(ExperimentResult.serializer(), result.stdout)
-        assertEquals(1, decoded.schemaVersion)
-        assertEquals("0.1.0", decoded.applicationVersion)
-        assertEquals("R1.8.1", decoded.kslVersion)
-        assertEquals(listOf("baseline", "candidate"), decoded.variants.map { it.id })
+        assertThat(decoded.schemaVersion).isEqualTo(1)
+        assertThat(decoded.applicationVersion).isEqualTo("0.1.0")
+        assertThat(decoded.kslVersion).isEqualTo("R1.8.1")
+        assertThat(decoded.variants.map { it.id }).containsExactly("baseline", "candidate")
         decoded.variants.forEach { variant ->
-            assertEquals(2, variant.replications.size)
-            assertEquals(
-                setOf("gateway", "middle", "dependency"),
-                variant.replications.first().services.keys,
-            )
+            assertThat(variant.replications).hasSize(2)
+            assertThat(variant.replications.first().services.keys)
+                .containsExactlyInAnyOrder("gateway", "middle", "dependency")
         }
         val encoded = Json.encodeToString(ExperimentResult.serializer(), decoded)
-        assertEquals(decoded, Json.decodeFromString(ExperimentResult.serializer(), encoded))
+        assertThat(Json.decodeFromString(ExperimentResult.serializer(), encoded)).isEqualTo(decoded)
     }
 
     @Test
@@ -145,9 +141,9 @@ class CliTest {
         val stdout = process.inputStream.readBytes().decodeToString()
         val exitCode = process.waitFor()
 
-        assertEquals(0, exitCode, errorFile.readText())
+        assertThat(exitCode).describedAs(errorFile.readText()).isZero()
         val decoded = Json.decodeFromString(ExperimentResult.serializer(), stdout)
-        assertEquals(listOf("baseline", "candidate"), decoded.variants.map { it.id })
+        assertThat(decoded.variants.map { it.id }).containsExactly("baseline", "candidate")
     }
 
     @Test
@@ -157,16 +153,17 @@ class CliTest {
 
         val result = execute(listOf("sweep", path.toString()))
 
-        assertEquals(0, result.exitCode, result.stderr)
-        assertEquals("", result.stderr)
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        assertThat(result.stderr).isEmpty()
         val decoded = Json.decodeFromString(ExperimentResult.serializer(), result.stdout)
-        assertEquals("0.1.0", decoded.applicationVersion)
-        assertEquals("R1.8.1", decoded.kslVersion)
-        assertEquals(listOf("sweep-0", "sweep-1"), decoded.variants.map { it.id })
-        assertEquals(listOf("sweep-0", "sweep-1"), decoded.variants.map { it.label })
-        assertEquals(List(2) { SweepParameter.LINK_TIMEOUT }, decoded.variants.map { it.sweepParameter })
-        assertEquals(listOf(25.0, 50.0), decoded.variants.map { it.sweepValue })
-        assertEquals(List(2) { 1 }, decoded.variants.map { it.replications.size })
+        assertThat(decoded.applicationVersion).isEqualTo("0.1.0")
+        assertThat(decoded.kslVersion).isEqualTo("R1.8.1")
+        assertThat(decoded.variants.map { it.id }).containsExactly("sweep-0", "sweep-1")
+        assertThat(decoded.variants.map { it.label }).containsExactly("sweep-0", "sweep-1")
+        assertThat(decoded.variants.map { it.sweepParameter })
+            .containsExactly(SweepParameter.LINK_TIMEOUT, SweepParameter.LINK_TIMEOUT)
+        assertThat(decoded.variants.map { it.sweepValue }).containsExactly(25.0, 50.0)
+        assertThat(decoded.variants.map { it.replications.size }).containsExactly(1, 1)
     }
 
     @Test
@@ -176,9 +173,9 @@ class CliTest {
 
         val result = execute(listOf("sweep", path.toString()))
 
-        assertEquals(2, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("variants[0].scenario.links[0].timeoutMs"))
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("variants[0].scenario.links[0].timeoutMs")
     }
 
     @Test
@@ -189,10 +186,10 @@ class CliTest {
             throw ExperimentExecutionException("synthetic execution failure")
         }
 
-        assertEquals(1, result.exitCode)
-        assertEquals("", result.stdout)
-        assertTrue(result.stderr.contains("Execution failed: synthetic execution failure"))
-        assertFalse(result.stderr.contains("\n\tat "))
+        assertThat(result.exitCode).isEqualTo(1)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("Execution failed: synthetic execution failure")
+        assertThat(result.stderr).doesNotContain("\n\tat ")
     }
 
     private fun execute(

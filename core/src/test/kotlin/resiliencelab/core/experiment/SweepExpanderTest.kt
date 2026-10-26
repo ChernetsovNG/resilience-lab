@@ -10,9 +10,9 @@ import resiliencelab.core.scenario.SweepDocument
 import resiliencelab.core.scenario.SweepParameter
 import resiliencelab.core.scenario.SweepSpec
 import resiliencelab.core.scenario.TestData
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class SweepExpanderTest {
     @Test
@@ -37,17 +37,15 @@ class SweepExpanderTest {
                 ),
             )
         }
-        assertEquals(3, expanded.variants.size)
-        assertEquals(1, expanded.schemaVersion)
-        assertEquals(execution, expanded.execution)
-        assertEquals(listOf("sweep-0", "sweep-1", "sweep-2"), expanded.variants.map { it.id })
-        assertEquals(values, expanded.variants.map { it.sweepValue })
-        assertEquals(
-            List(values.size) { SweepParameter.LINK_TIMEOUT },
-            expanded.variants.map { it.sweepParameter },
-        )
-        assertEquals(expectedScenarios, expanded.variants.map { it.scenario })
-        assertEquals(before, document)
+        assertThat(expanded.variants).hasSize(3)
+        assertThat(expanded.schemaVersion).isEqualTo(1)
+        assertThat(expanded.execution).isEqualTo(execution)
+        assertThat(expanded.variants.map { it.id }).containsExactly("sweep-0", "sweep-1", "sweep-2")
+        assertThat(expanded.variants.map { it.sweepValue }).containsExactly(25.0, 50.0, 100.0)
+        assertThat(expanded.variants.map { it.sweepParameter })
+            .containsExactly(*Array(values.size) { SweepParameter.LINK_TIMEOUT })
+        assertThat(expanded.variants.map { it.scenario }).isEqualTo(expectedScenarios)
+        assertThat(document).isEqualTo(before)
     }
 
     @Test
@@ -64,14 +62,12 @@ class SweepExpanderTest {
             ),
         )
 
-        assertEquals(
+        assertThat(expanded.variants.map { it.scenario }).isEqualTo(
             values.map { rate -> base.copy(workload = base.workload.copy(arrivalRate = rate)) },
-            expanded.variants.map { it.scenario },
         )
-        assertEquals(values, expanded.variants.map { it.sweepValue })
-        assertEquals(
+        assertThat(expanded.variants.map { it.sweepValue }).isEqualTo(values)
+        assertThat(expanded.variants.map { it.sweepParameter }).isEqualTo(
             List(values.size) { SweepParameter.ARRIVAL_RATE },
-            expanded.variants.map { it.sweepParameter },
         )
     }
 
@@ -88,14 +84,14 @@ class SweepExpanderTest {
             ),
         )
 
-        assertEquals(listOf(1, 2, Int.MAX_VALUE), expanded.variants.map { it.scenario.links.single().maxAttempts })
-        assertEquals(
+        assertThat(expanded.variants.map { it.scenario.links.single().maxAttempts })
+            .containsExactly(1, 2, Int.MAX_VALUE)
+        assertThat(expanded.variants.map { it.scenario }).isEqualTo(
             values.map { attempts ->
                 base.copy(links = listOf(base.links.single().copy(maxAttempts = attempts.toInt())))
             },
-            expanded.variants.map { it.scenario },
         )
-        assertEquals(values, expanded.variants.map { it.sweepValue })
+        assertThat(expanded.variants.map { it.sweepValue }).isEqualTo(values)
     }
 
     @Test
@@ -118,7 +114,7 @@ class SweepExpanderTest {
             ),
         )
 
-        assertEquals(
+        assertThat(expanded.variants.map { it.scenario }).isEqualTo(
             values.map { backoff ->
                 base.copy(
                     links = listOf(
@@ -126,11 +122,10 @@ class SweepExpanderTest {
                     ),
                 )
             },
-            expanded.variants.map { it.scenario },
         )
         expanded.variants.forEach { variant ->
-            assertEquals(1.5, variant.scenario.links.single().retry.base)
-            assertEquals(40.0, variant.scenario.links.single().retry.maxBackoffMs)
+            assertThat(variant.scenario.links.single().retry.base).isEqualTo(1.5)
+            assertThat(variant.scenario.links.single().retry.maxBackoffMs).isEqualTo(40.0)
         }
     }
 
@@ -157,17 +152,16 @@ class SweepExpanderTest {
             ),
         )
 
-        assertEquals(
+        assertThat(expanded.variants.map { it.scenario }).isEqualTo(
             values.map { multiplier ->
                 base.copy(degradation = degradation.copy(processingMultiplier = multiplier))
             },
-            expanded.variants.map { it.scenario },
         )
         expanded.variants.forEach { variant ->
-            assertEquals("backend", variant.scenario.degradation?.serviceId)
-            assertEquals(10.0, variant.scenario.degradation?.startMs)
-            assertEquals(100.0, variant.scenario.degradation?.endMs)
-            assertEquals(0.25, variant.scenario.degradation?.failureRate)
+            assertThat(variant.scenario.degradation?.serviceId).isEqualTo("backend")
+            assertThat(variant.scenario.degradation?.startMs).isEqualTo(10.0)
+            assertThat(variant.scenario.degradation?.endMs).isEqualTo(100.0)
+            assertThat(variant.scenario.degradation?.failureRate).isEqualTo(0.25)
         }
     }
 
@@ -178,27 +172,29 @@ class SweepExpanderTest {
             SweepParameter.MAX_ATTEMPTS,
             SweepParameter.BACKOFF_BASE,
         ).forEach { parameter ->
-            val exception = assertFailsWith<ScenarioValidationException> {
-                SweepExpander.expand(sweepDocument(parameter = parameter, linkId = null))
-            }
-
-            assertEquals(listOf("sweep.linkId"), exception.errors.map { it.path })
+            assertThatExceptionOfType(ScenarioValidationException::class.java)
+                .isThrownBy { SweepExpander.expand(sweepDocument(parameter = parameter, linkId = null)) }
+                .satisfies({ exception ->
+                    assertThat(exception.errors.map { it.path }).containsExactly("sweep.linkId")
+                })
         }
     }
 
     @Test
     fun `degradation sweep requires base degradation rather than creating one`() {
-        val exception = assertFailsWith<ScenarioValidationException> {
-            SweepExpander.expand(
-                sweepDocument(
-                    parameter = SweepParameter.DEGRADATION_MULTIPLIER,
-                    serviceId = "backend",
-                    linkId = null,
-                ),
-            )
-        }
-
-        assertEquals(listOf("sweep.serviceId"), exception.errors.map { it.path })
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy {
+                SweepExpander.expand(
+                    sweepDocument(
+                        parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+                        serviceId = "backend",
+                        linkId = null,
+                    ),
+                )
+            }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path }).containsExactly("sweep.serviceId")
+            })
     }
 
     @Test
@@ -213,18 +209,20 @@ class SweepExpanderTest {
             ),
         )
 
-        val exception = assertFailsWith<ScenarioValidationException> {
-            SweepExpander.expand(
-                sweepDocument(
-                    scenario = base,
-                    parameter = SweepParameter.DEGRADATION_MULTIPLIER,
-                    serviceId = "entry",
-                    linkId = null,
-                ),
-            )
-        }
-
-        assertEquals(listOf("sweep.serviceId"), exception.errors.map { it.path })
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy {
+                SweepExpander.expand(
+                    sweepDocument(
+                        scenario = base,
+                        parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+                        serviceId = "entry",
+                        linkId = null,
+                    ),
+                )
+            }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path }).containsExactly("sweep.serviceId")
+            })
     }
 
     @Test
@@ -240,15 +238,18 @@ class SweepExpanderTest {
         )
 
         invalidValues.forEach { value ->
-            val exception = assertFailsWith<ScenarioValidationException> {
-                SweepExpander.expand(
-                    sweepDocument(
-                        parameter = SweepParameter.MAX_ATTEMPTS,
-                        values = listOf(value),
-                    ),
-                )
-            }
-            assertEquals(listOf("sweep.values[0]"), exception.errors.map { it.path })
+            assertThatExceptionOfType(ScenarioValidationException::class.java)
+                .isThrownBy {
+                    SweepExpander.expand(
+                        sweepDocument(
+                            parameter = SweepParameter.MAX_ATTEMPTS,
+                            values = listOf(value),
+                        ),
+                    )
+                }
+                .satisfies({ exception ->
+                    assertThat(exception.errors.map { it.path }).containsExactly("sweep.values[0]")
+                })
         }
     }
 
@@ -257,23 +258,21 @@ class SweepExpanderTest {
         val base = TestData.simpleScenario()
         val invalid = base.copy(links = listOf(base.links.single().copy(timeoutMs = 0.0)))
 
-        val exception = assertFailsWith<ScenarioValidationException> {
-            SweepExpander.expand(sweepDocument(scenario = invalid))
-        }
-
-        assertEquals(listOf("baseScenario.links[0].timeoutMs"), exception.errors.map { it.path })
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy { SweepExpander.expand(sweepDocument(scenario = invalid)) }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path }).containsExactly("baseScenario.links[0].timeoutMs")
+            })
     }
 
     @Test
     fun `generated experiment validation rejects invalid expanded values`() {
-        val exception = assertFailsWith<ScenarioValidationException> {
-            SweepExpander.expand(sweepDocument(values = listOf(0.0)))
-        }
-
-        assertEquals(
-            listOf("variants[0].scenario.links[0].timeoutMs"),
-            exception.errors.map { it.path },
-        )
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy { SweepExpander.expand(sweepDocument(values = listOf(0.0))) }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path })
+                    .containsExactly("variants[0].scenario.links[0].timeoutMs")
+            })
     }
 
     private fun execution(): Execution = Execution(

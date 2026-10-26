@@ -1,7 +1,8 @@
 package resiliencelab.core.experiment
 
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
 
 class TimeWeightedSeriesTest {
     @Test
@@ -14,7 +15,7 @@ class TimeWeightedSeriesTest {
         series.record(timeMs = 20.0, value = 1_000.0)
         series.finish(timeMs = 30.0)
 
-        assertEquals(4.0, series.average, 1e-12)
+        assertThat(series.average).isCloseTo(4.0, offset(1e-12))
     }
 
     @Test
@@ -26,8 +27,8 @@ class TimeWeightedSeriesTest {
         series.record(timeMs = 7.0, value = 4.0)
         series.finish(timeMs = 25.0)
 
-        assertEquals(3.8, series.average, 1e-12)
-        assertEquals(4.0, series.p95, 1e-12)
+        assertThat(series.average).isCloseTo(3.8, offset(1e-12))
+        assertThat(series.p95).isCloseTo(4.0, offset(1e-12))
     }
 
     @Test
@@ -39,7 +40,7 @@ class TimeWeightedSeriesTest {
         series.record(timeMs = 9.5, value = 100.0)
         series.finish(timeMs = 10.0)
 
-        assertEquals(5.05, series.average, 1e-12)
-        assertEquals(1.0, series.p95, 1e-12)
+        assertThat(series.average).isCloseTo(5.05, offset(1e-12))
+        assertThat(series.p95).isCloseTo(1.0, offset(1e-12))
     }
 }

@@ -8,9 +8,9 @@ import resiliencelab.core.scenario.TestData
 import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import kotlinx.serialization.json.Json
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class SingleServiceInvocationTest {
     @Test
@@ -21,20 +21,20 @@ class SingleServiceInvocationTest {
         )
 
         val invocation = rig.invocations.single()
-        assertEquals(AttemptOutcome.SUCCEEDED, invocation.outcome)
-        assertTrue(invocation.work.isCompleted)
-        assertTrue(invocation.isProcessEnded)
-        assertEquals(20.0, invocation.work.processCompletionTime, 0.0)
+        assertThat(invocation.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(invocation.work.isCompleted).isTrue()
+        assertThat(invocation.isProcessEnded).isTrue()
+        assertThat(invocation.work.processCompletionTime).isCloseTo(20.0, offset(0.0))
 
         val result = rig.result()
-        assertEquals(listOf(0.0), result.arrivalTimesMs)
-        assertEquals(listOf(20.0), result.allLatenciesMs)
-        assertEquals(listOf(20.0), result.successfulLatenciesMs)
-        assertEquals(emptyList(), result.failedLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(1, result.successes)
-        assertEquals(0, result.failures)
-        assertEquals(
+        assertThat(result.arrivalTimesMs).containsExactly(0.0)
+        assertThat(result.allLatenciesMs).containsExactly(20.0)
+        assertThat(result.successfulLatenciesMs).containsExactly(20.0)
+        assertThat(result.failedLatenciesMs).isEmpty()
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isEqualTo(1)
+        assertThat(result.failures).isZero()
+        assertThat(result.services.getValue("entry")).isEqualTo(
             ServiceMetrics(
                 offeredAttempts = 1,
                 admittedAttempts = 1,
@@ -46,10 +46,9 @@ class SingleServiceInvocationTest {
                 meanQueueLength = 0.0,
                 p95QueueLength = 0.0,
             ),
-            result.services.getValue("entry"),
         )
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -68,27 +67,27 @@ class SingleServiceInvocationTest {
             ),
         )
 
-        assertEquals(AttemptOutcome.LOCAL_FAILURE, rig.invocations[0].outcome)
-        assertEquals(20.0, rig.invocations[0].work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.LOCAL_FAILURE, rig.invocations[1].outcome)
-        assertEquals(41.0, rig.invocations[1].work.processCompletionTime, 0.0)
+        assertThat(rig.invocations[0].outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
+        assertThat(rig.invocations[0].work.processCompletionTime).isCloseTo(20.0, offset(0.0))
+        assertThat(rig.invocations[1].outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
+        assertThat(rig.invocations[1].work.processCompletionTime).isCloseTo(41.0, offset(0.0))
 
         val result = rig.result()
-        assertEquals(listOf(0.0), result.arrivalTimesMs)
-        assertEquals(listOf(20.0), result.allLatenciesMs)
-        assertEquals(emptyList(), result.successfulLatenciesMs)
-        assertEquals(listOf(20.0), result.failedLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(0, result.successes)
-        assertEquals(1, result.failures)
-        assertEquals(2, result.services.getValue("entry").offeredAttempts)
-        assertEquals(2, result.services.getValue("entry").admittedAttempts)
-        assertEquals(2, result.services.getValue("entry").failures)
-        assertEquals(0, result.services.getValue("entry").queueRejections)
-        assertEquals(0, result.services.getValue("backend").offeredAttempts)
-        assertEquals(0, result.services.getValue("backend").admittedAttempts)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(result.arrivalTimesMs).containsExactly(0.0)
+        assertThat(result.allLatenciesMs).containsExactly(20.0)
+        assertThat(result.successfulLatenciesMs).isEmpty()
+        assertThat(result.failedLatenciesMs).containsExactly(20.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isZero()
+        assertThat(result.failures).isEqualTo(1)
+        assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(2)
+        assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(2)
+        assertThat(result.services.getValue("entry").failures).isEqualTo(2)
+        assertThat(result.services.getValue("entry").queueRejections).isZero()
+        assertThat(result.services.getValue("backend").offeredAttempts).isZero()
+        assertThat(result.services.getValue("backend").admittedAttempts).isZero()
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -101,26 +100,26 @@ class SingleServiceInvocationTest {
             ),
         )
 
-        assertEquals(AttemptOutcome.SUCCEEDED, rig.invocations[0].outcome)
-        assertEquals(20.0, rig.invocations[0].work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.QUEUE_REJECTED, rig.invocations[1].outcome)
-        assertEquals(1.0, rig.invocations[1].work.processCompletionTime, 0.0)
+        assertThat(rig.invocations[0].outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(rig.invocations[0].work.processCompletionTime).isCloseTo(20.0, offset(0.0))
+        assertThat(rig.invocations[1].outcome).isEqualTo(AttemptOutcome.QUEUE_REJECTED)
+        assertThat(rig.invocations[1].work.processCompletionTime).isCloseTo(1.0, offset(0.0))
 
         val result = rig.result()
-        assertEquals(listOf(1.0), result.arrivalTimesMs)
-        assertEquals(listOf(0.0), result.allLatenciesMs)
-        assertEquals(emptyList(), result.successfulLatenciesMs)
-        assertEquals(listOf(0.0), result.failedLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(0, result.successes)
-        assertEquals(1, result.failures)
+        assertThat(result.arrivalTimesMs).containsExactly(1.0)
+        assertThat(result.allLatenciesMs).containsExactly(0.0)
+        assertThat(result.successfulLatenciesMs).isEmpty()
+        assertThat(result.failedLatenciesMs).containsExactly(0.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isZero()
+        assertThat(result.failures).isEqualTo(1)
         val service = result.services.getValue("entry")
-        assertEquals(2, service.offeredAttempts)
-        assertEquals(1, service.admittedAttempts)
-        assertEquals(0, service.failures)
-        assertEquals(1, service.queueRejections)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(service.offeredAttempts).isEqualTo(2)
+        assertThat(service.admittedAttempts).isEqualTo(1)
+        assertThat(service.failures).isZero()
+        assertThat(service.queueRejections).isEqualTo(1)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -134,28 +133,25 @@ class SingleServiceInvocationTest {
             observationTimesMs = listOf(1.5, 20.5, 40.5),
         )
 
-        assertEquals(
-            listOf(
-                ActiveCounts(1.5, 2, 2),
-                ActiveCounts(20.5, 1, 1),
-                ActiveCounts(40.5, 0, 0),
-            ),
-            rig.observations,
+        assertThat(rig.observations).containsExactly(
+            ActiveCounts(1.5, 2, 2),
+            ActiveCounts(20.5, 1, 1),
+            ActiveCounts(40.5, 0, 0),
         )
-        assertEquals(AttemptOutcome.SUCCEEDED, rig.invocations[0].outcome)
-        assertEquals(AttemptOutcome.SUCCEEDED, rig.invocations[1].outcome)
-        assertEquals(20.0, rig.invocations[0].work.processCompletionTime, 0.0)
-        assertEquals(40.0, rig.invocations[1].work.processCompletionTime, 0.0)
+        assertThat(rig.invocations[0].outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(rig.invocations[1].outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(rig.invocations[0].work.processCompletionTime).isCloseTo(20.0, offset(0.0))
+        assertThat(rig.invocations[1].work.processCompletionTime).isCloseTo(40.0, offset(0.0))
 
         val result = rig.result()
-        assertEquals(listOf(0.0, 1.0), result.arrivalTimesMs)
-        assertEquals(listOf(20.0, 39.0), result.allLatenciesMs)
-        assertEquals(listOf(20.0, 39.0), result.successfulLatenciesMs)
-        assertEquals(2, result.originalArrivals)
-        assertEquals(2, result.successes)
-        assertEquals(0, result.failures)
-        assertEquals(2, result.services.getValue("entry").offeredAttempts)
-        assertEquals(2, result.services.getValue("entry").admittedAttempts)
+        assertThat(result.arrivalTimesMs).containsExactly(0.0, 1.0)
+        assertThat(result.allLatenciesMs).containsExactly(20.0, 39.0)
+        assertThat(result.successfulLatenciesMs).containsExactly(20.0, 39.0)
+        assertThat(result.originalArrivals).isEqualTo(2)
+        assertThat(result.successes).isEqualTo(2)
+        assertThat(result.failures).isZero()
+        assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(2)
+        assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(2)
     }
 
     @Test
@@ -169,7 +165,7 @@ class SingleServiceInvocationTest {
         val encoded = Json.encodeToString(ReplicationResult.serializer(), result)
         val decoded = Json.decodeFromString(ReplicationResult.serializer(), encoded)
 
-        assertEquals(result, decoded)
+        assertThat(decoded).isEqualTo(result)
     }
 
     private fun simulate(

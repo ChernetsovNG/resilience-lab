@@ -2,12 +2,10 @@ package resiliencelab.core.experiment
 
 import ksl.utilities.statistic.Statistic
 import kotlinx.serialization.json.Json
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.math.sqrt
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 
 class MetricsAggregatorTest {
     @Test
@@ -33,27 +31,38 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
-        val successRate = assertNotNull(aggregate.successRate)
-        assertSummary(successRate, mean = 0.625, stdDev = sqrt(0.03125), min = 0.5, max = 0.75)
+        val successRate = aggregate.successRate
+        assertThat(successRate).isNotNull()
+        assertSummary(successRate!!, mean = 0.625, stdDev = sqrt(0.03125), min = 0.5, max = 0.75)
         val expectedSuccessInterval = Statistic(doubleArrayOf(0.75, 0.5)).confidenceInterval(0.95)
-        assertEquals(expectedSuccessInterval.lowerLimit, assertNotNull(successRate.ci95Low), 1e-12)
-        assertEquals(expectedSuccessInterval.upperLimit, assertNotNull(successRate.ci95High), 1e-12)
+        assertThat(successRate.ci95Low).isNotNull()
+        assertThat(successRate.ci95Low!!).isCloseTo(expectedSuccessInterval.lowerLimit, offset(1e-12))
+        assertThat(successRate.ci95High).isNotNull()
+        assertThat(successRate.ci95High!!).isCloseTo(expectedSuccessInterval.upperLimit, offset(1e-12))
 
-        val pooledAll = assertNotNull(aggregate.pooledLatency.all)
-        assertLatency(pooledAll, meanMs = 35.0, p95Ms = 60.0, p99Ms = 60.0)
-        val pooledSuccessful = assertNotNull(aggregate.pooledLatency.successful)
-        assertLatency(pooledSuccessful, meanMs = 27.5, p95Ms = 50.0, p99Ms = 50.0)
-        val pooledFailed = assertNotNull(aggregate.pooledLatency.failed)
-        assertLatency(pooledFailed, meanMs = 50.0, p95Ms = 60.0, p99Ms = 60.0)
+        val pooledAll = aggregate.pooledLatency.all
+        assertThat(pooledAll).isNotNull()
+        assertLatency(pooledAll!!, meanMs = 35.0, p95Ms = 60.0, p99Ms = 60.0)
+        val pooledSuccessful = aggregate.pooledLatency.successful
+        assertThat(pooledSuccessful).isNotNull()
+        assertLatency(pooledSuccessful!!, meanMs = 27.5, p95Ms = 50.0, p99Ms = 50.0)
+        val pooledFailed = aggregate.pooledLatency.failed
+        assertThat(pooledFailed).isNotNull()
+        assertLatency(pooledFailed!!, meanMs = 50.0, p95Ms = 60.0, p99Ms = 60.0)
 
-        assertSummary(assertNotNull(aggregate.p95LatencyMs), 50.0, sqrt(200.0), 40.0, 60.0)
-        assertSummary(assertNotNull(aggregate.p99LatencyMs), 50.0, sqrt(200.0), 40.0, 60.0)
+        assertThat(aggregate.p95LatencyMs).isNotNull()
+        assertSummary(aggregate.p95LatencyMs!!, 50.0, sqrt(200.0), 40.0, 60.0)
+        assertThat(aggregate.p99LatencyMs).isNotNull()
+        assertSummary(aggregate.p99LatencyMs!!, 50.0, sqrt(200.0), 40.0, 60.0)
 
-        val service = assertNotNull(aggregate.services["entry"])
-        val admitted = assertNotNull(service.admittedAmplification)
-        assertSummary(admitted, mean = 0.875, stdDev = sqrt(0.28125), min = 0.5, max = 1.25)
-        val offered = assertNotNull(service.offeredAmplification)
-        assertSummary(offered, mean = 1.25, stdDev = sqrt(0.125), min = 1.0, max = 1.5)
+        val service = aggregate.services["entry"]
+        assertThat(service).isNotNull()
+        val admitted = service!!.admittedAmplification
+        assertThat(admitted).isNotNull()
+        assertSummary(admitted!!, mean = 0.875, stdDev = sqrt(0.28125), min = 0.5, max = 1.25)
+        val offered = service.offeredAmplification
+        assertThat(offered).isNotNull()
+        assertSummary(offered!!, mean = 1.25, stdDev = sqrt(0.125), min = 1.0, max = 1.5)
     }
 
     @Test
@@ -81,17 +90,20 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
-        val pooled = assertNotNull(aggregate.pooledLatency.all)
-        assertLatency(pooled, meanMs = 100.5, p95Ms = 190.95, p99Ms = 198.99)
+        val pooled = aggregate.pooledLatency.all
+        assertThat(pooled).isNotNull()
+        assertLatency(pooled!!, meanMs = 100.5, p95Ms = 190.95, p99Ms = 198.99)
+        assertThat(aggregate.p95LatencyMs).isNotNull()
         assertSummary(
-            assertNotNull(aggregate.p95LatencyMs),
+            aggregate.p95LatencyMs!!,
             mean = 145.95,
             stdDev = sqrt(5_000.0),
             min = 95.95,
             max = 195.95,
         )
+        assertThat(aggregate.p99LatencyMs).isNotNull()
         assertSummary(
-            assertNotNull(aggregate.p99LatencyMs),
+            aggregate.p99LatencyMs!!,
             mean = 149.99,
             stdDev = sqrt(5_000.0),
             min = 99.99,
@@ -113,13 +125,19 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
-        assertSingleValue(assertNotNull(aggregate.successRate), 1.0)
-        assertSingleValue(assertNotNull(aggregate.p95LatencyMs), 10.0)
-        assertSingleValue(assertNotNull(aggregate.p99LatencyMs), 10.0)
-        assertNull(aggregate.pooledLatency.failed)
-        val service = assertNotNull(aggregate.services["entry"])
-        assertSingleValue(assertNotNull(service.admittedAmplification), 2.0)
-        assertSingleValue(assertNotNull(service.offeredAmplification), 3.0)
+        assertThat(aggregate.successRate).isNotNull()
+        assertSingleValue(aggregate.successRate!!, 1.0)
+        assertThat(aggregate.p95LatencyMs).isNotNull()
+        assertSingleValue(aggregate.p95LatencyMs!!, 10.0)
+        assertThat(aggregate.p99LatencyMs).isNotNull()
+        assertSingleValue(aggregate.p99LatencyMs!!, 10.0)
+        assertThat(aggregate.pooledLatency.failed).isNull()
+        val service = aggregate.services["entry"]
+        assertThat(service).isNotNull()
+        assertThat(service!!.admittedAmplification).isNotNull()
+        assertSingleValue(service.admittedAmplification!!, 2.0)
+        assertThat(service.offeredAmplification).isNotNull()
+        assertSingleValue(service.offeredAmplification!!, 3.0)
     }
 
     @Test
@@ -136,19 +154,20 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
-        assertNull(aggregate.successRate)
-        assertNull(aggregate.p95LatencyMs)
-        assertNull(aggregate.p99LatencyMs)
-        assertNull(aggregate.pooledLatency.all)
-        assertNull(aggregate.pooledLatency.successful)
-        assertNull(aggregate.pooledLatency.failed)
-        val service = assertNotNull(aggregate.services["entry"])
-        assertNull(service.admittedAmplification)
-        assertNull(service.offeredAmplification)
+        assertThat(aggregate.successRate).isNull()
+        assertThat(aggregate.p95LatencyMs).isNull()
+        assertThat(aggregate.p99LatencyMs).isNull()
+        assertThat(aggregate.pooledLatency.all).isNull()
+        assertThat(aggregate.pooledLatency.successful).isNull()
+        assertThat(aggregate.pooledLatency.failed).isNull()
+        val service = aggregate.services["entry"]
+        assertThat(service).isNotNull()
+        assertThat(service!!.admittedAmplification).isNull()
+        assertThat(service.offeredAmplification).isNull()
 
         val encoded = Json.encodeToString(AggregateMetrics.serializer(), aggregate)
-        assertFalse(encoded.contains("NaN"))
-        assertEquals(aggregate, Json.decodeFromString(AggregateMetrics.serializer(), encoded))
+        assertThat(encoded).doesNotContain("NaN")
+        assertThat(Json.decodeFromString(AggregateMetrics.serializer(), encoded)).isEqualTo(aggregate)
     }
 
     private fun assertSummary(
@@ -158,25 +177,26 @@ class MetricsAggregatorTest {
         min: Double,
         max: Double,
     ) {
-        assertEquals(mean, actual.mean, 1e-9)
-        assertEquals(stdDev, assertNotNull(actual.stdDev), 1e-9)
-        assertEquals(min, actual.min, 1e-9)
-        assertEquals(max, actual.max, 1e-9)
+        assertThat(actual.mean).isCloseTo(mean, offset(1e-9))
+        assertThat(actual.stdDev).isNotNull()
+        assertThat(actual.stdDev!!).isCloseTo(stdDev, offset(1e-9))
+        assertThat(actual.min).isCloseTo(min, offset(1e-9))
+        assertThat(actual.max).isCloseTo(max, offset(1e-9))
     }
 
     private fun assertSingleValue(actual: MetricSummary, expected: Double) {
-        assertEquals(expected, actual.mean, 1e-12)
-        assertEquals(expected, actual.min, 1e-12)
-        assertEquals(expected, actual.max, 1e-12)
-        assertNull(actual.stdDev)
-        assertNull(actual.ci95Low)
-        assertNull(actual.ci95High)
+        assertThat(actual.mean).isCloseTo(expected, offset(1e-12))
+        assertThat(actual.min).isCloseTo(expected, offset(1e-12))
+        assertThat(actual.max).isCloseTo(expected, offset(1e-12))
+        assertThat(actual.stdDev).isNull()
+        assertThat(actual.ci95Low).isNull()
+        assertThat(actual.ci95High).isNull()
     }
 
     private fun assertLatency(actual: LatencyDistribution, meanMs: Double, p95Ms: Double, p99Ms: Double) {
-        assertEquals(meanMs, actual.meanMs, 1e-9)
-        assertEquals(p95Ms, actual.p95Ms, 1e-9)
-        assertEquals(p99Ms, actual.p99Ms, 1e-9)
+        assertThat(actual.meanMs).isCloseTo(meanMs, offset(1e-9))
+        assertThat(actual.p95Ms).isCloseTo(p95Ms, offset(1e-9))
+        assertThat(actual.p99Ms).isCloseTo(p99Ms, offset(1e-9))
     }
 
     private fun replication(

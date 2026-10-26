@@ -6,9 +6,9 @@ import ksl.modeling.queue.Queue
 import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class BoundedRequestQTest {
     @Test
@@ -19,11 +19,11 @@ class BoundedRequestQTest {
             attempts = listOf(AttemptSpec("idle", arrivalTime = 0.0)),
         )
 
-        assertEquals(mapOf("idle" to 0.0), rig.admissionTimes)
-        assertTrue(rig.rejectionTimes.isEmpty())
-        assertEquals(0, rig.queueSizeAfterAdmission.getValue("idle"))
-        assertEquals(0, rig.maxObservedWaitingQSize)
-        assertEquals(1.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("idle" to 0.0))
+        assertThat(rig.rejectionTimes).isEmpty()
+        assertThat(rig.queueSizeAfterAdmission.getValue("idle")).isZero()
+        assertThat(rig.maxObservedWaitingQSize).isZero()
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(1.0, offset(0.0))
     }
 
     @Test
@@ -36,14 +36,14 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(listOf(0.0), rig.holderAdmissionTimes)
-        assertEquals(mapOf("later" to 12.0), rig.admissionTimes)
-        assertTrue("rejected" !in rig.admissionTimes)
-        assertEquals(mapOf("rejected" to 1.0), rig.rejectionTimes)
-        assertEquals(listOf(1), rig.resourceBusyAtRejection)
-        assertEquals(listOf(0), rig.queueSizeAtRejection)
-        assertEquals(0, rig.maxObservedWaitingQSize)
-        assertEquals(2.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.holderAdmissionTimes).containsExactly(0.0)
+        assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("later" to 12.0))
+        assertThat(rig.admissionTimes).doesNotContainKey("rejected")
+        assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("rejected" to 1.0))
+        assertThat(rig.resourceBusyAtRejection).containsExactly(1)
+        assertThat(rig.queueSizeAtRejection).containsExactly(0)
+        assertThat(rig.maxObservedWaitingQSize).isZero()
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(2.0, offset(0.0))
     }
 
     @Test
@@ -56,11 +56,11 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("waiting" to 10.0), rig.admissionTimes)
-        assertEquals(mapOf("overflow" to 2.0), rig.rejectionTimes)
-        assertEquals(listOf(1), rig.queueSizeAtRejection)
-        assertEquals(1, rig.maxObservedWaitingQSize)
-        assertEquals(2.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("waiting" to 10.0))
+        assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("overflow" to 2.0))
+        assertThat(rig.queueSizeAtRejection).containsExactly(1)
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(1)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(2.0, offset(0.0))
     }
 
     @Test
@@ -74,11 +74,11 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("first" to 10.0, "second" to 11.0), rig.admissionTimes)
-        assertEquals(mapOf("overflow" to 1.0), rig.rejectionTimes)
-        assertEquals(listOf(2), rig.queueSizeAtRejection)
-        assertEquals(2, rig.maxObservedWaitingQSize)
-        assertEquals(3.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("first" to 10.0, "second" to 11.0))
+        assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("overflow" to 1.0))
+        assertThat(rig.queueSizeAtRejection).containsExactly(2)
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(2)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(3.0, offset(0.0))
     }
 
     @Test
@@ -93,12 +93,12 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("two-units" to 20.0), rig.admissionTimes)
-        assertEquals(mapOf("one-unit" to 11.0), rig.rejectionTimes)
-        assertEquals(listOf(true), rig.resourceHasSpareCapacityAtRejection)
-        assertEquals(listOf(1), rig.queueSizeAtRejection)
-        assertEquals(1, rig.maxObservedWaitingQSize)
-        assertEquals(3.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("two-units" to 20.0))
+        assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("one-unit" to 11.0))
+        assertThat(rig.resourceHasSpareCapacityAtRejection).containsExactly(true)
+        assertThat(rig.queueSizeAtRejection).containsExactly(1)
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(1)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(3.0, offset(0.0))
     }
 
     @Test
@@ -113,10 +113,11 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("two-units" to 20.0, "one-unit" to 21.0), rig.admissionTimes)
-        assertTrue(rig.rejectionTimes.isEmpty())
-        assertEquals(2, rig.maxObservedWaitingQSize)
-        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes)
+            .containsExactlyEntriesOf(mapOf("two-units" to 20.0, "one-unit" to 21.0))
+        assertThat(rig.rejectionTimes).isEmpty()
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(2)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(4.0, offset(0.0))
     }
 
     @Test
@@ -131,10 +132,11 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("two-units" to 20.0, "one-unit" to 21.0), rig.admissionTimes)
-        assertTrue(rig.rejectionTimes.isEmpty())
-        assertEquals(2, rig.maxObservedWaitingQSize)
-        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes)
+            .containsExactlyEntriesOf(mapOf("two-units" to 20.0, "one-unit" to 21.0))
+        assertThat(rig.rejectionTimes).isEmpty()
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(2)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(4.0, offset(0.0))
     }
 
     @Test
@@ -149,10 +151,11 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("two-units" to 10.0, "three-units" to 20.0), rig.admissionTimes)
-        assertTrue(rig.rejectionTimes.isEmpty())
-        assertEquals(2, rig.maxObservedWaitingQSize)
-        assertEquals(4.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes)
+            .containsExactlyEntriesOf(mapOf("two-units" to 10.0, "three-units" to 20.0))
+        assertThat(rig.rejectionTimes).isEmpty()
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(2)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(4.0, offset(0.0))
     }
 
     @Test
@@ -168,11 +171,12 @@ class BoundedRequestQTest {
             ),
         )
 
-        assertEquals(mapOf("two-units" to 10.0, "one-unit" to 10.0), rig.admissionTimes)
-        assertEquals(listOf("two-units", "one-unit"), rig.admissionTimes.keys.toList())
-        assertTrue(rig.rejectionTimes.isEmpty())
-        assertEquals(2, rig.maxObservedWaitingQSize)
-        assertEquals(3.0, rig.queue.timeInQ.withinReplicationStatistic.count, 0.0)
+        assertThat(rig.admissionTimes)
+            .containsExactlyEntriesOf(mapOf("two-units" to 10.0, "one-unit" to 10.0))
+        assertThat(rig.admissionTimes.keys).containsExactly("two-units", "one-unit")
+        assertThat(rig.rejectionTimes).isEmpty()
+        assertThat(rig.maxObservedWaitingQSize).isEqualTo(2)
+        assertThat(rig.queue.timeInQ.withinReplicationStatistic.count).isCloseTo(3.0, offset(0.0))
     }
 
     private fun simulate(

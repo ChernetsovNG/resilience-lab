@@ -5,8 +5,8 @@ import resiliencelab.core.scenario.DurationDistribution
 import ksl.utilities.random.rng.RNStreamProvider
 import ksl.utilities.random.rvariable.ExponentialRV
 import ksl.utilities.random.rvariable.LognormalRV
+import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 
 class DurationSamplerTest {
     @Test
@@ -19,7 +19,7 @@ class DurationSamplerTest {
 
         val samples = DoubleArray(8) { sampler.next() }
 
-        assertContentEquals(DoubleArray(8) { 12.5 }, samples)
+        assertThat(samples).containsExactly(*DoubleArray(8) { 12.5 })
     }
 
     @Test
@@ -36,7 +36,7 @@ class DurationSamplerTest {
         val expectedSamples = DoubleArray(16) { expected.value }
         val actualSamples = DoubleArray(16) { sampler.next() }
 
-        assertContentEquals(expectedSamples, actualSamples)
+        assertThat(actualSamples).containsExactly(*expectedSamples)
     }
 
     @Test
@@ -54,7 +54,7 @@ class DurationSamplerTest {
         val expectedSamples = DoubleArray(16) { expected.value }
         val actualSamples = DoubleArray(16) { sampler.next() }
 
-        assertContentEquals(expectedSamples, actualSamples)
+        assertThat(actualSamples).containsExactly(*expectedSamples)
     }
 
     @Test
@@ -66,7 +66,7 @@ class DurationSamplerTest {
         val firstSamples = DoubleArray(16) { first.next() }
         val secondSamples = DoubleArray(16) { second.next() }
 
-        assertContentEquals(firstSamples, secondSamples)
+        assertThat(secondSamples).containsExactly(*firstSamples)
     }
 
     private fun seededProvider(): RNStreamProvider = RNStreamProvider().apply {

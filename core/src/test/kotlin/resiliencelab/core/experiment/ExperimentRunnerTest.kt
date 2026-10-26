@@ -16,15 +16,11 @@ import ksl.utilities.random.rvariable.ExponentialRV
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatExceptionOfType
+import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.Tag
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class ExperimentRunnerTest {
     @Test
@@ -39,7 +35,7 @@ class ExperimentRunnerTest {
         val first = ExperimentRunner.run(document)
         val second = ExperimentRunner.run(document)
 
-        assertEquals(first, second)
+        assertThat(second).isEqualTo(first)
     }
 
     @Test
@@ -49,10 +45,8 @@ class ExperimentRunnerTest {
         val first = ExperimentRunner.run(document(variants = variants, seed = 42L))
         val second = ExperimentRunner.run(document(variants = variants, seed = 43L))
 
-        assertNotEquals(
-            first.variants.single().replications.map { it.arrivalTimesMs },
-            second.variants.single().replications.map { it.arrivalTimesMs },
-        )
+        assertThat(second.variants.single().replications.map { it.arrivalTimesMs })
+            .isNotEqualTo(first.variants.single().replications.map { it.arrivalTimesMs })
     }
 
     @Test
@@ -70,7 +64,7 @@ class ExperimentRunnerTest {
         val candidate = result.variants[1].replications
 
         baseline.indices.forEach { index ->
-            assertEquals(baseline[index].arrivalTimesMs, candidate[index].arrivalTimesMs)
+            assertThat(candidate[index].arrivalTimesMs).isEqualTo(baseline[index].arrivalTimesMs)
         }
     }
 
@@ -100,8 +94,8 @@ class ExperimentRunnerTest {
             replications = 3,
         )
         val actual = result.variants.single().replications.map { it.arrivalTimesMs }
-        assertEquals(expected, actual)
-        assertNotEquals(actual[0], actual[1])
+        assertThat(actual).isEqualTo(expected)
+        assertThat(actual[1]).isNotEqualTo(actual[0])
     }
 
     @Test
@@ -121,32 +115,31 @@ class ExperimentRunnerTest {
             ),
         )
 
-        assertEquals(1, result.schemaVersion)
-        assertEquals("0.1.0", result.applicationVersion)
-        assertEquals("R1.8.1", result.kslVersion)
-        assertEquals(listOf("sweep-1", "baseline"), result.variants.map { it.id })
-        assertEquals(listOf("Arrival rate 0.25", "Baseline"), result.variants.map { it.label })
-        assertEquals(SweepParameter.ARRIVAL_RATE, result.variants[0].sweepParameter)
-        assertEquals(0.25, result.variants[0].sweepValue)
-        assertNull(result.variants[1].sweepParameter)
-        assertNull(result.variants[1].sweepValue)
+        assertThat(result.schemaVersion).isEqualTo(1)
+        assertThat(result.applicationVersion).isEqualTo("0.1.0")
+        assertThat(result.kslVersion).isEqualTo("R1.8.1")
+        assertThat(result.variants.map { it.id }).containsExactly("sweep-1", "baseline")
+        assertThat(result.variants.map { it.label }).containsExactly("Arrival rate 0.25", "Baseline")
+        assertThat(result.variants[0].sweepParameter).isEqualTo(SweepParameter.ARRIVAL_RATE)
+        assertThat(result.variants[0].sweepValue).isEqualTo(0.25)
+        assertThat(result.variants[1].sweepParameter).isNull()
+        assertThat(result.variants[1].sweepValue).isNull()
         result.variants.forEach { variantResult ->
-            assertEquals(2, variantResult.replications.size)
-            assertEquals(MetricsAggregator.aggregate(variantResult.replications), variantResult.aggregate)
+            assertThat(variantResult.replications).hasSize(2)
+            assertThat(variantResult.aggregate).isEqualTo(MetricsAggregator.aggregate(variantResult.replications))
         }
 
         val encoded = Json.encodeToString(ExperimentResult.serializer(), result)
         val root = Json.parseToJsonElement(encoded).jsonObject
-        assertEquals(setOf("schemaVersion", "applicationVersion", "kslVersion", "variants"), root.keys)
+        assertThat(root.keys).containsExactlyInAnyOrder("schemaVersion", "applicationVersion", "kslVersion", "variants")
         val variantsJson = root.getValue("variants").jsonArray
-        assertEquals(
-            setOf("id", "label", "sweepParameter", "sweepValue", "replications", "aggregate"),
-            variantsJson[0].jsonObject.keys,
+        assertThat(variantsJson[0].jsonObject.keys).containsExactlyInAnyOrder(
+            "id", "label", "sweepParameter", "sweepValue", "replications", "aggregate",
         )
-        assertEquals(setOf("id", "label", "replications", "aggregate"), variantsJson[1].jsonObject.keys)
-        assertFalse(variantsJson[1].jsonObject.containsKey("sweepParameter"))
-        assertFalse(variantsJson[1].jsonObject.containsKey("sweepValue"))
-        assertEquals(result, Json.decodeFromString(ExperimentResult.serializer(), encoded))
+        assertThat(variantsJson[1].jsonObject.keys).containsExactlyInAnyOrder("id", "label", "replications", "aggregate")
+        assertThat(variantsJson[1].jsonObject.containsKey("sweepParameter")).isFalse()
+        assertThat(variantsJson[1].jsonObject.containsKey("sweepValue")).isFalse()
+        assertThat(Json.decodeFromString(ExperimentResult.serializer(), encoded)).isEqualTo(result)
     }
 
     @Test
@@ -156,11 +149,11 @@ class ExperimentRunnerTest {
             replications = 0,
         )
 
-        val exception = assertFailsWith<ScenarioValidationException> {
-            ExperimentRunner.run(invalid)
-        }
-
-        assertTrue(exception.errors.any { it.path == "execution.replications" })
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy { ExperimentRunner.run(invalid) }
+            .satisfies({ exception ->
+                assertThat(exception.errors).anyMatch { it.path == "execution.replications" }
+            })
     }
 
     @Test
@@ -182,11 +175,9 @@ class ExperimentRunnerTest {
             maxRealTimeSeconds = 1L,
         )
 
-        val exception = assertFailsWith<ExperimentExecutionException> {
-            ExperimentRunner.run(document)
-        }
-
-        assertTrue(exception.message.orEmpty().contains("capped"))
+        assertThatExceptionOfType(ExperimentExecutionException::class.java)
+            .isThrownBy { ExperimentRunner.run(document) }
+            .satisfies({ exception -> assertThat(exception.message.orEmpty()).contains("capped") })
     }
 
     @Test
@@ -220,15 +211,17 @@ class ExperimentRunnerTest {
         val variant = result.variants.single()
         val replication = variant.replications.single()
         val utilization = replication.services.getValue("entry").handlerUtilization
-        val meanResponseMs = assertNotNull(variant.aggregate.pooledLatency.all).meanMs
+        val pooledLatency = variant.aggregate.pooledLatency.all
+        assertThat(pooledLatency).isNotNull()
+        val meanResponseMs = pooledLatency!!.meanMs
         println(
             "M/M/1 analytic: arrivals=${replication.originalArrivals}, " +
                 "utilization=$utilization, meanResponseMs=$meanResponseMs",
         )
-        assertEquals(replication.originalArrivals, replication.successes)
-        assertEquals(0, replication.failures)
-        assertEquals(0.5, utilization, 0.03)
-        assertEquals(4.0, meanResponseMs, 0.25)
+        assertThat(replication.successes).isEqualTo(replication.originalArrivals)
+        assertThat(replication.failures).isZero()
+        assertThat(utilization).isCloseTo(0.5, offset(0.03))
+        assertThat(meanResponseMs).isCloseTo(4.0, offset(0.25))
     }
 
     private fun document(

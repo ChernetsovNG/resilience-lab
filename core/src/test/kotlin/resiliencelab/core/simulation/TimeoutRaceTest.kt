@@ -12,12 +12,9 @@ import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.utilities.random.rng.RNStreamProvider
 import ksl.utilities.random.rvariable.ExponentialRV
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class TimeoutRaceTest {
     @Test
@@ -28,23 +25,24 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.SUCCEEDED, caller.outcome)
-        assertEquals(50.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.SUCCEEDED, attempt.status)
-        assertEquals(AttemptOutcome.SUCCEEDED, child.outcome)
-        assertEquals(50.0, child.work.processCompletionTime, 0.0)
-        assertEquals(50.0, attempt.timeoutEvent.time, 0.0)
-        assertEquals(KSLEvent.DEFAULT_PRIORITY + 1, attempt.timeoutEvent.priority)
-        assertTrue(attempt.timeoutEvent.cancel)
-        assertFalse(attempt.timeoutEvent.isScheduled)
-        assertEquals(0, rig.result().services.getValue("entry").timeouts)
-        assertEquals(listOf(50.0), rig.result().successfulLatenciesMs)
-        assertEquals(0, rig.handlerBusy("entry"))
-        assertEquals(0, rig.handlerBusy("backend"))
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(caller.work.processCompletionTime).isCloseTo(50.0, offset(0.0))
+        assertThat(attempt.status).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(child.work.processCompletionTime).isCloseTo(50.0, offset(0.0))
+        assertThat(attempt.timeoutEvent.time).isCloseTo(50.0, offset(0.0))
+        assertThat(attempt.timeoutEvent.priority).isEqualTo(KSLEvent.DEFAULT_PRIORITY + 1)
+        assertThat(attempt.timeoutEvent.cancel).isTrue()
+        assertThat(attempt.timeoutEvent.isScheduled).isFalse()
+        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(rig.result().successfulLatenciesMs).containsExactly(50.0)
+        assertThat(rig.handlerBusy("entry")).isZero()
+        assertThat(rig.handlerBusy("backend")).isZero()
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -56,54 +54,52 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
-        assertEquals(50.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.TIMED_OUT, attempt.status)
-        assertEquals(AttemptOutcome.SUCCEEDED, child.outcome)
-        assertEquals(80.0, child.work.processCompletionTime, 0.0)
-        assertTrue(child.work.isCompleted)
-        assertFalse(child.work.isTerminated)
-        assertTrue(child.isProcessEnded)
-        assertFalse(attempt.timeoutEvent.cancel)
-        assertEquals(
-            listOf(
-                Snapshot(25.0, 2, 1, 1, 1, 1, 1, 1),
-                Snapshot(50.5, 1, 0, 0, 1, 1, 1, 1),
-                Snapshot(79.5, 1, 0, 0, 1, 1, 1, 1),
-                Snapshot(80.5, 0, 0, 0, 0, 1, 1, 1),
-            ),
-            rig.observations,
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(caller.work.processCompletionTime).isCloseTo(50.0, offset(0.0))
+        assertThat(attempt.status).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(child.work.processCompletionTime).isCloseTo(80.0, offset(0.0))
+        assertThat(child.work.isCompleted).isTrue()
+        assertThat(child.work.isTerminated).isFalse()
+        assertThat(child.isProcessEnded).isTrue()
+        assertThat(attempt.timeoutEvent.cancel).isFalse()
+        assertThat(rig.observations).containsExactly(
+            Snapshot(25.0, 2, 1, 1, 1, 1, 1, 1),
+            Snapshot(50.5, 1, 0, 0, 1, 1, 1, 1),
+            Snapshot(79.5, 1, 0, 0, 1, 1, 1, 1),
+            Snapshot(80.5, 0, 0, 0, 0, 1, 1, 1),
         )
 
         val result = rig.result()
-        assertEquals(listOf(0.0), result.arrivalTimesMs)
-        assertEquals(listOf(50.0), result.allLatenciesMs)
-        assertEquals(emptyList(), result.successfulLatenciesMs)
-        assertEquals(listOf(50.0), result.failedLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(0, result.successes)
-        assertEquals(1, result.failures)
-        assertEquals(1, result.services.getValue("entry").offeredAttempts)
-        assertEquals(1, result.services.getValue("entry").admittedAttempts)
-        assertEquals(1, result.services.getValue("entry").timeouts)
-        assertEquals(1, result.services.getValue("backend").offeredAttempts)
-        assertEquals(1, result.services.getValue("backend").admittedAttempts)
-        assertEquals(0, result.services.getValue("backend").timeouts)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(result.arrivalTimesMs).containsExactly(0.0)
+        assertThat(result.allLatenciesMs).containsExactly(50.0)
+        assertThat(result.successfulLatenciesMs).isEmpty()
+        assertThat(result.failedLatenciesMs).containsExactly(50.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isZero()
+        assertThat(result.failures).isEqualTo(1)
+        assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").timeouts).isZero()
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
     fun `independent nonzero request and response samples are inside the attempt timeout`() {
         val networkMeanMs = 5.0
         val (requestDelayMs, responseDelayMs) = networkSamples(networkMeanMs)
-        assertTrue(requestDelayMs > 0.0)
-        assertTrue(responseDelayMs > 0.0)
-        assertNotEquals(requestDelayMs, responseDelayMs)
+        assertThat(requestDelayMs).isPositive()
+        assertThat(responseDelayMs).isPositive()
+        assertThat(responseDelayMs).isNotEqualTo(requestDelayMs)
         val expectedCompletionMs = requestDelayMs + 10.0 + responseDelayMs
-        assertTrue(expectedCompletionMs < 500.0)
+        assertThat(expectedCompletionMs).isLessThan(500.0)
 
         val rig = simulate(
             scenario = scenario(
@@ -121,27 +117,25 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(0.0, child.work.processStartTime, 0.0)
-        assertEquals(expectedCompletionMs, child.work.processCompletionTime, 1e-9)
-        assertEquals(expectedCompletionMs, caller.work.processCompletionTime, 1e-9)
-        assertEquals(AttemptOutcome.SUCCEEDED, child.outcome)
-        assertEquals(AttemptOutcome.SUCCEEDED, caller.outcome)
-        assertEquals(AttemptOutcome.SUCCEEDED, attempt.status)
-        assertEquals(listOf(expectedCompletionMs), rig.result().allLatenciesMs)
-        assertEquals(0, rig.result().services.getValue("entry").timeouts)
-        assertTrue(attempt.timeoutEvent.cancel)
-        assertEquals(
-            listOf(
-                Snapshot(requestDelayMs / 2.0, 1, 1, 1, 0, 1, 0, 0),
-                Snapshot(requestDelayMs + 10.0 + responseDelayMs / 2.0, 2, 1, 1, 0, 1, 1, 1),
-            ),
-            rig.observations,
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(child.work.processStartTime).isCloseTo(0.0, offset(0.0))
+        assertThat(child.work.processCompletionTime).isCloseTo(expectedCompletionMs, offset(1e-9))
+        assertThat(caller.work.processCompletionTime).isCloseTo(expectedCompletionMs, offset(1e-9))
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(attempt.status).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(rig.result().allLatenciesMs).containsExactly(expectedCompletionMs)
+        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(attempt.timeoutEvent.cancel).isTrue()
+        assertThat(rig.observations).containsExactly(
+            Snapshot(requestDelayMs / 2.0, 1, 1, 1, 0, 1, 0, 0),
+            Snapshot(requestDelayMs + 10.0 + responseDelayMs / 2.0, 2, 1, 1, 0, 1, 1, 1),
         )
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.handlerBusy("entry"))
-        assertEquals(0, rig.handlerBusy("backend"))
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.handlerBusy("entry")).isZero()
+        assertThat(rig.handlerBusy("backend")).isZero()
     }
 
     @Test
@@ -158,36 +152,35 @@ class TimeoutRaceTest {
 
         val first = rig.invocations[0]
         val second = rig.invocations[1]
-        val firstAttempt = assertNotNull(first.callAttempt)
-        val secondAttempt = assertNotNull(second.callAttempt)
-        assertEquals(AttemptOutcome.SUCCEEDED, first.outcome)
-        assertEquals(80.0, first.work.processCompletionTime, 0.0)
-        assertEquals(80.0, firstAttempt.timeoutEvent.time, 0.0)
-        assertEquals(AttemptOutcome.SUCCEEDED, second.outcome)
-        assertEquals(160.0, second.work.processCompletionTime, 0.0)
-        assertEquals(160.0, secondAttempt.timeoutEvent.time, 0.0)
-        assertEquals(160.0, secondAttempt.child.work.processCompletionTime, 0.0)
-        assertTrue(secondAttempt.timeoutEvent.cancel)
-        assertEquals(
-            listOf(
-                Snapshot(50.5, 3, 1, 1, 1, 2, 1, 1),
-                Snapshot(80.5, 1, 1, 1, 0, 2, 1, 1),
-                Snapshot(110.5, 2, 1, 1, 1, 2, 2, 2),
-                Snapshot(160.5, 0, 0, 0, 0, 2, 2, 2),
-            ),
-            rig.observations,
+        val firstAttempt = first.callAttempt
+        assertThat(firstAttempt).isNotNull()
+        val secondAttempt = second.callAttempt
+        assertThat(secondAttempt).isNotNull()
+        assertThat(first.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(first.work.processCompletionTime).isCloseTo(80.0, offset(0.0))
+        assertThat(firstAttempt!!.timeoutEvent.time).isCloseTo(80.0, offset(0.0))
+        assertThat(second.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(second.work.processCompletionTime).isCloseTo(160.0, offset(0.0))
+        assertThat(secondAttempt!!.timeoutEvent.time).isCloseTo(160.0, offset(0.0))
+        assertThat(secondAttempt.child.work.processCompletionTime).isCloseTo(160.0, offset(0.0))
+        assertThat(secondAttempt.timeoutEvent.cancel).isTrue()
+        assertThat(rig.observations).containsExactly(
+            Snapshot(50.5, 3, 1, 1, 1, 2, 1, 1),
+            Snapshot(80.5, 1, 1, 1, 0, 2, 1, 1),
+            Snapshot(110.5, 2, 1, 1, 1, 2, 2, 2),
+            Snapshot(160.5, 0, 0, 0, 0, 2, 2, 2),
         )
 
         val result = rig.result()
-        assertEquals(listOf(0.0), result.arrivalTimesMs)
-        assertEquals(listOf(160.0), result.allLatenciesMs)
-        assertEquals(listOf(160.0), result.successfulLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(1, result.successes)
-        assertEquals(0, result.failures)
-        assertEquals(0, result.services.getValue("entry").timeouts)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(result.arrivalTimesMs).containsExactly(0.0)
+        assertThat(result.allLatenciesMs).containsExactly(160.0)
+        assertThat(result.successfulLatenciesMs).containsExactly(160.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isEqualTo(1)
+        assertThat(result.failures).isZero()
+        assertThat(result.services.getValue("entry").timeouts).isZero()
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -203,18 +196,19 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        assertEquals(AttemptOutcome.SUCCEEDED, caller.outcome)
-        assertEquals(30.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(30.0, attempt.child.work.processCompletionTime, 0.0)
-        assertEquals(50.0, attempt.timeoutEvent.time, 0.0)
-        assertTrue(attempt.timeoutEvent.cancel)
-        assertFalse(attempt.timeoutEvent.isScheduled)
-        assertEquals(0, rig.result().services.getValue("entry").timeouts)
-        assertEquals(listOf(30.0), rig.result().successfulLatenciesMs)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.handlerBusy("entry"))
-        assertEquals(0, rig.handlerBusy("backend"))
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(caller.work.processCompletionTime).isCloseTo(30.0, offset(0.0))
+        assertThat(attempt!!.child.work.processCompletionTime).isCloseTo(30.0, offset(0.0))
+        assertThat(attempt.timeoutEvent.time).isCloseTo(50.0, offset(0.0))
+        assertThat(attempt.timeoutEvent.cancel).isTrue()
+        assertThat(attempt.timeoutEvent.isScheduled).isFalse()
+        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(rig.result().successfulLatenciesMs).containsExactly(30.0)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.handlerBusy("entry")).isZero()
+        assertThat(rig.handlerBusy("backend")).isZero()
     }
 
     @Test
@@ -231,29 +225,27 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
-        assertEquals(18.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.TIMED_OUT, attempt.status)
-        assertEquals(AttemptOutcome.SUCCEEDED, child.outcome)
-        assertEquals(20.0, child.work.processCompletionTime, 0.0)
-        assertTrue(child.work.isCompleted)
-        assertFalse(child.work.isTerminated)
-        assertFalse(attempt.timeoutEvent.cancel)
-        assertEquals(
-            listOf(
-                Snapshot(14.5, 2, 1, 1, 1, 1, 1, 1),
-                Snapshot(16.0, 2, 1, 1, 0, 1, 1, 1),
-                Snapshot(18.5, 1, 0, 0, 0, 1, 1, 1),
-                Snapshot(20.5, 0, 0, 0, 0, 1, 1, 1),
-            ),
-            rig.observations,
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(caller.work.processCompletionTime).isCloseTo(18.0, offset(0.0))
+        assertThat(attempt.status).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(child.work.processCompletionTime).isCloseTo(20.0, offset(0.0))
+        assertThat(child.work.isCompleted).isTrue()
+        assertThat(child.work.isTerminated).isFalse()
+        assertThat(attempt.timeoutEvent.cancel).isFalse()
+        assertThat(rig.observations).containsExactly(
+            Snapshot(14.5, 2, 1, 1, 1, 1, 1, 1),
+            Snapshot(16.0, 2, 1, 1, 0, 1, 1, 1),
+            Snapshot(18.5, 1, 0, 0, 0, 1, 1, 1),
+            Snapshot(20.5, 0, 0, 0, 0, 1, 1, 1),
         )
-        assertEquals(listOf(18.0), rig.result().failedLatenciesMs)
-        assertEquals(1, rig.result().services.getValue("entry").timeouts)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        assertThat(rig.result().failedLatenciesMs).containsExactly(18.0)
+        assertThat(rig.result().services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
@@ -270,32 +262,30 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
-        assertEquals(10.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.SUCCEEDED, child.outcome)
-        assertEquals(45.0, child.work.processCompletionTime, 0.0)
-        assertTrue(child.work.isCompleted)
-        assertFalse(child.work.isTerminated)
-        assertEquals(
-            listOf(
-                LivenessSnapshot(10.5, 0, 0, 1),
-                LivenessSnapshot(20.5, 1, 0, 1),
-                LivenessSnapshot(30.5, 1, 0, 1),
-                LivenessSnapshot(45.5, 0, 0, 0),
-            ),
-            rig.livenessObservations,
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(caller.work.processCompletionTime).isCloseTo(10.0, offset(0.0))
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(child.work.processCompletionTime).isCloseTo(45.0, offset(0.0))
+        assertThat(child.work.isCompleted).isTrue()
+        assertThat(child.work.isTerminated).isFalse()
+        assertThat(rig.livenessObservations).containsExactly(
+            LivenessSnapshot(10.5, 0, 0, 1),
+            LivenessSnapshot(20.5, 1, 0, 1),
+            LivenessSnapshot(30.5, 1, 0, 1),
+            LivenessSnapshot(45.5, 0, 0, 0),
         )
 
         val result = rig.result()
-        assertEquals(listOf(10.0), result.failedLatenciesMs)
-        assertEquals(1, result.services.getValue("entry").timeouts)
-        assertEquals(1, result.services.getValue("backend").offeredAttempts)
-        assertEquals(1, result.services.getValue("backend").admittedAttempts)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
-        assertEquals(0, rig.reliabilityModel.activeDownstreamProcesses)
+        assertThat(result.failedLatenciesMs).containsExactly(10.0)
+        assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
+        assertThat(rig.reliabilityModel.activeDownstreamProcesses).isZero()
     }
 
     @Test
@@ -317,37 +307,35 @@ class TimeoutRaceTest {
 
         val blocker = rig.invocations[0]
         val caller = rig.invocations[1]
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.SUCCEEDED, blocker.outcome)
-        assertEquals(30.0, blocker.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
-        assertEquals(10.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.QUEUE_REJECTED, child.outcome)
-        assertEquals(40.0, child.work.processCompletionTime, 0.0)
-        assertTrue(child.work.isCompleted)
-        assertFalse(child.work.isTerminated)
-        assertEquals(
-            listOf(
-                LivenessSnapshot(10.5, 1, 0, 1),
-                LivenessSnapshot(20.5, 1, 0, 1),
-                LivenessSnapshot(30.5, 0, 0, 1),
-                LivenessSnapshot(40.5, 0, 0, 0),
-            ),
-            rig.livenessObservations,
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(blocker.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
+        assertThat(blocker.work.processCompletionTime).isCloseTo(30.0, offset(0.0))
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(caller.work.processCompletionTime).isCloseTo(10.0, offset(0.0))
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.QUEUE_REJECTED)
+        assertThat(child.work.processCompletionTime).isCloseTo(40.0, offset(0.0))
+        assertThat(child.work.isCompleted).isTrue()
+        assertThat(child.work.isTerminated).isFalse()
+        assertThat(rig.livenessObservations).containsExactly(
+            LivenessSnapshot(10.5, 1, 0, 1),
+            LivenessSnapshot(20.5, 1, 0, 1),
+            LivenessSnapshot(30.5, 0, 0, 1),
+            LivenessSnapshot(40.5, 0, 0, 0),
         )
 
         val result = rig.result()
-        assertEquals(listOf(10.0), result.failedLatenciesMs)
-        assertEquals(1, result.services.getValue("entry").timeouts)
-        assertEquals(2, result.services.getValue("backend").offeredAttempts)
-        assertEquals(1, result.services.getValue("backend").admittedAttempts)
-        assertEquals(1, result.services.getValue("backend").queueRejections)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
-        assertEquals(0, rig.reliabilityModel.activeDownstreamProcesses)
-        assertEquals(0, rig.handlerBusy("entry"))
-        assertEquals(0, rig.handlerBusy("backend"))
+        assertThat(result.failedLatenciesMs).containsExactly(10.0)
+        assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(2)
+        assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").queueRejections).isEqualTo(1)
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
+        assertThat(rig.reliabilityModel.activeDownstreamProcesses).isZero()
+        assertThat(rig.handlerBusy("entry")).isZero()
+        assertThat(rig.handlerBusy("backend")).isZero()
     }
 
     @Test
@@ -364,32 +352,33 @@ class TimeoutRaceTest {
         )
 
         val caller = rig.invocations.single()
-        val attempt = assertNotNull(caller.callAttempt)
-        val child = attempt.child
-        assertEquals(AttemptOutcome.TIMED_OUT, caller.outcome)
-        assertEquals(10.0, caller.work.processCompletionTime, 0.0)
-        assertEquals(AttemptOutcome.PENDING, child.outcome)
-        assertTrue(child.work.isTerminated)
-        assertFalse(child.work.isCompleted)
-        assertTrue(child.isProcessEnded)
-        assertEquals(0, rig.reliabilityModel.activeDownstreamProcesses)
-        assertEquals(0, rig.reliabilityModel.activeInvocations)
-        assertEquals(0, rig.reliabilityModel.activeOriginalRequests)
+        val attempt = caller.callAttempt
+        assertThat(attempt).isNotNull()
+        val child = attempt!!.child
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.TIMED_OUT)
+        assertThat(caller.work.processCompletionTime).isCloseTo(10.0, offset(0.0))
+        assertThat(child.outcome).isEqualTo(AttemptOutcome.PENDING)
+        assertThat(child.work.isTerminated).isTrue()
+        assertThat(child.work.isCompleted).isFalse()
+        assertThat(child.isProcessEnded).isTrue()
+        assertThat(rig.reliabilityModel.activeDownstreamProcesses).isZero()
+        assertThat(rig.reliabilityModel.activeInvocations).isZero()
+        assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
 
         val result = rig.result()
-        assertEquals(listOf(0.0), result.arrivalTimesMs)
-        assertEquals(listOf(10.0), result.allLatenciesMs)
-        assertEquals(emptyList(), result.successfulLatenciesMs)
-        assertEquals(listOf(10.0), result.failedLatenciesMs)
-        assertEquals(1, result.originalArrivals)
-        assertEquals(0, result.successes)
-        assertEquals(1, result.failures)
-        assertEquals(1, result.services.getValue("entry").offeredAttempts)
-        assertEquals(1, result.services.getValue("entry").admittedAttempts)
-        assertEquals(1, result.services.getValue("entry").timeouts)
-        assertEquals(0, result.services.getValue("backend").offeredAttempts)
-        assertEquals(0, result.services.getValue("backend").admittedAttempts)
-        assertEquals(0, result.services.getValue("backend").queueRejections)
+        assertThat(result.arrivalTimesMs).containsExactly(0.0)
+        assertThat(result.allLatenciesMs).containsExactly(10.0)
+        assertThat(result.successfulLatenciesMs).isEmpty()
+        assertThat(result.failedLatenciesMs).containsExactly(10.0)
+        assertThat(result.originalArrivals).isEqualTo(1)
+        assertThat(result.successes).isZero()
+        assertThat(result.failures).isEqualTo(1)
+        assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(1)
+        assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(result.services.getValue("backend").offeredAttempts).isZero()
+        assertThat(result.services.getValue("backend").admittedAttempts).isZero()
+        assertThat(result.services.getValue("backend").queueRejections).isZero()
     }
 
     private fun networkSamples(meanMs: Double): Pair<Double, Double> {

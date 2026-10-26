@@ -1,16 +1,15 @@
 package resiliencelab.core.scenario
 
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class ScenarioValidatorTest {
     @Test
     fun `valid experiment passes validation and requireValid`() {
         val document = experimentDocument()
 
-        assertEquals(emptyList(), ScenarioValidator.validate(document))
+        assertThat(ScenarioValidator.validate(document)).isEmpty()
         ScenarioValidator.requireValid(document)
     }
 
@@ -107,8 +106,8 @@ class ScenarioValidatorTest {
         )
 
         val paths = ScenarioValidator.validate(document).map { it.path }
-        assertTrue("variants[0].scenario.links[0].from" in paths, paths.toString())
-        assertTrue("variants[0].scenario.links[0].to" in paths, paths.toString())
+        assertThat(paths).describedAs(paths.toString()).contains("variants[0].scenario.links[0].from")
+        assertThat(paths).describedAs(paths.toString()).contains("variants[0].scenario.links[0].to")
     }
 
     @Test
@@ -312,7 +311,7 @@ class ScenarioValidatorTest {
             ),
         )
 
-        assertEquals(emptyList(), ScenarioValidator.validate(document))
+        assertThat(ScenarioValidator.validate(document)).isEmpty()
     }
 
     @Test
@@ -563,21 +562,21 @@ class ScenarioValidatorTest {
             execution().copy(replications = 0),
         )
 
-        val exception = assertFailsWith<ScenarioValidationException> {
-            ScenarioValidator.requireValid(document)
-        }
-
-        assertEquals(
-            listOf("execution.replications", "variants[0].scenario.links[0].maxAttempts"),
-            exception.errors.map { it.path }.sorted(),
-        )
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy { ScenarioValidator.requireValid(document) }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path }.sorted()).containsExactly(
+                    "execution.replications",
+                    "variants[0].scenario.links[0].maxAttempts",
+                )
+            })
     }
 
     @Test
     fun `valid sweep passes validation and requireValid`() {
         val document = sweepDocument()
 
-        assertEquals(emptyList(), ScenarioValidator.validate(document))
+        assertThat(ScenarioValidator.validate(document)).isEmpty()
         ScenarioValidator.requireValid(document)
     }
 
@@ -590,7 +589,7 @@ class ScenarioValidatorTest {
             values = listOf(0.1, 0.2),
         )
 
-        assertEquals(emptyList(), ScenarioValidator.validate(document))
+        assertThat(ScenarioValidator.validate(document)).isEmpty()
     }
 
     @Test
@@ -651,15 +650,14 @@ class ScenarioValidatorTest {
         )
 
         assertSweepPaths(values.indices.map { "sweep.values[$it]" }, document)
-        assertEquals(
-            emptyList(),
+        assertThat(
             ScenarioValidator.validate(
                 sweepDocument(
                     parameter = SweepParameter.MAX_ATTEMPTS,
                     values = listOf(1.0, Int.MAX_VALUE.toDouble()),
                 ),
             ),
-        )
+        ).isEmpty()
     }
 
     @Test
@@ -726,11 +724,11 @@ class ScenarioValidatorTest {
     fun `requireValid throws sweep errors`() {
         val document = sweepDocument(values = emptyList())
 
-        val exception = assertFailsWith<ScenarioValidationException> {
-            ScenarioValidator.requireValid(document)
-        }
-
-        assertEquals(listOf("sweep.values"), exception.errors.map { it.path })
+        assertThatExceptionOfType(ScenarioValidationException::class.java)
+            .isThrownBy { ScenarioValidator.requireValid(document) }
+            .satisfies({ exception ->
+                assertThat(exception.errors.map { it.path }).containsExactly("sweep.values")
+            })
     }
 
     private fun execution(): Execution = Execution(
@@ -799,13 +797,13 @@ class ScenarioValidatorTest {
 
     private fun assertExperimentPaths(expected: List<String>, document: ExperimentDocument) {
         val issues = ScenarioValidator.validate(document)
-        assertEquals(expected.sorted(), issues.map { it.path }.sorted())
-        assertTrue(issues.all { it.message.isNotBlank() }, issues.toString())
+        assertThat(issues.map { it.path }.sorted()).isEqualTo(expected.sorted())
+        assertThat(issues).describedAs(issues.toString()).allMatch { it.message.isNotBlank() }
     }
 
     private fun assertSweepPaths(expected: List<String>, document: SweepDocument) {
         val issues = ScenarioValidator.validate(document)
-        assertEquals(expected.sorted(), issues.map { it.path }.sorted())
-        assertTrue(issues.all { it.message.isNotBlank() }, issues.toString())
+        assertThat(issues.map { it.path }.sorted()).isEqualTo(expected.sorted())
+        assertThat(issues).describedAs(issues.toString()).allMatch { it.message.isNotBlank() }
     }
 }

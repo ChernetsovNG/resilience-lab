@@ -12,10 +12,10 @@ import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.Model
 import ksl.utilities.random.rng.RNStreamProvider
 import ksl.utilities.random.rvariable.ExponentialRV
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,18 +47,15 @@ class DegradationRunoutTest {
             replicationLengthMs = 40.0,
         )
 
-        assertEquals(listOf(14.0, 30.0, 31.0, 25.0), rig.invocations.map { it.work.processCompletionTime })
-        assertEquals(
-            listOf(
-                AttemptOutcome.SUCCEEDED,
-                AttemptOutcome.LOCAL_FAILURE,
-                AttemptOutcome.LOCAL_FAILURE,
-                AttemptOutcome.SUCCEEDED,
-            ),
-            rig.invocations.map { it.outcome },
+        assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(14.0, 30.0, 31.0, 25.0)
+        assertThat(rig.invocations.map { it.outcome }).containsExactly(
+            AttemptOutcome.SUCCEEDED,
+            AttemptOutcome.LOCAL_FAILURE,
+            AttemptOutcome.LOCAL_FAILURE,
+            AttemptOutcome.SUCCEEDED,
         )
-        assertEquals(0, rig.result.originalArrivals)
-        assertEquals(0, rig.result.services.getValue("entry").offeredAttempts)
+        assertThat(rig.result.originalArrivals).isZero()
+        assertThat(rig.result.services.getValue("entry").offeredAttempts).isZero()
         assertDrained(rig.reliabilityModel)
     }
 
@@ -72,19 +69,19 @@ class DegradationRunoutTest {
             streamNum = 3,
             endMs = 25.0,
         )
-        assertTrue(expected.isNotEmpty())
+        assertThat(expected).isNotEmpty()
 
         val rig = simulateOpen(scenario, execution)
 
         assertArrivalTimes(expected, rig.result.arrivalTimesMs)
-        assertTrue(rig.result.arrivalTimesMs.all { it >= 0.0 && it < 25.0 })
-        assertEquals(expected.size, rig.result.originalArrivals)
-        assertEquals(expected.size, rig.result.successes)
-        assertEquals(0, rig.result.failures)
-        assertEquals(expected.size, rig.result.services.getValue("entry").offeredAttempts)
-        assertEquals(25.0, rig.model.time, 1e-9)
-        assertTrue(rig.model.lengthOfReplication.isInfinite())
-        assertEquals(30.seconds, rig.model.maximumAllowedExecutionTimePerReplication)
+        assertThat(rig.result.arrivalTimesMs).allMatch { it >= 0.0 && it < 25.0 }
+        assertThat(rig.result.originalArrivals).isEqualTo(expected.size)
+        assertThat(rig.result.successes).isEqualTo(expected.size)
+        assertThat(rig.result.failures).isZero()
+        assertThat(rig.result.services.getValue("entry").offeredAttempts).isEqualTo(expected.size)
+        assertThat(rig.model.time).isCloseTo(25.0, offset(1e-9))
+        assertThat(rig.model.lengthOfReplication.isInfinite()).isTrue()
+        assertThat(rig.model.maximumAllowedExecutionTimePerReplication).isEqualTo(30.seconds)
         assertDrained(rig.reliabilityModel)
     }
 
@@ -112,33 +109,31 @@ class DegradationRunoutTest {
             endMs = 15.0,
         )
         val measurementArrivals = allArrivals.filter { it >= 10.0 }
-        assertTrue(allArrivals.any { it < 5.0 })
-        assertTrue(measurementArrivals.isNotEmpty())
+        assertThat(allArrivals).anyMatch { it < 5.0 }
+        assertThat(measurementArrivals).isNotEmpty()
 
         val rig = simulateOpen(scenario, execution, observationTimesMs = listOf(5.0))
 
         val warmup = rig.observations.single()
-        assertEquals(1, warmup.entryHandlersBusy)
-        assertTrue(warmup.activeOriginalRequests > 0)
-        assertEquals(0, warmup.originalArrivals)
-        assertEquals(mapOf("entry" to 0, "backend" to 0), warmup.offeredAttempts)
+        assertThat(warmup.entryHandlersBusy).isEqualTo(1)
+        assertThat(warmup.activeOriginalRequests).isPositive()
+        assertThat(warmup.originalArrivals).isZero()
+        assertThat(warmup.offeredAttempts).containsExactlyEntriesOf(mapOf("entry" to 0, "backend" to 0))
         assertArrivalTimes(measurementArrivals, rig.result.arrivalTimesMs)
-        assertEquals(measurementArrivals.size, rig.result.originalArrivals)
-        assertEquals(measurementArrivals.size, rig.result.successes)
-        assertEquals(0, rig.result.failures)
-        assertEquals(measurementArrivals.size, rig.result.allLatenciesMs.size)
+        assertThat(rig.result.originalArrivals).isEqualTo(measurementArrivals.size)
+        assertThat(rig.result.successes).isEqualTo(measurementArrivals.size)
+        assertThat(rig.result.failures).isZero()
+        assertThat(rig.result.allLatenciesMs).hasSize(measurementArrivals.size)
         for (serviceId in listOf("entry", "backend")) {
-            assertEquals(measurementArrivals.size, rig.result.services.getValue(serviceId).offeredAttempts)
-            assertEquals(measurementArrivals.size, rig.result.services.getValue(serviceId).admittedAttempts)
-            assertEquals(0, rig.result.services.getValue(serviceId).timeouts)
-            assertEquals(0, rig.result.services.getValue(serviceId).failures)
+            assertThat(rig.result.services.getValue(serviceId).offeredAttempts).isEqualTo(measurementArrivals.size)
+            assertThat(rig.result.services.getValue(serviceId).admittedAttempts).isEqualTo(measurementArrivals.size)
+            assertThat(rig.result.services.getValue(serviceId).timeouts).isZero()
+            assertThat(rig.result.services.getValue(serviceId).failures).isZero()
         }
-        assertTrue(rig.result.allLatenciesMs.all { it >= 40.0 })
-        assertTrue(
-            rig.result.arrivalTimesMs.zip(rig.result.allLatenciesMs).all { (arrival, latency) ->
-                arrival + latency > 15.0
-            },
-        )
+        assertThat(rig.result.allLatenciesMs).allMatch { it >= 40.0 }
+        assertThat(rig.result.arrivalTimesMs.zip(rig.result.allLatenciesMs)).allMatch { (arrival, latency) ->
+            arrival + latency > 15.0
+        }
         assertDrained(rig.reliabilityModel)
     }
 
@@ -160,13 +155,13 @@ class DegradationRunoutTest {
         val rig = simulateOpen(scenario, execution)
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
-        assertEquals(1, rig.result.originalArrivals)
-        assertEquals(0, rig.result.successes)
-        assertEquals(1, rig.result.failures)
-        assertEquals(listOf(gapMs * 0.75), rig.result.failedLatenciesMs)
-        assertEquals(1, rig.result.services.getValue("entry").admittedAttempts)
-        assertTrue(window.firstMs + gapMs * 0.75 > window.firstMs + gapMs / 2.0)
-        assertTrue(rig.model.time >= window.firstMs + gapMs)
+        assertThat(rig.result.originalArrivals).isEqualTo(1)
+        assertThat(rig.result.successes).isZero()
+        assertThat(rig.result.failures).isEqualTo(1)
+        assertThat(rig.result.failedLatenciesMs).containsExactly(gapMs * 0.75)
+        assertThat(rig.result.services.getValue("entry").admittedAttempts).isEqualTo(1)
+        assertThat(window.firstMs + gapMs * 0.75).isGreaterThan(window.firstMs + gapMs / 2.0)
+        assertThat(rig.model.time).isGreaterThanOrEqualTo(window.firstMs + gapMs)
         assertDrained(rig.reliabilityModel)
     }
 
@@ -208,13 +203,13 @@ class DegradationRunoutTest {
         val rig = simulateOpen(scenario, execution, manualInvocations = listOf(blocker))
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
-        assertEquals(listOf(10.0), rig.result.failedLatenciesMs)
-        assertEquals(1, rig.result.services.getValue("entry").timeouts)
-        assertEquals(1, rig.result.services.getValue("backend").offeredAttempts)
-        assertEquals(0, rig.result.services.getValue("backend").admittedAttempts)
-        assertEquals(1, rig.result.services.getValue("backend").queueRejections)
-        assertTrue(window.firstMs + gapMs / 2.0 > window.firstMs + 30.0)
-        assertTrue(rig.model.time >= window.firstMs + 40.0)
+        assertThat(rig.result.failedLatenciesMs).containsExactly(10.0)
+        assertThat(rig.result.services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(rig.result.services.getValue("backend").offeredAttempts).isEqualTo(1)
+        assertThat(rig.result.services.getValue("backend").admittedAttempts).isZero()
+        assertThat(rig.result.services.getValue("backend").queueRejections).isEqualTo(1)
+        assertThat(window.firstMs + gapMs / 2.0).isGreaterThan(window.firstMs + 30.0)
+        assertThat(rig.model.time).isGreaterThanOrEqualTo(window.firstMs + 40.0)
         assertDrained(rig.reliabilityModel)
     }
 
@@ -232,11 +227,10 @@ class DegradationRunoutTest {
         val reliabilityModel = ReliabilityModel(model, scenario, execution)
         model.maximumAllowedExecutionTimePerReplication = 1.nanoseconds
 
-        assertFailsWith<ExperimentExecutionException> {
-            reliabilityModel.runReplication()
-        }
+        assertThatThrownBy { reliabilityModel.runReplication() }
+            .isInstanceOf(ExperimentExecutionException::class.java)
 
-        assertTrue(model.time < firstArrivalMs + 100.0)
+        assertThat(model.time).isLessThan(firstArrivalMs + 100.0)
     }
 
     private fun singleServiceScenario(
@@ -339,16 +333,16 @@ class DegradationRunoutTest {
     }
 
     private fun assertArrivalTimes(expected: List<Double>, actual: List<Double>) {
-        assertEquals(expected.size, actual.size)
+        assertThat(actual).hasSize(expected.size)
         expected.zip(actual).forEach { (expectedTime, actualTime) ->
-            assertEquals(expectedTime, actualTime, 1e-9)
+            assertThat(actualTime).isCloseTo(expectedTime, offset(1e-9))
         }
     }
 
     private fun assertDrained(model: ReliabilityModel) {
-        assertEquals(0, model.activeOriginalRequests)
-        assertEquals(0, model.activeInvocations)
-        assertEquals(0, model.activeDownstreamProcesses)
+        assertThat(model.activeOriginalRequests).isZero()
+        assertThat(model.activeInvocations).isZero()
+        assertThat(model.activeDownstreamProcesses).isZero()
     }
 
     private fun fixed(durationMs: Double): DurationDistribution = DurationDistribution(
