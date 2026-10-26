@@ -2,25 +2,31 @@
 
 ## Текущее состояние
 
-Текущий срез включает модули `core`, `apps:cli` и `apps:server`:
+Текущий срез включает модули `core`, `apps:cli`, `apps:server` и `web`:
 
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
 - `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
+- `web` — Vite/React app shell, типизированный API client и health badge.
 
-Браузерный web UI ещё не реализован; полный MVP не завершён.
+Браузерный UI пока содержит только app shell без graph/editor/charts; полный MVP не завершён.
 
 ## Стандартные команды сборки и проверки
 
-Все команды выполняются из корня репозитория; для всех JVM-модулей требуется JDK 25 (`jvmToolchain(25)`).
+Gradle-команды выполняются из корня репозитория, команды web — из каталога `web`; для всех JVM-модулей требуется JDK 25 (`jvmToolchain(25)`), для web — Node.js 25.5.0 и npm 11.8.0.
 
-- `./gradlew test` — все тесты.
-- `./gradlew clean build` — чистая полная сборка и все доступные проверки.
+- `./gradlew test` — все JVM-тесты.
+- `./gradlew clean build` — чистая полная сборка и все доступные JVM-проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
+- `npm test -- --run` — web unit-тесты.
+- `npm run build` — type-check и production-сборка web.
+- `npm run lint` — ESLint для web.
+- `npm run dev` — Vite dev server с proxy `/api` на `http://127.0.0.1:8080`.
+- `npm run test:e2e` — Playwright-тесты web.
 
 Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test` и `apps/server/build/reports/jacoco/test` сохраняются как артефакты workflow.
 
