@@ -16,20 +16,22 @@ internal class ArrivalGenerator(
     measurementMs: Double,
     streamNum: Int,
 ) : ModelElement(reliabilityModel, "workload:arrival-generator") {
-    private val interArrival = ExponentialRV(
-        mean = 1 / arrivalRate,
-        streamNum = streamNum,
-        streamProvider = reliabilityModel.streamProvider,
-    )
-    private val arrivalEndMs = warmupMs + measurementMs
-    private val arrivalAction = EventActionIfc<Nothing> {
-        reliabilityModel.invoke(
-            serviceId = entryServiceId,
-            originalRequest = true,
-            measurementCohort = time >= warmupMs && time < arrivalEndMs,
+    private val interArrival =
+        ExponentialRV(
+            mean = 1 / arrivalRate,
+            streamNum = streamNum,
+            streamProvider = reliabilityModel.streamProvider,
         )
-        scheduleNext()
-    }
+    private val arrivalEndMs = warmupMs + measurementMs
+    private val arrivalAction =
+        EventActionIfc<Nothing> {
+            reliabilityModel.invoke(
+                serviceId = entryServiceId,
+                originalRequest = true,
+                measurementCohort = time >= warmupMs && time < arrivalEndMs,
+            )
+            scheduleNext()
+        }
 
     override fun initialize() {
         scheduleNext()

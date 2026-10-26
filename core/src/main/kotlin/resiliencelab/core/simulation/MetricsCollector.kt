@@ -23,9 +23,10 @@ class MetricsCollector(
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
-    private val serviceMetrics = services.associateTo(linkedMapOf()) { service ->
-        service.id to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
-    }
+    private val serviceMetrics =
+        services.associateTo(linkedMapOf()) { service ->
+            service.id to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
+        }
 
     fun replicationResult(): ReplicationResult {
         val timeMs = currentTimeMs()
@@ -55,17 +56,29 @@ class MetricsCollector(
         serviceMetrics.values.forEach { it.reset() }
     }
 
-    internal fun startMeasurement(serviceId: String, queueLength: Int, busyHandlers: Int) {
+    internal fun startMeasurement(
+        serviceId: String,
+        queueLength: Int,
+        busyHandlers: Int,
+    ) {
         val metrics = serviceMetrics.getValue(serviceId)
         metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
         metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
     }
 
-    internal fun recordQueueLength(serviceId: String, timeMs: Double, queueLength: Int) {
+    internal fun recordQueueLength(
+        serviceId: String,
+        timeMs: Double,
+        queueLength: Int,
+    ) {
         serviceMetrics.getValue(serviceId).queueLengthSeries.record(timeMs, queueLength.toDouble())
     }
 
-    internal fun recordBusyHandlers(serviceId: String, timeMs: Double, busyHandlers: Int) {
+    internal fun recordBusyHandlers(
+        serviceId: String,
+        timeMs: Double,
+        busyHandlers: Int,
+    ) {
         serviceMetrics.getValue(serviceId).busyHandlerSeries.record(timeMs, busyHandlers.toDouble())
     }
 
@@ -78,7 +91,11 @@ class MetricsCollector(
         originalArrivals++
     }
 
-    internal fun recordOriginalCompletion(arrivalTimeMs: Double, completionTimeMs: Double, succeeded: Boolean) {
+    internal fun recordOriginalCompletion(
+        arrivalTimeMs: Double,
+        completionTimeMs: Double,
+        succeeded: Boolean,
+    ) {
         val latencyMs = completionTimeMs - arrivalTimeMs
         allLatenciesMs += latencyMs
         if (succeeded) {
@@ -144,16 +161,17 @@ class MetricsCollector(
             busyHandlerSeries.finish(timeMs)
         }
 
-        fun snapshot(): ServiceMetrics = ServiceMetrics(
-            offeredAttempts = offeredAttempts,
-            admittedAttempts = admittedAttempts,
-            timeouts = timeouts,
-            retries = retries,
-            failures = failures,
-            queueRejections = queueRejections,
-            handlerUtilization = busyHandlerSeries.average / configuredHandlers,
-            meanQueueLength = queueLengthSeries.average,
-            p95QueueLength = queueLengthSeries.p95,
-        )
+        fun snapshot(): ServiceMetrics =
+            ServiceMetrics(
+                offeredAttempts = offeredAttempts,
+                admittedAttempts = admittedAttempts,
+                timeouts = timeouts,
+                retries = retries,
+                failures = failures,
+                queueRejections = queueRejections,
+                handlerUtilization = busyHandlerSeries.average / configuredHandlers,
+                meanQueueLength = queueLengthSeries.average,
+                p95QueueLength = queueLengthSeries.p95,
+            )
     }
 }

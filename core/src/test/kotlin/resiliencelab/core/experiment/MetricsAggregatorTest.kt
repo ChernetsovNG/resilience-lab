@@ -1,7 +1,7 @@
 package resiliencelab.core.experiment
 
-import ksl.utilities.statistic.Statistic
 import kotlinx.serialization.json.Json
+import ksl.utilities.statistic.Statistic
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import kotlin.math.sqrt
@@ -10,24 +10,26 @@ import kotlin.test.Test
 class MetricsAggregatorTest {
     @Test
     fun `two replications aggregate pooled latency ratios and uncertainty`() {
-        val first = replication(
-            originalArrivals = 4,
-            successes = 3,
-            failures = 1,
-            allLatencies = listOf(10.0, 20.0, 30.0, 40.0),
-            successfulLatencies = listOf(10.0, 20.0, 30.0),
-            failedLatencies = listOf(40.0),
-            services = mapOf("entry" to service(offered = 6, admitted = 5)),
-        )
-        val second = replication(
-            originalArrivals = 2,
-            successes = 1,
-            failures = 1,
-            allLatencies = listOf(50.0, 60.0),
-            successfulLatencies = listOf(50.0),
-            failedLatencies = listOf(60.0),
-            services = mapOf("entry" to service(offered = 2, admitted = 1)),
-        )
+        val first =
+            replication(
+                originalArrivals = 4,
+                successes = 3,
+                failures = 1,
+                allLatencies = listOf(10.0, 20.0, 30.0, 40.0),
+                successfulLatencies = listOf(10.0, 20.0, 30.0),
+                failedLatencies = listOf(40.0),
+                services = mapOf("entry" to service(offered = 6, admitted = 5)),
+            )
+        val second =
+            replication(
+                originalArrivals = 2,
+                successes = 1,
+                failures = 1,
+                allLatencies = listOf(50.0, 60.0),
+                successfulLatencies = listOf(50.0),
+                failedLatencies = listOf(60.0),
+                services = mapOf("entry" to service(offered = 2, admitted = 1)),
+            )
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
@@ -69,24 +71,26 @@ class MetricsAggregatorTest {
     fun `pooled and across replication percentiles follow KSL interpolation`() {
         val firstLatencies = (1..100).map { it.toDouble() }
         val secondLatencies = (101..200).map { it.toDouble() }
-        val first = replication(
-            originalArrivals = 100,
-            successes = 100,
-            failures = 0,
-            allLatencies = firstLatencies,
-            successfulLatencies = firstLatencies,
-            failedLatencies = emptyList(),
-            services = emptyMap(),
-        )
-        val second = replication(
-            originalArrivals = 100,
-            successes = 100,
-            failures = 0,
-            allLatencies = secondLatencies,
-            successfulLatencies = secondLatencies,
-            failedLatencies = emptyList(),
-            services = emptyMap(),
-        )
+        val first =
+            replication(
+                originalArrivals = 100,
+                successes = 100,
+                failures = 0,
+                allLatencies = firstLatencies,
+                successfulLatencies = firstLatencies,
+                failedLatencies = emptyList(),
+                services = emptyMap(),
+            )
+        val second =
+            replication(
+                originalArrivals = 100,
+                successes = 100,
+                failures = 0,
+                allLatencies = secondLatencies,
+                successfulLatencies = secondLatencies,
+                failedLatencies = emptyList(),
+                services = emptyMap(),
+            )
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
@@ -113,15 +117,16 @@ class MetricsAggregatorTest {
 
     @Test
     fun `single replication retains point values but has no fabricated uncertainty`() {
-        val result = replication(
-            originalArrivals = 1,
-            successes = 1,
-            failures = 0,
-            allLatencies = listOf(10.0),
-            successfulLatencies = listOf(10.0),
-            failedLatencies = emptyList(),
-            services = mapOf("entry" to service(offered = 3, admitted = 2)),
-        )
+        val result =
+            replication(
+                originalArrivals = 1,
+                successes = 1,
+                failures = 0,
+                allLatencies = listOf(10.0),
+                successfulLatencies = listOf(10.0),
+                failedLatencies = emptyList(),
+                services = mapOf("entry" to service(offered = 3, admitted = 2)),
+            )
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
@@ -142,15 +147,16 @@ class MetricsAggregatorTest {
 
     @Test
     fun `empty latency and zero denominator results are serializable nulls`() {
-        val result = replication(
-            originalArrivals = 0,
-            successes = 0,
-            failures = 0,
-            allLatencies = emptyList(),
-            successfulLatencies = emptyList(),
-            failedLatencies = emptyList(),
-            services = mapOf("entry" to service(offered = 0, admitted = 0)),
-        )
+        val result =
+            replication(
+                originalArrivals = 0,
+                successes = 0,
+                failures = 0,
+                allLatencies = emptyList(),
+                successfulLatencies = emptyList(),
+                failedLatencies = emptyList(),
+                services = mapOf("entry" to service(offered = 0, admitted = 0)),
+            )
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
@@ -184,7 +190,10 @@ class MetricsAggregatorTest {
         assertThat(actual.max).isCloseTo(max, offset(1e-9))
     }
 
-    private fun assertSingleValue(actual: MetricSummary, expected: Double) {
+    private fun assertSingleValue(
+        actual: MetricSummary,
+        expected: Double,
+    ) {
         assertThat(actual.mean).isCloseTo(expected, offset(1e-12))
         assertThat(actual.min).isCloseTo(expected, offset(1e-12))
         assertThat(actual.max).isCloseTo(expected, offset(1e-12))
@@ -193,7 +202,12 @@ class MetricsAggregatorTest {
         assertThat(actual.ci95High).isNull()
     }
 
-    private fun assertLatency(actual: LatencyDistribution, meanMs: Double, p95Ms: Double, p99Ms: Double) {
+    private fun assertLatency(
+        actual: LatencyDistribution,
+        meanMs: Double,
+        p95Ms: Double,
+        p99Ms: Double,
+    ) {
         assertThat(actual.meanMs).isCloseTo(meanMs, offset(1e-9))
         assertThat(actual.p95Ms).isCloseTo(p95Ms, offset(1e-9))
         assertThat(actual.p99Ms).isCloseTo(p99Ms, offset(1e-9))
@@ -207,26 +221,31 @@ class MetricsAggregatorTest {
         successfulLatencies: List<Double>,
         failedLatencies: List<Double>,
         services: Map<String, ServiceMetrics>,
-    ): ReplicationResult = ReplicationResult(
-        arrivalTimesMs = List(originalArrivals) { it.toDouble() },
-        allLatenciesMs = allLatencies,
-        successfulLatenciesMs = successfulLatencies,
-        failedLatenciesMs = failedLatencies,
-        originalArrivals = originalArrivals,
-        successes = successes,
-        failures = failures,
-        services = services,
-    )
+    ): ReplicationResult =
+        ReplicationResult(
+            arrivalTimesMs = List(originalArrivals) { it.toDouble() },
+            allLatenciesMs = allLatencies,
+            successfulLatenciesMs = successfulLatencies,
+            failedLatenciesMs = failedLatencies,
+            originalArrivals = originalArrivals,
+            successes = successes,
+            failures = failures,
+            services = services,
+        )
 
-    private fun service(offered: Int, admitted: Int): ServiceMetrics = ServiceMetrics(
-        offeredAttempts = offered,
-        admittedAttempts = admitted,
-        timeouts = 0,
-        retries = 0,
-        failures = 0,
-        queueRejections = 0,
-        handlerUtilization = 0.0,
-        meanQueueLength = 0.0,
-        p95QueueLength = 0.0,
-    )
+    private fun service(
+        offered: Int,
+        admitted: Int,
+    ): ServiceMetrics =
+        ServiceMetrics(
+            offeredAttempts = offered,
+            admittedAttempts = admitted,
+            timeouts = 0,
+            retries = 0,
+            failures = 0,
+            queueRejections = 0,
+            handlerUtilization = 0.0,
+            meanQueueLength = 0.0,
+            p95QueueLength = 0.0,
+        )
 }

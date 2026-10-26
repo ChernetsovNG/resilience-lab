@@ -11,11 +11,12 @@ import kotlinx.serialization.json.Json
 object ScenarioCodec {
     private const val SUPPORTED_SCHEMA_VERSION = 1
 
-    private val json = Json {
-        ignoreUnknownKeys = false
-        explicitNulls = false
-        prettyPrint = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = false
+            explicitNulls = false
+            prettyPrint = true
+        }
 
     fun decodeScenario(text: String): Scenario = json.decodeFromString(text)
 

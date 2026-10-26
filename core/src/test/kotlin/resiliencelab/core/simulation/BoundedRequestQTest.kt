@@ -13,11 +13,12 @@ import kotlin.test.Test
 class BoundedRequestQTest {
     @Test
     fun `idle zero-wait service accepts an attempt without leaving a queued request`() {
-        val rig = simulate(
-            waitingCapacity = 0,
-            holderReleaseTimes = emptyList(),
-            attempts = listOf(AttemptSpec("idle", arrivalTime = 0.0)),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 0,
+                holderReleaseTimes = emptyList(),
+                attempts = listOf(AttemptSpec("idle", arrivalTime = 0.0)),
+            )
 
         assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("idle" to 0.0))
         assertThat(rig.rejectionTimes).isEmpty()
@@ -28,13 +29,15 @@ class BoundedRequestQTest {
 
     @Test
     fun `occupied zero-wait rejection rolls back and later idle work proceeds`() {
-        val rig = simulate(
-            waitingCapacity = 0,
-            attempts = listOf(
-                AttemptSpec("rejected", arrivalTime = 1.0),
-                AttemptSpec("later", arrivalTime = 12.0),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 0,
+                attempts =
+                    listOf(
+                        AttemptSpec("rejected", arrivalTime = 1.0),
+                        AttemptSpec("later", arrivalTime = 12.0),
+                    ),
+            )
 
         assertThat(rig.holderAdmissionTimes).containsExactly(0.0)
         assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("later" to 12.0))
@@ -48,13 +51,15 @@ class BoundedRequestQTest {
 
     @Test
     fun `one request waits and the next is rejected when waiting capacity is one`() {
-        val rig = simulate(
-            waitingCapacity = 1,
-            attempts = listOf(
-                AttemptSpec("waiting", arrivalTime = 1.0),
-                AttemptSpec("overflow", arrivalTime = 2.0),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 1,
+                attempts =
+                    listOf(
+                        AttemptSpec("waiting", arrivalTime = 1.0),
+                        AttemptSpec("overflow", arrivalTime = 2.0),
+                    ),
+            )
 
         assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("waiting" to 10.0))
         assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("overflow" to 2.0))
@@ -65,14 +70,16 @@ class BoundedRequestQTest {
 
     @Test
     fun `simultaneous arrivals are admitted FIFO up to waiting capacity`() {
-        val rig = simulate(
-            waitingCapacity = 2,
-            attempts = listOf(
-                AttemptSpec("first", arrivalTime = 1.0),
-                AttemptSpec("second", arrivalTime = 1.0),
-                AttemptSpec("overflow", arrivalTime = 1.0),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 2,
+                attempts =
+                    listOf(
+                        AttemptSpec("first", arrivalTime = 1.0),
+                        AttemptSpec("second", arrivalTime = 1.0),
+                        AttemptSpec("overflow", arrivalTime = 1.0),
+                    ),
+            )
 
         assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("first" to 10.0, "second" to 11.0))
         assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("overflow" to 1.0))
@@ -83,15 +90,17 @@ class BoundedRequestQTest {
 
     @Test
     fun `available capacity does not bypass a full queue while a request waits`() {
-        val rig = simulate(
-            waitingCapacity = 1,
-            resourceCapacity = 2,
-            holderReleaseTimes = listOf(10.0, 20.0),
-            attempts = listOf(
-                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
-                AttemptSpec("one-unit", arrivalTime = 11.0, amount = 1),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 1,
+                resourceCapacity = 2,
+                holderReleaseTimes = listOf(10.0, 20.0),
+                attempts =
+                    listOf(
+                        AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                        AttemptSpec("one-unit", arrivalTime = 11.0, amount = 1),
+                    ),
+            )
 
         assertThat(rig.admissionTimes).containsExactlyEntriesOf(mapOf("two-units" to 20.0))
         assertThat(rig.rejectionTimes).containsExactlyEntriesOf(mapOf("one-unit" to 11.0))
@@ -103,15 +112,17 @@ class BoundedRequestQTest {
 
     @Test
     fun `later fitting arrival waits behind oversized head with spare waiting capacity`() {
-        val rig = simulate(
-            waitingCapacity = 2,
-            resourceCapacity = 2,
-            holderReleaseTimes = listOf(10.0, 20.0),
-            attempts = listOf(
-                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
-                AttemptSpec("one-unit", arrivalTime = 11.0, amount = 1),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 2,
+                resourceCapacity = 2,
+                holderReleaseTimes = listOf(10.0, 20.0),
+                attempts =
+                    listOf(
+                        AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                        AttemptSpec("one-unit", arrivalTime = 11.0, amount = 1),
+                    ),
+            )
 
         assertThat(rig.admissionTimes)
             .containsExactlyEntriesOf(mapOf("two-units" to 20.0, "one-unit" to 21.0))
@@ -122,15 +133,17 @@ class BoundedRequestQTest {
 
     @Test
     fun `release does not bypass oversized head with spare waiting capacity`() {
-        val rig = simulate(
-            waitingCapacity = 2,
-            resourceCapacity = 2,
-            holderReleaseTimes = listOf(10.0, 20.0),
-            attempts = listOf(
-                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
-                AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 2,
+                resourceCapacity = 2,
+                holderReleaseTimes = listOf(10.0, 20.0),
+                attempts =
+                    listOf(
+                        AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                        AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
+                    ),
+            )
 
         assertThat(rig.admissionTimes)
             .containsExactlyEntriesOf(mapOf("two-units" to 20.0, "one-unit" to 21.0))
@@ -141,15 +154,17 @@ class BoundedRequestQTest {
 
     @Test
     fun `dequeued head allocates before a larger later request`() {
-        val rig = simulate(
-            waitingCapacity = 2,
-            resourceCapacity = 3,
-            holderReleaseTimes = listOf(10.0, 20.0),
-            attempts = listOf(
-                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
-                AttemptSpec("three-units", arrivalTime = 2.0, amount = 3),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 2,
+                resourceCapacity = 3,
+                holderReleaseTimes = listOf(10.0, 20.0),
+                attempts =
+                    listOf(
+                        AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                        AttemptSpec("three-units", arrivalTime = 2.0, amount = 3),
+                    ),
+            )
 
         assertThat(rig.admissionTimes)
             .containsExactlyEntriesOf(mapOf("two-units" to 10.0, "three-units" to 20.0))
@@ -160,16 +175,18 @@ class BoundedRequestQTest {
 
     @Test
     fun `single release wakes head and fitting successor in FIFO order`() {
-        val rig = simulate(
-            waitingCapacity = 2,
-            resourceCapacity = 3,
-            holderReleaseTimes = listOf(10.0),
-            holderAmount = 3,
-            attempts = listOf(
-                AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
-                AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
-            ),
-        )
+        val rig =
+            simulate(
+                waitingCapacity = 2,
+                resourceCapacity = 3,
+                holderReleaseTimes = listOf(10.0),
+                holderAmount = 3,
+                attempts =
+                    listOf(
+                        AttemptSpec("two-units", arrivalTime = 1.0, amount = 2),
+                        AttemptSpec("one-unit", arrivalTime = 2.0, amount = 1),
+                    ),
+            )
 
         assertThat(rig.admissionTimes)
             .containsExactlyEntriesOf(mapOf("two-units" to 10.0, "one-unit" to 10.0))
@@ -210,12 +227,13 @@ class BoundedRequestQTest {
     ) : ProcessModel(parent, null) {
         val resource: ResourceWithQ
 
-        val queue = BoundedRequestQ(
-            parent = this,
-            name = "service:queue",
-            waitingCapacity = waitingCapacity,
-            resourceProvider = { resource },
-        )
+        val queue =
+            BoundedRequestQ(
+                parent = this,
+                name = "service:queue",
+                waitingCapacity = waitingCapacity,
+                resourceProvider = { resource },
+            )
         val admissionTimes = mutableMapOf<String, Double>()
         val rejectionTimes = mutableMapOf<String, Double>()
         val holderAdmissionTimes = mutableListOf<Double>()
@@ -227,25 +245,28 @@ class BoundedRequestQTest {
             private set
 
         init {
-            resource = FifoResourceWithQ(
-                parent = this,
-                name = "service",
-                capacity = resourceCapacity,
-                queue = queue,
-            )
-            queue.addQueueListener(object : QueueListenerIfc<ProcessModel.Entity.Request> {
-                override fun update(
-                    status: Queue.Status,
-                    queue: Queue<ProcessModel.Entity.Request>,
-                    qObject: ProcessModel.Entity.Request?,
-                ) {
-                    if (status != Queue.Status.ENQUEUED || qObject == null) return
-                    val requestWillWait = queue.size > 1 || !resource.canAllocate(qObject.amountRequested)
-                    if (requestWillWait) {
-                        maxObservedWaitingQSize = maxOf(maxObservedWaitingQSize, queue.size)
+            resource =
+                FifoResourceWithQ(
+                    parent = this,
+                    name = "service",
+                    capacity = resourceCapacity,
+                    queue = queue,
+                )
+            queue.addQueueListener(
+                object : QueueListenerIfc<ProcessModel.Entity.Request> {
+                    override fun update(
+                        status: Queue.Status,
+                        queue: Queue<ProcessModel.Entity.Request>,
+                        qObject: ProcessModel.Entity.Request?,
+                    ) {
+                        if (status != Queue.Status.ENQUEUED || qObject == null) return
+                        val requestWillWait = queue.size > 1 || !resource.canAllocate(qObject.amountRequested)
+                        if (requestWillWait) {
+                            maxObservedWaitingQSize = maxOf(maxObservedWaitingQSize, queue.size)
+                        }
                     }
-                }
-            })
+                },
+            )
         }
 
         override fun initialize() {
@@ -265,30 +286,36 @@ class BoundedRequestQTest {
             }
         }
 
-        inner class Holder(private val releaseAt: Double) : Entity() {
-            val work = process {
-                val allocation = seize(resource, amountNeeded = holderAmount)
-                holderAdmissionTimes += time
-                delay(releaseAt)
-                release(allocation)
-            }
+        inner class Holder(
+            private val releaseAt: Double,
+        ) : Entity() {
+            val work =
+                process {
+                    val allocation = seize(resource, amountNeeded = holderAmount)
+                    holderAdmissionTimes += time
+                    delay(releaseAt)
+                    release(allocation)
+                }
         }
 
-        inner class Attempt(private val spec: AttemptSpec) : Entity() {
-            val work = process {
-                try {
-                    val allocation = seize(resource, amountNeeded = spec.amount)
-                    admissionTimes[spec.label] = time
-                    queueSizeAfterAdmission[spec.label] = resource.waitingQ.size
-                    delay(1.0)
-                    release(allocation)
-                } catch (exception: QueueFullException) {
-                    rejectionTimes[spec.label] = time
-                    queueSizeAtRejection += resource.waitingQ.size
-                    resourceBusyAtRejection += resource.numBusy
-                    resourceHasSpareCapacityAtRejection += resource.capacity - resource.numBusy >= spec.amount
+        inner class Attempt(
+            private val spec: AttemptSpec,
+        ) : Entity() {
+            val work =
+                process {
+                    try {
+                        val allocation = seize(resource, amountNeeded = spec.amount)
+                        admissionTimes[spec.label] = time
+                        queueSizeAfterAdmission[spec.label] = resource.waitingQ.size
+                        delay(1.0)
+                        release(allocation)
+                    } catch (exception: QueueFullException) {
+                        rejectionTimes[spec.label] = time
+                        queueSizeAtRejection += resource.waitingQ.size
+                        resourceBusyAtRejection += resource.numBusy
+                        resourceHasSpareCapacityAtRejection += resource.capacity - resource.numBusy >= spec.amount
+                    }
                 }
-            }
         }
     }
 }

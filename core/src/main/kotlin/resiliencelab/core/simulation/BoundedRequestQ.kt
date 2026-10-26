@@ -15,6 +15,7 @@ import ksl.simulation.ModelElement
  * A request can still bypass the empty queue for immediate allocation; otherwise overflow is removed and rejected
  * with [QueueFullException]. Waiting capacity is separate from the resource's handler capacity.
  */
+@Suppress("ktlint:standard:function-naming")
 fun BoundedRequestQ(
     parent: ModelElement,
     name: String?,
@@ -61,22 +62,26 @@ class FifoResourceWithQ(
     private var queryingNonPendingRequests = false
 
     init {
-        waitingQ.addQueueListener(object : QueueListenerIfc<ProcessModel.Entity.Request> {
-            override fun update(
-                status: Queue.Status,
-                queue: Queue<ProcessModel.Entity.Request>,
-                qObject: ProcessModel.Entity.Request?,
-            ) {
-                allocationPending = status == Queue.Status.DEQUEUED
-            }
-        })
-        addAllocationListener(object : AllocationListenerIfc {
-            override fun allocate(allocation: Allocation) {
-                allocationPending = false
-            }
+        waitingQ.addQueueListener(
+            object : QueueListenerIfc<ProcessModel.Entity.Request> {
+                override fun update(
+                    status: Queue.Status,
+                    queue: Queue<ProcessModel.Entity.Request>,
+                    qObject: ProcessModel.Entity.Request?,
+                ) {
+                    allocationPending = status == Queue.Status.DEQUEUED
+                }
+            },
+        )
+        addAllocationListener(
+            object : AllocationListenerIfc {
+                override fun allocate(allocation: Allocation) {
+                    allocationPending = false
+                }
 
-            override fun deallocate(allocation: Allocation) = Unit
-        })
+                override fun deallocate(allocation: Allocation) = Unit
+            },
+        )
     }
 
     override val numAvailableUnits: Int

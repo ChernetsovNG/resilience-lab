@@ -1,11 +1,5 @@
 package resiliencelab.core.simulation
 
-import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.TestData
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.KSLEvent
@@ -14,15 +8,22 @@ import ksl.utilities.random.rng.RNStreamProvider
 import ksl.utilities.random.rvariable.ExponentialRV
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
+import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.scenario.DistributionKind
+import resiliencelab.core.scenario.DurationDistribution
+import resiliencelab.core.scenario.Execution
+import resiliencelab.core.scenario.Scenario
+import resiliencelab.core.scenario.TestData
 import kotlin.test.Test
 
 class TimeoutRaceTest {
     @Test
     fun `same-time response wins and cancels the timeout`() {
-        val rig = simulate(
-            scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
-            requests = listOf(InvocationSpec()),
-        )
+        val rig =
+            simulate(
+                scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
+                requests = listOf(InvocationSpec()),
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -37,7 +38,13 @@ class TimeoutRaceTest {
         assertThat(attempt.timeoutEvent.priority).isEqualTo(KSLEvent.DEFAULT_PRIORITY + 1)
         assertThat(attempt.timeoutEvent.cancel).isTrue()
         assertThat(attempt.timeoutEvent.isScheduled).isFalse()
-        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(
+            rig
+                .result()
+                .services
+                .getValue("entry")
+                .timeouts,
+        ).isZero()
         assertThat(rig.result().successfulLatenciesMs).containsExactly(50.0)
         assertThat(rig.handlerBusy("entry")).isZero()
         assertThat(rig.handlerBusy("backend")).isZero()
@@ -47,11 +54,12 @@ class TimeoutRaceTest {
 
     @Test
     fun `caller times out at 50 while orphaned downstream succeeds at 80`() {
-        val rig = simulate(
-            scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 80.0, timeoutMs = 50.0),
-            requests = listOf(InvocationSpec()),
-            observationTimesMs = listOf(25.0, 50.5, 79.5, 80.5),
-        )
+        val rig =
+            simulate(
+                scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 80.0, timeoutMs = 50.0),
+                requests = listOf(InvocationSpec()),
+                observationTimesMs = listOf(25.0, 50.5, 79.5, 80.5),
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -101,20 +109,23 @@ class TimeoutRaceTest {
         val expectedCompletionMs = requestDelayMs + 10.0 + responseDelayMs
         assertThat(expectedCompletionMs).isLessThan(500.0)
 
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 10.0,
-                network = DurationDistribution(DistributionKind.EXPONENTIAL, networkMeanMs, stdDevMs = null),
-                timeoutMs = 500.0,
-            ),
-            requests = listOf(InvocationSpec()),
-            observationTimesMs = listOf(
-                requestDelayMs / 2.0,
-                requestDelayMs + 10.0 + responseDelayMs / 2.0,
-            ),
-            replicationLengthMs = 1_000.0,
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 10.0,
+                        network = DurationDistribution(DistributionKind.EXPONENTIAL, networkMeanMs, stdDevMs = null),
+                        timeoutMs = 500.0,
+                    ),
+                requests = listOf(InvocationSpec()),
+                observationTimesMs =
+                    listOf(
+                        requestDelayMs / 2.0,
+                        requestDelayMs + 10.0 + responseDelayMs / 2.0,
+                    ),
+                replicationLengthMs = 1_000.0,
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -127,7 +138,13 @@ class TimeoutRaceTest {
         assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(attempt.status).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(rig.result().allLatenciesMs).containsExactly(expectedCompletionMs)
-        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(
+            rig
+                .result()
+                .services
+                .getValue("entry")
+                .timeouts,
+        ).isZero()
         assertThat(attempt.timeoutEvent.cancel).isTrue()
         assertThat(rig.observations).containsExactly(
             Snapshot(requestDelayMs / 2.0, 1, 1, 1, 0, 1, 0, 0),
@@ -140,15 +157,17 @@ class TimeoutRaceTest {
 
     @Test
     fun `caller queue and one local preprocessing are outside the attempt timeout`() {
-        val rig = simulate(
-            scenario = scenario(entryProcessingMs = 30.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
-            requests = listOf(
-                InvocationSpec(originalRequest = false),
-                InvocationSpec(originalRequest = true),
-            ),
-            observationTimesMs = listOf(50.5, 80.5, 110.5, 160.5),
-            replicationLengthMs = 200.0,
-        )
+        val rig =
+            simulate(
+                scenario = scenario(entryProcessingMs = 30.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
+                requests =
+                    listOf(
+                        InvocationSpec(originalRequest = false),
+                        InvocationSpec(originalRequest = true),
+                    ),
+                observationTimesMs = listOf(50.5, 80.5, 110.5, 160.5),
+                replicationLengthMs = 200.0,
+            )
 
         val first = rig.invocations[0]
         val second = rig.invocations[1]
@@ -185,15 +204,17 @@ class TimeoutRaceTest {
 
     @Test
     fun `response before the deadline cancels the scheduled timeout`() {
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 20.0,
-                network = fixed(5.0),
-                timeoutMs = 50.0,
-            ),
-            requests = listOf(InvocationSpec()),
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 20.0,
+                        network = fixed(5.0),
+                        timeoutMs = 50.0,
+                    ),
+                requests = listOf(InvocationSpec()),
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -204,7 +225,13 @@ class TimeoutRaceTest {
         assertThat(attempt.timeoutEvent.time).isCloseTo(50.0, offset(0.0))
         assertThat(attempt.timeoutEvent.cancel).isTrue()
         assertThat(attempt.timeoutEvent.isScheduled).isFalse()
-        assertThat(rig.result().services.getValue("entry").timeouts).isZero()
+        assertThat(
+            rig
+                .result()
+                .services
+                .getValue("entry")
+                .timeouts,
+        ).isZero()
         assertThat(rig.result().successfulLatenciesMs).containsExactly(30.0)
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.handlerBusy("entry")).isZero()
@@ -213,16 +240,18 @@ class TimeoutRaceTest {
 
     @Test
     fun `timeout expires while the response network is still in flight`() {
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 10.0,
-                network = fixed(5.0),
-                timeoutMs = 18.0,
-            ),
-            requests = listOf(InvocationSpec()),
-            observationTimesMs = listOf(14.5, 16.0, 18.5, 20.5),
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 10.0,
+                        network = fixed(5.0),
+                        timeoutMs = 18.0,
+                    ),
+                requests = listOf(InvocationSpec()),
+                observationTimesMs = listOf(14.5, 16.0, 18.5, 20.5),
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -243,23 +272,31 @@ class TimeoutRaceTest {
             Snapshot(20.5, 0, 0, 0, 0, 1, 1, 1),
         )
         assertThat(rig.result().failedLatenciesMs).containsExactly(18.0)
-        assertThat(rig.result().services.getValue("entry").timeouts).isEqualTo(1)
+        assertThat(
+            rig
+                .result()
+                .services
+                .getValue("entry")
+                .timeouts,
+        ).isEqualTo(1)
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
 
     @Test
     fun `downstream process remains live after caller timeout during request network`() {
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 5.0,
-                network = fixed(20.0),
-                timeoutMs = 10.0,
-            ),
-            requests = listOf(InvocationSpec()),
-            observationTimesMs = listOf(10.5, 20.5, 30.5, 45.5),
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 5.0,
+                        network = fixed(20.0),
+                        timeoutMs = 10.0,
+                    ),
+                requests = listOf(InvocationSpec()),
+                observationTimesMs = listOf(10.5, 20.5, 30.5, 45.5),
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -290,20 +327,23 @@ class TimeoutRaceTest {
 
     @Test
     fun `never admitted orphan remains live throughout its response network`() {
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 30.0,
-                network = fixed(20.0),
-                timeoutMs = 10.0,
-                backendQueueCapacity = 0,
-            ),
-            requests = listOf(
-                InvocationSpec(originalRequest = false, serviceId = "backend"),
-                InvocationSpec(),
-            ),
-            observationTimesMs = listOf(10.5, 20.5, 30.5, 40.5),
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 30.0,
+                        network = fixed(20.0),
+                        timeoutMs = 10.0,
+                        backendQueueCapacity = 0,
+                    ),
+                requests =
+                    listOf(
+                        InvocationSpec(originalRequest = false, serviceId = "backend"),
+                        InvocationSpec(),
+                    ),
+                observationTimesMs = listOf(10.5, 20.5, 30.5, 40.5),
+            )
 
         val blocker = rig.invocations[0]
         val caller = rig.invocations[1]
@@ -340,16 +380,18 @@ class TimeoutRaceTest {
 
     @Test
     fun `replication termination during request network balances downstream liveness`() {
-        val rig = simulate(
-            scenario = scenario(
-                entryProcessingMs = 0.0,
-                backendProcessingMs = 5.0,
-                network = fixed(20.0),
-                timeoutMs = 10.0,
-            ),
-            requests = listOf(InvocationSpec()),
-            replicationLengthMs = 15.0,
-        )
+        val rig =
+            simulate(
+                scenario =
+                    scenario(
+                        entryProcessingMs = 0.0,
+                        backendProcessingMs = 5.0,
+                        network = fixed(20.0),
+                        timeoutMs = 10.0,
+                    ),
+                requests = listOf(InvocationSpec()),
+                replicationLengthMs = 15.0,
+            )
 
         val caller = rig.invocations.single()
         val attempt = caller.callAttempt
@@ -382,9 +424,10 @@ class TimeoutRaceTest {
     }
 
     private fun networkSamples(meanMs: Double): Pair<Double, Double> {
-        val provider = RNStreamProvider().apply {
-            initialSeed(SeedFactory.seedVector(42L))
-        }
+        val provider =
+            RNStreamProvider().apply {
+                initialSeed(SeedFactory.seedVector(42L))
+            }
         val samples = ExponentialRV(meanMs, streamNum = 5, streamProvider = provider)
         return samples.value to samples.value
     }
@@ -398,24 +441,27 @@ class TimeoutRaceTest {
     ): Scenario {
         val base = TestData.simpleScenario()
         return base.copy(
-            services = listOf(
-                base.services[0].copy(processing = fixed(entryProcessingMs)),
-                base.services[1].copy(
-                    processing = fixed(backendProcessingMs),
-                    queueCapacity = backendQueueCapacity ?: base.services[1].queueCapacity,
+            services =
+                listOf(
+                    base.services[0].copy(processing = fixed(entryProcessingMs)),
+                    base.services[1].copy(
+                        processing = fixed(backendProcessingMs),
+                        queueCapacity = backendQueueCapacity ?: base.services[1].queueCapacity,
+                    ),
                 ),
-            ),
-            links = listOf(
-                base.links.single().copy(network = network, timeoutMs = timeoutMs, maxAttempts = 1),
-            ),
+            links =
+                listOf(
+                    base.links.single().copy(network = network, timeoutMs = timeoutMs, maxAttempts = 1),
+                ),
         )
     }
 
-    private fun fixed(durationMs: Double): DurationDistribution = DurationDistribution(
-        kind = DistributionKind.FIXED,
-        meanMs = durationMs,
-        stdDevMs = null,
-    )
+    private fun fixed(durationMs: Double): DurationDistribution =
+        DurationDistribution(
+            kind = DistributionKind.FIXED,
+            meanMs = durationMs,
+            stdDevMs = null,
+        )
 
     private fun simulate(
         scenario: Scenario,
@@ -432,13 +478,14 @@ class TimeoutRaceTest {
         return SimulationRig(model, reliabilityModel, driver)
     }
 
-    private fun execution(): Execution = Execution(
-        replications = 1,
-        warmupMs = 0.0,
-        measurementMs = 1_000.0,
-        seed = 42L,
-        maxRealTimeSeconds = 30L,
-    )
+    private fun execution(): Execution =
+        Execution(
+            replications = 1,
+            warmupMs = 0.0,
+            measurementMs = 1_000.0,
+            seed = 42L,
+            maxRealTimeSeconds = 30L,
+        )
 
     private data class InvocationSpec(
         val arrivalTimeMs: Double = 0.0,
@@ -478,8 +525,7 @@ class TimeoutRaceTest {
 
         fun result(): ReplicationResult = reliabilityModel.metrics.replicationResult()
 
-        fun handlerBusy(serviceId: String): Int =
-            (model.getModelElement(serviceId) as ResourceWithQ).numBusy
+        fun handlerBusy(serviceId: String): Int = (model.getModelElement(serviceId) as ResourceWithQ).numBusy
     }
 
     private class InvocationDriver(
@@ -497,11 +543,12 @@ class TimeoutRaceTest {
             observations.clear()
             livenessObservations.clear()
             requests.forEach { request ->
-                created += reliabilityModel.invoke(
-                    serviceId = request.serviceId,
-                    timeUntilActivation = request.arrivalTimeMs,
-                    originalRequest = request.originalRequest,
-                )
+                created +=
+                    reliabilityModel.invoke(
+                        serviceId = request.serviceId,
+                        timeUntilActivation = request.arrivalTimeMs,
+                        originalRequest = request.originalRequest,
+                    )
             }
             observationTimesMs.forEach { observationTime ->
                 activate(Observation().work, observationTime)
@@ -509,25 +556,28 @@ class TimeoutRaceTest {
         }
 
         private inner class Observation : Entity() {
-            val work = process("observe-timeout-race") {
-                val result = reliabilityModel.metrics.replicationResult()
-                observations += Snapshot(
-                    timeMs = time,
-                    activeInvocations = reliabilityModel.activeInvocations,
-                    activeOriginalRequests = reliabilityModel.activeOriginalRequests,
-                    entryHandlerBusy = (model.getModelElement("entry") as ResourceWithQ).numBusy,
-                    backendHandlerBusy = (model.getModelElement("backend") as ResourceWithQ).numBusy,
-                    entryOffered = result.services.getValue("entry").offeredAttempts,
-                    backendOffered = result.services.getValue("backend").offeredAttempts,
-                    backendAdmitted = result.services.getValue("backend").admittedAttempts,
-                )
-                livenessObservations += LivenessSnapshot(
-                    timeMs = time,
-                    activeInvocations = reliabilityModel.activeInvocations,
-                    activeOriginalRequests = reliabilityModel.activeOriginalRequests,
-                    activeDownstreamProcesses = reliabilityModel.activeDownstreamProcesses,
-                )
-            }
+            val work =
+                process("observe-timeout-race") {
+                    val result = reliabilityModel.metrics.replicationResult()
+                    observations +=
+                        Snapshot(
+                            timeMs = time,
+                            activeInvocations = reliabilityModel.activeInvocations,
+                            activeOriginalRequests = reliabilityModel.activeOriginalRequests,
+                            entryHandlerBusy = (model.getModelElement("entry") as ResourceWithQ).numBusy,
+                            backendHandlerBusy = (model.getModelElement("backend") as ResourceWithQ).numBusy,
+                            entryOffered = result.services.getValue("entry").offeredAttempts,
+                            backendOffered = result.services.getValue("backend").offeredAttempts,
+                            backendAdmitted = result.services.getValue("backend").admittedAttempts,
+                        )
+                    livenessObservations +=
+                        LivenessSnapshot(
+                            timeMs = time,
+                            activeInvocations = reliabilityModel.activeInvocations,
+                            activeOriginalRequests = reliabilityModel.activeOriginalRequests,
+                            activeDownstreamProcesses = reliabilityModel.activeDownstreamProcesses,
+                        )
+                }
         }
     }
 }

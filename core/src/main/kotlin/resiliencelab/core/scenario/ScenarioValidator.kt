@@ -40,7 +40,10 @@ object ScenarioValidator {
         }
     }
 
-    private fun validateExecution(execution: Execution, issues: MutableList<ValidationIssue>) {
+    private fun validateExecution(
+        execution: Execution,
+        issues: MutableList<ValidationIssue>,
+    ) {
         if (execution.replications <= 0) {
             issues += ValidationIssue("execution.replications", "must be greater than zero")
         }
@@ -62,11 +65,12 @@ object ScenarioValidator {
             issues += ValidationIssue("$prefix.entry", "must reference an existing service")
         }
 
-        val duplicateServiceIds = findDuplicates(
-            scenario.services.mapIndexed { index, service -> Triple(index, service.id, "$prefix.services[$index].id") },
-            issues,
-            "Service ID",
-        )
+        val duplicateServiceIds =
+            findDuplicates(
+                scenario.services.mapIndexed { index, service -> Triple(index, service.id, "$prefix.services[$index].id") },
+                issues,
+                "Service ID",
+            )
         findDuplicates(
             scenario.links.mapIndexed { index, link -> Triple(index, link.id, "$prefix.links[$index].id") },
             issues,
@@ -209,36 +213,43 @@ object ScenarioValidator {
         val indexedLinks = scenario.links.withIndex().toList()
         val outgoing = indexedLinks.filter { it.value.from in serviceIds }.groupBy { it.value.from }
         val incoming = indexedLinks.filter { it.value.to in serviceIds }.groupBy { it.value.to }
-        val validOutgoing = indexedLinks.filter {
-            it.value.from in serviceIds && it.value.to in serviceIds
-        }.groupBy { it.value.from }
+        val validOutgoing =
+            indexedLinks
+                .filter {
+                    it.value.from in serviceIds && it.value.to in serviceIds
+                }.groupBy { it.value.from }
 
         outgoing.values.forEach { links ->
             links.drop(1).forEach { link ->
-                issues += ValidationIssue(
-                    "$prefix.links[${link.index}].from",
-                    "service must have at most one outgoing link",
-                )
+                issues +=
+                    ValidationIssue(
+                        "$prefix.links[${link.index}].from",
+                        "service must have at most one outgoing link",
+                    )
             }
         }
         incoming.values.forEach { links ->
             links.drop(1).forEach { link ->
-                issues += ValidationIssue(
-                    "$prefix.links[${link.index}].to",
-                    "service must have at most one incoming link",
-                )
+                issues +=
+                    ValidationIssue(
+                        "$prefix.links[${link.index}].to",
+                        "service must have at most one incoming link",
+                    )
             }
         }
 
         val states = mutableMapOf<String, Int>()
+
         fun visit(serviceId: String) {
             states[serviceId] = 1
             validOutgoing[serviceId].orEmpty().forEach { link ->
                 when (states[link.value.to]) {
-                    1 -> issues += ValidationIssue(
-                        "$prefix.links[${link.index}].to",
-                        "must not close a cycle",
-                    )
+                    1 ->
+                        issues +=
+                            ValidationIssue(
+                                "$prefix.links[${link.index}].to",
+                                "must not close a cycle",
+                            )
                     null -> visit(link.value.to)
                 }
             }
@@ -262,16 +273,20 @@ object ScenarioValidator {
             }
             scenario.services.forEachIndexed { index, service ->
                 if (service.id !in reachable) {
-                    issues += ValidationIssue(
-                        "$prefix.services[$index].id",
-                        "service must be connected to the entry chain",
-                    )
+                    issues +=
+                        ValidationIssue(
+                            "$prefix.services[$index].id",
+                            "service must be connected to the entry chain",
+                        )
                 }
             }
         }
     }
 
-    private fun validateSweep(document: SweepDocument, issues: MutableList<ValidationIssue>) {
+    private fun validateSweep(
+        document: SweepDocument,
+        issues: MutableList<ValidationIssue>,
+    ) {
         when (document.sweep.parameter) {
             SweepParameter.ARRIVAL_RATE -> Unit
             SweepParameter.LINK_TIMEOUT,
@@ -293,7 +308,10 @@ object ScenarioValidator {
         }
     }
 
-    private fun validateLinkTarget(document: SweepDocument, issues: MutableList<ValidationIssue>) {
+    private fun validateLinkTarget(
+        document: SweepDocument,
+        issues: MutableList<ValidationIssue>,
+    ) {
         val linkId = document.sweep.linkId
         if (linkId == null) {
             issues += ValidationIssue("sweep.linkId", "is required for ${document.sweep.parameter}")
@@ -302,22 +320,31 @@ object ScenarioValidator {
         }
     }
 
-    private fun validateDegradationTarget(document: SweepDocument, issues: MutableList<ValidationIssue>) {
+    private fun validateDegradationTarget(
+        document: SweepDocument,
+        issues: MutableList<ValidationIssue>,
+    ) {
         val serviceId = document.sweep.serviceId
         val degradation = document.baseScenario.degradation
         when {
-            serviceId == null -> issues += ValidationIssue(
-                "sweep.serviceId",
-                "is required for ${document.sweep.parameter}",
-            )
-            degradation == null -> issues += ValidationIssue(
-                "sweep.serviceId",
-                "must reference baseScenario.degradation.serviceId",
-            )
-            serviceId != degradation.serviceId -> issues += ValidationIssue(
-                "sweep.serviceId",
-                "must match baseScenario.degradation.serviceId",
-            )
+            serviceId == null ->
+                issues +=
+                    ValidationIssue(
+                        "sweep.serviceId",
+                        "is required for ${document.sweep.parameter}",
+                    )
+            degradation == null ->
+                issues +=
+                    ValidationIssue(
+                        "sweep.serviceId",
+                        "must reference baseScenario.degradation.serviceId",
+                    )
+            serviceId != degradation.serviceId ->
+                issues +=
+                    ValidationIssue(
+                        "sweep.serviceId",
+                        "must match baseScenario.degradation.serviceId",
+                    )
         }
     }
 

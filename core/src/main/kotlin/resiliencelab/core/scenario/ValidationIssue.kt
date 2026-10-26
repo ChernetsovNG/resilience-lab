@@ -10,7 +10,7 @@ data class ValidationIssue(
 class ScenarioValidationException(
     val errors: List<ValidationIssue>,
 ) : IllegalArgumentException(
-    errors.joinToString(prefix = "Scenario validation failed: ", separator = "; ") {
-        "${it.path}: ${it.message}"
-    },
-)
+        errors.joinToString(prefix = "Scenario validation failed: ", separator = "; ") {
+            "${it.path}: ${it.message}"
+        },
+    )

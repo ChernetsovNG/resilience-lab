@@ -35,7 +35,10 @@ class TimeWeightedSeries(
             return durationsMs.lastKey()
         }
 
-    fun record(timeMs: Double, value: Double) {
+    fun record(
+        timeMs: Double,
+        value: Double,
+    ) {
         if (finished || timeMs < measurementStartMs) return
         integrateTo(minOf(timeMs, measurementEndMs))
         if (timeMs >= measurementEndMs) {

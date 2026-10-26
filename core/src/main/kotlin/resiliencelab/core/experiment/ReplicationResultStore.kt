@@ -12,7 +12,10 @@ internal class ReplicationResultStore(
 ) {
     private val results = ConcurrentSkipListMap<Int, ReplicationResult>()
 
-    fun record(replicationNumber: Int, result: ReplicationResult) {
+    fun record(
+        replicationNumber: Int,
+        result: ReplicationResult,
+    ) {
         val previous = results.putIfAbsent(replicationNumber, result)
         if (previous != null) {
             throw ExperimentExecutionException(

@@ -1,7 +1,7 @@
 package resiliencelab.core.experiment
 
-import resiliencelab.core.scenario.SweepParameter
 import kotlinx.serialization.Serializable
+import resiliencelab.core.scenario.SweepParameter
 
 /** Versioned experiment output containing both replication-level evidence and variant aggregates. */
 @Serializable

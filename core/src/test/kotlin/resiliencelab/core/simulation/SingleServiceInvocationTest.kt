@@ -1,24 +1,25 @@
 package resiliencelab.core.simulation
 
+import kotlinx.serialization.json.Json
+import ksl.modeling.entity.ProcessModel
+import ksl.simulation.Model
+import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.scenario.Execution
 import resiliencelab.core.scenario.Scenario
 import resiliencelab.core.scenario.TestData
-import ksl.modeling.entity.ProcessModel
-import ksl.simulation.Model
-import kotlinx.serialization.json.Json
-import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.data.Offset.offset
 import kotlin.test.Test
 
 class SingleServiceInvocationTest {
     @Test
     fun `fixed processing succeeds at 20 ms with offered and admitted counts`() {
-        val rig = simulate(
-            scenario = singleServiceScenario(),
-            requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
-        )
+        val rig =
+            simulate(
+                scenario = singleServiceScenario(),
+                requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
+            )
 
         val invocation = rig.invocations.single()
         assertThat(invocation.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
@@ -54,18 +55,22 @@ class SingleServiceInvocationTest {
     @Test
     fun `local failure consumes processing and releases handler without downstream invocation`() {
         val base = TestData.simpleScenario()
-        val scenario = base.copy(
-            services = base.services.map { service ->
-                if (service.id == "entry") service.copy(failureRate = 1.0) else service
-            },
-        )
-        val rig = simulate(
-            scenario = scenario,
-            requests = listOf(
-                InvocationSpec(arrivalTimeMs = 0.0, originalRequest = true),
-                InvocationSpec(arrivalTimeMs = 21.0, originalRequest = false),
-            ),
-        )
+        val scenario =
+            base.copy(
+                services =
+                    base.services.map { service ->
+                        if (service.id == "entry") service.copy(failureRate = 1.0) else service
+                    },
+            )
+        val rig =
+            simulate(
+                scenario = scenario,
+                requests =
+                    listOf(
+                        InvocationSpec(arrivalTimeMs = 0.0, originalRequest = true),
+                        InvocationSpec(arrivalTimeMs = 21.0, originalRequest = false),
+                    ),
+            )
 
         assertThat(rig.invocations[0].outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
         assertThat(rig.invocations[0].work.processCompletionTime).isCloseTo(20.0, offset(0.0))
@@ -92,13 +97,15 @@ class SingleServiceInvocationTest {
 
     @Test
     fun `zero capacity queue rejection counts offered but not admitted`() {
-        val rig = simulate(
-            scenario = singleServiceScenario(queueCapacity = 0),
-            requests = listOf(
-                InvocationSpec(arrivalTimeMs = 0.0, originalRequest = false),
-                InvocationSpec(arrivalTimeMs = 1.0, originalRequest = true),
-            ),
-        )
+        val rig =
+            simulate(
+                scenario = singleServiceScenario(queueCapacity = 0),
+                requests =
+                    listOf(
+                        InvocationSpec(arrivalTimeMs = 0.0, originalRequest = false),
+                        InvocationSpec(arrivalTimeMs = 1.0, originalRequest = true),
+                    ),
+            )
 
         assertThat(rig.invocations[0].outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(rig.invocations[0].work.processCompletionTime).isCloseTo(20.0, offset(0.0))
@@ -124,14 +131,16 @@ class SingleServiceInvocationTest {
 
     @Test
     fun `active counters include accepted queued invocations and original requests until completion`() {
-        val rig = simulate(
-            scenario = singleServiceScenario(),
-            requests = listOf(
-                InvocationSpec(arrivalTimeMs = 0.0),
-                InvocationSpec(arrivalTimeMs = 1.0),
-            ),
-            observationTimesMs = listOf(1.5, 20.5, 40.5),
-        )
+        val rig =
+            simulate(
+                scenario = singleServiceScenario(),
+                requests =
+                    listOf(
+                        InvocationSpec(arrivalTimeMs = 0.0),
+                        InvocationSpec(arrivalTimeMs = 1.0),
+                    ),
+                observationTimesMs = listOf(1.5, 20.5, 40.5),
+            )
 
         assertThat(rig.observations).containsExactly(
             ActiveCounts(1.5, 2, 2),
@@ -156,10 +165,11 @@ class SingleServiceInvocationTest {
 
     @Test
     fun `replication result round trips through JSON`() {
-        val rig = simulate(
-            scenario = singleServiceScenario(),
-            requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
-        )
+        val rig =
+            simulate(
+                scenario = singleServiceScenario(),
+                requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
+            )
         val result = rig.result()
 
         val encoded = Json.encodeToString(ReplicationResult.serializer(), result)
@@ -188,23 +198,25 @@ class SingleServiceInvocationTest {
     ): Scenario {
         val base = TestData.simpleScenario()
         return base.copy(
-            services = listOf(
-                base.services.first().copy(
-                    queueCapacity = queueCapacity,
-                    failureRate = failureRate,
+            services =
+                listOf(
+                    base.services.first().copy(
+                        queueCapacity = queueCapacity,
+                        failureRate = failureRate,
+                    ),
                 ),
-            ),
             links = emptyList(),
         )
     }
 
-    private fun execution(): Execution = Execution(
-        replications = 1,
-        warmupMs = 0.0,
-        measurementMs = 100.0,
-        seed = 42L,
-        maxRealTimeSeconds = 30L,
-    )
+    private fun execution(): Execution =
+        Execution(
+            replications = 1,
+            warmupMs = 0.0,
+            measurementMs = 100.0,
+            seed = 42L,
+            maxRealTimeSeconds = 30L,
+        )
 
     private data class InvocationSpec(
         val arrivalTimeMs: Double,
@@ -243,11 +255,12 @@ class SingleServiceInvocationTest {
             created.clear()
             observations.clear()
             requests.forEach { request ->
-                created += reliabilityModel.invoke(
-                    serviceId = request.serviceId,
-                    timeUntilActivation = request.arrivalTimeMs,
-                    originalRequest = request.originalRequest,
-                )
+                created +=
+                    reliabilityModel.invoke(
+                        serviceId = request.serviceId,
+                        timeUntilActivation = request.arrivalTimeMs,
+                        originalRequest = request.originalRequest,
+                    )
             }
             observationTimesMs.forEach { observationTime ->
                 activate(Observation().work, observationTime)
@@ -255,13 +268,15 @@ class SingleServiceInvocationTest {
         }
 
         private inner class Observation : Entity() {
-            val work = process("observe-active-counters") {
-                observations += ActiveCounts(
-                    timeMs = time,
-                    invocations = reliabilityModel.activeInvocations,
-                    originalRequests = reliabilityModel.activeOriginalRequests,
-                )
-            }
+            val work =
+                process("observe-active-counters") {
+                    observations +=
+                        ActiveCounts(
+                            timeMs = time,
+                            invocations = reliabilityModel.activeInvocations,
+                            originalRequests = reliabilityModel.activeOriginalRequests,
+                        )
+                }
         }
     }
 }

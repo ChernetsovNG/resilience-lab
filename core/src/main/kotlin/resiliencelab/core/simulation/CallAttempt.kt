@@ -18,11 +18,12 @@ internal class CallAttempt(
 
     fun onChildCompleted() {
         if (status != AttemptOutcome.PENDING) return
-        status = if (child.outcome == AttemptOutcome.SUCCEEDED) {
-            AttemptOutcome.SUCCEEDED
-        } else {
-            AttemptOutcome.DOWNSTREAM_FAILURE
-        }
+        status =
+            if (child.outcome == AttemptOutcome.SUCCEEDED) {
+                AttemptOutcome.SUCCEEDED
+            } else {
+                AttemptOutcome.DOWNSTREAM_FAILURE
+            }
         if (timeoutEvent.isScheduled) {
             timeoutEvent.cancel = true
         }

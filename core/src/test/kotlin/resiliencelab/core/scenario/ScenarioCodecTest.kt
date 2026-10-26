@@ -10,11 +10,19 @@ class ScenarioCodecTest {
     @Test
     fun `scenario round trip preserves every configured value`() {
         val base = TestData.simpleScenario()
-        val scenario = base.copy(
-            links = listOf(
-                base.links.single().copy(retry = base.links.single().retry.copy(base = 3.0)),
-            ),
-        )
+        val scenario =
+            base.copy(
+                links =
+                    listOf(
+                        base.links.single().copy(
+                            retry =
+                                base.links
+                                    .single()
+                                    .retry
+                                    .copy(base = 3.0),
+                        ),
+                    ),
+            )
 
         val decoded = ScenarioCodec.decodeScenario(ScenarioCodec.encodeScenario(scenario))
 
@@ -28,7 +36,11 @@ class ScenarioCodecTest {
 
         val decoded = ScenarioCodec.decodeScenario(encoded)
 
-        assertThat(decoded.links.single().retry.base).isCloseTo(2.0, offset(0.0))
+        assertThat(
+            decoded.links
+                .single()
+                .retry.base,
+        ).isCloseTo(2.0, offset(0.0))
     }
 
     @Test
@@ -52,17 +64,19 @@ class ScenarioCodecTest {
 
     @Test
     fun `experiment encoder omits null optional fields`() {
-        val document = experimentDocument().copy(
-            variants = listOf(
-                ExperimentVariant(
-                    id = "baseline",
-                    label = "Baseline",
-                    scenario = TestData.simpleScenario(),
-                    sweepParameter = null,
-                    sweepValue = null,
-                ),
-            ),
-        )
+        val document =
+            experimentDocument().copy(
+                variants =
+                    listOf(
+                        ExperimentVariant(
+                            id = "baseline",
+                            label = "Baseline",
+                            scenario = TestData.simpleScenario(),
+                            sweepParameter = null,
+                            sweepValue = null,
+                        ),
+                    ),
+            )
 
         val encoded = ScenarioCodec.encodeExperiment(document)
 
@@ -84,10 +98,11 @@ class ScenarioCodecTest {
         val encoded = ScenarioCodec.encodeExperiment(experimentDocument())
 
         listOf(0, 2).forEach { version ->
-            val unsupported = encoded.replaceFirst(
-                "\"schemaVersion\": 1",
-                "\"schemaVersion\": $version",
-            )
+            val unsupported =
+                encoded.replaceFirst(
+                    "\"schemaVersion\": 1",
+                    "\"schemaVersion\": $version",
+                )
             assertThatThrownBy { ScenarioCodec.decodeExperiment(unsupported) }
                 .isInstanceOf(IllegalArgumentException::class.java)
         }
@@ -125,10 +140,11 @@ class ScenarioCodecTest {
         val encoded = ScenarioCodec.encodeSweep(sweepDocument())
 
         listOf(0, 2).forEach { version ->
-            val unsupported = encoded.replaceFirst(
-                "\"schemaVersion\": 1",
-                "\"schemaVersion\": $version",
-            )
+            val unsupported =
+                encoded.replaceFirst(
+                    "\"schemaVersion\": 1",
+                    "\"schemaVersion\": $version",
+                )
             assertThatThrownBy { ScenarioCodec.decodeSweep(unsupported) }
                 .isInstanceOf(IllegalArgumentException::class.java)
         }
@@ -142,41 +158,47 @@ class ScenarioCodecTest {
             .isInstanceOf(IllegalArgumentException::class.java)
     }
 
-    private fun sweepDocument(): SweepDocument = SweepDocument(
-        schemaVersion = 1,
-        execution = Execution(
-            replications = 1,
-            warmupMs = 0.0,
-            measurementMs = 1_000.0,
-            seed = 42L,
-            maxRealTimeSeconds = 60L,
-        ),
-        baseScenario = TestData.simpleScenario(),
-        sweep = SweepSpec(
-            parameter = SweepParameter.LINK_TIMEOUT,
-            serviceId = null,
-            linkId = "entry-to-backend",
-            values = listOf(25.0, 50.0),
-        ),
-    )
+    private fun sweepDocument(): SweepDocument =
+        SweepDocument(
+            schemaVersion = 1,
+            execution =
+                Execution(
+                    replications = 1,
+                    warmupMs = 0.0,
+                    measurementMs = 1_000.0,
+                    seed = 42L,
+                    maxRealTimeSeconds = 60L,
+                ),
+            baseScenario = TestData.simpleScenario(),
+            sweep =
+                SweepSpec(
+                    parameter = SweepParameter.LINK_TIMEOUT,
+                    serviceId = null,
+                    linkId = "entry-to-backend",
+                    values = listOf(25.0, 50.0),
+                ),
+        )
 
-    private fun experimentDocument(): ExperimentDocument = ExperimentDocument(
-        schemaVersion = 1,
-        execution = Execution(
-            replications = 1,
-            warmupMs = 0.0,
-            measurementMs = 1_000.0,
-            seed = 42L,
-            maxRealTimeSeconds = 60L,
-        ),
-        variants = listOf(
-            ExperimentVariant(
-                id = "baseline",
-                label = "Baseline",
-                scenario = TestData.simpleScenario(),
-                sweepParameter = SweepParameter.LINK_TIMEOUT,
-                sweepValue = 50.0,
-            ),
-        ),
-    )
+    private fun experimentDocument(): ExperimentDocument =
+        ExperimentDocument(
+            schemaVersion = 1,
+            execution =
+                Execution(
+                    replications = 1,
+                    warmupMs = 0.0,
+                    measurementMs = 1_000.0,
+                    seed = 42L,
+                    maxRealTimeSeconds = 60L,
+                ),
+            variants =
+                listOf(
+                    ExperimentVariant(
+                        id = "baseline",
+                        label = "Baseline",
+                        scenario = TestData.simpleScenario(),
+                        sweepParameter = SweepParameter.LINK_TIMEOUT,
+                        sweepValue = 50.0,
+                    ),
+                ),
+        )
 }

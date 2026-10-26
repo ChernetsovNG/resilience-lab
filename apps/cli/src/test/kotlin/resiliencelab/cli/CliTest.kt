@@ -1,5 +1,8 @@
 package resiliencelab.cli
 
+import kotlinx.serialization.json.Json
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.experiment.ExperimentResult
 import resiliencelab.core.scenario.DistributionKind
 import resiliencelab.core.scenario.DurationDistribution
@@ -17,11 +20,8 @@ import resiliencelab.core.scenario.SweepParameter
 import resiliencelab.core.scenario.SweepSpec
 import resiliencelab.core.scenario.WorkloadSpec
 import resiliencelab.core.simulation.ExperimentExecutionException
-import kotlinx.serialization.json.Json
-import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.io.path.readText
-import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
 
 class CliTest {
@@ -30,13 +30,14 @@ class CliTest {
 
     @Test
     fun `usage errors return 2 without result output`() {
-        val invocations = listOf(
-            emptyList(),
-            listOf("unknown"),
-            listOf("validate"),
-            listOf("run", "one.json", "two.json"),
-            listOf("sweep"),
-        )
+        val invocations =
+            listOf(
+                emptyList(),
+                listOf("unknown"),
+                listOf("validate"),
+                listOf("run", "one.json", "two.json"),
+                listOf("sweep"),
+            )
 
         invocations.forEach { args ->
             val result = execute(args)
@@ -116,8 +117,11 @@ class CliTest {
         assertThat(decoded.variants.map { it.id }).containsExactly("baseline", "candidate")
         decoded.variants.forEach { variant ->
             assertThat(variant.replications).hasSize(2)
-            assertThat(variant.replications.first().services.keys)
-                .containsExactlyInAnyOrder("gateway", "middle", "dependency")
+            assertThat(
+                variant.replications
+                    .first()
+                    .services.keys,
+            ).containsExactlyInAnyOrder("gateway", "middle", "dependency")
         }
         val encoded = Json.encodeToString(ExperimentResult.serializer(), decoded)
         assertThat(Json.decodeFromString(ExperimentResult.serializer(), encoded)).isEqualTo(decoded)
@@ -128,15 +132,17 @@ class CliTest {
         val errorFile = tempDir.resolve("process-stderr.log")
         val repositoryRoot = Path.of("").toAbsolutePath().normalize()
         val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin")
-        val command = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-            listOf("cmd.exe", "/c", launcherDirectory.resolve("cli.bat").toString())
-        } else {
-            listOf(launcherDirectory.resolve("cli").toString())
-        }
-        val process = ProcessBuilder(command + listOf("run", "examples/retry-storm.json"))
-            .directory(repositoryRoot.toFile())
-            .redirectError(errorFile.toFile())
-            .start()
+        val command =
+            if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+                listOf("cmd.exe", "/c", launcherDirectory.resolve("cli.bat").toString())
+            } else {
+                listOf(launcherDirectory.resolve("cli").toString())
+            }
+        val process =
+            ProcessBuilder(command + listOf("run", "examples/retry-storm.json"))
+                .directory(repositoryRoot.toFile())
+                .redirectError(errorFile.toFile())
+                .start()
 
         val stdout = process.inputStream.readBytes().decodeToString()
         val exitCode = process.waitFor()
@@ -148,8 +154,10 @@ class CliTest {
 
     @Test
     fun `sweep executes both timeout points and preserves metadata`() {
-        val path = tempDir.resolve("sweep.json")
-            .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(25.0, 50.0))))
+        val path =
+            tempDir
+                .resolve("sweep.json")
+                .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(25.0, 50.0))))
 
         val result = execute(listOf("sweep", path.toString()))
 
@@ -168,8 +176,10 @@ class CliTest {
 
     @Test
     fun `sweep expansion validation errors return 2`() {
-        val path = tempDir.resolve("invalid-sweep.json")
-            .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(0.0))))
+        val path =
+            tempDir
+                .resolve("invalid-sweep.json")
+                .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(0.0))))
 
         val result = execute(listOf("sweep", path.toString()))
 
@@ -182,9 +192,10 @@ class CliTest {
     fun `execution failures return 1 and sanitize diagnostics`() {
         val path = writeExperiment(experimentDocument())
 
-        val result = execute(listOf("run", path.toString())) {
-            throw ExperimentExecutionException("synthetic execution failure")
-        }
+        val result =
+            execute(listOf("run", path.toString())) {
+                throw ExperimentExecutionException("synthetic execution failure")
+            }
 
         assertThat(result.exitCode).isEqualTo(1)
         assertThat(result.stdout).isEmpty()
@@ -206,89 +217,101 @@ class CliTest {
         tempDir.resolve("experiment.json").writeJson(ScenarioCodec.encodeExperiment(document))
 
     private fun Path.writeJson(text: String): Path {
-        java.nio.file.Files.writeString(this, text)
+        java.nio.file.Files
+            .writeString(this, text)
         return this
     }
 
-    private fun experimentDocument(replications: Int = 1): ExperimentDocument = ExperimentDocument(
-        schemaVersion = 1,
-        execution = execution(replications),
-        variants = listOf(
-            ExperimentVariant(
-                id = "baseline",
-                label = "Baseline",
-                scenario = simpleScenario(),
-                sweepParameter = null,
-                sweepValue = null,
-            ),
-        ),
-    )
-
-    private fun sweepDocument(values: List<Double>): SweepDocument = SweepDocument(
-        schemaVersion = 1,
-        execution = execution(replications = 1),
-        baseScenario = simpleScenario(),
-        sweep = SweepSpec(
-            parameter = SweepParameter.LINK_TIMEOUT,
-            serviceId = null,
-            linkId = "entry-to-backend",
-            values = values,
-        ),
-    )
-
-    private fun execution(replications: Int): Execution = Execution(
-        replications = replications,
-        warmupMs = 0.0,
-        measurementMs = 20.0,
-        seed = 42L,
-        maxRealTimeSeconds = 5L,
-    )
-
-    private fun simpleScenario(): Scenario = Scenario(
-        entry = "entry",
-        services = listOf(
-            ServiceSpec(
-                id = "entry",
-                handlers = 1,
-                queueCapacity = 2,
-                processing = fixed(0.0),
-                failureRate = 0.0,
-            ),
-            ServiceSpec(
-                id = "backend",
-                handlers = 1,
-                queueCapacity = 2,
-                processing = fixed(0.0),
-                failureRate = 0.0,
-            ),
-        ),
-        links = listOf(
-            LinkSpec(
-                id = "entry-to-backend",
-                from = "entry",
-                to = "backend",
-                network = fixed(0.0),
-                timeoutMs = 50.0,
-                maxAttempts = 1,
-                retry = RetrySpec(
-                    kind = RetryKind.NONE,
-                    baseBackoffMs = 0.0,
-                    maxBackoffMs = 0.0,
+    private fun experimentDocument(replications: Int = 1): ExperimentDocument =
+        ExperimentDocument(
+            schemaVersion = 1,
+            execution = execution(replications),
+            variants =
+                listOf(
+                    ExperimentVariant(
+                        id = "baseline",
+                        label = "Baseline",
+                        scenario = simpleScenario(),
+                        sweepParameter = null,
+                        sweepValue = null,
+                    ),
                 ),
-            ),
-        ),
-        workload = WorkloadSpec(
-            arrivalRate = 0.1,
-            requestDeadlineMs = 100.0,
-        ),
-        degradation = null,
-    )
+        )
 
-    private fun fixed(meanMs: Double): DurationDistribution = DurationDistribution(
-        kind = DistributionKind.FIXED,
-        meanMs = meanMs,
-        stdDevMs = null,
-    )
+    private fun sweepDocument(values: List<Double>): SweepDocument =
+        SweepDocument(
+            schemaVersion = 1,
+            execution = execution(replications = 1),
+            baseScenario = simpleScenario(),
+            sweep =
+                SweepSpec(
+                    parameter = SweepParameter.LINK_TIMEOUT,
+                    serviceId = null,
+                    linkId = "entry-to-backend",
+                    values = values,
+                ),
+        )
+
+    private fun execution(replications: Int): Execution =
+        Execution(
+            replications = replications,
+            warmupMs = 0.0,
+            measurementMs = 20.0,
+            seed = 42L,
+            maxRealTimeSeconds = 5L,
+        )
+
+    private fun simpleScenario(): Scenario =
+        Scenario(
+            entry = "entry",
+            services =
+                listOf(
+                    ServiceSpec(
+                        id = "entry",
+                        handlers = 1,
+                        queueCapacity = 2,
+                        processing = fixed(0.0),
+                        failureRate = 0.0,
+                    ),
+                    ServiceSpec(
+                        id = "backend",
+                        handlers = 1,
+                        queueCapacity = 2,
+                        processing = fixed(0.0),
+                        failureRate = 0.0,
+                    ),
+                ),
+            links =
+                listOf(
+                    LinkSpec(
+                        id = "entry-to-backend",
+                        from = "entry",
+                        to = "backend",
+                        network = fixed(0.0),
+                        timeoutMs = 50.0,
+                        maxAttempts = 1,
+                        retry =
+                            RetrySpec(
+                                kind = RetryKind.NONE,
+                                baseBackoffMs = 0.0,
+                                maxBackoffMs = 0.0,
+                            ),
+                    ),
+                ),
+            workload =
+                WorkloadSpec(
+                    arrivalRate = 0.1,
+                    requestDeadlineMs = 100.0,
+                ),
+            degradation = null,
+        )
+
+    private fun fixed(meanMs: Double): DurationDistribution =
+        DurationDistribution(
+            kind = DistributionKind.FIXED,
+            meanMs = meanMs,
+            stdDevMs = null,
+        )
 
     private data class CommandResult(
         val exitCode: Int,
