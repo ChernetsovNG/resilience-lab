@@ -92,6 +92,35 @@ describe("ChainCanvas", () => {
     expect(run.disabled).toBe(true);
     expect(screen.getByText(/service must be connected to the entry chain/)).toBeTruthy();
   });
+
+  it("edits baseline and candidate independently and clears selection when switching", () => {
+    render(<ChainCanvas />);
+    fireEvent.click(screen.getAllByTestId("service-block")[2]);
+    expect(screen.getByRole("button", { name: "Delete selected service" })).toHaveProperty("disabled", false);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Candidate" }));
+    expect(screen.getByRole("button", { name: "Delete selected service" })).toHaveProperty("disabled", true);
+    fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "8" } });
+    expect(screen.getAllByTestId("service-block")[0].textContent).toContain("8 handlers");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Baseline" }));
+    expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "4");
+    expect(screen.getAllByTestId("service-block")[0].textContent).toContain("4 handlers");
+    fireEvent.click(screen.getByRole("radio", { name: "Candidate" }));
+    expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "8");
+  });
+
+  it("disables submission while a numeric draft is invalid", () => {
+    render(<ChainCanvas />);
+    const run = screen.getByRole("button", { name: "Run comparison" }) as HTMLButtonElement;
+
+    fireEvent.change(screen.getByLabelText("Replications"), { target: { value: "" } });
+
+    expect(screen.getByLabelText("Replications")).toHaveProperty("value", "");
+    expect(run.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Replications"), { target: { value: "2" } });
+    expect(run.disabled).toBe(false);
+  });
 });
 
 describe("TopologyIssues", () => {

@@ -259,6 +259,22 @@ describe("useExperimentJob", () => {
     expect(getJobMock).toHaveBeenCalledTimes(1);
   });
 
+  it("retains structured submission issues from the API", async () => {
+    const issues = [{ path: "sweep.values[0]", message: "must be greater than zero" }];
+    startMock.mockRejectedValueOnce(
+      new ApiError(400, "VALIDATION_FAILED", "Experiment validation failed", issues),
+    );
+    const { result } = renderHook(() => useExperimentJob());
+
+    await act(async () => {
+      await result.current.startSweep(submission);
+    });
+
+    expect(result.current.error).toBe("Experiment validation failed");
+    expect(result.current.issues).toEqual(issues);
+    expect(result.current.isRunning).toBe(false);
+  });
+
   it("aborts and ignores work on reset and unmount", async () => {
     const accepted = deferred<{ id: string; status: "QUEUED" }>();
     startMock.mockReturnValue(accepted.promise);

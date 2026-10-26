@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import type { ExperimentResult } from "../src/api/types";
+import type { ExperimentResult, ExperimentSubmission } from "../src/api/types";
+import { createThreeServiceChain } from "../src/scenario/factory";
 
 async function useShortExecution(page: Page) {
   await page.getByLabel("Replications", { exact: true }).fill("2");
@@ -76,4 +77,35 @@ test("creates, reconnects and runs a degraded comparison through the real UI", a
       expect.any(Number),
     );
   }
+});
+
+test("edits only candidate and downloads the differing submitted configurations", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText(/Backend healthy/)).toBeVisible();
+  await page.getByRole("radio", { name: "Candidate", exact: true }).check();
+  await page.getByLabel("Handlers", { exact: true }).fill("9");
+  await expect(page.getByTestId("service-block").first()).toContainText("9 handlers");
+
+  await page.getByRole("radio", { name: "Baseline", exact: true }).check();
+  await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("4");
+  await expect(page.getByTestId("service-block").first()).toContainText("4 handlers");
+  await page.getByRole("radio", { name: "Candidate", exact: true }).check();
+  await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("9");
+  await useShortExecution(page);
+  await page.getByRole("button", { name: "Run comparison", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("result-download").click();
+  const download = await downloadPromise;
+  const analysis = JSON.parse(await readFile((await download.path())!, "utf8")) as ExperimentResult & {
+    submission: ExperimentSubmission;
+  };
+  const variants = analysis.submission.experiment?.variants;
+  expect(variants?.map((variant) => variant.id)).toEqual(["baseline", "candidate"]);
+  expect(variants?.[0].scenario).toEqual(createThreeServiceChain());
+  const expectedCandidate = createThreeServiceChain();
+  expectedCandidate.services[0].handlers = 9;
+  expect(variants?.[1].scenario).toEqual(expectedCandidate);
+  expect(variants?.[1].scenario).not.toEqual(variants?.[0].scenario);
 });

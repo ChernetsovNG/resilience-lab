@@ -1,26 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJob, getResult, startExperiment } from "../api/client";
+import { ApiError, getJob, getResult, startExperiment } from "../api/client";
 import type {
   ExperimentJob,
   ExperimentResult,
   ExperimentSubmission,
   JobStatus,
+  ValidationIssue,
 } from "../api/types";
 
 interface ExperimentJobState {
   jobId: string | null;
   job: ExperimentJob | null;
   result: ExperimentResult | null;
+  submission: ExperimentSubmission | null;
   isRunning: boolean;
   error: string | null;
+  issues: ValidationIssue[];
 }
 
 const idleState: ExperimentJobState = {
   jobId: null,
   job: null,
   result: null,
+  submission: null,
   isRunning: false,
   error: null,
+  issues: [],
 };
 
 function isActive(status: JobStatus): boolean {
@@ -55,25 +60,32 @@ export function useExperimentJob() {
       }
     };
     const fail = (reason: unknown) => {
-      update((current) => ({ ...current, isRunning: false, error: errorMessage(reason) }));
+      update((current) => ({
+        ...current,
+        isRunning: false,
+        error: errorMessage(reason),
+        issues: reason instanceof ApiError ? reason.issues : [],
+      }));
     };
 
     const loadResult = async (id: string): Promise<void> => {
       try {
         const value = await getResult(id, controller.signal);
-        update((current) => ({ ...current, result: value, error: null }));
+        update((current) => ({ ...current, result: value, error: null, issues: [] }));
       } catch (reason: unknown) {
         fail(reason);
       }
     };
 
     const acceptJob = (job: ExperimentJob) => {
-      update(() => ({
+      update((current) => ({
         jobId: job.id,
         job,
         result: null,
+        submission: current.submission,
         isRunning: isActive(job.status),
         error: job.status === "FAILED" ? (job.error ?? "Experiment failed") : null,
+        issues: [],
       }));
       if (isActive(job.status)) {
         schedulePoll(job.id);
@@ -102,7 +114,7 @@ export function useExperimentJob() {
       }, 500);
     }
 
-    setState({ ...idleState, isRunning: true });
+    setState({ ...idleState, isRunning: true, submission });
     try {
       const accepted = await startExperiment(submission, controller.signal);
       if (isCurrent()) {

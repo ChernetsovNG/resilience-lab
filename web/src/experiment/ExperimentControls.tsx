@@ -16,13 +16,14 @@ interface ExperimentControlsProps {
 
 export function ExperimentControls({ editor, sweep, controller, canRun = true }: ExperimentControlsProps) {
   const runComparison = () => {
+    if (!canRun || controller.isRunning) return;
     const submission = buildComparison(editor.baseline, editor.candidate, editor.execution);
     assertExclusiveSubmissionMode(submission);
     void controller.startComparison(submission);
   };
 
   const runSweep = () => {
-    if (!sweep) return;
+    if (!canRun || controller.isRunning || !sweep) return;
     const submission = buildSweep(editor.baseline, editor.execution, sweep);
     assertExclusiveSubmissionMode(submission);
     void controller.startSweep(submission);

@@ -41,11 +41,15 @@ export function health(): Promise<HealthView> {
   return request<HealthView>("/api/v1/health");
 }
 
-export function validateSubmission(value: ExperimentSubmission): Promise<ValidationReport> {
+export function validateSubmission(
+  value: ExperimentSubmission,
+  signal?: AbortSignal,
+): Promise<ValidationReport> {
   return request<ValidationReport>("/api/v1/scenarios/validate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(value),
+    ...(signal ? { signal } : {}),
   });
 }
 

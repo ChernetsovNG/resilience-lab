@@ -218,6 +218,32 @@ describe("SweepControls", () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toContain("integers");
   });
+
+  it.each([
+    ["ARRIVAL_RATE", "0", null],
+    ["ARRIVAL_RATE", "-1", null],
+    ["LINK_TIMEOUT", "0", "link"],
+    ["LINK_TIMEOUT", "-1", "link"],
+    ["BACKOFF_BASE", "-0.01", "link"],
+    ["DEGRADATION_MULTIPLIER", "0", "service"],
+    ["DEGRADATION_MULTIPLIER", "-2", "service"],
+    ["MAX_ATTEMPTS", "0", "link"],
+    ["MAX_ATTEMPTS", "2147483648", "link"],
+  ])("rejects out-of-range %s value %s", (parameter, value, targetKind) => {
+    const onChange = vi.fn();
+    render(<SweepControls onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Sweep parameter"), { target: { value: parameter } });
+    if (targetKind !== null) {
+      fireEvent.change(screen.getByLabelText(targetKind === "link" ? "Link ID" : "Service ID"), {
+        target: { value: "target-1" },
+      });
+    }
+    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/greater than zero|non-negative|1\.\.2147483647/);
+  });
 });
 
 describe("SweepChart", () => {

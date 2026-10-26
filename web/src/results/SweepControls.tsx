@@ -13,6 +13,24 @@ const parameters: { value: SweepParameter; label: string }[] = [
   { value: "DEGRADATION_MULTIPLIER", label: "Degradation multiplier" },
 ];
 
+function validateValue(parameter: SweepParameter, value: number): string | null {
+  if (parameter === "MAX_ATTEMPTS") {
+    if (!Number.isInteger(value)) return "Max attempts values must be integers.";
+    if (value < 1 || value > 2_147_483_647) return "Max attempts values must be in 1..2147483647.";
+    return null;
+  }
+  if (parameter === "BACKOFF_BASE" && value < 0) {
+    return "Backoff base values must be non-negative.";
+  }
+  if (parameter !== "BACKOFF_BASE" && value <= 0) {
+    return "Sweep values must be greater than zero for this parameter.";
+  }
+  if (parameter === "ARRIVAL_RATE" && (!Number.isFinite(1 / value) || 1 / value <= 0)) {
+    return "Arrival rate must produce a finite, strictly positive interarrival mean.";
+  }
+  return null;
+}
+
 export function SweepControls({ onChange }: SweepControlsProps) {
   const id = useId();
   const [parameter, setParameter] = useState<SweepParameter>("ARRIVAL_RATE");
@@ -30,9 +48,12 @@ export function SweepControls({ onChange }: SweepControlsProps) {
       setError("Sweep values must be valid finite numbers.");
       return;
     }
-    if (parameter === "MAX_ATTEMPTS" && values.some((value) => !Number.isInteger(value))) {
-      setError("Max attempts values must be integers.");
-      return;
+    for (const value of values) {
+      const valueError = validateValue(parameter, value);
+      if (valueError !== null) {
+        setError(valueError);
+        return;
+      }
     }
     if (needsTarget && target.trim() === "") {
       setError(`${needsLink ? "Link" : "Service"} ID is required for this parameter.`);

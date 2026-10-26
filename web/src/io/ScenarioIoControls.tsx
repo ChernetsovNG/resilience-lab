@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Execution, ExperimentDocument, Scenario, ValidationIssue } from "../api/types";
 import { downloadJson, ScenarioIo } from "./ScenarioIo";
 
@@ -10,13 +11,24 @@ interface ScenarioIoControlsProps {
 }
 
 export function ScenarioIoControls(props: ScenarioIoControlsProps) {
-  const createIo = () =>
-    new ScenarioIo({
-      getExecution: () => props.execution,
-      replaceScenario: props.replaceScenario,
-      replaceExperiment: props.replaceExperiment,
-      onIssues: props.onIssues,
+  const propsRef = useRef(props);
+  const ioRef = useRef<ScenarioIo | null>(null);
+  const createIo = () => {
+    ioRef.current ??= new ScenarioIo({
+      getExecution: () => propsRef.current.execution,
+      replaceScenario: (scenario) => propsRef.current.replaceScenario(scenario),
+      replaceExperiment: (scenario, execution) =>
+        propsRef.current.replaceExperiment(scenario, execution),
+      onIssues: (issues) => propsRef.current.onIssues(issues),
     });
+    return ioRef.current;
+  };
+
+  useEffect(() => {
+    propsRef.current = props;
+  }, [props]);
+
+  useEffect(() => () => ioRef.current?.cancel(), []);
 
   const importFile = (file: File | undefined, fullDocument: boolean) => {
     if (!file) return;

@@ -87,10 +87,13 @@ describe("ScenarioIo", () => {
 
     await expect(io.importScenario(jsonFile(imported))).resolves.toEqual(imported);
 
-    expect(validateMock).toHaveBeenCalledWith({
-      experiment: documentFor(imported, currentExecution),
-      sweep: null,
-    });
+    expect(validateMock).toHaveBeenCalledWith(
+      {
+        experiment: documentFor(imported, currentExecution),
+        sweep: null,
+      },
+      expect.any(AbortSignal),
+    );
     expect(state.scenario).toEqual(imported);
     expect(state.execution).toBe(currentExecution);
   });
@@ -107,7 +110,10 @@ describe("ScenarioIo", () => {
       scenario: imported,
       execution,
     });
-    expect(validateMock).toHaveBeenCalledWith({ experiment: document, sweep: null });
+    expect(validateMock).toHaveBeenCalledWith(
+      { experiment: document, sweep: null },
+      expect.any(AbortSignal),
+    );
     expect(state.scenario).toEqual(imported);
     expect(state.execution).toEqual(execution);
     expect(state.execution.seed).toBe(987_654_321);
@@ -196,6 +202,32 @@ describe("ScenarioIo", () => {
     expect(state.scenario).toBe(previous);
     expect(state.execution).toBe(execution);
     expect(state.issues).toEqual(issues);
+  });
+
+  it("lets only the latest concurrent import publish scenario or issues", async () => {
+    let resolveFirst!: (value: { valid: boolean; issues: ValidationIssue[] }) => void;
+    const firstValidation = new Promise<{ valid: boolean; issues: ValidationIssue[] }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    validateMock.mockReturnValueOnce(firstValidation).mockResolvedValueOnce({ valid: true, issues: [] });
+    const previous = createThreeServiceChain();
+    const first = createThreeServiceChain();
+    first.workload.arrivalRate = 20;
+    const latest = createThreeServiceChain();
+    latest.workload.arrivalRate = 30;
+    const { state, io } = harness(previous);
+
+    const firstImport = io.importScenario(jsonFile(first));
+    await vi.waitFor(() => expect(validateMock).toHaveBeenCalledTimes(1));
+    const firstSignal = validateMock.mock.calls[0][1];
+    const latestImport = io.importScenario(jsonFile(latest));
+    await expect(latestImport).resolves.toEqual(latest);
+    expect(firstSignal?.aborted).toBe(true);
+
+    resolveFirst({ valid: false, issues: [{ path: "$", message: "stale issue" }] });
+    await expect(firstImport).rejects.toMatchObject({ name: "AbortError" });
+    expect(state.scenario).toEqual(latest);
+    expect(state.issues).toEqual([]);
   });
 
   it("exports a full document through the UI and reimports scenario, execution, and seed", async () => {

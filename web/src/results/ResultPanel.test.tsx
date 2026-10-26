@@ -122,6 +122,33 @@ describe("ResultPanel", () => {
     rerender(<ResultPanel jobId="job-pending" result={null} error="Experiment not found" />);
     expect(screen.getByRole("alert").textContent).toBe("Experiment not found");
   });
+
+  it("renders structured submission issues", () => {
+    render(
+      <ResultPanel
+        jobId={null}
+        result={null}
+        error="Experiment validation failed"
+        issues={[{ path: "sweep.values[0]", message: "must be greater than zero" }]}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain("sweep.values[0]");
+    expect(screen.getByRole("alert").textContent).toContain("must be greater than zero");
+  });
+
+  it("shows retry lifecycle assumptions and downloaded-analysis guidance beside results", () => {
+    render(<ResultPanel jobId="job-42" result={result} />);
+
+    const assumptions = screen.getByRole("region", { name: "Model assumptions" });
+    expect(assumptions.textContent).toContain("handlers remain occupied during retry/backoff");
+    expect(assumptions.textContent).toContain("No cancellation or queue removal");
+    expect(assumptions.textContent).toContain("Orphaned work continues");
+    expect(assumptions.textContent).toContain("Late responses are discarded");
+    expect(assumptions.textContent).toContain("fully drained");
+    expect(assumptions.textContent).toContain("Downloaded analysis");
+    expect(screen.getByTestId("result-download")).toBeTruthy();
+  });
 });
 
 describe("JobStatus", () => {
@@ -150,6 +177,8 @@ describe("ExperimentControls", () => {
       jobId: null,
       job: null,
       result: null,
+      submission: null,
+      issues: [],
       isRunning: false,
       error: null,
       startComparison: vi.fn().mockResolvedValue(undefined),
@@ -183,6 +212,8 @@ describe("ExperimentControls", () => {
       jobId: null,
       job: null,
       result: null,
+      submission: null,
+      issues: [],
       isRunning: true,
       error: null,
       startComparison: vi.fn(),

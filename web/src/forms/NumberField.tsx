@@ -1,4 +1,5 @@
-import { useId, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
+import { DraftValidityContext } from "./DraftValidityContext";
 import { parseFiniteNumber } from "./numberInput";
 
 interface NumberFieldProps {
@@ -33,6 +34,8 @@ export function NumberField({
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
+  const onDraftValidityChange = useContext(DraftValidityContext);
+  const validityListenerRef = useRef(onDraftValidityChange);
   const [raw, setRaw] = useState(value === null ? "" : String(value));
   const [blurred, setBlurred] = useState(false);
   const [previousValue, setPreviousValue] = useState(value);
@@ -57,6 +60,21 @@ export function NumberField({
   };
   const valid = validate(raw);
   const showError = blurred && !valid;
+
+  useEffect(() => {
+    validityListenerRef.current = onDraftValidityChange;
+  }, [onDraftValidityChange]);
+
+  useEffect(() => {
+    validityListenerRef.current?.(id, valid);
+  }, [id, valid]);
+
+  useEffect(
+    () => () => {
+      validityListenerRef.current?.(id, true);
+    },
+    [id],
+  );
 
   return (
     <div className="parameter-field">

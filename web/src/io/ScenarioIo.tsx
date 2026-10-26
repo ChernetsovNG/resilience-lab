@@ -39,24 +39,40 @@ export function downloadJson(name: string, value: unknown): void {
   }
 }
 
+interface ImportContext {
+  generation: number;
+  controller: AbortController;
+}
+
 export class ScenarioIo {
   private readonly options: ScenarioIoOptions;
+  private generation = 0;
+  private controller: AbortController | null = null;
 
   constructor(options: ScenarioIoOptions) {
     this.options = options;
   }
 
+  cancel(): void {
+    this.generation += 1;
+    this.controller?.abort();
+    this.controller = null;
+  }
+
   async importScenario(file: File): Promise<Scenario> {
-    const scenario = await this.readJson(file);
+    const context = this.beginImport();
+    const scenario = await this.readJson(file, context);
     const experiment = this.wrapImported(scenario as Scenario, this.options.getExecution());
-    await this.validate(experiment, "Invalid scenario");
+    await this.validate(experiment, "Invalid scenario", context);
+    this.ensureCurrent(context);
     this.options.onIssues([]);
     this.options.replaceScenario(scenario as Scenario);
     return scenario as Scenario;
   }
 
   async importExperimentDocument(file: File): Promise<{ scenario: Scenario; execution: Execution }> {
-    const value = await this.readJson(file);
+    const context = this.beginImport();
+    const value = await this.readJson(file, context);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       this.reject("Experiment document must be an object", "$");
     }
@@ -65,10 +81,29 @@ export class ScenarioIo {
       this.reject("Unsupported experiment schemaVersion", "schemaVersion");
     }
     const variant = this.selectVariant(experiment.variants);
-    await this.validate(experiment, "Invalid experiment");
+    await this.validate(experiment, "Invalid experiment", context);
+    this.ensureCurrent(context);
     this.options.onIssues([]);
     this.options.replaceExperiment(variant.scenario, experiment.execution);
     return { scenario: variant.scenario, execution: experiment.execution };
+  }
+
+  private beginImport(): ImportContext {
+    const generation = ++this.generation;
+    this.controller?.abort();
+    const controller = new AbortController();
+    this.controller = controller;
+    return { generation, controller };
+  }
+
+  private isCurrent(context: ImportContext): boolean {
+    return this.generation === context.generation && !context.controller.signal.aborted;
+  }
+
+  private ensureCurrent(context: ImportContext): void {
+    if (!this.isCurrent(context)) {
+      throw new DOMException("Import superseded", "AbortError");
+    }
   }
 
   private wrapImported(scenario: Scenario, execution: Execution): ExperimentDocument {
@@ -102,9 +137,17 @@ export class ScenarioIo {
     this.reject("Experiment variants are ambiguous without one imported variant", "variants");
   }
 
-  private async validate(experiment: ExperimentDocument, message: string): Promise<void> {
+  private async validate(
+    experiment: ExperimentDocument,
+    message: string,
+    context: ImportContext,
+  ): Promise<void> {
     try {
-      const report = await validateSubmission({ experiment, sweep: null });
+      const report = await validateSubmission(
+        { experiment, sweep: null },
+        context.controller.signal,
+      );
+      this.ensureCurrent(context);
       if (!report.valid) {
         const issues = report.issues.length > 0 ? report.issues : [{ path: "$", message }];
         this.options.onIssues(issues);
@@ -112,6 +155,9 @@ export class ScenarioIo {
       }
     } catch (error) {
       if (error instanceof ScenarioImportError) throw error;
+      if (!this.isCurrent(context) || (error instanceof DOMException && error.name === "AbortError")) {
+        throw new DOMException("Import superseded", "AbortError");
+      }
       const issues =
         error instanceof ApiError && error.issues.length > 0
           ? error.issues
@@ -121,10 +167,15 @@ export class ScenarioIo {
     }
   }
 
-  private async readJson(file: File): Promise<unknown> {
+  private async readJson(file: File, context: ImportContext): Promise<unknown> {
     try {
-      return JSON.parse(await file.text()) as unknown;
+      const value = JSON.parse(await file.text()) as unknown;
+      this.ensureCurrent(context);
+      return value;
     } catch (error) {
+      if (!this.isCurrent(context)) {
+        throw new DOMException("Import superseded", "AbortError");
+      }
       const message = error instanceof Error ? error.message : "Unable to read JSON";
       this.reject(message, "$");
     }

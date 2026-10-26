@@ -1,4 +1,4 @@
-import type { ExperimentResult } from "../api/types";
+import type { ExperimentResult, ExperimentSubmission, ValidationIssue } from "../api/types";
 import { MetricCards } from "./MetricCards";
 import { ResultDownload } from "./ResultDownload";
 import { SweepChart } from "./SweepChart";
@@ -7,10 +7,12 @@ import { VariantComparisonChart } from "./VariantComparisonChart";
 interface ResultPanelProps {
   jobId: string | null;
   result: ExperimentResult | null;
+  submission?: ExperimentSubmission | null;
   error?: string | null;
+  issues?: ValidationIssue[];
 }
 
-export function ResultPanel({ jobId, result, error }: ResultPanelProps) {
+export function ResultPanel({ jobId, result, submission, error, issues = [] }: ResultPanelProps) {
   return (
     <section className="result-panel" aria-labelledby="result-title">
       <h2 id="result-title">Experiment result</h2>
@@ -19,10 +21,34 @@ export function ResultPanel({ jobId, result, error }: ResultPanelProps) {
           <strong>Job ID:</strong> <code>{jobId}</code>
         </p>
       ) : null}
-      {error ? <div role="alert">{error}</div> : null}
+      {error || issues.length > 0 ? (
+        <div role="alert">
+          {error}
+          {issues.length > 0 ? (
+            <ul>
+              {issues.map((issue, index) => (
+                <li key={`${issue.path}-${index}`}>
+                  <strong>{issue.path}:</strong> {issue.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       {result ? (
         <>
-          <ResultDownload result={result} />
+          <ResultDownload result={result} submission={submission} />
+          <section aria-label="Model assumptions">
+            <h3>Model assumptions</h3>
+            <ul>
+              <li>Blocking handlers remain occupied during retry/backoff and until the final local outcome.</li>
+              <li>No cancellation or queue removal is performed; cancellation propagation is absent.</li>
+              <li>Orphaned work continues to run and occupy resources, including accepted downstream work.</li>
+              <li>Late responses are discarded.</li>
+              <li>Each replication is fully drained: all measured-cohort client outcomes are known and all accepted work, including orphaned work, has finished.</li>
+            </ul>
+            <p>Downloaded analysis includes the complete numerical result and submitted configuration; interpret retry amplification under these assumptions.</p>
+          </section>
           {result.variants.some(
             (variant) => variant.sweepParameter === null || variant.sweepValue === null,
           ) ? (

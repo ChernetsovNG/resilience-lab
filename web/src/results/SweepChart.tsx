@@ -118,7 +118,7 @@ export function SweepChart({ variants }: SweepChartProps) {
               serviceIds.map((serviceId, index) => (
                 <Line
                   key={serviceId}
-                  dataKey={`services.${serviceId}`}
+                  dataKey={(point: SweepPoint) => point.services[serviceId]}
                   name={serviceId}
                   stroke={index % 2 === 0 ? "#2563eb" : "#7c3aed"}
                 />
