@@ -57,6 +57,13 @@ class ScenarioControllerTest {
     }
 
     @Test
+    fun `empty body returns the sanitized invalid submission error`() {
+        val response = validate("")
+
+        assertInvalidSubmission(response)
+    }
+
+    @Test
     fun `unknown submission field is rejected`() {
         val response = validate("""{"experiment":$validExperiment,"unknown":true}""")
 

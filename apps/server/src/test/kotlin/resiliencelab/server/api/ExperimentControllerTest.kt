@@ -15,11 +15,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import resiliencelab.core.experiment.ExperimentResult
+import resiliencelab.core.scenario.Execution
+import resiliencelab.core.scenario.ExperimentDocument
+import resiliencelab.server.experiment.ExperimentExecutor
 import resiliencelab.server.experiment.ExperimentJob
 import resiliencelab.server.experiment.ExperimentJobManager
 import resiliencelab.server.experiment.ExperimentJobStatus
 import java.util.UUID
+import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 
 @WebMvcTest(ExperimentController::class)
 @Import(ExperimentService::class)
@@ -66,6 +72,22 @@ class ExperimentControllerTest {
     }
 
     @Test
+    fun `empty body returns sanitized invalid submission without creating a job`() {
+        val response = submit("")
+
+        assertThat(response.status).isEqualTo(400)
+        assertThat(JsonPath.read<Map<String, Any>>(response.contentAsString, "$"))
+            .containsExactlyInAnyOrderEntriesOf(
+                mapOf(
+                    "code" to "INVALID_SUBMISSION",
+                    "message" to "Invalid experiment submission",
+                    "issues" to emptyList<Any>(),
+                ),
+            )
+        verifyNoInteractions(jobManager)
+    }
+
+    @Test
     fun `job state is returned for a controlled queued job`() {
         val id = UUID.randomUUID()
         given(jobManager.get(id)).willReturn(job(id, ExperimentJobStatus.QUEUED))
@@ -90,6 +112,31 @@ class ExperimentControllerTest {
         assertError(jobResponse, "EXPERIMENT_NOT_FOUND", "Experiment not found")
         assertThat(resultResponse.status).isEqualTo(404)
         assertError(resultResponse, "EXPERIMENT_NOT_FOUND", "Experiment not found")
+    }
+
+    @Test
+    fun `evicted oldest terminal job returns not found while newest remains available`() {
+        val manager =
+            ExperimentJobManager(
+                Executor { throw RejectedExecutionException("capacity") },
+                ExperimentExecutor { error("Rejected jobs must not execute") },
+            )
+        val ids = (1..101).map { manager.submit(rejectedDocument) }
+        val api =
+            MockMvcBuilders
+                .standaloneSetup(ExperimentController(ExperimentService(), manager))
+                .setControllerAdvice(ApiExceptionHandler())
+                .build()
+
+        val evictedResponse = api.perform(get("/api/v1/experiments/{id}", ids.first())).andReturn().response
+        val newestResponse = api.perform(get("/api/v1/experiments/{id}", ids.last())).andReturn().response
+
+        assertThat(evictedResponse.status).isEqualTo(404)
+        assertError(evictedResponse, "EXPERIMENT_NOT_FOUND", "Experiment not found")
+        assertThat(JsonPath.read<List<Any>>(evictedResponse.contentAsString, "$.issues")).isEmpty()
+        assertThat(newestResponse.status).isEqualTo(200)
+        assertThat(JsonPath.read<Map<String, Any>>(newestResponse.contentAsString, "$"))
+            .containsExactlyInAnyOrderEntriesOf(mapOf("id" to ids.last().toString(), "status" to "FAILED"))
     }
 
     @Test
@@ -173,6 +220,20 @@ class ExperimentControllerTest {
     }
 
     private companion object {
+        val rejectedDocument =
+            ExperimentDocument(
+                schemaVersion = 1,
+                execution =
+                    Execution(
+                        replications = 1,
+                        warmupMs = 0.0,
+                        measurementMs = 1.0,
+                        seed = 42,
+                        maxRealTimeSeconds = 60,
+                    ),
+                variants = emptyList(),
+            )
+
         val validExperiment =
             """
             {

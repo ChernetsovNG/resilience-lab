@@ -3,6 +3,9 @@ package resiliencelab.server.experiment
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import resiliencelab.core.experiment.ExperimentResult
 import resiliencelab.core.scenario.Execution
@@ -14,6 +17,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit.SECONDS
 
+@ExtendWith(OutputCaptureExtension::class)
 class ExperimentJobManagerTest {
     private val executors = mutableListOf<RecordingExecutor>()
 
@@ -97,7 +101,7 @@ class ExperimentJobManagerTest {
     }
 
     @Test
-    fun `failed job exposes only safe error text without changing another job result`() {
+    fun `failed job exposes only safe error text without changing another job result`(output: CapturedOutput) {
         val executor = recordingExecutor(threads = 2)
         val successStarted = CountDownLatch(1)
         val releaseSuccess = CountDownLatch(1)
@@ -132,6 +136,7 @@ class ExperimentJobManagerTest {
             "at resiliencelab",
             "\n\tat ",
         )
+        assertThat(output).contains(failedId.toString(), hostileMessage)
         assertThat(manager.get(successId)).isEqualTo(ExperimentJob(successId, ExperimentJobStatus.RUNNING, null, null))
 
         releaseSuccess.countDown()
@@ -158,7 +163,7 @@ class ExperimentJobManagerTest {
     }
 
     @Test
-    fun `rejected submission becomes failed instead of remaining queued`() {
+    fun `rejected submission becomes failed instead of remaining queued`(output: CapturedOutput) {
         val hostileMessage =
             "simulation capacity exhausted\njava.util.concurrent.RejectedExecutionException: pool detail\n\tat org.springframework.Secret.execute"
         val manager =
@@ -179,19 +184,74 @@ class ExperimentJobManagerTest {
             "at org.springframework",
             "\n\tat ",
         )
+        assertThat(output).contains(id.toString(), hostileMessage)
     }
 
-    private fun recordingExecutor(threads: Int): RecordingExecutor = RecordingExecutor(threads).also(executors::add)
+    @Test
+    fun `terminal retention evicts oldest failed jobs and retains newest`() {
+        val manager =
+            ExperimentJobManager(
+                Executor { throw RejectedExecutionException("capacity") },
+                ExperimentExecutor { result },
+            )
+
+        val ids = (1..101).map { manager.submit(document()) }
+
+        assertThat(manager.get(ids.first())).isNull()
+        assertThat(manager.get(ids[1])).isEqualTo(
+            ExperimentJob(ids[1], ExperimentJobStatus.FAILED, null, "Experiment execution failed"),
+        )
+        assertThat(manager.get(ids.last())).isEqualTo(
+            ExperimentJob(ids.last(), ExperimentJobStatus.FAILED, null, "Experiment execution failed"),
+        )
+    }
+
+    @Test
+    fun `terminal saturation never evicts a blocked running job`() {
+        val executor = recordingExecutor(threads = 1, queueCapacity = 0)
+        val activeStarted = CountDownLatch(1)
+        val releaseActive = CountDownLatch(1)
+        val manager =
+            ExperimentJobManager(
+                executor,
+                ExperimentExecutor {
+                    activeStarted.countDown()
+                    check(releaseActive.await(5, SECONDS))
+                    result
+                },
+            )
+        val activeId = manager.submit(document())
+        assertThat(activeStarted.await(5, SECONDS)).isTrue()
+
+        try {
+            val rejectedIds = (1..101).map { manager.submit(document()) }
+
+            assertThat(manager.get(activeId)).isEqualTo(
+                ExperimentJob(activeId, ExperimentJobStatus.RUNNING, null, null),
+            )
+            assertThat(manager.get(rejectedIds.first())).isNull()
+            assertThat(manager.get(rejectedIds.last())).isNotNull()
+        } finally {
+            releaseActive.countDown()
+            assertThat(executor.awaitCompletion(0)).isTrue()
+        }
+    }
+
+    private fun recordingExecutor(
+        threads: Int,
+        queueCapacity: Int = 100,
+    ): RecordingExecutor = RecordingExecutor(threads, queueCapacity).also(executors::add)
 
     private class RecordingExecutor(
         threads: Int,
+        queueCapacity: Int,
     ) : Executor,
         AutoCloseable {
         private val delegate =
             ThreadPoolTaskExecutor().apply {
                 corePoolSize = threads
                 maxPoolSize = threads
-                queueCapacity = 100
+                this.queueCapacity = queueCapacity
                 initialize()
             }
         private val completions = CopyOnWriteArrayList<CountDownLatch>()
