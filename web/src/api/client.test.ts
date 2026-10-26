@@ -117,6 +117,25 @@ describe("API client", () => {
     );
   });
 
+  it("forwards cancellation signals through the experiment lifecycle", async () => {
+    const fetchMock = stubJson({ id: "job-1", status: "QUEUED" });
+    const controller = new AbortController();
+
+    await startExperiment(submission, controller.signal);
+    await getJob("job-1", controller.signal);
+    await getResult("job-1", controller.signal);
+
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ signal: controller.signal });
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "/api/v1/experiments/job-1",
+      { signal: controller.signal },
+    ]);
+    expect(fetchMock.mock.calls[2]).toEqual([
+      "/api/v1/experiments/job-1/result",
+      { signal: controller.signal },
+    ]);
+  });
+
   it("preserves structured validation issues on a 400 response", async () => {
     stubJson(
       {

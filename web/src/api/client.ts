@@ -51,18 +51,26 @@ export function validateSubmission(value: ExperimentSubmission): Promise<Validat
 
 export function startExperiment(
   value: ExperimentSubmission,
+  signal?: AbortSignal,
 ): Promise<{ id: string; status: JobStatus }> {
   return request<{ id: string; status: JobStatus }>("/api/v1/experiments", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(value),
+    ...(signal ? { signal } : {}),
   });
 }
 
-export function getJob(id: string): Promise<ExperimentJob> {
-  return request<ExperimentJob>(`/api/v1/experiments/${encodeURIComponent(id)}`);
+export function getJob(id: string, signal?: AbortSignal): Promise<ExperimentJob> {
+  return request<ExperimentJob>(
+    `/api/v1/experiments/${encodeURIComponent(id)}`,
+    signal ? { signal } : undefined,
+  );
 }
 
-export function getResult(id: string): Promise<ExperimentResult> {
-  return request<ExperimentResult>(`/api/v1/experiments/${encodeURIComponent(id)}/result`);
+export function getResult(id: string, signal?: AbortSignal): Promise<ExperimentResult> {
+  return request<ExperimentResult>(
+    `/api/v1/experiments/${encodeURIComponent(id)}/result`,
+    signal ? { signal } : undefined,
+  );
 }
