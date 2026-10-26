@@ -130,15 +130,17 @@ class CliTest {
     @Test
     fun `process run emits only result JSON on stdout`() {
         val errorFile = tempDir.resolve("process-stderr.log")
-        val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
-        val process = ProcessBuilder(
-            java,
-            "-cp",
-            System.getProperty("java.class.path"),
-            "io.github.chernetsovng.resiliencelab.cli.MainKt",
-            "run",
-            "examples/retry-storm.json",
-        ).redirectError(errorFile.toFile()).start()
+        val repositoryRoot = Path.of("").toAbsolutePath().normalize()
+        val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin")
+        val command = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+            listOf("cmd.exe", "/c", launcherDirectory.resolve("cli.bat").toString())
+        } else {
+            listOf(launcherDirectory.resolve("cli").toString())
+        }
+        val process = ProcessBuilder(command + listOf("run", "examples/retry-storm.json"))
+            .directory(repositoryRoot.toFile())
+            .redirectError(errorFile.toFile())
+            .start()
 
         val stdout = process.inputStream.readBytes().decodeToString()
         val exitCode = process.waitFor()
