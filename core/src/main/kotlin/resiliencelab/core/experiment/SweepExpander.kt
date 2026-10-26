@@ -7,6 +7,10 @@ import resiliencelab.core.scenario.ScenarioValidator
 import resiliencelab.core.scenario.SweepDocument
 import resiliencelab.core.scenario.SweepParameter
 
+/**
+ * Expands a validated one-dimensional sweep into independent scenario variants.
+ * Each value changes only its selected target; all variants retain the same execution and seed settings.
+ */
 object SweepExpander {
     fun expand(document: SweepDocument): ExperimentDocument {
         ScenarioValidator.requireValid(document)

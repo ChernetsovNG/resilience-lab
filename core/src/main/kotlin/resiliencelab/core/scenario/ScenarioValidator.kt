@@ -1,5 +1,9 @@
 package resiliencelab.core.scenario
 
+/**
+ * Checks experiment and sweep documents for valid parameters, references, linear topology, and sweep targets.
+ * Validation accumulates path-qualified issues; the `requireValid` entry points fail atomically with all of them.
+ */
 object ScenarioValidator {
     fun validate(document: ExperimentDocument): List<ValidationIssue> {
         val issues = mutableListOf<ValidationIssue>()

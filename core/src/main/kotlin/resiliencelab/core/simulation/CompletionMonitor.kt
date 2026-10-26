@@ -2,6 +2,10 @@ package resiliencelab.core.simulation
 
 import ksl.simulation.ModelElement
 
+/**
+ * Ends a replication only after arrivals have stopped, all original client outcomes are known, and all accepted
+ * invocation and downstream process work has drained, including work orphaned by timeouts or deadlines.
+ */
 internal class CompletionMonitor(
     private val reliabilityModel: ReliabilityModel,
     private val arrivalEndMs: Double,

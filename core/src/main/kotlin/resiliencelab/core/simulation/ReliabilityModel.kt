@@ -10,6 +10,15 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Builds and runs the KSL process model for one scenario.
+ * Original requests receive an absolute deadline at arrival, and service handlers remain seized through local
+ * processing, synchronous downstream waits, retries, and backoff. A caller timeout or deadline ends only that
+ * client's wait: admitted descendants continue, late responses are ignored, and no retry starts after the deadline.
+ *
+ * Arrivals stop at measurement end, but a replication finishes only after every original client outcome is known
+ * and all accepted work, including orphaned work, has drained.
+ */
 class ReliabilityModel(
     model: Model,
     private val scenario: Scenario,

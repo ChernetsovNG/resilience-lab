@@ -10,6 +10,11 @@ import ksl.modeling.queue.Queue
 import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.ModelElement
 
+/**
+ * Creates a FIFO request queue with a bounded number of waiting requests.
+ * A request can still bypass the empty queue for immediate allocation; otherwise overflow is removed and rejected
+ * with [QueueFullException]. Waiting capacity is separate from the resource's handler capacity.
+ */
 fun BoundedRequestQ(
     parent: ModelElement,
     name: String?,
@@ -41,6 +46,10 @@ private class AdmissionListener(
     }
 }
 
+/**
+ * Preserves FIFO handler allocation by preventing later requests from bypassing an earlier unsatisfied request.
+ * The allocation-pending state permits the selected head request to complete its handoff without blocking itself.
+ */
 class FifoResourceWithQ(
     parent: ModelElement,
     name: String?,

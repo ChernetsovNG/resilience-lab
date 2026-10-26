@@ -3,6 +3,7 @@ package resiliencelab.core.experiment
 import resiliencelab.core.scenario.SweepParameter
 import kotlinx.serialization.Serializable
 
+/** Versioned experiment output containing both replication-level evidence and variant aggregates. */
 @Serializable
 data class ExperimentResult(
     val schemaVersion: Int,
@@ -11,6 +12,7 @@ data class ExperimentResult(
     val variants: List<VariantResult>,
 )
 
+/** Results for one scenario, retaining independent replications alongside their aggregate. */
 @Serializable
 data class VariantResult(
     val id: String,
@@ -21,6 +23,10 @@ data class VariantResult(
     val aggregate: AggregateMetrics,
 )
 
+/**
+ * A fully drained replication for the cohort arriving during the measurement interval.
+ * Client outcomes and caused attempts include run-out, while warm-up requests affect state but not these counters.
+ */
 @Serializable
 data class ReplicationResult(
     val arrivalTimesMs: List<Double>,
@@ -33,6 +39,11 @@ data class ReplicationResult(
     val services: Map<String, ServiceMetrics>,
 )
 
+/**
+ * Per-service counters for the measured cohort and time-weighted observations for the fixed measurement interval.
+ * Offered attempts include queue rejections; admitted attempts were queued or immediately allocated.
+ * Queue and handler observations include all work present, including warm-up work, but exclude run-out.
+ */
 @Serializable
 data class ServiceMetrics(
     val offeredAttempts: Int,
@@ -46,6 +57,7 @@ data class ServiceMetrics(
     val p95QueueLength: Double,
 )
 
+/** Aggregates pooled latency with replication-level success, percentile, and service amplification summaries. */
 @Serializable
 data class AggregateMetrics(
     val pooledLatency: LatencySummary,
@@ -55,6 +67,7 @@ data class AggregateMetrics(
     val services: Map<String, AggregateServiceMetrics>,
 )
 
+/** Pooled client-latency distributions partitioned by final client outcome. */
 @Serializable
 data class LatencySummary(
     val all: LatencyDistribution?,
@@ -62,6 +75,7 @@ data class LatencySummary(
     val failed: LatencyDistribution?,
 )
 
+/** Descriptive statistics for a non-empty set of pooled client latencies. */
 @Serializable
 data class LatencyDistribution(
     val meanMs: Double,
@@ -69,6 +83,10 @@ data class LatencyDistribution(
     val p99Ms: Double,
 )
 
+/**
+ * Describes replication-level metric values, with uncertainty available only when at least two values exist.
+ * Student confidence limits are not clipped to the metric's physical range.
+ */
 @Serializable
 data class MetricSummary(
     val mean: Double,
@@ -79,6 +97,7 @@ data class MetricSummary(
     val max: Double,
 )
 
+/** Summarizes per-replication service amplification using that replication's original-arrival denominator. */
 @Serializable
 data class AggregateServiceMetrics(
     val admittedAmplification: MetricSummary?,

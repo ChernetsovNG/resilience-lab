@@ -6,6 +6,7 @@ private const val KSL_M1_EXCLUSIVE_LIMIT = 4294967087L
 private const val KSL_M2_EXCLUSIVE_LIMIT = 4294944443L
 private const val KSL_GROUP_SIZE = 3
 
+/** Deterministically expands a scenario seed into the six-component vector required by KSL random streams. */
 object SeedFactory {
     fun seedVector(seed: Long): LongArray {
         val random = Random(seed)

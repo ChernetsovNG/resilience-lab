@@ -1,5 +1,9 @@
 package resiliencelab.core.simulation
 
+/**
+ * Describes invocation and caller-side attempt states; timeout and deadline outcomes do not imply cancellation
+ * of work already accepted downstream.
+ */
 enum class AttemptOutcome {
     PENDING,
     SUCCEEDED,

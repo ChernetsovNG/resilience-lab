@@ -4,6 +4,10 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+/**
+ * Encodes and decodes scenario, experiment, and sweep JSON without performing domain validation.
+ * Experiment and sweep documents must declare the supported schema version; unknown JSON fields are rejected.
+ */
 object ScenarioCodec {
     private const val SUPPORTED_SCHEMA_VERSION = 1
 

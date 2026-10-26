@@ -2,6 +2,11 @@ package resiliencelab.core.simulation
 
 import ksl.simulation.KSLEvent
 
+/**
+ * Coordinates one caller's wait for a downstream invocation.
+ * A timeout resumes only the caller and never cancels the child; the first terminal signal wins, so a late child
+ * completion cannot change a timed-out attempt.
+ */
 internal class CallAttempt(
     val child: ReliabilityModel.ServiceInvocation,
     val timeoutEvent: KSLEvent<*>,

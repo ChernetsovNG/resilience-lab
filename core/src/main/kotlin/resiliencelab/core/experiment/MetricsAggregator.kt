@@ -2,6 +2,11 @@ package resiliencelab.core.experiment
 
 import ksl.utilities.statistic.Statistic
 
+/**
+ * Combines independent replication results without conflating pooled and replication-level statistics.
+ * Latency distributions pool observations, while success, percentile, and amplification summaries describe
+ * replication-level values; empty distributions and ratios with no original arrivals are omitted.
+ */
 object MetricsAggregator {
     fun aggregate(replications: List<ReplicationResult>): AggregateMetrics {
         val pooledLatency = LatencySummary(

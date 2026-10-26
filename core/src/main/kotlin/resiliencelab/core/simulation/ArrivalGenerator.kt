@@ -3,6 +3,11 @@ package resiliencelab.core.simulation
 import ksl.simulation.ModelElement
 import ksl.utilities.random.rvariable.ExponentialRV
 
+/**
+ * Generates the open Poisson stream of original requests through warm-up and the measurement interval.
+ * Warm-up requests affect system state but are outside the measured cohort; no arrivals are created at or after
+ * the arrival boundary, leaving subsequent simulation time for completion and run-out.
+ */
 internal class ArrivalGenerator(
     private val reliabilityModel: ReliabilityModel,
     private val entryServiceId: String,

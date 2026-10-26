@@ -5,6 +5,11 @@ import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
 import resiliencelab.core.scenario.ServiceSpec
 
+/**
+ * Collects original-request outcomes and caused-attempt counters only for the measured arrival cohort, including
+ * their run-out activity. Queue-length and handler series include all work present but cover only the fixed
+ * measurement interval, so warm-up and run-out do not extend those time averages.
+ */
 class MetricsCollector(
     services: List<ServiceSpec>,
     private val measurementStartMs: Double,

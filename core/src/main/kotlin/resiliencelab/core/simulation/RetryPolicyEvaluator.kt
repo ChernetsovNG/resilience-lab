@@ -4,6 +4,10 @@ import resiliencelab.core.scenario.RetryKind
 import resiliencelab.core.scenario.RetrySpec
 import kotlin.math.pow
 
+/**
+ * Computes capped retry delays for one-based failed-attempt numbers.
+ * Exponential full jitter samples uniformly between zero and the capped exponential delay.
+ */
 object RetryPolicyEvaluator {
     fun backoffMs(retry: RetrySpec, failedAttemptNumber: Int, jitter: () -> Double): Double {
         require(failedAttemptNumber >= 1) { "failedAttemptNumber must be at least 1" }

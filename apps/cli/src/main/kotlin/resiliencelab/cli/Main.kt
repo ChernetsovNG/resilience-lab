@@ -16,10 +16,16 @@ import kotlin.system.exitProcess
 private const val USAGE =
     "Usage: validate <experiment.json> | run <experiment.json> | sweep <sweep.json>"
 
+/** Runs the requested CLI command and exits the process with its status. */
 fun main(args: Array<String>) {
     exitProcess(runCommand(args.asList(), System.out, System.err))
 }
 
+/**
+ * Dispatches `validate`, `run`, and `sweep` using the supplied streams.
+ * Input and validation failures return 2 and execution failures return 1. Successful `run` and `sweep` commands
+ * write one JSON result to [stdout]; validation diagnostics and command errors go to [stderr].
+ */
 internal fun runCommand(
     args: List<String>,
     stdout: Appendable,

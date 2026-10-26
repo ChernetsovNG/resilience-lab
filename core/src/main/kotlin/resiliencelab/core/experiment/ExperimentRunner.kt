@@ -14,6 +14,10 @@ import ksl.simulation.Model
 import ksl.simulation.ModelBuilderIfc
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Validates and executes all variants with KSL using their common replication and seed configuration.
+ * Every replication must drain completely; missing, duplicate, or failed replications prevent a result from being returned.
+ */
 object ExperimentRunner {
     fun run(document: ExperimentDocument): ExperimentResult {
         ScenarioValidator.requireValid(document)

@@ -3,6 +3,10 @@ package resiliencelab.core.experiment
 import resiliencelab.core.simulation.ExperimentExecutionException
 import java.util.concurrent.ConcurrentSkipListMap
 
+/**
+ * Collects concurrent results for one variant by one-based replication number.
+ * Duplicate records are rejected, and snapshots require exactly `1..expectedCount` in replication order.
+ */
 internal class ReplicationResultStore(
     private val variantId: String,
 ) {

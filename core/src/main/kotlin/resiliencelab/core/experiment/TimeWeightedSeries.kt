@@ -1,5 +1,10 @@
 package resiliencelab.core.experiment
 
+/**
+ * Integrates chronological, piecewise-constant observations over a fixed measurement interval.
+ * The average uses the full interval as its denominator, and the p95 is weighted by time at each value,
+ * not by observation count; recording or finishing at the interval end freezes the series.
+ */
 class TimeWeightedSeries(
     private val measurementStartMs: Double,
     private val measurementEndMs: Double,

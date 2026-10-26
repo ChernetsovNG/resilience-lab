@@ -14,6 +14,11 @@ import ksl.simulation.ModelElement
 import ksl.utilities.random.rng.RNStreamProvider
 import ksl.utilities.random.rvariable.UniformRV
 
+/**
+ * Owns a service's bounded FIFO admission path, blocking handler pool, and dedicated random samplers.
+ * Degradation is evaluated when local processing starts; its sampled duration and failure outcome are unaffected
+ * by the degradation interval ending while that attempt continues.
+ */
 internal class ServiceRuntime(
     parent: ModelElement,
     private val spec: ServiceSpec,
