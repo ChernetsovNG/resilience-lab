@@ -1,0 +1,14 @@
+.git/
+.worktrees/
+.gradle/
+.kotlin/
+**/build/
+**/dist/
+**/node_modules/
+**/playwright-report/
+**/test-results/
+kslOutput/
+.superpowers/
+.idea/
+.vscode/
+*.iml

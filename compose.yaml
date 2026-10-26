@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "5173:8080"

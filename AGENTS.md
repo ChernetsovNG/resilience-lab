@@ -32,6 +32,15 @@ Gradle-команды выполняются из корня репозитор�
 
 Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml`: сохраняет `./gradlew --no-daemon clean build`, затем выполняет Node.js 25.5.0 setup, `npm ci`, lint, unit tests, production build, установку Playwright Chromium и E2E. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и Playwright artifacts сохраняются как артефакты workflow.
 
+### Локальный Docker Compose
+
+- `docker compose up --build -d` — собрать production-like образы и запустить backend и frontend из корня репозитория.
+- Frontend: `http://127.0.0.1:5173`; backend health: `http://127.0.0.1:8080/api/v1/health`.
+- `docker compose down` — остановить и удалить только контейнеры этого Compose-проекта; volumes, образы и исходники не удаляются.
+- Браузер обращается к same-origin `/api`, Nginx передаёт запросы сервису `backend:8080`. Контейнеры работают от non-root пользователей; секреты и persistent volumes не используются.
+- Задания остаются process-local: перезапуск backend удаляет их, поэтому Compose не обеспечивает сохранение результатов между перезапусками.
+- Проверено 2026-10-26: оба образа реально собраны и запущены; host health вернул 200, proxied missing-job — API JSON 404, отсутствующий asset — Nginx 404. Установленный Playwright Chromium без mock API и локальных webServers прошёл comparison с двумя репликациями до `COMPLETED` и показал Baseline/Candidate metrics. После `docker compose down` список `docker compose ps` пуст.
+
 ### Проверка quality (2026-10-26)
 
 Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
