@@ -35,7 +35,7 @@ Gradle-команды выполняются из корня репозитор�
 ### Локальный Docker Compose
 
 - `docker compose up --build -d` — собрать production-like образы и запустить backend и frontend из корня репозитория.
-- Frontend: `http://127.0.0.1:5173`; backend health: `http://127.0.0.1:8080/api/v1/health`.
+- Frontend: `http://127.0.0.1:5173`; backend health: `http://127.0.0.1:8080/api/v1/health`. Оба host-порта опубликованы только на loopback (`127.0.0.1`), без configurable LAN access.
 - `docker compose down` — остановить и удалить только контейнеры этого Compose-проекта; volumes, образы и исходники не удаляются.
 - Браузер обращается к same-origin `/api`, Nginx передаёт запросы сервису `backend:8080`. Контейнеры работают от non-root пользователей; секреты и persistent volumes не используются.
 - Задания остаются process-local: перезапуск backend удаляет их, поэтому Compose не обеспечивает сохранение результатов между перезапусками.

@@ -6,7 +6,7 @@ services:
     environment:
       SERVER_ADDRESS: 0.0.0.0
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
 
   frontend:
     build:
@@ -15,4 +15,4 @@ services:
     depends_on:
       - backend
     ports:
-      - "5173:8080"
+      - "127.0.0.1:5173:8080"

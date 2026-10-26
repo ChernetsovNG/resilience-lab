@@ -4,7 +4,7 @@
 
 **Goal:** Build and run the existing backend and production frontend with one Docker Compose command and verify a real browser experiment through the container proxy.
 
-**Architecture:** Two multi-stage images: Gradle/JDK 25 produces the Spring Boot JAR for a JRE 25 runtime; Node 25.5.0 produces static Vite assets for a non-root Nginx runtime. Nginx serves the SPA on container port 8080 and proxies `/api/` unchanged to `backend:8080`; Compose publishes frontend `5173:8080` and backend `8080:8080`.
+**Architecture:** Two multi-stage images: Gradle/JDK 25 produces the Spring Boot JAR for a JRE 25 runtime; Node 25.5.0 produces static Vite assets for a non-root Nginx runtime. Nginx serves the SPA on container port 8080 and proxies `/api/` unchanged to `backend:8080`; Compose publishes frontend `127.0.0.1:5173:8080` and backend `127.0.0.1:8080:8080` on loopback only.
 
 **Tech Stack:** Docker Compose, Eclipse Temurin JDK/JRE 25, Gradle Wrapper 9.8.2, Node 25.5.0, Nginx Alpine, existing React/Spring applications.
 
@@ -57,9 +57,9 @@ Create `apps/server/Dockerfile` with a JDK 25 build stage running `./gradlew --n
 
 Create `web/Dockerfile` with Node 25.5.0 `npm ci` and `npm run build`, then an Nginx Alpine runtime copying `web/dist` and `web/nginx.conf`. Configure writable `/tmp` pid/cache paths and `USER nginx`; expose 8080.
 
-Create `web/nginx.conf`: listen 8080; static root and `index.html`; `location /api/` proxies to `http://backend:8080` preserving URI and setting `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`; SPA `try_files $uri $uri/ /index.html`; static assets must not fall back to HTML when the file is absent.
+Create `web/nginx.conf`: listen 8080; static root and `index.html`; exact `/api` returns 404; `location /api/` proxies to `http://backend:8080` preserving URI and setting `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`; SPA `try_files $uri $uri/ /index.html`; static assets must not fall back to HTML when the file is absent.
 
-Create `compose.yaml` with only `backend` and `frontend`, build contexts at repository root and Dockerfiles above, `frontend` depending on `backend`, and exact port mappings `8080:8080` and `5173:8080`.
+Create `compose.yaml` with only `backend` and `frontend`, build contexts at repository root and Dockerfiles above, `frontend` depending on `backend`, and exact loopback-only port mappings `127.0.0.1:8080:8080` and `127.0.0.1:5173:8080`.
 
 - [ ] **Step 3: Validate and build the real images**
 
