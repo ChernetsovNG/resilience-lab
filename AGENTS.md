@@ -2,12 +2,13 @@
 
 ## Текущее состояние
 
-Текущий срез включает только модули `core` и `apps:cli`:
+Текущий срез включает модули `core`, `apps:cli` и `apps:server`:
 
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
+- `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
 
-Server и браузерный web UI ещё не реализованы; полный MVP не завершён.
+Браузерный web UI ещё не реализован; полный MVP не завершён.
 
 ## Стандартные команды сборки и проверки
 
@@ -17,14 +18,19 @@ Server и браузерный web UI ещё не реализованы; пол
 - `./gradlew clean build` — чистая полная сборка и все доступные проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
+- `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
 
-Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo модулей `core` и `apps:cli` сохраняются как артефакты workflow.
+Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test` и `apps/server/build/reports/jacoco/test` сохраняются как артефакты workflow.
 
-### Проверка core quality (2026-10-26)
+### Проверка quality (2026-10-26)
 
-Локальный `./gradlew --no-daemon clean build` завершился успешно: 151 тест (`core`: 140, `apps:cli`: 11), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+
+### Backend API
+
+Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает его 28 тестов. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
 
 ### CLI
 

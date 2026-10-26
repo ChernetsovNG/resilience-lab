@@ -1,5 +1,6 @@
 package resiliencelab.core.scenario
 
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -18,12 +19,18 @@ object ScenarioCodec {
             prettyPrint = true
         }
 
-    fun decodeScenario(text: String): Scenario = json.decodeFromString(text)
+    /** Decodes a caller-supplied document with the same strict JSON configuration used for core scenarios. */
+    fun <T> decode(
+        text: String,
+        deserializer: DeserializationStrategy<T>,
+    ): T = json.decodeFromString(deserializer, text)
+
+    fun decodeScenario(text: String): Scenario = decode(text, Scenario.serializer())
 
     fun encodeScenario(value: Scenario): String = json.encodeToString(value)
 
     fun decodeExperiment(text: String): ExperimentDocument {
-        val document = json.decodeFromString<ExperimentDocument>(text)
+        val document = decode(text, ExperimentDocument.serializer())
         requireSupportedSchemaVersion(document.schemaVersion)
         return document
     }
@@ -34,7 +41,7 @@ object ScenarioCodec {
     }
 
     fun decodeSweep(text: String): SweepDocument {
-        val document = json.decodeFromString<SweepDocument>(text)
+        val document = decode(text, SweepDocument.serializer())
         requireSupportedSchemaVersion(document.schemaVersion)
         return document
     }
@@ -44,7 +51,8 @@ object ScenarioCodec {
         return json.encodeToString(value)
     }
 
-    private fun requireSupportedSchemaVersion(version: Int) {
+    /** Rejects schema versions other than the single version supported by this core release. */
+    fun requireSupportedSchemaVersion(version: Int) {
         require(version == SUPPORTED_SCHEMA_VERSION) {
             "Unsupported schemaVersion: $version; expected $SUPPORTED_SCHEMA_VERSION"
         }

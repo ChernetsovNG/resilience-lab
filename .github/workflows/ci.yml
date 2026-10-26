@@ -29,4 +29,5 @@ jobs:
           path: |
             core/build/reports/jacoco/test
             apps/cli/build/reports/jacoco/test
+            apps/server/build/reports/jacoco/test
           if-no-files-found: error

@@ -6,7 +6,7 @@
 
 **Architecture:** `apps/server` — тонкий Spring MVC adapter над `core`: JSON-документы декодируются тем же `ScenarioCodec`, sweep раскрывается через `SweepExpander`, выполнение идёт через `ExperimentRunner`. HTTP-потоки не выполняют CPU-bound симуляции; отдельный bounded `ThreadPoolTaskExecutor` запускает задания и сохраняет их состояние в памяти процесса.
 
-**Tech Stack:** JDK 25, Kotlin 2.4.21, Spring Boot 4.1.2, Spring MVC/Tomcat, Gradle 9.3, KSLCore R1.8.1, kotlinx-serialization-json 1.12.0, kotlinx-coroutines 1.11.0, JUnit 5, MockMvc, GPLv3.
+**Tech Stack:** JDK 25, Kotlin 2.4.21, Spring Boot 4.1.2, Spring MVC/Tomcat, Gradle 9.8.2, KSLCore R1.8.1, kotlinx-serialization-json 1.12.0, kotlinx-coroutines 1.11.0, JUnit 5, MockMvc, GPLv3.
 
 **Spec:** `docs/superpowers/specs/2026-10-25-resilience-lab-design.md`
 
@@ -15,10 +15,10 @@
 ## Global Constraints
 
 - Все JVM-модули используют `jvmToolchain(25)`; Spring Boot фиксируется на стабильном `4.1.2`, не RC.
-- Только `spring-boot-starter-web` и `spring-boot-starter-test` плюс `jackson-module-kotlin`; не добавлять Spring Data, JPA, Security, Actuator или второй web-фреймворк.
+- Только `spring-boot-starter-web`, `spring-boot-starter-test` и `spring-boot-webmvc-test` плюс `jackson-module-kotlin`; не добавлять Spring Data, JPA, Security, Actuator или второй web-фреймворк.
 - Сервер слушает только `127.0.0.1:8080`; Vite proxy обращается к нему по `/api`, поэтому отдельный CORS/Security-слой не нужен.
 - `core` остаётся независимым от Spring и HTTP; JSON-декодирование сценариев не дублируется через второй объектный маппер.
-- Задания хранятся только в памяти процесса; база данных и сохранение между перезапусками не входят в MVP.
+- Задания хранятся только в памяти процесса; база данных и сохранение между перезапусками не входят в MVP. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
 - CPU-bound симуляции выполняются в отдельном bounded executor, а не в request threads и не через общий неограниченный `@Async` executor.
 - Ошибки валидации возвращают `400`, отсутствующее задание — `404`, внутренние stack traces и конфиденциальные данные клиенту не возвращаются.
 - Все длительности — `Double` миллисекунды; результаты содержат application/KSL versions, чтобы воспроизводимость не зависела от скрытого окружения.
@@ -38,7 +38,7 @@
 // T02: mockMvc.post("/api/v1/scenarios/validate") { content = malformedJson }.andExpect { status { isBadRequest() }; jsonPath("$.code") { value("INVALID_SUBMISSION") } }; assertEquals(0, jobs.size)
 // T03: assertEquals(QUEUED, job.status); assertTrue(submitLatch.await(0, MILLISECONDS)); assertEquals(COMPLETED, otherJob.status)
 // T04: assertEquals(202, submitResponse.status); assertEquals(404, missingResultResponse.status); assertEquals(409, unfinishedResultResponse.status); assertEquals(500, failedResultResponse.status)
-// T04 real: assertEquals(1, result.schemaVersion); assertEquals("baseline", result.variants.single().id); assertTrue(result.variants.single().aggregate.pooledLatency.p95 > 0.0)
+// T04 real: assertEquals(1, result.schemaVersion); assertEquals("baseline", result.variants.single().id); assertTrue(result.variants.single().aggregate.pooledLatency.all.p95Ms > 0.0); assertTrue(result.variants.single().aggregate.pooledLatency.all.p99Ms >= result.variants.single().aggregate.pooledLatency.all.p95Ms)
 // T05: assertTrue(buildSuccessful && http202Accepted && completedStatusReceived && resultContainsBaselineAndCandidate)
 ```
 
@@ -48,10 +48,10 @@
 
 **Files:**
 - Create: `apps/server/build.gradle.kts`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/ResilienceLabApplication.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/HealthController.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/ResilienceLabApplication.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/HealthController.kt`
 - Create: `apps/server/src/main/resources/application.yml`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/HealthControllerTest.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/HealthControllerTest.kt`
 - Modify: `settings.gradle.kts`
 
 **Interfaces:**
@@ -60,7 +60,7 @@
 
 - [ ] **Step 1: Add the module and write the failing health test**
 
-Configure `application`, `org.springframework.boot` version `4.1.2`, `io.spring.dependency-management` version `1.1.7`, Kotlin JVM/serialization `2.4.21` and `jvmToolchain(25)`. Dependencies: `project(":core")`, `spring-boot-starter-web`, `jackson-module-kotlin`, `spring-boot-starter-test`. Bind `127.0.0.1:8080` in `application.yml`.
+Configure `application`, `org.springframework.boot` version `4.1.2`, `io.spring.dependency-management` version `1.1.7`, Kotlin JVM/serialization `2.4.21` and `jvmToolchain(25)`. Dependencies: `project(":core")`, `spring-boot-starter-web`, `jackson-module-kotlin`, `spring-boot-starter-test`, `spring-boot-webmvc-test`. Bind `127.0.0.1:8080` in `application.yml`.
 
 Write a `@WebMvcTest(HealthController::class)` assertion for `GET /api/v1/health`: status `200`, `status == "ok"`, `kslVersion == "R1.8.1"`.
 
@@ -90,12 +90,12 @@ git commit -m "feat: add Spring Boot server health endpoint"
 ### Task 2: Submission codec, validation endpoint and API errors
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentSubmission.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentSubmissionCodec.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentService.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ScenarioController.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ApiExceptionHandler.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/ScenarioControllerTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentSubmission.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentSubmissionCodec.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentService.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ScenarioController.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ApiExceptionHandler.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/ScenarioControllerTest.kt`
 
 **Interfaces:**
 - Produces: `ExperimentSubmission(experiment: ExperimentDocument? = null, sweep: SweepDocument? = null)`; exactly one field must be non-null.
@@ -130,11 +130,11 @@ git commit -m "feat: validate scenarios through the API"
 ### Task 3: Bounded experiment job manager
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentExecutor.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJob.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJobManager.kt`
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/SimulationExecutorConfig.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/experiment/ExperimentJobManagerTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentExecutor.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentJob.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/ExperimentJobManager.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/experiment/SimulationExecutorConfig.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/experiment/ExperimentJobManagerTest.kt`
 
 **Interfaces:**
 - Produces: `ExperimentExecutor.execute(document: ExperimentDocument): ExperimentResult`, implemented in production by delegating to `ExperimentRunner.run`.
@@ -169,9 +169,9 @@ git commit -m "feat: manage asynchronous experiment jobs"
 ### Task 4: Experiment API and real result integration
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentController.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/ExperimentControllerTest.kt`
-- Create: `apps/server/src/test/kotlin/io/github/chernetsovng/resiliencelab/server/api/RealExperimentApiTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/api/ExperimentController.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/ExperimentControllerTest.kt`
+- Create: `apps/server/src/test/kotlin/resiliencelab/server/api/RealExperimentApiTest.kt`
 
 **Interfaces:**
 - Consumes: `ExperimentSubmissionCodec`, `ExperimentService.prepare`, `ExperimentJobManager`.
@@ -208,6 +208,7 @@ git commit -m "feat: expose experiment jobs through the API"
 
 **Files:**
 - Modify: `AGENTS.md`
+- Modify: `.github/workflows/ci.yml`
 - Modify: `docs/superpowers/plans/2026-10-25-spring-backend-api.md` only if implementation changes the documented contract
 
 **Interfaces:**
@@ -234,6 +235,6 @@ Expected: no whitespace errors and only intended changes; do not push.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add AGENTS.md docs/superpowers/plans/2026-10-25-spring-backend-api.md
+git add AGENTS.md docs/superpowers/plans/2026-10-25-spring-backend-api.md .github/workflows/ci.yml
 git commit -m "docs: record backend API verification"
 ```
