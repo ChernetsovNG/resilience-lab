@@ -1,5 +1,8 @@
 import type { ExperimentResult } from "../api/types";
 import { MetricCards } from "./MetricCards";
+import { ResultDownload } from "./ResultDownload";
+import { SweepChart } from "./SweepChart";
+import { VariantComparisonChart } from "./VariantComparisonChart";
 
 interface ResultPanelProps {
   jobId: string | null;
@@ -18,12 +21,22 @@ export function ResultPanel({ jobId, result, error }: ResultPanelProps) {
       ) : null}
       {error ? <div role="alert">{error}</div> : null}
       {result ? (
-        result.variants.map((variant) => (
-          <section key={variant.id} aria-label={`${variant.label} metrics`}>
-            <h3>{variant.label}</h3>
-            <MetricCards variant={variant} />
-          </section>
-        ))
+        <>
+          <ResultDownload result={result} />
+          {result.variants.some(
+            (variant) => variant.sweepParameter !== null && variant.sweepValue !== null,
+          ) ? (
+            <SweepChart variants={result.variants} />
+          ) : (
+            <VariantComparisonChart variants={result.variants} />
+          )}
+          {result.variants.map((variant) => (
+            <section key={variant.id} aria-label={`${variant.label} metrics`}>
+              <h3>{variant.label}</h3>
+              <MetricCards variant={variant} />
+            </section>
+          ))}
+        </>
       ) : (
         <p>No result available.</p>
       )}
