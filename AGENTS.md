@@ -26,11 +26,11 @@
 
 ### Проверка quality (2026-10-26)
 
-Локальный `./gradlew clean build` на JDK 25 завершился успешно: 185 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 23), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
 
 ### Backend API
 
-Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает его 23 теста. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками.
+Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает его 28 тестов. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
 
 ### CLI
 

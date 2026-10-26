@@ -6,7 +6,7 @@
 
 **Architecture:** `apps/server` — тонкий Spring MVC adapter над `core`: JSON-документы декодируются тем же `ScenarioCodec`, sweep раскрывается через `SweepExpander`, выполнение идёт через `ExperimentRunner`. HTTP-потоки не выполняют CPU-bound симуляции; отдельный bounded `ThreadPoolTaskExecutor` запускает задания и сохраняет их состояние в памяти процесса.
 
-**Tech Stack:** JDK 25, Kotlin 2.4.21, Spring Boot 4.1.2, Spring MVC/Tomcat, Gradle 9.3, KSLCore R1.8.1, kotlinx-serialization-json 1.12.0, kotlinx-coroutines 1.11.0, JUnit 5, MockMvc, GPLv3.
+**Tech Stack:** JDK 25, Kotlin 2.4.21, Spring Boot 4.1.2, Spring MVC/Tomcat, Gradle 9.8.2, KSLCore R1.8.1, kotlinx-serialization-json 1.12.0, kotlinx-coroutines 1.11.0, JUnit 5, MockMvc, GPLv3.
 
 **Spec:** `docs/superpowers/specs/2026-10-25-resilience-lab-design.md`
 
@@ -18,7 +18,7 @@
 - Только `spring-boot-starter-web`, `spring-boot-starter-test` и `spring-boot-webmvc-test` плюс `jackson-module-kotlin`; не добавлять Spring Data, JPA, Security, Actuator или второй web-фреймворк.
 - Сервер слушает только `127.0.0.1:8080`; Vite proxy обращается к нему по `/api`, поэтому отдельный CORS/Security-слой не нужен.
 - `core` остаётся независимым от Spring и HTTP; JSON-декодирование сценариев не дублируется через второй объектный маппер.
-- Задания хранятся только в памяти процесса; база данных и сохранение между перезапусками не входят в MVP.
+- Задания хранятся только в памяти процесса; база данных и сохранение между перезапусками не входят в MVP. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
 - CPU-bound симуляции выполняются в отдельном bounded executor, а не в request threads и не через общий неограниченный `@Async` executor.
 - Ошибки валидации возвращают `400`, отсутствующее задание — `404`, внутренние stack traces и конфиденциальные данные клиенту не возвращаются.
 - Все длительности — `Double` миллисекунды; результаты содержат application/KSL versions, чтобы воспроизводимость не зависела от скрытого окружения.
