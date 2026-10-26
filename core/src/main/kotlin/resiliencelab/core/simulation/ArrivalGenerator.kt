@@ -39,7 +39,11 @@ internal class ArrivalGenerator(
 
     private fun scheduleNext() {
         val delayMs = interArrival.value
-        if (time + delayMs < arrivalEndMs) {
+        val nextArrivalMs = time + delayMs
+        if (!nextArrivalMs.isFinite()) {
+            throw ExperimentExecutionException("Next arrival time must be finite")
+        }
+        if (nextArrivalMs < arrivalEndMs) {
             schedule(arrivalAction, delayMs)
         }
     }

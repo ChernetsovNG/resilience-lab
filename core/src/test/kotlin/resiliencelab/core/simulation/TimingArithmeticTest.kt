@@ -1,0 +1,111 @@
+package resiliencelab.core.simulation
+
+import ksl.modeling.entity.ProcessModel
+import ksl.simulation.Model
+import ksl.simulation.ModelElement
+import org.assertj.core.api.Assertions.assertThatCode
+import org.assertj.core.api.Assertions.assertThatExceptionOfType
+import resiliencelab.core.scenario.Execution
+import resiliencelab.core.scenario.TestData
+import kotlin.test.Test
+
+class TimingArithmeticTest {
+    @Test
+    fun `original request deadline overflow is rejected before scheduling`() {
+        val model = Model("OriginalDeadlineOverflow", autoCSVReports = false)
+        val reliabilityModel = reliabilityModel(model, requestDeadlineMs = Double.MAX_VALUE)
+
+        assertThatExceptionOfType(ExperimentExecutionException::class.java)
+            .isThrownBy {
+                reliabilityModel.invoke(
+                    serviceId = "entry",
+                    timeUntilActivation = Double.MAX_VALUE,
+                    originalRequest = true,
+                )
+            }.withMessageContaining("deadline")
+    }
+
+    @Test
+    fun `original request arrival overflow is rejected before activation`() {
+        val model = Model("OriginalArrivalOverflow", autoCSVReports = false)
+        val reliabilityModel = reliabilityModel(model)
+        InvocationAtLateTime(model) {
+            reliabilityModel.invoke(
+                serviceId = "entry",
+                timeUntilActivation = Double.MAX_VALUE,
+                originalRequest = true,
+            )
+        }
+
+        assertThatExceptionOfType(ExperimentExecutionException::class.java)
+            .isThrownBy { model.simulate() }
+            .withMessageContaining("arrival")
+    }
+
+    @Test
+    fun `nonfinite next arrival candidate is rejected`() {
+        val model = Model("NextArrivalOverflow", autoCSVReports = false)
+        val reliabilityModel = reliabilityModel(model)
+        ArrivalGenerator(
+            reliabilityModel = reliabilityModel,
+            entryServiceId = "entry",
+            arrivalRate = 1.0 / Double.MAX_VALUE,
+            warmupMs = Double.MAX_VALUE,
+            measurementMs = Double.MAX_VALUE,
+            streamNum = 1,
+        )
+
+        assertThatExceptionOfType(ExperimentExecutionException::class.java)
+            .isThrownBy { model.simulate() }
+            .withMessageContaining("Next arrival")
+    }
+
+    @Test
+    fun `direct nonoriginal invocation retains its infinite deadline`() {
+        val model = Model("DirectNonOriginalInvocation", autoCSVReports = false)
+        val reliabilityModel = reliabilityModel(model, requestDeadlineMs = Double.MAX_VALUE)
+
+        assertThatCode {
+            reliabilityModel.invoke(
+                serviceId = "entry",
+                timeUntilActivation = Double.MAX_VALUE,
+                originalRequest = false,
+            )
+        }.doesNotThrowAnyException()
+    }
+
+    private fun reliabilityModel(
+        model: Model,
+        requestDeadlineMs: Double = 500.0,
+    ): ReliabilityModel {
+        val base = TestData.simpleScenario()
+        val scenario =
+            base.copy(
+                services = listOf(base.services.first()),
+                links = emptyList(),
+                workload = base.workload.copy(requestDeadlineMs = requestDeadlineMs),
+            )
+        return ReliabilityModel(model, scenario, execution())
+    }
+
+    private fun execution(): Execution =
+        Execution(
+            replications = 1,
+            warmupMs = 0.0,
+            measurementMs = 100.0,
+            seed = 42L,
+            maxRealTimeSeconds = 30L,
+        )
+
+    private class InvocationAtLateTime(
+        model: Model,
+        private val action: () -> Unit,
+    ) : ProcessModel(model) {
+        override fun initialize() {
+            schedule(
+                eventAction = ModelElement.EventActionIfc<Nothing> { action() },
+                timeToEvent = Double.MAX_VALUE,
+            )
+        }
+    }
+}

@@ -176,17 +176,25 @@ class ReliabilityModel(
         measurementCohort: Boolean = true,
     ): ServiceInvocation {
         val arrivalTimeMs = time + timeUntilActivation
+        if (!arrivalTimeMs.isFinite()) {
+            throw ExperimentExecutionException("Invocation arrival time must be finite")
+        }
+        val originalDeadlineMs =
+            if (originalRequest) {
+                (arrivalTimeMs + scenario.workload.requestDeadlineMs).also { deadline ->
+                    if (!deadline.isFinite()) {
+                        throw ExperimentExecutionException("Original request deadline must be finite")
+                    }
+                }
+            } else {
+                Double.POSITIVE_INFINITY
+            }
         return createInvocation(
             serviceId = serviceId,
             timeUntilActivation = timeUntilActivation,
             originalRequest = originalRequest,
             measurementCohort = measurementCohort,
-            originalDeadlineMs =
-                if (originalRequest) {
-                    arrivalTimeMs + scenario.workload.requestDeadlineMs
-                } else {
-                    Double.POSITIVE_INFINITY
-                },
+            originalDeadlineMs = originalDeadlineMs,
             incomingNetwork = null,
         )
     }

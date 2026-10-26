@@ -189,6 +189,38 @@ class SweepExpanderTest {
     }
 
     @Test
+    fun `nonpositive degradation multipliers are rejected before expansion`() {
+        val base =
+            TestData.simpleScenario().copy(
+                degradation =
+                    DegradationSpec(
+                        serviceId = "backend",
+                        startMs = 10.0,
+                        endMs = 100.0,
+                        processingMultiplier = 2.0,
+                        failureRate = null,
+                    ),
+            )
+
+        listOf(0.0, -1.0).forEach { multiplier ->
+            assertThatExceptionOfType(ScenarioValidationException::class.java)
+                .isThrownBy {
+                    SweepExpander.expand(
+                        sweepDocument(
+                            scenario = base,
+                            parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+                            serviceId = "backend",
+                            linkId = null,
+                            values = listOf(multiplier),
+                        ),
+                    )
+                }.satisfies({ exception ->
+                    assertThat(exception.errors.map { it.path }).containsExactly("sweep.values[0]")
+                })
+        }
+    }
+
+    @Test
     fun `missing link targets are rejected before expansion`() {
         listOf(
             SweepParameter.LINK_TIMEOUT,

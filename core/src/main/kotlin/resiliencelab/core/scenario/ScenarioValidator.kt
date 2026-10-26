@@ -49,6 +49,13 @@ object ScenarioValidator {
         }
         validateFiniteNonNegative(execution.warmupMs, "execution.warmupMs", issues)
         validateFinitePositive(execution.measurementMs, "execution.measurementMs", issues)
+        if (
+            execution.warmupMs.isFinite() &&
+            execution.measurementMs.isFinite() &&
+            !(execution.warmupMs + execution.measurementMs).isFinite()
+        ) {
+            issues += ValidationIssue("execution.measurementMs", "warmupMs + measurementMs must be finite")
+        }
         if (execution.maxRealTimeSeconds <= 0L) {
             issues += ValidationIssue("execution.maxRealTimeSeconds", "must be greater than zero")
         }
@@ -174,7 +181,7 @@ object ScenarioValidator {
         prefix: String,
         issues: MutableList<ValidationIssue>,
     ) {
-        validateFinitePositive(workload.arrivalRate, "$prefix.arrivalRate", issues)
+        validateArrivalRate(workload.arrivalRate, "$prefix.arrivalRate", issues)
         validateFinitePositive(workload.requestDeadlineMs, "$prefix.requestDeadlineMs", issues)
     }
 
@@ -198,7 +205,7 @@ object ScenarioValidator {
         ) {
             issues += ValidationIssue("$prefix.endMs", "must be greater than startMs")
         }
-        validateFinite(degradation.processingMultiplier, "$prefix.processingMultiplier", issues)
+        validateFinitePositive(degradation.processingMultiplier, "$prefix.processingMultiplier", issues)
         degradation.failureRate?.let { failureRate ->
             validateFailureRate(failureRate, "$prefix.failureRate", issues)
         }
@@ -300,10 +307,12 @@ object ScenarioValidator {
             issues += ValidationIssue("sweep.values", "must not be empty")
         }
         document.sweep.values.forEachIndexed { index, value ->
-            if (document.sweep.parameter == SweepParameter.MAX_ATTEMPTS) {
-                validateMaxAttemptsValue(value, "sweep.values[$index]", issues)
-            } else {
-                validateFinite(value, "sweep.values[$index]", issues)
+            when (document.sweep.parameter) {
+                SweepParameter.MAX_ATTEMPTS -> validateMaxAttemptsValue(value, "sweep.values[$index]", issues)
+                SweepParameter.DEGRADATION_MULTIPLIER ->
+                    validateFinitePositive(value, "sweep.values[$index]", issues)
+                SweepParameter.ARRIVAL_RATE -> validateArrivalRate(value, "sweep.values[$index]", issues)
+                else -> validateFinite(value, "sweep.values[$index]", issues)
             }
         }
     }
@@ -379,6 +388,20 @@ object ScenarioValidator {
     ) {
         if (!value.isFinite()) {
             issues += ValidationIssue(path, "must be finite")
+        }
+    }
+
+    private fun validateArrivalRate(
+        value: Double,
+        path: String,
+        issues: MutableList<ValidationIssue>,
+    ) {
+        validateFinitePositive(value, path, issues)
+        if (value.isFinite() && value > 0.0) {
+            val interArrivalMean = 1 / value
+            if (!interArrivalMean.isFinite() || interArrivalMean <= 0.0) {
+                issues += ValidationIssue(path, "must produce a finite, strictly positive interarrival mean")
+            }
         }
     }
 

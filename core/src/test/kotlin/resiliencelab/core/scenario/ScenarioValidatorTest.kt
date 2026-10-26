@@ -437,6 +437,29 @@ class ScenarioValidatorTest {
     }
 
     @Test
+    fun `nonpositive degradation multiplier is rejected at its field`() {
+        val scenario = TestData.simpleScenario()
+
+        listOf(0.0, -1.0).forEach { multiplier ->
+            val document =
+                experimentDocument(
+                    scenario.copy(
+                        degradation =
+                            DegradationSpec(
+                                serviceId = "backend",
+                                startMs = 0.0,
+                                endMs = 10.0,
+                                processingMultiplier = multiplier,
+                                failureRate = null,
+                            ),
+                    ),
+                )
+
+            assertExperimentPaths(listOf("variants[0].scenario.degradation.processingMultiplier"), document)
+        }
+    }
+
+    @Test
     fun `degradation failure rate must be within the unit interval`() {
         val scenario = TestData.simpleScenario()
         val document =
@@ -473,6 +496,38 @@ class ScenarioValidatorTest {
     @Test
     fun `nonpositive measurement duration is rejected`() {
         val document = experimentDocument(execution = execution().copy(measurementMs = 0.0))
+
+        assertExperimentPaths(listOf("execution.measurementMs"), document)
+    }
+
+    @Test
+    fun `arrival rate with an infinite interarrival mean is rejected`() {
+        val scenario = TestData.simpleScenario()
+        val document =
+            experimentDocument(
+                scenario.copy(workload = scenario.workload.copy(arrivalRate = Double.MIN_VALUE)),
+            )
+
+        assertExperimentPaths(listOf("variants[0].scenario.workload.arrivalRate"), document)
+        assertThat(
+            ScenarioValidator.validate(
+                experimentDocument(
+                    scenario.copy(workload = scenario.workload.copy(arrivalRate = Double.MAX_VALUE)),
+                ),
+            ),
+        ).isEmpty()
+    }
+
+    @Test
+    fun `nonfinite measurement end is rejected at measurement duration`() {
+        val document =
+            experimentDocument(
+                execution =
+                    execution().copy(
+                        warmupMs = Double.MAX_VALUE,
+                        measurementMs = Double.MAX_VALUE,
+                    ),
+            )
 
         assertExperimentPaths(listOf("execution.measurementMs"), document)
     }
@@ -644,6 +699,48 @@ class ScenarioValidatorTest {
             )
 
         assertThat(ScenarioValidator.validate(document)).isEmpty()
+    }
+
+    @Test
+    fun `sweep rejects invalid derived timing values at their input fields`() {
+        val base = TestData.simpleScenario()
+        val degradation =
+            DegradationSpec(
+                serviceId = "backend",
+                startMs = 0.0,
+                endMs = 10.0,
+                processingMultiplier = 2.0,
+                failureRate = null,
+            )
+
+        assertSweepPaths(
+            listOf("execution.measurementMs"),
+            sweepDocument(
+                execution =
+                    execution().copy(
+                        warmupMs = Double.MAX_VALUE,
+                        measurementMs = Double.MAX_VALUE,
+                    ),
+            ),
+        )
+        assertSweepPaths(
+            listOf("sweep.values[0]", "sweep.values[1]"),
+            sweepDocument(
+                scenario = base.copy(degradation = degradation),
+                parameter = SweepParameter.DEGRADATION_MULTIPLIER,
+                serviceId = "backend",
+                linkId = null,
+                values = listOf(0.0, -1.0),
+            ),
+        )
+        assertSweepPaths(
+            listOf("sweep.values[0]"),
+            sweepDocument(
+                parameter = SweepParameter.ARRIVAL_RATE,
+                linkId = null,
+                values = listOf(Double.MIN_VALUE, Double.MAX_VALUE),
+            ),
+        )
     }
 
     @Test
