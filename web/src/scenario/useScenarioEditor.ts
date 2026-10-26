@@ -29,9 +29,9 @@ type Action =
   | { type: "new" }
   | { type: "load-retry-storm" }
   | { type: "select"; variantId: ActiveVariantId }
-  | { type: "add-service"; service: ServiceSpec }
+  | { type: "add-service" }
   | { type: "delete-service"; serviceId: string }
-  | { type: "connect"; link: LinkSpec }
+  | { type: "connect"; from: string; to: string }
   | {
       type: "update-service";
       variantId: ActiveVariantId;
@@ -101,7 +101,16 @@ export function scenarioEditorReducer(
     case "add-service":
       return updateActive(state, (scenario) => ({
         ...scenario,
-        services: [...scenario.services, action.service],
+        services: [
+          ...scenario.services,
+          {
+            id: nextId(scenario.services.map((service) => service.id), "service"),
+            handlers: 4,
+            queueCapacity: 32,
+            processing: { kind: "FIXED", meanMs: 10, stdDevMs: null },
+            failureRate: 0,
+          },
+        ],
       }));
     case "delete-service":
       return updateActive(state, (scenario) => {
@@ -119,14 +128,22 @@ export function scenarioEditorReducer(
       });
     case "connect":
       return updateActive(state, (scenario) => {
-        if (
-          scenario.links.some(
-            (link) => link.from === action.link.from && link.to === action.link.to,
-          )
-        ) {
+        if (scenario.links.some((link) => link.from === action.from && link.to === action.to)) {
           return scenario;
         }
-        return { ...scenario, links: [...scenario.links, action.link] };
+        const template = scenario.links[0] ?? createThreeServiceChain().links[0];
+        return {
+          ...scenario,
+          links: [
+            ...scenario.links,
+            {
+              ...template,
+              id: nextId(scenario.links.map((link) => link.id), "link"),
+              from: action.from,
+              to: action.to,
+            },
+          ],
+        };
       });
     case "update-service":
       return withIssues({
@@ -162,42 +179,15 @@ export function scenarioEditorReducer(
 
 export function useScenarioEditor() {
   const [state, dispatch] = useReducer(scenarioEditorReducer, undefined, initialState);
-  const active = () => state[state.activeVariantId];
 
   return {
     ...state,
     newThreeServiceChain: () => dispatch({ type: "new" }),
     loadRetryStormExample: () => dispatch({ type: "load-retry-storm" }),
     selectActiveVariant: (variantId: ActiveVariantId) => dispatch({ type: "select", variantId }),
-    addService: () => {
-      const scenario = active();
-      const id = nextId(scenario.services.map((service) => service.id), "service");
-      dispatch({
-        type: "add-service",
-        service: {
-          id,
-          handlers: 4,
-          queueCapacity: 32,
-          processing: { kind: "FIXED", meanMs: 10, stdDevMs: null },
-          failureRate: 0,
-        },
-      });
-      return id;
-    },
+    addService: () => dispatch({ type: "add-service" }),
     deleteService: (serviceId: string) => dispatch({ type: "delete-service", serviceId }),
-    connectServices: (from: string, to: string) => {
-      const scenario = active();
-      const template = scenario.links[0] ?? createThreeServiceChain().links[0];
-      dispatch({
-        type: "connect",
-        link: {
-          ...template,
-          id: nextId(scenario.links.map((link) => link.id), "link"),
-          from,
-          to,
-        },
-      });
-    },
+    connectServices: (from: string, to: string) => dispatch({ type: "connect", from, to }),
     updateService: (variantId: ActiveVariantId, serviceId: string, patch: Partial<ServiceSpec>) =>
       dispatch({ type: "update-service", variantId, serviceId, patch }),
     updateLink: (linkId: string, patch: Partial<LinkSpec>) =>

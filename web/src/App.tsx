@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { health as getHealth } from "./api/client";
 import type { HealthView } from "./api/types";
 import { HealthBadge } from "./components/HealthBadge";
+import { ChainCanvas } from "./editor/ChainCanvas";
 
 export function App() {
   const [health, setHealth] = useState<HealthView | null>(null);
@@ -39,6 +40,7 @@ export function App() {
       <main className="workspace">
         <section className="editor-shell" aria-labelledby="editor-title">
           <h2 id="editor-title">Experiment editor</h2>
+          <ChainCanvas />
         </section>
       </main>
     </div>

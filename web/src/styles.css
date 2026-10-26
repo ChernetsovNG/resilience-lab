@@ -84,3 +84,98 @@ textarea {
   font-size: 1rem;
   color: #aeb9ca;
 }
+
+.chain-editor {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.editor-toolbar button {
+  min-block-size: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #59667a;
+  border-radius: 0.375rem;
+  color: #e8edf5;
+  background: #242e3d;
+  cursor: pointer;
+}
+
+.editor-toolbar button:hover:not(:disabled) {
+  background: #334158;
+}
+
+.editor-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.editor-toolbar button:focus-visible,
+.chain-canvas :focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+}
+
+.chain-canvas {
+  min-height: 28rem;
+  border: 1px solid #465267;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #10141c;
+}
+
+.service-block {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 11rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #72819a;
+  border-radius: 0.5rem;
+  color: #e8edf5;
+  background: #242e3d;
+  text-align: center;
+}
+
+.service-block span {
+  color: #c4cedd;
+  font-size: 0.8rem;
+}
+
+.react-flow__node.selected .service-block {
+  border-color: #93c5fd;
+}
+
+.react-flow__handle {
+  min-width: 0.75rem;
+  min-height: 0.75rem;
+  background: #93c5fd;
+}
+
+.topology-issues {
+  color: #d8e0eb;
+}
+
+.topology-issues h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.topology-issues p,
+.topology-issues ul {
+  margin: 0;
+}
+
+.topology-issues ul {
+  padding-left: 1.5rem;
+  color: #fecaca;
+}
+
+.topology-issues li + li {
+  margin-top: 0.35rem;
+}

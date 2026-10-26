@@ -7,9 +7,9 @@
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
 - `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
-- `web` — Vite/React app shell, типизированный API client и health badge.
+- `web` — Vite/React app shell, типизированный API client, health badge и controlled Xyflow editor линейной цепочки сервисов.
 
-Браузерный UI пока содержит только app shell без graph/editor/charts; полный MVP не завершён.
+Браузерный UI содержит visual chain editor без charts и фактической отправки экспериментов; полный MVP не завершён.
 
 ## Стандартные команды сборки и проверки
 

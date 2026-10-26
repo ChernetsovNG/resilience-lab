@@ -39,18 +39,42 @@ describe("useScenarioEditor", () => {
   it("adds and deletes a service with its attached links", () => {
     const { result } = renderHook(() => useScenarioEditor());
     const link = result.current.baseline.links[1];
-    let addedId = "";
 
-    act(() => {
-      addedId = result.current.addService();
-    });
+    act(() => result.current.addService());
     expect(result.current.baseline.services).toHaveLength(4);
-    expect(addedId).not.toBe("");
+    expect(result.current.baseline.services[3].id).toBe("service-4");
     expect(result.current.issues.some((issue) => issue.message.includes("connected"))).toBe(true);
 
     act(() => result.current.deleteService(result.current.baseline.services[2].id));
     expect(result.current.baseline.services).toHaveLength(3);
     expect(result.current.baseline.links.some(({ id }) => id === link.id)).toBe(false);
+  });
+
+  it("allocates unique service and link IDs for batched calls", () => {
+    const { result } = renderHook(() => useScenarioEditor());
+
+    act(() => {
+      result.current.addService();
+      result.current.addService();
+    });
+    act(() => {
+      result.current.connectServices("service-1", "service-3");
+      result.current.connectServices("service-3", "service-4");
+    });
+
+    expect(result.current.baseline.services.map(({ id }) => id)).toEqual([
+      "service-1",
+      "service-2",
+      "service-3",
+      "service-4",
+      "service-5",
+    ]);
+    expect(result.current.baseline.links.map(({ id }) => id)).toEqual([
+      "link-1",
+      "link-2",
+      "link-3",
+      "link-4",
+    ]);
   });
 
   it("connects services without duplicating an edge", () => {
