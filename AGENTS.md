@@ -18,14 +18,19 @@
 - `./gradlew clean build` — чистая полная сборка и все доступные проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
+- `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
 
-Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo модулей `core` и `apps:cli` сохраняются как артефакты workflow.
+Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test` и `apps/server/build/reports/jacoco/test` сохраняются как артефакты workflow.
 
 ### Проверка quality (2026-10-26)
 
-Локальный `./gradlew build` завершился успешно: 172 теста (`core`: 142, `apps:cli`: 11, `apps:server`: 10), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+Локальный `./gradlew clean build` на JDK 25 завершился успешно: 185 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 23), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+
+### Backend API
+
+Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает его 23 теста. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками.
 
 ### CLI
 

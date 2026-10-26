@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - Все JVM-модули используют `jvmToolchain(25)`; Spring Boot фиксируется на стабильном `4.1.2`, не RC.
-- Только `spring-boot-starter-web` и `spring-boot-starter-test` плюс `jackson-module-kotlin`; не добавлять Spring Data, JPA, Security, Actuator или второй web-фреймворк.
+- Только `spring-boot-starter-web`, `spring-boot-starter-test` и `spring-boot-webmvc-test` плюс `jackson-module-kotlin`; не добавлять Spring Data, JPA, Security, Actuator или второй web-фреймворк.
 - Сервер слушает только `127.0.0.1:8080`; Vite proxy обращается к нему по `/api`, поэтому отдельный CORS/Security-слой не нужен.
 - `core` остаётся независимым от Spring и HTTP; JSON-декодирование сценариев не дублируется через второй объектный маппер.
 - Задания хранятся только в памяти процесса; база данных и сохранение между перезапусками не входят в MVP.
@@ -38,7 +38,7 @@
 // T02: mockMvc.post("/api/v1/scenarios/validate") { content = malformedJson }.andExpect { status { isBadRequest() }; jsonPath("$.code") { value("INVALID_SUBMISSION") } }; assertEquals(0, jobs.size)
 // T03: assertEquals(QUEUED, job.status); assertTrue(submitLatch.await(0, MILLISECONDS)); assertEquals(COMPLETED, otherJob.status)
 // T04: assertEquals(202, submitResponse.status); assertEquals(404, missingResultResponse.status); assertEquals(409, unfinishedResultResponse.status); assertEquals(500, failedResultResponse.status)
-// T04 real: assertEquals(1, result.schemaVersion); assertEquals("baseline", result.variants.single().id); assertTrue(result.variants.single().aggregate.pooledLatency.p95 > 0.0)
+// T04 real: assertEquals(1, result.schemaVersion); assertEquals("baseline", result.variants.single().id); assertTrue(result.variants.single().aggregate.pooledLatency.all.p95Ms > 0.0); assertTrue(result.variants.single().aggregate.pooledLatency.all.p99Ms >= result.variants.single().aggregate.pooledLatency.all.p95Ms)
 // T05: assertTrue(buildSuccessful && http202Accepted && completedStatusReceived && resultContainsBaselineAndCandidate)
 ```
 
@@ -60,7 +60,7 @@
 
 - [ ] **Step 1: Add the module and write the failing health test**
 
-Configure `application`, `org.springframework.boot` version `4.1.2`, `io.spring.dependency-management` version `1.1.7`, Kotlin JVM/serialization `2.4.21` and `jvmToolchain(25)`. Dependencies: `project(":core")`, `spring-boot-starter-web`, `jackson-module-kotlin`, `spring-boot-starter-test`. Bind `127.0.0.1:8080` in `application.yml`.
+Configure `application`, `org.springframework.boot` version `4.1.2`, `io.spring.dependency-management` version `1.1.7`, Kotlin JVM/serialization `2.4.21` and `jvmToolchain(25)`. Dependencies: `project(":core")`, `spring-boot-starter-web`, `jackson-module-kotlin`, `spring-boot-starter-test`, `spring-boot-webmvc-test`. Bind `127.0.0.1:8080` in `application.yml`.
 
 Write a `@WebMvcTest(HealthController::class)` assertion for `GET /api/v1/health`: status `200`, `status == "ok"`, `kslVersion == "R1.8.1"`.
 
@@ -208,6 +208,7 @@ git commit -m "feat: expose experiment jobs through the API"
 
 **Files:**
 - Modify: `AGENTS.md`
+- Modify: `.github/workflows/ci.yml`
 - Modify: `docs/superpowers/plans/2026-10-25-spring-backend-api.md` only if implementation changes the documented contract
 
 **Interfaces:**
@@ -234,6 +235,6 @@ Expected: no whitespace errors and only intended changes; do not push.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add AGENTS.md docs/superpowers/plans/2026-10-25-spring-backend-api.md
+git add AGENTS.md docs/superpowers/plans/2026-10-25-spring-backend-api.md .github/workflows/ci.yml
 git commit -m "docs: record backend API verification"
 ```
