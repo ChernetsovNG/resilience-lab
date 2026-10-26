@@ -1,0 +1,184 @@
+{
+    "schemaVersion": 1,
+    "execution": {
+        "replications": 2,
+        "warmupMs": 0.0,
+        "measurementMs": 1000.0,
+        "seed": 20261025,
+        "maxRealTimeSeconds": 30
+    },
+    "variants": [
+        {
+            "id": "baseline",
+            "label": "Baseline",
+            "scenario": {
+                "entry": "gateway",
+                "services": [
+                    {
+                        "id": "gateway",
+                        "handlers": 4,
+                        "queueCapacity": 16,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 1.0
+                        },
+                        "failureRate": 0.0
+                    },
+                    {
+                        "id": "middle",
+                        "handlers": 4,
+                        "queueCapacity": 12,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 2.0
+                        },
+                        "failureRate": 0.0
+                    },
+                    {
+                        "id": "dependency",
+                        "handlers": 2,
+                        "queueCapacity": 8,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 8.0
+                        },
+                        "failureRate": 0.0
+                    }
+                ],
+                "links": [
+                    {
+                        "id": "gateway-to-middle",
+                        "from": "gateway",
+                        "to": "middle",
+                        "network": {
+                            "kind": "FIXED",
+                            "meanMs": 0.5
+                        },
+                        "timeoutMs": 80.0,
+                        "maxAttempts": 3,
+                        "retry": {
+                            "kind": "EXPONENTIAL_FULL_JITTER",
+                            "baseBackoffMs": 2.0,
+                            "maxBackoffMs": 20.0,
+                            "base": 2.0
+                        }
+                    },
+                    {
+                        "id": "middle-to-dependency",
+                        "from": "middle",
+                        "to": "dependency",
+                        "network": {
+                            "kind": "FIXED",
+                            "meanMs": 0.5
+                        },
+                        "timeoutMs": 60.0,
+                        "maxAttempts": 3,
+                        "retry": {
+                            "kind": "EXPONENTIAL_FULL_JITTER",
+                            "baseBackoffMs": 2.0,
+                            "maxBackoffMs": 20.0,
+                            "base": 2.0
+                        }
+                    }
+                ],
+                "workload": {
+                    "arrivalRate": 0.12,
+                    "requestDeadlineMs": 250.0
+                },
+                "degradation": {
+                    "serviceId": "dependency",
+                    "startMs": 200.0,
+                    "endMs": 700.0,
+                    "processingMultiplier": 6.0,
+                    "failureRate": 0.05
+                }
+            }
+        },
+        {
+            "id": "candidate",
+            "label": "Candidate",
+            "scenario": {
+                "entry": "gateway",
+                "services": [
+                    {
+                        "id": "gateway",
+                        "handlers": 4,
+                        "queueCapacity": 16,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 1.0
+                        },
+                        "failureRate": 0.0
+                    },
+                    {
+                        "id": "middle",
+                        "handlers": 4,
+                        "queueCapacity": 12,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 2.0
+                        },
+                        "failureRate": 0.0
+                    },
+                    {
+                        "id": "dependency",
+                        "handlers": 2,
+                        "queueCapacity": 8,
+                        "processing": {
+                            "kind": "FIXED",
+                            "meanMs": 8.0
+                        },
+                        "failureRate": 0.0
+                    }
+                ],
+                "links": [
+                    {
+                        "id": "gateway-to-middle",
+                        "from": "gateway",
+                        "to": "middle",
+                        "network": {
+                            "kind": "FIXED",
+                            "meanMs": 0.5
+                        },
+                        "timeoutMs": 80.0,
+                        "maxAttempts": 1,
+                        "retry": {
+                            "kind": "EXPONENTIAL_FULL_JITTER",
+                            "baseBackoffMs": 2.0,
+                            "maxBackoffMs": 20.0,
+                            "base": 2.0
+                        }
+                    },
+                    {
+                        "id": "middle-to-dependency",
+                        "from": "middle",
+                        "to": "dependency",
+                        "network": {
+                            "kind": "FIXED",
+                            "meanMs": 0.5
+                        },
+                        "timeoutMs": 60.0,
+                        "maxAttempts": 1,
+                        "retry": {
+                            "kind": "EXPONENTIAL_FULL_JITTER",
+                            "baseBackoffMs": 2.0,
+                            "maxBackoffMs": 20.0,
+                            "base": 2.0
+                        }
+                    }
+                ],
+                "workload": {
+                    "arrivalRate": 0.12,
+                    "requestDeadlineMs": 250.0
+                },
+                "degradation": {
+                    "serviceId": "dependency",
+                    "startMs": 200.0,
+                    "endMs": 700.0,
+                    "processingMultiplier": 6.0,
+                    "failureRate": 0.05
+                }
+            }
+        }
+    ]
+}

@@ -28,6 +28,17 @@ object ScenarioCodec {
         return json.encodeToString(value)
     }
 
+    fun decodeSweep(text: String): SweepDocument {
+        val document = json.decodeFromString<SweepDocument>(text)
+        requireSupportedSchemaVersion(document.schemaVersion)
+        return document
+    }
+
+    fun encodeSweep(value: SweepDocument): String {
+        requireSupportedSchemaVersion(value.schemaVersion)
+        return json.encodeToString(value)
+    }
+
     private fun requireSupportedSchemaVersion(version: Int) {
         require(version == SUPPORTED_SCHEMA_VERSION) {
             "Unsupported schemaVersion: $version; expected $SUPPORTED_SCHEMA_VERSION"

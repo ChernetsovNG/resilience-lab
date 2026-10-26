@@ -13,3 +13,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "resilience-lab"
 include("core")
+include("apps:cli")
