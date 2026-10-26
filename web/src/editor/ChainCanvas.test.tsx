@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { ChainCanvas } from "./ChainCanvas";
 import { TopologyIssues } from "./TopologyIssues";
@@ -59,6 +59,15 @@ describe("ChainCanvas", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add service" }));
     expect(screen.getAllByTestId("service-block")).toHaveLength(4);
+  });
+
+  it("edits the selected service through its parameter inspector", () => {
+    render(<ChainCanvas />);
+    const inspector = screen.getByRole("form", { name: "Service parameters" });
+
+    fireEvent.change(within(inspector).getByLabelText("Handlers"), { target: { value: "8" } });
+
+    expect(screen.getAllByTestId("service-block")[0].textContent).toContain("8 handlers");
   });
 
   it("deletes the selected service and its linked edge", async () => {

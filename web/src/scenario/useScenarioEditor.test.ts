@@ -115,6 +115,26 @@ describe("useScenarioEditor", () => {
     expect(execution.replications).not.toBe(5);
   });
 
+  it("replaces imported scenario and execution together and exposes import issues", () => {
+    const { result } = renderHook(() => useScenarioEditor());
+    const imported = structuredClone(result.current.baseline);
+    imported.workload.arrivalRate = 30;
+    const execution = { ...result.current.execution, seed: 9876 };
+    const untouchedCandidate = result.current.candidate;
+
+    act(() => result.current.replaceScenario(imported));
+    expect(result.current.baseline).toBe(imported);
+    expect(result.current.candidate).toBe(untouchedCandidate);
+
+    act(() => result.current.replaceExperiment(imported, execution));
+    expect(result.current.baseline).toBe(imported);
+    expect(result.current.execution).toBe(execution);
+
+    const issues = [{ path: "experiment.seed", message: "invalid" }];
+    act(() => result.current.setIssues(issues));
+    expect(result.current.issues).toEqual(issues);
+  });
+
   it("loads a fresh three-service chain and the retry-storm example", () => {
     const { result } = renderHook(() => useScenarioEditor());
     const beforeReset = result.current.baseline;

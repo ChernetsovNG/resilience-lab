@@ -179,3 +179,89 @@ textarea {
 .topology-issues li + li {
   margin-top: 0.35rem;
 }
+
+.scenario-io,
+.parameter-panels {
+  display: grid;
+  gap: 1rem;
+}
+
+.scenario-io {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  align-items: end;
+}
+
+.scenario-io label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.scenario-io button {
+  min-height: 3rem;
+}
+
+.parameter-panels {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  align-items: start;
+}
+
+.parameter-form fieldset {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #465267;
+  border-radius: 0.5rem;
+}
+
+.parameter-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.parameter-field--checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.parameter-field input,
+.parameter-field select,
+.scenario-io input,
+.scenario-io button {
+  min-height: 3rem;
+  padding: 0.5rem;
+  border: 1px solid #72819a;
+  border-radius: 0.375rem;
+  color: #e8edf5;
+  background: #242e3d;
+  font: inherit;
+}
+
+.parameter-field--checkbox input {
+  min-height: auto;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.parameter-field input:focus-visible,
+.parameter-field select:focus-visible,
+.scenario-io :focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.parameter-field input:user-invalid {
+  border-color: #f87171;
+  background: #451f27;
+}
+
+.parameter-hint {
+  color: #aeb9ca;
+  font-size: 0.875rem;
+}
+
+.parameter-error {
+  color: #fecaca;
+  font-size: 0.875rem;
+}

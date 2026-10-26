@@ -2,6 +2,12 @@ import { useState } from "react";
 import { Background, ReactFlow } from "@xyflow/react";
 import type { Connection, Edge, NodeChange, XYPosition } from "@xyflow/react";
 import { useScenarioEditor } from "../scenario/useScenarioEditor";
+import { DegradationInspector } from "../forms/DegradationInspector";
+import { ExecutionInspector } from "../forms/ExecutionInspector";
+import { LinkInspector } from "../forms/LinkInspector";
+import { ServiceInspector } from "../forms/ServiceInspector";
+import { WorkloadInspector } from "../forms/WorkloadInspector";
+import { ScenarioIoControls } from "../io/ScenarioIoControls";
 import { EditorToolbar } from "./EditorToolbar";
 import { ServiceBlock } from "./ServiceBlock";
 import type { ServiceNode } from "./ServiceBlock";
@@ -56,6 +62,9 @@ export function ChainCanvas() {
     reset();
   };
 
+  const selectedService =
+    scenario.services.find((service) => service.id === selectedServiceId) ?? scenario.services[0];
+
   return (
     <div className="chain-editor">
       <EditorToolbar
@@ -85,6 +94,31 @@ export function ChainCanvas() {
         >
           <Background />
         </ReactFlow>
+      </div>
+      <ScenarioIoControls
+        scenario={scenario}
+        execution={editor.execution}
+        replaceScenario={editor.replaceScenario}
+        replaceExperiment={editor.replaceExperiment}
+        onIssues={editor.setIssues}
+      />
+      <div className="parameter-panels">
+        {selectedService ? (
+          <ServiceInspector
+            service={selectedService}
+            onChange={(patch) => editor.updateService(editor.activeVariantId, selectedService.id, patch)}
+          />
+        ) : null}
+        {scenario.links.map((link) => (
+          <LinkInspector key={link.id} link={link} onChange={(patch) => editor.updateLink(link.id, patch)} />
+        ))}
+        <WorkloadInspector workload={scenario.workload} onChange={editor.updateWorkload} />
+        <DegradationInspector
+          degradation={scenario.degradation}
+          serviceIds={scenario.services.map((service) => service.id)}
+          onChange={editor.updateDegradation}
+        />
+        <ExecutionInspector execution={editor.execution} onChange={editor.updateExecution} />
       </div>
       <TopologyIssues issues={editor.issues} />
     </div>

@@ -41,7 +41,10 @@ type Action =
   | { type: "update-link"; linkId: string; patch: Partial<LinkSpec> }
   | { type: "update-workload"; patch: Partial<WorkloadSpec> }
   | { type: "update-degradation"; degradation: DegradationSpec | null }
-  | { type: "update-execution"; patch: Partial<Execution> };
+  | { type: "update-execution"; patch: Partial<Execution> }
+  | { type: "replace-scenario"; scenario: Scenario }
+  | { type: "replace-experiment"; scenario: Scenario; execution: Execution }
+  | { type: "set-issues"; issues: ValidationIssue[] };
 
 function initialState(): ScenarioEditorState {
   return withIssues({
@@ -174,6 +177,16 @@ export function scenarioEditorReducer(
       }));
     case "update-execution":
       return { ...state, execution: { ...state.execution, ...action.patch } };
+    case "replace-scenario":
+      return updateActive(state, () => action.scenario);
+    case "replace-experiment":
+      return withIssues({
+        ...state,
+        [state.activeVariantId]: action.scenario,
+        execution: action.execution,
+      });
+    case "set-issues":
+      return { ...state, issues: action.issues };
   }
 }
 
@@ -198,5 +211,9 @@ export function useScenarioEditor() {
       dispatch({ type: "update-degradation", degradation }),
     updateExecution: (patch: Partial<Execution>) =>
       dispatch({ type: "update-execution", patch }),
+    replaceScenario: (scenario: Scenario) => dispatch({ type: "replace-scenario", scenario }),
+    replaceExperiment: (scenario: Scenario, execution: Execution) =>
+      dispatch({ type: "replace-experiment", scenario, execution }),
+    setIssues: (issues: ValidationIssue[]) => dispatch({ type: "set-issues", issues }),
   };
 }
