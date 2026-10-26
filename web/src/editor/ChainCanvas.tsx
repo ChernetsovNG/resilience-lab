@@ -28,6 +28,7 @@ export function ChainCanvas() {
   const editor = useScenarioEditor();
   const controller = useExperimentJob();
   const [sweep, setSweep] = useState<SweepSpec | null>(null);
+  const [sweepDraftApplied, setSweepDraftApplied] = useState(false);
   const [positions, setPositions] = useState<Record<string, XYPosition>>({});
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [invalidDrafts, setInvalidDrafts] = useState<ReadonlySet<string>>(new Set());
@@ -139,6 +140,7 @@ export function ChainCanvas() {
           sweep={sweep}
           controller={controller}
           canRun={editor.issues.length === 0 && invalidDrafts.size === 0}
+          canRunSweep={sweepDraftApplied}
         />
         <JobStatus job={controller.job} isRunning={controller.isRunning} error={controller.error} />
         <div className="chain-canvas">
@@ -157,6 +159,7 @@ export function ChainCanvas() {
           </ReactFlow>
         </div>
         <ScenarioIoControls
+          activeVariantId={editor.activeVariantId}
           scenario={scenario}
           execution={editor.execution}
           replaceScenario={editor.replaceScenario}
@@ -181,7 +184,11 @@ export function ChainCanvas() {
           />
           <ExecutionInspector execution={editor.execution} onChange={editor.updateExecution} />
         </div>
-        <SweepControls onChange={setSweep} />
+        <SweepControls
+          onChange={setSweep}
+          appliedSweep={sweep}
+          onDraftStateChange={setSweepDraftApplied}
+        />
         <TopologyIssues issues={editor.issues} />
         <ResultPanel
           jobId={controller.jobId}

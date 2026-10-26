@@ -59,18 +59,24 @@ export class ScenarioIo {
     this.controller = null;
   }
 
-  async importScenario(file: File): Promise<Scenario> {
+  async importScenario(
+    file: File,
+    replaceScenario: (scenario: Scenario) => void = this.options.replaceScenario,
+  ): Promise<Scenario> {
     const context = this.beginImport();
     const scenario = await this.readJson(file, context);
     const experiment = this.wrapImported(scenario as Scenario, this.options.getExecution());
     await this.validate(experiment, "Invalid scenario", context);
     this.ensureCurrent(context);
     this.options.onIssues([]);
-    this.options.replaceScenario(scenario as Scenario);
+    replaceScenario(scenario as Scenario);
     return scenario as Scenario;
   }
 
-  async importExperimentDocument(file: File): Promise<{ scenario: Scenario; execution: Execution }> {
+  async importExperimentDocument(
+    file: File,
+    replaceExperiment: (scenario: Scenario, execution: Execution) => void = this.options.replaceExperiment,
+  ): Promise<{ scenario: Scenario; execution: Execution }> {
     const context = this.beginImport();
     const value = await this.readJson(file, context);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -84,7 +90,7 @@ export class ScenarioIo {
     await this.validate(experiment, "Invalid experiment", context);
     this.ensureCurrent(context);
     this.options.onIssues([]);
-    this.options.replaceExperiment(variant.scenario, experiment.execution);
+    replaceExperiment(variant.scenario, experiment.execution);
     return { scenario: variant.scenario, execution: experiment.execution };
   }
 

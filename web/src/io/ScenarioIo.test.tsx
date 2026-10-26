@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { validateSubmission } from "../api/client";
 import type { Execution, ExperimentDocument, Scenario, ValidationIssue } from "../api/types";
 import { createDefaultExecution, createThreeServiceChain } from "../scenario/factory";
+import { useScenarioEditor } from "../scenario/useScenarioEditor";
 import { ScenarioIo } from "./ScenarioIo";
 import { ScenarioIoControls } from "./ScenarioIoControls";
 
@@ -65,6 +66,28 @@ function blobText(blob: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsText(blob);
   });
+}
+
+function VariantImportHarness() {
+  const editor = useScenarioEditor();
+  const scenario = editor[editor.activeVariantId];
+  return (
+    <>
+      <button type="button" onClick={() => editor.selectActiveVariant("candidate")}>
+        Candidate
+      </button>
+      <ScenarioIoControls
+        activeVariantId={editor.activeVariantId}
+        scenario={scenario}
+        execution={editor.execution}
+        replaceScenario={editor.replaceScenario}
+        replaceExperiment={editor.replaceExperiment}
+        onIssues={editor.setIssues}
+      />
+      <output data-testid="baseline-arrival">{editor.baseline.workload.arrivalRate}</output>
+      <output data-testid="candidate-arrival">{editor.candidate.workload.arrivalRate}</output>
+    </>
+  );
 }
 
 describe("ScenarioIo", () => {
@@ -204,6 +227,27 @@ describe("ScenarioIo", () => {
     expect(state.issues).toEqual(issues);
   });
 
+  it("imports into the variant targeted at start even after switching variants", async () => {
+    let resolveValidation!: (value: { valid: boolean; issues: ValidationIssue[] }) => void;
+    const validation = new Promise<{ valid: boolean; issues: ValidationIssue[] }>((resolve) => {
+      resolveValidation = resolve;
+    });
+    validateMock.mockReturnValueOnce(validation);
+    const imported = createThreeServiceChain();
+    imported.workload.arrivalRate = 20;
+    render(<VariantImportHarness />);
+
+    fireEvent.change(screen.getByLabelText("Import scenario"), {
+      target: { files: [jsonFile(imported)] },
+    });
+    await waitFor(() => expect(validateMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Candidate" }));
+    resolveValidation({ valid: true, issues: [] });
+
+    await waitFor(() => expect(screen.getByTestId("baseline-arrival").textContent).toBe("20"));
+    expect(screen.getByTestId("candidate-arrival").textContent).toBe("10");
+  });
+
   it("lets only the latest concurrent import publish scenario or issues", async () => {
     let resolveFirst!: (value: { valid: boolean; issues: ValidationIssue[] }) => void;
     const firstValidation = new Promise<{ valid: boolean; issues: ValidationIssue[] }>((resolve) => {
@@ -242,6 +286,7 @@ describe("ScenarioIo", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(
       <ScenarioIoControls
+        activeVariantId="baseline"
         scenario={scenario}
         execution={execution}
         replaceScenario={vi.fn()}

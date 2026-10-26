@@ -12,9 +12,16 @@ interface ExperimentControlsProps {
   sweep?: SweepSpec | null;
   controller: ReturnType<typeof useExperimentJob>;
   canRun?: boolean;
+  canRunSweep?: boolean;
 }
 
-export function ExperimentControls({ editor, sweep, controller, canRun = true }: ExperimentControlsProps) {
+export function ExperimentControls({
+  editor,
+  sweep,
+  controller,
+  canRun = true,
+  canRunSweep = canRun,
+}: ExperimentControlsProps) {
   const runComparison = () => {
     if (!canRun || controller.isRunning) return;
     const submission = buildComparison(editor.baseline, editor.candidate, editor.execution);
@@ -23,7 +30,7 @@ export function ExperimentControls({ editor, sweep, controller, canRun = true }:
   };
 
   const runSweep = () => {
-    if (!canRun || controller.isRunning || !sweep) return;
+    if (!canRun || !canRunSweep || controller.isRunning || !sweep) return;
     const submission = buildSweep(editor.baseline, editor.execution, sweep);
     assertExclusiveSubmissionMode(submission);
     void controller.startSweep(submission);
@@ -34,7 +41,11 @@ export function ExperimentControls({ editor, sweep, controller, canRun = true }:
       <button type="button" disabled={!canRun || controller.isRunning} onClick={runComparison}>
         Run comparison
       </button>
-      <button type="button" disabled={!canRun || controller.isRunning || !sweep} onClick={runSweep}>
+      <button
+        type="button"
+        disabled={!canRun || !canRunSweep || controller.isRunning || !sweep}
+        onClick={runSweep}
+      >
         Run sweep
       </button>
     </div>

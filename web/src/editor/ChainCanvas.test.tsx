@@ -121,6 +121,26 @@ describe("ChainCanvas", () => {
     fireEvent.change(screen.getByLabelText("Replications"), { target: { value: "2" } });
     expect(run.disabled).toBe(false);
   });
+
+  it("runs sweep only while the visible draft matches the last valid apply", () => {
+    render(<ChainCanvas />);
+    const run = screen.getByRole("button", { name: "Run sweep" }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText("Sweep parameter"), { target: { value: "LINK_TIMEOUT" } });
+    fireEvent.change(screen.getByLabelText("Link ID"), { target: { value: "link-1" } });
+    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value: "25, 50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
+    expect(run.disabled).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value: "25, 75" } });
+    expect(run.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value: "25, Infinity" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
+    expect(screen.getByRole("alert").textContent).toContain("finite numbers");
+    expect(run.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value: "25, 50" } });
+    expect(run.disabled).toBe(false);
+  });
 });
 
 describe("TopologyIssues", () => {

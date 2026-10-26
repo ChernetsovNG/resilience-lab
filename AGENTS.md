@@ -36,7 +36,7 @@ Gradle-команды выполняются из корня репозитор�
 
 Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
 
-Полная web-команда `npm run lint && npm test -- --run && npm run build && npm run test:e2e` завершилась успешно: ESLint без ошибок, 117 unit-тестов в 14 файлах, production build и 4 реальных Chromium E2E-теста. E2E проверяют add/delete/reconnect, независимое редактирование baseline/candidate, degradation multiplier 2, две репликации, COMPLETED, baseline/candidate success/p95/p99/admitted amplification, различия submitted configurations и численные метрики в полном JSON download, отсутствие POST при invalid draft и ровно две точки `LINK_TIMEOUT` sweep для `25, 50`.
+Полная web-команда `npm run lint && npm test -- --run && npm run build && npm run test:e2e` завершилась успешно: ESLint без ошибок, 119 unit-тестов в 14 файлах, production build и 6 реальных Chromium E2E-тестов. E2E проверяют add/delete/reconnect, независимое редактирование baseline/candidate, degradation multiplier 2, две репликации, COMPLETED, baseline/candidate success/p95/p99/admitted amplification, различия submitted configurations и численные метрики в полном JSON download, отсутствие POST при invalid или неприменённом sweep draft и ровно две точки `LINK_TIMEOUT` sweep для `25, 50`.
 
 ### Backend API
 

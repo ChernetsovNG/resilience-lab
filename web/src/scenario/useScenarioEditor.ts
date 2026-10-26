@@ -42,8 +42,8 @@ type Action =
   | { type: "update-workload"; patch: Partial<WorkloadSpec> }
   | { type: "update-degradation"; degradation: DegradationSpec | null }
   | { type: "update-execution"; patch: Partial<Execution> }
-  | { type: "replace-scenario"; scenario: Scenario }
-  | { type: "replace-experiment"; scenario: Scenario; execution: Execution }
+  | { type: "replace-scenario"; scenario: Scenario; variantId: ActiveVariantId }
+  | { type: "replace-experiment"; scenario: Scenario; execution: Execution; variantId: ActiveVariantId }
   | { type: "set-issues"; issues: ValidationIssue[] };
 
 function initialState(): ScenarioEditorState {
@@ -178,11 +178,14 @@ export function scenarioEditorReducer(
     case "update-execution":
       return { ...state, execution: { ...state.execution, ...action.patch } };
     case "replace-scenario":
-      return updateActive(state, () => action.scenario);
+      return withIssues({
+        ...state,
+        [action.variantId]: action.scenario,
+      });
     case "replace-experiment":
       return withIssues({
         ...state,
-        [state.activeVariantId]: action.scenario,
+        [action.variantId]: action.scenario,
         execution: action.execution,
       });
     case "set-issues":
@@ -211,9 +214,13 @@ export function useScenarioEditor() {
       dispatch({ type: "update-degradation", degradation }),
     updateExecution: (patch: Partial<Execution>) =>
       dispatch({ type: "update-execution", patch }),
-    replaceScenario: (scenario: Scenario) => dispatch({ type: "replace-scenario", scenario }),
-    replaceExperiment: (scenario: Scenario, execution: Execution) =>
-      dispatch({ type: "replace-experiment", scenario, execution }),
+    replaceScenario: (scenario: Scenario, variantId: ActiveVariantId = state.activeVariantId) =>
+      dispatch({ type: "replace-scenario", scenario, variantId }),
+    replaceExperiment: (
+      scenario: Scenario,
+      execution: Execution,
+      variantId: ActiveVariantId = state.activeVariantId,
+    ) => dispatch({ type: "replace-experiment", scenario, execution, variantId }),
     setIssues: (issues: ValidationIssue[]) => dispatch({ type: "set-issues", issues }),
   };
 }

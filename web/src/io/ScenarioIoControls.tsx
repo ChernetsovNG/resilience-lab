@@ -1,12 +1,18 @@
 import { useEffect, useRef } from "react";
 import type { Execution, ExperimentDocument, Scenario, ValidationIssue } from "../api/types";
+import type { ActiveVariantId } from "../scenario/useScenarioEditor";
 import { downloadJson, ScenarioIo } from "./ScenarioIo";
 
 interface ScenarioIoControlsProps {
+  activeVariantId: ActiveVariantId;
   scenario: Scenario;
   execution: Execution;
-  replaceScenario: (scenario: Scenario) => void;
-  replaceExperiment: (scenario: Scenario, execution: Execution) => void;
+  replaceScenario: (scenario: Scenario, variantId?: ActiveVariantId) => void;
+  replaceExperiment: (
+    scenario: Scenario,
+    execution: Execution,
+    variantId?: ActiveVariantId,
+  ) => void;
   onIssues: (issues: ValidationIssue[]) => void;
 }
 
@@ -32,9 +38,14 @@ export function ScenarioIoControls(props: ScenarioIoControlsProps) {
 
   const importFile = (file: File | undefined, fullDocument: boolean) => {
     if (!file) return;
+    const variantId = propsRef.current.activeVariantId;
     const pending = fullDocument
-      ? createIo().importExperimentDocument(file)
-      : createIo().importScenario(file);
+      ? createIo().importExperimentDocument(file, (scenario, execution) =>
+          propsRef.current.replaceExperiment(scenario, execution, variantId),
+        )
+      : createIo().importScenario(file, (scenario) =>
+          propsRef.current.replaceScenario(scenario, variantId),
+        );
     void pending.catch(() => undefined);
   };
 
