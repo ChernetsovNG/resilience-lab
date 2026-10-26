@@ -91,6 +91,11 @@ export class ScenarioIo {
     if (!Array.isArray(variants)) {
       this.reject("Experiment variants must be an array", "variants");
     }
+    variants.forEach((variant, index) => {
+      if (typeof variant !== "object" || variant === null || Array.isArray(variant)) {
+        this.reject("Experiment variant must be an object", `variants[${index}]`);
+      }
+    });
     const imported = variants.filter((variant) => variant.id === "imported" || variant.label === "imported");
     if (imported.length === 1) return imported[0];
     if (imported.length === 0 && variants.length === 1) return variants[0];

@@ -142,6 +142,20 @@ describe("ScenarioIo", () => {
     expect(state.issues[0].message).toContain("ambiguous");
   });
 
+  it.each([null, 42, "invalid", []])("publishes issues for malformed variant %j", async (variant) => {
+    const previous = createThreeServiceChain();
+    const execution = createDefaultExecution();
+    const document = { ...documentFor(createThreeServiceChain(), execution), variants: [variant] };
+    const { state, io } = harness(previous, execution);
+
+    await expect(io.importExperimentDocument(jsonFile(document))).rejects.toThrow("Experiment variant");
+
+    expect(state.scenario).toBe(previous);
+    expect(state.execution).toBe(execution);
+    expect(state.issues).toHaveLength(1);
+    expect(state.issues[0].path).toBe("variants[0]");
+  });
+
   it("rejects a malformed document with issues instead of replacing state", async () => {
     const previous = createThreeServiceChain();
     const execution = createDefaultExecution();

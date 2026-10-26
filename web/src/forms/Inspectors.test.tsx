@@ -130,6 +130,55 @@ describe("parameter inspectors", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["EXPONENTIAL", null],
+    ["LOGNORMAL", 1],
+  ] as const)("commits a core-valid %s distribution when the fixed mean is zero", (kind, stdDevMs) => {
+    const onChange = vi.fn();
+    render(
+      <ServiceInspector
+        service={{ ...service, processing: { kind: "FIXED", meanMs: 0, stdDevMs: null } }}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Processing kind"), { target: { value: kind } });
+
+    expect(onChange).toHaveBeenCalledWith({ processing: { kind, meanMs: 1, stdDevMs } });
+  });
+
+  it.each([0, -2])("supplies a positive standard deviation when LOGNORMAL requires it", (stdDevMs) => {
+    const onChange = vi.fn();
+    render(
+      <ServiceInspector
+        service={{ ...service, processing: { kind: "FIXED", meanMs: 10, stdDevMs } }}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Processing kind"), { target: { value: "LOGNORMAL" } });
+
+    expect(onChange).toHaveBeenCalledWith({
+      processing: { kind: "LOGNORMAL", meanMs: 10, stdDevMs: 1 },
+    });
+  });
+
+  it.each(["FIXED", "EXPONENTIAL"] as const)("allows finite negative standard deviation for %s", (kind) => {
+    const onChange = vi.fn();
+    render(
+      <ServiceInspector
+        service={{ ...service, processing: { kind, meanMs: 10, stdDevMs: null } }}
+        onChange={onChange}
+      />,
+    );
+
+    change("Processing standard deviation (ms)", "-2.5");
+
+    expect(onChange).toHaveBeenCalledWith({
+      processing: { kind, meanMs: 10, stdDevMs: -2.5 },
+    });
+  });
+
   it("labels distribution controls independently for multiple links", () => {
     render(
       <>

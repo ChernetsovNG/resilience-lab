@@ -9,6 +9,17 @@ interface DistributionFieldsProps {
   onChange: (distribution: DurationDistribution) => void;
 }
 
+function isDistributionValid(candidate: DurationDistribution): boolean {
+  const meanValid =
+    Number.isFinite(candidate.meanMs) &&
+    (candidate.kind === "FIXED" ? candidate.meanMs >= 0 : candidate.meanMs > 0);
+  const stdDevValid =
+    candidate.kind === "LOGNORMAL"
+      ? candidate.stdDevMs !== null && Number.isFinite(candidate.stdDevMs) && candidate.stdDevMs > 0
+      : candidate.stdDevMs === null || Number.isFinite(candidate.stdDevMs);
+  return meanValid && stdDevValid;
+}
+
 export function DistributionFields({ label, name, distribution, onChange }: DistributionFieldsProps) {
   const id = useId();
 
@@ -22,11 +33,22 @@ export function DistributionFields({ label, name, distribution, onChange }: Dist
           value={distribution.kind}
           onChange={(event) => {
             const kind = event.target.value as DistributionKind;
-            onChange({
+            const candidate: DurationDistribution = {
               ...distribution,
               kind,
-              stdDevMs: kind === "LOGNORMAL" ? (distribution.stdDevMs ?? 1) : distribution.stdDevMs,
-            });
+              meanMs:
+                kind !== "FIXED" && (!Number.isFinite(distribution.meanMs) || distribution.meanMs <= 0)
+                  ? 1
+                  : distribution.meanMs,
+              stdDevMs:
+                kind === "LOGNORMAL" &&
+                (distribution.stdDevMs === null ||
+                  !Number.isFinite(distribution.stdDevMs) ||
+                  distribution.stdDevMs <= 0)
+                  ? 1
+                  : distribution.stdDevMs,
+            };
+            if (isDistributionValid(candidate)) onChange(candidate);
           }}
         >
           <option value="FIXED">Fixed</option>
@@ -50,11 +72,11 @@ export function DistributionFields({ label, name, distribution, onChange }: Dist
         label={`${label} standard deviation (ms)`}
         name={`${name}StdDevMs`}
         value={distribution.stdDevMs}
-        min={0}
+        min={distribution.kind === "LOGNORMAL" ? 0 : undefined}
         positive={distribution.kind === "LOGNORMAL"}
         allowEmpty={distribution.kind !== "LOGNORMAL"}
-        hint={distribution.kind === "LOGNORMAL" ? "Required and greater than zero." : "Optional; leave empty for null."}
-        errorMessage={distribution.kind === "LOGNORMAL" ? "Must be greater than 0." : "Must be zero or greater or empty."}
+        hint={distribution.kind === "LOGNORMAL" ? "Required and greater than zero." : "Optional finite value; leave empty for null."}
+        errorMessage={distribution.kind === "LOGNORMAL" ? "Must be greater than 0." : "Must be finite or empty."}
         onCommit={(stdDevMs) => onChange({ ...distribution, stdDevMs })}
       />
     </>
