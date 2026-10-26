@@ -2,12 +2,13 @@
 
 ## Текущее состояние
 
-Текущий срез включает только модули `core` и `apps:cli`:
+Текущий срез включает модули `core`, `apps:cli` и `apps:server`:
 
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
+- `apps:server` — Spring Boot API для health и валидации сценариев без создания заданий.
 
-Server и браузерный web UI ещё не реализованы; полный MVP не завершён.
+Браузерный web UI, задания и API результатов ещё не реализованы; полный MVP не завершён.
 
 ## Стандартные команды сборки и проверки
 
@@ -22,9 +23,9 @@ Server и браузерный web UI ещё не реализованы; пол
 
 Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo модулей `core` и `apps:cli` сохраняются как артефакты workflow.
 
-### Проверка core quality (2026-10-26)
+### Проверка quality (2026-10-26)
 
-Локальный `./gradlew --no-daemon clean build` завершился успешно: 151 тест (`core`: 140, `apps:cli`: 11), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+Локальный `./gradlew build` завершился успешно: 172 теста (`core`: 142, `apps:cli`: 11, `apps:server`: 10), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
 
 ### CLI
 

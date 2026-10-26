@@ -1,5 +1,6 @@
 package resiliencelab.core.scenario
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -158,6 +159,21 @@ class ScenarioCodecTest {
             .isInstanceOf(IllegalArgumentException::class.java)
     }
 
+    @Test
+    fun `shared decoder applies strict JSON settings to caller documents`() {
+        val encoded = """{"value":"expected","unknown":true}"""
+
+        assertThatThrownBy { ScenarioCodec.decode(encoded, StrictDocument.serializer()) }
+            .isInstanceOf(SerializationException::class.java)
+    }
+
+    @Test
+    fun `shared schema version guard rejects unsupported versions`() {
+        assertThatThrownBy { ScenarioCodec.requireSupportedSchemaVersion(2) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+            .hasMessage("Unsupported schemaVersion: 2; expected 1")
+    }
+
     private fun sweepDocument(): SweepDocument =
         SweepDocument(
             schemaVersion = 1,
@@ -202,3 +218,8 @@ class ScenarioCodecTest {
                 ),
         )
 }
+
+@Serializable
+private data class StrictDocument(
+    val value: String,
+)
