@@ -15,7 +15,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("io.github.chernetsovng.resiliencelab.cli.MainKt")
+    mainClass.set("resiliencelab.cli.MainKt")
 }
 
 tasks.startScripts {

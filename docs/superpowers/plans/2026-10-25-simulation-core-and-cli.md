@@ -514,7 +514,7 @@ Expected: FAIL because the application module does not exist.
 
 - [ ] **Step 3: Implement the CLI and example**
 
-Use the `application` plugin and main class `io.github.chernetsovng.resiliencelab.cli.MainKt`; no CLI dependency is needed for three explicit commands. `validate` returns `2` on validation errors, `run`/`sweep` return `1` on execution errors and `0` on success. Include only synthetic data in `examples/retry-storm.json` with three services, bounded handlers/queues, degradation and deadline/retry settings.
+Use the `application` plugin and main class `resiliencelab.cli.MainKt`; no CLI dependency is needed for three explicit commands. `validate` returns `2` on validation errors, `run`/`sweep` return `1` on execution errors and `0` on success. Include only synthetic data in `examples/retry-storm.json` with three services, bounded handlers/queues, degradation and deadline/retry settings.
 
 - [ ] **Step 4: Run the tests and the real CLI**
 

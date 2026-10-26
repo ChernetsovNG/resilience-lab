@@ -47,7 +47,7 @@ Run `git stash push -u -m "backend-task1-wip"`; verify the stash and clean HEAD 
 
 - [ ] **Step 2: Verify package migration**
 
-Run `./gradlew test` and search source/build/docs for `io.github.chernetsovng.resiliencelab`.
+Run `./gradlew test` and search source/build/docs for the former fully qualified project package.
 Expected: 151 tests PASS; zero stale references.
 
 - [ ] **Step 3: Commit**

@@ -30,7 +30,7 @@
 ## Ограничения
 
 - JDK 25 и Kotlin 2.4.21 сохраняются.
-- `resiliencelab` — новый корневой package вместо `io.github.chernetsovng.resiliencelab`; JVM API меняется намеренно, JSON API не меняется.
+- `resiliencelab` — новый корневой package; JVM API меняется намеренно, JSON API не меняется.
 - AssertJ `3.27.7` — stable, JUnit Platform сохраняется.
 - KtLint Gradle plugin `14.2.0` включается в `check` и GitHub Actions.
 - JaCoCo — HTML+XML для каждого JVM-модуля. Baseline рассчитывается по факту, а не выбирается произвольно.
