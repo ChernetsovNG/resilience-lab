@@ -35,9 +35,13 @@ function format(value: number | null | undefined, unit = ""): string {
 }
 
 function interval(summary: MetricSummary | null, scale = 1, unit = ""): string {
-  if (summary?.ci95Low === null || summary?.ci95Low === undefined ||
-      summary.ci95High === null || summary.ci95High === undefined) {
-    return "95% CI unavailable";
+  if (
+    summary?.ci95Low === null ||
+    summary?.ci95Low === undefined ||
+    summary.ci95High === null ||
+    summary.ci95High === undefined
+  ) {
+    return "not enough replications";
   }
   return `95% CI [${format(summary.ci95Low * scale, unit)}, ${format(summary.ci95High * scale, unit)}]`;
 }
@@ -87,7 +91,7 @@ export function VariantComparisonChart({ variants }: VariantComparisonChartProps
             ];
             const missingInterval = summaries.some(
               (summary) =>
-                summary !== null && (summary.ci95Low === null || summary.ci95High === null),
+                summary === null || summary.ci95Low === null || summary.ci95High === null,
             );
             return (
               <li key={variant.id}>

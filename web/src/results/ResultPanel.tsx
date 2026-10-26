@@ -24,12 +24,19 @@ export function ResultPanel({ jobId, result, error }: ResultPanelProps) {
         <>
           <ResultDownload result={result} />
           {result.variants.some(
+            (variant) => variant.sweepParameter === null || variant.sweepValue === null,
+          ) ? (
+            <VariantComparisonChart
+              variants={result.variants.filter(
+                (variant) => variant.sweepParameter === null || variant.sweepValue === null,
+              )}
+            />
+          ) : null}
+          {result.variants.some(
             (variant) => variant.sweepParameter !== null && variant.sweepValue !== null,
           ) ? (
             <SweepChart variants={result.variants} />
-          ) : (
-            <VariantComparisonChart variants={result.variants} />
-          )}
+          ) : null}
           {result.variants.map((variant) => (
             <section key={variant.id} aria-label={`${variant.label} metrics`}>
               <h3>{variant.label}</h3>

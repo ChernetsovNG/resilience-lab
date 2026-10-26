@@ -116,6 +116,22 @@ describe("VariantComparisonChart", () => {
     expect(figure.textContent).toContain("95% CI [1.10×, 1.40×]");
     expect(figure.textContent).toContain("Candidate: not enough replications");
   });
+
+  it("uses the missing-replication fallback for null metric summaries", () => {
+    const empty = variant("empty", "Empty", 0, 0, 0, 0);
+    empty.aggregate.successRate = null;
+    empty.aggregate.services.checkout.admittedAmplification = null;
+
+    render(<VariantComparisonChart variants={[empty]} />);
+
+    const figure = screen.getByRole("figure", { name: "Variant comparison" });
+    expect(figure.textContent).toContain("Empty: not enough replications");
+    expect(figure.textContent).toContain("Success N/A (not enough replications)");
+    expect(figure.textContent).toContain(
+      "checkout admitted amplification N/A (not enough replications)",
+    );
+    expect(figure.textContent).not.toContain("95% CI unavailable");
+  });
 });
 
 describe("SweepControls", () => {
@@ -217,27 +233,71 @@ describe("SweepChart", () => {
     const figure = screen.getByRole("figure", { name: "Parameter sweep" });
     const points = within(figure).getAllByRole("listitem");
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: 90.00%",
-      "50: 80.00%",
-      "100: 70.00%",
+      "25: 90.00% (not enough replications)",
+      "50: 80.00% (not enough replications)",
+      "100: 70.00% (not enough replications)",
     ]);
     expect(figure.textContent).not.toContain("900");
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), { target: { value: "p95" } });
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: 120.00 ms",
-      "50: 130.00 ms",
-      "100: 140.00 ms",
+      "25: 120.00 ms (not enough replications)",
+      "50: 130.00 ms (not enough replications)",
+      "100: 140.00 ms (not enough replications)",
     ]);
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), {
       target: { value: "amplification" },
     });
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: 1.25×",
-      "50: 2.25×",
-      "100: 3.25×",
+      "25: checkout 1.25× (not enough replications)",
+      "50: checkout 2.25× (not enough replications)",
+      "100: checkout 3.25× (not enough replications)",
     ]);
+  });
+
+  it("shows available confidence intervals for every selectable sweep metric", () => {
+    const point = structuredClone(sweepVariants[0]);
+    point.aggregate.successRate = metric(0.9, 0.81, 0.99);
+    point.aggregate.p95LatencyMs = metric(120, 110, 130);
+    point.aggregate.services.checkout.admittedAmplification = metric(1.25, 1, 1.5);
+    render(<SweepChart variants={[point]} />);
+
+    const figure = screen.getByRole("figure", { name: "Parameter sweep" });
+    const value = () => within(figure).getByRole("listitem").textContent;
+    expect(value()).toBe("25: 90.00% (95% CI [81.00%, 99.00%])");
+
+    fireEvent.change(screen.getByLabelText("Sweep metric"), { target: { value: "p95" } });
+    expect(value()).toBe("25: 120.00 ms (95% CI [110.00 ms, 130.00 ms])");
+
+    fireEvent.change(screen.getByLabelText("Sweep metric"), {
+      target: { value: "amplification" },
+    });
+    expect(value()).toBe("25: checkout 1.25× (95% CI [1.00×, 1.50×])");
+  });
+
+  it("separates mixed sweep parameters and labels the selected x-axis parameter", () => {
+    const linkPoint = {
+      ...structuredClone(sweepVariants[0]),
+      id: "link-point",
+      sweepParameter: "LINK_TIMEOUT" as const,
+      sweepValue: 500,
+    };
+    render(<SweepChart variants={[sweepVariants[0], linkPoint, sweepVariants[1]]} />);
+
+    const figure = screen.getByRole("figure", { name: "Parameter sweep" });
+    const points = () => within(figure).getAllByRole("listitem").map((point) => point.textContent);
+    expect(figure.textContent).toContain("ARRIVAL_RATE");
+    expect(points()).toEqual([
+      "25: 90.00% (not enough replications)",
+      "50: 80.00% (not enough replications)",
+    ]);
+
+    fireEvent.change(screen.getByLabelText("Sweep chart parameter"), {
+      target: { value: "LINK_TIMEOUT" },
+    });
+    expect(figure.textContent).toContain("LINK_TIMEOUT");
+    expect(points()).toEqual(["500: 90.00% (not enough replications)"]);
   });
 });
 
@@ -256,5 +316,30 @@ describe("ResultDownload and ResultPanel integration", () => {
 
     expect(screen.getByRole("figure", { name: "Variant comparison" })).toBeTruthy();
     expect(screen.getByTestId("result-download")).toBeTruthy();
+  });
+
+  it("renders comparison and sweep sections independently for mixed results", () => {
+    const sweepPoint = {
+      ...structuredClone(candidate),
+      id: "arrival-25",
+      label: "Arrival 25",
+      sweepParameter: "ARRIVAL_RATE" as const,
+      sweepValue: 25,
+    };
+    render(
+      <ResultPanel
+        jobId="job-mixed"
+        result={{ ...result, variants: [baseline, candidate, sweepPoint] }}
+      />,
+    );
+
+    const comparison = screen.getByRole("figure", { name: "Variant comparison" });
+    const sweep = screen.getByRole("figure", { name: "Parameter sweep" });
+    expect(comparison.textContent).toContain("Baseline");
+    expect(comparison.textContent).toContain("Candidate");
+    expect(comparison.textContent).not.toContain("Arrival 25");
+    expect(within(sweep).getByRole("listitem").textContent).toBe(
+      "25: 75.00% (not enough replications)",
+    );
   });
 });
