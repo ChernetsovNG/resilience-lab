@@ -1,6 +1,5 @@
 interface EditorToolbarProps {
   canDelete: boolean;
-  canRun: boolean;
   onNew: () => void;
   onLoadExample: () => void;
   onAddService: () => void;
@@ -9,7 +8,6 @@ interface EditorToolbarProps {
 
 export function EditorToolbar({
   canDelete,
-  canRun,
   onNew,
   onLoadExample,
   onAddService,
@@ -28,9 +26,6 @@ export function EditorToolbar({
       </button>
       <button type="button" onClick={onDeleteService} disabled={!canDelete}>
         Delete selected service
-      </button>
-      <button type="button" disabled={!canRun} aria-describedby="topology-issues">
-        Run comparison
       </button>
     </div>
   );

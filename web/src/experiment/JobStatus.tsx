@@ -9,7 +9,9 @@ interface JobStatusProps {
 export function JobStatus({ job, isRunning, error }: JobStatusProps) {
   return (
     <div className="job-status">
-      <div role="status">{job?.status ?? (isRunning ? "Submitting experiment…" : "Not started")}</div>
+      <div role="status" data-testid="job-status">
+        {job?.status ?? (isRunning ? "Submitting experiment…" : "Not started")}
+      </div>
       {error ? <div role="alert">{error}</div> : null}
     </div>
   );

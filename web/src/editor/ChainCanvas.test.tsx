@@ -90,9 +90,7 @@ describe("ChainCanvas", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add service" }));
 
     expect(run.disabled).toBe(true);
-    expect(screen.getByRole("status").textContent).toContain(
-      "service must be connected to the entry chain",
-    );
+    expect(screen.getByText(/service must be connected to the entry chain/)).toBeTruthy();
   });
 });
 

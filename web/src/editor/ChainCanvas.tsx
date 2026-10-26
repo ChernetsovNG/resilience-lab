@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Background, ReactFlow } from "@xyflow/react";
 import type { Connection, Edge, NodeChange, XYPosition } from "@xyflow/react";
+import type { SweepSpec } from "../api/types";
+import { ExperimentControls } from "../experiment/ExperimentControls";
+import { JobStatus } from "../experiment/JobStatus";
+import { useExperimentJob } from "../experiment/useExperimentJob";
 import { useScenarioEditor } from "../scenario/useScenarioEditor";
 import { DegradationInspector } from "../forms/DegradationInspector";
 import { ExecutionInspector } from "../forms/ExecutionInspector";
@@ -8,6 +12,8 @@ import { LinkInspector } from "../forms/LinkInspector";
 import { ServiceInspector } from "../forms/ServiceInspector";
 import { WorkloadInspector } from "../forms/WorkloadInspector";
 import { ScenarioIoControls } from "../io/ScenarioIoControls";
+import { ResultPanel } from "../results/ResultPanel";
+import { SweepControls } from "../results/SweepControls";
 import { EditorToolbar } from "./EditorToolbar";
 import { ServiceBlock } from "./ServiceBlock";
 import type { ServiceNode } from "./ServiceBlock";
@@ -18,6 +24,8 @@ const nodeTypes = { service: ServiceBlock };
 
 export function ChainCanvas() {
   const editor = useScenarioEditor();
+  const controller = useExperimentJob();
+  const [sweep, setSweep] = useState<SweepSpec | null>(null);
   const [positions, setPositions] = useState<Record<string, XYPosition>>({});
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const scenario = editor[editor.activeVariantId];
@@ -59,6 +67,7 @@ export function ChainCanvas() {
   const resetCanvas = (reset: () => void) => {
     setPositions({});
     setSelectedServiceId(null);
+    controller.reset();
     reset();
   };
 
@@ -69,7 +78,6 @@ export function ChainCanvas() {
     <div className="chain-editor">
       <EditorToolbar
         canDelete={selectedServiceId !== null}
-        canRun={editor.issues.length === 0}
         onNew={() => resetCanvas(editor.newThreeServiceChain)}
         onLoadExample={() => resetCanvas(editor.loadRetryStormExample)}
         onAddService={editor.addService}
@@ -80,6 +88,13 @@ export function ChainCanvas() {
           }
         }}
       />
+      <ExperimentControls
+        editor={editor}
+        sweep={sweep}
+        controller={controller}
+        canRun={editor.issues.length === 0}
+      />
+      <JobStatus job={controller.job} isRunning={controller.isRunning} error={controller.error} />
       <div className="chain-canvas">
         <ReactFlow
           aria-label="Service chain canvas"
@@ -120,7 +135,9 @@ export function ChainCanvas() {
         />
         <ExecutionInspector execution={editor.execution} onChange={editor.updateExecution} />
       </div>
+      <SweepControls onChange={setSweep} />
       <TopologyIssues issues={editor.issues} />
+      <ResultPanel jobId={controller.jobId} result={controller.result} error={controller.error} />
     </div>
   );
 }

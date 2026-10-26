@@ -7,9 +7,9 @@
 - `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
 - `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
 - `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
-- `web` — Vite/React app shell, типизированный API client, health badge и controlled Xyflow editor линейной цепочки сервисов.
+- `web` — Vite/React SPA с типизированным API client, health badge, controlled Xyflow editor, формами параметров, baseline/candidate-сравнением, sweep, Recharts-графиками и импортом/экспортом JSON.
 
-Браузерный UI содержит visual chain editor без charts и фактической отправки экспериментов; полный MVP не завершён.
+Первый полный MVP завершён: core, CLI, Spring API и браузерный UI реализованы; реальный Chromium-сценарий проходит через editor, API, polling, charts и download без mock API.
 
 ## Стандартные команды сборки и проверки
 
@@ -22,17 +22,21 @@ Gradle-команды выполняются из корня репозитор�
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
+- `npm ci` — воспроизводимая установка frontend-зависимостей из `package-lock.json`.
 - `npm test -- --run` — web unit-тесты.
-- `npm run build` — type-check и production-сборка web.
+- `npm run build` — type-check и production-сборка web в `web/dist/`.
 - `npm run lint` — ESLint для web.
 - `npm run dev` — Vite dev server с proxy `/api` на `http://127.0.0.1:8080`.
-- `npm run test:e2e` — Playwright-тесты web.
+- `npx playwright install chromium` — локальная установка Chromium; CI использует `npx playwright install --with-deps chromium`.
+- `npm run test:e2e` — Playwright запускает изолированные `./gradlew :apps:server:bootRun` из корня и `npm run dev -- --host 127.0.0.1` из `web`, ждёт `http://127.0.0.1:8080/api/v1/health` и `http://127.0.0.1:5173`, не использует уже запущенные серверы и останавливает browser/server processes после прогона. Trace и screenshot при ошибках сохраняются в `web/test-results/`; CI также загружает `web/playwright-report/`, если он сформирован.
 
-Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml` и запускает `./gradlew --no-daemon clean build`; HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test` и `apps/server/build/reports/jacoco/test` сохраняются как артефакты workflow.
+Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml`: сохраняет `./gradlew --no-daemon clean build`, затем выполняет Node.js 25.5.0 setup, `npm ci`, lint, unit tests, production build, установку Playwright Chromium и E2E. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и Playwright artifacts сохраняются как артефакты workflow.
 
 ### Проверка quality (2026-10-26)
 
 Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
+
+Полная web-команда `npm run lint && npm test -- --run && npm run build && npm run test:e2e` завершилась успешно: ESLint без ошибок, 99 unit-тестов в 13 файлах, production build и 2 реальных Chromium E2E-теста. E2E проверяют add/delete/reconnect, degradation multiplier 2, две репликации, COMPLETED, baseline/candidate success/p95/p99/admitted amplification, содержимое полного JSON download и ровно две точки `LINK_TIMEOUT` sweep для `25, 50`.
 
 ### Backend API
 
