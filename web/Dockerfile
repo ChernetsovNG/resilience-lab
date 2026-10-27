@@ -1,4 +1,4 @@
-FROM node:25.5.0-alpine AS build
+FROM node:26.12.1-alpine AS build
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
