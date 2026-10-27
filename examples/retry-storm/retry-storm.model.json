@@ -1,0 +1,94 @@
+{
+  "blocks": {
+    "client": {
+      "params": {
+        "deadline": "250ms",
+        "rate": "120/s"
+      },
+      "type": "client"
+    },
+    "dependency": {
+      "params": {
+        "handlers": 2,
+        "processing": {
+          "kind": "fixed",
+          "mean": "8ms"
+        },
+        "queue": 8
+      },
+      "type": "service"
+    },
+    "gateway": {
+      "params": {
+        "handlers": 4,
+        "processing": {
+          "kind": "fixed",
+          "mean": "1ms"
+        },
+        "queue": 16
+      },
+      "type": "service"
+    },
+    "middle": {
+      "params": {
+        "handlers": 4,
+        "processing": {
+          "kind": "fixed",
+          "mean": "2ms"
+        },
+        "queue": 12
+      },
+      "type": "service"
+    }
+  },
+  "connections": [
+    {
+      "from": "client",
+      "id": "client-to-gateway",
+      "to": "gateway",
+      "type": "request"
+    },
+    {
+      "from": "gateway",
+      "id": "gateway-to-middle",
+      "params": {
+        "attempts": 3,
+        "backoff": {
+          "base": "2ms",
+          "kind": "exponential-full-jitter",
+          "max": "20ms",
+          "multiplier": 2
+        },
+        "network": {
+          "kind": "fixed",
+          "mean": "0.5ms"
+        },
+        "timeout": "80ms"
+      },
+      "to": "middle",
+      "type": "call"
+    },
+    {
+      "from": "middle",
+      "id": "middle-to-dependency",
+      "params": {
+        "attempts": 3,
+        "backoff": {
+          "base": "2ms",
+          "kind": "exponential-full-jitter",
+          "max": "20ms",
+          "multiplier": 2
+        },
+        "network": {
+          "kind": "fixed",
+          "mean": "0.5ms"
+        },
+        "timeout": "60ms"
+      },
+      "to": "dependency",
+      "type": "call"
+    }
+  ],
+  "description": "Retry storm on a three-service chain with a degraded dependency.",
+  "schemaVersion": 1
+}
