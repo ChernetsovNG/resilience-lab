@@ -1,4 +1,4 @@
-import type { HealthView } from "../api/types";
+import type { HealthView } from "../api/apiTypes";
 
 interface HealthBadgeProps {
   health: HealthView | null;
