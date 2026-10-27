@@ -1,0 +1,3136 @@
+{
+  "measuredOn": "2026-10-27",
+  "baselineCommit": "37710289be93ab37b4424c07b98547e13224c640",
+  "environment": {
+    "os": "Darwin",
+    "osVersion": "26.6.2",
+    "architecture": "arm64",
+    "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Microsoft-13877172 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Microsoft-13877172 (build 25.0.3+9-LTS, mixed mode, sharing)",
+    "node": "v26.12.1",
+    "chromium": "156.0.8078.4",
+    "cpu": "Apple M4 Pro",
+    "memoryBytes": 51539607552,
+    "logicalCpus": 14
+  },
+  "sourceSha256": {
+    "src/main/java/resiliencelab/research/ResultsVolume.java": "5fac768b0f044f9a1092944c72039542385239656c524b6b51dc6a67d12d1a93",
+    "browser-entry.mjs": "89abdbc30328d8fc94762f5ae644ac7c359843c6927a91dc5d0b03b16bec819e",
+    "browser.mjs": "01d3edd9acbd883a510ac71665265363e27f9733bb8f76e2739ac030b58692fd",
+    "measure.py": "71b0dcd37e3df4b8cd329287b58925f6dc3f631c7ed9a8ae4760b42eb48e1ef5"
+  },
+  "rawFloat64Bytes": {
+    "50": 600000000,
+    "500": 6000000000,
+    "5000": 60000000000
+  },
+  "single": [
+    {
+      "kind": "series",
+      "blocks": 50,
+      "format": "json",
+      "rows": 30000,
+      "bytes": 2152382,
+      "writeMs": [
+        21.491042,
+        21.689875,
+        21.079958
+      ],
+      "medianWriteMs": 21.491042,
+      "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+      "fileSha256": "abe733ff0521d4a282d8095953b62d2cc742b3e6a1b428a9ece1d55ea84be2b5"
+    },
+    {
+      "kind": "series",
+      "blocks": 50,
+      "format": "json-gzip",
+      "rows": 30000,
+      "bytes": 528821,
+      "writeMs": [
+        81.032416,
+        89.854625,
+        90.078917
+      ],
+      "medianWriteMs": 89.854625,
+      "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+      "fileSha256": "809d9e8732ca8df146fda31502b0bf4faebf3f03e6f8928fb38177b5e730a055"
+    },
+    {
+      "kind": "series",
+      "blocks": 50,
+      "format": "csv",
+      "rows": 30000,
+      "bytes": 2092336,
+      "writeMs": [
+        20.920791,
+        22.40925,
+        22.631083
+      ],
+      "medianWriteMs": 22.40925,
+      "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+      "fileSha256": "01338255c68b7a61777814309bdff1ac04e543e7792ce780d9e8668904ea503c"
+    },
+    {
+      "kind": "series",
+      "blocks": 50,
+      "format": "arrow",
+      "rows": 30000,
+      "bytes": 2688568,
+      "writeMs": [
+        15.493584,
+        16.359708,
+        16.863542
+      ],
+      "medianWriteMs": 16.359708,
+      "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+      "fileSha256": "a0618edb272d2e8cd3c8df734fff3c9894500eed44252e731a880a282a0748d0"
+    },
+    {
+      "kind": "series",
+      "blocks": 50,
+      "format": "parquet",
+      "rows": 30000,
+      "bytes": 600527,
+      "writeMs": [
+        71.327041,
+        71.639583,
+        71.149292
+      ],
+      "medianWriteMs": 71.327041,
+      "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+      "fileSha256": "6f7316e593e10a9327fcf57d9443139e36e21819e4c14f64178e2726a9545a66"
+    },
+    {
+      "kind": "series",
+      "blocks": 500,
+      "format": "json",
+      "rows": 300000,
+      "bytes": 21820380,
+      "writeMs": [
+        119.883875,
+        132.30175,
+        133.372375
+      ],
+      "medianWriteMs": 132.30175,
+      "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+      "fileSha256": "dfe081fd20868aa81febd0b216f654a84815b0f1eadf27daf486cc97eee5da2d"
+    },
+    {
+      "kind": "series",
+      "blocks": 500,
+      "format": "json-gzip",
+      "rows": 300000,
+      "bytes": 5282119,
+      "writeMs": [
+        745.05975,
+        816.020375,
+        771.345834
+      ],
+      "medianWriteMs": 771.345834,
+      "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+      "fileSha256": "f5e16b75e047177ca8f54f7822676b5a494c30ff72b83270520e76f83d3d56e2"
+    },
+    {
+      "kind": "series",
+      "blocks": 500,
+      "format": "csv",
+      "rows": 300000,
+      "bytes": 21220334,
+      "writeMs": [
+        118.991834,
+        186.867334,
+        118.901208
+      ],
+      "medianWriteMs": 118.991834,
+      "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+      "fileSha256": "cb929fa5b5230fb656ef609a39e660d9a1ef6da046568d8ce46c607798920abb"
+    },
+    {
+      "kind": "series",
+      "blocks": 500,
+      "format": "arrow",
+      "rows": 300000,
+      "bytes": 26875768,
+      "writeMs": [
+        75.909625,
+        65.527166,
+        64.406709
+      ],
+      "medianWriteMs": 65.527166,
+      "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+      "fileSha256": "4189f2ccd826d111dae19ae5ddef64c2da2bfc73b533aecd8c1593af09cd2e87"
+    },
+    {
+      "kind": "series",
+      "blocks": 500,
+      "format": "parquet",
+      "rows": 300000,
+      "bytes": 5261066,
+      "writeMs": [
+        285.133791,
+        302.863542,
+        302.663458
+      ],
+      "medianWriteMs": 302.663458,
+      "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+      "fileSha256": "e7fcf06f644c73a9e16e52dc08babc04e1535abf4a598b76c2bc4c6f5cb35fff"
+    },
+    {
+      "kind": "series",
+      "blocks": 5000,
+      "format": "json",
+      "rows": 3000000,
+      "bytes": 221204863,
+      "writeMs": [
+        1012.231417,
+        1027.930542,
+        1026.625459
+      ],
+      "medianWriteMs": 1026.625459,
+      "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+      "fileSha256": "9af1ecb6895c8a2c5f059860d8f29c05440a5d923b35292526b2f7bac0db2fc7"
+    },
+    {
+      "kind": "series",
+      "blocks": 5000,
+      "format": "json-gzip",
+      "rows": 3000000,
+      "bytes": 52797678,
+      "writeMs": [
+        8456.97675,
+        7631.605833,
+        7511.05775
+      ],
+      "medianWriteMs": 7631.605833,
+      "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+      "fileSha256": "5bdad7e2e5a895d67e020c633232cfe2e126a2e69e8944a1fd482325f182c099"
+    },
+    {
+      "kind": "series",
+      "blocks": 5000,
+      "format": "csv",
+      "rows": 3000000,
+      "bytes": 215204817,
+      "writeMs": [
+        1081.8025,
+        1027.847,
+        975.321833
+      ],
+      "medianWriteMs": 1027.847,
+      "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+      "fileSha256": "c2bdd2323f126d386543c309c2e584f2b94e47d4fc300b16dc2a27bfcb5578b2"
+    },
+    {
+      "kind": "series",
+      "blocks": 5000,
+      "format": "arrow",
+      "rows": 3000000,
+      "bytes": 268747480,
+      "writeMs": [
+        479.197584,
+        459.591333,
+        426.147708
+      ],
+      "medianWriteMs": 459.591333,
+      "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+      "fileSha256": "334ce0691723d1f7a3d327cc2bfc2ff2c67fc94e25e48dac1d75fc3e6092ecf6"
+    },
+    {
+      "kind": "series",
+      "blocks": 5000,
+      "format": "parquet",
+      "rows": 3000000,
+      "bytes": 54135746,
+      "writeMs": [
+        2454.152833,
+        2300.463625,
+        2135.332333
+      ],
+      "medianWriteMs": 2300.463625,
+      "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+      "fileSha256": "2c0ef729f8bf5634b64c9555d766d76a03b6f3262d0a0036e8181ceada3e2774"
+    },
+    {
+      "kind": "trace",
+      "blocks": 50,
+      "format": "json",
+      "rows": 283004,
+      "bytes": 11879225,
+      "writeMs": [
+        40.704792,
+        44.379709,
+        43.01225
+      ],
+      "medianWriteMs": 43.01225,
+      "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+      "fileSha256": "29a9bc14b5c53d21bc7feae0b1dceadb2f75625b8c123cb4c1e3306b73e16048"
+    },
+    {
+      "kind": "trace",
+      "blocks": 50,
+      "format": "json-gzip",
+      "rows": 283004,
+      "bytes": 2250252,
+      "writeMs": [
+        266.663708,
+        260.674375,
+        256.866792
+      ],
+      "medianWriteMs": 260.674375,
+      "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+      "fileSha256": "8e0416c14b236a4f4019c13a4e4171c7afad16982a1fc9bb278c8f1ab58d45b7"
+    },
+    {
+      "kind": "trace",
+      "blocks": 50,
+      "format": "csv",
+      "rows": 283004,
+      "bytes": 11313181,
+      "writeMs": [
+        45.853625,
+        43.969833,
+        43.910292
+      ],
+      "medianWriteMs": 43.969833,
+      "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+      "fileSha256": "e5ae2853ccfa3f4ebf3cb591da551f5ef7d01d3670f301a3a268111211b221e2"
+    },
+    {
+      "kind": "trace",
+      "blocks": 50,
+      "format": "arrow",
+      "rows": 283004,
+      "bytes": 9319432,
+      "writeMs": [
+        36.021916,
+        32.882125,
+        36.985792
+      ],
+      "medianWriteMs": 36.021916,
+      "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+      "fileSha256": "18bf5d20077dbe906505bc4244ab97b1ac3f15300a7b70bcc90048b896e72739"
+    },
+    {
+      "kind": "trace",
+      "blocks": 50,
+      "format": "parquet",
+      "rows": 283004,
+      "bytes": 2702107,
+      "writeMs": [
+        193.985667,
+        219.580125,
+        208.309292
+      ],
+      "medianWriteMs": 208.309292,
+      "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+      "fileSha256": "781b013370100030b0ffde3cd2e99815b2d11d26bb19d62df28cfeba48706856"
+    }
+  ],
+  "grid50": [
+    {
+      "format": "json",
+      "files": 250,
+      "rows": 7500000,
+      "bytes": 541167188,
+      "minFileBytes": 2150189,
+      "maxFileBytes": 2174302,
+      "sumWriteMs": 2577.272583
+    },
+    {
+      "format": "json-gzip",
+      "files": 250,
+      "rows": 7500000,
+      "bytes": 133566086,
+      "minFileBytes": 527416,
+      "maxFileBytes": 542923,
+      "sumWriteMs": 19115.445087
+    },
+    {
+      "format": "csv",
+      "files": 250,
+      "rows": 7500000,
+      "bytes": 526155688,
+      "minFileBytes": 2090143,
+      "maxFileBytes": 2114256,
+      "sumWriteMs": 2520.588328
+    },
+    {
+      "format": "arrow",
+      "files": 250,
+      "rows": 7500000,
+      "bytes": 672142000,
+      "minFileBytes": 2688568,
+      "maxFileBytes": 2688568,
+      "sumWriteMs": 1163.540039
+    },
+    {
+      "format": "parquet",
+      "files": 250,
+      "rows": 7500000,
+      "bytes": 149958710,
+      "minFileBytes": 596815,
+      "maxFileBytes": 603291,
+      "sumWriteMs": 5930.538033
+    }
+  ],
+  "trace": {
+    "originalRequests": 600000,
+    "sampledRequests": 5891,
+    "attempts": 70751,
+    "events": 283004,
+    "sampleRate": 0.01,
+    "requestRatePerSecond": 1000,
+    "durationSeconds": 600,
+    "hops": 10
+  },
+  "noise": [
+    {
+      "kind": "series-noise",
+      "format": "json",
+      "blocks": 50,
+      "windows": 600,
+      "seed": 42,
+      "rows": 30000,
+      "columnCount": 12,
+      "columns": [
+        "node",
+        "window",
+        "arrivalRate",
+        "successRate",
+        "errorRate",
+        "timeoutRate",
+        "meanLatencyMs",
+        "p99LatencyMs",
+        "utilization",
+        "queueLength",
+        "attemptsPerRequest",
+        "rejectedRate"
+      ],
+      "bytes": 5707496,
+      "writeMs": 23.221292,
+      "checksum": 159699686121,
+      "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+      "datasetIndex": 0,
+      "warmupRows": 5000,
+      "warmupMode": "once-per-process",
+      "arrowBatchRows": 8192,
+      "parquetRowGroupBytes": 16777216,
+      "parquetPageBytes": 65536,
+      "fileSha256": "44a708abb2d02f5bec654d27aa730a124bd581effb3f99af9d16e170d75eb333"
+    },
+    {
+      "kind": "series-noise",
+      "format": "json-gzip",
+      "blocks": 50,
+      "windows": 600,
+      "seed": 42,
+      "rows": 30000,
+      "columnCount": 12,
+      "columns": [
+        "node",
+        "window",
+        "arrivalRate",
+        "successRate",
+        "errorRate",
+        "timeoutRate",
+        "meanLatencyMs",
+        "p99LatencyMs",
+        "utilization",
+        "queueLength",
+        "attemptsPerRequest",
+        "rejectedRate"
+      ],
+      "bytes": 2770490,
+      "writeMs": 193.180916,
+      "checksum": 159699686121,
+      "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+      "datasetIndex": 0,
+      "warmupRows": 5000,
+      "warmupMode": "once-per-process",
+      "arrowBatchRows": 8192,
+      "parquetRowGroupBytes": 16777216,
+      "parquetPageBytes": 65536,
+      "fileSha256": "e57f50a0ca39831c32edce776ad4169795f10b4848be131af41700ef694a30ef"
+    },
+    {
+      "kind": "series-noise",
+      "format": "csv",
+      "blocks": 50,
+      "windows": 600,
+      "seed": 42,
+      "rows": 30000,
+      "columnCount": 12,
+      "columns": [
+        "node",
+        "window",
+        "arrivalRate",
+        "successRate",
+        "errorRate",
+        "timeoutRate",
+        "meanLatencyMs",
+        "p99LatencyMs",
+        "utilization",
+        "queueLength",
+        "attemptsPerRequest",
+        "rejectedRate"
+      ],
+      "bytes": 5647450,
+      "writeMs": 22.618417,
+      "checksum": 159699686121,
+      "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+      "datasetIndex": 0,
+      "warmupRows": 5000,
+      "warmupMode": "once-per-process",
+      "arrowBatchRows": 8192,
+      "parquetRowGroupBytes": 16777216,
+      "parquetPageBytes": 65536,
+      "fileSha256": "9e66e5dde76daafd1db03a6245cd99e8dac76430598f0ec266a14c748f339384"
+    },
+    {
+      "kind": "series-noise",
+      "format": "arrow",
+      "blocks": 50,
+      "windows": 600,
+      "seed": 42,
+      "rows": 30000,
+      "columnCount": 12,
+      "columns": [
+        "node",
+        "window",
+        "arrivalRate",
+        "successRate",
+        "errorRate",
+        "timeoutRate",
+        "meanLatencyMs",
+        "p99LatencyMs",
+        "utilization",
+        "queueLength",
+        "attemptsPerRequest",
+        "rejectedRate"
+      ],
+      "bytes": 2688568,
+      "writeMs": 11.015667,
+      "checksum": 159699686121,
+      "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+      "datasetIndex": 0,
+      "warmupRows": 5000,
+      "warmupMode": "once-per-process",
+      "arrowBatchRows": 8192,
+      "parquetRowGroupBytes": 16777216,
+      "parquetPageBytes": 65536,
+      "fileSha256": "d9d1287abc3aabf72842e3aa37d5b12f8b9df501ae8eaa1568d2c9e74551c9b0"
+    },
+    {
+      "kind": "series-noise",
+      "format": "parquet",
+      "blocks": 50,
+      "windows": 600,
+      "seed": 42,
+      "rows": 30000,
+      "columnCount": 12,
+      "columns": [
+        "node",
+        "window",
+        "arrivalRate",
+        "successRate",
+        "errorRate",
+        "timeoutRate",
+        "meanLatencyMs",
+        "p99LatencyMs",
+        "utilization",
+        "queueLength",
+        "attemptsPerRequest",
+        "rejectedRate"
+      ],
+      "bytes": 2411342,
+      "writeMs": 62.884542,
+      "checksum": 159699686121,
+      "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+      "datasetIndex": 0,
+      "warmupRows": 5000,
+      "warmupMode": "once-per-process",
+      "arrowBatchRows": 8192,
+      "parquetRowGroupBytes": 16777216,
+      "parquetPageBytes": 65536,
+      "fileSha256": "2a56adfc1ba243eb113e7c4eb92ec36e83003465af15558eded246d60b4ff6fc"
+    }
+  ],
+  "browser": {
+    "node": "v26.12.1",
+    "chromium": "156.0.8078.4",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+    "results": [
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2092336,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21443127374,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 2092336,
+          "fetchMs": 6.899999976158142,
+          "decodeAndScanMs": 32.10000002384186,
+          "totalMs": 39
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092336,
+            "fetchMs": 3.299999952316284,
+            "decodeAndScanMs": 23,
+            "totalMs": 26.299999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092336,
+            "fetchMs": 3.4000000953674316,
+            "decodeAndScanMs": 23.399999976158142,
+            "totalMs": 26.800000071525574
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092336,
+            "fetchMs": 3.899999976158142,
+            "decodeAndScanMs": 24.299999952316284,
+            "totalMs": 28.199999928474426
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2688568,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21443127374,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 2688568,
+          "fetchMs": 5.700000047683716,
+          "decodeAndScanMs": 12.200000047683716,
+          "totalMs": 17.90000009536743
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.200000047683716,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 8.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.5,
+            "decodeAndScanMs": 4.600000023841858,
+            "totalMs": 9.100000023841858
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.199999928474426,
+            "decodeAndScanMs": 4.400000095367432,
+            "totalMs": 8.600000023841858
+          }
+        ],
+        "streaming": {
+          "rows": 30000,
+          "batches": 4,
+          "firstBatchMs": 6.299999952316284,
+          "totalMs": 11.399999976158142,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 600527,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21443127374,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 600527,
+          "fetchMs": 2.6999999284744263,
+          "decodeAndScanMs": 15.700000047683716,
+          "totalMs": 18.399999976158142
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600527,
+            "fetchMs": 1.5999999046325684,
+            "decodeAndScanMs": 6.600000023841858,
+            "totalMs": 8.199999928474426
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600527,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 7.299999952316284,
+            "totalMs": 8.799999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600527,
+            "fetchMs": 1.5999999046325684,
+            "decodeAndScanMs": 7.400000095367432,
+            "totalMs": 9
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797387436,
+          "transferredBytes": 629980,
+          "requests": 3,
+          "totalMs": 5.599999904632568,
+          "canonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014"
+        }
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2152382,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21443127374,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 2152382,
+          "fetchMs": 5.199999928474426,
+          "decodeAndScanMs": 12.600000023841858,
+          "totalMs": 17.799999952316284
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152382,
+            "fetchMs": 3.4000000953674316,
+            "decodeAndScanMs": 7.799999952316284,
+            "totalMs": 11.200000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152382,
+            "fetchMs": 3.4000000953674316,
+            "decodeAndScanMs": 7.5,
+            "totalMs": 10.900000095367432
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152382,
+            "fetchMs": 3.399999976158142,
+            "decodeAndScanMs": 9.5,
+            "totalMs": 12.899999976158142
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 528821,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21443127374,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "e15dff921123d23a9f534853741f1112a415cf8dd001a6b1137237049131f677",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 528821,
+          "fetchMs": 2.799999952316284,
+          "decodeAndScanMs": 20.5,
+          "totalMs": 23.299999952316284
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528821,
+            "fetchMs": 1.6999999284744263,
+            "decodeAndScanMs": 12.5,
+            "totalMs": 14.199999928474426
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528821,
+            "fetchMs": 1.600000023841858,
+            "decodeAndScanMs": 12.100000023841858,
+            "totalMs": 13.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21443127374,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528821,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 13,
+            "totalMs": 14.5
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 500,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 21220334,
+        "rows": 300000,
+        "cold": {
+          "rows": 300000,
+          "values": 3600000,
+          "checksum": 290021872829,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 21220334,
+          "fetchMs": 19.5,
+          "decodeAndScanMs": 249.5,
+          "totalMs": 269
+        },
+        "trials": [
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21220334,
+            "fetchMs": 16.699999928474426,
+            "decodeAndScanMs": 216.5,
+            "totalMs": 233.19999992847443
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21220334,
+            "fetchMs": 16.5,
+            "decodeAndScanMs": 240.60000002384186,
+            "totalMs": 257.10000002384186
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21220334,
+            "fetchMs": 19.700000047683716,
+            "decodeAndScanMs": 230.19999992847443,
+            "totalMs": 249.89999997615814
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 500,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 26875768,
+        "rows": 300000,
+        "cold": {
+          "rows": 300000,
+          "values": 3600000,
+          "checksum": 290021872829,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 26875768,
+          "fetchMs": 25.800000071525574,
+          "decodeAndScanMs": 36.799999952316284,
+          "totalMs": 62.60000002384186
+        },
+        "trials": [
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 26875768,
+            "fetchMs": 28.200000047683716,
+            "decodeAndScanMs": 32.10000002384186,
+            "totalMs": 60.300000071525574
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 26875768,
+            "fetchMs": 21.799999952316284,
+            "decodeAndScanMs": 65.39999997615814,
+            "totalMs": 87.19999992847443
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 26875768,
+            "fetchMs": 19.200000047683716,
+            "decodeAndScanMs": 28.59999990463257,
+            "totalMs": 47.799999952316284
+          }
+        ],
+        "streaming": {
+          "rows": 300000,
+          "batches": 37,
+          "firstBatchMs": 3.5,
+          "totalMs": 44,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 500,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 5261066,
+        "rows": 300000,
+        "cold": {
+          "rows": 300000,
+          "values": 3600000,
+          "checksum": 290021872829,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 5261066,
+          "fetchMs": 8.399999976158142,
+          "decodeAndScanMs": 66.70000004768372,
+          "totalMs": 75.10000002384186
+        },
+        "trials": [
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5261066,
+            "fetchMs": 6.799999952316284,
+            "decodeAndScanMs": 52.10000002384186,
+            "totalMs": 58.89999997615814
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5261066,
+            "fetchMs": 7.5,
+            "decodeAndScanMs": 51.800000071525574,
+            "totalMs": 59.300000071525574
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5261066,
+            "fetchMs": 6.899999976158142,
+            "decodeAndScanMs": 52.89999997615814,
+            "totalMs": 59.799999952316284
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797387436,
+          "transferredBytes": 1450388,
+          "requests": 3,
+          "totalMs": 6,
+          "canonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014"
+        }
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 500,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 21820380,
+        "rows": 300000,
+        "cold": {
+          "rows": 300000,
+          "values": 3600000,
+          "checksum": 290021872829,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 21820380,
+          "fetchMs": 19.100000023841858,
+          "decodeAndScanMs": 86.29999995231628,
+          "totalMs": 105.39999997615814
+        },
+        "trials": [
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21820380,
+            "fetchMs": 19.299999952316284,
+            "decodeAndScanMs": 83.70000004768372,
+            "totalMs": 103
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21820380,
+            "fetchMs": 19.59999990463257,
+            "decodeAndScanMs": 79.40000009536743,
+            "totalMs": 99
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 21820380,
+            "fetchMs": 17.799999952316284,
+            "decodeAndScanMs": 79.79999995231628,
+            "totalMs": 97.59999990463257
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 500,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 5282119,
+        "rows": 300000,
+        "cold": {
+          "rows": 300000,
+          "values": 3600000,
+          "checksum": 290021872829,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "a27414d6c0eb14f343fa9efda1534584f800f286a01a27f1d2474c39678980c1",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 5282119,
+          "fetchMs": 9.399999976158142,
+          "decodeAndScanMs": 115.20000004768372,
+          "totalMs": 124.60000002384186
+        },
+        "trials": [
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5282119,
+            "fetchMs": 8.400000095367432,
+            "decodeAndScanMs": 106.39999997615814,
+            "totalMs": 114.80000007152557
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5282119,
+            "fetchMs": 10,
+            "decodeAndScanMs": 109.5,
+            "totalMs": 119.5
+          },
+          {
+            "rows": 300000,
+            "values": 3600000,
+            "checksum": 290021872829,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5282119,
+            "fetchMs": 8,
+            "decodeAndScanMs": 110.5,
+            "totalMs": 118.5
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 5000,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 215204817,
+        "rows": 3000000,
+        "cold": {
+          "rows": 3000000,
+          "values": 36000000,
+          "checksum": 9654205132927,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 215204817,
+          "fetchMs": 178.70000004768372,
+          "decodeAndScanMs": 2237.7999999523163,
+          "totalMs": 2416.5
+        },
+        "trials": [
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 215204817,
+            "fetchMs": 168.80000007152557,
+            "decodeAndScanMs": 2201.399999976158,
+            "totalMs": 2370.2000000476837
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 215204817,
+            "fetchMs": 158.20000004768372,
+            "decodeAndScanMs": 2195.5999999046326,
+            "totalMs": 2353.7999999523163
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 215204817,
+            "fetchMs": 158.5,
+            "decodeAndScanMs": 2181.899999976158,
+            "totalMs": 2340.399999976158
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 5000,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 268747480,
+        "rows": 3000000,
+        "cold": {
+          "rows": 3000000,
+          "values": 36000000,
+          "checksum": 9654205132927,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 268747480,
+          "fetchMs": 225.79999995231628,
+          "decodeAndScanMs": 272.90000009536743,
+          "totalMs": 498.7000000476837
+        },
+        "trials": [
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 268747480,
+            "fetchMs": 189.89999997615814,
+            "decodeAndScanMs": 282.10000002384186,
+            "totalMs": 472
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 268747480,
+            "fetchMs": 231.89999997615814,
+            "decodeAndScanMs": 290.39999997615814,
+            "totalMs": 522.2999999523163
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 268747480,
+            "fetchMs": 170,
+            "decodeAndScanMs": 280,
+            "totalMs": 450
+          }
+        ],
+        "streaming": {
+          "rows": 3000000,
+          "batches": 367,
+          "firstBatchMs": 4.100000023841858,
+          "totalMs": 309.5,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 5000,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 54135746,
+        "rows": 3000000,
+        "cold": {
+          "rows": 3000000,
+          "values": 36000000,
+          "checksum": 9654205132927,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 54135746,
+          "fetchMs": 44.10000002384186,
+          "decodeAndScanMs": 506.2999999523163,
+          "totalMs": 550.3999999761581
+        },
+        "trials": [
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 54135746,
+            "fetchMs": 48.300000071525574,
+            "decodeAndScanMs": 537,
+            "totalMs": 585.3000000715256
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 54135746,
+            "fetchMs": 46.799999952316284,
+            "decodeAndScanMs": 517,
+            "totalMs": 563.7999999523163
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 54135746,
+            "fetchMs": 44.5,
+            "decodeAndScanMs": 512.5,
+            "totalMs": 557
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797387436,
+          "transferredBytes": 3503466,
+          "requests": 4,
+          "totalMs": 9.399999976158142,
+          "canonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014"
+        }
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 5000,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 221204863,
+        "rows": 3000000,
+        "cold": {
+          "rows": 3000000,
+          "values": 36000000,
+          "checksum": 9654205132927,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 221204863,
+          "fetchMs": 179.89999997615814,
+          "decodeAndScanMs": 909.7000000476837,
+          "totalMs": 1089.6000000238419
+        },
+        "trials": [
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 221204863,
+            "fetchMs": 390.2999999523163,
+            "decodeAndScanMs": 915.3000000715256,
+            "totalMs": 1305.6000000238419
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 221204863,
+            "fetchMs": 252.19999992847443,
+            "decodeAndScanMs": 865.6000000238419,
+            "totalMs": 1117.7999999523163
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 221204863,
+            "fetchMs": 170.80000007152557,
+            "decodeAndScanMs": 842.8999999761581,
+            "totalMs": 1013.7000000476837
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 5000,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 52797678,
+        "rows": 3000000,
+        "cold": {
+          "rows": 3000000,
+          "values": 36000000,
+          "checksum": 9654205132927,
+          "uiChecksum": 9797387436,
+          "canonicalSha256": "7a879f928e8caee282a060882da646dc25a3d8a827b137465f3b07910851bdfe",
+          "uiCanonicalSha256": "0d250304f3c017aff95ac6f26917939d63850a6d37294e1ba2969164ef73c014",
+          "bytes": 52797678,
+          "fetchMs": 36.10000002384186,
+          "decodeAndScanMs": 1150,
+          "totalMs": 1186.1000000238419
+        },
+        "trials": [
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 52797678,
+            "fetchMs": 53.699999928474426,
+            "decodeAndScanMs": 1090.5,
+            "totalMs": 1144.1999999284744
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 52797678,
+            "fetchMs": 34.799999952316284,
+            "decodeAndScanMs": 1147.7999999523163,
+            "totalMs": 1182.5999999046326
+          },
+          {
+            "rows": 3000000,
+            "values": 36000000,
+            "checksum": 9654205132927,
+            "uiChecksum": 9797387436,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 52797678,
+            "fetchMs": 53.199999928474426,
+            "decodeAndScanMs": 1108.7000000476837,
+            "totalMs": 1161.8999999761581
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "trace",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 11313181,
+        "rows": 283004,
+        "cold": {
+          "rows": 283004,
+          "values": 1981028,
+          "checksum": 3390690221193620,
+          "uiChecksum": 134852000,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+          "uiCanonicalSha256": null,
+          "bytes": 11313181,
+          "fetchMs": 15.200000047683716,
+          "decodeAndScanMs": 113.29999995231628,
+          "totalMs": 128.5
+        },
+        "trials": [
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11313181,
+            "fetchMs": 15.399999976158142,
+            "decodeAndScanMs": 110.10000002384186,
+            "totalMs": 125.5
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11313181,
+            "fetchMs": 13.099999904632568,
+            "decodeAndScanMs": 108.20000004768372,
+            "totalMs": 121.29999995231628
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11313181,
+            "fetchMs": 15.100000023841858,
+            "decodeAndScanMs": 113.29999995231628,
+            "totalMs": 128.39999997615814
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "trace",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 9319432,
+        "rows": 283004,
+        "cold": {
+          "rows": 283004,
+          "values": 1981028,
+          "checksum": 3390690221193620,
+          "uiChecksum": 134852000,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+          "uiCanonicalSha256": null,
+          "bytes": 9319432,
+          "fetchMs": 12.600000023841858,
+          "decodeAndScanMs": 23,
+          "totalMs": 35.60000002384186
+        },
+        "trials": [
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 9319432,
+            "fetchMs": 11,
+            "decodeAndScanMs": 16.100000023841858,
+            "totalMs": 27.100000023841858
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 9319432,
+            "fetchMs": 12.5,
+            "decodeAndScanMs": 16.200000047683716,
+            "totalMs": 28.700000047683716
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 9319432,
+            "fetchMs": 10.800000071525574,
+            "decodeAndScanMs": 15.899999976158142,
+            "totalMs": 26.700000047683716
+          }
+        ],
+        "streaming": {
+          "rows": 283004,
+          "batches": 35,
+          "firstBatchMs": 3,
+          "totalMs": 25.699999928474426,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4"
+        },
+        "slice": null
+      },
+      {
+        "kind": "trace",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2702107,
+        "rows": 283004,
+        "cold": {
+          "rows": 283004,
+          "values": 1981028,
+          "checksum": 3390690221193620,
+          "uiChecksum": 134852000,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+          "uiCanonicalSha256": null,
+          "bytes": 2702107,
+          "fetchMs": 5.300000071525574,
+          "decodeAndScanMs": 35.39999997615814,
+          "totalMs": 40.700000047683716
+        },
+        "trials": [
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2702107,
+            "fetchMs": 4.100000023841858,
+            "decodeAndScanMs": 24.5,
+            "totalMs": 28.600000023841858
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2702107,
+            "fetchMs": 4,
+            "decodeAndScanMs": 22.600000023841858,
+            "totalMs": 26.600000023841858
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2702107,
+            "fetchMs": 4.199999928474426,
+            "decodeAndScanMs": 29.200000047683716,
+            "totalMs": 33.39999997615814
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "trace",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 11879225,
+        "rows": 283004,
+        "cold": {
+          "rows": 283004,
+          "values": 1981028,
+          "checksum": 3390690221193620,
+          "uiChecksum": 134852000,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+          "uiCanonicalSha256": null,
+          "bytes": 11879225,
+          "fetchMs": 16.200000047683716,
+          "decodeAndScanMs": 46,
+          "totalMs": 62.200000047683716
+        },
+        "trials": [
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11879225,
+            "fetchMs": 14.399999976158142,
+            "decodeAndScanMs": 35.89999997615814,
+            "totalMs": 50.299999952316284
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11879225,
+            "fetchMs": 18.200000047683716,
+            "decodeAndScanMs": 37.89999997615814,
+            "totalMs": 56.10000002384186
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 11879225,
+            "fetchMs": 14.599999904632568,
+            "decodeAndScanMs": 37.10000002384186,
+            "totalMs": 51.699999928474426
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "trace",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2250252,
+        "rows": 283004,
+        "cold": {
+          "rows": 283004,
+          "values": 1981028,
+          "checksum": 3390690221193620,
+          "uiChecksum": 134852000,
+          "canonicalSha256": "c41843181411a2aa3e3e3f6c96dc56560dc6f448c682655c00682951001629c4",
+          "uiCanonicalSha256": null,
+          "bytes": 2250252,
+          "fetchMs": 4.799999952316284,
+          "decodeAndScanMs": 58.5,
+          "totalMs": 63.299999952316284
+        },
+        "trials": [
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2250252,
+            "fetchMs": 3.899999976158142,
+            "decodeAndScanMs": 49.60000002384186,
+            "totalMs": 53.5
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2250252,
+            "fetchMs": 3.899999976158142,
+            "decodeAndScanMs": 55.10000002384186,
+            "totalMs": 59
+          },
+          {
+            "rows": 283004,
+            "values": 1981028,
+            "checksum": 3390690221193620,
+            "uiChecksum": 134852000,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2250252,
+            "fetchMs": 3.399999976158142,
+            "decodeAndScanMs": 48.40000009536743,
+            "totalMs": 51.800000071525574
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1000,
+        "bytes": 2152419,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21447707504,
+          "uiChecksum": 9797464370,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0",
+          "uiCanonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504",
+          "bytes": 2152419,
+          "fetchMs": 5.600000023841858,
+          "decodeAndScanMs": 12.399999976158142,
+          "totalMs": 18
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152419,
+            "fetchMs": 3.200000047683716,
+            "decodeAndScanMs": 7.700000047683716,
+            "totalMs": 10.900000095367432
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152419,
+            "fetchMs": 7.700000047683716,
+            "decodeAndScanMs": 7.699999928474426,
+            "totalMs": 15.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2152419,
+            "fetchMs": 3.100000023841858,
+            "decodeAndScanMs": 8.199999928474426,
+            "totalMs": 11.299999952316284
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1123,
+        "bytes": 2169769,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 27237964732,
+          "uiChecksum": 9797438980,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d",
+          "uiCanonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7",
+          "bytes": 2169769,
+          "fetchMs": 5.300000071525574,
+          "decodeAndScanMs": 12.799999952316284,
+          "totalMs": 18.100000023841858
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2169769,
+            "fetchMs": 3.1999999284744263,
+            "decodeAndScanMs": 7.700000047683716,
+            "totalMs": 10.899999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2169769,
+            "fetchMs": 3.1999999284744263,
+            "decodeAndScanMs": 7.400000095367432,
+            "totalMs": 10.600000023841858
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2169769,
+            "fetchMs": 3,
+            "decodeAndScanMs": 8.100000023841858,
+            "totalMs": 11.100000023841858
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1249,
+        "bytes": 2166655,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 33038629820,
+          "uiChecksum": 9797516488,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601",
+          "uiCanonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4",
+          "bytes": 2166655,
+          "fetchMs": 5,
+          "decodeAndScanMs": 12.5,
+          "totalMs": 17.5
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2166655,
+            "fetchMs": 3.299999952316284,
+            "decodeAndScanMs": 7.799999952316284,
+            "totalMs": 11.099999904632568
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2166655,
+            "fetchMs": 3.6999999284744263,
+            "decodeAndScanMs": 7.600000023841858,
+            "totalMs": 11.299999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2166655,
+            "fetchMs": 3.200000047683716,
+            "decodeAndScanMs": 8.399999976158142,
+            "totalMs": 11.600000023841858
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1000,
+        "bytes": 528430,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21447707504,
+          "uiChecksum": 9797464370,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0",
+          "uiCanonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504",
+          "bytes": 528430,
+          "fetchMs": 2.700000047683716,
+          "decodeAndScanMs": 15.600000023841858,
+          "totalMs": 18.300000071525574
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528430,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 12.100000023841858,
+            "totalMs": 13.5
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528430,
+            "fetchMs": 1.1999999284744263,
+            "decodeAndScanMs": 10.700000047683716,
+            "totalMs": 11.899999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 528430,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 11.300000071525574,
+            "totalMs": 12.800000071525574
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1123,
+        "bytes": 538967,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 27237964732,
+          "uiChecksum": 9797438980,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d",
+          "uiCanonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7",
+          "bytes": 538967,
+          "fetchMs": 3,
+          "decodeAndScanMs": 16.399999976158142,
+          "totalMs": 19.399999976158142
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 538967,
+            "fetchMs": 1.5999999046325684,
+            "decodeAndScanMs": 11.300000071525574,
+            "totalMs": 12.899999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 538967,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 11.100000023841858,
+            "totalMs": 12.5
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 538967,
+            "fetchMs": 1.3000000715255737,
+            "decodeAndScanMs": 11.899999976158142,
+            "totalMs": 13.200000047683716
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1249,
+        "bytes": 530330,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 33038629820,
+          "uiChecksum": 9797516488,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601",
+          "uiCanonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4",
+          "bytes": 530330,
+          "fetchMs": 3,
+          "decodeAndScanMs": 17.299999952316284,
+          "totalMs": 20.299999952316284
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 530330,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 12,
+            "totalMs": 13.5
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 530330,
+            "fetchMs": 1.600000023841858,
+            "decodeAndScanMs": 11.100000023841858,
+            "totalMs": 12.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 530330,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 10.899999976158142,
+            "totalMs": 12.399999976158142
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1000,
+        "bytes": 2092373,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21447707504,
+          "uiChecksum": 9797464370,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0",
+          "uiCanonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504",
+          "bytes": 2092373,
+          "fetchMs": 6,
+          "decodeAndScanMs": 27.399999976158142,
+          "totalMs": 33.39999997615814
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092373,
+            "fetchMs": 3,
+            "decodeAndScanMs": 23.200000047683716,
+            "totalMs": 26.200000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092373,
+            "fetchMs": 3.200000047683716,
+            "decodeAndScanMs": 23.5,
+            "totalMs": 26.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2092373,
+            "fetchMs": 3.200000047683716,
+            "decodeAndScanMs": 23.399999976158142,
+            "totalMs": 26.600000023841858
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1123,
+        "bytes": 2109723,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 27237964732,
+          "uiChecksum": 9797438980,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d",
+          "uiCanonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7",
+          "bytes": 2109723,
+          "fetchMs": 4.800000071525574,
+          "decodeAndScanMs": 25.699999928474426,
+          "totalMs": 30.5
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2109723,
+            "fetchMs": 3.3000000715255737,
+            "decodeAndScanMs": 23.199999928474426,
+            "totalMs": 26.5
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2109723,
+            "fetchMs": 3.1999999284744263,
+            "decodeAndScanMs": 23,
+            "totalMs": 26.199999928474426
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2109723,
+            "fetchMs": 3.399999976158142,
+            "decodeAndScanMs": 23,
+            "totalMs": 26.399999976158142
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1249,
+        "bytes": 2106609,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 33038629820,
+          "uiChecksum": 9797516488,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601",
+          "uiCanonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4",
+          "bytes": 2106609,
+          "fetchMs": 4.899999976158142,
+          "decodeAndScanMs": 25.700000047683716,
+          "totalMs": 30.600000023841858
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2106609,
+            "fetchMs": 3.200000047683716,
+            "decodeAndScanMs": 23.199999928474426,
+            "totalMs": 26.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2106609,
+            "fetchMs": 4,
+            "decodeAndScanMs": 23.299999952316284,
+            "totalMs": 27.299999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2106609,
+            "fetchMs": 3.100000023841858,
+            "decodeAndScanMs": 23,
+            "totalMs": 26.100000023841858
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1000,
+        "bytes": 2688568,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21447707504,
+          "uiChecksum": 9797464370,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0",
+          "uiCanonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504",
+          "bytes": 2688568,
+          "fetchMs": 5.899999976158142,
+          "decodeAndScanMs": 10.799999952316284,
+          "totalMs": 16.699999928474426
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.5,
+            "decodeAndScanMs": 4.799999952316284,
+            "totalMs": 9.299999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.299999952316284,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 8.799999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.099999904632568,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 8.599999904632568
+          }
+        ],
+        "streaming": {
+          "rows": 30000,
+          "batches": 4,
+          "firstBatchMs": 3.6999999284744263,
+          "totalMs": 8.5,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1123,
+        "bytes": 2688568,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 27237964732,
+          "uiChecksum": 9797438980,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d",
+          "uiCanonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7",
+          "bytes": 2688568,
+          "fetchMs": 5.299999952316284,
+          "decodeAndScanMs": 10.300000071525574,
+          "totalMs": 15.600000023841858
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 3.799999952316284,
+            "decodeAndScanMs": 4.600000023841858,
+            "totalMs": 8.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 3.6999999284744263,
+            "decodeAndScanMs": 4.400000095367432,
+            "totalMs": 8.100000023841858
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 3.700000047683716,
+            "decodeAndScanMs": 4.399999976158142,
+            "totalMs": 8.100000023841858
+          }
+        ],
+        "streaming": {
+          "rows": 30000,
+          "batches": 4,
+          "firstBatchMs": 3.5,
+          "totalMs": 8.899999976158142,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1249,
+        "bytes": 2688568,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 33038629820,
+          "uiChecksum": 9797516488,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601",
+          "uiCanonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4",
+          "bytes": 2688568,
+          "fetchMs": 5.399999976158142,
+          "decodeAndScanMs": 10.299999952316284,
+          "totalMs": 15.699999928474426
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 5.399999976158142,
+            "decodeAndScanMs": 5,
+            "totalMs": 10.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.799999952316284,
+            "decodeAndScanMs": 4.600000023841858,
+            "totalMs": 9.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 3.8000000715255737,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 8.300000071525574
+          }
+        ],
+        "streaming": {
+          "rows": 30000,
+          "batches": 4,
+          "firstBatchMs": 3.5,
+          "totalMs": 8.100000023841858,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1000,
+        "bytes": 599935,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 21447707504,
+          "uiChecksum": 9797464370,
+          "canonicalSha256": "25d58de6c300f1e43eb35def59b259cb95d4c4a9ebeea84f40abd4185d026df0",
+          "uiCanonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504",
+          "bytes": 599935,
+          "fetchMs": 3,
+          "decodeAndScanMs": 15.400000095367432,
+          "totalMs": 18.40000009536743
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 599935,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.5,
+            "totalMs": 7.899999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 599935,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.899999976158142,
+            "totalMs": 8.299999952316284
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 21447707504,
+            "uiChecksum": 9797464370,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 599935,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.699999928474426,
+            "totalMs": 8.099999904632568
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797464370,
+          "transferredBytes": 630270,
+          "requests": 3,
+          "totalMs": 5.299999952316284,
+          "canonicalSha256": "bcffa8727ad53a5dc86df15326dd836740aefbe1f8e5f93f2e3b16d482d7a504"
+        }
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1123,
+        "bytes": 600916,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 27237964732,
+          "uiChecksum": 9797438980,
+          "canonicalSha256": "de047a902b5f9383a94669248dcd182758494b2b95f337708c9c396c7d7f745d",
+          "uiCanonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7",
+          "bytes": 600916,
+          "fetchMs": 2.9000000953674316,
+          "decodeAndScanMs": 15.699999928474426,
+          "totalMs": 18.600000023841858
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600916,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.200000047683716,
+            "totalMs": 7.600000023841858
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600916,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.600000023841858,
+            "totalMs": 8
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 27237964732,
+            "uiChecksum": 9797438980,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600916,
+            "fetchMs": 2,
+            "decodeAndScanMs": 6.299999952316284,
+            "totalMs": 8.299999952316284
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797438980,
+          "transferredBytes": 630029,
+          "requests": 3,
+          "totalMs": 5,
+          "canonicalSha256": "2947a676f2279ea868208face5b8153ba2bcae98c9b06e3391ad852e257929c7"
+        }
+      },
+      {
+        "kind": "series",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 1249,
+        "bytes": 600145,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 33038629820,
+          "uiChecksum": 9797516488,
+          "canonicalSha256": "a575214cf7182dc34d11fbad9fcb71fd89f330e7f193c34d2855d6f290133601",
+          "uiCanonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4",
+          "bytes": 600145,
+          "fetchMs": 2.899999976158142,
+          "decodeAndScanMs": 15.600000023841858,
+          "totalMs": 18.5
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600145,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 6.5,
+            "totalMs": 8
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600145,
+            "fetchMs": 1.399999976158142,
+            "decodeAndScanMs": 6.600000023841858,
+            "totalMs": 8
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 33038629820,
+            "uiChecksum": 9797516488,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 600145,
+            "fetchMs": 1.5,
+            "decodeAndScanMs": 6.799999952316284,
+            "totalMs": 8.299999952316284
+          }
+        ],
+        "streaming": null,
+        "slice": {
+          "rows": 30000,
+          "columns": [
+            "node",
+            "window",
+            "utilization",
+            "queueLength"
+          ],
+          "values": 120000,
+          "checksum": 9797516488,
+          "transferredBytes": 630056,
+          "requests": 3,
+          "totalMs": 4.5,
+          "canonicalSha256": "370eacb6afdd726c0e718cf1a90b25e672f527af001ca9110c56b873ece9fef4"
+        }
+      },
+      {
+        "kind": "series-noise",
+        "format": "json",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 5707496,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 159699686121,
+          "uiChecksum": 39737357279,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+          "uiCanonicalSha256": "5269eafc4cc41b1f72b214d2b7d2d55150b331e99ba737cd505a66ae5124301c",
+          "bytes": 5707496,
+          "fetchMs": 8.5,
+          "decodeAndScanMs": 15.5,
+          "totalMs": 24
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5707496,
+            "fetchMs": 7.600000023841858,
+            "decodeAndScanMs": 11.899999976158142,
+            "totalMs": 19.5
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5707496,
+            "fetchMs": 8.899999976158142,
+            "decodeAndScanMs": 11.5,
+            "totalMs": 20.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5707496,
+            "fetchMs": 7.299999952316284,
+            "decodeAndScanMs": 12.200000047683716,
+            "totalMs": 19.5
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series-noise",
+        "format": "json-gzip",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2770490,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 159699686121,
+          "uiChecksum": 39737357279,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+          "uiCanonicalSha256": "5269eafc4cc41b1f72b214d2b7d2d55150b331e99ba737cd505a66ae5124301c",
+          "bytes": 2770490,
+          "fetchMs": 5.600000023841858,
+          "decodeAndScanMs": 27.600000023841858,
+          "totalMs": 33.200000047683716
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2770490,
+            "fetchMs": 4.299999952316284,
+            "decodeAndScanMs": 26.40000009536743,
+            "totalMs": 30.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2770490,
+            "fetchMs": 3.899999976158142,
+            "decodeAndScanMs": 23.299999952316284,
+            "totalMs": 27.199999928474426
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2770490,
+            "fetchMs": 3.8000000715255737,
+            "decodeAndScanMs": 23.399999976158142,
+            "totalMs": 27.200000047683716
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series-noise",
+        "format": "csv",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 5647450,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 159699686121,
+          "uiChecksum": 39737357279,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+          "uiCanonicalSha256": "5269eafc4cc41b1f72b214d2b7d2d55150b331e99ba737cd505a66ae5124301c",
+          "bytes": 5647450,
+          "fetchMs": 8.5,
+          "decodeAndScanMs": 28.699999928474426,
+          "totalMs": 37.199999928474426
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5647450,
+            "fetchMs": 7.700000047683716,
+            "decodeAndScanMs": 27.899999976158142,
+            "totalMs": 35.60000002384186
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5647450,
+            "fetchMs": 8.800000071525574,
+            "decodeAndScanMs": 28.09999990463257,
+            "totalMs": 36.89999997615814
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 5647450,
+            "fetchMs": 7.699999928474426,
+            "decodeAndScanMs": 28.700000047683716,
+            "totalMs": 36.39999997615814
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      },
+      {
+        "kind": "series-noise",
+        "format": "arrow",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2688568,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 159699686121,
+          "uiChecksum": 39737357279,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+          "uiCanonicalSha256": "5269eafc4cc41b1f72b214d2b7d2d55150b331e99ba737cd505a66ae5124301c",
+          "bytes": 2688568,
+          "fetchMs": 8.899999976158142,
+          "decodeAndScanMs": 11.5,
+          "totalMs": 20.399999976158142
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.200000047683716,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 8.700000047683716
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 4.399999976158142,
+            "decodeAndScanMs": 4.600000023841858,
+            "totalMs": 9
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2688568,
+            "fetchMs": 5.799999952316284,
+            "decodeAndScanMs": 4.5,
+            "totalMs": 10.299999952316284
+          }
+        ],
+        "streaming": {
+          "rows": 30000,
+          "batches": 4,
+          "firstBatchMs": 3.8000000715255737,
+          "totalMs": 9.300000071525574,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0"
+        },
+        "slice": null
+      },
+      {
+        "kind": "series-noise",
+        "format": "parquet",
+        "blocks": 50,
+        "windows": 600,
+        "seed": 42,
+        "bytes": 2411342,
+        "rows": 30000,
+        "cold": {
+          "rows": 30000,
+          "values": 360000,
+          "checksum": 159699686121,
+          "uiChecksum": 39737357279,
+          "canonicalSha256": "02a8c8d0fe07eade7beab7aa70529316c7756bb93c9fff607157704d9d2af8a0",
+          "uiCanonicalSha256": "5269eafc4cc41b1f72b214d2b7d2d55150b331e99ba737cd505a66ae5124301c",
+          "bytes": 2411342,
+          "fetchMs": 5.600000023841858,
+          "decodeAndScanMs": 14.399999976158142,
+          "totalMs": 20
+        },
+        "trials": [
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2411342,
+            "fetchMs": 3.700000047683716,
+            "decodeAndScanMs": 7.700000047683716,
+            "totalMs": 11.400000095367432
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2411342,
+            "fetchMs": 4.100000023841858,
+            "decodeAndScanMs": 8.299999952316284,
+            "totalMs": 12.399999976158142
+          },
+          {
+            "rows": 30000,
+            "values": 360000,
+            "checksum": 159699686121,
+            "uiChecksum": 39737357279,
+            "canonicalSha256": null,
+            "uiCanonicalSha256": null,
+            "bytes": 2411342,
+            "fetchMs": 3.8000000715255737,
+            "decodeAndScanMs": 7.5,
+            "totalMs": 11.300000071525574
+          }
+        ],
+        "streaming": null,
+        "slice": null
+      }
+    ]
+  }
+}
