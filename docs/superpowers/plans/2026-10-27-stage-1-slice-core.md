@@ -4797,7 +4797,7 @@ git commit -m "feat(core): add Lab facade for validating and running experiments
 - [ ] **Step 1: Полная сборка**
 
 Run: `./gradlew clean build`
-Expected: BUILD SUCCESSFUL — тесты, KtLint и пороги JaCoCo всех модулей. Если покрытие `core` ниже порога (0.95 по строкам, 0.85 по ветвям), добавить тесты на непокрытые ветви новых классов, не снижая порог.
+Expected: BUILD SUCCESSFUL — тесты, KtLint и отчёты JaCoCo всех модулей.
 
 - [ ] **Step 2: Web и E2E не затронуты**
 

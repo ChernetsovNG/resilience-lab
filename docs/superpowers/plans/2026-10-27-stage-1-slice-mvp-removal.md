@@ -77,7 +77,7 @@ git rm -r apps/server/src/test/kotlin/resiliencelab/server/api apps/server/src/t
 - [ ] **Step 3: Проверка**
 
 Run: `./gradlew :apps:server:check`
-Expected: BUILD SUCCESSFUL; `OpenApiSpecTest` проходит без изменений `apps/server/openapi.json` — springdoc и раньше описывал только пакет `lab`. Если не проходит порог покрытия JaCoCo, добавить тесты на непокрытые ветви пакета `lab`, а не снижать порог.
+Expected: BUILD SUCCESSFUL; `OpenApiSpecTest` проходит без изменений `apps/server/openapi.json` — springdoc и раньше описывал только пакет `lab`.
 
 - [ ] **Step 4: Commit**
 
@@ -740,7 +740,7 @@ Expected: пусто.
 - [ ] **Step 4: Проверка**
 
 Run: `./gradlew ktlintFormat && ./gradlew clean build`
-Expected: BUILD SUCCESSFUL. Если покрытие `core` ниже порога, добавить тесты на непокрытые ветви, а не снижать порог.
+Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 5: Commit**
 

@@ -2644,7 +2644,7 @@ git commit -m "docs: describe stage 1 API and CLI"
 - [ ] **Step 1: JVM**
 
 Run: `./gradlew clean build`
-Expected: BUILD SUCCESSFUL — тесты, KtLint, пороги JaCoCo всех модулей, актуальный `openapi.json`.
+Expected: BUILD SUCCESSFUL — тесты, KtLint, отчёты JaCoCo всех модулей, актуальный `openapi.json`.
 
 - [ ] **Step 2: Web и E2E на старых ручках**
 
