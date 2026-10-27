@@ -27,10 +27,12 @@ Gradle-команды выполняются из корня репозитор�
 - `npm run build` — type-check и production-сборка web в `web/dist/`.
 - `npm run lint` — ESLint для web.
 - `npm run dev` — Vite dev server с proxy `/api` на `http://127.0.0.1:8080`.
-- `npx playwright install chromium` — локальная установка Chromium; CI использует `npx playwright install --with-deps chromium`.
+- `npx playwright install chromium` — локальная установка Chromium; в CI браузеры и системные зависимости уже установлены в официальном Docker-образе Playwright.
 - `npm run test:e2e` — Playwright запускает изолированные `./gradlew :apps:server:bootRun` из корня и `npm run dev -- --host 127.0.0.1` из `web`, ждёт `http://127.0.0.1:8080/api/v1/health` и `http://127.0.0.1:5173`, не использует уже запущенные серверы и останавливает browser/server processes после прогона. Trace и screenshot при ошибках сохраняются в `web/test-results/`; CI также загружает `web/playwright-report/`, если он сформирован.
 
-Проект использует Gradle Wrapper 9.8.2. GitHub Actions настроен в `.github/workflows/ci.yml`: сохраняет `./gradlew --no-daemon clean build`, затем выполняет Node.js 25.5.0 setup, `npm ci`, lint, unit tests, production build, установку Playwright Chromium и E2E. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и Playwright artifacts сохраняются как артефакты workflow.
+Проект использует Gradle Wrapper 9.8.2. В `.github/workflows/ci.yml` настроены две независимые job с лимитом 20 минут каждая. `build` на обычном Ubuntu-раннере выполняет `./gradlew --no-daemon clean build`, `npm ci`, lint, unit tests и production build. `e2e` запускает `npm ci` и `npm run test:e2e -- --reporter=line,html` внутри официального образа `mcr.microsoft.com/playwright:v1.64.1-noble` с готовыми браузерами и системными зависимостями; установки браузеров и apt-пакетов в workflow нет. Обе job используют JDK 25 и Node.js 25.5.0, кэши Gradle и npm. При запуске E2E `GRADLE_USER_HOME="$HOME/.gradle"` направляет Gradle в каталог, который кэширует `actions/setup-java` внутри контейнера.
+
+Перед E2E проверяется совпадение версии образа с `@playwright/test` из `web/package-lock.json`; при обновлении Playwright нужно также обновить `jobs.e2e.container.image`, иначе проверка завершится с понятной ошибкой. YAML anchor связывает образ контейнера и значение для проверки. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` сохраняет job `build`, а `web/test-results/` и `web/playwright-report/` — job `e2e`, в обоих случаях и при ошибке предыдущих шагов, если файлы сформированы. HTML-отчёт Playwright формируется и при успешном прогоне.
 
 ### Локальный Docker Compose
 
