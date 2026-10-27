@@ -43,7 +43,7 @@ jobs:
         run: npm run build
       - name: Upload JaCoCo reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jacoco-reports
           path: |
@@ -94,7 +94,7 @@ jobs:
         run: GRADLE_USER_HOME="$HOME/.gradle" npm run test:e2e -- --reporter=line,html
       - name: Upload Playwright artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-artifacts
           path: |
