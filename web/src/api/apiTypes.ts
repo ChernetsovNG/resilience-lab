@@ -1,0 +1,22 @@
+import type { components } from "./schema";
+
+type Schemas = components["schemas"];
+
+export type ApiProblem = Schemas["ApiProblem"];
+export type BlockInstance = Schemas["BlockInstance"];
+export type Catalog = Schemas["Catalog"];
+export type ConnectionInstance = Schemas["ConnectionInstance"];
+export type Diagnostic = Schemas["Diagnostic"];
+export type DocumentContent = Schemas["DocumentContent"];
+export type DocumentEntry = Schemas["DocumentEntry"];
+export type DocumentView = Schemas["DocumentView"];
+export type ExperimentFile = Schemas["ExperimentFile"];
+export type HealthView = Schemas["HealthView"];
+export type JobView = Schemas["JobView"];
+export type LayoutFile = Schemas["LayoutFile"];
+export type MetricSummary = Schemas["MetricSummary"];
+export type ModelFile = Schemas["ModelFile"];
+export type ParamDescriptor = Schemas["ParamDescriptor"];
+export type RunSummary = Schemas["RunSummary"];
+export type TypeDescriptor = Schemas["TypeDescriptor"];
+export type Variant = Schemas["Variant"];
