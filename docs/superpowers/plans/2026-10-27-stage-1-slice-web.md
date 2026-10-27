@@ -33,6 +33,8 @@
 - Типы API берутся только из `src/api/schema.d.ts` через псевдонимы в `src/api/apiTypes.ts`; руками типы API не пишутся.
 - Сервер пишет отсутствующее значение как `null`, а сгенерированный тип для полей-ссылок может быть просто необязательным. Проверять отсутствие через `== null` или `??`, а не через `=== undefined`.
 - Если `tsc` требует в тестовой фикстуре поле, которого в плане нет, значит, схема отличается от ожиданий плана: дополнить фикстуру по сгенерированному типу.
+- Поля `JsonElement` в API описаны схемой «любой JSON» (план сервера), поэтому `ParamDescriptor["default"]` и значения `overrides` — объединение JSON-типов, а не `unknown`.
+- Состояние не теряет правки и не смешивает документы: переключение эксперимента ждёт загрузки, сохранения и запуска и спрашивает перед отбрасыванием несохранённых правок; сохранение и запуск ждут исправления ошибочных черновиков; итог сохранения применяется только к тому открытию документа, для которого оно отправлено; результаты показываются только для эксперимента, для которого посчитаны.
 
 ## Границы плана
 
@@ -40,7 +42,7 @@
 - **Не входит (дорожка T3):** перетаскивание из палитры, правка структуры и раскладки на холсте, undo/redo, правка переопределений на страницах вариантов, правка параметров прогона и отказов, диагностика `POST /validate` на схеме и вкладка Problems, отслеживание внешних правок.
 - **Не входит (дорожка T4):** Timeline, результаты на схеме, воспроизведение, вывод, Map.
 - **Пропадает до дорожек:** sweep, графики, импорт и экспорт JSON, скачивание результата (дизайн этапа 1, §7.1).
-- **Страница варианта редактируема,** если у варианта нет переопределений (это сама модель); остальные страницы только для просмотра, переопределённые значения отмечены.
+- **Модель правится только на странице `Model`,** первой вкладке под схемой. Страницы вариантов, в том числе без переопределений, только для просмотра, переопределённые значения отмечены; правку переопределений на них добавит T3.
 
 ## Карта файлов
 
@@ -86,6 +88,7 @@ val prepareE2eWorkspace =
         description = "Copies examples/ into a scratch workspace for browser tests."
         from(rootProject.file("examples")) { exclude("**/.results/**") }
         into(e2eWorkspace)
+        outputs.upToDateWhen { false }
     }
 
 tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") {
@@ -99,7 +102,7 @@ tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") 
 }
 ```
 
-`Sync` при каждом запуске возвращает копию к содержимому `examples/` и удаляет лишнее, включая `.results/` прошлых прогонов.
+`Sync` при каждом запуске возвращает копию к содержимому `examples/` и удаляет лишнее, включая `.results/` прошлых прогонов. Без `upToDateWhen { false }` Gradle считает задачу актуальной, если в копию только добавились файлы, и оставляет их.
 
 - [ ] **Step 2: Playwright**
 
@@ -207,10 +210,10 @@ export interface StubResponse {
   body?: unknown;
 }
 
-/** Replaces `fetch` with [handler]; returns the mock to inspect calls. */
-export function stubFetch(handler: (url: string, init: RequestInit | undefined) => StubResponse) {
+/** Replaces `fetch` with [handler]; returns the mock to inspect calls. An async handler delays the response. */
+export function stubFetch(handler: (url: string, init: RequestInit | undefined) => StubResponse | Promise<StubResponse>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const { status = 200, body } = handler(String(input), init);
+    const { status = 200, body } = await handler(String(input), init);
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -433,11 +436,23 @@ import type {
   RunSummary,
 } from "../api/apiTypes";
 
+type QuantityUnit = ParamDescriptor["units"][number];
+
+const unit = (symbol: string, numerator: number, denominator: number): QuantityUnit => ({ symbol, numerator, denominator });
+
+/** Units and scales the server catalog lists for each dimension. */
+export const unitsOf: Record<string, QuantityUnit[]> = {
+  DURATION: [unit("ms", 1, 1), unit("s", 1000, 1), unit("min", 60000, 1)],
+  RATE: [unit("/ms", 1, 1), unit("/s", 1, 1000), unit("/min", 1, 60000)],
+  PROBABILITY: [unit("%", 1, 100)],
+};
+
 function param(partial: Partial<ParamDescriptor> & Pick<ParamDescriptor, "name" | "kind" | "title">): ParamDescriptor {
-  return { description: "", required: false, options: [], fields: [], sweepable: false, ...partial };
+  const units = partial.dimension == null ? [] : unitsOf[partial.dimension];
+  return { description: "", required: false, options: [], fields: [], sweepable: false, units, ...partial };
 }
 
-function distribution(name: string, title: string, fallback?: unknown): ParamDescriptor {
+function distribution(name: string, title: string, fallback?: ParamDescriptor["default"]): ParamDescriptor {
   return param({
     name,
     kind: "OBJECT",
@@ -481,7 +496,7 @@ export const catalog: Catalog = {
         param({ name: "handlers", kind: "INTEGER", title: "Handlers", required: true, minimum: 1 }),
         param({ name: "queue", kind: "INTEGER", title: "Queue capacity", default: 0, minimum: 0 }),
         distribution("processing", "Processing time"),
-        param({ name: "failureRate", kind: "QUANTITY", title: "Failure rate", default: "0%", dimension: "PROBABILITY" }),
+        param({ name: "failureRate", kind: "QUANTITY", title: "Failure rate", default: "0%", dimension: "PROBABILITY", minimum: 0, maximum: 1 }),
       ],
     },
     {
@@ -642,22 +657,25 @@ describe("resolveRef", () => {
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { isQuantity } from "./quantities";
+import { unitsOf } from "../test/fixtures";
+import { canonicalOf } from "./quantities";
 
-describe("isQuantity", () => {
-  it("accepts units of the dimension", () => {
-    expect(isQuantity("250ms", "DURATION")).toBe(true);
-    expect(isQuantity("1.5min", "DURATION")).toBe(true);
-    expect(isQuantity("120/s", "RATE")).toBe(true);
-    expect(isQuantity("0.5%", "PROBABILITY")).toBe(true);
+const { DURATION: duration, RATE: rate, PROBABILITY: probability } = unitsOf;
+
+describe("canonicalOf", () => {
+  it("scales the listed units to canonical values like the core parser", () => {
+    expect(canonicalOf("250ms", duration)).toBe(250);
+    expect(canonicalOf("1.5min", duration)).toBe(90000);
+    expect(canonicalOf("120/s", rate)).toBe(0.12);
+    expect(canonicalOf("0.5%", probability)).toBe(0.005);
   });
 
   it("rejects missing, foreign and malformed units", () => {
     for (const text of ["250", "250 ms", "-1ms", "1h", "1e999ms", "1.ms"]) {
-      expect(isQuantity(text, "DURATION")).toBe(false);
+      expect(canonicalOf(text, duration)).toBeNull();
     }
-    expect(isQuantity("120/s", "DURATION")).toBe(false);
-    expect(isQuantity("5ms", "PROBABILITY")).toBe(false);
+    expect(canonicalOf("120/s", duration)).toBeNull();
+    expect(canonicalOf("5ms", probability)).toBeNull();
   });
 });
 ```
@@ -679,6 +697,20 @@ describe("withParam", () => {
     expect(elementOf(withParam(model, "gateway-to-middle", "attempts", 1), "gateway-to-middle")?.params.attempts).toBe(1);
     expect(elementOf(model, "missing")).toBeNull();
   });
+
+  it("treats inherited names such as constructor as ordinary IDs", () => {
+    const withConstructor = {
+      ...model,
+      connections: model.connections.map((connection) =>
+        connection.id === "gateway-to-middle" ? { ...connection, id: "constructor" } : connection,
+      ),
+    };
+
+    expect(elementOf(model, "constructor")).toBeNull();
+    expect(elementOf(withConstructor, "constructor")?.type).toBe("call");
+    const overridden = applyOverrides(withConstructor, { "constructor.attempts": 1 }, catalog);
+    expect(elementOf(overridden, "constructor")?.params.attempts).toBe(1);
+  });
 });
 
 describe("applyOverrides", () => {
@@ -694,6 +726,16 @@ describe("applyOverrides", () => {
     expect(elementOf(effective, "gateway-to-middle")?.params.attempts).toBe(1);
     expect(elementOf(effective, "middle-to-dependency")?.params.network).toEqual({ kind: "fixed", mean: "3ms" });
     expect(applyOverrides(model, {}, catalog)).toBe(model);
+  });
+
+  it("applies an object override before overrides of its fields whatever their order, like the core compiler", () => {
+    const effective = applyOverrides(
+      model,
+      { "gateway.processing.mean": "3ms", "gateway.processing": { kind: "fixed", mean: "2ms" } },
+      catalog,
+    );
+
+    expect(elementOf(effective, "gateway")?.params.processing).toEqual({ kind: "fixed", mean: "3ms" });
   });
 });
 
@@ -744,21 +786,19 @@ export function resolveRef(documentPath: string, ref: string): string | null {
 ```ts
 import type { ParamDescriptor } from "../api/apiTypes";
 
-export type Dimension = NonNullable<ParamDescriptor["dimension"]>;
+const pattern = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(.+)$/;
 
-/** Units the core `Quantities` accepts for each dimension; keep in sync with it. */
-export const UNITS: Record<Dimension, readonly string[]> = {
-  DURATION: ["ms", "s", "min"],
-  RATE: ["/ms", "/s", "/min"],
-  PROBABILITY: ["%"],
-};
-
-const pattern = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(ms|s|min|\/ms|\/s|\/min|%)$/;
-
-/** True when [text] is a finite quantity with a unit of [dimension], such as `250ms` or `120/s`. */
-export function isQuantity(text: string, dimension: Dimension): boolean {
+/**
+ * Canonical value of [text], a finite non-negative number followed by one of [units] such as `250ms` or `120/s`; null
+ * for any other text. The units and their scales come from the catalog descriptor of the parameter (ADR 0001), and
+ * the arithmetic repeats the core parser, so ranges are checked on the same numbers.
+ */
+export function canonicalOf(text: string, units: readonly ParamDescriptor["units"][number][]): number | null {
   const match = pattern.exec(text);
-  return match !== null && UNITS[dimension].includes(match[2]) && Number.isFinite(Number(match[1]));
+  const unit = units.find((candidate) => candidate.symbol === match?.[2]);
+  if (match === null || unit === undefined) return null;
+  const value = (Number(match[1]) * unit.numerator) / unit.denominator;
+  return Number.isFinite(value) ? value : null;
 }
 ```
 
@@ -773,9 +813,14 @@ export function isObject(value: unknown): value is Params {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Own entry [key] of [record]; inherited names such as `constructor` are valid IDs, not entries. */
+export function ownEntry<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 /** Type and parameters of block or connection [id]; null when the model has no such element. */
 export function elementOf(model: ModelFile, id: string): { type: string; params: Params } | null {
-  const block = model.blocks[id];
+  const block = ownEntry(model.blocks, id);
   if (block !== undefined) return { type: block.type, params: block.params };
   const connection = model.connections.find((candidate) => candidate.id === id);
   return connection === undefined ? null : { type: connection.type, params: connection.params };
@@ -789,7 +834,7 @@ export function withParam(model: ModelFile, id: string, name: string, value: unk
     else next[name] = value;
     return next;
   };
-  const block = model.blocks[id];
+  const block = ownEntry(model.blocks, id);
   if (block !== undefined) {
     return { ...model, blocks: { ...model.blocks, [id]: { ...block, params: update(block.params) } } };
   }
@@ -803,11 +848,12 @@ export function withParam(model: ModelFile, id: string, name: string, value: unk
 
 /**
  * The model as a variant sees it (ADR 0002): overrides are `id.param[.field]` paths, and a missing object starts from
- * its catalog default, as in the core compiler.
+ * its catalog default. As in the core compiler, overrides apply in key order, so an object comes before its fields.
  */
 export function applyOverrides(model: ModelFile, overrides: Params, catalog: Catalog): ModelFile {
   let result = model;
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const key of Object.keys(overrides).sort()) {
+    const value = overrides[key];
     const [id, name, ...fields] = key.split(".");
     const element = elementOf(result, id);
     const descriptor = catalog.types
@@ -865,7 +911,8 @@ git commit -m "feat(web): resolve references, check quantities and apply variant
 ```ts
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { catalog, documentViews, experimentPath, modelPath } from "../test/fixtures";
+import type { DocumentView } from "../api/apiTypes";
+import { catalog, documentViews, experiment, experimentPath, modelPath } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
 import { useWorkspace } from "./useWorkspace";
 
@@ -873,18 +920,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubWorkspace(putStatus = 200) {
-  return stubFetch((url, init) => {
+function stubWorkspace(options: { putStatus?: number; putGate?: Promise<void>; documents?: Record<string, DocumentView> } = {}) {
+  const views = { ...documentViews, ...options.documents };
+  return stubFetch(async (url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
       return { body: Object.values(documentViews).map(({ path, kind, version }) => ({ path, kind, version })) };
     }
     if (init?.method === "PUT") {
-      return putStatus === 409
+      await options.putGate;
+      return options.putStatus === 409
         ? { status: 409, body: { code: "VERSION_CONFLICT", message: "stale", diagnostics: [] } }
         : { body: { path: modelPath, kind: "MODEL", version: "v-model-2" } };
     }
-    const document = documentViews[decodeURIComponent(url.split("path=")[1] ?? "")];
+    const document = views[decodeURIComponent(url.split("path=")[1] ?? "")];
     return document === undefined
       ? { status: 404, body: { code: "DOCUMENT_NOT_FOUND", message: "missing", diagnostics: [] } }
       : { body: document };
@@ -908,6 +957,7 @@ describe("useWorkspace", () => {
     expect(result.current.loaded?.modelPath).toBe(modelPath);
     expect(result.current.loaded?.layout?.positions.gateway).toEqual({ x: 260, y: 100 });
     expect(result.current.dirty).toBe(false);
+    expect(result.current.loading).toBe(false);
   });
 
   it("saves edits with If-Match and clears the unsaved state", async () => {
@@ -929,7 +979,7 @@ describe("useWorkspace", () => {
   });
 
   it("reports a version conflict and reloads the stored model", async () => {
-    stubWorkspace(409);
+    stubWorkspace({ putStatus: 409 });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
 
@@ -956,6 +1006,94 @@ describe("useWorkspace", () => {
     });
 
     expect(result.current.problem?.code).toBe("DOCUMENT_NOT_FOUND");
+  });
+
+  it("reports a layout reference that leaves the workspace or cannot be read", async () => {
+    const withLayout = (path: string, layoutRef: string): DocumentView => ({
+      path,
+      kind: "EXPERIMENT",
+      version: "v-broken",
+      content: { experiment: { ...experiment, layoutRef } },
+    });
+    const outside = "retry-storm/outside.experiment.json";
+    const missing = "retry-storm/missing.experiment.json";
+    stubWorkspace({
+      documents: { [outside]: withLayout(outside, "../../outside.layout.json"), [missing]: withLayout(missing, "missing.layout.json") },
+    });
+    const { result } = await loaded();
+
+    await act(async () => {
+      await result.current.open(outside);
+    });
+    expect(result.current.problem?.message).toContain("layoutRef");
+
+    await act(async () => {
+      await result.current.open(missing);
+    });
+    expect(result.current.problem?.code).toBe("DOCUMENT_NOT_FOUND");
+  });
+
+  it("keeps unsaved edits unless opening discards them", async () => {
+    stubWorkspace();
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+
+    let opened = true;
+    await act(async () => {
+      opened = await result.current.open(experimentPath);
+    });
+    expect(opened).toBe(false);
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(6);
+
+    await act(async () => {
+      opened = await result.current.open(experimentPath, true);
+    });
+    expect(opened).toBe(true);
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
+  });
+
+  it("reports loading while an experiment opens", async () => {
+    stubWorkspace();
+    const { result } = await loaded();
+
+    let opening: Promise<boolean> = Promise.resolve(false);
+    act(() => {
+      opening = result.current.open(experimentPath);
+    });
+    expect(result.current.loading).toBe(true);
+    await act(async () => {
+      await opening;
+    });
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("does not open another experiment while saving", async () => {
+    let release: () => void = () => {};
+    const putGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubWorkspace({ putGate });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+
+    let saving: Promise<void> = Promise.resolve();
+    act(() => {
+      saving = result.current.save();
+    });
+    expect(result.current.saving).toBe(true);
+    let opened = true;
+    await act(async () => {
+      opened = await result.current.open(experimentPath, true);
+    });
+    expect(opened).toBe(false);
+
+    release();
+    await act(async () => {
+      await saving;
+    });
+    expect(result.current.saving).toBe(false);
+    expect(result.current.dirty).toBe(false);
   });
 });
 ```
@@ -989,14 +1127,21 @@ export interface Workspace {
   catalog: Catalog | null;
   experiments: string[];
   loaded: LoadedExperiment | null;
+  /** An experiment is being opened; editing, saving and running wait for it. */
+  loading: boolean;
   dirty: boolean;
   saving: boolean;
   /** The stored model changed since it was read; only a reload continues. */
   conflict: boolean;
   problem: ApiProblem | null;
-  open: (experimentPath: string) => Promise<void>;
+  /**
+   * Opens [experimentPath] and resolves to true. Does nothing and resolves to false while saving, or while the model has
+   * unsaved edits unless [discardChanges] is set.
+   */
+  open: (experimentPath: string, discardChanges?: boolean) => Promise<boolean>;
   setParam: (id: string, name: string, value: unknown) => void;
   save: () => Promise<void>;
+  /** Rereads the open experiment from storage, discarding unsaved edits. */
   reload: () => Promise<void>;
 }
 
@@ -1013,17 +1158,14 @@ async function loadExperiment(experimentPath: string): Promise<LoadedExperiment>
   const modelView = await api.document(modelPath);
   const model = modelView.content.model;
   if (model == null) throw new Error(`${modelPath} is not a model`);
-  const layoutPath = experiment.layoutRef == null ? null : resolveRef(experimentPath, experiment.layoutRef);
-  const layoutView = layoutPath === null ? null : await api.document(layoutPath).catch(() => null);
-  return {
-    experimentPath,
-    experiment,
-    modelPath,
-    model,
-    savedModel: model,
-    modelVersion: modelView.version,
-    layout: layoutView?.content.layout ?? null,
-  };
+  let layout: LayoutFile | null = null;
+  if (experiment.layoutRef != null) {
+    const layoutPath = resolveRef(experimentPath, experiment.layoutRef);
+    if (layoutPath === null) throw new Error(`layoutRef of ${experimentPath} leaves the workspace`);
+    layout = (await api.document(layoutPath)).content.layout ?? null;
+    if (layout === null) throw new Error(`${layoutPath} is not a layout`);
+  }
+  return { experimentPath, experiment, modelPath, model, savedModel: model, modelVersion: modelView.version, layout };
 }
 
 /** Catalog and documents of the workspace, edits of the model and saving with `If-Match` (stage 1 design §6.2). */
@@ -1031,13 +1173,17 @@ export function useWorkspace(): Workspace {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [experiments, setExperiments] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<LoadedExperiment | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
+  /** Increments on every open, so responses for an earlier document are ignored. */
   const generation = useRef(0);
+  const dirty = loaded !== null && loaded.model !== loaded.savedModel;
 
-  const open = useCallback(async (experimentPath: string) => {
+  const load = useCallback(async (experimentPath: string) => {
     const current = ++generation.current;
+    setLoading(true);
     setProblem(null);
     setConflict(false);
     try {
@@ -1045,8 +1191,19 @@ export function useWorkspace(): Workspace {
       if (current === generation.current) setLoaded(next);
     } catch (error) {
       if (current === generation.current) setProblem(problemOf(error));
+    } finally {
+      if (current === generation.current) setLoading(false);
     }
   }, []);
+
+  const open = useCallback(
+    async (experimentPath: string, discardChanges = false) => {
+      if (saving || (dirty && !discardChanges)) return false;
+      await load(experimentPath);
+      return true;
+    },
+    [dirty, saving, load],
+  );
 
   useEffect(() => {
     let active = true;
@@ -1059,7 +1216,7 @@ export function useWorkspace(): Workspace {
           .sort();
         setCatalog(nextCatalog);
         setExperiments(paths);
-        if (paths.length > 0) await open(paths[0]);
+        if (paths.length > 0) await load(paths[0]);
       })
       .catch((error: unknown) => {
         if (active) setProblem(problemOf(error));
@@ -1067,41 +1224,43 @@ export function useWorkspace(): Workspace {
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [load]);
 
   const setParam = useCallback((id: string, name: string, value: unknown) => {
     setLoaded((current) => (current === null ? current : { ...current, model: withParam(current.model, id, name, value) }));
   }, []);
 
+  /** Saves the model; the outcome applies only to the document generation it was sent for. */
   const save = useCallback(async () => {
-    if (loaded === null || loaded.model === loaded.savedModel) return;
+    if (loaded === null || !dirty || loading) return;
     const saved = loaded;
+    const current = generation.current;
     setSaving(true);
     setProblem(null);
     try {
       const entry = await api.saveDocument(saved.modelPath, { model: saved.model }, saved.modelVersion);
-      setLoaded((current) =>
-        current === null || current.modelPath !== saved.modelPath
-          ? current
-          : { ...current, savedModel: saved.model, modelVersion: entry.version },
-      );
+      if (current === generation.current) {
+        setLoaded((now) => (now === null ? now : { ...now, savedModel: saved.model, modelVersion: entry.version }));
+      }
     } catch (error) {
+      if (current !== generation.current) return;
       if (error instanceof ApiError && error.status === 409) setConflict(true);
       else setProblem(problemOf(error));
     } finally {
       setSaving(false);
     }
-  }, [loaded]);
+  }, [loaded, dirty, loading]);
 
   const reload = useCallback(async () => {
-    if (loaded !== null) await open(loaded.experimentPath);
-  }, [loaded, open]);
+    if (loaded !== null && !saving) await load(loaded.experimentPath);
+  }, [loaded, saving, load]);
 
   return {
     catalog,
     experiments,
     loaded,
-    dirty: loaded !== null && loaded.model !== loaded.savedModel,
+    loading,
+    dirty,
     saving,
     conflict,
     problem,
@@ -1183,6 +1342,7 @@ describe("useRun", () => {
 
     expect(result.current.job?.status).toBe("COMPLETED");
     expect(result.current.summary).toEqual(summary);
+    expect(result.current.experiment).toBe(experimentPath);
     expect(result.current.problem).toBeNull();
     expect(result.current.running).toBe(false);
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs/job-1")).toHaveLength(2);
@@ -1216,6 +1376,7 @@ describe("useRun", () => {
 
     expect(result.current.job).toBeNull();
     expect(result.current.problem).toBeNull();
+    expect(result.current.experiment).toBeNull();
   });
 });
 ```
@@ -1234,6 +1395,8 @@ import type { ApiProblem, JobView, RunSummary } from "../api/apiTypes";
 import { problemOf } from "../workspace/useWorkspace";
 
 export interface Run {
+  /** The experiment the state below belongs to. */
+  experiment: string | null;
   job: JobView | null;
   summary: RunSummary | null;
   problem: ApiProblem | null;
@@ -1246,6 +1409,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /** Submits a job, polls it every [pollMs] until it finishes and loads the run summary (ADR 0010, item 4). */
 export function useRun(pollMs = 500): Run {
+  const [experiment, setExperiment] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
@@ -1261,6 +1425,7 @@ export function useRun(pollMs = 500): Run {
 
   const reset = useCallback(() => {
     generation.current += 1;
+    setExperiment(null);
     setJob(null);
     setSummary(null);
     setProblem(null);
@@ -1271,6 +1436,7 @@ export function useRun(pollMs = 500): Run {
     async (experimentPath: string) => {
       const current = ++generation.current;
       const live = () => current === generation.current;
+      setExperiment(experimentPath);
       setJob(null);
       setSummary(null);
       setProblem(null);
@@ -1300,7 +1466,7 @@ export function useRun(pollMs = 500): Run {
     [pollMs],
   );
 
-  return { job, summary, problem, running, run, reset };
+  return { experiment, job, summary, problem, running, run, reset };
 }
 ```
 
@@ -1327,8 +1493,12 @@ git commit -m "feat(web): submit jobs, poll them and load run summaries"
 - [ ] **Step 1: Заглушки DOM для React Flow — `src/test/reactFlow.ts`**
 
 ```ts
-/** jsdom lacks layout; React Flow needs sizes, ResizeObserver and DOMMatrixReadOnly to render nodes. */
+/** jsdom lacks layout; React Flow needs sizes, SVG text boxes, ResizeObserver and DOMMatrixReadOnly to render. */
 export function mockReactFlowDom(): void {
+  Object.defineProperty(SVGElement.prototype, "getBBox", {
+    configurable: true,
+    value: () => ({ x: 0, y: 0, width: 0, height: 0 }) as DOMRect,
+  });
   HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 180, height: 80, top: 0, left: 0, right: 180, bottom: 80, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
   Object.defineProperties(HTMLElement.prototype, {
@@ -1392,13 +1562,16 @@ describe("Canvas", () => {
 });
 
 describe("VariantTabs", () => {
-  it("marks the active variant and switches pages", () => {
+  it("puts the model page first, marks the active page and switches pages", () => {
     const onSelect = vi.fn();
-    render(<VariantTabs variants={experiment.variants} active="baseline" onSelect={onSelect} />);
+    render(<VariantTabs variants={experiment.variants} active={null} onSelect={onSelect} />);
 
-    expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Model", "Baseline", "No retries"]);
+    expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
-    expect(onSelect).toHaveBeenCalledWith("no-retries");
+    expect(onSelect).toHaveBeenLastCalledWith("no-retries");
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 });
 ```
@@ -1445,6 +1618,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
 import { Background, Controls, ReactFlow } from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 import type { ConnectionInstance, LayoutFile, ModelFile } from "../api/apiTypes";
+import { ownEntry } from "../workspace/params";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import "@xyflow/react/dist/style.css";
@@ -1469,7 +1643,7 @@ export function Canvas({ model, layout, selected, onSelect }: CanvasProps) {
   const nodes: BlockNodeType[] = Object.entries(model.blocks).map(([id, block], index) => ({
     id,
     type: "block",
-    position: layout?.positions[id] ?? { x: index * 260, y: 100 },
+    position: (layout === null ? undefined : ownEntry(layout.positions, id)) ?? { x: index * 260, y: 100 },
     data: { id, block },
     selected: selected === id,
     ariaLabel: id,
@@ -1510,14 +1684,21 @@ import type { Variant } from "../api/apiTypes";
 
 export interface VariantTabsProps {
   variants: Variant[];
-  active: string;
-  onSelect: (id: string) => void;
+  /** ID of the active variant page; null for the model page. */
+  active: string | null;
+  onSelect: (id: string | null) => void;
 }
 
-/** Variant pages below the canvas, as in draw.io (product vision §5.5). */
+/**
+ * Pages below the canvas, as in draw.io (product vision §5.5): the model page first, then one page per variant. Only
+ * the model page edits the model; a variant page shows it with the variant's overrides, even when there are none.
+ */
 export function VariantTabs({ variants, active, onSelect }: VariantTabsProps) {
   return (
-    <div className="variant-tabs" role="tablist" aria-label="Variants">
+    <div className="variant-tabs" role="tablist" aria-label="Pages">
+      <button type="button" role="tab" aria-selected={active === null} onClick={() => onSelect(null)}>
+        Model
+      </button>
       {variants.map((variant) => (
         <button
           key={variant.id}
@@ -1575,6 +1756,7 @@ function renderInspector(props: Partial<InspectorProps> = {}) {
       editable
       overrides={{}}
       onParam={onParam}
+      onValidity={vi.fn()}
       {...props}
     />,
   );
@@ -1609,6 +1791,31 @@ describe("Inspector", () => {
 
     commit("Queue capacity", "");
     expect(onParam).toHaveBeenCalledWith("gateway", "queue", undefined);
+  });
+
+  it("checks catalog ranges in canonical units at both bounds", () => {
+    const onParam = renderInspector();
+
+    commit("Handlers", "0");
+    expect(screen.getByRole("alert").textContent).toContain(">= 1");
+    commit("Failure rate", "150%");
+    expect(onParam).not.toHaveBeenCalled();
+
+    commit("Handlers", "1");
+    commit("Failure rate", "100%");
+    expect(onParam).toHaveBeenCalledWith("gateway", "handlers", 1);
+    expect(onParam).toHaveBeenCalledWith("gateway", "failureRate", "100%");
+  });
+
+  it("reports invalid drafts so that saving and running can wait for them", () => {
+    const onValidity = vi.fn();
+    renderInspector({ onValidity });
+
+    fireEvent.change(input("Handlers"), { target: { value: "4.5" } });
+    expect(onValidity).toHaveBeenLastCalledWith("gateway.handlers", false);
+
+    fireEvent.change(input("Handlers"), { target: { value: "5" } });
+    expect(onValidity).toHaveBeenLastCalledWith("gateway.handlers", true);
   });
 
   it("edits a field of an object parameter as a whole object", () => {
@@ -1659,10 +1866,10 @@ Expected: FAIL — нет модуля `./Inspector`.
 `src/inspector/ParamField.tsx`:
 
 ```tsx
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { isObject } from "../workspace/params";
-import { UNITS, isQuantity } from "../workspace/quantities";
+import { canonicalOf } from "../workspace/quantities";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -1674,6 +1881,8 @@ export interface ParamFieldProps {
   isOverridden: (path: string) => boolean;
   /** New value; undefined removes it from the document. */
   onCommit: (value: unknown) => void;
+  /** Whether the draft at [path] is valid; an invalid draft is never committed. */
+  onValidity: (path: string, valid: boolean) => void;
 }
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
@@ -1681,7 +1890,7 @@ export function ParamField(props: ParamFieldProps) {
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
 
-function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit }: ParamFieldProps) {
+function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onValidity }: ParamFieldProps) {
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}>
@@ -1694,6 +1903,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
           path={`${path}.${field.name}`}
           editable={editable}
           isOverridden={isOverridden}
+          onValidity={onValidity}
           onCommit={(next) => {
             const updated = { ...current };
             if (next === undefined) delete updated[field.name];
@@ -1713,20 +1923,38 @@ function parse(descriptor: ParamDescriptor, draft: string): Parsed {
   if (text === "") return descriptor.required ? { ok: false, message: "Required" } : { ok: true, value: undefined };
   switch (descriptor.kind) {
     case "INTEGER":
-      return Number.isSafeInteger(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a whole number" };
+      return Number.isSafeInteger(Number(text)) ? inRange(descriptor, Number(text), Number(text)) : { ok: false, message: "Enter a whole number" };
     case "NUMBER":
-      return Number.isFinite(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a number" };
+      return Number.isFinite(Number(text)) ? inRange(descriptor, Number(text), Number(text)) : { ok: false, message: "Enter a number" };
     case "QUANTITY": {
-      const dimension = descriptor.dimension;
-      if (dimension == null || isQuantity(text, dimension)) return { ok: true, value: text };
-      return { ok: false, message: `Use a value with a unit: ${UNITS[dimension].join(", ")}` };
+      if (descriptor.units.length === 0) return { ok: true, value: text };
+      const canonical = canonicalOf(text, descriptor.units);
+      return canonical === null
+        ? { ok: false, message: `Use a value with a unit: ${descriptor.units.map((unit) => unit.symbol).join(", ")}` }
+        : inRange(descriptor, canonical, text);
     }
     default:
       return { ok: true, value: text };
   }
 }
 
-function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit }: ParamFieldProps) {
+/** Accepts [value] when its [canonical] number lies in the catalog range, which is in canonical units as in the core. */
+function inRange(descriptor: ParamDescriptor, canonical: number, value: unknown): Parsed {
+  const { minimum, exclusiveMinimum, maximum } = descriptor;
+  const below = (minimum != null && canonical < minimum) || (exclusiveMinimum != null && canonical <= exclusiveMinimum);
+  const above = maximum != null && canonical > maximum;
+  if (!below && !above) return { ok: true, value };
+  const unit = descriptor.units[0];
+  const shown = (bound: number) => (unit === undefined ? String(bound) : `${(bound * unit.denominator) / unit.numerator}${unit.symbol}`);
+  const limits = [
+    minimum == null ? null : `>= ${shown(minimum)}`,
+    exclusiveMinimum == null ? null : `> ${shown(exclusiveMinimum)}`,
+    maximum == null ? null : `<= ${shown(maximum)}`,
+  ];
+  return { ok: false, message: `Out of range: ${limits.filter((limit) => limit !== null).join(" and ")}` };
+}
+
+function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onValidity }: ParamFieldProps) {
   const id = useId();
   const shown = value == null ? "" : String(value);
   const [draft, setDraft] = useState(shown);
@@ -1736,6 +1964,22 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
     setDraft(shown);
   }
   const parsed = parse(descriptor, draft);
+  const validityRef = useRef(onValidity);
+
+  useEffect(() => {
+    validityRef.current = onValidity;
+  }, [onValidity]);
+
+  useEffect(() => {
+    validityRef.current(path, parsed.ok);
+  }, [path, parsed.ok]);
+
+  useEffect(
+    () => () => {
+      validityRef.current(path, true);
+    },
+    [path],
+  );
   const overridden = isOverridden(path);
   const fallback = descriptor.default == null ? "" : String(descriptor.default);
   const commit = () => {
@@ -1808,10 +2052,12 @@ export interface InspectorProps {
   editable: boolean;
   overrides: Record<string, unknown>;
   onParam: (id: string, name: string, value: unknown) => void;
+  /** Validity of a field draft by `elementId.path`; a field that unmounts reports itself valid. */
+  onValidity: (key: string, valid: boolean) => void;
 }
 
 /** Context inspector (product vision §5.5): the selected element from the catalog, run settings otherwise. */
-export function Inspector({ catalog, model, experiment, selected, editable, overrides, onParam }: InspectorProps) {
+export function Inspector({ catalog, model, experiment, selected, editable, overrides, onParam, onValidity }: InspectorProps) {
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
@@ -1834,6 +2080,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
               editable={editable}
               isOverridden={(path) => isOverridden(overrides, selected, path)}
               onCommit={(value) => onParam(selected, descriptor.name, value)}
+              onValidity={(path, valid) => onValidity(`${selected}.${path}`, valid)}
             />
           ))}
         </>
@@ -2120,7 +2367,11 @@ export interface TopBarProps {
   experiments: string[];
   experiment: string | null;
   onExperiment: (path: string) => void;
+  /** An experiment is being opened. */
+  loading: boolean;
   dirty: boolean;
+  /** Some field holds a draft that cannot be committed. */
+  invalid: boolean;
   saving: boolean;
   onSave: () => void;
   running: boolean;
@@ -2130,14 +2381,23 @@ export interface TopBarProps {
   healthError: string | null;
 }
 
-/** Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run, job status, backend health. */
+/**
+ * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run, job status, backend health. Switching waits for
+ * opening, saving and running; saving and running wait for valid drafts, and running also for saved changes.
+ */
 export function TopBar(props: TopBarProps) {
-  const { experiments, experiment, onExperiment, dirty, saving, onSave, running, onRun, job, health, healthError } = props;
+  const { experiments, experiment, onExperiment, loading, dirty, invalid, saving, onSave, running, onRun, job, health, healthError } =
+    props;
   return (
     <header className="top-bar">
       <h1>Resilience Lab</h1>
       <span className="top-bar-label">Experiment</span>
-      <select aria-label="Experiment" value={experiment ?? ""} onChange={(event) => onExperiment(event.target.value)}>
+      <select
+        aria-label="Experiment"
+        value={experiment ?? ""}
+        disabled={loading || saving || running}
+        onChange={(event) => onExperiment(event.target.value)}
+      >
         {experiment === null ? <option value="">No experiment</option> : null}
         {experiments.map((path) => (
           <option key={path} value={path}>
@@ -2146,15 +2406,15 @@ export function TopBar(props: TopBarProps) {
         ))}
       </select>
       {dirty ? <span className="dirty-mark">Unsaved changes</span> : null}
-      <button type="button" onClick={onSave} disabled={!dirty || saving}>
+      <button type="button" onClick={onSave} disabled={!dirty || invalid || saving || loading}>
         Save
       </button>
       <button
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || dirty || running}
-        title={dirty ? "Save changes before running" : undefined}
+        disabled={experiment === null || loading || dirty || invalid || running}
+        title={invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined}
       >
         Run
       </button>
@@ -2224,7 +2484,7 @@ git commit -m "feat(web): add top bar, palette and results panels"
 - [ ] **Step 1: `src/App.tsx` целиком**
 
 ```tsx
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Canvas } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
@@ -2238,21 +2498,35 @@ import { applyOverrides } from "./workspace/params";
 import { useWorkspace } from "./workspace/useWorkspace";
 
 /**
- * One-screen layout (product vision §5.5, stage 1 design §6.1). A variant without overrides is the model itself and
- * can be edited; other variant pages show the model with their overrides, read-only in the stage 1 slice.
+ * One-screen layout (product vision §5.5, stage 1 design §6.1). The model page edits the model; a variant page shows the
+ * model with the variant's overrides, read-only in the stage 1 slice even when the variant has none. Results are shown
+ * only for the experiment they were computed for.
  */
 export function App() {
   const workspace = useWorkspace();
   const run = useRun();
   const health = useHealth();
+  /** Active variant page; null, or an ID the open experiment lacks, shows the model page. */
   const [variantId, setVariantId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog } = workspace;
   const variants = loaded?.experiment.variants ?? [];
-  const variant = variants.find((candidate) => candidate.id === variantId) ?? variants[0];
+  const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
-  const editable = Object.keys(overrides).length === 0;
+  const editable = variant === undefined && !workspace.loading;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
+  const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
+
+  const onValidity = useCallback((key: string, valid: boolean) => {
+    setInvalidFields((current) => {
+      if (valid === !current.has(key)) return current;
+      const next = new Set(current);
+      if (valid) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="app">
@@ -2260,19 +2534,22 @@ export function App() {
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
+          if (workspace.dirty && !window.confirm("Discard unsaved changes to the model?")) return;
           setSelected(null);
           setVariantId(null);
           run.reset();
-          void workspace.open(path);
+          void workspace.open(path, true);
         }}
+        loading={workspace.loading}
         dirty={workspace.dirty}
+        invalid={invalidFields.size > 0}
         saving={workspace.saving}
         onSave={() => void workspace.save()}
         running={run.running}
         onRun={() => {
           if (loaded !== null) void run.run(loaded.experimentPath);
         }}
-        job={run.job}
+        job={ownRun ? run.job : null}
         health={health.health}
         healthError={health.error}
       />
@@ -2296,7 +2573,7 @@ export function App() {
             <Canvas model={model} layout={loaded.layout} selected={selected} onSelect={setSelected} />
           )}
         </div>
-        <VariantTabs variants={variants} active={variant?.id ?? ""} onSelect={setVariantId} />
+        <VariantTabs variants={variants} active={variant?.id ?? null} onSelect={setVariantId} />
       </main>
       {model === null || loaded === null || catalog === null ? (
         <aside className="inspector" aria-label="Inspector" />
@@ -2309,9 +2586,14 @@ export function App() {
           editable={editable}
           overrides={overrides}
           onParam={workspace.setParam}
+          onValidity={onValidity}
         />
       )}
-      <ResultsPanel job={run.job} summary={run.summary} problem={run.problem} />
+      <ResultsPanel
+        job={ownRun ? run.job : null}
+        summary={ownRun ? run.summary : null}
+        problem={ownRun ? run.problem : null}
+      />
     </div>
   );
 }
@@ -2671,7 +2953,7 @@ Run: `npm run lint && npm test -- --run && npm run build`
 Expected: PASS. `tsc -b` не проверяет `e2e/`, поэтому старые E2E ещё не мешают сборке.
 
 Run: `npm run dev -- --host 127.0.0.1` при запущенном `./gradlew :apps:server:bootRun` из корня; открыть `http://127.0.0.1:5173`.
-Expected: страница не прокручивается; слева палитра, в центре четыре блока retry storm, справа параметры прогона, внизу вкладки `Baseline` и `No retries` и панель результатов.
+Expected: страница не прокручивается; слева палитра, в центре четыре блока retry storm, справа параметры прогона, внизу вкладки `Model`, `Baseline` и `No retries` и панель результатов.
 
 - [ ] **Step 5: Commit**
 
@@ -2703,7 +2985,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("block-node")).toHaveCount(4);
 });
 
-test("shows a variant page read-only with its overrides", async ({ page }) => {
+test("shows variant pages read-only with their overrides and edits only on the model page", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const call = page.getByTestId("rf__edge-gateway-to-middle");
   await expect(call).toContainText("· 1×");
@@ -2716,6 +2998,10 @@ test("shows a variant page read-only with its overrides", async ({ page }) => {
 
   await page.getByRole("tab", { name: "Baseline" }).click();
   await expect(attempts).toHaveValue("3");
+  await expect(attempts).not.toBeEditable();
+
+  await page.getByRole("tab", { name: "Model" }).click();
+  await expect(attempts).toHaveValue("3");
   await expect(attempts).toBeEditable();
 });
 
@@ -2723,6 +3009,8 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await page.getByTestId("rf__node-gateway").click();
   const handlers = page.getByLabel("Handlers", { exact: true });
   await expect(handlers).toHaveValue("4");
+  await handlers.fill("4.5");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   await handlers.fill("6");
   await handlers.press("Enter");
   await expect(page.getByText("Unsaved changes")).toBeVisible();
@@ -2774,6 +3062,8 @@ git commit -m "test(e2e): cover the stage 1 slice in a real browser"
 - `web` — Vite/React SPA этапа 1: экран без прокрутки, холст React Flow, инспектор параметров из каталога с сохранением модели, страницы вариантов для просмотра, запуск задания и сводка; типы API генерируются из `apps/server/openapi.json`.
 ```
 
+В строке `core` заменить «; модель сценариев MVP со sweep остаётся до перехода web» на «; модель сценариев MVP со sweep остаётся до отдельного плана удаления MVP». В строке `apps:server` заменить « и ручки MVP для нынешнего web» на « и ручки MVP, которые больше не используются и ждут удаления».
+
 Заменить абзац «Первый полный MVP завершён: ...» на:
 
 ```markdown
@@ -2811,9 +3101,10 @@ git commit -m "test(e2e): cover the stage 1 slice in a real browser"
 ```markdown
 Откроется эксперимент retry storm. Выберите блок или связь на схеме, измените
 параметр в инспекторе справа, нажмите `Save`, затем `Run` и дождитесь
-`COMPLETED`: сводка по вариантам появится в панели внизу. Вкладки под схемой
-переключают варианты; на странице варианта с переопределениями параметры
-доступны только для просмотра, переопределённые отмечены.
+`COMPLETED`: сводка по вариантам появится в панели внизу. Модель правится на
+первой вкладке под схемой, `Model`; вкладки вариантов показывают модель с
+переопределениями варианта только для просмотра, переопределённые значения
+отмечены.
 
 Оба порта доступны только на `127.0.0.1`. Backend работает с копией `examples/`
 внутри контейнера: изменения и результаты прогонов пропадают вместе с ним.

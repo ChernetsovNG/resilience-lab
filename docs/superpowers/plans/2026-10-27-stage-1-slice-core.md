@@ -46,6 +46,7 @@
 | `core/src/main/kotlin/resiliencelab/core/results/RunArtifact.kt` | Манифест, сводка, запись артефакта |
 | `core/src/main/kotlin/resiliencelab/core/lab/Lab.kt` | Фасад для сервера и CLI |
 | `examples/retry-storm/*.json` | Пример в новом формате |
+| `.gitignore` | Каталог `.results/` вне git |
 
 Тесты лежат зеркально в `core/src/test/kotlin/resiliencelab/core/<пакет>/`.
 
@@ -54,6 +55,8 @@
 - один тест: `./gradlew :core:test --tests '<полное.имя.Класса>'`
 - форматирование: `./gradlew :core:ktlintFormat`
 - полная проверка модуля: `./gradlew :core:check`
+
+`ktlintFormat` перед каждым коммитом переносит длинные цепочки вызовов в нескольких блоках кода (задачи 7, 8, 14); это ожидаемо, смысл кода не меняется.
 
 ---
 
@@ -120,10 +123,11 @@ class QuantitiesTest {
     }
 
     @Test
-    fun `lists accepted units per dimension`() {
-        assertThat(Quantities.unitsOf(Dimension.DURATION)).containsExactly("ms", "s", "min")
-        assertThat(Quantities.unitsOf(Dimension.RATE)).containsExactly("/ms", "/s", "/min")
-        assertThat(Quantities.unitsOf(Dimension.PROBABILITY)).containsExactly("%")
+    fun `lists accepted units per dimension with their scales`() {
+        assertThat(Quantities.unitsOf(Dimension.DURATION).map { it.symbol }).containsExactly("ms", "s", "min")
+        assertThat(Quantities.unitsOf(Dimension.RATE).map { it.symbol }).containsExactly("/ms", "/s", "/min")
+        assertThat(Quantities.unitsOf(Dimension.RATE)[1]).isEqualTo(QuantityUnit("/s", 1.0, 1_000.0))
+        assertThat(Quantities.unitsOf(Dimension.PROBABILITY)).containsExactly(QuantityUnit("%", 1.0, 100.0))
     }
 }
 ```
@@ -152,25 +156,30 @@ enum class Dimension {
     PROBABILITY,
 }
 
+/**
+ * A unit a document may write: canonical value = written value * [numerator] / [denominator]. The division keeps
+ * results like 120/s == 0.12 exact; the catalog lists units so that UI converts values the same way (ADR 0001).
+ */
+@Serializable
+data class QuantityUnit(
+    val symbol: String,
+    val numerator: Double,
+    val denominator: Double,
+)
+
 /** Parses and prints document quantities such as `250ms`, `2s`, `120/s` and `0.5%` (ADR 0001, item 6). */
 object Quantities {
     private val pattern = Regex("""^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(ms|s|min|/ms|/s|/min|%)$""")
 
-    /** canonical = value * numerator / denominator; the division keeps results like 120/s == 0.12 exact. */
-    private class Scale(
-        val numerator: Double,
-        val denominator: Double,
-    )
-
-    private val scales: Map<Dimension, Map<String, Scale>> =
+    private val units: Map<Dimension, List<QuantityUnit>> =
         mapOf(
-            Dimension.DURATION to linkedMapOf("ms" to Scale(1.0, 1.0), "s" to Scale(1_000.0, 1.0), "min" to Scale(60_000.0, 1.0)),
-            Dimension.RATE to linkedMapOf("/ms" to Scale(1.0, 1.0), "/s" to Scale(1.0, 1_000.0), "/min" to Scale(1.0, 60_000.0)),
-            Dimension.PROBABILITY to linkedMapOf("%" to Scale(1.0, 100.0)),
+            Dimension.DURATION to listOf(QuantityUnit("ms", 1.0, 1.0), QuantityUnit("s", 1_000.0, 1.0), QuantityUnit("min", 60_000.0, 1.0)),
+            Dimension.RATE to listOf(QuantityUnit("/ms", 1.0, 1.0), QuantityUnit("/s", 1.0, 1_000.0), QuantityUnit("/min", 1.0, 60_000.0)),
+            Dimension.PROBABILITY to listOf(QuantityUnit("%", 1.0, 100.0)),
         )
 
     /** Units accepted for [dimension], in display order. */
-    fun unitsOf(dimension: Dimension): List<String> = scales.getValue(dimension).keys.toList()
+    fun unitsOf(dimension: Dimension): List<QuantityUnit> = units.getValue(dimension)
 
     /** Returns the canonical value, or null when [text] is not a finite non-negative quantity of [dimension]. */
     fun parse(
@@ -178,8 +187,8 @@ object Quantities {
         dimension: Dimension,
     ): Double? {
         val match = pattern.matchEntire(text) ?: return null
-        val scale = scales.getValue(dimension)[match.groupValues[2]] ?: return null
-        val value = match.groupValues[1].toDouble() * scale.numerator / scale.denominator
+        val unit = units.getValue(dimension).firstOrNull { it.symbol == match.groupValues[2] } ?: return null
+        val value = match.groupValues[1].toDouble() * unit.numerator / unit.denominator
         return value.takeIf { it.isFinite() }
     }
 
@@ -249,6 +258,10 @@ class Stage1CatalogTest {
         assertThat(params.getValue("handlers").required).isTrue()
         assertThat(params.getValue("handlers").minimum).isEqualTo(1.0)
         assertThat(params.getValue("failureRate").dimension).isEqualTo(Dimension.PROBABILITY)
+        assertThat(params.getValue("failureRate").units).containsExactly(QuantityUnit("%", 1.0, 100.0))
+        assertThat(params.getValue("handlers").units).isEmpty()
+        val mean = params.getValue("processing").fields.first { it.name == "mean" }
+        assertThat(mean.units.map { it.symbol }).containsExactly("ms", "s", "min")
         assertThat(params.getValue("processing").fields.map { it.name }).containsExactly("kind", "mean", "stdDev")
     }
 
@@ -312,8 +325,9 @@ data class ConnectionRule(
 )
 
 /**
- * One parameter of a type. Ranges of [ParamKind.QUANTITY] are in canonical units of [dimension];
- * [default] is used when a document omits the parameter.
+ * One parameter of a type. Ranges of [ParamKind.QUANTITY] are in canonical units of [dimension], and [units] lists the
+ * units a document may write with their scales, so UI checks ranges as the core does; [default] is used when a
+ * document omits the parameter.
  */
 @Serializable
 data class ParamDescriptor(
@@ -324,6 +338,7 @@ data class ParamDescriptor(
     val required: Boolean = false,
     val default: JsonElement? = null,
     val dimension: Dimension? = null,
+    val units: List<QuantityUnit> = emptyList(),
     val minimum: Double? = null,
     val exclusiveMinimum: Double? = null,
     val maximum: Double? = null,
@@ -370,8 +385,12 @@ object Stage1Catalog {
     val catalog: Catalog =
         Catalog(
             schemaVersion = 1,
-            types = listOf(client(), service(), request(), call()),
+            types = listOf(client(), service(), request(), call()).map { type -> type.copy(params = type.params.map(::withUnits)) },
         )
+
+    /** Quantity parameters list the units [Quantities] accepts for their dimension (ADR 0001, items 1 and 6). */
+    private fun withUnits(param: ParamDescriptor): ParamDescriptor =
+        param.copy(units = param.dimension?.let(Quantities::unitsOf).orEmpty(), fields = param.fields.map(::withUnits))
 
     private fun client() =
         TypeDescriptor(
@@ -827,6 +846,24 @@ class DocumentCodecTest {
         assertThat((decodedExperiment as DecodeResult.Ok).value).isEqualTo(experiment)
         assertThat((decodedLayout as DecodeResult.Ok).value).isEqualTo(layout)
     }
+
+    @Test
+    fun `keeps descriptions and notes of documents, blocks and connections`() {
+        val model =
+            ModelFile(
+                schemaVersion = 1,
+                description = "Chain",
+                notes = "Calibrated on staging",
+                blocks = mapOf("a" to BlockInstance(type = "client", description = "Load", notes = "Peak hour")),
+                connections =
+                    listOf(ConnectionInstance(id = "c", type = "request", from = "a", to = "b", description = "Entry", notes = "Direct")),
+            )
+
+        val text = DocumentCodec.encodeModel(model)
+
+        assertThat((DocumentCodec.decodeModel(text, "m.model.json") as DecodeResult.Ok).value).isEqualTo(model)
+        assertThat(text).contains("\"notes\": \"Peak hour\"", "\"notes\": \"Direct\"")
+    }
 }
 ```
 
@@ -854,12 +891,13 @@ data class ModelFile(
     val connections: List<ConnectionInstance> = emptyList(),
 )
 
-/** One block: catalog type and parameter values as written in the document. */
+/** One block: catalog type, parameter values as written in the document and explanations (ADR 0005, item 5). */
 @Serializable
 data class BlockInstance(
     val type: String,
     val params: JsonObject = JsonObject(emptyMap()),
     val description: String? = null,
+    val notes: String? = null,
 )
 
 /** One connection from a source block to a target block. */
@@ -871,6 +909,7 @@ data class ConnectionInstance(
     val to: String,
     val params: JsonObject = JsonObject(emptyMap()),
     val description: String? = null,
+    val notes: String? = null,
 )
 
 /** `*.layout.json`: canvas positions by block path. */
@@ -1125,10 +1164,62 @@ git commit -m "feat(core): add strict document codec with canonical writer"
 
 **Files:**
 - Create: `core/src/main/kotlin/resiliencelab/core/ir/ChainIr.kt`
+- Test: `core/src/test/kotlin/resiliencelab/core/ir/ChainIrTest.kt`
 
-Тестируется через компилятор (Task 7) и движок (Task 9).
+Каждый элемент IR хранит происхождение — документ и указатель JSON (ADR 0002, п. 3); компилятор (Task 7) заполняет его, IR, собранная в коде (тесты, адаптер MVP), получает `Origin.UNSPECIFIED`.
 
-- [ ] **Step 1: Реализация**
+- [ ] **Step 1: Написать падающий тест**
+
+```kotlin
+package resiliencelab.core.ir
+
+import org.assertj.core.api.Assertions.assertThat
+import kotlin.test.Test
+
+class ChainIrTest {
+    private val fixed = Distribution(DistributionShape.FIXED, 1.0)
+    private val chain =
+        ChainIr(
+            client = ClientNode("client", arrivalRatePerMs = 0.1, deadlineMs = 100.0),
+            entry = "a",
+            services = listOf(ServiceNode("a", 1, 0, fixed, 0.0), ServiceNode("b", 1, 0, fixed, 0.0)),
+            calls =
+                listOf(
+                    CallEdge(
+                        path = "a-to-b",
+                        from = "a",
+                        to = "b",
+                        network = fixed,
+                        timeoutMs = 10.0,
+                        attempts = 1,
+                        backoff = Backoff(BackoffKind.NONE, 0.0, 0.0, 2.0),
+                        origin = Origin("m.model.json", "/connections/1"),
+                    ),
+                ),
+            faults = emptyList(),
+            run = RunSettings(replications = 1, warmupMs = 0.0, measurementMs = 100.0, seed = 1, maxRealTimeSeconds = 30),
+        )
+
+    @Test
+    fun `finds the outgoing call of a service`() {
+        assertThat(chain.outgoingCall("a")?.path).isEqualTo("a-to-b")
+        assertThat(chain.outgoingCall("b")).isNull()
+    }
+
+    @Test
+    fun `keeps the origin of compiled elements and marks elements built in code`() {
+        assertThat(chain.calls.single().origin).isEqualTo(Origin("m.model.json", "/connections/1"))
+        assertThat(chain.services.first().origin).isEqualTo(Origin.UNSPECIFIED)
+    }
+}
+```
+
+- [ ] **Step 2: Тест падает**
+
+Run: `./gradlew :core:test --tests 'resiliencelab.core.ir.ChainIrTest'`
+Expected: FAIL — `Unresolved reference: ChainIr`.
+
+- [ ] **Step 3: Реализация**
 
 ```kotlin
 package resiliencelab.core.ir
@@ -1162,11 +1253,23 @@ data class Backoff(
     val multiplier: Double,
 )
 
+/** Where an IR element is defined (ADR 0002, item 3): the document and the JSON pointer in it. */
+data class Origin(
+    val document: String,
+    val pointer: String,
+) {
+    companion object {
+        /** Origin of IR built in code rather than compiled from documents (tests, the MVP adapter). */
+        val UNSPECIFIED = Origin("", "")
+    }
+}
+
 /** Source of original requests. */
 data class ClientNode(
     val path: String,
     val arrivalRatePerMs: Double,
     val deadlineMs: Double,
+    val origin: Origin = Origin.UNSPECIFIED,
 )
 
 /** Blocking service with a bounded FIFO queue. */
@@ -1176,6 +1279,7 @@ data class ServiceNode(
     val queueCapacity: Int,
     val processing: Distribution,
     val failureProbability: Double,
+    val origin: Origin = Origin.UNSPECIFIED,
 )
 
 /** Synchronous call from [from] to [to]. */
@@ -1187,6 +1291,7 @@ data class CallEdge(
     val timeoutMs: Double,
     val attempts: Int,
     val backoff: Backoff,
+    val origin: Origin = Origin.UNSPECIFIED,
 )
 
 /** Degradation of [target] while local processing starts within [fromMs, toMs). */
@@ -1196,6 +1301,7 @@ data class FaultSpan(
     val toMs: Double,
     val processingMultiplier: Double?,
     val failureProbability: Double?,
+    val origin: Origin = Origin.UNSPECIFIED,
 )
 
 /** Replications, measurement window, seed and real-time cap of a run. */
@@ -1223,17 +1329,17 @@ data class ChainIr(
 }
 ```
 
-- [ ] **Step 2: Компиляция**
+- [ ] **Step 4: Тест проходит**
 
-Run: `./gradlew :core:compileKotlin`
-Expected: BUILD SUCCESSFUL.
+Run: `./gradlew :core:test --tests 'resiliencelab.core.ir.ChainIrTest'`
+Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 ./gradlew :core:ktlintFormat
-git add core/src/main/kotlin/resiliencelab/core/ir/ChainIr.kt
-git commit -m "feat(core): add chain intermediate representation"
+git add core/src/main/kotlin/resiliencelab/core/ir/ChainIr.kt core/src/test/kotlin/resiliencelab/core/ir/ChainIrTest.kt
+git commit -m "feat(core): add chain intermediate representation with element origins"
 ```
 
 ---
@@ -1334,6 +1440,28 @@ class ParamReaderTest {
         assertThat(reader.int("attempts")).isNull()
         assertThat(diagnostics.map { it.code }).containsExactly("QUANTITY_INVALID", "PARAM_TYPE", "PARAM_RANGE")
     }
+
+    @Test
+    fun `reports overridden values at their place in the experiment`() {
+        val diagnostics = mutableListOf<Diagnostic>()
+        val overrides =
+            OverrideOrigins(
+                "e.experiment.json",
+                mapOf("attempts" to "/variants/1/overrides/c.attempts", "backoff" to "/variants/1/overrides/c.backoff"),
+            )
+        val params = Json.parseToJsonElement("""{"timeout": "x", "attempts": 0, "backoff": {"kind": "slow"}}""").jsonObject
+        val reader = ParamReader(params, callParams, "m.model.json", "/connections/1/params", "c", diagnostics, overrides)
+
+        reader.quantity("timeout")
+        reader.int("attempts")
+        reader.obj("backoff")!!.choice("kind")
+
+        assertThat(diagnostics.map { it.document to it.pointer }).containsExactly(
+            "m.model.json" to "/connections/1/params/timeout",
+            "e.experiment.json" to "/variants/1/overrides/c.attempts",
+            "e.experiment.json" to "/variants/1/overrides/c.backoff",
+        )
+    }
 }
 ```
 
@@ -1356,9 +1484,24 @@ import kotlinx.serialization.json.intOrNull
 import resiliencelab.core.catalog.ParamDescriptor
 import resiliencelab.core.catalog.Quantities
 
+/** Where overridden values of one element come from: parameter path (`attempts`, `backoff.base`) → experiment pointer. */
+internal class OverrideOrigins(
+    val document: String,
+    private val pointers: Map<String, String>,
+) {
+    /** Pointer of the override that set [parameter] or an object holding it; null when the value comes from the model. */
+    fun pointerOf(parameter: String): String? =
+        pointers.entries.firstOrNull { (path, _) -> parameter == path || parameter.startsWith("$path.") }?.value
+
+    companion object {
+        val NONE = OverrideOrigins("", emptyMap())
+    }
+}
+
 /**
  * Reads document parameters against catalog descriptors. Every null result has a diagnostic, except optional
- * parameters without a default, which are simply absent.
+ * parameters without a default, which are simply absent. A diagnostic about a value set by a variant override points
+ * to that override in the experiment, otherwise to the parameter in the model.
  */
 internal class ParamReader(
     private val params: JsonObject,
@@ -1367,6 +1510,8 @@ internal class ParamReader(
     private val pointer: String,
     private val path: String,
     private val diagnostics: MutableList<Diagnostic>,
+    private val overrides: OverrideOrigins = OverrideOrigins.NONE,
+    private val prefix: String = "",
 ) {
     init {
         params.keys
@@ -1405,7 +1550,8 @@ internal class ParamReader(
                 ?: return fail(
                     "QUANTITY_INVALID",
                     name,
-                    "Parameter '$name' must be a quantity with one of the units ${Quantities.unitsOf(dimension).joinToString()}",
+                    "Parameter '$name' must be a quantity with one of the units " +
+                        Quantities.unitsOf(dimension).joinToString { it.symbol },
                 )
         return value.takeIf { inRange(descriptor, value) }
     }
@@ -1422,7 +1568,8 @@ internal class ParamReader(
         val descriptor = descriptor(name)
         val element = valueOf(descriptor) ?: return null
         val value = element as? JsonObject ?: return fail("PARAM_TYPE", name, "Parameter '$name' must be an object")
-        return ParamReader(value, descriptor.fields, document, JsonPointer.child(pointer, name), path, diagnostics)
+        val childPointer = JsonPointer.child(pointer, name)
+        return ParamReader(value, descriptor.fields, document, childPointer, path, diagnostics, overrides, "$prefix$name.")
     }
 
     /** Reports an error about parameter [name] and returns null. */
@@ -1475,7 +1622,13 @@ internal class ParamReader(
         message: String,
         name: String,
     ) {
-        diagnostics += Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path)
+        val override = overrides.pointerOf(prefix + name)
+        diagnostics +=
+            if (override == null) {
+                Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path)
+            } else {
+                Diagnostic(code, Severity.ERROR, message, overrides.document, override, path)
+            }
     }
 }
 ```
@@ -1513,6 +1666,7 @@ import resiliencelab.core.document.ExperimentFile
 import resiliencelab.core.document.ModelFile
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.Origin
 import kotlin.test.Test
 
 class ModelCompilerTest {
@@ -1578,6 +1732,51 @@ class ModelCompilerTest {
     }
 
     @Test
+    fun `records where every element is defined`() {
+        val chain = compile().experiment!!.variants.first().chain
+
+        assertThat(chain.client.origin).isEqualTo(Origin("m.model.json", "/blocks/client"))
+        assertThat(chain.services.first().origin).isEqualTo(Origin("m.model.json", "/blocks/dependency"))
+        assertThat(chain.calls.single().origin).isEqualTo(Origin("m.model.json", "/connections/1"))
+        assertThat(chain.faults.single().origin).isEqualTo(Origin("e.experiment.json", "/faults/0"))
+    }
+
+    @Test
+    fun `reports invalid override values at their place in the experiment`() {
+        val overrides = "\"gateway-to-dependency.attempts\": 0, \"gateway-to-dependency.backoff.base\": \"x\""
+        val broken = experiment.replace("\"gateway-to-dependency.attempts\": 1", overrides)
+
+        val diagnostics = compile(experimentText = broken).diagnostics
+
+        assertThat(diagnostics.map { Triple(it.code, it.document, it.pointer) }).containsExactlyInAnyOrder(
+            Triple("PARAM_RANGE", "e.experiment.json", "/variants/1/overrides/gateway-to-dependency.attempts"),
+            Triple("QUANTITY_INVALID", "e.experiment.json", "/variants/1/overrides/gateway-to-dependency.backoff.base"),
+        )
+    }
+
+    @Test
+    fun `request connections take no parameters`() {
+        val broken = model.replace("\"to\": \"gateway\"}", "\"to\": \"gateway\", \"params\": {\"attempts\": 3}}")
+
+        val diagnostic = compile(modelText = broken).diagnostics.single()
+
+        assertThat(diagnostic.code).isEqualTo("PARAM_UNKNOWN")
+        assertThat(diagnostic.pointer).isEqualTo("/connections/0/params/attempts")
+    }
+
+    @Test
+    fun `rejects values whose derived quantities are not finite`() {
+        val tinyRate = model.replace("\"rate\": \"120/s\"", "\"rate\": \"1e-320/ms\"")
+        val rate = compile(modelText = tinyRate).diagnostics.single()
+        assertThat(rate.code to rate.pointer).isEqualTo("PARAM_RANGE" to "/blocks/client/params/rate")
+
+        val endless =
+            experiment.replace("\"warmup\": \"0ms\", \"measurement\": \"1s\"", "\"warmup\": \"1e308ms\", \"measurement\": \"1e308ms\"")
+        val window = compile(experimentText = endless).diagnostics.single()
+        assertThat(window.code to window.pointer).isEqualTo("EXECUTION_RANGE" to "/execution/measurement")
+    }
+
+    @Test
     fun `document order does not change the compiled experiment`() {
         val reordered =
             """
@@ -1594,8 +1793,26 @@ class ModelCompilerTest {
             }}
             """.trimIndent()
 
-        assertThat(compile(modelText = reordered).experiment).isEqualTo(compile().experiment)
+        assertThat(compile(modelText = reordered).experiment!!.withoutOrigins()).isEqualTo(compile().experiment!!.withoutOrigins())
     }
+
+    /** Pointers of connections depend on their array position; everything the engine reads must not. */
+    private fun CompiledExperiment.withoutOrigins(): CompiledExperiment =
+        copy(
+            variants =
+                variants.map { variant ->
+                    val chain = variant.chain
+                    variant.copy(
+                        chain =
+                            chain.copy(
+                                client = chain.client.copy(origin = Origin.UNSPECIFIED),
+                                services = chain.services.map { it.copy(origin = Origin.UNSPECIFIED) },
+                                calls = chain.calls.map { it.copy(origin = Origin.UNSPECIFIED) },
+                                faults = chain.faults.map { it.copy(origin = Origin.UNSPECIFIED) },
+                            ),
+                    )
+                },
+        )
 
     @Test
     fun `reports unknown types with pointers`() {
@@ -1671,6 +1888,17 @@ class ModelCompilerTest {
     }
 
     @Test
+    fun `applies an object override before overrides of its fields whatever their order`() {
+        val overlapping = "\"gateway.processing.mean\": \"3ms\", \"gateway.processing\": {\"kind\": \"fixed\", \"mean\": \"2ms\"}"
+        val nested = experiment.replace("\"gateway-to-dependency.attempts\": 1", overlapping)
+
+        val variant = compile(experimentText = nested).experiment!!.variants.last()
+
+        val gateway = variant.chain.services.first { it.path == "gateway" }
+        assertThat(gateway.processing.meanMs).isEqualTo(3.0)
+    }
+
+    @Test
     fun `checks faults and execution settings`() {
         val broken =
             experiment
@@ -1742,6 +1970,7 @@ import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import kotlin.math.ceil
@@ -1790,7 +2019,7 @@ class ModelCompiler(
             } else {
                 experiment.variants.mapIndexedNotNull { index, variant ->
                     val patched = applyOverrides(model, variant, index, experimentDocument, sink) ?: return@mapIndexedNotNull null
-                    val parts = buildChain(patched, modelDocument, sink) ?: return@mapIndexedNotNull null
+                    val parts = buildChain(patched.model, modelDocument, patched.origins, sink) ?: return@mapIndexedNotNull null
                     run?.let {
                         CompiledVariant(
                             id = variant.id,
@@ -1802,8 +2031,14 @@ class ModelCompiler(
             }
         val diagnostics = sink.items.distinct()
         val failed = diagnostics.any { it.severity == Severity.ERROR } || run == null
-        return CompileResult(if (failed) null else CompiledExperiment(variants, run!!), diagnostics)
+        return CompileResult(if (failed) null else CompiledExperiment(variants, run), diagnostics)
     }
+
+    /** A variant's model and, per element, where its overridden values come from. */
+    private class Patched(
+        val model: ModelFile,
+        val origins: Map<String, OverrideOrigins>,
+    )
 
     private class ChainParts(
         val client: ClientNode,
@@ -1863,15 +2098,17 @@ class ModelCompiler(
         return sink.errorCount() == before
     }
 
+    /** Applies overrides in key order, so an object comes before its fields whatever the document order; web does the same. */
     private fun applyOverrides(
         model: ModelFile,
         variant: Variant,
         index: Int,
         document: String,
         sink: Diagnostics,
-    ): ModelFile? {
+    ): Patched? {
         var blocks = model.blocks
         val connections = model.connections.toMutableList()
+        val pointers = mutableMapOf<String, MutableMap<String, String>>()
         var ok = true
         variant.overrides.toSortedMap().forEach { (path, value) ->
             val segments = path.split('.')
@@ -1898,8 +2135,11 @@ class ModelCompiler(
                 val connection = connections[connectionIndex]
                 connections[connectionIndex] = connection.copy(params = setIn(connection.params, descriptors, paramPath, value))
             }
+            pointers.getOrPut(target) { mutableMapOf() }[paramPath.joinToString(".")] =
+                JsonPointer.of("variants", index, "overrides", path)
         }
-        return if (ok) model.copy(blocks = blocks, connections = connections) else null
+        if (!ok) return null
+        return Patched(model.copy(blocks = blocks, connections = connections), pointers.mapValues { OverrideOrigins(document, it.value) })
     }
 
     private fun resolves(
@@ -1926,17 +2166,22 @@ class ModelCompiler(
     private fun buildChain(
         model: ModelFile,
         document: String,
+        origins: Map<String, OverrideOrigins>,
         sink: Diagnostics,
     ): ChainParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
         val services = model.blocks.filterValues { it.type == "service" }.toSortedMap()
-        val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, sink) }
-        val serviceNodes = services.map { (id, block) -> readService(id, block.params, document, sink) }
+        val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink) }
+        val serviceNodes = services.map { (id, block) -> readService(id, block.params, document, origins[id], sink) }
         val indexed = model.connections.withIndex()
         val requests = indexed.filter { it.value.type == "request" }
+        requests.forEach { (index, connection) ->
+            // A request has no parameters; reading them against the catalog reports any that are written.
+            reader("request", connection.params, document, JsonPointer.of("connections", index, "params"), connection.id, sink)
+        }
         val calls = indexed.filter { it.value.type == "call" }.sortedBy { it.value.id }
-        val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, sink) }
+        val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, origins[connection.id], sink) }
         if (clients.size != 1) {
             sink.error("TOPOLOGY_CLIENT", "The model must contain exactly one client block; found ${clients.size}", document, "/blocks")
         }
@@ -1984,21 +2229,27 @@ class ModelCompiler(
         id: String,
         params: JsonObject,
         document: String,
+        overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ClientNode? {
-        val reader = reader("client", params, document, JsonPointer.of("blocks", id, "params"), id, sink)
+        val reader = reader("client", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
         val rate = reader.quantity("rate")
         val deadline = reader.quantity("deadline")
-        return if (rate == null || deadline == null) null else ClientNode(id, rate, deadline)
+        if (rate != null && !(1.0 / rate).isFinite()) {
+            return reader.fail("PARAM_RANGE", "rate", "Arrival rate is too small: the mean interval between requests is not finite")
+        }
+        if (rate == null || deadline == null) return null
+        return ClientNode(id, rate, deadline, Origin(document, JsonPointer.of("blocks", id)))
     }
 
     private fun readService(
         id: String,
         params: JsonObject,
         document: String,
+        overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ServiceNode? {
-        val reader = reader("service", params, document, JsonPointer.of("blocks", id, "params"), id, sink)
+        val reader = reader("service", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
         val handlers = reader.int("handlers")
         val queue = reader.int("queue")
         val processing = reader.obj("processing")?.let(::distribution)
@@ -2006,7 +2257,7 @@ class ModelCompiler(
         return if (handlers == null || queue == null || processing == null || failure == null) {
             null
         } else {
-            ServiceNode(id, handlers, queue, processing, failure)
+            ServiceNode(id, handlers, queue, processing, failure, Origin(document, JsonPointer.of("blocks", id)))
         }
     }
 
@@ -2014,10 +2265,11 @@ class ModelCompiler(
         index: Int,
         connection: ConnectionInstance,
         document: String,
+        overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): CallEdge? {
-        val reader =
-            reader("call", connection.params, document, JsonPointer.of("connections", index, "params"), connection.id, sink)
+        val pointer = JsonPointer.of("connections", index, "params")
+        val reader = reader("call", connection.params, document, pointer, connection.id, sink, overrides)
         val network = reader.obj("network")?.let(::distribution)
         val timeout = reader.quantity("timeout")
         val attempts = reader.int("attempts")
@@ -2025,7 +2277,8 @@ class ModelCompiler(
         return if (network == null || timeout == null || attempts == null || backoff == null) {
             null
         } else {
-            CallEdge(connection.id, connection.from, connection.to, network, timeout, attempts, backoff)
+            val origin = Origin(document, JsonPointer.of("connections", index))
+            CallEdge(connection.id, connection.from, connection.to, network, timeout, attempts, backoff, origin)
         }
     }
 
@@ -2074,7 +2327,8 @@ class ModelCompiler(
         pointer: String,
         path: String,
         sink: Diagnostics,
-    ) = ParamReader(params, catalog.type(type)!!.params, document, pointer, path, sink.items)
+        overrides: OverrideOrigins? = null,
+    ) = ParamReader(params, catalog.type(type)!!.params, document, pointer, path, sink.items, overrides ?: OverrideOrigins.NONE)
 
     private fun runSettings(
         experiment: ExperimentFile,
@@ -2091,6 +2345,9 @@ class ModelCompiler(
         val maxRealTime = duration(execution.maxRealTime, "/execution/maxRealTime", document, sink, allowZero = false)
         if (execution.seed !in 0L..MAX_SEED) {
             sink.error("SEED_RANGE", "seed must be an integer from 0 to $MAX_SEED", document, "/execution/seed")
+        }
+        if (warmup != null && measurement != null && !(warmup + measurement).isFinite()) {
+            sink.error("EXECUTION_RANGE", "warmup plus measurement must be finite", document, "/execution/measurement")
         }
         if (sink.errorCount() > before || warmup == null || measurement == null || maxRealTime == null) return null
         return RunSettings(execution.replications, warmup, measurement, execution.seed, ceil(maxRealTime / 1_000.0).toLong())
@@ -2141,7 +2398,11 @@ class ModelCompiler(
                 if (multiplier == null && fault.failureRate == null) {
                     sink.error("FAULT_EMPTY", "Fault must set processingMultiplier or failureRate", document, pointer, fault.target)
                 }
-                if (sink.errorCount() > before) null else FaultSpan(fault.target, from!!, to!!, multiplier, failure)
+                if (sink.errorCount() > before) {
+                    null
+                } else {
+                    FaultSpan(fault.target, from!!, to!!, multiplier, failure, Origin(document, pointer))
+                }
             }
         spans.groupBy { it.target }.forEach { (target, list) ->
             val overlap = list.sortedBy { it.fromMs }.zipWithNext().any { (first, second) -> second.fromMs < first.toMs }
@@ -2246,7 +2507,7 @@ class PathStreamsTest {
     }
 
     @Test
-    fun `same key gives the same sequence in separately opened sources; other roles differ`() {
+    fun `same key gives the same sequence in separately opened sources and other roles differ`() {
         val plan = StreamPlan(listOf(key, key.copy(role = "outcome")))
         val first = PathStreamSource(plan, seed = 42, replication = 0).stream("system/api", StreamRole.PROCESSING)
         val second = PathStreamSource(plan, seed = 42, replication = 0).stream("system/api", StreamRole.PROCESSING)
@@ -2275,7 +2536,7 @@ class PathStreamsTest {
     }
 
     @Test
-    fun `different keys sharing an address stop the plan; identical keys are allowed`() {
+    fun `different keys sharing an address stop the plan but identical keys are allowed`() {
         assertThatThrownBy { StreamPlan(listOf(key, key.copy(role = "outcome"))) { 7L } }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("collision")
@@ -3038,7 +3299,7 @@ import resiliencelab.core.scenario.Scenario
 import kotlin.time.Duration.Companion.seconds
 ```
 
-Заменить заголовок класса и поля до `var activeInvocations` (от `class ReliabilityModel(` до закрывающей скобки `associateBy { it.serviceId }` включительно) на:
+В KDoc класса заменить `for one scenario.` на `for one chain of the IR.`. Заменить заголовок класса и поля до `var activeInvocations` (от `class ReliabilityModel(` до закрывающей скобки `associateBy { it.serviceId }` включительно) на:
 
 ```kotlin
 class ReliabilityModel(
@@ -3121,7 +3382,9 @@ class ReliabilityModel(
         runtimes.values.forEach { it.resetFaults() }
 ```
 
-и блок от `val degradation = scenario.degradation` до конца `if (degradation != null) { ... }` на:
+Дальше в `initialize()` имена `measurementStartMs` и `measurementEndMs` означают одноимённые свойства класса из нового заголовка: значения те же, правка вызовов `schedule(...)` не нужна.
+
+И блок от `val degradation = scenario.degradation` до конца `if (degradation != null) { ... }` на:
 
 ```kotlin
         chain.faults.forEach { fault ->
@@ -3223,6 +3486,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CompiledVariant
+import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -3233,6 +3497,9 @@ import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import java.util.Collections
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.test.Test
 
 class ExperimentExecutorTest {
@@ -3276,6 +3543,7 @@ class ExperimentExecutorTest {
 
         assertThat(parallel).isEqualTo(sequential)
         assertThat(sequential.variants.map { it.id }).containsExactly("baseline", "single")
+        assertThat(sequential.variants.map { it.label }).containsExactly("Baseline", "Single")
         assertThat(sequential.variants.first().replications).hasSize(3)
     }
 
@@ -3290,14 +3558,38 @@ class ExperimentExecutorTest {
     }
 
     @Test
-    fun `reports progress for every task`() {
+    fun `reports progress for every task in increasing order`() {
         val progress = Collections.synchronizedList(mutableListOf<Pair<Int, Int>>())
 
         ExperimentExecutor(workers = 3).run(experiment) { completed, total -> progress += completed to total }
 
-        assertThat(progress).hasSize(6)
-        assertThat(progress.map { it.second }.toSet()).containsExactly(6)
-        assertThat(progress.map { it.first }.sorted()).containsExactly(1, 2, 3, 4, 5, 6)
+        assertThat(progress).containsExactly(1 to 6, 2 to 6, 3 to 6, 4 to 6, 5 to 6, 6 to 6)
+    }
+
+    @Test
+    fun `concurrent runs of one executor share its workers`() {
+        val active = AtomicInteger()
+        val peak = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                peak.accumulateAndGet(active.incrementAndGet()) { a, b -> maxOf(a, b) }
+                Thread.sleep(20)
+                active.decrementAndGet()
+                ReplicationResult(emptyList(), emptyList(), emptyList(), emptyList(), 0, 0, 0, emptyMap())
+            }
+
+        val runs = (1..2).map { thread { executor.run(experiment) } }
+        runs.forEach { it.join() }
+
+        assertThat(peak.get()).isEqualTo(1)
+    }
+
+    @Test
+    fun `a closed executor accepts no runs`() {
+        val executor = ExperimentExecutor(workers = 1)
+        executor.close()
+
+        assertThatThrownBy { executor.run(experiment) }.isInstanceOf(RejectedExecutionException::class.java)
     }
 
     @Test
@@ -3331,8 +3623,8 @@ import resiliencelab.core.simulation.ReliabilityModel
 import resiliencelab.core.simulation.StreamPlan
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 
 /** Replications of one variant and their aggregate. */
 data class VariantRun(
@@ -3348,19 +3640,23 @@ data class ExperimentRun(
 )
 
 /**
- * Runs every (variant, replication) task on a bounded pool, each in a fresh KSL model with path-based streams
- * (ADR 0006, ADR 0009). The stream plan of all tasks is checked for collisions before any model runs, so results
- * do not depend on the number of workers or on the order of task completion.
+ * Runs every (variant, replication) task in a fresh KSL model with path-based streams (ADR 0006). All runs of one
+ * executor share its [workers] threads (ADR 0009; interleaving tasks of different jobs is a later step). The stream
+ * plan of all tasks is checked for collisions before any model runs, so results do not depend on the number of workers
+ * or on the order of task completion. Worker threads are daemons; [close] stops them.
  */
 class ExperimentExecutor internal constructor(
     private val workers: Int,
     private val replicate: (ChainIr, StreamPlan, Long, Int) -> ReplicationResult,
-) {
+) : AutoCloseable {
     constructor(workers: Int = defaultWorkers()) : this(workers, ::runReplication)
 
     init {
         require(workers >= 1) { "workers must be at least 1" }
     }
+
+    private val pool: ExecutorService =
+        Executors.newFixedThreadPool(workers) { task -> Thread(task, "experiment-task").apply { isDaemon = true } }
 
     fun run(
         experiment: CompiledExperiment,
@@ -3373,27 +3669,27 @@ class ExperimentExecutor internal constructor(
             )
         val tasks = experiment.variants.indices.flatMap { variant -> (0 until replications).map { variant to it } }
         val results = Array(experiment.variants.size) { arrayOfNulls<ReplicationResult>(replications) }
-        val completed = AtomicInteger()
-        val pool = Executors.newFixedThreadPool(minOf(workers, tasks.size.coerceAtLeast(1)))
+        val progress = Progress(tasks.size, onProgress)
+        val futures =
+            tasks.map { (variant, replication) ->
+                pool.submit(
+                    Callable {
+                        val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                        synchronized(results) { results[variant][replication] = result }
+                        progress.completeOne()
+                    },
+                )
+            }
         try {
-            tasks
-                .map { (variant, replication) ->
-                    pool.submit(
-                        Callable {
-                            val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
-                            synchronized(results) { results[variant][replication] = result }
-                            onProgress(completed.incrementAndGet(), tasks.size)
-                        },
-                    )
-                }.forEach { future ->
-                    try {
-                        future.get()
-                    } catch (exception: ExecutionException) {
-                        throw exception.cause ?: exception
-                    }
+            futures.forEach { future ->
+                try {
+                    future.get()
+                } catch (exception: ExecutionException) {
+                    throw exception.cause ?: exception
                 }
+            }
         } finally {
-            pool.shutdownNow()
+            futures.forEach { it.cancel(true) }
         }
         return ExperimentRun(
             experiment.variants.mapIndexed { index, variant ->
@@ -3403,9 +3699,28 @@ class ExperimentExecutor internal constructor(
         )
     }
 
+    /** Stops the worker threads; tasks still running are interrupted. */
+    override fun close() {
+        pool.shutdownNow()
+    }
+
     companion object {
         /** All cores but one, so the server stays responsive (ADR 0009). */
         fun defaultWorkers(): Int = maxOf(1, Runtime.getRuntime().availableProcessors() - 1)
+    }
+}
+
+/** Finished tasks of one run; the count and its notification change together, so reported counts only grow. */
+private class Progress(
+    private val total: Int,
+    private val onProgress: (Int, Int) -> Unit,
+) {
+    private var completed = 0
+
+    @Synchronized
+    fun completeOne() {
+        completed += 1
+        onProgress(completed, total)
     }
 }
 
@@ -3449,12 +3764,20 @@ package resiliencelab.core.workspace
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
+import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.test.Test
 
 class FileWorkspaceTest {
-    private val root = Files.createTempDirectory("workspace-test")
-    private val workspace = FileWorkspace(root)
+    @TempDir
+    lateinit var root: Path
+
+    private val workspace by lazy { FileWorkspace(root) }
 
     @Test
     fun `writes, reads and versions documents`() {
@@ -3491,10 +3814,53 @@ class FileWorkspaceTest {
 
     @Test
     fun `rejects paths that leave the workspace and missing documents`() {
-        listOf("../x.json", "/abs.json", "a/../../x.json", "", "a\\b.json").forEach { path ->
+        listOf("../x.json", "/abs.json", "a/../../x.json", "", "a\\b.json", "\u0000.layout.json").forEach { path ->
             assertThatThrownBy { workspace.read(path) }.describedAs(path).isInstanceOf(InvalidDocumentPathException::class.java)
         }
         assertThatThrownBy { workspace.read("missing.json") }.isInstanceOf(DocumentNotFoundException::class.java)
+    }
+
+    @Test
+    fun `rejects paths that escape through symbolic links`(
+        @TempDir outside: Path,
+    ) {
+        Files.writeString(outside.resolve("outside.layout.json"), "{}\n")
+        Files.createSymbolicLink(root.resolve("external"), outside)
+
+        assertThatThrownBy { workspace.read("external/outside.layout.json") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThatThrownBy { workspace.write("external/outside.layout.json", "x\n") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThatThrownBy { workspace.create("external/new.layout.json", "x\n") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThat(Files.readString(outside.resolve("outside.layout.json"))).isEqualTo("{}\n")
+        assertThat(workspace.list()).isEmpty()
+    }
+
+    @Test
+    fun `creates a document once even under concurrent requests`() {
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        val attempts =
+            (1..2).map { n ->
+                pool.submit(
+                    Callable {
+                        start.await()
+                        runCatching { workspace.create("race.layout.json", "$n\n") }
+                    },
+                )
+            }
+        start.countDown()
+        val results = attempts.map { it.get() }
+        pool.shutdown()
+
+        assertThat(results.count { it.isSuccess }).isEqualTo(1)
+        assertThat(results.single { it.isFailure }.exceptionOrNull()).isInstanceOf(DocumentExistsException::class.java)
+        assertThat(workspace.read("race.layout.json").version).isEqualTo(results.single { it.isSuccess }.getOrThrow())
+    }
+
+    @Test
+    fun `rejects documents that are not UTF-8`() {
+        Files.write(root.resolve("broken.model.json"), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        assertThatThrownBy { workspace.read("broken.model.json") }.isInstanceOf(IOException::class.java)
     }
 }
 ```
@@ -3510,12 +3876,13 @@ Expected: FAIL — `Unresolved reference: FileWorkspace`.
 package resiliencelab.core.workspace
 
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.security.MessageDigest
 import kotlin.io.path.isRegularFile
-import kotlin.io.path.readText
 
 /** Document text with its version — the SHA-256 of its UTF-8 bytes. */
 data class VersionedDocument(
@@ -3537,6 +3904,10 @@ class VersionConflictException(
 class InvalidDocumentPathException(
     path: String,
 ) : IllegalArgumentException("Path '$path' is not a relative path inside the workspace")
+
+class DocumentExistsException(
+    path: String,
+) : RuntimeException("Document '$path' already exists")
 
 /** Versions of document text. */
 object DocumentVersion {
@@ -3565,18 +3936,31 @@ interface Workspace {
         text: String,
         expectedVersion: String? = null,
     ): String
+
+    /**
+     * Writes a new document and returns its version. Throws [DocumentExistsException] when the document exists;
+     * the check and the write are one atomic step, so of two concurrent creations exactly one succeeds.
+     */
+    fun create(
+        path: String,
+        text: String,
+    ): String
 }
 
-/** Workspace in a directory, usually a git repository. */
+/**
+ * Workspace in a directory, usually a git repository. Paths may not leave the directory, also through symbolic links;
+ * listings skip symbolic links.
+ */
 class FileWorkspace(
     root: Path,
 ) : Workspace {
     private val root: Path = root.toAbsolutePath().normalize()
+    private val realRoot: Path = this.root.toRealPath()
 
     override fun list(): List<String> =
         Files.walk(root).use { paths ->
             paths
-                .filter { it.isRegularFile() && it.fileName.toString().endsWith(".json") }
+                .filter { it.isRegularFile(NOFOLLOW_LINKS) && it.fileName.toString().endsWith(".json") }
                 .map { root.relativize(it) }
                 .filter { relative -> relative.none { it.toString().startsWith(".") } }
                 .map { it.joinToString("/") }
@@ -3587,7 +3971,7 @@ class FileWorkspace(
     override fun read(path: String): VersionedDocument {
         val file = resolve(path)
         if (!file.isRegularFile()) throw DocumentNotFoundException(path)
-        val text = file.readText()
+        val text = Files.readString(file)
         return VersionedDocument(path, text, DocumentVersion.of(text))
     }
 
@@ -3601,9 +3985,26 @@ class FileWorkspace(
     ): String {
         val file = resolve(path)
         if (expectedVersion != null) {
-            val current = if (file.isRegularFile()) DocumentVersion.of(file.readText()) else null
+            val current = if (file.isRegularFile()) DocumentVersion.of(Files.readString(file)) else null
             if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
         }
+        return store(file, text)
+    }
+
+    @Synchronized
+    override fun create(
+        path: String,
+        text: String,
+    ): String {
+        val file = resolve(path)
+        if (Files.exists(file, NOFOLLOW_LINKS)) throw DocumentExistsException(path)
+        return store(file, text)
+    }
+
+    private fun store(
+        file: Path,
+        text: String,
+    ): String {
         Files.createDirectories(file.parent)
         val temporary = Files.createTempFile(file.parent, ".write-", ".tmp")
         Files.writeString(temporary, text)
@@ -3611,10 +4012,23 @@ class FileWorkspace(
         return DocumentVersion.of(text)
     }
 
+    /**
+     * Maps a workspace path to a file inside the root. The deepest existing component of the path must resolve inside
+     * the real root, so a symbolic link cannot lead reads or writes outside the workspace.
+     */
     private fun resolve(path: String): Path {
         if (path.isBlank() || path.startsWith("/") || path.contains('\\')) throw InvalidDocumentPathException(path)
-        val file = root.resolve(path).normalize()
+        val file =
+            try {
+                root.resolve(path).normalize()
+            } catch (exception: InvalidPathException) {
+                throw InvalidDocumentPathException(path)
+            }
         if (!file.startsWith(root) || file == root) throw InvalidDocumentPathException(path)
+        var existing = file
+        while (!Files.exists(existing, NOFOLLOW_LINKS)) existing = existing.parent
+        val real = runCatching { existing.toRealPath() }.getOrNull()
+        if (real == null || !real.startsWith(realRoot)) throw InvalidDocumentPathException(path)
         return file
     }
 }
@@ -3639,7 +4053,10 @@ git commit -m "feat(core): add file workspace with document versions"
 
 **Files:**
 - Create: `core/src/main/kotlin/resiliencelab/core/results/RunArtifact.kt`
+- Modify: `.gitignore`
 - Test: `core/src/test/kotlin/resiliencelab/core/results/RunArtifactTest.kt`
+
+Прогоны пишутся в `.results/` рабочей области, а этот каталог не попадает в git (ADR 0008, п. 9): в конец `.gitignore` добавить строку `.results/`.
 
 - [ ] **Step 1: Написать падающий тест**
 
@@ -3647,11 +4064,13 @@ git commit -m "feat(core): add file workspace with document versions"
 package resiliencelab.core.results
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySummary
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
-import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
 class RunArtifactTest {
@@ -3663,8 +4082,21 @@ class RunArtifactTest {
     }
 
     @Test
-    fun `writes canonical summary, then the manifest with the summary checksum`() {
-        val workspace = FileWorkspace(Files.createTempDirectory("artifact-test"))
+    fun `rejects run ids and experiment names that leave the results directory`() {
+        listOf("../..", "..", ".", "a/b", "", ".hidden").forEach { runId ->
+            assertThatThrownBy { ResultsLayout.runDirectory("e.experiment.json", runId) }
+                .describedAs(runId)
+                .isInstanceOf(IllegalArgumentException::class.java)
+        }
+        assertThatThrownBy { ResultsLayout.runDirectory("..experiment.json", "run-1") }
+            .isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `writes canonical summary, then the manifest with the summary checksum`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
         val aggregate = AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap())
         val summary = RunSummary(1, "e.experiment.json", listOf(VariantSummary("baseline", "Baseline", 2, aggregate)))
         val manifest =
@@ -3752,13 +4184,23 @@ data class RunSummary(
     val variants: List<VariantSummary>,
 )
 
-/** Workspace locations of run artifacts. */
+/** Workspace locations of run artifacts (ADR 0008, item 1). */
 object ResultsLayout {
-    /** `.results/<experiment name without .experiment.json>/<runId>`. */
+    private val segment = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+    /**
+     * `.results/<experiment name without .experiment.json>/<runId>`. Both parts must be single plain path segments, so
+     * an artifact can never be written outside `.results/`.
+     */
     fun runDirectory(
         experimentPath: String,
         runId: String,
-    ): String = ".results/${experimentPath.substringAfterLast('/').removeSuffix(".experiment.json")}/$runId"
+    ): String {
+        val name = experimentPath.substringAfterLast('/').removeSuffix(".experiment.json")
+        require(segment.matches(name)) { "Experiment name '$name' cannot name a results directory" }
+        require(segment.matches(runId)) { "Run id '$runId' must match ${segment.pattern}" }
+        return ".results/$name/$runId"
+    }
 }
 
 /** Writes the artifact; the manifest goes last so that its presence marks a finished run. */
@@ -3788,7 +4230,7 @@ Expected: PASS.
 
 ```bash
 ./gradlew :core:ktlintFormat
-git add core/src/main/kotlin/resiliencelab/core/results core/src/test/kotlin/resiliencelab/core/results
+git add .gitignore core/src/main/kotlin/resiliencelab/core/results core/src/test/kotlin/resiliencelab/core/results
 git commit -m "feat(core): write run manifest and summary artifacts"
 ```
 
@@ -4026,6 +4468,7 @@ package resiliencelab.core.lab
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
@@ -4038,8 +4481,11 @@ class LabTest {
     private val experiment = "retry-storm/retry-storm.experiment.json"
     private val model = "retry-storm/retry-storm.model.json"
 
+    @TempDir
+    lateinit var temp: Path
+
     private fun exampleWorkspace(): Path {
-        val target = Files.createTempDirectory("lab-test")
+        val target = Files.createTempDirectory(temp, "lab-test")
         val source = Path.of("../examples")
         Files.walk(source.resolve("retry-storm")).use { paths ->
             paths.filter { Files.isRegularFile(it) }.forEach { file ->
@@ -4060,7 +4506,7 @@ class LabTest {
     }
 
     @Test
-    fun `reports missing documents and broken references`() {
+    fun `reports missing and unreadable documents and broken references`() {
         val root = exampleWorkspace()
         val lab = Lab(FileWorkspace(root))
 
@@ -4078,6 +4524,39 @@ class LabTest {
         Files.writeString(experimentFile, original)
         Files.writeString(root.resolve(model), "{")
         assertThat(lab.validate(experiment).diagnostics.single().code).isEqualTo("JSON_SYNTAX")
+
+        Files.write(root.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+        assertThat(lab.validate(experiment).diagnostics.single().code).isEqualTo("DOCUMENT_UNREADABLE")
+    }
+
+    @Test
+    fun `checks the layout reference and the layout document`() {
+        val root = exampleWorkspace()
+        val lab = Lab(FileWorkspace(root))
+        val experimentFile = root.resolve(experiment)
+        val original = Files.readString(experimentFile)
+
+        Files.writeString(experimentFile, original.replace("retry-storm.layout.json", "https://example.invalid/layout.json"))
+        val remote = lab.validate(experiment).diagnostics.single()
+        assertThat(remote.code to remote.pointer).isEqualTo("LAYOUT_REF" to "/layoutRef")
+
+        Files.writeString(experimentFile, original.replace("retry-storm.layout.json", "gone.layout.json"))
+        assertThat(lab.validate(experiment).diagnostics.single().code).isEqualTo("LAYOUT_REF")
+
+        Files.writeString(experimentFile, original)
+        Files.writeString(root.resolve("retry-storm/retry-storm.layout.json"), "{")
+        val broken = lab.validate(experiment)
+        assertThat(broken.valid).isFalse()
+        assertThat(broken.diagnostics.single().code).isEqualTo("JSON_SYNTAX")
+    }
+
+    @Test
+    fun `refuses run ids that would leave the results directory before computing`() {
+        val root = exampleWorkspace()
+
+        assertThatThrownBy { Lab(FileWorkspace(root)).run(experiment, "../..") }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThat(root.resolve(".results")).doesNotExist()
+        assertThat(root.resolve("summary.json")).doesNotExist()
     }
 
     @Test
@@ -4097,6 +4576,9 @@ class LabTest {
 
         assertThat(outcome.runDirectory).isEqualTo(".results/retry-storm/run-1")
         assertThat(outcome.summary.variants.map { it.id }).containsExactly("baseline", "no-retries")
+        assertThat(outcome.summary.variants.map { it.label }).containsExactly("Baseline", "No retries")
+        val writtenSummary = Files.readString(sequentialRoot.resolve(".results/retry-storm/run-1/summary.json"))
+        assertThat(writtenSummary).contains("\"label\": \"No retries\"")
         assertThat(outcome.manifest.documents.keys).containsExactly(experiment, model)
         listOf("summary.json", "manifest.json").forEach { file ->
             val relative = ".results/retry-storm/run-1/$file"
@@ -4164,6 +4646,7 @@ import resiliencelab.core.simulation.PathStreams
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
+import java.io.IOException
 
 /** Diagnostics of one experiment. */
 data class ValidationReport(
@@ -4199,10 +4682,10 @@ class Lab(
         runId: String,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): RunOutcome {
+        val runDirectory = ResultsLayout.runDirectory(experimentPath, runId)
         val loaded = load(experimentPath)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
         val result = executor.run(compiled, onProgress)
-        val runDirectory = ResultsLayout.runDirectory(experimentPath, runId)
         val summary =
             RunSummary(
                 schemaVersion = 1,
@@ -4232,7 +4715,14 @@ class Lab(
         val versions: Map<String, String>,
     )
 
-    private fun load(experimentPath: String): Loaded {
+    private fun load(experimentPath: String): Loaded =
+        try {
+            loadDocuments(experimentPath)
+        } catch (exception: UnreadableDocumentException) {
+            failed(exception.diagnostic)
+        }
+
+    private fun loadDocuments(experimentPath: String): Loaded {
         val experimentDocument =
             read(experimentPath)
                 ?: return failed(
@@ -4261,18 +4751,50 @@ class Lab(
                 is DecodeResult.Failed -> return Loaded(null, decoded.diagnostics, emptyMap())
             }
         val result = compiler.compile(model, modelDocument.path, experiment, experimentPath)
+        val layout = experiment.layoutRef?.let { checkLayout(experimentPath, it) }.orEmpty()
         val versions = sortedMapOf(experimentPath to experimentDocument.version, modelDocument.path to modelDocument.version)
-        return Loaded(result.experiment, result.diagnostics, versions)
+        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions)
     }
 
+    /** The optional layout must be a readable layout document inside the workspace (ADR 0005, item 3). */
+    private fun checkLayout(
+        experimentPath: String,
+        layoutRef: String,
+    ): List<Diagnostic> {
+        val layoutDocument =
+            resolveRef(experimentPath, layoutRef)?.let(::read)
+                ?: return listOf(
+                    Diagnostic(
+                        "LAYOUT_REF",
+                        Severity.ERROR,
+                        "layoutRef '$layoutRef' does not name a layout in the workspace",
+                        experimentPath,
+                        "/layoutRef",
+                    ),
+                )
+        return when (val decoded = DocumentCodec.decodeLayout(layoutDocument.text, layoutDocument.path)) {
+            is DecodeResult.Ok -> emptyList()
+            is DecodeResult.Failed -> decoded.diagnostics
+        }
+    }
+
+    /** The document, or null when it does not exist or its path is invalid; a failed read is a diagnostic, not a crash. */
     private fun read(path: String): VersionedDocument? =
         try {
             if (workspace.exists(path)) workspace.read(path) else null
         } catch (exception: InvalidDocumentPathException) {
             null
+        } catch (exception: IOException) {
+            val reason = exception.message ?: exception.javaClass.simpleName
+            val diagnostic = Diagnostic("DOCUMENT_UNREADABLE", Severity.ERROR, "Document '$path' cannot be read: $reason", path)
+            throw UnreadableDocumentException(diagnostic)
         }
 
     private fun failed(diagnostic: Diagnostic) = Loaded(null, listOf(diagnostic), emptyMap())
+
+    private class UnreadableDocumentException(
+        val diagnostic: Diagnostic,
+    ) : RuntimeException(diagnostic.message)
 
     companion object {
         /** Resolves [ref] against the directory of [documentPath]; null when it leaves the workspace or is not relative. */
@@ -4317,7 +4839,7 @@ git commit -m "feat(core): add Lab facade for validating and running experiments
 - [ ] **Step 1: Полная сборка**
 
 Run: `./gradlew clean build`
-Expected: BUILD SUCCESSFUL — тесты, KtLint и пороги JaCoCo всех модулей. Если покрытие `core` ниже порога (0.95 по строкам, 0.85 по ветвям), добавить тесты на непокрытые ветви новых классов, не снижая порог.
+Expected: BUILD SUCCESSFUL — тесты, KtLint и отчёты JaCoCo всех модулей.
 
 - [ ] **Step 2: Web и E2E не затронуты**
 
@@ -4327,7 +4849,7 @@ Expected: всё проходит — старое API сервера не ме�
 - [ ] **Step 3: Просмотр диффа**
 
 Run: `git diff --check origin/main && git diff --stat origin/main`
-Expected: изменения только в `core/`, `examples/retry-storm/` и `core/build.gradle.kts`.
+Expected: изменения только в `core/`, `examples/retry-storm/` и `.gitignore`.
 
 - [ ] **Step 4: PR**
 

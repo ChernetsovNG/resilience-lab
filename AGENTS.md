@@ -23,7 +23,7 @@ Gradle-команды выполняются из корня репозитор�
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
-- `./gradlew jacocoTestReport jacocoTestCoverageVerification` — формирование отчётов JaCoCo и проверка покрытия для всех JVM-модулей.
+- `./gradlew jacocoTestReport` — отчёты покрытия JaCoCo для всех JVM-модулей; пороги покрытия сборка не проверяет.
 - `npm ci` — воспроизводимая установка frontend-зависимостей из `package-lock.json`.
 - `npm test -- --run` — web unit-тесты.
 - `npm run test:coverage` — web unit-тесты с V8-покрытием без порогов; HTML и LCOV сохраняются в `web/coverage/`.
@@ -128,7 +128,7 @@ Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:serve
 Перед PR проверь конечное состояние ветки:
 
 - Всегда: `git diff --check origin/main` и просмотр diff относительно `origin/main`, чтобы исключить посторонние изменения.
-- JVM-код, зависимости или сборка JVM-модулей: `./gradlew clean build` из корня. Команда включает тесты, KtLint и проверку покрытия.
+- JVM-код, зависимости или сборка JVM-модулей: `./gradlew clean build` из корня. Команда включает тесты, KtLint и отчёты покрытия.
 - Web-код, зависимости или сборка web: из `web` выполни `npm ci`, `npm run lint`, `npm test -- --run` и `npm run build`.
 - Взаимодействие UI и API, пользовательские сценарии, E2E-тесты или их запуск: из `web` выполни `npm run test:e2e`. Подготовка окружения и установка Chromium описаны в разделе стандартных команд выше.
 - Только документация или шаблоны: проверь ссылки, Markdown и YAML-заголовок шаблона issue. Сборка приложения для таких изменений не требуется.

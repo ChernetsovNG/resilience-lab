@@ -32,7 +32,7 @@
 |---|---|
 | `simulation/DegradationRunoutTest`, `TimeoutRaceTest`, `RetryDeadlineTest`, `SingleServiceInvocationTest`, `ServiceMetricsIntegrationTest`, `TimingArithmeticTest`, `DurationSamplerTest`, `BoundedRequestQTest` | Переносятся на IR в пакете `engine.ksl`, число тестов в каждом файле не меняется |
 | `simulation/SeedFactoryTest` | Удаляется вместе с `SeedFactory` |
-| `experiment/ExperimentRunnerTest` | M/M/1, различие seed, общие поступления вариантов, потоки повторений и сбой по лимиту переносятся в `ExperimentExecutorTest`; детерминизм, метаданные результата и отказ от неверного документа уже покрыты тестами `ExperimentExecutorTest`, `LabTest`, `ModelCompilerTest` |
+| `experiment/ExperimentRunnerTest` | M/M/1, различие seed, общие поступления вариантов, потоки повторений и сбой по лимиту переносятся в `ExperimentExecutorTest`; детерминизм, метаданные результата (идентификаторы и подписи вариантов, их порядок) и отказ от неверного документа уже покрыты тестами `ExperimentExecutorTest`, `LabTest`, `ModelCompilerTest` |
 | `experiment/SweepExpanderTest` | Удаляется: сетка — дорожка T1 |
 | `scenario/ScenarioCodecTest`, `ScenarioValidatorTest` | Удаляются; проверки документов нового формата покрывают `DocumentCodecTest` и `ModelCompilerTest` (см. Task 7, Step 1) |
 | `apps/server` `api/*Test`, `experiment/ExperimentJobManagerTest` | Удаляются вместе с ручками MVP |
@@ -77,7 +77,7 @@ git rm -r apps/server/src/test/kotlin/resiliencelab/server/api apps/server/src/t
 - [ ] **Step 3: Проверка**
 
 Run: `./gradlew :apps:server:check`
-Expected: BUILD SUCCESSFUL; `OpenApiSpecTest` проходит без изменений `apps/server/openapi.json` — springdoc и раньше описывал только пакет `lab`. Если не проходит порог покрытия JaCoCo, добавить тесты на непокрытые ветви пакета `lab`, а не снижать порог.
+Expected: BUILD SUCCESSFUL; `OpenApiSpecTest` проходит без изменений `apps/server/openapi.json` — springdoc и раньше описывал только пакет `lab`.
 
 - [ ] **Step 4: Commit**
 
@@ -195,8 +195,8 @@ import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 
 /**
- * Chains, models and streams for engine tests. [simple] is the two-service chain the MVP tests built from
- * `TestData.simpleScenario()`; streams are the path-based ones the engine uses (ADR 0006).
+ * Chains, models and streams for engine tests. [simple] is the two-service chain the MVP engine tests used;
+ * streams are the path-based ones the engine uses (ADR 0006).
  */
 object TestChains {
     const val CLIENT = "client"
@@ -316,6 +316,7 @@ git commit -m "test(core): add chain fixtures with path-based streams"
 | `DurationDistribution(DistributionKind.X, mean, stdDevMs = null)`, `DurationDistribution(kind = …, meanMs = …, stdDevMs = null)` | `Distribution(DistributionShape.X, mean)`, `Distribution(shape = …, meanMs = …)` |
 | тело локальной `fixed(durationMs)` | `TestChains.fixed(durationMs)`, тип результата `Distribution` |
 | `base.services[i].copy(id = …, failureRate = …)` | `base.services[i].copy(path = …, failureProbability = …)` |
+| чтение `service.id` (`if (service.id == "entry") …`) | `service.path` |
 | `links = …`, `base.links` | `calls = …`, `base.calls` |
 | `.copy(id = "backend-to-third", …)` у связи, `maxAttempts = …`, `retry = …` | `.copy(path = "backend-to-third", …)`, `attempts = …`, `backoff = …` |
 | `RetrySpec(RetryKind.X, a, b)` | `TestChains.backoff(BackoffKind.X, a, b)` |
@@ -672,20 +673,20 @@ class ExperimentExecutionException(
 В `ExperimentExecutor.run` заменить в задаче пула строку
 
 ```kotlin
-                            val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                        val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
 ```
 
 на
 
 ```kotlin
-                            val result =
-                                try {
-                                    replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
-                                } catch (failure: ExperimentExecutionException) {
-                                    val id = experiment.variants[variant].id
-                                    val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
-                                    throw ExperimentExecutionException(message, failure)
-                                }
+                        val result =
+                            try {
+                                replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                            } catch (failure: ExperimentExecutionException) {
+                                val id = experiment.variants[variant].id
+                                val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
+                                throw ExperimentExecutionException(message, failure)
+                            }
 ```
 
 и добавить импорт `resiliencelab.core.engine.ksl.ExperimentExecutionException`. Сбои кода (не расчёта) по-прежнему пробрасываются как есть — это проверяет тест плана 1 `rethrows the failure of a task`.
@@ -715,7 +716,7 @@ git commit -m "test(core): port MVP experiment semantics to the executor"
 
 - [ ] **Step 1: Сверить правила проверки MVP с компилятором**
 
-Просмотреть названия тестов `ScenarioValidatorTest` (`grep -n 'fun \`' core/src/test/kotlin/resiliencelab/core/scenario/ScenarioValidatorTest.kt`) и для каждого правила найти соответствие: диапазон параметра в `Stage1Catalog`, проверку в `ModelCompiler` или тест в `ModelCompilerTest`. Правило без соответствия не переносить в этой задаче, а перечислить в PR как находку.
+Просмотреть названия тестов `ScenarioValidatorTest` (`grep -n 'fun \`' core/src/test/kotlin/resiliencelab/core/scenario/ScenarioValidatorTest.kt`) и для каждого правила найти соответствие: диапазон параметра в `Stage1Catalog`, проверку в `ModelCompiler` или тест в `ModelCompilerTest`. Правило без соответствия останавливает удаление: сначала перенести его в компилятор вместе с тестом в `ModelCompilerTest` (отдельный коммит этой задачи), и только затем удалять `ScenarioValidatorTest`. Конечность `1 / rate` и суммы `warmup + measurement` уже перенёс план ядра (тест `rejects values whose derived quantities are not finite`).
 
 - [ ] **Step 2: Удалить файлы**
 
@@ -740,7 +741,7 @@ Expected: пусто.
 - [ ] **Step 4: Проверка**
 
 Run: `./gradlew ktlintFormat && ./gradlew clean build`
-Expected: BUILD SUCCESSFUL. Если покрытие `core` ниже порога, добавить тесты на непокрытые ветви, а не снижать порог.
+Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 5: Commit**
 
@@ -760,8 +761,8 @@ git commit -m "refactor(core): remove MVP scenarios, runner and legacy adapters"
 
 В разделе «Текущее состояние»:
 
-- в строке `core` удалить «; модель сценариев MVP со sweep остаётся до перехода web»;
-- в строке `apps:server` удалить « и ручки MVP для нынешнего web»;
+- в строке `core` удалить «; модель сценариев MVP со sweep остаётся до отдельного плана удаления MVP»;
+- в строке `apps:server` удалить « и ручки MVP, которые больше не используются и ждут удаления»;
 - в абзаце «Сквозной срез этапа 1: ...» удалить предложение «Ручки MVP на сервере больше не используются и удаляются отдельной задачей.»
 
 Run: `grep -n "MVP" AGENTS.md`
@@ -800,4 +801,4 @@ Expected: изменения в `core/`, `apps/server/`, `AGENTS.md`.
 
 - [ ] **Step 5: PR**
 
-Открыть PR в `main` по правилам `AGENTS.md` (раздел «Работа по issue») с `Closes #<issue удаления MVP>`. В описании перечислить, куда ушли тесты MVP (таблица «Куда уходят тесты MVP»), и найденные правила проверки без соответствия (Task 7, Step 1).
+Открыть PR в `main` по правилам `AGENTS.md` (раздел «Работа по issue») с `Closes #<issue удаления MVP>`. В описании перечислить, куда ушли тесты MVP (таблица «Куда уходят тесты MVP»), и правила проверки, перенесённые в компилятор в Task 7, Step 1, если такие были.
