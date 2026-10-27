@@ -95,6 +95,32 @@ class ExperimentApiTest {
         }
     }
 
+    @Test
+    fun `serves finished runs`() {
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+        val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
+        val runId = JsonPath.read<String>(finished.contentAsString, "$.runId")
+
+        val runs = mockMvc.perform(get("/api/v1/runs")).andReturn().response
+        assertThat(JsonPath.read<List<String>>(runs.contentAsString, "$[*].id")).contains(runId)
+        openApi.assertResponse("get", "/api/v1/runs", runs)
+
+        val summary = mockMvc.perform(get("/api/v1/runs/{id}/summary", runId)).andReturn().response
+        assertThat(summary.status).isEqualTo(200)
+        assertThat(JsonPath.read<List<String>>(summary.contentAsString, "$.variants[*].id")).containsExactly("baseline", "no-retries")
+        openApi.assertResponse("get", "/api/v1/runs/{id}/summary", summary)
+
+        val manifest = mockMvc.perform(get("/api/v1/runs/{id}/manifest", runId)).andReturn().response
+        assertThat(JsonPath.read<String>(manifest.contentAsString, "$.experiment")).isEqualTo(experiment)
+        assertThat(JsonPath.read<Map<String, String>>(manifest.contentAsString, "$.documents"))
+            .containsOnlyKeys(experiment, "retry-storm/retry-storm.model.json")
+        openApi.assertResponse("get", "/api/v1/runs/{id}/manifest", manifest)
+
+        val missing = mockMvc.perform(get("/api/v1/runs/{id}/summary", "missing")).andReturn().response
+        assertThat(missing.status).isEqualTo(404)
+        assertThat(JsonPath.read<String>(missing.contentAsString, "$.code")).isEqualTo("RUN_NOT_FOUND")
+    }
+
     private fun postJson(
         path: String,
         body: String,
