@@ -4,7 +4,7 @@
 
 **Goal:** Добавить в `core` новый фундамент этапа 1 — каталог типов, документы, компилятор в IR, движок с потоками по путям, исполнение задач, файловую рабочую область, артефакт прогона и фасад `Lab` для сервера и CLI — не ломая нынешнее API ядра.
 
-**Architecture:** Новые пакеты `catalog`, `document`, `compiler`, `ir`, `execution`, `results`, `workspace`, `lab` появляются рядом со старыми. Движок (`simulation`) начинает принимать `ChainIr` и источник потоков `StreamSource`; старый конструктор `ReliabilityModel(model, scenario, execution)` остаётся и переводит MVP-сценарий в IR с прежней нумерацией потоков, поэтому старые тесты, сервер, CLI и web продолжают работать. План 2 (сервер и CLI) переключит их на `Lab` и удалит старое.
+**Architecture:** Новые пакеты `catalog`, `document`, `compiler`, `ir`, `execution`, `results`, `workspace`, `lab` появляются рядом со старыми. Движок (`simulation`) начинает принимать `ChainIr` и источник потоков `StreamSource`; старый конструктор `ReliabilityModel(model, scenario, execution)` остаётся и переводит MVP-сценарий в IR с прежней нумерацией потоков, поэтому старые тесты, сервер, CLI и web продолжают работать. План 2 переключит сервер и CLI на `Lab`; старый код удаляет план 4 после перехода web.
 
 **Tech Stack:** Kotlin 2.4.21, JDK 25, KSLCore R1.8.1, kotlinx.serialization 1.12.0, jackson-core 2.21.7 (строгая проверка JSON), kotlin.test + AssertJ.
 
@@ -21,7 +21,7 @@
 
 - **Входит:** всё перечисленное в Goal; пример `examples/retry-storm/` в новом формате; тесты детерминизма.
 - **Не входит:** сервер, CLI, web (планы 2 и 3). Дорожке T1 остаются ряды и поле `execution.window`, вывод v1, линтер, сетка и поле `grid`, генерация JSON-схем, оценка стоимости, отмена, досчёт и чередование заданий.
-- **Остаётся до плана 2:** пакет `scenario`, `experiment/ExperimentRunner`, `experiment/SweepExpander`, `simulation/SeedFactory`, старый конструктор `ReliabilityModel`, `LegacyScenarioAdapter`, файл `examples/retry-storm.json`. План 2 удаляет их, переносит смысловые тесты MVP на IR и переименовывает пакет `simulation` в `engine.ksl`.
+- **Остаётся до плана 4 (удаление MVP после перехода web):** пакет `scenario`, `experiment/ExperimentRunner`, `experiment/SweepExpander`, `simulation/SeedFactory`, старый конструктор `ReliabilityModel`, `LegacyScenarioAdapter`. План 4 удаляет их, переносит смысловые тесты MVP на IR и переименовывает пакет `simulation` в `engine.ksl`; файл `examples/retry-storm.json` удаляет план 2 вместе со старым CLI.
 - **Отличие от §4.1 дизайна:** пакеты `workspace` (хранилище документов, ADR 0003) и `lab` (фасад) живут в ядре, чтобы сервер и CLI работали с документами одинаково (D5); таблица §4.1 дополнена.
 
 ## Карта файлов
@@ -2615,7 +2615,7 @@ import resiliencelab.core.scenario.Scenario
 
 /**
  * Maps MVP scenarios onto the chain IR and the MVP stream numbering, so the legacy API and its tests keep their
- * exact behaviour. Removed together with the `scenario` package (stage 1 slice, plan 2).
+ * exact behaviour. Removed together with the `scenario` package once the web client leaves the MVP API.
  */
 internal object LegacyScenarioAdapter {
     const val CLIENT_PATH = "workload"
@@ -3047,7 +3047,7 @@ class ReliabilityModel(
     private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
 ) : ProcessModel(model) {
-    /** MVP constructor: maps [scenario] onto the chain IR with the MVP stream numbering; removed in plan 2. */
+    /** MVP constructor: maps [scenario] onto the chain IR with the MVP stream numbering; removed together with the MVP API. */
     constructor(
         model: Model,
         scenario: Scenario,
