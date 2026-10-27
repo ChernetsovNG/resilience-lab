@@ -1,5 +1,6 @@
 package resiliencelab.core.workspace
 
+import java.nio.channels.FileChannel
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
@@ -7,6 +8,7 @@ import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.security.MessageDigest
@@ -77,13 +79,18 @@ interface Workspace {
 
 /**
  * Workspace in a directory, usually a git repository. Paths may not leave the directory, also through symbolic links;
- * listings skip symbolic links.
+ * listings skip symbolic links. A root alias is pinned to its physical directory when this workspace is opened.
+ *
+ * All mutations coordinate through a JDK filesystem lock on the stable `.workspace.lock` inside that directory.
+ * This workspace owns the lock metadata: public writes/creates cannot replace it, and normal operations never remove it.
+ * Cooperating instances and JVMs serialize version checks with replacement; the filesystem must support file locks.
+ * Uncooperative external editors and hostile filesystem replacement are outside this coordination protocol.
  */
 class FileWorkspace(
     root: Path,
 ) : Workspace {
-    private val root: Path = root.toAbsolutePath().normalize()
-    private val realRoot: Path = this.root.toRealPath()
+    private val root: Path = root.toRealPath()
+    private val lockFile: Path = this.root.resolve(".workspace.lock")
 
     override fun list(): List<String> =
         Files.walk(root).use { paths ->
@@ -105,33 +112,48 @@ class FileWorkspace(
 
     override fun exists(path: String): Boolean = resolve(path).isRegularFile()
 
-    @Synchronized
     override fun write(
         path: String,
         text: String,
         expectedVersion: String?,
-    ): String {
-        val file = resolve(path)
-        if (expectedVersion != null) {
-            val current = if (file.isRegularFile()) DocumentVersion.of(Files.readString(file)) else null
-            if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
+    ): String =
+        mutate(path) { file ->
+            if (expectedVersion != null) {
+                val current = if (file.isRegularFile()) DocumentVersion.of(Files.readString(file)) else null
+                if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
+            }
+            store(file, text)
         }
-        return store(file, text)
-    }
 
     override fun create(
         path: String,
         text: String,
-    ): String {
-        val file = resolve(path)
-        Files.createDirectories(file.parent)
-        try {
-            Files.write(file, text.toByteArray(Charsets.UTF_8), CREATE_NEW, WRITE)
-        } catch (_: FileAlreadyExistsException) {
-            throw DocumentExistsException(path)
+    ): String =
+        mutate(path) { file ->
+            Files.createDirectories(file.parent)
+            try {
+                Files.write(file, text.toByteArray(Charsets.UTF_8), CREATE_NEW, WRITE)
+            } catch (_: FileAlreadyExistsException) {
+                throw DocumentExistsException(path)
+            }
+            DocumentVersion.of(text)
         }
-        return DocumentVersion.of(text)
-    }
+
+    private fun mutate(
+        path: String,
+        action: (Path) -> String,
+    ): String =
+        synchronized(mutationMonitor) {
+            FileChannel.open(lockFile, CREATE, WRITE, NOFOLLOW_LINKS).use { channel ->
+                channel.lock().use {
+                    val file = resolve(path)
+                    if (file.startsWith(lockFile) || (Files.exists(file) && Files.isSameFile(file, lockFile))) {
+                        throw InvalidDocumentPathException(path)
+                    }
+                    action(file)
+                }
+            }
+        }
 
     private fun store(
         file: Path,
@@ -160,7 +182,12 @@ class FileWorkspace(
         var existing = file
         while (!Files.exists(existing, NOFOLLOW_LINKS)) existing = existing.parent
         val real = runCatching { existing.toRealPath() }.getOrNull()
-        if (real == null || !real.startsWith(realRoot)) throw InvalidDocumentPathException(path)
+        if (real == null || !real.startsWith(root)) throw InvalidDocumentPathException(path)
         return file
+    }
+
+    private companion object {
+        // ponytail: one JVM monitor serializes all roots; scope monitors by root only if workspace throughput requires it.
+        val mutationMonitor = Any()
     }
 }
