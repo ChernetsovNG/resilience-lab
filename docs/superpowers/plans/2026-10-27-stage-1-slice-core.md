@@ -3517,6 +3517,7 @@ class ExperimentExecutorTest {
 
         assertThat(parallel).isEqualTo(sequential)
         assertThat(sequential.variants.map { it.id }).containsExactly("baseline", "single")
+        assertThat(sequential.variants.map { it.label }).containsExactly("Baseline", "Single")
         assertThat(sequential.variants.first().replications).hasSize(3)
     }
 
@@ -4537,6 +4538,9 @@ class LabTest {
 
         assertThat(outcome.runDirectory).isEqualTo(".results/retry-storm/run-1")
         assertThat(outcome.summary.variants.map { it.id }).containsExactly("baseline", "no-retries")
+        assertThat(outcome.summary.variants.map { it.label }).containsExactly("Baseline", "No retries")
+        val writtenSummary = Files.readString(sequentialRoot.resolve(".results/retry-storm/run-1/summary.json"))
+        assertThat(writtenSummary).contains("\"label\": \"No retries\"")
         assertThat(outcome.manifest.documents.keys).containsExactly(experiment, model)
         listOf("summary.json", "manifest.json").forEach { file ->
             val relative = ".results/retry-storm/run-1/$file"

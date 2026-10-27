@@ -32,7 +32,7 @@
 |---|---|
 | `simulation/DegradationRunoutTest`, `TimeoutRaceTest`, `RetryDeadlineTest`, `SingleServiceInvocationTest`, `ServiceMetricsIntegrationTest`, `TimingArithmeticTest`, `DurationSamplerTest`, `BoundedRequestQTest` | Переносятся на IR в пакете `engine.ksl`, число тестов в каждом файле не меняется |
 | `simulation/SeedFactoryTest` | Удаляется вместе с `SeedFactory` |
-| `experiment/ExperimentRunnerTest` | M/M/1, различие seed, общие поступления вариантов, потоки повторений и сбой по лимиту переносятся в `ExperimentExecutorTest`; детерминизм, метаданные результата и отказ от неверного документа уже покрыты тестами `ExperimentExecutorTest`, `LabTest`, `ModelCompilerTest` |
+| `experiment/ExperimentRunnerTest` | M/M/1, различие seed, общие поступления вариантов, потоки повторений и сбой по лимиту переносятся в `ExperimentExecutorTest`; детерминизм, метаданные результата (идентификаторы и подписи вариантов, их порядок) и отказ от неверного документа уже покрыты тестами `ExperimentExecutorTest`, `LabTest`, `ModelCompilerTest` |
 | `experiment/SweepExpanderTest` | Удаляется: сетка — дорожка T1 |
 | `scenario/ScenarioCodecTest`, `ScenarioValidatorTest` | Удаляются; проверки документов нового формата покрывают `DocumentCodecTest` и `ModelCompilerTest` (см. Task 7, Step 1) |
 | `apps/server` `api/*Test`, `experiment/ExperimentJobManagerTest` | Удаляются вместе с ручками MVP |
@@ -195,8 +195,8 @@ import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 
 /**
- * Chains, models and streams for engine tests. [simple] is the two-service chain the MVP tests built from
- * `TestData.simpleScenario()`; streams are the path-based ones the engine uses (ADR 0006).
+ * Chains, models and streams for engine tests. [simple] is the two-service chain the MVP engine tests used;
+ * streams are the path-based ones the engine uses (ADR 0006).
  */
 object TestChains {
     const val CLIENT = "client"
@@ -715,7 +715,7 @@ git commit -m "test(core): port MVP experiment semantics to the executor"
 
 - [ ] **Step 1: Сверить правила проверки MVP с компилятором**
 
-Просмотреть названия тестов `ScenarioValidatorTest` (`grep -n 'fun \`' core/src/test/kotlin/resiliencelab/core/scenario/ScenarioValidatorTest.kt`) и для каждого правила найти соответствие: диапазон параметра в `Stage1Catalog`, проверку в `ModelCompiler` или тест в `ModelCompilerTest`. Правило без соответствия не переносить в этой задаче, а перечислить в PR как находку.
+Просмотреть названия тестов `ScenarioValidatorTest` (`grep -n 'fun \`' core/src/test/kotlin/resiliencelab/core/scenario/ScenarioValidatorTest.kt`) и для каждого правила найти соответствие: диапазон параметра в `Stage1Catalog`, проверку в `ModelCompiler` или тест в `ModelCompilerTest`. Правило без соответствия останавливает удаление: сначала перенести его в компилятор вместе с тестом в `ModelCompilerTest` (отдельный коммит этой задачи), и только затем удалять `ScenarioValidatorTest`. Конечность `1 / rate` и суммы `warmup + measurement` уже перенёс план ядра (тест `rejects values whose derived quantities are not finite`).
 
 - [ ] **Step 2: Удалить файлы**
 
@@ -800,4 +800,4 @@ Expected: изменения в `core/`, `apps/server/`, `AGENTS.md`.
 
 - [ ] **Step 5: PR**
 
-Открыть PR в `main` по правилам `AGENTS.md` (раздел «Работа по issue») с `Closes #<issue удаления MVP>`. В описании перечислить, куда ушли тесты MVP (таблица «Куда уходят тесты MVP»), и найденные правила проверки без соответствия (Task 7, Step 1).
+Открыть PR в `main` по правилам `AGENTS.md` (раздел «Работа по issue») с `Closes #<issue удаления MVP>`. В описании перечислить, куда ушли тесты MVP (таблица «Куда уходят тесты MVP»), и правила проверки, перенесённые в компилятор в Task 7, Step 1, если такие были.
