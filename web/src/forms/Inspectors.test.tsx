@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { DegradationSpec, Execution, LinkSpec, ServiceSpec, WorkloadSpec } from "../api/types";
@@ -202,8 +203,8 @@ describe("parameter inspectors", () => {
       </>,
     );
 
-    change("Arrival rate", "20.5");
-    expect(onWorkload).toHaveBeenLastCalledWith({ arrivalRate: 20.5 });
+    change("Arrival rate (RPS)", "20.5");
+    expect(onWorkload).toHaveBeenLastCalledWith({ arrivalRate: 0.0205 });
     change("Request deadline (ms)", "750");
     expect(onWorkload).toHaveBeenLastCalledWith({ requestDeadlineMs: 750 });
     change("Replications", "5");
@@ -219,8 +220,9 @@ describe("parameter inspectors", () => {
 
     onWorkload.mockClear();
     onExecution.mockClear();
-    change("Arrival rate", "0");
-    change("Arrival rate", "1e-323");
+    change("Arrival rate (RPS)", "0");
+    change("Arrival rate (RPS)", "1e-323");
+    change("Arrival rate (RPS)", "1e-307");
     change("Request deadline (ms)", "-1");
     change("Replications", "0");
     change("Warm-up (ms)", "-1");
@@ -229,6 +231,36 @@ describe("parameter inspectors", () => {
     change("Maximum real time (seconds)", "0");
     expect(onWorkload).not.toHaveBeenCalled();
     expect(onExecution).not.toHaveBeenCalled();
+  });
+
+  it("preserves a fractional RPS draft when the controlled workload echoes its stored value", () => {
+    function ControlledWorkload() {
+      const [current, setCurrent] = useState({ ...workload, arrivalRate: 0.06 });
+      return (
+        <>
+          <WorkloadInspector workload={current} onChange={(patch) => setCurrent({ ...current, ...patch })} />
+          <output data-testid="stored-arrival-rate">{current.arrivalRate}</output>
+        </>
+      );
+    }
+    render(<ControlledWorkload />);
+    const input = screen.getByLabelText("Arrival rate (RPS)") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "63.7" } });
+    expect(input.value).toBe("63.7");
+    fireEvent.change(input, { target: { value: input.value + "5" } });
+    expect(input.value).toBe("63.75");
+    expect(screen.getByTestId("stored-arrival-rate").textContent).toBe("0.06375");
+  });
+
+  it("displays stored arrival rates in RPS after import or variant changes", () => {
+    const { rerender } = render(
+      <WorkloadInspector workload={{ ...workload, arrivalRate: 0.1 }} onChange={vi.fn()} />,
+    );
+    expect((screen.getByLabelText("Arrival rate (RPS)") as HTMLInputElement).value).toBe("100");
+
+    rerender(<WorkloadInspector workload={{ ...workload, arrivalRate: 0.1255 }} onChange={vi.fn()} />);
+    expect((screen.getByLabelText("Arrival rate (RPS)") as HTMLInputElement).value).toBe("125.5");
   });
 
   it("rejects execution durations whose sum is not finite", () => {

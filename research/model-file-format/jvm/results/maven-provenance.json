@@ -1,0 +1,304 @@
+{
+  "retrievedDate": "2026-10-27",
+  "artifacts": [
+    {
+      "coordinates": "org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21",
+      "pomUrl": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.4.21/kotlin-gradle-plugin-2.4.21.pom",
+      "pomSha256": "21389e11c74edc552b0615bbcb96d2473dced92617eaab596d8d7557918f6e17",
+      "declaredDependencies": [
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-gradle-plugin-api",
+          "version": "2.4.21",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "fus-statistics-gradle-plugin",
+          "version": "2.4.21",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-gradle-plugin-idea",
+          "version": "2.4.21",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-gradle-plugin-idea-proto",
+          "version": "2.4.21",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-klib-commonizer-api",
+          "version": "2.4.21",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-build-statistics",
+          "version": "2.4.21",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-util-klib-metadata",
+          "version": "2.4.21",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-compiler-runner",
+          "version": "2.4.21",
+          "scope": "runtime"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.12.0",
+      "pomUrl": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.12.0/kotlinx-serialization-json-jvm-1.12.0.pom",
+      "pomSha256": "4965002d7bc71f7a2db201f07d30c579ff12f20a050f7b307d3e2a2b12d3ded7",
+      "declaredDependencies": [
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-stdlib",
+          "version": "2.4.10",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-serialization-core-jvm",
+          "version": "1.12.0",
+          "scope": "compile"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "org.jetbrains.kotlinx:kotlinx-schema-generator-json-jvm:0.6.0",
+      "pomUrl": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-schema-generator-json-jvm/0.6.0/kotlinx-schema-generator-json-jvm-0.6.0.pom",
+      "pomSha256": "ac983b4948375aa83160cd83f9241e624a8ced8c7c84198e9f7639fc72bb7e87",
+      "declaredDependencies": [
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-serialization-json-jvm",
+          "version": "1.11.0",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-schema-annotations-jvm",
+          "version": "0.6.0",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-schema-generator-core-jvm",
+          "version": "0.6.0",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-schema-json-jvm",
+          "version": "0.6.0",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-stdlib",
+          "version": "2.3.21",
+          "scope": "compile"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "com.charleskorn.kaml:kaml-jvm:0.104.0",
+      "pomUrl": "https://repo.maven.apache.org/maven2/com/charleskorn/kaml/kaml-jvm/0.104.0/kaml-jvm-0.104.0.pom",
+      "pomSha256": "89df52d05cd53b2cc8f74fb2454e17a6e3540b686288231037513145e59a4eef",
+      "declaredDependencies": [
+        {
+          "groupId": "org.jetbrains.kotlinx",
+          "artifactId": "kotlinx-serialization-core-jvm",
+          "version": "1.9.0",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-stdlib",
+          "version": "2.2.21",
+          "scope": "compile"
+        },
+        {
+          "groupId": "it.krzeminski",
+          "artifactId": "snakeyaml-engine-kmp-jvm",
+          "version": "4.0.1",
+          "scope": "runtime"
+        },
+        {
+          "groupId": "com.squareup.okio",
+          "artifactId": "okio-jvm",
+          "version": "3.16.4",
+          "scope": "runtime"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "org.snakeyaml:snakeyaml-engine:3.2",
+      "pomUrl": "https://repo.maven.apache.org/maven2/org/snakeyaml/snakeyaml-engine/3.2/snakeyaml-engine-3.2.pom",
+      "pomSha256": "a9d99fd7ba9c27aad1bf093268079c46e0199fa7814c6e9283094586b8b41568",
+      "declaredDependencies": [
+        {
+          "groupId": "org.junit.jupiter",
+          "artifactId": "junit-jupiter-engine",
+          "version": "${junit.jupiter.version}",
+          "scope": "test"
+        },
+        {
+          "groupId": "org.junit.jupiter",
+          "artifactId": "junit-jupiter-api",
+          "version": "${junit.jupiter.version}",
+          "scope": "test"
+        },
+        {
+          "groupId": "com.google.guava",
+          "artifactId": "guava",
+          "version": "${guava.version}",
+          "scope": "test"
+        },
+        {
+          "groupId": "org.openjdk.jmh",
+          "artifactId": "jmh-core",
+          "version": "${jmh.version}",
+          "scope": "test"
+        },
+        {
+          "groupId": "org.openjdk.jmh",
+          "artifactId": "jmh-generator-annprocess",
+          "version": "${jmh.version}",
+          "scope": "test"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7",
+      "pomUrl": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/module/jackson-module-kotlin/2.21.7/jackson-module-kotlin-2.21.7.pom",
+      "pomSha256": "d41e7644a64ea320ceb0d52a7a57baadcaa9a636486167b25cbdc5eda15717ec",
+      "declaredDependencies": [
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-databind",
+          "version": null,
+          "scope": null
+        },
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-annotations",
+          "version": null,
+          "scope": null
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-stdlib",
+          "version": "${version.kotlin}",
+          "scope": "provided"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-stdlib-jdk8",
+          "version": "${version.kotlin}",
+          "scope": "provided"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-reflect",
+          "version": "${version.kotlin}",
+          "scope": "compile"
+        },
+        {
+          "groupId": "org.jetbrains.kotlin",
+          "artifactId": "kotlin-test-junit5",
+          "version": "${version.kotlin}",
+          "scope": "test"
+        },
+        {
+          "groupId": "com.fasterxml.jackson.dataformat",
+          "artifactId": "jackson-dataformat-xml",
+          "version": null,
+          "scope": "test"
+        },
+        {
+          "groupId": "com.fasterxml.jackson.dataformat",
+          "artifactId": "jackson-dataformat-csv",
+          "version": null,
+          "scope": "test"
+        },
+        {
+          "groupId": "com.fasterxml.jackson.datatype",
+          "artifactId": "jackson-datatype-jsr310",
+          "version": null,
+          "scope": "test"
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "com.github.victools:jsonschema-generator:4.38.0",
+      "pomUrl": "https://repo.maven.apache.org/maven2/com/github/victools/jsonschema-generator/4.38.0/jsonschema-generator-4.38.0.pom",
+      "pomSha256": "7c64a139379fbfb79c87f6d079e3872409480c9b810c551476af9e4b5b14d0eb",
+      "declaredDependencies": [
+        {
+          "groupId": "com.fasterxml",
+          "artifactId": "classmate",
+          "version": null,
+          "scope": null
+        },
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-core",
+          "version": null,
+          "scope": null
+        },
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-databind",
+          "version": null,
+          "scope": null
+        }
+      ],
+      "availability": "resolved"
+    },
+    {
+      "coordinates": "com.github.victools:jsonschema-module-jackson:4.38.0",
+      "pomUrl": "https://repo.maven.apache.org/maven2/com/github/victools/jsonschema-module-jackson/4.38.0/jsonschema-module-jackson-4.38.0.pom",
+      "pomSha256": "df1351018eecf2ae102389b42159209864ba7e43ac5ab9f192a2bdeab90a8fb5",
+      "declaredDependencies": [
+        {
+          "groupId": "com.github.victools",
+          "artifactId": "jsonschema-generator",
+          "version": null,
+          "scope": "provided"
+        },
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-core",
+          "version": null,
+          "scope": "provided"
+        },
+        {
+          "groupId": "com.fasterxml.jackson.core",
+          "artifactId": "jackson-annotations",
+          "version": null,
+          "scope": "provided"
+        }
+      ],
+      "availability": "resolved"
+    }
+  ],
+  "unavailableCandidates": []
+}

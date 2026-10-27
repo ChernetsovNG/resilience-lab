@@ -1,0 +1,57 @@
+diff --git a/layout.yaml b/layout.yaml
+index 9efa0c3..d03eb41 100644
+--- a/layout.yaml
++++ b/layout.yaml
+@@ -9,4 +9,7 @@ positions:
+   middle:
+     x: 260
+     y: 100
++  worker:
++    x: 780
++    y: 100
+ schemaVersion: research-1
+diff --git a/models/baseline.yaml b/models/baseline.yaml
+index 2523853..effa101 100644
+--- a/models/baseline.yaml
++++ b/models/baseline.yaml
+@@ -3,7 +3,21 @@ kind: model
+ linkOrder:
+   - gateway-to-middle
+   - middle-to-dependency
++  - dependency-to-worker
+ links:
++  dependency-to-worker:
++    from: dependency
++    maxAttempts: 3
++    network:
++      kind: FIXED
++      meanMs: 0.5
++    retry:
++      base: 2
++      baseBackoffMs: 2
++      kind: EXPONENTIAL_FULL_JITTER
++      maxBackoffMs: 20
++    timeoutMs: 60
++    to: worker
+   gateway-to-middle:
+     from: gateway
+     maxAttempts: 3
+@@ -35,6 +49,7 @@ serviceOrder:
+   - gateway
+   - middle
+   - dependency
++  - worker
+ services:
+   dependency:
+     libraryRef: ../library/dependency.yaml
+@@ -52,3 +67,10 @@ services:
+       kind: FIXED
+       meanMs: 2
+     queueCapacity: 12
++  worker:
++    failureRate: 0
++    handlers: 4
++    processing:
++      kind: FIXED
++      meanMs: 2
++    queueCapacity: 12

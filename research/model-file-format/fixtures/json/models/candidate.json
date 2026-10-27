@@ -1,0 +1,71 @@
+{
+  "entry": "gateway",
+  "kind": "model",
+  "linkOrder": [
+    "gateway-to-middle",
+    "middle-to-dependency"
+  ],
+  "links": {
+    "gateway-to-middle": {
+      "from": "gateway",
+      "maxAttempts": 1,
+      "network": {
+        "kind": "FIXED",
+        "meanMs": 0.5
+      },
+      "retry": {
+        "base": 2,
+        "baseBackoffMs": 2,
+        "kind": "EXPONENTIAL_FULL_JITTER",
+        "maxBackoffMs": 20
+      },
+      "timeoutMs": 80,
+      "to": "middle"
+    },
+    "middle-to-dependency": {
+      "from": "middle",
+      "maxAttempts": 1,
+      "network": {
+        "kind": "FIXED",
+        "meanMs": 0.5
+      },
+      "retry": {
+        "base": 2,
+        "baseBackoffMs": 2,
+        "kind": "EXPONENTIAL_FULL_JITTER",
+        "maxBackoffMs": 20
+      },
+      "timeoutMs": 60,
+      "to": "dependency"
+    }
+  },
+  "schemaVersion": "research-1",
+  "serviceOrder": [
+    "gateway",
+    "middle",
+    "dependency"
+  ],
+  "services": {
+    "dependency": {
+      "libraryRef": "../library/dependency.json"
+    },
+    "gateway": {
+      "failureRate": 0,
+      "handlers": 4,
+      "processing": {
+        "kind": "FIXED",
+        "meanMs": 1
+      },
+      "queueCapacity": 16
+    },
+    "middle": {
+      "failureRate": 0,
+      "handlers": 4,
+      "processing": {
+        "kind": "FIXED",
+        "meanMs": 2
+      },
+      "queueCapacity": 12
+    }
+  }
+}

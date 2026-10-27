@@ -1,0 +1,19 @@
+{
+  "name": "results-volume-research",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^26.0.0"
+  },
+  "scripts": {
+    "browser": "node browser.mjs"
+  },
+  "dependencies": {
+    "apache-arrow": "21.2.0",
+    "hyparquet": "1.31.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "playwright": "1.64.1"
+  }
+}

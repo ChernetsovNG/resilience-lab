@@ -1,0 +1,25 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "type" : "object",
+  "properties" : {
+    "mode" : {
+      "type" : "string",
+      "enum" : [ "SYNC", "ASYNC" ]
+    },
+    "name" : {
+      "type" : "string"
+    },
+    "note" : {
+      "type" : "string"
+    },
+    "requiredNullable" : {
+      "type" : "string"
+    },
+    "version" : {
+      "type" : "integer"
+    },
+    "work" : {
+      "type" : "object"
+    }
+  }
+}

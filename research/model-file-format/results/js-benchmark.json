@@ -1,0 +1,90 @@
+{
+  "arch": "arm64",
+  "cpu": "Apple M4 Pro",
+  "measurements": [
+    {
+      "blocks": 50,
+      "bytes": 9313,
+      "iterations": 20,
+      "medianMs": 0.012666999999993322,
+      "p95Ms": 0.014374999999972715,
+      "parser": "JSON.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 50,
+      "bytes": 6300,
+      "iterations": 20,
+      "medianMs": 1.879583499999967,
+      "p95Ms": 2.324958000000038,
+      "parser": "yaml.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 50,
+      "bytes": 6300,
+      "iterations": 20,
+      "medianMs": 1.517229499999985,
+      "p95Ms": 1.6565420000000017,
+      "parser": "yaml.parseDocument",
+      "warmup": 5
+    },
+    {
+      "blocks": 500,
+      "bytes": 93413,
+      "iterations": 20,
+      "medianMs": 0.11354149999999663,
+      "p95Ms": 0.12691699999999173,
+      "parser": "JSON.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 500,
+      "bytes": 63400,
+      "iterations": 20,
+      "medianMs": 15.483687499999974,
+      "p95Ms": 16.94916599999999,
+      "parser": "yaml.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 500,
+      "bytes": 63400,
+      "iterations": 20,
+      "medianMs": 14.098854500000016,
+      "p95Ms": 14.82220800000016,
+      "parser": "yaml.parseDocument",
+      "warmup": 5
+    },
+    {
+      "blocks": 5000,
+      "bytes": 938913,
+      "iterations": 20,
+      "medianMs": 1.1326665000000276,
+      "p95Ms": 1.1717499999999745,
+      "parser": "JSON.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 5000,
+      "bytes": 638900,
+      "iterations": 20,
+      "medianMs": 161.31514549999974,
+      "p95Ms": 176.9145410000001,
+      "parser": "yaml.parse",
+      "warmup": 5
+    },
+    {
+      "blocks": 5000,
+      "bytes": 638900,
+      "iterations": 20,
+      "medianMs": 148.15722900000037,
+      "p95Ms": 158.3262080000004,
+      "parser": "yaml.parseDocument",
+      "warmup": 5
+    }
+  ],
+  "platform": "darwin",
+  "runtime": "v26.12.1",
+  "scope": "Parse preloaded strings only; no I/O, schema validation, model compilation or simulation. Synthetic flat services, not hierarchy. Sequential in one Node process."
+}

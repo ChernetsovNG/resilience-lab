@@ -236,6 +236,7 @@ describe("ScenarioIo", () => {
     const imported = createThreeServiceChain();
     imported.workload.arrivalRate = 20;
     render(<VariantImportHarness />);
+    const candidateArrival = screen.getByTestId("candidate-arrival").textContent;
 
     fireEvent.change(screen.getByLabelText("Import scenario"), {
       target: { files: [jsonFile(imported)] },
@@ -245,7 +246,7 @@ describe("ScenarioIo", () => {
     resolveValidation({ valid: true, issues: [] });
 
     await waitFor(() => expect(screen.getByTestId("baseline-arrival").textContent).toBe("20"));
-    expect(screen.getByTestId("candidate-arrival").textContent).toBe("10");
+    expect(screen.getByTestId("candidate-arrival").textContent).toBe(candidateArrival);
   });
 
   it("lets only the latest concurrent import publish scenario or issues", async () => {

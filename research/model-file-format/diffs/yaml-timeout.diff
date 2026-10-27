@@ -1,0 +1,13 @@
+diff --git a/models/baseline.yaml b/models/baseline.yaml
+index 2523853..62db26f 100644
+--- a/models/baseline.yaml
++++ b/models/baseline.yaml
+@@ -28,7 +28,7 @@ links:
+       baseBackoffMs: 2
+       kind: EXPONENTIAL_FULL_JITTER
+       maxBackoffMs: 20
+-    timeoutMs: 60
++    timeoutMs: 90
+     to: dependency
+ schemaVersion: research-1
+ serviceOrder:
