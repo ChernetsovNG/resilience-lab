@@ -42,7 +42,7 @@
 - **Не входит (дорожка T3):** перетаскивание из палитры, правка структуры и раскладки на холсте, undo/redo, правка переопределений на страницах вариантов, правка параметров прогона и отказов, диагностика `POST /validate` на схеме и вкладка Problems, отслеживание внешних правок.
 - **Не входит (дорожка T4):** Timeline, результаты на схеме, воспроизведение, вывод, Map.
 - **Пропадает до дорожек:** sweep, графики, импорт и экспорт JSON, скачивание результата (дизайн этапа 1, §7.1).
-- **Страница варианта редактируема,** если у варианта нет переопределений (это сама модель); остальные страницы только для просмотра, переопределённые значения отмечены.
+- **Модель правится только на странице `Model`,** первой вкладке под схемой. Страницы вариантов, в том числе без переопределений, только для просмотра, переопределённые значения отмечены; правку переопределений на них добавит T3.
 
 ## Карта файлов
 
@@ -1562,13 +1562,16 @@ describe("Canvas", () => {
 });
 
 describe("VariantTabs", () => {
-  it("marks the active variant and switches pages", () => {
+  it("puts the model page first, marks the active page and switches pages", () => {
     const onSelect = vi.fn();
-    render(<VariantTabs variants={experiment.variants} active="baseline" onSelect={onSelect} />);
+    render(<VariantTabs variants={experiment.variants} active={null} onSelect={onSelect} />);
 
-    expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Model", "Baseline", "No retries"]);
+    expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
-    expect(onSelect).toHaveBeenCalledWith("no-retries");
+    expect(onSelect).toHaveBeenLastCalledWith("no-retries");
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 });
 ```
@@ -1681,14 +1684,21 @@ import type { Variant } from "../api/apiTypes";
 
 export interface VariantTabsProps {
   variants: Variant[];
-  active: string;
-  onSelect: (id: string) => void;
+  /** ID of the active variant page; null for the model page. */
+  active: string | null;
+  onSelect: (id: string | null) => void;
 }
 
-/** Variant pages below the canvas, as in draw.io (product vision §5.5). */
+/**
+ * Pages below the canvas, as in draw.io (product vision §5.5): the model page first, then one page per variant. Only
+ * the model page edits the model; a variant page shows it with the variant's overrides, even when there are none.
+ */
 export function VariantTabs({ variants, active, onSelect }: VariantTabsProps) {
   return (
-    <div className="variant-tabs" role="tablist" aria-label="Variants">
+    <div className="variant-tabs" role="tablist" aria-label="Pages">
+      <button type="button" role="tab" aria-selected={active === null} onClick={() => onSelect(null)}>
+        Model
+      </button>
       {variants.map((variant) => (
         <button
           key={variant.id}
@@ -2488,22 +2498,23 @@ import { applyOverrides } from "./workspace/params";
 import { useWorkspace } from "./workspace/useWorkspace";
 
 /**
- * One-screen layout (product vision §5.5, stage 1 design §6.1). A variant without overrides is the model itself and
- * can be edited; other variant pages show the model with their overrides, read-only in the stage 1 slice. Results are
- * shown only for the experiment they were computed for.
+ * One-screen layout (product vision §5.5, stage 1 design §6.1). The model page edits the model; a variant page shows the
+ * model with the variant's overrides, read-only in the stage 1 slice even when the variant has none. Results are shown
+ * only for the experiment they were computed for.
  */
 export function App() {
   const workspace = useWorkspace();
   const run = useRun();
   const health = useHealth();
+  /** Active variant page; null, or an ID the open experiment lacks, shows the model page. */
   const [variantId, setVariantId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog } = workspace;
   const variants = loaded?.experiment.variants ?? [];
-  const variant = variants.find((candidate) => candidate.id === variantId) ?? variants[0];
+  const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
-  const editable = Object.keys(overrides).length === 0 && !workspace.loading;
+  const editable = variant === undefined && !workspace.loading;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
 
@@ -2562,7 +2573,7 @@ export function App() {
             <Canvas model={model} layout={loaded.layout} selected={selected} onSelect={setSelected} />
           )}
         </div>
-        <VariantTabs variants={variants} active={variant?.id ?? ""} onSelect={setVariantId} />
+        <VariantTabs variants={variants} active={variant?.id ?? null} onSelect={setVariantId} />
       </main>
       {model === null || loaded === null || catalog === null ? (
         <aside className="inspector" aria-label="Inspector" />
@@ -2942,7 +2953,7 @@ Run: `npm run lint && npm test -- --run && npm run build`
 Expected: PASS. `tsc -b` не проверяет `e2e/`, поэтому старые E2E ещё не мешают сборке.
 
 Run: `npm run dev -- --host 127.0.0.1` при запущенном `./gradlew :apps:server:bootRun` из корня; открыть `http://127.0.0.1:5173`.
-Expected: страница не прокручивается; слева палитра, в центре четыре блока retry storm, справа параметры прогона, внизу вкладки `Baseline` и `No retries` и панель результатов.
+Expected: страница не прокручивается; слева палитра, в центре четыре блока retry storm, справа параметры прогона, внизу вкладки `Model`, `Baseline` и `No retries` и панель результатов.
 
 - [ ] **Step 5: Commit**
 
@@ -2974,7 +2985,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("block-node")).toHaveCount(4);
 });
 
-test("shows a variant page read-only with its overrides", async ({ page }) => {
+test("shows variant pages read-only with their overrides and edits only on the model page", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const call = page.getByTestId("rf__edge-gateway-to-middle");
   await expect(call).toContainText("· 1×");
@@ -2986,6 +2997,10 @@ test("shows a variant page read-only with its overrides", async ({ page }) => {
   await expect(page.locator(".param-field--overridden")).toContainText("overridden");
 
   await page.getByRole("tab", { name: "Baseline" }).click();
+  await expect(attempts).toHaveValue("3");
+  await expect(attempts).not.toBeEditable();
+
+  await page.getByRole("tab", { name: "Model" }).click();
   await expect(attempts).toHaveValue("3");
   await expect(attempts).toBeEditable();
 });
@@ -3086,9 +3101,10 @@ git commit -m "test(e2e): cover the stage 1 slice in a real browser"
 ```markdown
 Откроется эксперимент retry storm. Выберите блок или связь на схеме, измените
 параметр в инспекторе справа, нажмите `Save`, затем `Run` и дождитесь
-`COMPLETED`: сводка по вариантам появится в панели внизу. Вкладки под схемой
-переключают варианты; на странице варианта с переопределениями параметры
-доступны только для просмотра, переопределённые отмечены.
+`COMPLETED`: сводка по вариантам появится в панели внизу. Модель правится на
+первой вкладке под схемой, `Model`; вкладки вариантов показывают модель с
+переопределениями варианта только для просмотра, переопределённые значения
+отмечены.
 
 Оба порта доступны только на `127.0.0.1`. Backend работает с копией `examples/`
 внутри контейнера: изменения и результаты прогонов пропадают вместе с ним.
