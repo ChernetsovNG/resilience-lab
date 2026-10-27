@@ -102,6 +102,8 @@ apps/cli/build/install/cli/bin/cli run examples/retry-storm.json > result.json
   задачи и этапы развития.
 - [Проектный дизайн](docs/superpowers/specs/2026-10-25-resilience-lab-design.md):
   семантика модели, метрики, допущения и границы текущей версии.
+- [Целевая архитектура](docs/architecture/2026-10-27-target-architecture.md):
+  архитектурные решения (ADR) и исследования, на которых они основаны.
 - [AGENTS.md](AGENTS.md): правила работы с репозиторием и команды проверок.
 
 ## Лицензия
