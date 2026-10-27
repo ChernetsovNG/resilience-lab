@@ -1,0 +1,1458 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "resilience-lab API",
+    "version" : "0.1.0"
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ],
+  "paths" : {
+    "/api/v1/catalog" : {
+      "get" : {
+        "operationId" : "getCatalog",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Catalog"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "catalog-controller" ]
+      }
+    },
+    "/api/v1/health" : {
+      "get" : {
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "health-controller" ]
+      }
+    },
+    "/api/v1/jobs" : {
+      "get" : {
+        "operationId" : "listJobs",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/JobView"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "job-controller" ]
+      },
+      "post" : {
+        "operationId" : "submitJob",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExperimentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "job-controller" ]
+      }
+    },
+    "/api/v1/jobs/{id}" : {
+      "get" : {
+        "operationId" : "getJob",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "job-controller" ]
+      }
+    },
+    "/api/v1/runs" : {
+      "get" : {
+        "operationId" : "listRuns",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/RunEntry"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
+    "/api/v1/runs/{id}/manifest" : {
+      "get" : {
+        "operationId" : "getRunManifest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunManifest"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
+    "/api/v1/runs/{id}/summary" : {
+      "get" : {
+        "operationId" : "getRunSummary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
+    "/api/v1/validate" : {
+      "post" : {
+        "operationId" : "validateExperiment",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExperimentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ValidationView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "validation-controller" ]
+      }
+    },
+    "/api/v1/workspace/document" : {
+      "get" : {
+        "operationId" : "getDocument",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DocumentView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "document-controller" ]
+      },
+      "put" : {
+        "operationId" : "putDocument",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DocumentContent"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DocumentEntry"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "document-controller" ]
+      }
+    },
+    "/api/v1/workspace/documents" : {
+      "get" : {
+        "operationId" : "listDocuments",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/DocumentEntry"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "document-controller" ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AggregateMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "p95LatencyMs" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "p99LatencyMs" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "pooledLatency" : {
+            "$ref" : "#/components/schemas/LatencySummary"
+          },
+          "services" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateServiceMetrics"
+            }
+          },
+          "successRate" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "pooledLatency", "services" ]
+      },
+      "AggregateServiceMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "admittedAmplification" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "offeredAmplification" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ApiProblem" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "diagnostics" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Diagnostic"
+            }
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "diagnostics", "message" ]
+      },
+      "BlockInstance" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "params" : {
+            "type" : "object",
+            "additionalProperties" : true
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "params", "type" ]
+      },
+      "Catalog" : {
+        "type" : "object",
+        "properties" : {
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "types" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TypeDescriptor"
+            }
+          }
+        },
+        "required" : [ "schemaVersion", "types" ]
+      },
+      "ConnectionInstance" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
+          "from" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "params" : {
+            "type" : "object",
+            "additionalProperties" : true
+          },
+          "to" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "from", "id", "params", "to", "type" ]
+      },
+      "ConnectionRule" : {
+        "type" : "object",
+        "properties" : {
+          "fromType" : {
+            "type" : "string"
+          },
+          "toType" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "fromType", "toType" ]
+      },
+      "Diagnostic" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "document" : {
+            "type" : [ "string", "null" ]
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : [ "string", "null" ]
+          },
+          "pointer" : {
+            "type" : [ "string", "null" ]
+          },
+          "severity" : {
+            "type" : "string",
+            "enum" : [ "ERROR", "WARNING" ]
+          }
+        },
+        "required" : [ "code", "message", "severity" ]
+      },
+      "DocumentContent" : {
+        "type" : "object",
+        "properties" : {
+          "experiment" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ExperimentFile"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "layout" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LayoutFile"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "model" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ModelFile"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "DocumentEntry" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "MODEL", "LAYOUT", "EXPERIMENT" ]
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "path", "version" ]
+      },
+      "DocumentView" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "$ref" : "#/components/schemas/DocumentContent"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "MODEL", "LAYOUT", "EXPERIMENT" ]
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "content", "kind", "path", "version" ]
+      },
+      "ExecutionSettings" : {
+        "type" : "object",
+        "properties" : {
+          "maxRealTime" : {
+            "type" : "string"
+          },
+          "measurement" : {
+            "type" : "string"
+          },
+          "replications" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "warmup" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "maxRealTime", "measurement", "replications", "seed", "warmup" ]
+      },
+      "ExperimentFile" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
+          "execution" : {
+            "$ref" : "#/components/schemas/ExecutionSettings"
+          },
+          "faults" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Fault"
+            }
+          },
+          "layoutRef" : {
+            "type" : [ "string", "null" ]
+          },
+          "modelRef" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variants" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Variant"
+            }
+          }
+        },
+        "required" : [ "execution", "faults", "modelRef", "schemaVersion", "variants" ]
+      },
+      "ExperimentRequest" : {
+        "type" : "object",
+        "properties" : {
+          "experiment" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "experiment" ]
+      },
+      "Fault" : {
+        "type" : "object",
+        "properties" : {
+          "failureRate" : {
+            "type" : [ "string", "null" ]
+          },
+          "from" : {
+            "type" : "string"
+          },
+          "processingMultiplier" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "target" : {
+            "type" : "string"
+          },
+          "to" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "from", "target", "to" ]
+      },
+      "HealthView" : {
+        "type" : "object",
+        "properties" : {
+          "applicationVersion" : {
+            "type" : "string"
+          },
+          "kslVersion" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "applicationVersion", "kslVersion", "status" ]
+      },
+      "JobView" : {
+        "type" : "object",
+        "properties" : {
+          "completedTasks" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "diagnostics" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Diagnostic"
+            }
+          },
+          "error" : {
+            "type" : [ "string", "null" ]
+          },
+          "experiment" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "runId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "QUEUED", "RUNNING", "COMPLETED", "FAILED" ]
+          },
+          "totalTasks" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "completedTasks", "diagnostics", "experiment", "id", "runId", "status", "totalTasks" ]
+      },
+      "LatencyDistribution" : {
+        "type" : "object",
+        "properties" : {
+          "meanMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "p95Ms" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "p99Ms" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "meanMs", "p95Ms", "p99Ms" ]
+      },
+      "LatencySummary" : {
+        "type" : "object",
+        "properties" : {
+          "all" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "failed" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "successful" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "LayoutFile" : {
+        "type" : "object",
+        "properties" : {
+          "positions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/Position"
+            }
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "positions", "schemaVersion" ]
+      },
+      "MetricSummary" : {
+        "type" : "object",
+        "properties" : {
+          "ci95High" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "ci95Low" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "max" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "mean" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "min" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "stdDev" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          }
+        },
+        "required" : [ "max", "mean", "min" ]
+      },
+      "ModelFile" : {
+        "type" : "object",
+        "properties" : {
+          "blocks" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/BlockInstance"
+            }
+          },
+          "connections" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectionInstance"
+            }
+          },
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "blocks", "connections", "schemaVersion" ]
+      },
+      "ParamDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "default" : {
+            "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+            "additionalProperties" : true
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "dimension" : {
+            "type" : [ "string", "null" ],
+            "enum" : [ "DURATION", "RATE", "PROBABILITY", null ]
+          },
+          "exclusiveMinimum" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "fields" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamDescriptor"
+            }
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT" ]
+          },
+          "maximum" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "minimum" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "options" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "required" : {
+            "type" : "boolean"
+          },
+          "sweepable" : {
+            "type" : "boolean"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "units" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/QuantityUnit"
+            }
+          }
+        },
+        "required" : [ "description", "fields", "kind", "name", "options", "required", "sweepable", "title", "units" ]
+      },
+      "PortDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "direction" : {
+            "type" : "string",
+            "enum" : [ "IN", "OUT" ]
+          },
+          "id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "direction", "id" ]
+      },
+      "Position" : {
+        "type" : "object",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "x", "y" ]
+      },
+      "QuantityUnit" : {
+        "type" : "object",
+        "properties" : {
+          "denominator" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "numerator" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "symbol" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "denominator", "numerator", "symbol" ]
+      },
+      "RunEntry" : {
+        "type" : "object",
+        "properties" : {
+          "directory" : {
+            "type" : "string"
+          },
+          "experiment" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "directory", "experiment", "id" ]
+      },
+      "RunManifest" : {
+        "type" : "object",
+        "properties" : {
+          "applicationVersion" : {
+            "type" : "string"
+          },
+          "complete" : {
+            "type" : "boolean"
+          },
+          "documents" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "experiment" : {
+            "type" : "string"
+          },
+          "kslVersion" : {
+            "type" : "string"
+          },
+          "parts" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "replications" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "streamAssignment" : {
+            "type" : "string"
+          },
+          "variants" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "applicationVersion", "complete", "documents", "experiment", "kslVersion", "parts", "replications", "schemaVersion", "seed", "streamAssignment", "variants" ]
+      },
+      "RunSummary" : {
+        "type" : "object",
+        "properties" : {
+          "experiment" : {
+            "type" : "string"
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variants" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VariantSummary"
+            }
+          }
+        },
+        "required" : [ "experiment", "schemaVersion", "variants" ]
+      },
+      "TypeDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "enum" : [ "BLOCK", "CONNECTION" ]
+          },
+          "connects" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ConnectionRule"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ParamDescriptor"
+            }
+          },
+          "ports" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PortDescriptor"
+            }
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "category", "description", "id", "params", "ports", "title", "version" ]
+      },
+      "ValidationView" : {
+        "type" : "object",
+        "properties" : {
+          "diagnostics" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Diagnostic"
+            }
+          },
+          "experiment" : {
+            "type" : "string"
+          },
+          "valid" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "diagnostics", "experiment", "valid" ]
+      },
+      "Variant" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : [ "string", "null" ]
+          },
+          "overrides" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+              "additionalProperties" : true
+            }
+          }
+        },
+        "required" : [ "id", "overrides" ]
+      },
+      "VariantSummary" : {
+        "type" : "object",
+        "properties" : {
+          "aggregate" : {
+            "$ref" : "#/components/schemas/AggregateMetrics"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "replications" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "aggregate", "id", "label", "replications" ]
+      }
+    }
+  }
+}
