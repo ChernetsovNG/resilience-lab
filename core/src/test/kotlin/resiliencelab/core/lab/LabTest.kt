@@ -246,4 +246,27 @@ class LabTest {
         assertThat(Lab.resolveRef("b.experiment.json", "/m.model.json")).isNull()
         assertThat(Lab.resolveRef("b.experiment.json", "https://x/m.model.json")).isNull()
     }
+
+    @Test
+    fun `rejects changed validated inputs before computing`() {
+        listOf(
+            Triple(experiment, "20261025", "20261026"),
+            Triple(model, "\"handlers\": 2", "\"handlers\": 3"),
+        ).forEach { (path, before, after) ->
+            val root = exampleWorkspace()
+            Lab(FileWorkspace(root)).use { lab ->
+                val report = lab.validate(experiment)
+                val file = root.resolve(path)
+                val original = Files.readString(file)
+                val changed = original.replace(before, after)
+                assertThat(changed).isNotEqualTo(original)
+                Files.writeString(file, changed)
+
+                val failure = runCatching { lab.run(experiment, "changed-input", report.documentVersions) }.exceptionOrNull()
+                assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+                assertThat((failure as InvalidExperimentException).diagnostics.map { it.code }).containsExactly("DOCUMENT_CHANGED")
+                assertThat(root.resolve(".results")).doesNotExist()
+            }
+        }
+    }
 }

@@ -10,6 +10,7 @@ import java.util.concurrent.RejectedExecutionException
 /**
  * Process-local jobs (ADR 0009, stage 1 slice): a job validates its experiment on submission and then runs it through
  * [Lab] on [executor]. At most [maxTerminalJobs] finished jobs are kept, oldest evicted first; active jobs stay.
+ * Accepted computation-input versions are checked by the core before a queued job starts computing.
  */
 class JobService(
     private val lab: Lab,
@@ -32,7 +33,7 @@ class JobService(
         val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, 0)
         synchronized(lock) { jobs[job.id] = job }
         try {
-            executor.execute { execute(job.id) }
+            executor.execute { execute(job.id, report.documentVersions) }
         } catch (exception: RejectedExecutionException) {
             finish(job.id) { it.copy(status = JobStatus.FAILED, error = "Job queue is full") }
         }
@@ -44,10 +45,13 @@ class JobService(
     /** Jobs, newest first. */
     fun list(): List<JobView> = synchronized(lock) { jobs.values.reversed() }
 
-    private fun execute(id: String) {
+    private fun execute(
+        id: String,
+        expectedVersions: Map<String, String>,
+    ) {
         val job = update(id) { it.copy(status = JobStatus.RUNNING) } ?: return
         try {
-            lab.run(job.experiment, job.runId) { completed, total ->
+            lab.run(job.experiment, job.runId, expectedVersions) { completed, total ->
                 update(id) { it.copy(completedTasks = maxOf(it.completedTasks, completed), totalTasks = total) }
             }
             finish(id) { it.copy(status = JobStatus.COMPLETED) }

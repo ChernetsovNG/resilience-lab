@@ -61,6 +61,8 @@ Dependabot еженедельно проверяет npm, Gradle, GitHub Actions
 
 Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1` и рабочей областью `examples/`; другой каталог задаётся переменной `RESILIENCE_LAB_WORKSPACE` или аргументом `--args='--resilience-lab.workspace=<каталог>'`. Прогоны записываются в `<рабочая область>/.results/`, этот каталог не попадает в git. Спецификацию `apps/server/openapi.json` генерирует springdoc. `./gradlew :apps:server:test` запускает тесты backend. Задания хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками; хранятся не более 100 завершённых заданий в порядке завершения FIFO, активные задания никогда не вытесняются. Результаты прогонов этапа 1 остаются в `.results/`.
 
+При принятии задания фиксируются версии модели и эксперимента. Если к началу расчёта документы изменились, задание завершается с `FAILED`; для валидных изменённых документов возвращается диагностика `DOCUMENT_CHANGED`. Результаты не записываются.
+
 ### CLI
 
 - `./gradlew :apps:cli:run --args="validate examples/retry-storm/retry-storm.experiment.json"` — проверить пример эксперимента.

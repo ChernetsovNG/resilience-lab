@@ -100,4 +100,23 @@ class JobServiceTest {
         assertThat(jobs.get(third.id)).isNull()
         assertThat(jobs.list().map { it.id }).containsExactly(second.id, first.id)
     }
+
+    @Test
+    fun `rejects valid document changes made while a job is queued`() {
+        val queued = mutableListOf<Runnable>()
+        val jobs = service(Executor { queued += it })
+        val job = jobs.submit(experiment)
+        val file = root.resolve(experiment)
+        val original = Files.readString(file)
+        val changed = original.replace("20261025", "20261026")
+        assertThat(changed).isNotEqualTo(original)
+        Files.writeString(file, changed)
+
+        queued.single().run()
+
+        val failed = jobs.get(job.id)!!
+        assertThat(failed.status).isEqualTo(JobStatus.FAILED)
+        assertThat(failed.diagnostics.single().code).isEqualTo("DOCUMENT_CHANGED")
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
 }
