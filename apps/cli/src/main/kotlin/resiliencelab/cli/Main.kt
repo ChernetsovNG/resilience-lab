@@ -1,151 +1,159 @@
 package resiliencelab.cli
 
-import kotlinx.serialization.json.Json
-import resiliencelab.core.experiment.ExperimentResult
-import resiliencelab.core.experiment.ExperimentRunner
-import resiliencelab.core.experiment.SweepExpander
-import resiliencelab.core.scenario.ExperimentDocument
-import resiliencelab.core.scenario.ScenarioCodec
-import resiliencelab.core.scenario.ScenarioValidationException
-import resiliencelab.core.scenario.ScenarioValidator
-import resiliencelab.core.scenario.ValidationIssue
+import resiliencelab.core.compiler.Diagnostic
+import resiliencelab.core.execution.ExperimentExecutor
+import resiliencelab.core.experiment.MetricSummary
+import resiliencelab.core.lab.InvalidExperimentException
+import resiliencelab.core.lab.Lab
+import resiliencelab.core.lab.RunIds
+import resiliencelab.core.lab.RunOutcome
+import resiliencelab.core.workspace.FileWorkspace
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
-import kotlin.io.path.readText
+import java.util.Locale
 import kotlin.system.exitProcess
 
-private const val USAGE =
-    "Usage: validate <experiment.json> | run <experiment.json> | sweep <sweep.json>"
+private const val USAGE = "Usage: validate <experiment.json> | run [--workers N] <experiment.json>"
 
-/** Runs the requested CLI command and exits the process with its status. */
+/** Runs one command against the current directory as the workspace and exits with its status. */
 fun main(args: Array<String>) {
     exitProcess(runCommand(args.asList(), System.out, System.err))
 }
 
+/** Runs an experiment through [Lab]: the CLI counterpart of `POST /jobs`. */
+internal typealias ExperimentRun = (lab: Lab, experiment: String, runId: String, onProgress: (Int, Int) -> Unit) -> RunOutcome
+
 /**
- * Dispatches `validate`, `run`, and `sweep` using the supplied streams.
- * Input and validation failures return 2 and execution failures return 1. Successful `run` and `sweep` commands
- * write one JSON result to [stdout]; validation diagnostics and command errors go to [stderr].
+ * Validates or runs an experiment of the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
+ * 2 for usage errors and invalid experiments, 1 for execution failures. `run` writes the artifact to `.results/`,
+ * progress to [stderr], and the run directory followed by one summary line per variant to [stdout].
  */
 internal fun runCommand(
     args: List<String>,
     stdout: Appendable,
     stderr: Appendable,
-    experimentRunner: (ExperimentDocument) -> ExperimentResult = ExperimentRunner::run,
+    workspaceRoot: Path = Path.of("").toAbsolutePath(),
+    newRunId: () -> String = { RunIds.next() },
+    execute: ExperimentRun = { lab, experiment, runId, onProgress -> lab.run(experiment, runId, onProgress) },
 ): Int {
-    if (args.size != 2 || args[0] !in setOf("validate", "run", "sweep")) {
-        stderr.appendLine(USAGE)
-        return 2
-    }
-
-    val text =
-        try {
-            Path.of(args[1]).readText()
-        } catch (error: Exception) {
-            return inputError(stderr, error)
+    val command = Command.parse(args) ?: return usage(stderr)
+    val root = workspaceRoot.toAbsolutePath().normalize()
+    val experiment =
+        relativePath(root, command.experiment)
+            ?: return inputError(stderr, "experiment must be inside the workspace $root: ${command.experiment}")
+    val executor = command.workers?.let { ExperimentExecutor(it) } ?: ExperimentExecutor()
+    return executor.use {
+        val lab = Lab(FileWorkspace(root), executor = executor)
+        if (command.run) {
+            run(lab, experiment, newRunId(), stdout, stderr, execute)
+        } else {
+            validate(lab, experiment, stderr)
         }
+    }
+}
 
-    return when (args[0]) {
-        "validate" -> validate(text, args[1], stderr)
-        "run" -> run(text, stdout, stderr, experimentRunner)
-        else -> sweep(text, stdout, stderr, experimentRunner)
+private class Command(
+    val run: Boolean,
+    val experiment: String,
+    val workers: Int?,
+) {
+    companion object {
+        fun parse(args: List<String>): Command? =
+            when {
+                args.size == 2 && args[0] == "validate" -> Command(run = false, experiment = args[1], workers = null)
+                args.size == 2 && args[0] == "run" -> Command(run = true, experiment = args[1], workers = null)
+                args.size == 4 && args[0] == "run" && args[1] == "--workers" ->
+                    args[2].toIntOrNull()?.takeIf { it >= 1 }?.let { Command(run = true, experiment = args[3], workers = it) }
+                else -> null
+            }
     }
 }
 
 private fun validate(
-    text: String,
-    path: String,
+    lab: Lab,
+    experiment: String,
     stderr: Appendable,
 ): Int {
-    val document =
-        try {
-            ScenarioCodec.decodeExperiment(text)
-        } catch (error: Exception) {
-            return inputError(stderr, error)
-        }
-    val issues = ScenarioValidator.validate(document)
-    if (issues.isNotEmpty()) return validationError(stderr, issues)
-
-    stderr.appendLine("Valid experiment: $path")
+    val report = lab.validate(experiment)
+    if (!report.valid) return validationError(stderr, report.diagnostics)
+    stderr.appendLine("Valid experiment: $experiment")
     return 0
 }
 
 private fun run(
-    text: String,
+    lab: Lab,
+    experiment: String,
+    runId: String,
     stdout: Appendable,
     stderr: Appendable,
-    experimentRunner: (ExperimentDocument) -> ExperimentResult,
+    execute: ExperimentRun,
 ): Int {
-    val document =
+    val outcome =
         try {
-            ScenarioCodec.decodeExperiment(text)
+            execute(lab, experiment, runId) { completed, total ->
+                synchronized(stderr) { stderr.appendLine("Tasks $completed/$total") }
+            }
+        } catch (error: InvalidExperimentException) {
+            return validationError(stderr, error.diagnostics)
         } catch (error: Exception) {
-            return inputError(stderr, error)
-        }
-    val issues = ScenarioValidator.validate(document)
-    if (issues.isNotEmpty()) return validationError(stderr, issues)
-
-    return execute(document, stdout, stderr, experimentRunner)
-}
-
-private fun sweep(
-    text: String,
-    stdout: Appendable,
-    stderr: Appendable,
-    experimentRunner: (ExperimentDocument) -> ExperimentResult,
-): Int {
-    val document =
-        try {
-            ScenarioCodec.decodeSweep(text)
-        } catch (error: Exception) {
-            return inputError(stderr, error)
-        }
-    val issues = ScenarioValidator.validate(document)
-    if (issues.isNotEmpty()) return validationError(stderr, issues)
-    val expanded =
-        try {
-            SweepExpander.expand(document)
-        } catch (error: ScenarioValidationException) {
-            return validationError(stderr, error.errors)
-        }
-
-    return execute(expanded, stdout, stderr, experimentRunner)
-}
-
-private fun execute(
-    document: ExperimentDocument,
-    stdout: Appendable,
-    stderr: Appendable,
-    experimentRunner: (ExperimentDocument) -> ExperimentResult,
-): Int {
-    val encoded =
-        try {
-            Json.encodeToString(ExperimentResult.serializer(), experimentRunner(document))
-        } catch (error: Exception) {
-            stderr.appendLine("Execution failed: ${diagnostic(error)}")
+            stderr.appendLine("Execution failed: ${firstLine(error)}")
             return 1
         }
-    stdout.appendLine(encoded)
+    stdout.appendLine(outcome.runDirectory)
+    outcome.summary.variants.forEach { variant ->
+        val aggregate = variant.aggregate
+        stdout.appendLine(
+            "${variant.id}: success ${percent(aggregate.successRate)}, " +
+                "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}",
+        )
+    }
     return 0
+}
+
+private fun relativePath(
+    root: Path,
+    argument: String,
+): String? {
+    val resolved =
+        try {
+            root.resolve(argument).normalize()
+        } catch (exception: InvalidPathException) {
+            return null
+        }
+    if (!resolved.startsWith(root) || resolved == root) return null
+    return root.relativize(resolved).joinToString("/")
+}
+
+private fun usage(stderr: Appendable): Int {
+    stderr.appendLine(USAGE)
+    return 2
 }
 
 private fun inputError(
     stderr: Appendable,
-    error: Exception,
+    message: String,
 ): Int {
-    stderr.appendLine("Invalid input: ${diagnostic(error)}")
+    stderr.appendLine("Invalid input: $message")
     return 2
 }
 
 private fun validationError(
     stderr: Appendable,
-    issues: List<ValidationIssue>,
+    diagnostics: List<Diagnostic>,
 ): Int {
     stderr.appendLine("Validation failed:")
-    issues.forEach { issue -> stderr.appendLine("- ${issue.path}: ${issue.message}") }
+    diagnostics.forEach { stderr.appendLine("- ${location(it)}: ${it.code}: ${it.message}") }
     return 2
 }
 
-private fun diagnostic(error: Throwable): String =
+private fun location(diagnostic: Diagnostic): String =
+    listOfNotNull(diagnostic.document, diagnostic.pointer).joinToString("#").ifEmpty { "experiment" }
+
+private fun percent(summary: MetricSummary?): String = summary?.let { String.format(Locale.ROOT, "%.1f%%", it.mean * 100) } ?: "n/a"
+
+private fun millis(summary: MetricSummary?): String = summary?.let { String.format(Locale.ROOT, "%.1f ms", it.mean) } ?: "n/a"
+
+private fun firstLine(error: Throwable): String =
     error.message
         ?.lineSequence()
         ?.firstOrNull()

@@ -1,4 +1,4 @@
-package resiliencelab.server.api
+package resiliencelab.server.lab
 
 import com.jayway.jsonpath.JsonPath
 import org.assertj.core.api.Assertions.assertThat

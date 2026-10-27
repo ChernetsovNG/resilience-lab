@@ -293,4 +293,16 @@ class FileWorkspaceTest {
 
         assertThatThrownBy { workspace.read("broken.model.json") }.isInstanceOf(IOException::class.java)
     }
+
+    @Test
+    fun `lists every file under a directory, hidden ones included`() {
+        workspace.write(".results/e/run-1/manifest.json", "{}\n")
+        workspace.write(".results/e/run-1/summary.json", "{}\n")
+        workspace.write("a.model.json", "{}\n")
+
+        assertThat(workspace.listFiles(".results"))
+            .containsExactly(".results/e/run-1/manifest.json", ".results/e/run-1/summary.json")
+        assertThat(workspace.listFiles("missing")).isEmpty()
+        assertThatThrownBy { workspace.listFiles("../outside") }.isInstanceOf(InvalidDocumentPathException::class.java)
+    }
 }

@@ -6,3 +6,12 @@ server:
 spring:
   main:
     banner-mode: off
+
+springdoc:
+  packages-to-scan: resiliencelab.server.lab
+  writer-with-order-by-keys: true
+  writer-with-default-pretty-printer: true
+  default-produces-media-type: application/json
+
+resilience-lab:
+  workspace: examples

@@ -12,3 +12,4 @@ kslOutput/
 .idea/
 .vscode/
 *.iml
+**/.results/

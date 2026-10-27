@@ -19,10 +19,11 @@ import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import java.io.IOException
 
-/** Diagnostics of one experiment. */
+/** Diagnostics and versions of the computation inputs of one experiment. */
 data class ValidationReport(
     val experimentPath: String,
     val diagnostics: List<Diagnostic>,
+    val documentVersions: Map<String, String> = emptyMap(),
 ) {
     val valid: Boolean get() = diagnostics.none { it.severity == Severity.ERROR }
 }
@@ -58,17 +59,44 @@ class Lab(
     }
 
     /** Validates an experiment and all referenced documents in the workspace. */
-    fun validate(experimentPath: String): ValidationReport = ValidationReport(experimentPath, load(experimentPath).diagnostics)
+    fun validate(experimentPath: String): ValidationReport {
+        val loaded = load(experimentPath)
+        return ValidationReport(experimentPath, loaded.diagnostics, loaded.versions)
+    }
 
     /** Runs a valid experiment and writes its reproducible result artifact under the workspace results directory. */
     fun run(
         experimentPath: String,
         runId: String,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
+    ): RunOutcome = run(experimentPath, runId, expectedVersions = null, onProgress)
+
+    /**
+     * Runs only the computation inputs accepted by validation when [expectedVersions] is supplied. The check uses
+     * the same loaded documents as compilation and execution, so a queued job cannot silently run later edits.
+     * A mismatch raises [InvalidExperimentException] with `DOCUMENT_CHANGED` before computing or writing results.
+     */
+    fun run(
+        experimentPath: String,
+        runId: String,
+        expectedVersions: Map<String, String>?,
+        onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): RunOutcome {
         val runDirectory = ResultsLayout.runDirectory(experimentPath, runId)
         val loaded = load(experimentPath)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        if (expectedVersions != null && expectedVersions != loaded.versions) {
+            throw InvalidExperimentException(
+                listOf(
+                    Diagnostic(
+                        "DOCUMENT_CHANGED",
+                        Severity.ERROR,
+                        "Experiment documents changed after validation; submit the experiment again",
+                        experimentPath,
+                    ),
+                ),
+            )
+        }
         val result = executor.run(compiled, onProgress)
         val summary =
             RunSummary(

@@ -17,6 +17,7 @@ dependencies {
     }
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.2.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
@@ -36,4 +37,9 @@ configurations.named("ktlint") {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("resilience-lab.workspace", rootProject.file("examples").absolutePath)
+}
+
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    workingDir = rootProject.projectDir
 }

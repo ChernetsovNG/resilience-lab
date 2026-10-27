@@ -1,0 +1,102 @@
+package resiliencelab.server.lab
+
+import kotlinx.serialization.Serializable
+import resiliencelab.core.compiler.Diagnostic
+import resiliencelab.core.document.ExperimentFile
+import resiliencelab.core.document.LayoutFile
+import resiliencelab.core.document.ModelFile
+
+// API types follow the rules of the server plan: plain @Serializable classes, no @SerialName, @Transient, custom
+// serializers or polymorphism, because springdoc derives the schema from Kotlin properties and kotlinx writes the JSON.
+
+/** Error body of the stage 1 API (stage 1 design §4.1). */
+@Serializable
+data class ApiProblem(
+    val code: String,
+    val message: String,
+    val diagnostics: List<Diagnostic> = emptyList(),
+)
+
+/** Server status and versions. */
+@Serializable
+data class HealthView(
+    val status: String,
+    val applicationVersion: String,
+    val kslVersion: String,
+)
+
+/** Workspace document kinds by file suffix (ADR 0005). */
+@Serializable
+enum class DocumentKind(
+    val suffix: String,
+) {
+    MODEL(".model.json"),
+    LAYOUT(".layout.json"),
+    EXPERIMENT(".experiment.json"),
+    ;
+
+    companion object {
+        fun of(path: String): DocumentKind? = entries.firstOrNull { path.endsWith(it.suffix) }
+    }
+}
+
+/** A workspace document without its content. */
+@Serializable
+data class DocumentEntry(
+    val path: String,
+    val kind: DocumentKind,
+    val version: String,
+)
+
+/** Document content: exactly the property of the document kind is set. */
+@Serializable
+data class DocumentContent(
+    val model: ModelFile? = null,
+    val layout: LayoutFile? = null,
+    val experiment: ExperimentFile? = null,
+)
+
+/** A document with its version; the same version is sent as `ETag`. */
+@Serializable
+data class DocumentView(
+    val path: String,
+    val kind: DocumentKind,
+    val version: String,
+    val content: DocumentContent,
+)
+
+/** Names an experiment document of the workspace. */
+@Serializable
+data class ExperimentRequest(
+    val experiment: String,
+)
+
+/** Diagnostics of one experiment; [valid] is false when any diagnostic is an error. */
+@Serializable
+data class ValidationView(
+    val experiment: String,
+    val valid: Boolean,
+    val diagnostics: List<Diagnostic>,
+)
+
+/** Lifecycle of a process-local job. */
+@Serializable
+enum class JobStatus {
+    QUEUED,
+    RUNNING,
+    COMPLETED,
+    FAILED,
+}
+
+/** Snapshot of a job: one run of one experiment; [totalTasks] is known after the first task finishes. */
+@Serializable
+data class JobView(
+    val id: String,
+    val experiment: String,
+    val runId: String,
+    val status: JobStatus,
+    val completedTasks: Int,
+    val totalTasks: Int,
+    val error: String? = null,
+    val diagnostics: List<Diagnostic> = emptyList(),
+)
