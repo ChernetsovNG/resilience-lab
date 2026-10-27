@@ -38,9 +38,13 @@ curl --fail http://127.0.0.1:8080/api/v1/health
 `COMPLETED`. Прокрутите страницу к `Experiment result`: там появятся метрики
 и графики.
 
-Оба порта доступны только на `127.0.0.1`. Задания и результаты хранятся в памяти
-backend: перед перезапуском сохраните нужные результаты через
-`Download full result JSON`.
+Оба порта доступны только на `127.0.0.1`. Задания и результаты браузерных
+экспериментов хранятся в памяти backend: перед перезапуском сохраните нужные
+результаты через `Download full result JSON`.
+
+API этапа 1 хранит документы и прогоны в `/workspace`, копии `examples/`
+внутри образа backend. Эти файлы пропадают при удалении контейнера.
+
 Остановить контейнеры:
 
 ```sh
@@ -60,6 +64,12 @@ Compose. Порты `8080` и `5173` должны быть свободны.
 ```sh
 ./gradlew :apps:server:bootRun
 ```
+
+Рабочая область сервера по умолчанию — `examples/`; другой каталог задаётся
+переменной `RESILIENCE_LAB_WORKSPACE` или аргументом
+`--args='--resilience-lab.workspace=<каталог>'`. Новое API описано в
+[спецификации OpenAPI](apps/server/openapi.json). Браузерный интерфейс пока
+использует ручки MVP.
 
 Во втором терминале перейдите из корня в `web`, установите Node.js через fnm
 и запустите интерфейс:
@@ -86,15 +96,16 @@ Vite передаёт запросы `/api` локальному backend на `1
 
 ```sh
 ./gradlew :apps:cli:installDist
-apps/cli/build/install/cli/bin/cli validate examples/retry-storm.json
-apps/cli/build/install/cli/bin/cli run examples/retry-storm.json > result.json
+apps/cli/build/install/cli/bin/cli validate examples/retry-storm/retry-storm.experiment.json
+apps/cli/build/install/cli/bin/cli run examples/retry-storm/retry-storm.experiment.json
 ```
 
-[Пример retry storm](examples/retry-storm.json) сравнивает три попытки на связи
-с одной при замедлении конечного сервиса. `validate` проверяет конфигурацию;
-`run` сохраняет в `result.json` один JSON-документ с конфигурацией и численными
-результатами. Диагностика идёт в stderr. Установленный launcher позволяет
-получить чистый JSON без служебного вывода Gradle.
+[Пример retry storm](examples/retry-storm/) сравнивает три попытки на вызовах
+с одной при замедлении конечного сервиса. `validate` проверяет модель и
+эксперимент; `run` записывает результат в `.results/retry-storm/<прогон>/`
+и печатает путь к нему и краткую сводку по вариантам. Ход расчёта и
+диагностика идут в stderr. Рабочая область CLI — текущий каталог;
+`run --workers N <эксперимент>` задаёт число потоков расчёта.
 
 ## Документация
 

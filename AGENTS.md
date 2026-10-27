@@ -4,9 +4,9 @@
 
 Текущий срез включает модули `core`, `apps:cli`, `apps:server` и `web`:
 
-- `core` — модель сценариев, валидация, KSL-симуляция, повторения, parameter sweep и агрегация метрик.
-- `apps:cli` — команды `validate`, `run` и `sweep`, собираемые с помощью Gradle `application`.
-- `apps:server` — Spring Boot API для health, валидации сценариев, асинхронных заданий экспериментов и их результатов; задания хранятся process-local.
+- `core` — фундамент этапа 1: каталог типов, документы рабочей области, компилятор в IR, KSL-симуляция с потоками по путям блоков, исполнение задач, артефакты прогонов и фасад `Lab`; модель сценариев MVP со sweep остаётся до перехода web.
+- `apps:cli` — команды `validate` и `run [--workers N]` для экспериментов рабочей области, собираемые с помощью Gradle `application`.
+- `apps:server` — Spring Boot API этапа 1 (каталог, документы рабочей области, проверка, задания, прогоны) со спецификацией `apps/server/openapi.json` и ручки MVP для нынешнего web; задания хранятся process-local.
 - `web` — Vite/React SPA с типизированным API client, health badge, controlled Xyflow editor, формами параметров, baseline/candidate-сравнением, sweep, Recharts-графиками и импортом/экспортом JSON.
 
 Первый полный MVP завершён: core, CLI, Spring API и браузерный UI реализованы; реальный Chromium-сценарий проходит через editor, API, polling, charts и download без mock API.
@@ -22,6 +22,7 @@ Gradle-команды выполняются из корня репозитор�
 - `./gradlew :core:test` — тесты модуля `core`.
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
+- `UPDATE_OPENAPI=1 ./gradlew :apps:server:test --tests 'resiliencelab.server.lab.OpenApiSpecTest' --rerun` — пересоздать `apps/server/openapi.json` после изменения API; без переменной тест проверяет, что файл совпадает с кодом.
 - `./gradlew ktlintCheck` — проверка KtLint для всех JVM-модулей.
 - `./gradlew jacocoTestReport` — отчёты покрытия JaCoCo для всех JVM-модулей; пороги покрытия сборка не проверяет.
 - `npm ci` — воспроизводимая установка frontend-зависимостей из `package-lock.json`.
@@ -53,20 +54,20 @@ Dependabot еженедельно проверяет npm, Gradle, GitHub Actions
 - Frontend: `http://127.0.0.1:5173`; backend health: `http://127.0.0.1:8080/api/v1/health`. Оба host-порта опубликованы только на loopback (`127.0.0.1`), без configurable LAN access.
 - `docker compose down` — остановить и удалить только контейнеры этого Compose-проекта; volumes, образы и исходники не удаляются.
 - Браузер обращается к same-origin `/api`, Nginx передаёт запросы сервису `backend:8080`. Контейнеры работают от non-root пользователей; секреты и persistent volumes не используются.
-- Задания остаются process-local: перезапуск backend удаляет их, поэтому Compose не обеспечивает сохранение результатов между перезапусками.
+- Задания и результаты ручек MVP хранятся в памяти процесса: перезапуск backend удаляет их.
+- Backend работает с копией `examples/` внутри образа (`/workspace`): изменения документов и результаты прогонов пропадают вместе с контейнером.
 
 ### Backend API
 
-Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает тесты backend. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
+Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1` и рабочей областью `examples/`; другой каталог задаётся переменной `RESILIENCE_LAB_WORKSPACE` или аргументом `--args='--resilience-lab.workspace=<каталог>'`. Прогоны записываются в `<рабочая область>/.results/`, этот каталог не попадает в git. Спецификацию `apps/server/openapi.json` генерирует springdoc. `./gradlew :apps:server:test` запускает тесты backend. Задания хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками; хранятся не более 100 завершённых заданий в порядке завершения FIFO, активные задания никогда не вытесняются. Результаты прогонов этапа 1 остаются в `.results/`.
 
 ### CLI
 
-- `./gradlew :apps:cli:run --args="validate examples/retry-storm.json"` — проверить пример эксперимента.
-- `./gradlew :apps:cli:run --args="run examples/retry-storm.json"` — выполнить пример эксперимента.
-- `./gradlew :apps:cli:run --args="sweep <sweep.json>"` — выполнить parameter sweep; вместо `<sweep.json>` подставить путь к sweep-документу.
+- `./gradlew :apps:cli:run --args="validate examples/retry-storm/retry-storm.experiment.json"` — проверить пример эксперимента.
+- `./gradlew :apps:cli:run --args="run examples/retry-storm/retry-storm.experiment.json"` — выполнить пример; `--workers N` перед путём ограничивает число потоков расчёта.
 - `./gradlew :apps:cli:installDist` — собрать установленный launcher в `apps/cli/build/install/cli/bin/` (`cli` для Linux/macOS, `cli.bat` для Windows).
 
-`run` и `sweep` выводят один JSON-документ в stdout приложения; диагностика и сообщения `validate` выводятся в stderr. Запуск через Gradle добавляет служебные сообщения в общий вывод. Для машинного потребления JSON нужно запускать установленный launcher отдельным процессом из корня репозитория с теми же аргументами, например `run examples/retry-storm.json`, и парсить только его stdout.
+Рабочая область CLI — текущий каталог; путь к эксперименту должен вести внутрь неё. `run` записывает артефакт в `.results/<эксперимент>/<прогон>/` и печатает в stdout каталог прогона и по строке сводки на вариант; ход выполнения и диагностика идут в stderr, `validate` печатает результат в stderr. Код выхода 2 означает ошибку использования или проверки, 1 — сбой расчёта. Запуск через Gradle добавляет в вывод служебные сообщения; для разбора stdout запускайте установленный launcher.
 
 Основной документ: [проектный дизайн](docs/superpowers/specs/2026-10-25-resilience-lab-design.md). Он содержит цели, границы MVP, модельную семантику, критерии результата и рассмотренные альтернативы.
 
@@ -102,6 +103,7 @@ Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:serve
 - Kotlin-код размещать в пакете `resiliencelab` и его подпакетах.
 - В тестах использовать AssertJ для утверждений.
 - Публичные API и нетривиальные контракты документировать с помощью KDoc.
+- Типы API сервера — `@Serializable` data-классы и enum без `@SerialName`, `@Transient`, собственных сериализаторов и полиморфизма; ответы содержат все поля, отсутствующее значение — `null`; имена методов контроллеров уникальны. Схему OpenAPI springdoc строит по свойствам Kotlin, JSON пишет kotlinx, и тест `OpenApiConformance` сверяет ответы со схемой.
 
 ## Правила работы
 
