@@ -33,6 +33,8 @@
 - Типы API берутся только из `src/api/schema.d.ts` через псевдонимы в `src/api/apiTypes.ts`; руками типы API не пишутся.
 - Сервер пишет отсутствующее значение как `null`, а сгенерированный тип для полей-ссылок может быть просто необязательным. Проверять отсутствие через `== null` или `??`, а не через `=== undefined`.
 - Если `tsc` требует в тестовой фикстуре поле, которого в плане нет, значит, схема отличается от ожиданий плана: дополнить фикстуру по сгенерированному типу.
+- Поля `JsonElement` в API описаны схемой «любой JSON» (план сервера), поэтому `ParamDescriptor["default"]` и значения `overrides` — объединение JSON-типов, а не `unknown`.
+- Состояние не теряет правки и не смешивает документы: переключение эксперимента ждёт загрузки, сохранения и запуска и спрашивает перед отбрасыванием несохранённых правок; сохранение и запуск ждут исправления ошибочных черновиков; итог сохранения применяется только к тому открытию документа, для которого оно отправлено; результаты показываются только для эксперимента, для которого посчитаны.
 
 ## Границы плана
 
@@ -86,6 +88,7 @@ val prepareE2eWorkspace =
         description = "Copies examples/ into a scratch workspace for browser tests."
         from(rootProject.file("examples")) { exclude("**/.results/**") }
         into(e2eWorkspace)
+        outputs.upToDateWhen { false }
     }
 
 tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") {
@@ -99,7 +102,7 @@ tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") 
 }
 ```
 
-`Sync` при каждом запуске возвращает копию к содержимому `examples/` и удаляет лишнее, включая `.results/` прошлых прогонов.
+`Sync` при каждом запуске возвращает копию к содержимому `examples/` и удаляет лишнее, включая `.results/` прошлых прогонов. Без `upToDateWhen { false }` Gradle считает задачу актуальной, если в копию только добавились файлы, и оставляет их.
 
 - [ ] **Step 2: Playwright**
 
@@ -207,10 +210,10 @@ export interface StubResponse {
   body?: unknown;
 }
 
-/** Replaces `fetch` with [handler]; returns the mock to inspect calls. */
-export function stubFetch(handler: (url: string, init: RequestInit | undefined) => StubResponse) {
+/** Replaces `fetch` with [handler]; returns the mock to inspect calls. An async handler delays the response. */
+export function stubFetch(handler: (url: string, init: RequestInit | undefined) => StubResponse | Promise<StubResponse>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const { status = 200, body } = handler(String(input), init);
+    const { status = 200, body } = await handler(String(input), init);
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -873,14 +876,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubWorkspace(putStatus = 200) {
-  return stubFetch((url, init) => {
+function stubWorkspace(options: { putStatus?: number; putGate?: Promise<void> } = {}) {
+  return stubFetch(async (url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
       return { body: Object.values(documentViews).map(({ path, kind, version }) => ({ path, kind, version })) };
     }
     if (init?.method === "PUT") {
-      return putStatus === 409
+      await options.putGate;
+      return options.putStatus === 409
         ? { status: 409, body: { code: "VERSION_CONFLICT", message: "stale", diagnostics: [] } }
         : { body: { path: modelPath, kind: "MODEL", version: "v-model-2" } };
     }
@@ -908,6 +912,7 @@ describe("useWorkspace", () => {
     expect(result.current.loaded?.modelPath).toBe(modelPath);
     expect(result.current.loaded?.layout?.positions.gateway).toEqual({ x: 260, y: 100 });
     expect(result.current.dirty).toBe(false);
+    expect(result.current.loading).toBe(false);
   });
 
   it("saves edits with If-Match and clears the unsaved state", async () => {
@@ -929,7 +934,7 @@ describe("useWorkspace", () => {
   });
 
   it("reports a version conflict and reloads the stored model", async () => {
-    stubWorkspace(409);
+    stubWorkspace({ putStatus: 409 });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
 
@@ -956,6 +961,69 @@ describe("useWorkspace", () => {
     });
 
     expect(result.current.problem?.code).toBe("DOCUMENT_NOT_FOUND");
+  });
+
+  it("keeps unsaved edits unless opening discards them", async () => {
+    stubWorkspace();
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+
+    let opened = true;
+    await act(async () => {
+      opened = await result.current.open(experimentPath);
+    });
+    expect(opened).toBe(false);
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(6);
+
+    await act(async () => {
+      opened = await result.current.open(experimentPath, true);
+    });
+    expect(opened).toBe(true);
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
+  });
+
+  it("reports loading while an experiment opens", async () => {
+    stubWorkspace();
+    const { result } = await loaded();
+
+    let opening: Promise<boolean> = Promise.resolve(false);
+    act(() => {
+      opening = result.current.open(experimentPath);
+    });
+    expect(result.current.loading).toBe(true);
+    await act(async () => {
+      await opening;
+    });
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("does not open another experiment while saving", async () => {
+    let release: () => void = () => {};
+    const putGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubWorkspace({ putGate });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+
+    let saving: Promise<void> = Promise.resolve();
+    act(() => {
+      saving = result.current.save();
+    });
+    expect(result.current.saving).toBe(true);
+    let opened = true;
+    await act(async () => {
+      opened = await result.current.open(experimentPath, true);
+    });
+    expect(opened).toBe(false);
+
+    release();
+    await act(async () => {
+      await saving;
+    });
+    expect(result.current.saving).toBe(false);
+    expect(result.current.dirty).toBe(false);
   });
 });
 ```
@@ -989,14 +1057,21 @@ export interface Workspace {
   catalog: Catalog | null;
   experiments: string[];
   loaded: LoadedExperiment | null;
+  /** An experiment is being opened; editing, saving and running wait for it. */
+  loading: boolean;
   dirty: boolean;
   saving: boolean;
   /** The stored model changed since it was read; only a reload continues. */
   conflict: boolean;
   problem: ApiProblem | null;
-  open: (experimentPath: string) => Promise<void>;
+  /**
+   * Opens [experimentPath] and resolves to true. Does nothing and resolves to false while saving, or while the model has
+   * unsaved edits unless [discardChanges] is set.
+   */
+  open: (experimentPath: string, discardChanges?: boolean) => Promise<boolean>;
   setParam: (id: string, name: string, value: unknown) => void;
   save: () => Promise<void>;
+  /** Rereads the open experiment from storage, discarding unsaved edits. */
   reload: () => Promise<void>;
 }
 
@@ -1031,13 +1106,17 @@ export function useWorkspace(): Workspace {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [experiments, setExperiments] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<LoadedExperiment | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
+  /** Increments on every open, so responses for an earlier document are ignored. */
   const generation = useRef(0);
+  const dirty = loaded !== null && loaded.model !== loaded.savedModel;
 
-  const open = useCallback(async (experimentPath: string) => {
+  const load = useCallback(async (experimentPath: string) => {
     const current = ++generation.current;
+    setLoading(true);
     setProblem(null);
     setConflict(false);
     try {
@@ -1045,8 +1124,19 @@ export function useWorkspace(): Workspace {
       if (current === generation.current) setLoaded(next);
     } catch (error) {
       if (current === generation.current) setProblem(problemOf(error));
+    } finally {
+      if (current === generation.current) setLoading(false);
     }
   }, []);
+
+  const open = useCallback(
+    async (experimentPath: string, discardChanges = false) => {
+      if (saving || (dirty && !discardChanges)) return false;
+      await load(experimentPath);
+      return true;
+    },
+    [dirty, saving, load],
+  );
 
   useEffect(() => {
     let active = true;
@@ -1059,7 +1149,7 @@ export function useWorkspace(): Workspace {
           .sort();
         setCatalog(nextCatalog);
         setExperiments(paths);
-        if (paths.length > 0) await open(paths[0]);
+        if (paths.length > 0) await load(paths[0]);
       })
       .catch((error: unknown) => {
         if (active) setProblem(problemOf(error));
@@ -1067,41 +1157,43 @@ export function useWorkspace(): Workspace {
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [load]);
 
   const setParam = useCallback((id: string, name: string, value: unknown) => {
     setLoaded((current) => (current === null ? current : { ...current, model: withParam(current.model, id, name, value) }));
   }, []);
 
+  /** Saves the model; the outcome applies only to the document generation it was sent for. */
   const save = useCallback(async () => {
-    if (loaded === null || loaded.model === loaded.savedModel) return;
+    if (loaded === null || !dirty || loading) return;
     const saved = loaded;
+    const current = generation.current;
     setSaving(true);
     setProblem(null);
     try {
       const entry = await api.saveDocument(saved.modelPath, { model: saved.model }, saved.modelVersion);
-      setLoaded((current) =>
-        current === null || current.modelPath !== saved.modelPath
-          ? current
-          : { ...current, savedModel: saved.model, modelVersion: entry.version },
-      );
+      if (current === generation.current) {
+        setLoaded((now) => (now === null ? now : { ...now, savedModel: saved.model, modelVersion: entry.version }));
+      }
     } catch (error) {
+      if (current !== generation.current) return;
       if (error instanceof ApiError && error.status === 409) setConflict(true);
       else setProblem(problemOf(error));
     } finally {
       setSaving(false);
     }
-  }, [loaded]);
+  }, [loaded, dirty, loading]);
 
   const reload = useCallback(async () => {
-    if (loaded !== null) await open(loaded.experimentPath);
-  }, [loaded, open]);
+    if (loaded !== null && !saving) await load(loaded.experimentPath);
+  }, [loaded, saving, load]);
 
   return {
     catalog,
     experiments,
     loaded,
-    dirty: loaded !== null && loaded.model !== loaded.savedModel,
+    loading,
+    dirty,
     saving,
     conflict,
     problem,
@@ -1183,6 +1275,7 @@ describe("useRun", () => {
 
     expect(result.current.job?.status).toBe("COMPLETED");
     expect(result.current.summary).toEqual(summary);
+    expect(result.current.experiment).toBe(experimentPath);
     expect(result.current.problem).toBeNull();
     expect(result.current.running).toBe(false);
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs/job-1")).toHaveLength(2);
@@ -1216,6 +1309,7 @@ describe("useRun", () => {
 
     expect(result.current.job).toBeNull();
     expect(result.current.problem).toBeNull();
+    expect(result.current.experiment).toBeNull();
   });
 });
 ```
@@ -1234,6 +1328,8 @@ import type { ApiProblem, JobView, RunSummary } from "../api/apiTypes";
 import { problemOf } from "../workspace/useWorkspace";
 
 export interface Run {
+  /** The experiment the state below belongs to. */
+  experiment: string | null;
   job: JobView | null;
   summary: RunSummary | null;
   problem: ApiProblem | null;
@@ -1246,6 +1342,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /** Submits a job, polls it every [pollMs] until it finishes and loads the run summary (ADR 0010, item 4). */
 export function useRun(pollMs = 500): Run {
+  const [experiment, setExperiment] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
@@ -1261,6 +1358,7 @@ export function useRun(pollMs = 500): Run {
 
   const reset = useCallback(() => {
     generation.current += 1;
+    setExperiment(null);
     setJob(null);
     setSummary(null);
     setProblem(null);
@@ -1271,6 +1369,7 @@ export function useRun(pollMs = 500): Run {
     async (experimentPath: string) => {
       const current = ++generation.current;
       const live = () => current === generation.current;
+      setExperiment(experimentPath);
       setJob(null);
       setSummary(null);
       setProblem(null);
@@ -1300,7 +1399,7 @@ export function useRun(pollMs = 500): Run {
     [pollMs],
   );
 
-  return { job, summary, problem, running, run, reset };
+  return { experiment, job, summary, problem, running, run, reset };
 }
 ```
 
@@ -1327,8 +1426,12 @@ git commit -m "feat(web): submit jobs, poll them and load run summaries"
 - [ ] **Step 1: Заглушки DOM для React Flow — `src/test/reactFlow.ts`**
 
 ```ts
-/** jsdom lacks layout; React Flow needs sizes, ResizeObserver and DOMMatrixReadOnly to render nodes. */
+/** jsdom lacks layout; React Flow needs sizes, SVG text boxes, ResizeObserver and DOMMatrixReadOnly to render. */
 export function mockReactFlowDom(): void {
+  Object.defineProperty(SVGElement.prototype, "getBBox", {
+    configurable: true,
+    value: () => ({ x: 0, y: 0, width: 0, height: 0 }) as DOMRect,
+  });
   HTMLElement.prototype.getBoundingClientRect = () =>
     ({ width: 180, height: 80, top: 0, left: 0, right: 180, bottom: 80, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
   Object.defineProperties(HTMLElement.prototype, {
@@ -1575,6 +1678,7 @@ function renderInspector(props: Partial<InspectorProps> = {}) {
       editable
       overrides={{}}
       onParam={onParam}
+      onValidity={vi.fn()}
       {...props}
     />,
   );
@@ -1609,6 +1713,17 @@ describe("Inspector", () => {
 
     commit("Queue capacity", "");
     expect(onParam).toHaveBeenCalledWith("gateway", "queue", undefined);
+  });
+
+  it("reports invalid drafts so that saving and running can wait for them", () => {
+    const onValidity = vi.fn();
+    renderInspector({ onValidity });
+
+    fireEvent.change(input("Handlers"), { target: { value: "4.5" } });
+    expect(onValidity).toHaveBeenLastCalledWith("gateway.handlers", false);
+
+    fireEvent.change(input("Handlers"), { target: { value: "5" } });
+    expect(onValidity).toHaveBeenLastCalledWith("gateway.handlers", true);
   });
 
   it("edits a field of an object parameter as a whole object", () => {
@@ -1659,7 +1774,7 @@ Expected: FAIL — нет модуля `./Inspector`.
 `src/inspector/ParamField.tsx`:
 
 ```tsx
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { isObject } from "../workspace/params";
 import { UNITS, isQuantity } from "../workspace/quantities";
@@ -1674,6 +1789,8 @@ export interface ParamFieldProps {
   isOverridden: (path: string) => boolean;
   /** New value; undefined removes it from the document. */
   onCommit: (value: unknown) => void;
+  /** Whether the draft at [path] is valid; an invalid draft is never committed. */
+  onValidity: (path: string, valid: boolean) => void;
 }
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
@@ -1681,7 +1798,7 @@ export function ParamField(props: ParamFieldProps) {
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
 
-function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit }: ParamFieldProps) {
+function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onValidity }: ParamFieldProps) {
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}>
@@ -1694,6 +1811,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
           path={`${path}.${field.name}`}
           editable={editable}
           isOverridden={isOverridden}
+          onValidity={onValidity}
           onCommit={(next) => {
             const updated = { ...current };
             if (next === undefined) delete updated[field.name];
@@ -1726,7 +1844,7 @@ function parse(descriptor: ParamDescriptor, draft: string): Parsed {
   }
 }
 
-function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit }: ParamFieldProps) {
+function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onValidity }: ParamFieldProps) {
   const id = useId();
   const shown = value == null ? "" : String(value);
   const [draft, setDraft] = useState(shown);
@@ -1736,6 +1854,22 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
     setDraft(shown);
   }
   const parsed = parse(descriptor, draft);
+  const validityRef = useRef(onValidity);
+
+  useEffect(() => {
+    validityRef.current = onValidity;
+  }, [onValidity]);
+
+  useEffect(() => {
+    validityRef.current(path, parsed.ok);
+  }, [path, parsed.ok]);
+
+  useEffect(
+    () => () => {
+      validityRef.current(path, true);
+    },
+    [path],
+  );
   const overridden = isOverridden(path);
   const fallback = descriptor.default == null ? "" : String(descriptor.default);
   const commit = () => {
@@ -1808,10 +1942,12 @@ export interface InspectorProps {
   editable: boolean;
   overrides: Record<string, unknown>;
   onParam: (id: string, name: string, value: unknown) => void;
+  /** Validity of a field draft by `elementId.path`; a field that unmounts reports itself valid. */
+  onValidity: (key: string, valid: boolean) => void;
 }
 
 /** Context inspector (product vision §5.5): the selected element from the catalog, run settings otherwise. */
-export function Inspector({ catalog, model, experiment, selected, editable, overrides, onParam }: InspectorProps) {
+export function Inspector({ catalog, model, experiment, selected, editable, overrides, onParam, onValidity }: InspectorProps) {
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
@@ -1834,6 +1970,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
               editable={editable}
               isOverridden={(path) => isOverridden(overrides, selected, path)}
               onCommit={(value) => onParam(selected, descriptor.name, value)}
+              onValidity={(path, valid) => onValidity(`${selected}.${path}`, valid)}
             />
           ))}
         </>
@@ -2120,7 +2257,11 @@ export interface TopBarProps {
   experiments: string[];
   experiment: string | null;
   onExperiment: (path: string) => void;
+  /** An experiment is being opened. */
+  loading: boolean;
   dirty: boolean;
+  /** Some field holds a draft that cannot be committed. */
+  invalid: boolean;
   saving: boolean;
   onSave: () => void;
   running: boolean;
@@ -2130,14 +2271,23 @@ export interface TopBarProps {
   healthError: string | null;
 }
 
-/** Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run, job status, backend health. */
+/**
+ * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run, job status, backend health. Switching waits for
+ * opening, saving and running; saving and running wait for valid drafts, and running also for saved changes.
+ */
 export function TopBar(props: TopBarProps) {
-  const { experiments, experiment, onExperiment, dirty, saving, onSave, running, onRun, job, health, healthError } = props;
+  const { experiments, experiment, onExperiment, loading, dirty, invalid, saving, onSave, running, onRun, job, health, healthError } =
+    props;
   return (
     <header className="top-bar">
       <h1>Resilience Lab</h1>
       <span className="top-bar-label">Experiment</span>
-      <select aria-label="Experiment" value={experiment ?? ""} onChange={(event) => onExperiment(event.target.value)}>
+      <select
+        aria-label="Experiment"
+        value={experiment ?? ""}
+        disabled={loading || saving || running}
+        onChange={(event) => onExperiment(event.target.value)}
+      >
         {experiment === null ? <option value="">No experiment</option> : null}
         {experiments.map((path) => (
           <option key={path} value={path}>
@@ -2146,15 +2296,15 @@ export function TopBar(props: TopBarProps) {
         ))}
       </select>
       {dirty ? <span className="dirty-mark">Unsaved changes</span> : null}
-      <button type="button" onClick={onSave} disabled={!dirty || saving}>
+      <button type="button" onClick={onSave} disabled={!dirty || invalid || saving || loading}>
         Save
       </button>
       <button
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || dirty || running}
-        title={dirty ? "Save changes before running" : undefined}
+        disabled={experiment === null || loading || dirty || invalid || running}
+        title={invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined}
       >
         Run
       </button>
@@ -2224,7 +2374,7 @@ git commit -m "feat(web): add top bar, palette and results panels"
 - [ ] **Step 1: `src/App.tsx` целиком**
 
 ```tsx
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Canvas } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
@@ -2239,7 +2389,8 @@ import { useWorkspace } from "./workspace/useWorkspace";
 
 /**
  * One-screen layout (product vision §5.5, stage 1 design §6.1). A variant without overrides is the model itself and
- * can be edited; other variant pages show the model with their overrides, read-only in the stage 1 slice.
+ * can be edited; other variant pages show the model with their overrides, read-only in the stage 1 slice. Results are
+ * shown only for the experiment they were computed for.
  */
 export function App() {
   const workspace = useWorkspace();
@@ -2247,12 +2398,24 @@ export function App() {
   const health = useHealth();
   const [variantId, setVariantId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog } = workspace;
   const variants = loaded?.experiment.variants ?? [];
   const variant = variants.find((candidate) => candidate.id === variantId) ?? variants[0];
   const overrides = variant?.overrides ?? {};
-  const editable = Object.keys(overrides).length === 0;
+  const editable = Object.keys(overrides).length === 0 && !workspace.loading;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
+  const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
+
+  const onValidity = useCallback((key: string, valid: boolean) => {
+    setInvalidFields((current) => {
+      if (valid === !current.has(key)) return current;
+      const next = new Set(current);
+      if (valid) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="app">
@@ -2260,19 +2423,22 @@ export function App() {
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
+          if (workspace.dirty && !window.confirm("Discard unsaved changes to the model?")) return;
           setSelected(null);
           setVariantId(null);
           run.reset();
-          void workspace.open(path);
+          void workspace.open(path, true);
         }}
+        loading={workspace.loading}
         dirty={workspace.dirty}
+        invalid={invalidFields.size > 0}
         saving={workspace.saving}
         onSave={() => void workspace.save()}
         running={run.running}
         onRun={() => {
           if (loaded !== null) void run.run(loaded.experimentPath);
         }}
-        job={run.job}
+        job={ownRun ? run.job : null}
         health={health.health}
         healthError={health.error}
       />
@@ -2309,9 +2475,14 @@ export function App() {
           editable={editable}
           overrides={overrides}
           onParam={workspace.setParam}
+          onValidity={onValidity}
         />
       )}
-      <ResultsPanel job={run.job} summary={run.summary} problem={run.problem} />
+      <ResultsPanel
+        job={ownRun ? run.job : null}
+        summary={ownRun ? run.summary : null}
+        problem={ownRun ? run.problem : null}
+      />
     </div>
   );
 }
@@ -2723,6 +2894,8 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await page.getByTestId("rf__node-gateway").click();
   const handlers = page.getByLabel("Handlers", { exact: true });
   await expect(handlers).toHaveValue("4");
+  await handlers.fill("4.5");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   await handlers.fill("6");
   await handlers.press("Enter");
   await expect(page.getByText("Unsaved changes")).toBeVisible();
@@ -2773,6 +2946,8 @@ git commit -m "test(e2e): cover the stage 1 slice in a real browser"
 ```markdown
 - `web` — Vite/React SPA этапа 1: экран без прокрутки, холст React Flow, инспектор параметров из каталога с сохранением модели, страницы вариантов для просмотра, запуск задания и сводка; типы API генерируются из `apps/server/openapi.json`.
 ```
+
+В строке `core` заменить «; модель сценариев MVP со sweep остаётся до перехода web» на «; модель сценариев MVP со sweep остаётся до отдельного плана удаления MVP». В строке `apps:server` заменить « и ручки MVP для нынешнего web» на « и ручки MVP, которые больше не используются и ждут удаления».
 
 Заменить абзац «Первый полный MVP завершён: ...» на:
 
