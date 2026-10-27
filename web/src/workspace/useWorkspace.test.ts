@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocumentView } from "../api/apiTypes";
-import { catalog, documentViews, experiment, experimentPath, modelPath } from "../test/fixtures";
+import { catalog, documentViews, experiment, experimentPath, model, modelPath } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
 import { useWorkspace } from "./useWorkspace";
 
@@ -274,5 +274,95 @@ describe("useWorkspace", () => {
     expect(result.current.loaded?.experimentPath).toBe(newerPath);
     expect(result.current.loading).toBe(false);
     expect(result.current.problem).toBeNull();
+  });
+
+  it.each(["reload", "open"] as const)("preserves the conflict after a failed %s", async (operation) => {
+    let rejectReads = false;
+    const fetchMock = stubWorkspace({
+      putStatus: 409,
+      beforeDocument: async () => { if (rejectReads) throw new Error("offline"); },
+    });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    await act(async () => { await result.current.save(); });
+    expect(result.current.conflict).toBe(true);
+
+    rejectReads = true;
+    await act(async () => {
+      if (operation === "reload") await result.current.reload();
+      else await result.current.open("retry-storm/other.experiment.json", true);
+    });
+    expect(result.current.problem?.message).toBe("offline");
+    expect(result.current.loaded?.experimentPath).toBe(experimentPath);
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(6);
+    expect(result.current.conflict).toBe(true);
+
+    await act(async () => { await result.current.save(); });
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it("blocks a same-turn save after open before an old PUT can affect the new document", async () => {
+    const openGate = deferred();
+    const putGate = deferred();
+    const newerPath = "retry-storm/newer.experiment.json";
+    const newerModelPath = "retry-storm/newer.model.json";
+    const newerModel = {
+      ...model,
+      blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 12 } } },
+    };
+    const fetchMock = stubWorkspace({
+      putGate: putGate.promise,
+      beforeDocument: async (path) => { if (path === newerPath) await openGate.promise; },
+      documents: {
+        [newerPath]: {
+          path: newerPath, kind: "EXPERIMENT", version: "v-new-experiment",
+          content: { experiment: { ...experiment, modelRef: "newer.model.json" } },
+        },
+        [newerModelPath]: { path: newerModelPath, kind: "MODEL", version: "v-new-model", content: { model: newerModel } },
+      },
+    });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    let opening!: Promise<boolean>;
+    let saving!: Promise<void>;
+    act(() => {
+      opening = result.current.open(newerPath, true);
+      saving = result.current.save();
+    });
+
+    openGate.release();
+    await act(async () => { await opening; });
+    putGate.release();
+    await act(async () => { await saving; });
+    expect(result.current.loaded?.experimentPath).toBe(newerPath);
+    expect(result.current.loaded?.modelVersion).toBe("v-new-model");
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(12);
+    expect(result.current.loaded?.savedModel.blocks.gateway.params.handlers).toBe(12);
+    expect(result.current.dirty).toBe(false);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+  });
+
+  it("blocks parameter edits as soon as opening starts and until it finishes", async () => {
+    const openGate = deferred();
+    let pauseReads = false;
+    stubWorkspace({ beforeDocument: async () => { if (pauseReads) await openGate.promise; } });
+    const { result } = await loaded();
+    pauseReads = true;
+    let opening!: Promise<boolean>;
+    act(() => {
+      opening = result.current.open(experimentPath);
+      result.current.setParam("gateway", "handlers", 6);
+    });
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
+    expect(result.current.dirty).toBe(false);
+    act(() => result.current.setParam("gateway", "handlers", 8));
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
+
+    openGate.release();
+    await act(async () => { await opening; });
+    act(() => result.current.setParam("gateway", "handlers", 10));
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(10);
+    expect(result.current.dirty).toBe(true);
   });
 });

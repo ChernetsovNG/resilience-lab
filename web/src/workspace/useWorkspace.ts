@@ -69,20 +69,27 @@ export function useWorkspace(): Workspace {
   const generation = useRef(0);
   // A ref also blocks duplicate saves before React publishes the saving state.
   const saveInFlight = useRef(false);
+  const loadInFlight = useRef(false);
   const dirty = loaded !== null && loaded.model !== loaded.savedModel;
 
   const load = useCallback(async (experimentPath: string) => {
     const current = ++generation.current;
+    loadInFlight.current = true;
     setLoading(true);
     setProblem(null);
-    setConflict(false);
     try {
       const next = await loadExperiment(experimentPath);
-      if (current === generation.current) setLoaded(next);
+      if (current === generation.current) {
+        setLoaded(next);
+        setConflict(false);
+      }
     } catch (error) {
       if (current === generation.current) setProblem(problemOf(error));
     } finally {
-      if (current === generation.current) setLoading(false);
+      if (current === generation.current) {
+        loadInFlight.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -112,11 +119,12 @@ export function useWorkspace(): Workspace {
   }, [load]);
 
   const setParam = useCallback((id: string, name: string, value: unknown) => {
+    if (loadInFlight.current) return;
     setLoaded((current) => current === null ? current : { ...current, model: withParam(current.model, id, name, value) });
   }, []);
 
   const save = useCallback(async () => {
-    if (loaded === null || !dirty || loading || conflict || saveInFlight.current) return;
+    if (loaded === null || !dirty || loadInFlight.current || conflict || saveInFlight.current) return;
     const saved = loaded;
     const current = generation.current;
     saveInFlight.current = true;
@@ -124,9 +132,13 @@ export function useWorkspace(): Workspace {
     setProblem(null);
     try {
       const entry = await api.saveDocument(saved.modelPath, { model: saved.model }, saved.modelVersion);
-      if (current === generation.current) {
-        setLoaded((now) => now === null ? now : { ...now, savedModel: saved.model, modelVersion: entry.version });
-      }
+      setLoaded((now) => {
+        if (
+          current !== generation.current || now === null ||
+          now.experimentPath !== saved.experimentPath || now.modelPath !== saved.modelPath
+        ) return now;
+        return { ...now, savedModel: saved.model, modelVersion: entry.version };
+      });
     } catch (error) {
       if (current !== generation.current) return;
       if (error instanceof ApiError && error.status === 409) setConflict(true);
@@ -135,7 +147,7 @@ export function useWorkspace(): Workspace {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [loaded, dirty, loading, conflict]);
+  }, [loaded, dirty, conflict]);
 
   const reload = useCallback(async () => {
     if (loaded !== null && !saveInFlight.current) await load(loaded.experimentPath);
