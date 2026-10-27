@@ -31,12 +31,18 @@
 - Путь документа с `/` проходит в параметре запроса; `ResponseEntity.eTag(...)` сам ставит кавычки.
 - `writer-with-order-by-keys` и `writer-with-default-pretty-printer` дают стабильный многострочный JSON спецификации.
 
+Ревью плана (2026-10-27) и повторная проба добавили:
+
+- Пустая `JsonSchema()` для `JsonElement` превращается в `type: object`, и валидатор JSON Schema 2020-12 отвергает реальные значения `default: 0`, `"0%"` и `overrides: { "…attempts": 1 }`. Схема «любой JSON» — `types` из всех семи типов JSON плюс `additionalProperties: true`; с ней ответы проходят `Draft202012Validator`, а openapi-typescript даёт тип «любое JSON-значение».
+- У nullable enum (`dimension: Dimension?`) springdoc пишет `type: ["string", "null"]`, но в `enum` нет `null`, и ответ с `null` не проходит валидатор. `OpenApiCustomizer` добавляет `null` в такие `enum`.
+
 ## Правила для типов API
 
 - Типы API — обычные `@Serializable` data-классы и enum без `@SerialName`, `@Transient`, собственных сериализаторов и полиморфизма: схему строит springdoc по свойствам Kotlin, JSON пишет kotlinx, и имена полей обязаны совпадать.
 - Ответы содержат все поля; отсутствующее значение пишется как `null`. Это даёт бин `apiJson`.
 - Имена методов контроллеров уникальны во всём пакете: из них springdoc делает `operationId`, а совпадения он нумерует в порядке обхода.
-- Ответы-ошибки — `ApiProblem` из обработчиков с `@ResponseStatus` (400, 404, 409).
+- Ответы-ошибки — `ApiProblem` из обработчиков с `@ResponseStatus` (400, 404, 409, 500).
+- Поля `JsonElement` описываются схемой «любой JSON», nullable enum — с `null` в `enum` (см. `LabConfiguration`); `OpenApiConformance` в тестах проверяет типы, `enum`, `null` и обязательные поля ответов.
 
 ## Границы плана
 
@@ -59,7 +65,7 @@
 | `apps/server/.../lab/LabExceptionHandler.kt` | Исключения API и `ApiProblem` |
 | `apps/server/.../lab/HealthController.kt` | Перенос `health` в новый пакет |
 | `apps/server/.../lab/CatalogController.kt` | `GET /catalog` |
-| `apps/server/.../lab/DocumentController.kt`, `Documents.kt` | Документы рабочей области |
+| `apps/server/.../lab/DocumentController.kt`, `Documents.kt`, `IfMatch.kt` | Документы рабочей области, строгое сравнение `If-Match` |
 | `apps/server/.../lab/ValidationController.kt` | `POST /validate` |
 | `apps/server/.../lab/JobService.kt`, `JobController.kt` | Задания |
 | `apps/server/.../lab/RunController.kt` | Прогоны |
@@ -123,7 +129,7 @@ Expected: FAIL — `Unresolved reference: listFiles`.
         if (!start.isDirectory()) return emptyList()
         return Files.walk(start).use { paths ->
             paths
-                .filter { it.isRegularFile() }
+                .filter { it.isRegularFile(NOFOLLOW_LINKS) }
                 .map { root.relativize(it).joinToString("/") }
                 .sorted()
                 .toList()
@@ -131,7 +137,7 @@ Expected: FAIL — `Unresolved reference: listFiles`.
     }
 ```
 
-и импорт `kotlin.io.path.isDirectory`.
+и импорт `kotlin.io.path.isDirectory`. Символьные ссылки пропускаются, как в `list()`.
 
 - [ ] **Step 4: Тест проходит**
 
@@ -248,6 +254,7 @@ class RunCatalogTest {
     private fun finish(
         directory: String,
         experiment: String,
+        complete: Boolean = true,
     ) {
         val manifest =
             RunManifest(
@@ -261,7 +268,7 @@ class RunCatalogTest {
                 replications = 1,
                 variants = emptyList(),
                 parts = emptyMap(),
-                complete = true,
+                complete = complete,
             )
         ArtifactWriter(workspace).write(directory, manifest, RunSummary(1, experiment, emptyList()))
     }
@@ -290,6 +297,15 @@ class RunCatalogTest {
     }
 
     @Test
+    fun `does not present an incomplete run as finished`() {
+        finish(".results/a/r1", "a.experiment.json", complete = false)
+
+        assertThat(catalog.list()).isEmpty()
+        assertThat(catalog.manifest("r1")).isNull()
+        assertThat(catalog.summary("r1")).isNull()
+    }
+
+    @Test
     fun `is empty without results`() {
         assertThat(catalog.list()).isEmpty()
     }
@@ -311,7 +327,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import resiliencelab.core.workspace.Workspace
 
-/** A finished run: its manifest exists (ADR 0008). */
+/** A finished run: its manifest exists and says the run is complete (ADR 0008). */
 @Serializable
 data class RunEntry(
     val id: String,
@@ -327,15 +343,17 @@ class RunCatalog(
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json { explicitNulls = false }
 
-    /** Finished runs, newest first; runs whose manifest cannot be read are skipped. */
+    /** Finished runs, newest first; incomplete runs and runs whose manifest cannot be read are skipped. */
     fun list(): List<RunEntry> =
         workspace
             .listFiles(RESULTS)
             .filter { MANIFEST.matches(it) }
             .mapNotNull { path ->
                 val directory = path.removeSuffix("/$MANIFEST_FILE")
-                runCatching { RunEntry(directory.substringAfterLast('/'), readManifest(directory).experiment, directory) }
+                runCatching { readManifest(directory) }
                     .getOrNull()
+                    ?.takeIf { it.complete }
+                    ?.let { RunEntry(directory.substringAfterLast('/'), it.experiment, directory) }
             }.sortedWith(compareByDescending<RunEntry> { it.id }.thenBy { it.directory })
 
     fun manifest(id: String): RunManifest? = find(id)?.let { readManifest(it.directory) }
@@ -472,6 +490,10 @@ class HealthControllerTest {
 ```kotlin
 package resiliencelab.server.lab
 
+import io.swagger.v3.oas.models.Components
+import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.media.JsonSchema
+import io.swagger.v3.oas.models.media.ObjectSchema
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -492,6 +514,21 @@ class LabConfigurationTest {
             """{"id":"j","experiment":"e.experiment.json","runId":"r","status":"QUEUED",""" +
                 """"completedTasks":0,"totalTasks":0,"error":null,"diagnostics":[]}""",
         )
+    }
+
+    @Test
+    fun `nullable enums accept null in the schema`() {
+        val dimension = JsonSchema().types(setOf("string", "null"))
+        dimension.enum = listOf("DURATION", "RATE")
+        val required = JsonSchema().types(setOf("string"))
+        required.enum = listOf("ERROR", "WARNING")
+        val descriptor = ObjectSchema().addProperty("dimension", dimension).addProperty("severity", required)
+        val openApi = OpenAPI().components(Components().addSchemas("Descriptor", descriptor))
+
+        LabConfiguration().nullableEnums().customise(openApi)
+
+        assertThat(dimension.enum).containsExactly("DURATION", "RATE", null)
+        assertThat(required.enum).containsExactly("ERROR", "WARNING")
     }
 }
 ```
@@ -610,6 +647,7 @@ data class JobView(
 ```kotlin
 package resiliencelab.server.lab
 
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MissingServletRequestParameterException
@@ -618,9 +656,11 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.lab.InvalidExperimentException
+import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionConflictException
+import java.io.IOException
 
 /** Failures of the stage 1 API; each subclass maps to one documented status. */
 sealed class ApiException(
@@ -689,6 +729,22 @@ class LabExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     fun versionConflict(exception: VersionConflictException): ApiProblem =
         ApiProblem("VERSION_CONFLICT", exception.message ?: "Document version conflict")
+
+    @ExceptionHandler(DocumentExistsException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun documentExists(exception: DocumentExistsException): ApiProblem =
+        ApiProblem("VERSION_REQUIRED", "${exception.message}; send If-Match with its version")
+
+    @ExceptionHandler(IOException::class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    fun storageFailure(exception: IOException): ApiProblem {
+        logger.error("Workspace storage failed", exception)
+        return ApiProblem("STORAGE_ERROR", "Workspace storage failed")
+    }
+
+    private companion object {
+        val logger = LoggerFactory.getLogger(LabExceptionHandler::class.java)
+    }
 }
 ```
 
@@ -717,10 +773,12 @@ package resiliencelab.server.lab
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.media.JsonSchema
+import io.swagger.v3.oas.models.media.Schema
 import io.swagger.v3.oas.models.servers.Server
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springdoc.core.utils.SpringDocUtils
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -743,11 +801,27 @@ import java.nio.file.Path
 @Configuration(proxyBeanMethods = false)
 class LabConfiguration {
     init {
+        // Any JSON value. An empty schema is emitted as `type: object` and would reject numbers and strings.
+        val anyJson = JsonSchema().types(setOf("array", "boolean", "integer", "null", "number", "object", "string"))
         SpringDocUtils
             .getConfig()
             .replaceWithSchema(JsonObject::class.java, JsonSchema().types(setOf("object")).additionalProperties(true))
-            .replaceWithSchema(JsonElement::class.java, JsonSchema())
+            .replaceWithSchema(JsonElement::class.java, anyJson.additionalProperties(true))
     }
+
+    /** Adds `null` to the `enum` of nullable enum properties: springdoc lists only the constants (JSON Schema 2020-12). */
+    @Bean
+    fun nullableEnums(): OpenApiCustomizer =
+        OpenApiCustomizer { openApi ->
+            openApi.components?.schemas?.values?.forEach { schema ->
+                schema.properties?.values?.forEach { property ->
+                    @Suppress("UNCHECKED_CAST")
+                    val typed = property as Schema<Any?>
+                    val values = typed.enum
+                    if (typed.types?.contains("null") == true && values != null && null !in values) typed.enum = values + null
+                }
+            }
+        }
 
     /**
      * JSON of `@Serializable` requests and responses, picked up by the Spring Boot kotlinx converter. Every property is
@@ -847,8 +921,8 @@ git commit -m "feat(server): configure stage 1 API, workspace and OpenAPI"
 ### Task 5: Каталог и документы рабочей области
 
 **Files:**
-- Create: `apps/server/src/main/kotlin/resiliencelab/server/lab/CatalogController.kt`, `Documents.kt`, `DocumentController.kt`
-- Test: `apps/server/src/test/kotlin/resiliencelab/server/lab/TestWorkspace.kt`, `OpenApiConformance.kt`, `WorkspaceApiTest.kt`
+- Create: `apps/server/src/main/kotlin/resiliencelab/server/lab/CatalogController.kt`, `Documents.kt`, `IfMatch.kt`, `DocumentController.kt`
+- Test: `apps/server/src/test/kotlin/resiliencelab/server/lab/TestWorkspace.kt`, `OpenApiConformance.kt`, `IfMatchTest.kt`, `WorkspaceApiTest.kt`
 
 - [ ] **Step 1: Тестовые помощники**
 
@@ -889,18 +963,21 @@ package resiliencelab.server.lab
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.assertj.core.api.Assertions.assertThat
 import org.springframework.mock.web.MockHttpServletResponse
 
 /**
- * Checks responses against the generated OpenAPI document: every property of a JSON object is declared and every
- * required one is present, recursively through references, nullable alternatives, arrays and maps. Guards the
- * agreement between kotlinx, which writes the JSON, and springdoc, which derives the schema.
+ * Checks responses against the generated OpenAPI document with the JSON Schema rules the API uses: `$ref`,
+ * `oneOf`/`anyOf`, `type` (also as a list), `enum` including `null`, `required`, `properties`, `additionalProperties`
+ * and `items`. Guards the agreement between kotlinx, which writes the JSON, and springdoc, which derives the schema.
  */
 class OpenApiConformance(
     document: String,
@@ -932,35 +1009,69 @@ class OpenApiConformance(
         value: JsonElement,
         at: String,
     ) {
-        val resolved = resolve(schema)
-        when (value) {
-            is JsonObject -> {
-                val properties = resolved["properties"]?.jsonObject
-                if (properties != null) {
-                    val required = resolved["required"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
-                    assertThat(properties.keys).describedAs("$at: undeclared properties").containsAll(value.keys)
-                    assertThat(value.keys).describedAs("$at: missing required properties").containsAll(required)
-                    value.forEach { (name, item) -> check(properties.getValue(name).jsonObject, item, "$at.$name") }
-                } else {
-                    val items = resolved["additionalProperties"] as? JsonObject
-                    if (items != null) value.forEach { (name, item) -> check(items, item, "$at.$name") }
-                }
+        (schema["\$ref"] as? JsonPrimitive)?.let { reference ->
+            return check(schemas.getValue(reference.content.substringAfterLast('/')).jsonObject, value, at)
+        }
+        ((schema["oneOf"] ?: schema["anyOf"]) as? JsonArray)?.let { alternatives ->
+            val matching = alternatives.count { runCatching { check(it.jsonObject, value, at) }.isSuccess }
+            assertThat(matching).describedAs("$at: $value matches none of the alternatives").isPositive()
+            return
+        }
+        val types =
+            when (val type = schema["type"]) {
+                is JsonPrimitive -> setOf(type.content)
+                is JsonArray -> type.map { it.jsonPrimitive.content }.toSet()
+                else -> null
             }
+        if (types != null) {
+            val actual = typeOf(value)
+            assertThat(actual in types || (actual == "integer" && "number" in types))
+                .describedAs("$at: $actual is not one of $types")
+                .isTrue()
+        }
+        (schema["enum"] as? JsonArray)?.let { values -> assertThat(values).describedAs("$at: $value is not in the enum").contains(value) }
+        when (value) {
+            is JsonObject -> checkObject(schema, value, at)
             is JsonArray -> {
-                val items = resolved["items"] as? JsonObject
+                val items = schema["items"] as? JsonObject
                 if (items != null) value.forEachIndexed { index, item -> check(items, item, "$at[$index]") }
             }
             else -> Unit
         }
     }
 
-    private fun resolve(schema: JsonObject): JsonObject {
-        val reference = (schema["\$ref"] as? JsonPrimitive)?.content
-        if (reference != null) return resolve(schemas.getValue(reference.substringAfterLast('/')).jsonObject)
-        val alternatives = (schema["oneOf"] ?: schema["anyOf"]) as? JsonArray ?: return schema
-        val present = alternatives.map { it.jsonObject }.firstOrNull { (it["type"] as? JsonPrimitive)?.content != "null" }
-        return present?.let(::resolve) ?: schema
+    private fun checkObject(
+        schema: JsonObject,
+        value: JsonObject,
+        at: String,
+    ) {
+        val properties = schema["properties"]?.jsonObject ?: JsonObject(emptyMap())
+        val required = schema["required"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+        assertThat(value.keys).describedAs("$at: missing required properties").containsAll(required)
+        val additional = schema["additionalProperties"]
+        value.forEach { (name, item) ->
+            val property = properties[name] as? JsonObject
+            when {
+                property != null -> check(property, item, "$at.$name")
+                additional is JsonObject -> check(additional, item, "$at.$name")
+                else -> assertThat(additional).describedAs("$at.$name is not declared").isEqualTo(JsonPrimitive(true))
+            }
+        }
     }
+
+    private fun typeOf(value: JsonElement): String =
+        when (value) {
+            JsonNull -> "null"
+            is JsonObject -> "object"
+            is JsonArray -> "array"
+            is JsonPrimitive ->
+                when {
+                    value.isString -> "string"
+                    value.booleanOrNull != null -> "boolean"
+                    value.longOrNull != null -> "integer"
+                    else -> "number"
+                }
+        }
 }
 ```
 
@@ -1041,6 +1152,23 @@ class WorkspaceApiTest {
         assertThat(JsonPath.read<Int>(response.contentAsString, "$.content.model.blocks.gateway.params.handlers")).isEqualTo(4)
         assertThat(JsonPath.read<Any?>(response.contentAsString, "$.content.layout")).isNull()
         openApi.assertResponse("get", "/api/v1/workspace/document", response)
+
+        val experimentView = getDocument(experiment)
+        val attempts = "$.content.experiment.variants[1].overrides['gateway-to-middle.attempts']"
+        assertThat(JsonPath.read<Int>(experimentView.contentAsString, attempts)).isEqualTo(1)
+        openApi.assertResponse("get", "/api/v1/workspace/document", experimentView)
+    }
+
+    @Test
+    fun `compares If-Match strongly`() {
+        val current = (DocumentCodec.decodeLayout(read(layout), layout) as DecodeResult.Ok).value
+        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = current))
+        val version = version(layout)
+
+        assertThat(code(putDocument(layout, body, ifMatch = "W/\"$version\""))).isEqualTo("VERSION_CONFLICT")
+        assertThat(putDocument(layout, body, ifMatch = "\"stale\", \"$version\"").status).isEqualTo(200)
+        assertThat(putDocument(layout, body, ifMatch = "*").status).isEqualTo(200)
+        assertThat(code(putDocument("drafts/absent.layout.json", body, ifMatch = "*"))).isEqualTo("VERSION_CONFLICT")
     }
 
     @Test
@@ -1091,6 +1219,7 @@ class WorkspaceApiTest {
 
         assertThat(code(getDocument("notes.txt"))).isEqualTo("DOCUMENT_KIND")
         assertThat(code(getDocument("../outside.model.json"))).isEqualTo("DOCUMENT_PATH")
+        assertThat(code(getDocument("\u0000.layout.json"))).isEqualTo("DOCUMENT_PATH")
 
         val missing = getDocument("missing.model.json")
         assertThat(missing.status).isEqualTo(404)
@@ -1135,9 +1264,30 @@ class WorkspaceApiTest {
 }
 ```
 
+`IfMatchTest.kt`:
+
+```kotlin
+package resiliencelab.server.lab
+
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+
+class IfMatchTest {
+    @Test
+    fun `compares entity tags strongly`() {
+        assertThat(IfMatch.accepts("\"v1\"", "v1")).isTrue()
+        assertThat(IfMatch.accepts("\"v0\", \"v1\"", "v1")).isTrue()
+        assertThat(IfMatch.accepts("*", "v1")).isTrue()
+        assertThat(IfMatch.accepts("W/\"v1\"", "v1")).isFalse()
+        assertThat(IfMatch.accepts("v1", "v1")).isFalse()
+        assertThat(IfMatch.accepts("\"v2\"", "v1")).isFalse()
+    }
+}
+```
+
 - [ ] **Step 3: Тест падает**
 
-Run: `./gradlew :apps:server:test --tests 'resiliencelab.server.lab.WorkspaceApiTest'`
+Run: `./gradlew :apps:server:test --tests 'resiliencelab.server.lab.WorkspaceApiTest' --tests 'resiliencelab.server.lab.IfMatchTest'`
 Expected: FAIL — ручки отвечают 404, а `assertResponse` не находит путей в спецификации.
 
 - [ ] **Step 4: Реализация**
@@ -1202,6 +1352,23 @@ internal object Documents {
 }
 ```
 
+`IfMatch.kt`:
+
+```kotlin
+package resiliencelab.server.lab
+
+/** `If-Match` with strong comparison (RFC 9110 §13.1.1): `*` matches any stored version, weak tags never match. */
+internal object IfMatch {
+    fun accepts(
+        header: String,
+        current: String,
+    ): Boolean {
+        val tags = header.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        return tags == listOf("*") || tags.any { it == "\"$current\"" }
+    }
+}
+```
+
 `DocumentController.kt`:
 
 ```kotlin
@@ -1221,7 +1388,8 @@ import resiliencelab.core.workspace.Workspace
 
 /**
  * Workspace documents with versions (ADR 0003, ADR 0010). The path is a query parameter because it contains `/`.
- * A write needs `If-Match` with the current version when the document exists; stored text is always canonical.
+ * Without `If-Match` a write only creates a new document; with it the stored version must match. A failed condition
+ * is 409, as the project decided. Stored text is always canonical.
  */
 @RestController
 @RequestMapping("/api/v1/workspace")
@@ -1260,12 +1428,21 @@ class DocumentController(
                 ?: throw BadRequest("DOCUMENT_KIND", "Content must hold exactly one document of the kind of '$path'")
         val checked = Documents.decode(kind, text, path)
         if (checked is DecodeResult.Failed) throw BadRequest("DOCUMENT_INVALID", "Document '$path' is invalid", checked.diagnostics)
-        val expected = ifMatch?.removePrefix("W/")?.trim('"')
-        if (expected == null && workspace.exists(path)) {
-            throw Conflict("VERSION_REQUIRED", "Document '$path' exists; send If-Match with its version")
-        }
-        val version = workspace.write(path, text, expected)
+        val version = if (ifMatch == null) workspace.create(path, text) else replace(path, text, ifMatch)
         return ResponseEntity.ok().eTag(version).body(DocumentEntry(path, kind, version))
+    }
+
+    /** Writes over the stored document when [ifMatch] accepts its version; the write itself rechecks that version. */
+    private fun replace(
+        path: String,
+        text: String,
+        ifMatch: String,
+    ): String {
+        val current = if (workspace.exists(path)) workspace.read(path).version else null
+        if (current == null || !IfMatch.accepts(ifMatch, current)) {
+            throw Conflict("VERSION_CONFLICT", "Document '$path' is not at a version that If-Match accepts")
+        }
+        return workspace.write(path, text, expectedVersion = current)
     }
 
     private fun kindOf(path: String): DocumentKind =
@@ -2037,7 +2214,39 @@ class CliTest {
     }
 
     @Test
+    fun `unreadable documents are diagnostics, not crashes`() {
+        Files.write(workspace.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        val result = execute(listOf("validate", experiment))
+
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stderr).contains("DOCUMENT_UNREADABLE").doesNotContain("\tat ")
+    }
+
+    @Test
     fun `installed launcher prints only the run directory and summary on stdout`() {
+        val result = launch(listOf("run", experiment))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(3)
+        assertThat(lines[0]).matches("""\.results/retry-storm/\d{8}-\d{6}-\d{3}-[0-9a-f]{4}""")
+        assertThat(workspace.resolve(lines[0]).resolve("manifest.json")).exists()
+    }
+
+    @Test
+    fun `installed launcher reports invalid input with code 2 and no stack trace`() {
+        Files.write(workspace.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        val result = launch(listOf("validate", experiment))
+
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("DOCUMENT_UNREADABLE").doesNotContain("\tat ")
+    }
+
+    /** Runs the launcher from `installDist` as a separate process in the workspace. */
+    private fun launch(args: List<String>): CommandResult {
         val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin").toAbsolutePath()
         val command =
             if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
@@ -2045,21 +2254,15 @@ class CliTest {
             } else {
                 listOf(launcherDirectory.resolve("cli").toString())
             }
-        val errorFile = workspace.resolve("process-stderr.log")
+        val errorFile = Files.createTempFile("cli-stderr", ".log")
         val process =
-            ProcessBuilder(command + listOf("run", experiment))
+            ProcessBuilder(command + args)
                 .directory(workspace.toFile())
                 .redirectError(errorFile.toFile())
                 .start()
-
         val stdout = process.inputStream.readBytes().decodeToString()
         val exitCode = process.waitFor()
-
-        assertThat(exitCode).describedAs(errorFile.readText()).isZero()
-        val lines = stdout.lines().filter { it.isNotBlank() }
-        assertThat(lines).hasSize(3)
-        assertThat(lines[0]).matches("""\.results/retry-storm/\d{8}-\d{6}-\d{3}-[0-9a-f]{4}""")
-        assertThat(workspace.resolve(lines[0]).resolve("manifest.json")).exists()
+        return CommandResult(exitCode, stdout, errorFile.readText())
     }
 
     private fun breakModel() {
@@ -2108,6 +2311,7 @@ import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.FileWorkspace
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.Locale
 import kotlin.system.exitProcess
@@ -2211,7 +2415,12 @@ private fun relativePath(
     root: Path,
     argument: String,
 ): String? {
-    val resolved = root.resolve(argument).normalize()
+    val resolved =
+        try {
+            root.resolve(argument).normalize()
+        } catch (exception: InvalidPathException) {
+            return null
+        }
     if (!resolved.startsWith(root) || resolved == root) return null
     return root.relativize(resolved).joinToString("/")
 }
@@ -2304,14 +2513,15 @@ ENV RESILIENCE_LAB_WORKSPACE=/workspace
 
 ```bash
 docker compose up --build -d
-curl -fsS http://127.0.0.1:8080/api/v1/catalog | head -c 120
-curl -fsS -X POST -H 'Content-Type: application/json' -d '{"experiment":"retry-storm/retry-storm.experiment.json"}' http://127.0.0.1:5173/api/v1/jobs
-sleep 5
-curl -fsS http://127.0.0.1:5173/api/v1/runs
+for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null && break; sleep 2; done
+curl -fsS http://127.0.0.1:8080/api/v1/catalog | head -c 120; echo
+job=$(curl -fsS -X POST -H 'Content-Type: application/json' -d '{"experiment":"retry-storm/retry-storm.experiment.json"}' http://127.0.0.1:5173/api/v1/jobs | sed -E 's/.*"id":"([^"]+)".*/\1/')
+for i in $(seq 1 60); do status=$(curl -fsS "http://127.0.0.1:5173/api/v1/jobs/$job" | sed -E 's/.*"status":"([A-Z]+)".*/\1/'); [ "$status" = COMPLETED ] || [ "$status" = FAILED ] && break; sleep 2; done; echo "$status"
+curl -fsS http://127.0.0.1:5173/api/v1/runs; echo
 docker compose down
 ```
 
-Expected: каталог начинается с `{"schemaVersion":1,"types":[`; задание принято (`"status":"QUEUED"` или `"RUNNING"`); список прогонов не пуст. Если Docker недоступен, написать об этом в PR.
+Expected: сервер отвечает на `/health` в пределах двух минут; каталог начинается с `{"schemaVersion":1,"types":[`; задание доходит до `COMPLETED`; список прогонов не пуст. Если Docker недоступен, написать об этом в PR.
 
 - [ ] **Step 3: Commit**
 

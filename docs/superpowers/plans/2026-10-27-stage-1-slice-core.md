@@ -2246,7 +2246,7 @@ class PathStreamsTest {
     }
 
     @Test
-    fun `same key gives the same sequence in separately opened sources; other roles differ`() {
+    fun `same key gives the same sequence in separately opened sources and other roles differ`() {
         val plan = StreamPlan(listOf(key, key.copy(role = "outcome")))
         val first = PathStreamSource(plan, seed = 42, replication = 0).stream("system/api", StreamRole.PROCESSING)
         val second = PathStreamSource(plan, seed = 42, replication = 0).stream("system/api", StreamRole.PROCESSING)
@@ -2275,7 +2275,7 @@ class PathStreamsTest {
     }
 
     @Test
-    fun `different keys sharing an address stop the plan; identical keys are allowed`() {
+    fun `different keys sharing an address stop the plan but identical keys are allowed`() {
         assertThatThrownBy { StreamPlan(listOf(key, key.copy(role = "outcome"))) { 7L } }
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("collision")
@@ -3449,7 +3449,11 @@ package resiliencelab.core.workspace
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import java.io.IOException
 import java.nio.file.Files
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.test.Test
 
 class FileWorkspaceTest {
@@ -3491,10 +3495,52 @@ class FileWorkspaceTest {
 
     @Test
     fun `rejects paths that leave the workspace and missing documents`() {
-        listOf("../x.json", "/abs.json", "a/../../x.json", "", "a\\b.json").forEach { path ->
+        listOf("../x.json", "/abs.json", "a/../../x.json", "", "a\\b.json", "\u0000.layout.json").forEach { path ->
             assertThatThrownBy { workspace.read(path) }.describedAs(path).isInstanceOf(InvalidDocumentPathException::class.java)
         }
         assertThatThrownBy { workspace.read("missing.json") }.isInstanceOf(DocumentNotFoundException::class.java)
+    }
+
+    @Test
+    fun `rejects paths that escape through symbolic links`() {
+        val outside = Files.createTempDirectory("workspace-outside")
+        Files.writeString(outside.resolve("outside.layout.json"), "{}\n")
+        Files.createSymbolicLink(root.resolve("external"), outside)
+
+        assertThatThrownBy { workspace.read("external/outside.layout.json") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThatThrownBy { workspace.write("external/outside.layout.json", "x\n") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThatThrownBy { workspace.create("external/new.layout.json", "x\n") }.isInstanceOf(InvalidDocumentPathException::class.java)
+        assertThat(Files.readString(outside.resolve("outside.layout.json"))).isEqualTo("{}\n")
+        assertThat(workspace.list()).isEmpty()
+    }
+
+    @Test
+    fun `creates a document once even under concurrent requests`() {
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        val attempts =
+            (1..2).map { n ->
+                pool.submit(
+                    Callable {
+                        start.await()
+                        runCatching { workspace.create("race.layout.json", "$n\n") }
+                    },
+                )
+            }
+        start.countDown()
+        val results = attempts.map { it.get() }
+        pool.shutdown()
+
+        assertThat(results.count { it.isSuccess }).isEqualTo(1)
+        assertThat(results.single { it.isFailure }.exceptionOrNull()).isInstanceOf(DocumentExistsException::class.java)
+        assertThat(workspace.read("race.layout.json").version).isEqualTo(results.single { it.isSuccess }.getOrThrow())
+    }
+
+    @Test
+    fun `rejects documents that are not UTF-8`() {
+        Files.write(root.resolve("broken.model.json"), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        assertThatThrownBy { workspace.read("broken.model.json") }.isInstanceOf(IOException::class.java)
     }
 }
 ```
@@ -3510,12 +3556,13 @@ Expected: FAIL — `Unresolved reference: FileWorkspace`.
 package resiliencelab.core.workspace
 
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.security.MessageDigest
 import kotlin.io.path.isRegularFile
-import kotlin.io.path.readText
 
 /** Document text with its version — the SHA-256 of its UTF-8 bytes. */
 data class VersionedDocument(
@@ -3537,6 +3584,10 @@ class VersionConflictException(
 class InvalidDocumentPathException(
     path: String,
 ) : IllegalArgumentException("Path '$path' is not a relative path inside the workspace")
+
+class DocumentExistsException(
+    path: String,
+) : RuntimeException("Document '$path' already exists")
 
 /** Versions of document text. */
 object DocumentVersion {
@@ -3565,18 +3616,31 @@ interface Workspace {
         text: String,
         expectedVersion: String? = null,
     ): String
+
+    /**
+     * Writes a new document and returns its version. Throws [DocumentExistsException] when the document exists;
+     * the check and the write are one atomic step, so of two concurrent creations exactly one succeeds.
+     */
+    fun create(
+        path: String,
+        text: String,
+    ): String
 }
 
-/** Workspace in a directory, usually a git repository. */
+/**
+ * Workspace in a directory, usually a git repository. Paths may not leave the directory, also through symbolic links;
+ * listings skip symbolic links.
+ */
 class FileWorkspace(
     root: Path,
 ) : Workspace {
     private val root: Path = root.toAbsolutePath().normalize()
+    private val realRoot: Path = this.root.toRealPath()
 
     override fun list(): List<String> =
         Files.walk(root).use { paths ->
             paths
-                .filter { it.isRegularFile() && it.fileName.toString().endsWith(".json") }
+                .filter { it.isRegularFile(NOFOLLOW_LINKS) && it.fileName.toString().endsWith(".json") }
                 .map { root.relativize(it) }
                 .filter { relative -> relative.none { it.toString().startsWith(".") } }
                 .map { it.joinToString("/") }
@@ -3587,7 +3651,7 @@ class FileWorkspace(
     override fun read(path: String): VersionedDocument {
         val file = resolve(path)
         if (!file.isRegularFile()) throw DocumentNotFoundException(path)
-        val text = file.readText()
+        val text = Files.readString(file)
         return VersionedDocument(path, text, DocumentVersion.of(text))
     }
 
@@ -3601,9 +3665,26 @@ class FileWorkspace(
     ): String {
         val file = resolve(path)
         if (expectedVersion != null) {
-            val current = if (file.isRegularFile()) DocumentVersion.of(file.readText()) else null
+            val current = if (file.isRegularFile()) DocumentVersion.of(Files.readString(file)) else null
             if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
         }
+        return store(file, text)
+    }
+
+    @Synchronized
+    override fun create(
+        path: String,
+        text: String,
+    ): String {
+        val file = resolve(path)
+        if (Files.exists(file, NOFOLLOW_LINKS)) throw DocumentExistsException(path)
+        return store(file, text)
+    }
+
+    private fun store(
+        file: Path,
+        text: String,
+    ): String {
         Files.createDirectories(file.parent)
         val temporary = Files.createTempFile(file.parent, ".write-", ".tmp")
         Files.writeString(temporary, text)
@@ -3611,10 +3692,23 @@ class FileWorkspace(
         return DocumentVersion.of(text)
     }
 
+    /**
+     * Maps a workspace path to a file inside the root. The deepest existing component of the path must resolve inside
+     * the real root, so a symbolic link cannot lead reads or writes outside the workspace.
+     */
     private fun resolve(path: String): Path {
         if (path.isBlank() || path.startsWith("/") || path.contains('\\')) throw InvalidDocumentPathException(path)
-        val file = root.resolve(path).normalize()
+        val file =
+            try {
+                root.resolve(path).normalize()
+            } catch (exception: InvalidPathException) {
+                throw InvalidDocumentPathException(path)
+            }
         if (!file.startsWith(root) || file == root) throw InvalidDocumentPathException(path)
+        var existing = file
+        while (!Files.exists(existing, NOFOLLOW_LINKS)) existing = existing.parent
+        val real = runCatching { existing.toRealPath() }.getOrNull()
+        if (real == null || !real.startsWith(realRoot)) throw InvalidDocumentPathException(path)
         return file
     }
 }
@@ -4060,7 +4154,7 @@ class LabTest {
     }
 
     @Test
-    fun `reports missing documents and broken references`() {
+    fun `reports missing and unreadable documents and broken references`() {
         val root = exampleWorkspace()
         val lab = Lab(FileWorkspace(root))
 
@@ -4078,6 +4172,9 @@ class LabTest {
         Files.writeString(experimentFile, original)
         Files.writeString(root.resolve(model), "{")
         assertThat(lab.validate(experiment).diagnostics.single().code).isEqualTo("JSON_SYNTAX")
+
+        Files.write(root.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+        assertThat(lab.validate(experiment).diagnostics.single().code).isEqualTo("DOCUMENT_UNREADABLE")
     }
 
     @Test
@@ -4164,6 +4261,7 @@ import resiliencelab.core.simulation.PathStreams
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
+import java.io.IOException
 
 /** Diagnostics of one experiment. */
 data class ValidationReport(
@@ -4232,7 +4330,14 @@ class Lab(
         val versions: Map<String, String>,
     )
 
-    private fun load(experimentPath: String): Loaded {
+    private fun load(experimentPath: String): Loaded =
+        try {
+            loadDocuments(experimentPath)
+        } catch (exception: UnreadableDocumentException) {
+            failed(exception.diagnostic)
+        }
+
+    private fun loadDocuments(experimentPath: String): Loaded {
         val experimentDocument =
             read(experimentPath)
                 ?: return failed(
@@ -4265,14 +4370,23 @@ class Lab(
         return Loaded(result.experiment, result.diagnostics, versions)
     }
 
+    /** The document, or null when it does not exist or its path is invalid; a failed read is a diagnostic, not a crash. */
     private fun read(path: String): VersionedDocument? =
         try {
             if (workspace.exists(path)) workspace.read(path) else null
         } catch (exception: InvalidDocumentPathException) {
             null
+        } catch (exception: IOException) {
+            val reason = exception.message ?: exception.javaClass.simpleName
+            val diagnostic = Diagnostic("DOCUMENT_UNREADABLE", Severity.ERROR, "Document '$path' cannot be read: $reason", path)
+            throw UnreadableDocumentException(diagnostic)
         }
 
     private fun failed(diagnostic: Diagnostic) = Loaded(null, listOf(diagnostic), emptyMap())
+
+    private class UnreadableDocumentException(
+        val diagnostic: Diagnostic,
+    ) : RuntimeException(diagnostic.message)
 
     companion object {
         /** Resolves [ref] against the directory of [documentPath]; null when it leaves the workspace or is not relative. */

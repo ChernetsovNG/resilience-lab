@@ -437,7 +437,7 @@ function param(partial: Partial<ParamDescriptor> & Pick<ParamDescriptor, "name" 
   return { description: "", required: false, options: [], fields: [], sweepable: false, ...partial };
 }
 
-function distribution(name: string, title: string, fallback?: unknown): ParamDescriptor {
+function distribution(name: string, title: string, fallback?: ParamDescriptor["default"]): ParamDescriptor {
   return param({
     name,
     kind: "OBJECT",
