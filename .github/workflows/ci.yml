@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -19,6 +20,7 @@ jobs:
         with:
           distribution: microsoft
           java-version: '25'
+          cache: gradle
       - name: Set up Node.js 25.5.0
         uses: actions/setup-node@v4
         with:
@@ -39,12 +41,6 @@ jobs:
       - name: Build frontend
         working-directory: web
         run: npm run build
-      - name: Install Playwright Chromium
-        working-directory: web
-        run: npx playwright install --with-deps chromium
-      - name: Run real browser workflows
-        working-directory: web
-        run: npm run test:e2e
       - name: Upload JaCoCo reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,6 +51,47 @@ jobs:
             apps/cli/build/reports/jacoco/test
             apps/server/build/reports/jacoco/test
           if-no-files-found: error
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: &playwright-image mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 25.5.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25.5.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Verify Playwright image matches lock file
+        env:
+          PLAYWRIGHT_IMAGE: *playwright-image
+        run: |
+          node <<'NODE'
+          const version = require('./web/package-lock.json').packages['node_modules/@playwright/test'].version;
+          const expected = `mcr.microsoft.com/playwright:v${version}-noble`;
+          if (process.env.PLAYWRIGHT_IMAGE !== expected) {
+            console.error(`Playwright image mismatch: lock file requires ${expected}. Update jobs.e2e.container.image in .github/workflows/ci.yml.`);
+            process.exit(1);
+          }
+          console.log(`Playwright image matches @playwright/test ${version}.`);
+          NODE
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '25'
+          cache: gradle
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Run real browser workflows
+        working-directory: web
+        run: GRADLE_USER_HOME="$HOME/.gradle" npm run test:e2e -- --reporter=line,html
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
