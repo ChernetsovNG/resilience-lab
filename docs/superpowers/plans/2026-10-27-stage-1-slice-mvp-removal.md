@@ -316,6 +316,7 @@ git commit -m "test(core): add chain fixtures with path-based streams"
 | `DurationDistribution(DistributionKind.X, mean, stdDevMs = null)`, `DurationDistribution(kind = …, meanMs = …, stdDevMs = null)` | `Distribution(DistributionShape.X, mean)`, `Distribution(shape = …, meanMs = …)` |
 | тело локальной `fixed(durationMs)` | `TestChains.fixed(durationMs)`, тип результата `Distribution` |
 | `base.services[i].copy(id = …, failureRate = …)` | `base.services[i].copy(path = …, failureProbability = …)` |
+| чтение `service.id` (`if (service.id == "entry") …`) | `service.path` |
 | `links = …`, `base.links` | `calls = …`, `base.calls` |
 | `.copy(id = "backend-to-third", …)` у связи, `maxAttempts = …`, `retry = …` | `.copy(path = "backend-to-third", …)`, `attempts = …`, `backoff = …` |
 | `RetrySpec(RetryKind.X, a, b)` | `TestChains.backoff(BackoffKind.X, a, b)` |

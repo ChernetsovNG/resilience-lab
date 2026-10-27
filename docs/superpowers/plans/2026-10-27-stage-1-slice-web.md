@@ -436,8 +436,16 @@ import type {
   RunSummary,
 } from "../api/apiTypes";
 
-/** Units the server catalog lists for each dimension. */
-const unitsOf: Record<string, string[]> = { DURATION: ["ms", "s", "min"], RATE: ["/ms", "/s", "/min"], PROBABILITY: ["%"] };
+type QuantityUnit = ParamDescriptor["units"][number];
+
+const unit = (symbol: string, numerator: number, denominator: number): QuantityUnit => ({ symbol, numerator, denominator });
+
+/** Units and scales the server catalog lists for each dimension. */
+export const unitsOf: Record<string, QuantityUnit[]> = {
+  DURATION: [unit("ms", 1, 1), unit("s", 1000, 1), unit("min", 60000, 1)],
+  RATE: [unit("/ms", 1, 1), unit("/s", 1, 1000), unit("/min", 1, 60000)],
+  PROBABILITY: [unit("%", 1, 100)],
+};
 
 function param(partial: Partial<ParamDescriptor> & Pick<ParamDescriptor, "name" | "kind" | "title">): ParamDescriptor {
   const units = partial.dimension == null ? [] : unitsOf[partial.dimension];
@@ -488,7 +496,7 @@ export const catalog: Catalog = {
         param({ name: "handlers", kind: "INTEGER", title: "Handlers", required: true, minimum: 1 }),
         param({ name: "queue", kind: "INTEGER", title: "Queue capacity", default: 0, minimum: 0 }),
         distribution("processing", "Processing time"),
-        param({ name: "failureRate", kind: "QUANTITY", title: "Failure rate", default: "0%", dimension: "PROBABILITY" }),
+        param({ name: "failureRate", kind: "QUANTITY", title: "Failure rate", default: "0%", dimension: "PROBABILITY", minimum: 0, maximum: 1 }),
       ],
     },
     {
@@ -649,26 +657,25 @@ describe("resolveRef", () => {
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { isQuantity } from "./quantities";
+import { unitsOf } from "../test/fixtures";
+import { canonicalOf } from "./quantities";
 
-const duration = ["ms", "s", "min"];
-const rate = ["/ms", "/s", "/min"];
-const probability = ["%"];
+const { DURATION: duration, RATE: rate, PROBABILITY: probability } = unitsOf;
 
-describe("isQuantity", () => {
-  it("accepts the listed units", () => {
-    expect(isQuantity("250ms", duration)).toBe(true);
-    expect(isQuantity("1.5min", duration)).toBe(true);
-    expect(isQuantity("120/s", rate)).toBe(true);
-    expect(isQuantity("0.5%", probability)).toBe(true);
+describe("canonicalOf", () => {
+  it("scales the listed units to canonical values like the core parser", () => {
+    expect(canonicalOf("250ms", duration)).toBe(250);
+    expect(canonicalOf("1.5min", duration)).toBe(90000);
+    expect(canonicalOf("120/s", rate)).toBe(0.12);
+    expect(canonicalOf("0.5%", probability)).toBe(0.005);
   });
 
   it("rejects missing, foreign and malformed units", () => {
     for (const text of ["250", "250 ms", "-1ms", "1h", "1e999ms", "1.ms"]) {
-      expect(isQuantity(text, duration)).toBe(false);
+      expect(canonicalOf(text, duration)).toBeNull();
     }
-    expect(isQuantity("120/s", duration)).toBe(false);
-    expect(isQuantity("5ms", probability)).toBe(false);
+    expect(canonicalOf("120/s", duration)).toBeNull();
+    expect(canonicalOf("5ms", probability)).toBeNull();
   });
 });
 ```
@@ -690,6 +697,20 @@ describe("withParam", () => {
     expect(elementOf(withParam(model, "gateway-to-middle", "attempts", 1), "gateway-to-middle")?.params.attempts).toBe(1);
     expect(elementOf(model, "missing")).toBeNull();
   });
+
+  it("treats inherited names such as constructor as ordinary IDs", () => {
+    const withConstructor = {
+      ...model,
+      connections: model.connections.map((connection) =>
+        connection.id === "gateway-to-middle" ? { ...connection, id: "constructor" } : connection,
+      ),
+    };
+
+    expect(elementOf(model, "constructor")).toBeNull();
+    expect(elementOf(withConstructor, "constructor")?.type).toBe("call");
+    const overridden = applyOverrides(withConstructor, { "constructor.attempts": 1 }, catalog);
+    expect(elementOf(overridden, "constructor")?.params.attempts).toBe(1);
+  });
 });
 
 describe("applyOverrides", () => {
@@ -705,6 +726,16 @@ describe("applyOverrides", () => {
     expect(elementOf(effective, "gateway-to-middle")?.params.attempts).toBe(1);
     expect(elementOf(effective, "middle-to-dependency")?.params.network).toEqual({ kind: "fixed", mean: "3ms" });
     expect(applyOverrides(model, {}, catalog)).toBe(model);
+  });
+
+  it("applies an object override before overrides of its fields whatever their order, like the core compiler", () => {
+    const effective = applyOverrides(
+      model,
+      { "gateway.processing.mean": "3ms", "gateway.processing": { kind: "fixed", mean: "2ms" } },
+      catalog,
+    );
+
+    expect(elementOf(effective, "gateway")?.params.processing).toEqual({ kind: "fixed", mean: "3ms" });
   });
 });
 
@@ -753,15 +784,21 @@ export function resolveRef(documentPath: string, ref: string): string | null {
 `src/workspace/quantities.ts`:
 
 ```ts
+import type { ParamDescriptor } from "../api/apiTypes";
+
 const pattern = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(.+)$/;
 
 /**
- * True when [text] is a finite non-negative number followed by one of [units], such as `250ms` or `120/s`. The units
- * come from the catalog descriptor of the parameter (ADR 0001), the same list the core parser accepts.
+ * Canonical value of [text], a finite non-negative number followed by one of [units] such as `250ms` or `120/s`; null
+ * for any other text. The units and their scales come from the catalog descriptor of the parameter (ADR 0001), and
+ * the arithmetic repeats the core parser, so ranges are checked on the same numbers.
  */
-export function isQuantity(text: string, units: readonly string[]): boolean {
+export function canonicalOf(text: string, units: readonly ParamDescriptor["units"][number][]): number | null {
   const match = pattern.exec(text);
-  return match !== null && units.includes(match[2]) && Number.isFinite(Number(match[1]));
+  const unit = units.find((candidate) => candidate.symbol === match?.[2]);
+  if (match === null || unit === undefined) return null;
+  const value = (Number(match[1]) * unit.numerator) / unit.denominator;
+  return Number.isFinite(value) ? value : null;
 }
 ```
 
@@ -776,9 +813,14 @@ export function isObject(value: unknown): value is Params {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Own entry [key] of [record]; inherited names such as `constructor` are valid IDs, not entries. */
+export function ownEntry<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 /** Type and parameters of block or connection [id]; null when the model has no such element. */
 export function elementOf(model: ModelFile, id: string): { type: string; params: Params } | null {
-  const block = model.blocks[id];
+  const block = ownEntry(model.blocks, id);
   if (block !== undefined) return { type: block.type, params: block.params };
   const connection = model.connections.find((candidate) => candidate.id === id);
   return connection === undefined ? null : { type: connection.type, params: connection.params };
@@ -792,7 +834,7 @@ export function withParam(model: ModelFile, id: string, name: string, value: unk
     else next[name] = value;
     return next;
   };
-  const block = model.blocks[id];
+  const block = ownEntry(model.blocks, id);
   if (block !== undefined) {
     return { ...model, blocks: { ...model.blocks, [id]: { ...block, params: update(block.params) } } };
   }
@@ -806,11 +848,12 @@ export function withParam(model: ModelFile, id: string, name: string, value: unk
 
 /**
  * The model as a variant sees it (ADR 0002): overrides are `id.param[.field]` paths, and a missing object starts from
- * its catalog default, as in the core compiler.
+ * its catalog default. As in the core compiler, overrides apply in key order, so an object comes before its fields.
  */
 export function applyOverrides(model: ModelFile, overrides: Params, catalog: Catalog): ModelFile {
   let result = model;
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const key of Object.keys(overrides).sort()) {
+    const value = overrides[key];
     const [id, name, ...fields] = key.split(".");
     const element = elementOf(result, id);
     const descriptor = catalog.types
@@ -868,7 +911,8 @@ git commit -m "feat(web): resolve references, check quantities and apply variant
 ```ts
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { catalog, documentViews, experimentPath, modelPath } from "../test/fixtures";
+import type { DocumentView } from "../api/apiTypes";
+import { catalog, documentViews, experiment, experimentPath, modelPath } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
 import { useWorkspace } from "./useWorkspace";
 
@@ -876,7 +920,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubWorkspace(options: { putStatus?: number; putGate?: Promise<void> } = {}) {
+function stubWorkspace(options: { putStatus?: number; putGate?: Promise<void>; documents?: Record<string, DocumentView> } = {}) {
+  const views = { ...documentViews, ...options.documents };
   return stubFetch(async (url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
@@ -888,7 +933,7 @@ function stubWorkspace(options: { putStatus?: number; putGate?: Promise<void> } 
         ? { status: 409, body: { code: "VERSION_CONFLICT", message: "stale", diagnostics: [] } }
         : { body: { path: modelPath, kind: "MODEL", version: "v-model-2" } };
     }
-    const document = documentViews[decodeURIComponent(url.split("path=")[1] ?? "")];
+    const document = views[decodeURIComponent(url.split("path=")[1] ?? "")];
     return document === undefined
       ? { status: 404, body: { code: "DOCUMENT_NOT_FOUND", message: "missing", diagnostics: [] } }
       : { body: document };
@@ -960,6 +1005,31 @@ describe("useWorkspace", () => {
       await result.current.open("missing.experiment.json");
     });
 
+    expect(result.current.problem?.code).toBe("DOCUMENT_NOT_FOUND");
+  });
+
+  it("reports a layout reference that leaves the workspace or cannot be read", async () => {
+    const withLayout = (path: string, layoutRef: string): DocumentView => ({
+      path,
+      kind: "EXPERIMENT",
+      version: "v-broken",
+      content: { experiment: { ...experiment, layoutRef } },
+    });
+    const outside = "retry-storm/outside.experiment.json";
+    const missing = "retry-storm/missing.experiment.json";
+    stubWorkspace({
+      documents: { [outside]: withLayout(outside, "../../outside.layout.json"), [missing]: withLayout(missing, "missing.layout.json") },
+    });
+    const { result } = await loaded();
+
+    await act(async () => {
+      await result.current.open(outside);
+    });
+    expect(result.current.problem?.message).toContain("layoutRef");
+
+    await act(async () => {
+      await result.current.open(missing);
+    });
     expect(result.current.problem?.code).toBe("DOCUMENT_NOT_FOUND");
   });
 
@@ -1088,17 +1158,14 @@ async function loadExperiment(experimentPath: string): Promise<LoadedExperiment>
   const modelView = await api.document(modelPath);
   const model = modelView.content.model;
   if (model == null) throw new Error(`${modelPath} is not a model`);
-  const layoutPath = experiment.layoutRef == null ? null : resolveRef(experimentPath, experiment.layoutRef);
-  const layoutView = layoutPath === null ? null : await api.document(layoutPath).catch(() => null);
-  return {
-    experimentPath,
-    experiment,
-    modelPath,
-    model,
-    savedModel: model,
-    modelVersion: modelView.version,
-    layout: layoutView?.content.layout ?? null,
-  };
+  let layout: LayoutFile | null = null;
+  if (experiment.layoutRef != null) {
+    const layoutPath = resolveRef(experimentPath, experiment.layoutRef);
+    if (layoutPath === null) throw new Error(`layoutRef of ${experimentPath} leaves the workspace`);
+    layout = (await api.document(layoutPath)).content.layout ?? null;
+    if (layout === null) throw new Error(`${layoutPath} is not a layout`);
+  }
+  return { experimentPath, experiment, modelPath, model, savedModel: model, modelVersion: modelView.version, layout };
 }
 
 /** Catalog and documents of the workspace, edits of the model and saving with `If-Match` (stage 1 design §6.2). */
@@ -1548,6 +1615,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
 import { Background, Controls, ReactFlow } from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 import type { ConnectionInstance, LayoutFile, ModelFile } from "../api/apiTypes";
+import { ownEntry } from "../workspace/params";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import "@xyflow/react/dist/style.css";
@@ -1572,7 +1640,7 @@ export function Canvas({ model, layout, selected, onSelect }: CanvasProps) {
   const nodes: BlockNodeType[] = Object.entries(model.blocks).map(([id, block], index) => ({
     id,
     type: "block",
-    position: layout?.positions[id] ?? { x: index * 260, y: 100 },
+    position: (layout === null ? undefined : ownEntry(layout.positions, id)) ?? { x: index * 260, y: 100 },
     data: { id, block },
     selected: selected === id,
     ariaLabel: id,
@@ -1715,6 +1783,20 @@ describe("Inspector", () => {
     expect(onParam).toHaveBeenCalledWith("gateway", "queue", undefined);
   });
 
+  it("checks catalog ranges in canonical units at both bounds", () => {
+    const onParam = renderInspector();
+
+    commit("Handlers", "0");
+    expect(screen.getByRole("alert").textContent).toContain(">= 1");
+    commit("Failure rate", "150%");
+    expect(onParam).not.toHaveBeenCalled();
+
+    commit("Handlers", "1");
+    commit("Failure rate", "100%");
+    expect(onParam).toHaveBeenCalledWith("gateway", "handlers", 1);
+    expect(onParam).toHaveBeenCalledWith("gateway", "failureRate", "100%");
+  });
+
   it("reports invalid drafts so that saving and running can wait for them", () => {
     const onValidity = vi.fn();
     renderInspector({ onValidity });
@@ -1777,7 +1859,7 @@ Expected: FAIL — нет модуля `./Inspector`.
 import { useEffect, useId, useRef, useState } from "react";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { isObject } from "../workspace/params";
-import { isQuantity } from "../workspace/quantities";
+import { canonicalOf } from "../workspace/quantities";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -1831,16 +1913,35 @@ function parse(descriptor: ParamDescriptor, draft: string): Parsed {
   if (text === "") return descriptor.required ? { ok: false, message: "Required" } : { ok: true, value: undefined };
   switch (descriptor.kind) {
     case "INTEGER":
-      return Number.isSafeInteger(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a whole number" };
+      return Number.isSafeInteger(Number(text)) ? inRange(descriptor, Number(text), Number(text)) : { ok: false, message: "Enter a whole number" };
     case "NUMBER":
-      return Number.isFinite(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a number" };
-    case "QUANTITY":
-      return descriptor.units.length === 0 || isQuantity(text, descriptor.units)
-        ? { ok: true, value: text }
-        : { ok: false, message: `Use a value with a unit: ${descriptor.units.join(", ")}` };
+      return Number.isFinite(Number(text)) ? inRange(descriptor, Number(text), Number(text)) : { ok: false, message: "Enter a number" };
+    case "QUANTITY": {
+      if (descriptor.units.length === 0) return { ok: true, value: text };
+      const canonical = canonicalOf(text, descriptor.units);
+      return canonical === null
+        ? { ok: false, message: `Use a value with a unit: ${descriptor.units.map((unit) => unit.symbol).join(", ")}` }
+        : inRange(descriptor, canonical, text);
+    }
     default:
       return { ok: true, value: text };
   }
+}
+
+/** Accepts [value] when its [canonical] number lies in the catalog range, which is in canonical units as in the core. */
+function inRange(descriptor: ParamDescriptor, canonical: number, value: unknown): Parsed {
+  const { minimum, exclusiveMinimum, maximum } = descriptor;
+  const below = (minimum != null && canonical < minimum) || (exclusiveMinimum != null && canonical <= exclusiveMinimum);
+  const above = maximum != null && canonical > maximum;
+  if (!below && !above) return { ok: true, value };
+  const unit = descriptor.units[0];
+  const shown = (bound: number) => (unit === undefined ? String(bound) : `${(bound * unit.denominator) / unit.numerator}${unit.symbol}`);
+  const limits = [
+    minimum == null ? null : `>= ${shown(minimum)}`,
+    exclusiveMinimum == null ? null : `> ${shown(exclusiveMinimum)}`,
+    maximum == null ? null : `<= ${shown(maximum)}`,
+  ];
+  return { ok: false, message: `Out of range: ${limits.filter((limit) => limit !== null).join(" and ")}` };
 }
 
 function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onValidity }: ParamFieldProps) {

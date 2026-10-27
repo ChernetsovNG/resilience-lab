@@ -46,6 +46,7 @@
 | `core/src/main/kotlin/resiliencelab/core/results/RunArtifact.kt` | Манифест, сводка, запись артефакта |
 | `core/src/main/kotlin/resiliencelab/core/lab/Lab.kt` | Фасад для сервера и CLI |
 | `examples/retry-storm/*.json` | Пример в новом формате |
+| `.gitignore` | Каталог `.results/` вне git |
 
 Тесты лежат зеркально в `core/src/test/kotlin/resiliencelab/core/<пакет>/`.
 
@@ -54,6 +55,8 @@
 - один тест: `./gradlew :core:test --tests '<полное.имя.Класса>'`
 - форматирование: `./gradlew :core:ktlintFormat`
 - полная проверка модуля: `./gradlew :core:check`
+
+`ktlintFormat` перед каждым коммитом переносит длинные цепочки вызовов в нескольких блоках кода (задачи 7, 8, 14); это ожидаемо, смысл кода не меняется.
 
 ---
 
@@ -120,10 +123,11 @@ class QuantitiesTest {
     }
 
     @Test
-    fun `lists accepted units per dimension`() {
-        assertThat(Quantities.unitsOf(Dimension.DURATION)).containsExactly("ms", "s", "min")
-        assertThat(Quantities.unitsOf(Dimension.RATE)).containsExactly("/ms", "/s", "/min")
-        assertThat(Quantities.unitsOf(Dimension.PROBABILITY)).containsExactly("%")
+    fun `lists accepted units per dimension with their scales`() {
+        assertThat(Quantities.unitsOf(Dimension.DURATION).map { it.symbol }).containsExactly("ms", "s", "min")
+        assertThat(Quantities.unitsOf(Dimension.RATE).map { it.symbol }).containsExactly("/ms", "/s", "/min")
+        assertThat(Quantities.unitsOf(Dimension.RATE)[1]).isEqualTo(QuantityUnit("/s", 1.0, 1_000.0))
+        assertThat(Quantities.unitsOf(Dimension.PROBABILITY)).containsExactly(QuantityUnit("%", 1.0, 100.0))
     }
 }
 ```
@@ -152,25 +156,30 @@ enum class Dimension {
     PROBABILITY,
 }
 
+/**
+ * A unit a document may write: canonical value = written value * [numerator] / [denominator]. The division keeps
+ * results like 120/s == 0.12 exact; the catalog lists units so that UI converts values the same way (ADR 0001).
+ */
+@Serializable
+data class QuantityUnit(
+    val symbol: String,
+    val numerator: Double,
+    val denominator: Double,
+)
+
 /** Parses and prints document quantities such as `250ms`, `2s`, `120/s` and `0.5%` (ADR 0001, item 6). */
 object Quantities {
     private val pattern = Regex("""^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(ms|s|min|/ms|/s|/min|%)$""")
 
-    /** canonical = value * numerator / denominator; the division keeps results like 120/s == 0.12 exact. */
-    private class Scale(
-        val numerator: Double,
-        val denominator: Double,
-    )
-
-    private val scales: Map<Dimension, Map<String, Scale>> =
+    private val units: Map<Dimension, List<QuantityUnit>> =
         mapOf(
-            Dimension.DURATION to linkedMapOf("ms" to Scale(1.0, 1.0), "s" to Scale(1_000.0, 1.0), "min" to Scale(60_000.0, 1.0)),
-            Dimension.RATE to linkedMapOf("/ms" to Scale(1.0, 1.0), "/s" to Scale(1.0, 1_000.0), "/min" to Scale(1.0, 60_000.0)),
-            Dimension.PROBABILITY to linkedMapOf("%" to Scale(1.0, 100.0)),
+            Dimension.DURATION to listOf(QuantityUnit("ms", 1.0, 1.0), QuantityUnit("s", 1_000.0, 1.0), QuantityUnit("min", 60_000.0, 1.0)),
+            Dimension.RATE to listOf(QuantityUnit("/ms", 1.0, 1.0), QuantityUnit("/s", 1.0, 1_000.0), QuantityUnit("/min", 1.0, 60_000.0)),
+            Dimension.PROBABILITY to listOf(QuantityUnit("%", 1.0, 100.0)),
         )
 
     /** Units accepted for [dimension], in display order. */
-    fun unitsOf(dimension: Dimension): List<String> = scales.getValue(dimension).keys.toList()
+    fun unitsOf(dimension: Dimension): List<QuantityUnit> = units.getValue(dimension)
 
     /** Returns the canonical value, or null when [text] is not a finite non-negative quantity of [dimension]. */
     fun parse(
@@ -178,8 +187,8 @@ object Quantities {
         dimension: Dimension,
     ): Double? {
         val match = pattern.matchEntire(text) ?: return null
-        val scale = scales.getValue(dimension)[match.groupValues[2]] ?: return null
-        val value = match.groupValues[1].toDouble() * scale.numerator / scale.denominator
+        val unit = units.getValue(dimension).firstOrNull { it.symbol == match.groupValues[2] } ?: return null
+        val value = match.groupValues[1].toDouble() * unit.numerator / unit.denominator
         return value.takeIf { it.isFinite() }
     }
 
@@ -249,9 +258,10 @@ class Stage1CatalogTest {
         assertThat(params.getValue("handlers").required).isTrue()
         assertThat(params.getValue("handlers").minimum).isEqualTo(1.0)
         assertThat(params.getValue("failureRate").dimension).isEqualTo(Dimension.PROBABILITY)
-        assertThat(params.getValue("failureRate").units).containsExactly("%")
+        assertThat(params.getValue("failureRate").units).containsExactly(QuantityUnit("%", 1.0, 100.0))
         assertThat(params.getValue("handlers").units).isEmpty()
-        assertThat(params.getValue("processing").fields.first { it.name == "mean" }.units).containsExactly("ms", "s", "min")
+        val mean = params.getValue("processing").fields.first { it.name == "mean" }
+        assertThat(mean.units.map { it.symbol }).containsExactly("ms", "s", "min")
         assertThat(params.getValue("processing").fields.map { it.name }).containsExactly("kind", "mean", "stdDev")
     }
 
@@ -316,7 +326,8 @@ data class ConnectionRule(
 
 /**
  * One parameter of a type. Ranges of [ParamKind.QUANTITY] are in canonical units of [dimension], and [units] lists the
- * units a document may write; [default] is used when a document omits the parameter.
+ * units a document may write with their scales, so UI checks ranges as the core does; [default] is used when a
+ * document omits the parameter.
  */
 @Serializable
 data class ParamDescriptor(
@@ -327,7 +338,7 @@ data class ParamDescriptor(
     val required: Boolean = false,
     val default: JsonElement? = null,
     val dimension: Dimension? = null,
-    val units: List<String> = emptyList(),
+    val units: List<QuantityUnit> = emptyList(),
     val minimum: Double? = null,
     val exclusiveMinimum: Double? = null,
     val maximum: Double? = null,
@@ -1539,7 +1550,8 @@ internal class ParamReader(
                 ?: return fail(
                     "QUANTITY_INVALID",
                     name,
-                    "Parameter '$name' must be a quantity with one of the units ${Quantities.unitsOf(dimension).joinToString()}",
+                    "Parameter '$name' must be a quantity with one of the units " +
+                        Quantities.unitsOf(dimension).joinToString { it.symbol },
                 )
         return value.takeIf { inRange(descriptor, value) }
     }
@@ -1876,6 +1888,17 @@ class ModelCompilerTest {
     }
 
     @Test
+    fun `applies an object override before overrides of its fields whatever their order`() {
+        val overlapping = "\"gateway.processing.mean\": \"3ms\", \"gateway.processing\": {\"kind\": \"fixed\", \"mean\": \"2ms\"}"
+        val nested = experiment.replace("\"gateway-to-dependency.attempts\": 1", overlapping)
+
+        val variant = compile(experimentText = nested).experiment!!.variants.last()
+
+        val gateway = variant.chain.services.first { it.path == "gateway" }
+        assertThat(gateway.processing.meanMs).isEqualTo(3.0)
+    }
+
+    @Test
     fun `checks faults and execution settings`() {
         val broken =
             experiment
@@ -2008,7 +2031,7 @@ class ModelCompiler(
             }
         val diagnostics = sink.items.distinct()
         val failed = diagnostics.any { it.severity == Severity.ERROR } || run == null
-        return CompileResult(if (failed) null else CompiledExperiment(variants, run!!), diagnostics)
+        return CompileResult(if (failed) null else CompiledExperiment(variants, run), diagnostics)
     }
 
     /** A variant's model and, per element, where its overridden values come from. */
@@ -2075,6 +2098,7 @@ class ModelCompiler(
         return sink.errorCount() == before
     }
 
+    /** Applies overrides in key order, so an object comes before its fields whatever the document order; web does the same. */
     private fun applyOverrides(
         model: ModelFile,
         variant: Variant,
@@ -3275,7 +3299,7 @@ import resiliencelab.core.scenario.Scenario
 import kotlin.time.Duration.Companion.seconds
 ```
 
-Заменить заголовок класса и поля до `var activeInvocations` (от `class ReliabilityModel(` до закрывающей скобки `associateBy { it.serviceId }` включительно) на:
+В KDoc класса заменить `for one scenario.` на `for one chain of the IR.`. Заменить заголовок класса и поля до `var activeInvocations` (от `class ReliabilityModel(` до закрывающей скобки `associateBy { it.serviceId }` включительно) на:
 
 ```kotlin
 class ReliabilityModel(
@@ -3358,7 +3382,9 @@ class ReliabilityModel(
         runtimes.values.forEach { it.resetFaults() }
 ```
 
-и блок от `val degradation = scenario.degradation` до конца `if (degradation != null) { ... }` на:
+Дальше в `initialize()` имена `measurementStartMs` и `measurementEndMs` означают одноимённые свойства класса из нового заголовка: значения те же, правка вызовов `schedule(...)` не нужна.
+
+И блок от `val degradation = scenario.degradation` до конца `if (degradation != null) { ... }` на:
 
 ```kotlin
         chain.faults.forEach { fault ->
@@ -3738,16 +3764,20 @@ package resiliencelab.core.workspace
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import kotlin.test.Test
 
 class FileWorkspaceTest {
-    private val root = Files.createTempDirectory("workspace-test")
-    private val workspace = FileWorkspace(root)
+    @TempDir
+    lateinit var root: Path
+
+    private val workspace by lazy { FileWorkspace(root) }
 
     @Test
     fun `writes, reads and versions documents`() {
@@ -3791,8 +3821,9 @@ class FileWorkspaceTest {
     }
 
     @Test
-    fun `rejects paths that escape through symbolic links`() {
-        val outside = Files.createTempDirectory("workspace-outside")
+    fun `rejects paths that escape through symbolic links`(
+        @TempDir outside: Path,
+    ) {
         Files.writeString(outside.resolve("outside.layout.json"), "{}\n")
         Files.createSymbolicLink(root.resolve("external"), outside)
 
@@ -4034,11 +4065,12 @@ package resiliencelab.core.results
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySummary
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
-import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
 class RunArtifactTest {
@@ -4061,8 +4093,10 @@ class RunArtifactTest {
     }
 
     @Test
-    fun `writes canonical summary, then the manifest with the summary checksum`() {
-        val workspace = FileWorkspace(Files.createTempDirectory("artifact-test"))
+    fun `writes canonical summary, then the manifest with the summary checksum`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
         val aggregate = AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap())
         val summary = RunSummary(1, "e.experiment.json", listOf(VariantSummary("baseline", "Baseline", 2, aggregate)))
         val manifest =
@@ -4434,6 +4468,7 @@ package resiliencelab.core.lab
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
@@ -4446,8 +4481,11 @@ class LabTest {
     private val experiment = "retry-storm/retry-storm.experiment.json"
     private val model = "retry-storm/retry-storm.model.json"
 
+    @TempDir
+    lateinit var temp: Path
+
     private fun exampleWorkspace(): Path {
-        val target = Files.createTempDirectory("lab-test")
+        val target = Files.createTempDirectory(temp, "lab-test")
         val source = Path.of("../examples")
         Files.walk(source.resolve("retry-storm")).use { paths ->
             paths.filter { Files.isRegularFile(it) }.forEach { file ->
@@ -4811,7 +4849,7 @@ Expected: всё проходит — старое API сервера не ме�
 - [ ] **Step 3: Просмотр диффа**
 
 Run: `git diff --check origin/main && git diff --stat origin/main`
-Expected: изменения только в `core/`, `examples/retry-storm/` и `core/build.gradle.kts`.
+Expected: изменения только в `core/`, `examples/retry-storm/` и `.gitignore`.
 
 - [ ] **Step 4: PR**
 
