@@ -1,0 +1,20 @@
+{
+  "recorded_at_utc": "2026-10-27T14:59:22.747252+00:00",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.5",
+  "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Microsoft-13877172 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Microsoft-13877172 (build 25.0.3+9-LTS, mixed mode, sharing)",
+  "base_revision": "37710289be93ab37b4424c07b98547e13224c640",
+  "jvm_flags": [
+    "-Xms512m",
+    "-Xmx2g",
+    "-XX:+UseG1GC"
+  ],
+  "forks": 3,
+  "warmups_per_fork": 2,
+  "notes": "No background-load isolation or thermal control; local exploratory benchmark.",
+  "machdep.cpu.brand_string": "Apple M4 Pro",
+  "hw.physicalcpu": "14",
+  "hw.logicalcpu": "14",
+  "hw.memsize": "51539607552",
+  "power": "AC Power"
+}
