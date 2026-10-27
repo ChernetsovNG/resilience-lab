@@ -5,8 +5,11 @@ updates:
     schedule:
       interval: "weekly"
     groups:
+      playwright:
+        patterns: ["@playwright/test"]
       minor-and-patch:
         patterns: ["*"]
+        exclude-patterns: ["@playwright/test"]
         update-types: ["minor", "patch"]
 
   - package-ecosystem: "gradle"
@@ -20,6 +23,17 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/apps/server"
+      - "/web"
     schedule:
       interval: "weekly"
     groups:
