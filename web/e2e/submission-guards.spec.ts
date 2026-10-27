@@ -57,11 +57,11 @@ test("does not submit an applied sweep while an invalid draft is visible", async
   });
   await page.goto("/");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
-  await page.getByLabel("Sweep values", { exact: true }).fill("25, 50");
+  await page.getByLabel("Sweep values (RPS)", { exact: true }).fill("25, 50");
   await page.getByRole("button", { name: "Apply sweep" }).click();
   const run = page.getByRole("button", { name: "Run sweep", exact: true });
   await expect(run).toBeEnabled();
-  await page.getByLabel("Sweep values", { exact: true }).fill("25, Infinity");
+  await page.getByLabel("Sweep values (RPS)", { exact: true }).fill("25, Infinity");
   await page.getByRole("button", { name: "Apply sweep" }).click();
   await expect(page.getByRole("alert")).toContainText("finite numbers");
   await expect(run).toBeDisabled();

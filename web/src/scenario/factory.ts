@@ -5,6 +5,7 @@ import type {
   Scenario,
   ServiceSpec,
 } from "../api/types";
+import { rpsToArrivalRate } from "./arrivalRate";
 
 export function createDefaultExecution(): Execution {
   return {
@@ -51,7 +52,7 @@ export function createThreeServiceChain(): Scenario {
       createLink("link-1", "service-1", "service-2"),
       createLink("link-2", "service-2", "service-3"),
     ],
-    workload: { arrivalRate: 10, requestDeadlineMs: 1_000 },
+    workload: { arrivalRate: rpsToArrivalRate(100), requestDeadlineMs: 1_000 },
     degradation: null,
   };
 }
@@ -59,7 +60,7 @@ export function createThreeServiceChain(): Scenario {
 export function createRetryStormExample(): { experiment: ExperimentDocument } {
   const baseline = createThreeServiceChain();
   const candidate = createThreeServiceChain();
-  candidate.workload = { arrivalRate: 10, requestDeadlineMs: 500 };
+  candidate.workload = { ...candidate.workload, requestDeadlineMs: 500 };
   candidate.links = candidate.links.map((link) => ({
     ...link,
     maxAttempts: 3,
