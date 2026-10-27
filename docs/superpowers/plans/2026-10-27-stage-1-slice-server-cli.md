@@ -71,7 +71,7 @@
 | `apps/server/.../lab/RunController.kt` | Прогоны |
 | `apps/server/.../api/ApiExceptionHandler.kt` (изменение) | Ограничить старый обработчик старыми контроллерами |
 | `apps/server/openapi.json` | Сгенерированная спецификация |
-| `apps/server/Dockerfile`, `.dockerignore`, `.gitignore` | Рабочая область в образе, `.results/` вне git и образа |
+| `apps/server/Dockerfile`, `.dockerignore` | Рабочая область в образе, `.results/` вне образа (вне git — с плана ядра) |
 | `apps/cli/src/main/kotlin/resiliencelab/cli/Main.kt` | CLI на `Lab` |
 | `AGENTS.md`, `README.md` | Команды и поведение |
 
@@ -393,7 +393,7 @@ git commit -m "feat(core): find finished runs in the workspace"
 ### Task 4: Конфигурация сервера и общие типы API
 
 **Files:**
-- Modify: `apps/server/build.gradle.kts`, `apps/server/src/main/resources/application.yml`, `.gitignore`, `.dockerignore`
+- Modify: `apps/server/build.gradle.kts`, `apps/server/src/main/resources/application.yml`, `.dockerignore`
 - Modify: `apps/server/src/main/kotlin/resiliencelab/server/api/ApiExceptionHandler.kt`
 - Delete: `apps/server/src/main/kotlin/resiliencelab/server/api/HealthController.kt`, `apps/server/src/test/kotlin/resiliencelab/server/api/HealthControllerTest.kt`
 - Create: `apps/server/src/main/kotlin/resiliencelab/server/lab/LabConfiguration.kt`, `ApiTypes.kt`, `LabExceptionHandler.kt`, `HealthController.kt`, `JobService.kt` (заготовка; полная реализация — Task 7)
@@ -446,7 +446,7 @@ resilience-lab:
   workspace: examples
 ```
 
-В конец `.gitignore` добавить строку `.results/`, в конец `.dockerignore` — строку `**/.results/`: прогоны `bootRun` пишутся в `examples/.results/` и не должны попадать ни в git, ни в образ.
+В конец `.dockerignore` добавить строку `**/.results/`: прогоны `bootRun` пишутся в `examples/.results/` и не должны попадать в образ. В git они не попадают с плана ядра, который добавил `.results/` в `.gitignore`.
 
 - [ ] **Step 3: Написать падающие тесты**
 
@@ -785,6 +785,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
 import resiliencelab.core.results.RunCatalog
@@ -846,8 +847,15 @@ class LabConfiguration {
         return FileWorkspace(root)
     }
 
+    /** One pool of simulation tasks for all jobs (ADR 0009); Spring closes it with the context. */
     @Bean
-    fun lab(workspace: Workspace): Lab = Lab(workspace)
+    fun experimentExecutor(): ExperimentExecutor = ExperimentExecutor()
+
+    @Bean
+    fun lab(
+        workspace: Workspace,
+        experimentExecutor: ExperimentExecutor,
+    ): Lab = Lab(workspace, executor = experimentExecutor)
 
     @Bean
     fun runCatalog(workspace: Workspace): RunCatalog = RunCatalog(workspace)
@@ -912,7 +920,7 @@ Expected: PASS — новые тесты и все тесты MVP без изм�
 
 ```bash
 ./gradlew ktlintFormat
-git add .gitignore .dockerignore apps/server
+git add .dockerignore apps/server
 git commit -m "feat(server): configure stage 1 API, workspace and OpenAPI"
 ```
 
@@ -2646,7 +2654,7 @@ Expected: всё проходит — web и E2E пользуются ручка
 - [ ] **Step 3: Просмотр диффа**
 
 Run: `git diff --check origin/main && git diff --stat origin/main`
-Expected: изменения в `core/`, `apps/`, `examples/`, `AGENTS.md`, `README.md`, `.gitignore`, `.dockerignore`; каталога `.results/` в индексе нет.
+Expected: изменения в `core/`, `apps/`, `examples/`, `AGENTS.md`, `README.md`, `.dockerignore`; каталога `.results/` в индексе нет.
 
 - [ ] **Step 4: PR**
 

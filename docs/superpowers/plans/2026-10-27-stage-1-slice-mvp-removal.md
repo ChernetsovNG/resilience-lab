@@ -672,20 +672,20 @@ class ExperimentExecutionException(
 В `ExperimentExecutor.run` заменить в задаче пула строку
 
 ```kotlin
-                            val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                        val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
 ```
 
 на
 
 ```kotlin
-                            val result =
-                                try {
-                                    replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
-                                } catch (failure: ExperimentExecutionException) {
-                                    val id = experiment.variants[variant].id
-                                    val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
-                                    throw ExperimentExecutionException(message, failure)
-                                }
+                        val result =
+                            try {
+                                replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                            } catch (failure: ExperimentExecutionException) {
+                                val id = experiment.variants[variant].id
+                                val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
+                                throw ExperimentExecutionException(message, failure)
+                            }
 ```
 
 и добавить импорт `resiliencelab.core.engine.ksl.ExperimentExecutionException`. Сбои кода (не расчёта) по-прежнему пробрасываются как есть — это проверяет тест плана 1 `rethrows the failure of a task`.

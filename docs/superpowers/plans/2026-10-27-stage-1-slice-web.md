@@ -436,8 +436,12 @@ import type {
   RunSummary,
 } from "../api/apiTypes";
 
+/** Units the server catalog lists for each dimension. */
+const unitsOf: Record<string, string[]> = { DURATION: ["ms", "s", "min"], RATE: ["/ms", "/s", "/min"], PROBABILITY: ["%"] };
+
 function param(partial: Partial<ParamDescriptor> & Pick<ParamDescriptor, "name" | "kind" | "title">): ParamDescriptor {
-  return { description: "", required: false, options: [], fields: [], sweepable: false, ...partial };
+  const units = partial.dimension == null ? [] : unitsOf[partial.dimension];
+  return { description: "", required: false, options: [], fields: [], sweepable: false, units, ...partial };
 }
 
 function distribution(name: string, title: string, fallback?: ParamDescriptor["default"]): ParamDescriptor {
@@ -647,20 +651,24 @@ describe("resolveRef", () => {
 import { describe, expect, it } from "vitest";
 import { isQuantity } from "./quantities";
 
+const duration = ["ms", "s", "min"];
+const rate = ["/ms", "/s", "/min"];
+const probability = ["%"];
+
 describe("isQuantity", () => {
-  it("accepts units of the dimension", () => {
-    expect(isQuantity("250ms", "DURATION")).toBe(true);
-    expect(isQuantity("1.5min", "DURATION")).toBe(true);
-    expect(isQuantity("120/s", "RATE")).toBe(true);
-    expect(isQuantity("0.5%", "PROBABILITY")).toBe(true);
+  it("accepts the listed units", () => {
+    expect(isQuantity("250ms", duration)).toBe(true);
+    expect(isQuantity("1.5min", duration)).toBe(true);
+    expect(isQuantity("120/s", rate)).toBe(true);
+    expect(isQuantity("0.5%", probability)).toBe(true);
   });
 
   it("rejects missing, foreign and malformed units", () => {
     for (const text of ["250", "250 ms", "-1ms", "1h", "1e999ms", "1.ms"]) {
-      expect(isQuantity(text, "DURATION")).toBe(false);
+      expect(isQuantity(text, duration)).toBe(false);
     }
-    expect(isQuantity("120/s", "DURATION")).toBe(false);
-    expect(isQuantity("5ms", "PROBABILITY")).toBe(false);
+    expect(isQuantity("120/s", duration)).toBe(false);
+    expect(isQuantity("5ms", probability)).toBe(false);
   });
 });
 ```
@@ -745,23 +753,15 @@ export function resolveRef(documentPath: string, ref: string): string | null {
 `src/workspace/quantities.ts`:
 
 ```ts
-import type { ParamDescriptor } from "../api/apiTypes";
+const pattern = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(.+)$/;
 
-export type Dimension = NonNullable<ParamDescriptor["dimension"]>;
-
-/** Units the core `Quantities` accepts for each dimension; keep in sync with it. */
-export const UNITS: Record<Dimension, readonly string[]> = {
-  DURATION: ["ms", "s", "min"],
-  RATE: ["/ms", "/s", "/min"],
-  PROBABILITY: ["%"],
-};
-
-const pattern = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(ms|s|min|\/ms|\/s|\/min|%)$/;
-
-/** True when [text] is a finite quantity with a unit of [dimension], such as `250ms` or `120/s`. */
-export function isQuantity(text: string, dimension: Dimension): boolean {
+/**
+ * True when [text] is a finite non-negative number followed by one of [units], such as `250ms` or `120/s`. The units
+ * come from the catalog descriptor of the parameter (ADR 0001), the same list the core parser accepts.
+ */
+export function isQuantity(text: string, units: readonly string[]): boolean {
   const match = pattern.exec(text);
-  return match !== null && UNITS[dimension].includes(match[2]) && Number.isFinite(Number(match[1]));
+  return match !== null && units.includes(match[2]) && Number.isFinite(Number(match[1]));
 }
 ```
 
@@ -1777,7 +1777,7 @@ Expected: FAIL — нет модуля `./Inspector`.
 import { useEffect, useId, useRef, useState } from "react";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { isObject } from "../workspace/params";
-import { UNITS, isQuantity } from "../workspace/quantities";
+import { isQuantity } from "../workspace/quantities";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -1834,11 +1834,10 @@ function parse(descriptor: ParamDescriptor, draft: string): Parsed {
       return Number.isSafeInteger(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a whole number" };
     case "NUMBER":
       return Number.isFinite(Number(text)) ? { ok: true, value: Number(text) } : { ok: false, message: "Enter a number" };
-    case "QUANTITY": {
-      const dimension = descriptor.dimension;
-      if (dimension == null || isQuantity(text, dimension)) return { ok: true, value: text };
-      return { ok: false, message: `Use a value with a unit: ${UNITS[dimension].join(", ")}` };
-    }
+    case "QUANTITY":
+      return descriptor.units.length === 0 || isQuantity(text, descriptor.units)
+        ? { ok: true, value: text }
+        : { ok: false, message: `Use a value with a unit: ${descriptor.units.join(", ")}` };
     default:
       return { ok: true, value: text };
   }
