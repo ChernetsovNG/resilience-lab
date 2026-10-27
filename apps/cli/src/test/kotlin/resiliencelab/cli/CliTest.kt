@@ -1,45 +1,47 @@
 package resiliencelab.cli
 
-import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
-import resiliencelab.core.experiment.ExperimentResult
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.ExperimentDocument
-import resiliencelab.core.scenario.ExperimentVariant
-import resiliencelab.core.scenario.LinkSpec
-import resiliencelab.core.scenario.RetryKind
-import resiliencelab.core.scenario.RetrySpec
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.ScenarioCodec
-import resiliencelab.core.scenario.ServiceSpec
-import resiliencelab.core.scenario.SweepDocument
-import resiliencelab.core.scenario.SweepParameter
-import resiliencelab.core.scenario.SweepSpec
-import resiliencelab.core.scenario.WorkloadSpec
-import resiliencelab.core.simulation.ExperimentExecutionException
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import kotlin.test.Test
 
 class CliTest {
     @TempDir
-    lateinit var tempDir: Path
+    lateinit var workspace: Path
+
+    private val experiment = "retry-storm/retry-storm.experiment.json"
+    private val model = "retry-storm/retry-storm.model.json"
+    private var runs = 0
+
+    @BeforeEach
+    fun copyExample() {
+        val source = Path.of("examples")
+        Files.walk(source.resolve("retry-storm")).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.forEach { file ->
+                val destination = workspace.resolve(source.relativize(file).toString())
+                Files.createDirectories(destination.parent)
+                Files.copy(file, destination)
+            }
+        }
+    }
 
     @Test
-    fun `usage errors return 2 without result output`() {
-        val invocations =
-            listOf(
-                emptyList(),
-                listOf("unknown"),
-                listOf("validate"),
-                listOf("run", "one.json", "two.json"),
-                listOf("sweep"),
-            )
-
-        invocations.forEach { args ->
+    fun `usage errors return 2 without output on stdout`() {
+        listOf(
+            emptyList(),
+            listOf("unknown", experiment),
+            listOf("validate"),
+            listOf("run"),
+            listOf("run", experiment, "extra"),
+            listOf("run", "--workers", "0", experiment),
+            listOf("run", "--workers", "many", experiment),
+            listOf("validate", "--workers", "2", experiment),
+            listOf("sweep", "sweep.json"),
+        ).forEach { args ->
             val result = execute(args)
 
             assertThat(result.exitCode).describedAs(args.toString()).isEqualTo(2)
@@ -49,269 +51,162 @@ class CliTest {
     }
 
     @Test
-    fun `validate accepts a valid experiment only on stderr`() {
-        val path = writeExperiment(experimentDocument())
-
-        val result = execute(listOf("validate", path.toString()))
+    fun `validate accepts the example`() {
+        val result = execute(listOf("validate", experiment))
 
         assertThat(result.exitCode).isZero()
         assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Valid experiment")
+        assertThat(result.stderr).contains("Valid experiment: $experiment")
     }
 
     @Test
-    fun `validate reports semantic validation errors as input errors`() {
-        val path = writeExperiment(experimentDocument(replications = 0))
+    fun `validate accepts an absolute path inside the workspace`() {
+        assertThat(execute(listOf("validate", workspace.resolve(experiment).toString())).exitCode).isZero()
+    }
 
-        val result = execute(listOf("validate", path.toString()))
+    @Test
+    fun `validate reports diagnostics with document and pointer`() {
+        breakModel()
+
+        val result = execute(listOf("validate", experiment))
 
         assertThat(result.exitCode).isEqualTo(2)
         assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("execution.replications")
-        assertThat(result.stderr).doesNotContain("\n\tat ")
+        assertThat(result.stderr).contains("$model#/blocks/dependency/params/handlers: PARAM_MISSING: ")
+        assertThat(result.stderr).doesNotContain("\tat ")
     }
 
     @Test
-    fun `malformed JSON returns 2 without a stack trace`() {
-        val path = tempDir.resolve("malformed.json").writeJson("{ not JSON")
+    fun `malformed, missing and outside documents return 2`() {
+        workspace.resolve(experiment).writeText("{ not JSON")
+        assertThat(execute(listOf("validate", experiment)).stderr).contains("JSON_SYNTAX")
 
-        val result = execute(listOf("run", path.toString()))
+        val missing = execute(listOf("validate", "missing.experiment.json"))
+        assertThat(missing.exitCode).isEqualTo(2)
+        assertThat(missing.stderr).contains("DOCUMENT_MISSING")
 
-        assertThat(result.exitCode).isEqualTo(2)
-        assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Invalid input")
-        assertThat(result.stderr).doesNotContain("\n\tat ")
+        val outside = execute(listOf("validate", "../outside.experiment.json"))
+        assertThat(outside.exitCode).isEqualTo(2)
+        assertThat(outside.stderr).contains("Invalid input: experiment must be inside the workspace")
     }
 
     @Test
-    fun `unsupported schema returns 2 before execution`() {
-        val path = writeExperiment(experimentDocument())
-        path.writeJson(path.readText().replaceFirst("\"schemaVersion\": 1", "\"schemaVersion\": 2"))
-
-        val result = execute(listOf("run", path.toString()))
-
-        assertThat(result.exitCode).isEqualTo(2)
-        assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("schemaVersion")
-    }
-
-    @Test
-    fun `missing input file returns 2 without result output`() {
-        val result = execute(listOf("validate", tempDir.resolve("missing.json").toString()))
-
-        assertThat(result.exitCode).isEqualTo(2)
-        assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Invalid input")
-    }
-
-    @Test
-    fun `run executes retry storm example and returns a complete result JSON round trip`() {
-        val result = execute(listOf("run", "examples/retry-storm.json"))
+    fun `run writes the artifact and prints the run directory with a summary`() {
+        val result = execute(listOf("run", experiment))
 
         assertThat(result.exitCode).describedAs(result.stderr).isZero()
-        assertThat(result.stderr).isEmpty()
-        val decoded = Json.decodeFromString(ExperimentResult.serializer(), result.stdout)
-        assertThat(decoded.schemaVersion).isEqualTo(1)
-        assertThat(decoded.applicationVersion).isEqualTo("0.1.0")
-        assertThat(decoded.kslVersion).isEqualTo("R1.8.1")
-        assertThat(decoded.variants.map { it.id }).containsExactly("baseline", "candidate")
-        decoded.variants.forEach { variant ->
-            assertThat(variant.replications).hasSize(2)
-            assertThat(
-                variant.replications
-                    .first()
-                    .services.keys,
-            ).containsExactlyInAnyOrder("gateway", "middle", "dependency")
-        }
-        val encoded = Json.encodeToString(ExperimentResult.serializer(), decoded)
-        assertThat(Json.decodeFromString(ExperimentResult.serializer(), encoded)).isEqualTo(decoded)
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(3)
+        assertThat(lines[0]).isEqualTo(".results/retry-storm/run-1")
+        assertThat(lines[1]).startsWith("baseline: success ").contains("p95 ", "p99 ")
+        assertThat(lines[2]).startsWith("no-retries: success ")
+        assertThat(workspace.resolve(".results/retry-storm/run-1/manifest.json")).exists()
+        assertThat(result.stderr).contains("Tasks 4/4")
     }
 
     @Test
-    fun `process run emits only result JSON on stdout`() {
-        val errorFile = tempDir.resolve("process-stderr.log")
-        val repositoryRoot = Path.of("").toAbsolutePath().normalize()
-        val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin")
+    fun `worker count does not change the result`() {
+        execute(listOf("run", experiment))
+        val first = workspace.resolve(".results/retry-storm/run-1/summary.json").readText()
+
+        val result = execute(listOf("run", "--workers", "1", experiment))
+
+        assertThat(result.exitCode).isZero()
+        assertThat(workspace.resolve(".results/retry-storm/run-2/summary.json").readText()).isEqualTo(first)
+    }
+
+    @Test
+    fun `run reports an invalid experiment without writing results`() {
+        breakModel()
+
+        val result = execute(listOf("run", experiment))
+
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("PARAM_MISSING")
+        assertThat(workspace.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `execution failures return 1 with a sanitized message`() {
+        val result = execute(listOf("run", experiment)) { _, _, _, _ -> throw IllegalStateException("boom\n\tat somewhere") }
+
+        assertThat(result.exitCode).isEqualTo(1)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("Execution failed: boom").doesNotContain("\tat ")
+    }
+
+    @Test
+    fun `unreadable documents are diagnostics, not crashes`() {
+        Files.write(workspace.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        val result = execute(listOf("validate", experiment))
+
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stderr).contains("DOCUMENT_UNREADABLE").doesNotContain("\tat ")
+    }
+
+    @Test
+    fun `installed launcher prints only the run directory and summary on stdout`() {
+        val result = launch(listOf("run", experiment))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(3)
+        assertThat(lines[0]).matches("""\.results/retry-storm/\d{8}-\d{6}-\d{3}-[0-9a-f]{4}""")
+        assertThat(workspace.resolve(lines[0]).resolve("manifest.json")).exists()
+    }
+
+    @Test
+    fun `installed launcher reports invalid input with code 2 and no stack trace`() {
+        Files.write(workspace.resolve(model), byteArrayOf(0x7b, 0xC3.toByte(), 0x28, 0x7d))
+
+        val result = launch(listOf("validate", experiment))
+
+        assertThat(result.exitCode).isEqualTo(2)
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("DOCUMENT_UNREADABLE").doesNotContain("\tat ")
+    }
+
+    /** Runs the launcher from `installDist` as a separate process in the workspace. */
+    private fun launch(args: List<String>): CommandResult {
+        val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin").toAbsolutePath()
         val command =
             if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
                 listOf("cmd.exe", "/c", launcherDirectory.resolve("cli.bat").toString())
             } else {
                 listOf(launcherDirectory.resolve("cli").toString())
             }
+        val errorFile = Files.createTempFile("cli-stderr", ".log")
         val process =
-            ProcessBuilder(command + listOf("run", "examples/retry-storm.json"))
-                .directory(repositoryRoot.toFile())
+            ProcessBuilder(command + args)
+                .directory(workspace.toFile())
                 .redirectError(errorFile.toFile())
                 .start()
-
         val stdout = process.inputStream.readBytes().decodeToString()
         val exitCode = process.waitFor()
-
-        assertThat(exitCode).describedAs(errorFile.readText()).isZero()
-        val decoded = Json.decodeFromString(ExperimentResult.serializer(), stdout)
-        assertThat(decoded.variants.map { it.id }).containsExactly("baseline", "candidate")
+        return CommandResult(exitCode, stdout, errorFile.readText())
     }
 
-    @Test
-    fun `sweep executes both timeout points and preserves metadata`() {
-        val path =
-            tempDir
-                .resolve("sweep.json")
-                .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(25.0, 50.0))))
-
-        val result = execute(listOf("sweep", path.toString()))
-
-        assertThat(result.exitCode).describedAs(result.stderr).isZero()
-        assertThat(result.stderr).isEmpty()
-        val decoded = Json.decodeFromString(ExperimentResult.serializer(), result.stdout)
-        assertThat(decoded.applicationVersion).isEqualTo("0.1.0")
-        assertThat(decoded.kslVersion).isEqualTo("R1.8.1")
-        assertThat(decoded.variants.map { it.id }).containsExactly("sweep-0", "sweep-1")
-        assertThat(decoded.variants.map { it.label }).containsExactly("sweep-0", "sweep-1")
-        assertThat(decoded.variants.map { it.sweepParameter })
-            .containsExactly(SweepParameter.LINK_TIMEOUT, SweepParameter.LINK_TIMEOUT)
-        assertThat(decoded.variants.map { it.sweepValue }).containsExactly(25.0, 50.0)
-        assertThat(decoded.variants.map { it.replications.size }).containsExactly(1, 1)
-    }
-
-    @Test
-    fun `sweep expansion validation errors return 2`() {
-        val path =
-            tempDir
-                .resolve("invalid-sweep.json")
-                .writeJson(ScenarioCodec.encodeSweep(sweepDocument(values = listOf(0.0))))
-
-        val result = execute(listOf("sweep", path.toString()))
-
-        assertThat(result.exitCode).isEqualTo(2)
-        assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("variants[0].scenario.links[0].timeoutMs")
-    }
-
-    @Test
-    fun `execution failures return 1 and sanitize diagnostics`() {
-        val path = writeExperiment(experimentDocument())
-
-        val result =
-            execute(listOf("run", path.toString())) {
-                throw ExperimentExecutionException("synthetic execution failure")
-            }
-
-        assertThat(result.exitCode).isEqualTo(1)
-        assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Execution failed: synthetic execution failure")
-        assertThat(result.stderr).doesNotContain("\n\tat ")
+    private fun breakModel() {
+        val file = workspace.resolve(model)
+        file.writeText(file.readText().replace("\"handlers\": 2,", ""))
     }
 
     private fun execute(
         args: List<String>,
-        runner: (ExperimentDocument) -> ExperimentResult = resiliencelab.core.experiment.ExperimentRunner::run,
+        run: ExperimentRun? = null,
     ): CommandResult {
         val stdout = StringBuilder()
         val stderr = StringBuilder()
-        val exitCode = runCommand(args, stdout, stderr, runner)
+        val exitCode =
+            if (run == null) {
+                runCommand(args, stdout, stderr, workspace, newRunId = { "run-${++runs}" })
+            } else {
+                runCommand(args, stdout, stderr, workspace, newRunId = { "run-${++runs}" }, execute = run)
+            }
         return CommandResult(exitCode, stdout.toString(), stderr.toString())
     }
-
-    private fun writeExperiment(document: ExperimentDocument): Path =
-        tempDir.resolve("experiment.json").writeJson(ScenarioCodec.encodeExperiment(document))
-
-    private fun Path.writeJson(text: String): Path {
-        java.nio.file.Files
-            .writeString(this, text)
-        return this
-    }
-
-    private fun experimentDocument(replications: Int = 1): ExperimentDocument =
-        ExperimentDocument(
-            schemaVersion = 1,
-            execution = execution(replications),
-            variants =
-                listOf(
-                    ExperimentVariant(
-                        id = "baseline",
-                        label = "Baseline",
-                        scenario = simpleScenario(),
-                        sweepParameter = null,
-                        sweepValue = null,
-                    ),
-                ),
-        )
-
-    private fun sweepDocument(values: List<Double>): SweepDocument =
-        SweepDocument(
-            schemaVersion = 1,
-            execution = execution(replications = 1),
-            baseScenario = simpleScenario(),
-            sweep =
-                SweepSpec(
-                    parameter = SweepParameter.LINK_TIMEOUT,
-                    serviceId = null,
-                    linkId = "entry-to-backend",
-                    values = values,
-                ),
-        )
-
-    private fun execution(replications: Int): Execution =
-        Execution(
-            replications = replications,
-            warmupMs = 0.0,
-            measurementMs = 20.0,
-            seed = 42L,
-            maxRealTimeSeconds = 5L,
-        )
-
-    private fun simpleScenario(): Scenario =
-        Scenario(
-            entry = "entry",
-            services =
-                listOf(
-                    ServiceSpec(
-                        id = "entry",
-                        handlers = 1,
-                        queueCapacity = 2,
-                        processing = fixed(0.0),
-                        failureRate = 0.0,
-                    ),
-                    ServiceSpec(
-                        id = "backend",
-                        handlers = 1,
-                        queueCapacity = 2,
-                        processing = fixed(0.0),
-                        failureRate = 0.0,
-                    ),
-                ),
-            links =
-                listOf(
-                    LinkSpec(
-                        id = "entry-to-backend",
-                        from = "entry",
-                        to = "backend",
-                        network = fixed(0.0),
-                        timeoutMs = 50.0,
-                        maxAttempts = 1,
-                        retry =
-                            RetrySpec(
-                                kind = RetryKind.NONE,
-                                baseBackoffMs = 0.0,
-                                maxBackoffMs = 0.0,
-                            ),
-                    ),
-                ),
-            workload =
-                WorkloadSpec(
-                    arrivalRate = 0.1,
-                    requestDeadlineMs = 100.0,
-                ),
-            degradation = null,
-        )
-
-    private fun fixed(meanMs: Double): DurationDistribution =
-        DurationDistribution(
-            kind = DistributionKind.FIXED,
-            meanMs = meanMs,
-            stdDevMs = null,
-        )
 
     private data class CommandResult(
         val exitCode: Int,
