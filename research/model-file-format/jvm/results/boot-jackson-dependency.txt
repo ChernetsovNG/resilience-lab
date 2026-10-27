@@ -1,0 +1,52 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+
+> Task :apps:server:dependencyInsight
+com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7
+  Variant runtimeElements:
+    | Attribute Name                     | Provided     | Requested    |
+    |------------------------------------|--------------|--------------|
+    | org.gradle.status                  | release      |              |
+    | org.gradle.category                | library      | library      |
+    | org.gradle.dependency.bundling     | external     | external     |
+    | org.gradle.libraryelements         | jar          | jar          |
+    | org.gradle.usage                   | java-runtime | java-runtime |
+    | org.gradle.jvm.environment         |              | standard-jvm |
+    | org.gradle.jvm.version             |              | 25           |
+    | org.jetbrains.kotlin.platform.type |              | jvm          |
+   Selection reasons:
+      - Selected by rule
+      - By constraint
+
+com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7
+\--- com.fasterxml.jackson:jackson-bom:2.21.7
+     +--- com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.7
+     |    +--- org.apache.arrow:arrow-vector:18.1.0 (requested com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.0)
+     |    |    \--- org.jetbrains.kotlinx:dataframe-arrow:1.0.0-Beta2
+     |    |         \--- org.jetbrains.kotlinx:dataframe:1.0.0-Beta2
+     |    |              \--- io.github.rossetti:KSLCore:R1.8.1
+     |    |                   \--- project ':core'
+     |    |                        \--- runtimeClasspath
+     |    \--- com.fasterxml.jackson:jackson-bom:2.21.7 (*)
+     +--- com.fasterxml.jackson.core:jackson-databind:2.21.7
+     |    +--- org.apache.arrow:arrow-vector:18.1.0 (requested com.fasterxml.jackson.core:jackson-databind:2.18.0) (*)
+     |    +--- com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.7 (*)
+     |    +--- com.fasterxml.jackson:jackson-bom:2.21.7 (*)
+     |    \--- com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7 (*)
+     +--- com.fasterxml.jackson.core:jackson-core:2.21.7
+     |    +--- org.apache.arrow:arrow-vector:18.1.0 (requested com.fasterxml.jackson.core:jackson-core:2.18.0) (*)
+     |    +--- com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.7 (*)
+     |    +--- com.fasterxml.jackson.core:jackson-databind:2.21.7 (*)
+     |    \--- com.fasterxml.jackson:jackson-bom:2.21.7 (*)
+     \--- com.fasterxml.jackson.module:jackson-module-kotlin:2.21.7 (*)
+
+com.fasterxml.jackson.module:jackson-module-kotlin -> 2.21.7
+\--- runtimeClasspath
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.
+
+BUILD SUCCESSFUL in 3s
+1 actionable task: 1 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.8.2/userguide/configuration_cache_enabling.html

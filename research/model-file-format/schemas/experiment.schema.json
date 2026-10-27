@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "maxRealTimeSeconds": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "measurementMs": {
+          "type": "number"
+        },
+        "replications": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "seed": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "warmupMs": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "replications",
+        "warmupMs",
+        "measurementMs",
+        "seed",
+        "maxRealTimeSeconds"
+      ],
+      "type": "object"
+    },
+    "kind": {
+      "const": "experiment"
+    },
+    "schemaVersion": {
+      "const": "research-1"
+    },
+    "variants": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "degradation": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "endMs": {
+                    "type": "number"
+                  },
+                  "failureRate": {
+                    "type": "number"
+                  },
+                  "processingMultiplier": {
+                    "type": "number"
+                  },
+                  "serviceId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "serviceId",
+                  "startMs",
+                  "endMs",
+                  "processingMultiplier",
+                  "failureRate"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "layoutRef": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "modelRef": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "workload": {
+            "additionalProperties": false,
+            "properties": {
+              "arrivalRate": {
+                "type": "number"
+              },
+              "requestDeadlineMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "arrivalRate",
+              "requestDeadlineMs"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "modelRef",
+          "layoutRef",
+          "workload",
+          "degradation"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "execution",
+    "variants"
+  ],
+  "type": "object"
+}

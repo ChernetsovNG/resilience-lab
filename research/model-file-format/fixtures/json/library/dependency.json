@@ -1,0 +1,14 @@
+{
+  "description": "Shared dependency from the original retry-storm example.",
+  "kind": "service-template",
+  "schemaVersion": "research-1",
+  "service": {
+    "failureRate": 0,
+    "handlers": 2,
+    "processing": {
+      "kind": "FIXED",
+      "meanMs": 8
+    },
+    "queueCapacity": 8
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "execution": {
+    "maxRealTimeSeconds": 30,
+    "measurementMs": 1000,
+    "replications": 2,
+    "seed": 20261025,
+    "warmupMs": 0
+  },
+  "kind": "experiment",
+  "schemaVersion": "research-1",
+  "variants": [
+    {
+      "degradation": {
+        "endMs": 700,
+        "failureRate": 0.05,
+        "processingMultiplier": 6,
+        "serviceId": "dependency",
+        "startMs": 200
+      },
+      "id": "baseline",
+      "label": "Baseline",
+      "layoutRef": "layout.json",
+      "modelRef": "models/baseline.json",
+      "workload": {
+        "arrivalRate": 0.12,
+        "requestDeadlineMs": 250
+      }
+    },
+    {
+      "degradation": {
+        "endMs": 700,
+        "failureRate": 0.05,
+        "processingMultiplier": 6,
+        "serviceId": "dependency",
+        "startMs": 200
+      },
+      "id": "candidate",
+      "label": "Candidate",
+      "layoutRef": "layout.json",
+      "modelRef": "models/candidate.json",
+      "workload": {
+        "arrivalRate": 0.12,
+        "requestDeadlineMs": 250
+      }
+    }
+  ]
+}

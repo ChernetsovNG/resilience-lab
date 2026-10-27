@@ -1,0 +1,138 @@
+{
+  "java": "25.0.3",
+  "processors": 14,
+  "results": [
+    {
+      "parser": "kotlinx-json-tree",
+      "blocks": 50,
+      "jsonBytes": 4333,
+      "yamlBytes": 2665,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.0554165,
+      "p95Ms": 0.074708,
+      "minMs": 0.044
+    },
+    {
+      "parser": "jackson-json-tree",
+      "blocks": 50,
+      "jsonBytes": 4333,
+      "yamlBytes": 2665,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.062875,
+      "p95Ms": 0.17625,
+      "minMs": 0.049667
+    },
+    {
+      "parser": "kaml-yaml-tree",
+      "blocks": 50,
+      "jsonBytes": 4333,
+      "yamlBytes": 2665,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.3699795,
+      "p95Ms": 0.5805,
+      "minMs": 0.320542
+    },
+    {
+      "parser": "engine-yaml-tree",
+      "blocks": 50,
+      "jsonBytes": 4333,
+      "yamlBytes": 2665,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.4213545,
+      "p95Ms": 0.536917,
+      "minMs": 0.393125
+    },
+    {
+      "parser": "kotlinx-json-tree",
+      "blocks": 500,
+      "jsonBytes": 43434,
+      "yamlBytes": 26916,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.16170849999999998,
+      "p95Ms": 0.197083,
+      "minMs": 0.147625
+    },
+    {
+      "parser": "jackson-json-tree",
+      "blocks": 500,
+      "jsonBytes": 43434,
+      "yamlBytes": 26916,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.2816875,
+      "p95Ms": 0.412667,
+      "minMs": 0.245292
+    },
+    {
+      "parser": "kaml-yaml-tree",
+      "blocks": 500,
+      "jsonBytes": 43434,
+      "yamlBytes": 26916,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 2.1538125,
+      "p95Ms": 2.782792,
+      "minMs": 1.461083
+    },
+    {
+      "parser": "engine-yaml-tree",
+      "blocks": 500,
+      "jsonBytes": 43434,
+      "yamlBytes": 26916,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 1.6120830000000002,
+      "p95Ms": 2.036875,
+      "minMs": 1.397666
+    },
+    {
+      "parser": "kotlinx-json-tree",
+      "blocks": 5000,
+      "jsonBytes": 438935,
+      "yamlBytes": 273917,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 0.7144379999999999,
+      "p95Ms": 0.778167,
+      "minMs": 0.662
+    },
+    {
+      "parser": "jackson-json-tree",
+      "blocks": 5000,
+      "jsonBytes": 438935,
+      "yamlBytes": 273917,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 1.00425,
+      "p95Ms": 1.25525,
+      "minMs": 0.702083
+    },
+    {
+      "parser": "kaml-yaml-tree",
+      "blocks": 5000,
+      "jsonBytes": 438935,
+      "yamlBytes": 273917,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 9.110187499999999,
+      "p95Ms": 14.631833,
+      "minMs": 8.895625
+    },
+    {
+      "parser": "engine-yaml-tree",
+      "blocks": 5000,
+      "jsonBytes": 438935,
+      "yamlBytes": 273917,
+      "warmup": 20,
+      "iterations": 50,
+      "medianMs": 15.001312,
+      "p95Ms": 21.195542,
+      "minMs": 14.3575
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+diff --git a/layout.json b/layout.json
+index 0ce9e02..90c0c22 100644
+--- a/layout.json
++++ b/layout.json
+@@ -10,7 +10,7 @@
+       "y": 100
+     },
+     "middle": {
+-      "x": 260,
++      "x": 300,
+       "y": 100
+     }
+   },
