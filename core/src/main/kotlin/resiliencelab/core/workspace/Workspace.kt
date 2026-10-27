@@ -12,6 +12,7 @@ import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
 import java.security.MessageDigest
+import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 
 /** Document text with its version — the SHA-256 of its UTF-8 bytes. */
@@ -52,6 +53,9 @@ object DocumentVersion {
 interface Workspace {
     /** Relative paths of `.json` documents outside hidden directories, sorted. */
     fun list(): List<String>
+
+    /** Relative paths of all files under [directory], hidden ones included, sorted; empty when it does not exist. */
+    fun listFiles(directory: String): List<String>
 
     fun read(path: String): VersionedDocument
 
@@ -102,6 +106,18 @@ class FileWorkspace(
                 .sorted()
                 .toList()
         }
+
+    override fun listFiles(directory: String): List<String> {
+        val start = resolve(directory)
+        if (!start.isDirectory()) return emptyList()
+        return Files.walk(start).use { paths ->
+            paths
+                .filter { it.isRegularFile(NOFOLLOW_LINKS) }
+                .map { root.relativize(it).joinToString("/") }
+                .sorted()
+                .toList()
+        }
+    }
 
     override fun read(path: String): VersionedDocument {
         val file = resolve(path)
