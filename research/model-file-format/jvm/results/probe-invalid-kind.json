@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "requiredNullable": null,
+  "name": "untitled",
+  "note": null,
+  "mode": "sync",
+  "work": {
+    "type": "INVALID",
+    "ms": 10.0
+  }
+}

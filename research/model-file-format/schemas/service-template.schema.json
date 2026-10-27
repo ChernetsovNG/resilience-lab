@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "const": "service-template"
+    },
+    "schemaVersion": {
+      "const": "research-1"
+    },
+    "service": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "failureRate": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "handlers": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "processing": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "FIXED",
+                    "EXPONENTIAL",
+                    "LOGNORMAL"
+                  ]
+                },
+                "meanMs": {
+                  "type": "number"
+                },
+                "stdDevMs": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "kind",
+                "meanMs"
+              ],
+              "type": "object"
+            },
+            "queueCapacity": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "handlers",
+            "queueCapacity",
+            "processing",
+            "failureRate"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "libraryRef": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "libraryRef"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "description",
+    "service"
+  ],
+  "type": "object"
+}

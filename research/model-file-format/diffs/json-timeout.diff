@@ -1,0 +1,13 @@
+diff --git a/models/baseline.json b/models/baseline.json
+index 5954a98..6650baa 100644
+--- a/models/baseline.json
++++ b/models/baseline.json
+@@ -35,7 +35,7 @@
+         "kind": "EXPONENTIAL_FULL_JITTER",
+         "maxBackoffMs": 20
+       },
+-      "timeoutMs": 60,
++      "timeoutMs": 90,
+       "to": "dependency"
+     }
+   },

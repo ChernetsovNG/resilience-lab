@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resiliencelab.research.ProbeModel",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer"
+    },
+    "requiredNullable": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mode": {
+      "$ref": "#/$defs/resiliencelab.research.Mode"
+    },
+    "work": {
+      "$ref": "#/$defs/resiliencelab.research.Work"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requiredNullable"
+  ],
+  "$defs": {
+    "resiliencelab.research.Mode": {
+      "type": "string",
+      "enum": [
+        "sync",
+        "async"
+      ]
+    },
+    "resiliencelab.research.Work": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/fixed"
+        },
+        {
+          "$ref": "#/$defs/uniform"
+        }
+      ]
+    },
+    "fixed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "fixed"
+        },
+        "ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "ms"
+      ],
+      "additionalProperties": false
+    },
+    "uniform": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "uniform"
+        },
+        "low": {
+          "type": "number"
+        },
+        "high": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "low",
+        "high"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

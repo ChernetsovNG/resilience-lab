@@ -1,0 +1,12 @@
+diff --git a/layout.yaml b/layout.yaml
+index 9efa0c3..b8db279 100644
+--- a/layout.yaml
++++ b/layout.yaml
+@@ -7,6 +7,6 @@ positions:
+     x: 0
+     y: 100
+   middle:
+-    x: 260
++    x: 300
+     y: 100
+ schemaVersion: research-1

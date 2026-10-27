@@ -1,0 +1,67 @@
+{
+  "checks": [
+    "json: split, schema, resolve and rebuild both variants in original order",
+    "json: real git merge, independent edits and competing timeout",
+    "json: invalid schema, missing/cyclic/outside references rejected",
+    "yaml: split, schema, resolve and rebuild both variants in original order",
+    "yaml: real git merge, independent edits and competing timeout",
+    "yaml: invalid schema, missing/cyclic/outside references rejected",
+    "YAML: Document edit retains all three comments; DTO rewrite loses them",
+    "strict YAML profile rejects duplicate keys, aliases, tags and non-finite numbers",
+    "JSON builtin limitations and finite guard are observable",
+    "Kotlin-generated schema is consumed by AJV 2020 without translation"
+  ],
+  "diffs": {
+    "json-add-node": {
+      "added": 33,
+      "files": [
+        "layout.json",
+        "models/baseline.json"
+      ],
+      "removed": 2
+    },
+    "json-move": {
+      "added": 1,
+      "files": [
+        "layout.json"
+      ],
+      "removed": 1
+    },
+    "json-timeout": {
+      "added": 1,
+      "files": [
+        "models/baseline.json"
+      ],
+      "removed": 1
+    },
+    "yaml-add-node": {
+      "added": 25,
+      "files": [
+        "layout.yaml",
+        "models/baseline.yaml"
+      ],
+      "removed": 0
+    },
+    "yaml-move": {
+      "added": 1,
+      "files": [
+        "layout.yaml"
+      ],
+      "removed": 1
+    },
+    "yaml-timeout": {
+      "added": 1,
+      "files": [
+        "models/baseline.yaml"
+      ],
+      "removed": 1
+    }
+  },
+  "limitations": [
+    "JSON.parse does not reject duplicate keys",
+    "Envelope schemas are handwritten and do not replace domain validation",
+    "No compound block ports or mask overrides",
+    "Writer stability is checked within one library/version, not cross-language byte identity"
+  ],
+  "sourceSha256": "76553e5de25bb79ac8dfd310c5697a10169d46f536bddea59ab9513b12a2332f"
+}

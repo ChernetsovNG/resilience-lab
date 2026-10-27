@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "entry": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "const": "model"
+    },
+    "linkOrder": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "links": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxAttempts": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "network": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "FIXED",
+                  "EXPONENTIAL",
+                  "LOGNORMAL"
+                ]
+              },
+              "meanMs": {
+                "type": "number"
+              },
+              "stdDevMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "meanMs"
+            ],
+            "type": "object"
+          },
+          "retry": {
+            "additionalProperties": false,
+            "properties": {
+              "base": {
+                "type": "number"
+              },
+              "baseBackoffMs": {
+                "type": "number"
+              },
+              "kind": {
+                "enum": [
+                  "NONE",
+                  "FIXED",
+                  "EXPONENTIAL_FULL_JITTER"
+                ]
+              },
+              "maxBackoffMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "baseBackoffMs",
+              "maxBackoffMs"
+            ],
+            "type": "object"
+          },
+          "timeoutMs": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "to": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "network",
+          "timeoutMs",
+          "maxAttempts",
+          "retry"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": "research-1"
+    },
+    "serviceOrder": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "services": {
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "failureRate": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              "handlers": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "processing": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "FIXED",
+                      "EXPONENTIAL",
+                      "LOGNORMAL"
+                    ]
+                  },
+                  "meanMs": {
+                    "type": "number"
+                  },
+                  "stdDevMs": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "meanMs"
+                ],
+                "type": "object"
+              },
+              "queueCapacity": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "handlers",
+              "queueCapacity",
+              "processing",
+              "failureRate"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "libraryRef": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "libraryRef"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
+    "entry",
+    "serviceOrder",
+    "linkOrder",
+    "services",
+    "links"
+  ],
+  "type": "object"
+}
