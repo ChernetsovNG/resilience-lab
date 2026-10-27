@@ -6,12 +6,13 @@ import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.scenario.Execution
 import resiliencelab.core.scenario.Scenario
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Builds and runs the KSL process model for one scenario.
+ * Builds and runs the KSL process model for one chain of the IR.
  * Original requests receive an absolute deadline at arrival, and service handlers remain seized through local
  * processing, synchronous downstream waits, retries, and backoff. A caller timeout or deadline ends only that
  * client's wait: admitted descendants continue, late responses are ignored, and no retry starts after the deadline.
@@ -21,48 +22,47 @@ import kotlin.time.Duration.Companion.seconds
  */
 class ReliabilityModel(
     model: Model,
-    private val scenario: Scenario,
-    private val execution: Execution,
+    private val chain: ChainIr,
+    private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
 ) : ProcessModel(model) {
-    private val randomStreams =
-        model.streamProvider.apply {
-            initialSeed(SeedFactory.seedVector(execution.seed))
-        }
+    /** MVP constructor: maps [scenario] onto the chain IR with the MVP stream numbering; removed together with the MVP API. */
+    constructor(
+        model: Model,
+        scenario: Scenario,
+        execution: Execution,
+        onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
+    ) : this(
+        model,
+        LegacyScenarioAdapter.chain(scenario, execution),
+        LegacyScenarioAdapter.streams(model, scenario, execution.seed),
+        onReplicationCompleted,
+    )
+
+    private val measurementStartMs = chain.run.warmupMs
+    private val measurementEndMs = chain.run.warmupMs + chain.run.measurementMs
+
     val metrics =
         MetricsCollector(
-            services = scenario.services,
-            measurementStartMs = execution.warmupMs,
-            measurementEndMs = execution.warmupMs + execution.measurementMs,
+            services = chain.services,
+            measurementStartMs = measurementStartMs,
+            measurementEndMs = measurementEndMs,
             currentTimeMs = { time },
         )
-    private val outgoingLinks =
-        scenario.links
-            .mapIndexed { index, link ->
-                val networkStreamNum = scenario.services.size * 2 + index + 1
-                val jitterStreamNum = scenario.services.size * 2 + scenario.links.size + index + 1
-                link.from to Triple(link, networkStreamNum, jitterStreamNum)
-            }.toMap()
     private val runtimes =
-        scenario.services
-            .mapIndexed { index, service ->
-                val outgoing = outgoingLinks[service.id]
+        chain.services
+            .map { service ->
                 ServiceRuntime(
                     parent = this,
-                    spec = service,
-                    degradation = scenario.degradation?.takeIf { it.serviceId == service.id },
-                    streamProvider = randomStreams,
-                    durationStreamNum = index * 2 + 1,
-                    failureStreamNum = index * 2 + 2,
-                    outgoingLink = outgoing?.first,
-                    networkStreamNum = outgoing?.second,
-                    jitterStreamNum = outgoing?.third,
+                    node = service,
+                    streams = streams,
+                    outgoingCall = chain.outgoingCall(service.path),
                     onAdmitted = ::recordAdmission,
                     onQueueLengthChanged = { queueLength ->
-                        metrics.recordQueueLength(service.id, this@ReliabilityModel.time, queueLength)
+                        metrics.recordQueueLength(service.path, this@ReliabilityModel.time, queueLength)
                     },
                     onBusyHandlersChanged = { busyHandlers ->
-                        metrics.recordBusyHandlers(service.id, this@ReliabilityModel.time, busyHandlers)
+                        metrics.recordBusyHandlers(service.path, this@ReliabilityModel.time, busyHandlers)
                     },
                 )
             }.associateBy { it.serviceId }
@@ -76,7 +76,7 @@ class ReliabilityModel(
 
     init {
         model.lengthOfReplication = Double.POSITIVE_INFINITY
-        model.maximumAllowedExecutionTimePerReplication = execution.maxRealTimeSeconds.seconds
+        model.maximumAllowedExecutionTimePerReplication = chain.run.maxRealTimeSeconds.seconds
     }
 
     override fun initialize() {
@@ -84,9 +84,7 @@ class ReliabilityModel(
         activeInvocations = 0
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
-        runtimes.values.forEach { it.resetDegradation() }
-        val measurementStartMs = execution.warmupMs
-        val measurementEndMs = execution.warmupMs + execution.measurementMs
+        runtimes.values.forEach { it.resetFaults() }
         schedule(
             eventAction =
                 ModelElement.EventActionIfc<Nothing> {
@@ -109,17 +107,16 @@ class ReliabilityModel(
             timeToEvent = measurementEndMs,
             priority = KSLEvent.DEFAULT_PRIORITY - 1,
         )
-        val degradation = scenario.degradation
-        if (degradation != null) {
-            val runtime = runtimes.getValue(degradation.serviceId)
+        chain.faults.forEach { fault ->
+            val runtime = runtimes.getValue(fault.target)
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.startDegradation() },
-                timeToEvent = degradation.startMs,
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.startFault(fault) },
+                timeToEvent = fault.fromMs,
                 priority = KSLEvent.DEFAULT_PRIORITY - 1,
             )
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.endDegradation() },
-                timeToEvent = degradation.endMs,
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.endFault(fault) },
+                timeToEvent = fault.toMs,
                 priority = KSLEvent.DEFAULT_PRIORITY - 1,
             )
         }
@@ -131,15 +128,15 @@ class ReliabilityModel(
         if (workloadPrepared) return
         ArrivalGenerator(
             reliabilityModel = this,
-            entryServiceId = scenario.entry,
-            arrivalRate = scenario.workload.arrivalRate,
-            warmupMs = execution.warmupMs,
-            measurementMs = execution.measurementMs,
-            streamNum = scenario.services.size * 2 + scenario.links.size * 2 + 1,
+            entryServiceId = chain.entry,
+            arrivalRate = chain.client.arrivalRatePerMs,
+            warmupMs = chain.run.warmupMs,
+            measurementMs = chain.run.measurementMs,
+            stream = streams.stream(chain.client.path, StreamRole.ARRIVALS),
         )
         CompletionMonitor(
             reliabilityModel = this,
-            arrivalEndMs = execution.warmupMs + execution.measurementMs,
+            arrivalEndMs = measurementEndMs,
         )
         workloadPrepared = true
     }
@@ -157,7 +154,7 @@ class ReliabilityModel(
     }
 
     private fun isFullyDrained(): Boolean =
-        time >= execution.warmupMs + execution.measurementMs &&
+        time >= measurementEndMs &&
             activeOriginalRequests == 0 &&
             activeInvocations == 0 &&
             activeDownstreamProcesses == 0
@@ -181,7 +178,7 @@ class ReliabilityModel(
         }
         val originalDeadlineMs =
             if (originalRequest) {
-                (arrivalTimeMs + scenario.workload.requestDeadlineMs).also { deadline ->
+                (arrivalTimeMs + chain.client.deadlineMs).also { deadline ->
                     if (!deadline.isFinite()) {
                         throw ExperimentExecutionException("Original request deadline must be finite")
                     }
@@ -362,8 +359,8 @@ class ReliabilityModel(
                                     metrics.recordLocalFailure(runtime.serviceId)
                                 }
                             } else {
-                                val link = runtime.outgoingLink
-                                if (link == null) {
+                                val call = runtime.outgoingCall
+                                if (call == null) {
                                     currentOutcome = AttemptOutcome.SUCCEEDED
                                 } else if (time >= originalDeadlineMs) {
                                     currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
@@ -379,7 +376,7 @@ class ReliabilityModel(
                                         }
                                         val child =
                                             createInvocation(
-                                                serviceId = link.to,
+                                                serviceId = call.to,
                                                 timeUntilActivation = 0.0,
                                                 originalRequest = false,
                                                 measurementCohort = measurementCohort,
@@ -391,7 +388,7 @@ class ReliabilityModel(
                                                 caller = this@ServiceInvocation,
                                                 child = child,
                                                 callingServiceId = runtime.serviceId,
-                                                timeoutMs = minOf(link.timeoutMs, originalDeadlineMs - time),
+                                                timeoutMs = minOf(call.timeoutMs, originalDeadlineMs - time),
                                             )
                                         callAttempt = attempt
                                         blockUntilCompleted(child.work)
@@ -406,13 +403,13 @@ class ReliabilityModel(
                                             currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
                                             break
                                         }
-                                        if (attemptNumber == link.maxAttempts) {
+                                        if (attemptNumber == call.attempts) {
                                             currentOutcome = attempt.status
                                             break
                                         }
                                         val backoffMs =
                                             RetryPolicyEvaluator.backoffMs(
-                                                retry = link.retry,
+                                                backoff = call.backoff,
                                                 failedAttemptNumber = attemptNumber,
                                                 jitter = { runtime.nextJitter() },
                                             )

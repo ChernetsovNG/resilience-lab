@@ -1,6 +1,7 @@
 package resiliencelab.core.simulation
 
-import resiliencelab.core.scenario.RetryKind
+import resiliencelab.core.ir.Backoff
+import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.scenario.RetrySpec
 import kotlin.math.pow
 
@@ -10,23 +11,30 @@ import kotlin.math.pow
  */
 object RetryPolicyEvaluator {
     fun backoffMs(
-        retry: RetrySpec,
+        backoff: Backoff,
         failedAttemptNumber: Int,
         jitter: () -> Double,
     ): Double {
         require(failedAttemptNumber >= 1) { "failedAttemptNumber must be at least 1" }
-        return when (retry.kind) {
-            RetryKind.NONE -> 0.0
-            RetryKind.FIXED -> minOf(retry.baseBackoffMs, retry.maxBackoffMs)
-            RetryKind.EXPONENTIAL_FULL_JITTER -> {
+        return when (backoff.kind) {
+            BackoffKind.NONE -> 0.0
+            BackoffKind.FIXED -> minOf(backoff.baseMs, backoff.maxMs)
+            BackoffKind.EXPONENTIAL_FULL_JITTER -> {
                 val uncappedMs =
-                    if (retry.baseBackoffMs == 0.0) {
+                    if (backoff.baseMs == 0.0) {
                         0.0
                     } else {
-                        retry.baseBackoffMs * retry.base.pow(failedAttemptNumber - 1)
+                        backoff.baseMs * backoff.multiplier.pow(failedAttemptNumber - 1)
                     }
-                jitter() * minOf(retry.maxBackoffMs, uncappedMs)
+                jitter() * minOf(backoff.maxMs, uncappedMs)
             }
         }
     }
+
+    /** MVP overload; removed with the `scenario` package. */
+    fun backoffMs(
+        retry: RetrySpec,
+        failedAttemptNumber: Int,
+        jitter: () -> Double,
+    ): Double = backoffMs(LegacyScenarioAdapter.backoff(retry), failedAttemptNumber, jitter)
 }

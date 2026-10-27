@@ -8,50 +8,39 @@ import ksl.modeling.entity.ResourceWithQ
 import ksl.modeling.queue.Queue
 import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.ModelElement
-import ksl.utilities.random.rng.RNStreamProvider
-import ksl.utilities.random.rvariable.UniformRV
-import resiliencelab.core.scenario.DegradationSpec
-import resiliencelab.core.scenario.LinkSpec
-import resiliencelab.core.scenario.ServiceSpec
+import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.ServiceNode
 
 /**
- * Owns a service's bounded FIFO admission path, blocking handler pool, and dedicated random samplers.
- * Degradation is evaluated when local processing starts; its sampled duration and failure outcome are unaffected
- * by the degradation interval ending while that attempt continues.
+ * Owns a service's bounded FIFO admission path, blocking handler pool, and its random sources.
+ * A fault is evaluated when local processing starts; its sampled duration and failure outcome are unaffected
+ * by the fault interval ending while that attempt continues.
  */
 internal class ServiceRuntime(
     parent: ModelElement,
-    private val spec: ServiceSpec,
-    private val degradation: DegradationSpec?,
-    streamProvider: RNStreamProvider,
-    durationStreamNum: Int,
-    failureStreamNum: Int,
-    val outgoingLink: LinkSpec?,
-    networkStreamNum: Int?,
-    jitterStreamNum: Int?,
+    private val node: ServiceNode,
+    streams: StreamSource,
+    val outgoingCall: CallEdge?,
     onAdmitted: (ProcessModel.Entity) -> Unit,
     onQueueLengthChanged: (Int) -> Unit,
     onBusyHandlersChanged: (Int) -> Unit,
 ) {
-    val serviceId: String = spec.id
-    private val durationSampler = DurationSamplerFactory.create(spec.processing, durationStreamNum, streamProvider)
-    private val failureSampler = UniformRV(0.0, 1.0, failureStreamNum, streamProvider)
+    val serviceId: String = node.path
+    private val durationSampler =
+        DurationSamplerFactory.create(node.processing, streams.stream(node.path, StreamRole.PROCESSING))
+    private val outcomeStream = streams.stream(node.path, StreamRole.OUTCOME)
     private val networkSampler =
-        outgoingLink?.let {
-            DurationSamplerFactory.create(it.network, requireNotNull(networkStreamNum), streamProvider)
-        }
-    private val jitterSampler =
-        outgoingLink?.let {
-            UniformRV(0.0, 1.0, requireNotNull(jitterStreamNum), streamProvider)
-        }
-    private var degradationActive = false
+        outgoingCall?.let { DurationSamplerFactory.create(it.network, streams.stream(it.path, StreamRole.NETWORK)) }
+    private val jitterStream = outgoingCall?.let { streams.stream(it.path, StreamRole.JITTER) }
+    private var activeFault: FaultSpan? = null
 
     val resource: ResourceWithQ
     val queue: RequestQ =
         BoundedRequestQ(
             parent = parent,
             name = "$serviceId:queue",
-            waitingCapacity = spec.queueCapacity,
+            waitingCapacity = node.queueCapacity,
             resourceProvider = { resource },
         )
 
@@ -60,7 +49,7 @@ internal class ServiceRuntime(
             FifoResourceWithQ(
                 parent = parent,
                 name = serviceId,
-                capacity = spec.handlers,
+                capacity = node.handlers,
                 queue = queue,
             )
         queue.addQueueListener(
@@ -90,29 +79,26 @@ internal class ServiceRuntime(
         )
     }
 
-    fun resetDegradation() {
-        degradationActive = false
+    fun resetFaults() {
+        activeFault = null
     }
 
-    fun startDegradation() {
-        degradationActive = true
+    fun startFault(fault: FaultSpan) {
+        activeFault = fault
     }
 
-    fun endDegradation() {
-        degradationActive = false
+    fun endFault(fault: FaultSpan) {
+        if (activeFault == fault) activeFault = null
     }
 
-    fun nextDurationMs(): Double {
-        val multiplier = if (degradationActive) degradation?.processingMultiplier ?: 1.0 else 1.0
-        return durationSampler.next() * multiplier
-    }
+    fun nextDurationMs(): Double = durationSampler.next() * (activeFault?.processingMultiplier ?: 1.0)
 
     fun nextLocalFailure(): Boolean {
-        val failureRate = if (degradationActive) degradation?.failureRate ?: spec.failureRate else spec.failureRate
-        return failureSampler.value < failureRate
+        val failureProbability = activeFault?.failureProbability ?: node.failureProbability
+        return outcomeStream.randU01() < failureProbability
     }
 
     fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
 
-    fun nextJitter(): Double = requireNotNull(jitterSampler).value
+    fun nextJitter(): Double = requireNotNull(jitterStream).randU01()
 }
