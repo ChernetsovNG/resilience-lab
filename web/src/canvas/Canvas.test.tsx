@@ -94,4 +94,14 @@ describe("VariantTabs", () => {
     expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tab", { name: "plain" }).getAttribute("aria-selected")).toBe("true");
   });
+
+  it("keeps page navigation disabled while an editable draft is invalid", () => {
+    const onSelect = vi.fn();
+    render(<VariantTabs variants={experiment.variants} active={null} disabled onSelect={onSelect} />);
+    for (const tab of screen.getAllByRole("tab")) {
+      expect((tab as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(tab);
+    }
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
