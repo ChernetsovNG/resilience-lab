@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.workspace.Workspace
+import java.io.IOException
 
 /**
  * Workspace documents with versions (ADR 0003, ADR 0010). The path is a query parameter because it contains `/`.
@@ -23,12 +24,14 @@ class DocumentController(
     private val workspace: Workspace,
 ) {
     @GetMapping("/documents")
+    @Throws(IOException::class)
     fun listDocuments(): List<DocumentEntry> =
         workspace.list().mapNotNull { path ->
             DocumentKind.of(path)?.let { kind -> DocumentEntry(path, kind, workspace.read(path).version) }
         }
 
     @GetMapping("/document")
+    @Throws(IOException::class)
     fun getDocument(
         @RequestParam path: String,
     ): ResponseEntity<DocumentView> {
@@ -43,6 +46,7 @@ class DocumentController(
     }
 
     @PutMapping("/document")
+    @Throws(IOException::class)
     fun putDocument(
         @RequestParam path: String,
         @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,

@@ -313,6 +313,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "run-controller" ]
@@ -369,6 +379,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "run-controller" ]
@@ -425,6 +445,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "run-controller" ]
@@ -539,6 +569,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "document-controller" ]
@@ -610,6 +650,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "document-controller" ]
@@ -661,6 +711,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
           }
         },
         "tags" : [ "document-controller" ]

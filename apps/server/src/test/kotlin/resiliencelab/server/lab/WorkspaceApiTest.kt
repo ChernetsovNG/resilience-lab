@@ -157,6 +157,22 @@ class WorkspaceApiTest {
         assertThat(JsonPath.read<String>(broken.contentAsString, "$.diagnostics[0].code")).isEqualTo("JSON_SYNTAX")
     }
 
+    @Test
+    fun `documents sanitized storage failures in OpenAPI`() {
+        Files.write(root.resolve("unreadable.model.json"), byteArrayOf(0xC3.toByte(), 0x28))
+        try {
+            val response = getDocument("unreadable.model.json")
+
+            assertThat(response.status).isEqualTo(500)
+            assertThat(code(response)).isEqualTo("STORAGE_ERROR")
+            assertThat(JsonPath.read<String>(response.contentAsString, "$.message")).isEqualTo("Workspace storage failed")
+            assertThat(response.contentAsString).doesNotContain(root.toString())
+            openApi.assertResponse("get", "/api/v1/workspace/document", response)
+        } finally {
+            Files.deleteIfExists(root.resolve("unreadable.model.json"))
+        }
+    }
+
     private fun getDocument(path: String): MockHttpServletResponse =
         mockMvc.perform(get("/api/v1/workspace/document").param("path", path)).andReturn().response
 
