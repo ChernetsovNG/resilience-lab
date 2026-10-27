@@ -44,17 +44,10 @@ Gradle-команды выполняются из корня репозитор�
 - `docker compose down` — остановить и удалить только контейнеры этого Compose-проекта; volumes, образы и исходники не удаляются.
 - Браузер обращается к same-origin `/api`, Nginx передаёт запросы сервису `backend:8080`. Контейнеры работают от non-root пользователей; секреты и persistent volumes не используются.
 - Задания остаются process-local: перезапуск backend удаляет их, поэтому Compose не обеспечивает сохранение результатов между перезапусками.
-- Проверено 2026-10-26: оба образа реально собраны и запущены; host health вернул 200, proxied missing-job — API JSON 404, отсутствующий asset — Nginx 404. Установленный Playwright Chromium без mock API и локальных webServers прошёл comparison с двумя репликациями до `COMPLETED` и показал Baseline/Candidate metrics. После `docker compose down` список `docker compose ps` пуст.
-
-### Проверка quality (2026-10-26)
-
-Локальный `./gradlew clean build` на JDK 25 завершился успешно: 190 тестов (`core`: 151, `apps:cli`: 11, `apps:server`: 28), без ошибок и пропусков; проверки KtLint и JaCoCo пройдены, HTML/XML-отчёты сформированы. Настроенные минимумы покрытия LINE/BRANCH: `core` — 0.95/0.85, `apps:cli` — 0.85/0.60, `apps:server` — 0.75/0.60. Фактическая версия wrapper — Gradle 9.8.2; CI запускается через `.github/workflows/ci.yml`.
-
-Полная web-команда `npm run lint && npm test -- --run && npm run build && npm run test:e2e` завершилась успешно: ESLint без ошибок, 119 unit-тестов в 14 файлах, production build и 6 реальных Chromium E2E-тестов. E2E проверяют add/delete/reconnect, независимое редактирование baseline/candidate, degradation multiplier 2, две репликации, COMPLETED, baseline/candidate success/p95/p99/admitted amplification, различия submitted configurations и численные метрики в полном JSON download, отсутствие POST при invalid или неприменённом sweep draft и ровно две точки `LINK_TIMEOUT` sweep для `25, 50`.
 
 ### Backend API
 
-Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает его 28 тестов. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
+Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:server:bootRun` запускает локальный API с базовым URL `http://127.0.0.1:8080/api/v1`; `./gradlew :apps:server:test` запускает тесты backend. Асинхронные задания экспериментов хранятся только в памяти процесса (process-local) и не сохраняются между перезапусками. Хранятся не более 100 завершённых заданий в порядке завершения FIFO; активные задания никогда не вытесняются.
 
 ### CLI
 
