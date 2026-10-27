@@ -13,6 +13,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import java.util.concurrent.TimeUnit.SECONDS
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,6 +45,54 @@ class ExperimentApiTest {
         assertThat(JsonPath.read<Boolean>(missing.contentAsString, "$.valid")).isFalse()
         assertThat(JsonPath.read<String>(missing.contentAsString, "$.diagnostics[0].code")).isEqualTo("DOCUMENT_MISSING")
         openApi.assertResponse("post", "/api/v1/validate", missing)
+    }
+
+    @Test
+    fun `runs a job to completion`() {
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+        assertThat(submitted.status).isEqualTo(202)
+        openApi.assertResponse("post", "/api/v1/jobs", submitted)
+
+        val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
+
+        assertThat(JsonPath.read<String>(finished.contentAsString, "$.status")).isEqualTo("COMPLETED")
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.completedTasks")).isEqualTo(4)
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.totalTasks")).isEqualTo(4)
+        openApi.assertResponse("get", "/api/v1/jobs/{id}", finished)
+
+        val jobs = mockMvc.perform(get("/api/v1/jobs")).andReturn().response
+        assertThat(JsonPath.read<List<String>>(jobs.contentAsString, "$[*].id"))
+            .contains(JsonPath.read<String>(finished.contentAsString, "$.id"))
+        openApi.assertResponse("get", "/api/v1/jobs", jobs)
+    }
+
+    @Test
+    fun `rejects invalid jobs, malformed requests and unknown ids`() {
+        val invalid = postJson("/api/v1/jobs", """{"experiment":"missing.experiment.json"}""")
+        assertThat(invalid.status).isEqualTo(400)
+        assertThat(JsonPath.read<String>(invalid.contentAsString, "$.code")).isEqualTo("EXPERIMENT_INVALID")
+        assertThat(JsonPath.read<String>(invalid.contentAsString, "$.diagnostics[0].code")).isEqualTo("DOCUMENT_MISSING")
+        openApi.assertResponse("post", "/api/v1/jobs", invalid)
+
+        val malformed = postJson("/api/v1/jobs", "{}")
+        assertThat(malformed.status).isEqualTo(400)
+        assertThat(JsonPath.read<String>(malformed.contentAsString, "$.code")).isEqualTo("REQUEST_INVALID")
+
+        val unknown = mockMvc.perform(get("/api/v1/jobs/{id}", "unknown")).andReturn().response
+        assertThat(unknown.status).isEqualTo(404)
+        assertThat(JsonPath.read<String>(unknown.contentAsString, "$.code")).isEqualTo("JOB_NOT_FOUND")
+        openApi.assertResponse("get", "/api/v1/jobs/{id}", unknown)
+    }
+
+    private fun awaitJob(id: String): MockHttpServletResponse {
+        val deadline = System.nanoTime() + SECONDS.toNanos(60)
+        while (true) {
+            val response = mockMvc.perform(get("/api/v1/jobs/{id}", id)).andReturn().response
+            val status = JsonPath.read<String>(response.contentAsString, "$.status")
+            if (status == "COMPLETED" || status == "FAILED") return response
+            check(System.nanoTime() < deadline) { "Job $id did not finish: ${response.contentAsString}" }
+            Thread.sleep(50)
+        }
     }
 
     private fun postJson(
