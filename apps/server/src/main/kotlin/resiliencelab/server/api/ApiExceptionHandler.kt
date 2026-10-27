@@ -10,7 +10,7 @@ import resiliencelab.core.scenario.ScenarioValidationException
 import resiliencelab.core.scenario.ValidationIssue
 
 /** Maps submission failures to stable API errors without exposing exception or filesystem details. */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = [ExperimentController::class, ScenarioController::class])
 class ApiExceptionHandler {
     /** Returns core validation diagnostics while keeping the top-level message generic. */
     @ExceptionHandler(ScenarioValidationException::class)
