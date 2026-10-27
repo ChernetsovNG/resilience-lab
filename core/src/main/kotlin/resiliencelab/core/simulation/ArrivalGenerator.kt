@@ -1,7 +1,8 @@
 package resiliencelab.core.simulation
 
 import ksl.simulation.ModelElement
-import ksl.utilities.random.rvariable.ExponentialRV
+import ksl.utilities.random.rng.RNStreamIfc
+import ksl.utilities.random.rvariable.KSLRandom
 
 /**
  * Generates the open Poisson stream of original requests through warm-up and the measurement interval.
@@ -14,14 +15,26 @@ internal class ArrivalGenerator(
     arrivalRate: Double,
     private val warmupMs: Double,
     measurementMs: Double,
-    streamNum: Int,
+    private val stream: RNStreamIfc,
 ) : ModelElement(reliabilityModel, "workload:arrival-generator") {
-    private val interArrival =
-        ExponentialRV(
-            mean = 1 / arrivalRate,
-            streamNum = streamNum,
-            streamProvider = reliabilityModel.streamProvider,
-        )
+    /** MVP overload; removed with the `scenario` package. */
+    constructor(
+        reliabilityModel: ReliabilityModel,
+        entryServiceId: String,
+        arrivalRate: Double,
+        warmupMs: Double,
+        measurementMs: Double,
+        streamNum: Int,
+    ) : this(
+        reliabilityModel,
+        entryServiceId,
+        arrivalRate,
+        warmupMs,
+        measurementMs,
+        reliabilityModel.streamProvider.rnStream(streamNum),
+    )
+
+    private val meanInterArrivalMs = 1 / arrivalRate
     private val arrivalEndMs = warmupMs + measurementMs
     private val arrivalAction =
         EventActionIfc<Nothing> {
@@ -33,12 +46,16 @@ internal class ArrivalGenerator(
             scheduleNext()
         }
 
+    init {
+        require(meanInterArrivalMs > 0.0) { "Exponential mean must be > 0.0" }
+    }
+
     override fun initialize() {
         scheduleNext()
     }
 
     private fun scheduleNext() {
-        val delayMs = interArrival.value
+        val delayMs = KSLRandom.rExponential(meanInterArrivalMs, stream)
         val nextArrivalMs = time + delayMs
         if (!nextArrivalMs.isFinite()) {
             throw ExperimentExecutionException("Next arrival time must be finite")

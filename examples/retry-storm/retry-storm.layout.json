@@ -1,0 +1,21 @@
+{
+  "positions": {
+    "client": {
+      "x": 0.0,
+      "y": 100.0
+    },
+    "dependency": {
+      "x": 780.0,
+      "y": 100.0
+    },
+    "gateway": {
+      "x": 260.0,
+      "y": 100.0
+    },
+    "middle": {
+      "x": 520.0,
+      "y": 100.0
+    }
+  },
+  "schemaVersion": 1
+}

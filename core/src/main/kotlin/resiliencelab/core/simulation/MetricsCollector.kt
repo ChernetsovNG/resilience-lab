@@ -3,7 +3,7 @@ package resiliencelab.core.simulation
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
-import resiliencelab.core.scenario.ServiceSpec
+import resiliencelab.core.ir.ServiceNode
 
 /**
  * Collects original-request outcomes and caused-attempt counters only for the measured arrival cohort, including
@@ -11,7 +11,7 @@ import resiliencelab.core.scenario.ServiceSpec
  * measurement interval, so warm-up and run-out do not extend those time averages.
  */
 class MetricsCollector(
-    services: List<ServiceSpec>,
+    services: List<ServiceNode>,
     private val measurementStartMs: Double,
     private val measurementEndMs: Double,
     private val currentTimeMs: () -> Double,
@@ -25,7 +25,7 @@ class MetricsCollector(
     private var failures = 0
     private val serviceMetrics =
         services.associateTo(linkedMapOf()) { service ->
-            service.id to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
+            service.path to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
         }
 
     fun replicationResult(): ReplicationResult {

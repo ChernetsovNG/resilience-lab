@@ -1,10 +1,10 @@
 package resiliencelab.core.simulation
 
+import ksl.utilities.random.rng.RNStreamIfc
 import ksl.utilities.random.rng.RNStreamProvider
-import ksl.utilities.random.rvariable.ConstantRV
-import ksl.utilities.random.rvariable.ExponentialRV
-import ksl.utilities.random.rvariable.LognormalRV
-import resiliencelab.core.scenario.DistributionKind
+import ksl.utilities.random.rvariable.KSLRandom
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.scenario.DurationDistribution
 
 /** Draws processing or one-way network durations in milliseconds from a configured distribution. */
@@ -12,22 +12,25 @@ fun interface DurationSampler {
     fun next(): Double
 }
 
-/** Binds duration distributions to their designated KSL streams; fixed durations consume no random stream. */
+/** Draws durations from an explicitly owned stream; fixed durations consume no random numbers (ADR 0006). */
 object DurationSamplerFactory {
+    fun create(
+        distribution: Distribution,
+        stream: RNStreamIfc,
+    ): DurationSampler =
+        when (distribution.shape) {
+            DistributionShape.FIXED -> DurationSampler { distribution.meanMs }
+            DistributionShape.EXPONENTIAL -> DurationSampler { KSLRandom.rExponential(distribution.meanMs, stream) }
+            DistributionShape.LOGNORMAL -> {
+                val stdDev = requireNotNull(distribution.stdDevMs) { "Lognormal distribution requires stdDevMs" }
+                DurationSampler { KSLRandom.rLogNormal(distribution.meanMs, stdDev * stdDev, stream) }
+            }
+        }
+
+    /** MVP overload; removed with the `scenario` package. */
     fun create(
         spec: DurationDistribution,
         streamNum: Int,
         provider: RNStreamProvider,
-    ): DurationSampler {
-        val randomVariable =
-            when (spec.kind) {
-                DistributionKind.FIXED -> ConstantRV(spec.meanMs)
-                DistributionKind.EXPONENTIAL -> ExponentialRV(spec.meanMs, streamNum, provider)
-                DistributionKind.LOGNORMAL -> {
-                    val stdDev = spec.stdDevMs!!
-                    LognormalRV(spec.meanMs, stdDev * stdDev, streamNum, provider)
-                }
-            }
-        return DurationSampler { randomVariable.value }
-    }
+    ): DurationSampler = create(LegacyScenarioAdapter.distribution(spec), provider.rnStream(streamNum))
 }
