@@ -37,6 +37,16 @@ Gradle-команды выполняются из корня репозитор�
 
 Перед E2E проверяется совпадение версии образа с `@playwright/test` из `web/package-lock.json`; при обновлении Playwright нужно также обновить `jobs.e2e.container.image`, иначе проверка завершится с понятной ошибкой. YAML anchor связывает образ контейнера и значение для проверки. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и V8-отчёт `web/coverage/` (артефакт `frontend-coverage`) сохраняет job `build`, а `web/test-results/` и `web/playwright-report/` — job `e2e`, в обоих случаях и при ошибке предыдущих шагов, если файлы сформированы. HTML-отчёт Playwright формируется и при успешном прогоне.
 
+### Обновление зависимостей и Docker-образов
+
+Dependabot еженедельно проверяет npm, Gradle, GitHub Actions и Dockerfile в `apps/server` и `web`. Обновления minor/patch объединяются по экосистеме; major приходят отдельными PR. Для `@playwright/test` выделена группа `playwright` для всех типов обновлений.
+
+- При обновлении Node.js меняй `web/.nvmrc` и `FROM node:<версия>-alpine` в `web/Dockerfile` в одном PR, в том числе в PR Dependabot. CI проверяет точное совпадение перед сборкой. Если меняется major, согласуй также `web/package.json` (`engines.node`).
+- При обновлении `@playwright/test` обновляй `web/package.json`, `web/package-lock.json` и `jobs.e2e.container.image` в `.github/workflows/ci.yml` в одном PR. Образ должен иметь вид `mcr.microsoft.com/playwright:v<версия @playwright/test>-noble`; существующая CI-проверка блокирует рассинхрон. В PR группы `playwright` образ меняется вручную: [Dependabot для GitHub Actions](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions) обновляет ссылки `uses:`, а не `container.image`.
+- Плавающий `nginx:alpine` получает новое содержимое при загрузке образа. Без версии или digest Dependabot не создаёт PR на изменение содержимого этого тега.
+
+Параметры `directories`, `groups` и `exclude-patterns` сверены с [документацией Dependabot](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
+
 ### Локальный Docker Compose
 
 - `docker compose up --build -d` — собрать production-like образы и запустить backend и frontend из корня репозитория.
@@ -109,6 +119,7 @@ Backend использует Spring Boot 4.1.2 и JDK 25. `./gradlew :apps:serve
 2. Проверь `git status`; не перезаписывай чужие незакоммиченные изменения. Выполни `git fetch origin` и создай отдельную ветку от актуального `main`: `git switch -c <имя-ветки> origin/main`. Не работай в `main` или ветке другой задачи.
 3. Меняй только то, что нужно для issue. Сторонние ошибки и технический долг перечисли в PR; не исправляй их в той же задаче.
 4. Проверь изменения по затронутым областям, как указано ниже. Создавай коммиты в стиле Conventional Commits на английском, например `docs: add agent task templates`.
+   В коммитах с участием Codex сохраняй автора-человека и добавляй трейлер `Co-authored-by: Codex <codex@openai.com>`. При squash сохраняй этот трейлер в итоговом сообщении коммита.
 5. Перед PR снова выполни `git fetch origin` и `git rebase origin/main`, сохранив актуальные изменения `main`. Если после rebase изменился результат работы или были конфликты, повтори соответствующие проверки.
 6. Отправь ветку командой `git push -u origin HEAD` и открой PR в `main`: `gh pr create --base main`. В описании укажи `Closes #N`, заменив `N` номером issue. Самостоятельно не мержи PR.
 
