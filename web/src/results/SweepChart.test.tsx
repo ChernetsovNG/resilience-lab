@@ -5,13 +5,21 @@ import type { VariantResult } from "../api/types";
 import { SweepChart } from "./SweepChart";
 
 const captured = vi.hoisted(() => ({
+  points: [] as Array<{ sweepValue: number }>,
+  axes: [] as Array<{ ticks: number[]; label: { value: string } }>,
   lines: [] as Array<{ dataKey: unknown; name?: string }>,
 }));
 
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: ReactNode }) => children,
-  LineChart: ({ children }: { children: ReactNode }) => children,
-  XAxis: () => null,
+  LineChart: ({ children, data }: { children: ReactNode; data: Array<{ sweepValue: number }> }) => {
+    captured.points = data;
+    return children;
+  },
+  XAxis: (props: { ticks: number[]; label: { value: string } }) => {
+    captured.axes.push(props);
+    return null;
+  },
   YAxis: () => null,
   Tooltip: () => null,
   Legend: () => null,
@@ -53,6 +61,23 @@ function sweepVariant(serviceId: string): VariantResult {
 describe("SweepChart service accessors", () => {
   beforeEach(() => {
     captured.lines.length = 0;
+    captured.points.length = 0;
+    captured.axes.length = 0;
+  });
+
+  it("plots arrival-rate metadata in RPS without changing the numerical result", () => {
+    const variants = [0.025, 0.0505].map((sweepValue, index) => ({
+      ...sweepVariant("checkout"),
+      id: "arrival-" + index,
+      sweepParameter: "ARRIVAL_RATE" as const,
+      sweepValue,
+    }));
+    render(<SweepChart variants={variants} />);
+
+    expect(captured.points.map((point) => point.sweepValue)).toEqual([25, 50.5]);
+    expect(captured.axes[0].ticks).toEqual([25, 50.5]);
+    expect(captured.axes[0].label.value).toBe("Arrival rate (RPS)");
+    expect(variants.map((variant) => variant.sweepValue)).toEqual([0.025, 0.0505]);
   });
 
   it.each(["checkout.eu", "shard[1]", "checkout.eu[primary]"])(

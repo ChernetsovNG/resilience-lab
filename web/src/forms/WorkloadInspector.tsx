@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { WorkloadSpec } from "../api/types";
+import { arrivalRateToRps, rpsToArrivalRate } from "../scenario/arrivalRate";
 import { NumberField } from "./NumberField";
 
 interface WorkloadInspectorProps {
@@ -7,21 +9,33 @@ interface WorkloadInspectorProps {
 }
 
 export function WorkloadInspector({ workload, onChange }: WorkloadInspectorProps) {
+  const [committedRps, setCommittedRps] = useState<number | null>(null);
+  // Preserve the entered RPS while the stored rate echoes back with floating-point noise.
+  const rps = committedRps !== null && rpsToArrivalRate(committedRps) === workload.arrivalRate
+    ? committedRps
+    : arrivalRateToRps(workload.arrivalRate);
+
   return (
     <form className="parameter-form" aria-label="Workload parameters" onSubmit={(event) => event.preventDefault()}>
       <fieldset>
         <legend>Workload</legend>
         <NumberField
-          label="Arrival rate"
+          label="Arrival rate (RPS)"
           name="arrivalRate"
-          value={workload.arrivalRate}
+          value={rps}
           min={0}
           positive
-          hint="Positive rate with a finite interarrival mean."
+          hint="Requests per second; must give a finite interarrival mean."
           errorMessage="Must be positive with a finite interarrival mean."
-          isValid={(arrivalRate) => Number.isFinite(1 / arrivalRate) && 1 / arrivalRate > 0}
-          onCommit={(arrivalRate) => {
-            if (arrivalRate !== null) onChange({ arrivalRate });
+          isValid={(rps) => {
+            const meanMs = 1 / rpsToArrivalRate(rps);
+            return Number.isFinite(meanMs) && meanMs > 0;
+          }}
+          onCommit={(rps) => {
+            if (rps !== null) {
+              setCommittedRps(rps);
+              onChange({ arrivalRate: rpsToArrivalRate(rps) });
+            }
           }}
         />
         <NumberField

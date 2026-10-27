@@ -139,8 +139,8 @@ describe("SweepControls", () => {
     const onChange = vi.fn();
     render(<SweepControls onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText("Sweep values"), {
-      target: { value: "25, 50, 100" },
+    fireEvent.change(screen.getByLabelText(/^Sweep values/), {
+      target: { value: "25, 50.5, 100" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
 
@@ -148,8 +148,18 @@ describe("SweepControls", () => {
       parameter: "ARRIVAL_RATE",
       serviceId: null,
       linkId: null,
-      values: [25, 50, 100],
+      values: [0.025, 0.0505, 0.1],
     });
+  });
+
+  it.each(["1e-307", "1e-323"])("rejects RPS %s with a non-finite converted interarrival mean", (value) => {
+    const onChange = vi.fn();
+    render(<SweepControls onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Sweep values (RPS)"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toBeTruthy();
   });
 
   it("requires a link target and preserves the ordered values", () => {
@@ -159,7 +169,7 @@ describe("SweepControls", () => {
     fireEvent.change(screen.getByLabelText("Sweep parameter"), {
       target: { value: "LINK_TIMEOUT" },
     });
-    fireEvent.change(screen.getByLabelText("Sweep values"), {
+    fireEvent.change(screen.getByLabelText(/^Sweep values/), {
       target: { value: "25, 50, 100" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
@@ -183,7 +193,7 @@ describe("SweepControls", () => {
     fireEvent.change(screen.getByLabelText("Sweep parameter"), {
       target: { value: "DEGRADATION_MULTIPLIER" },
     });
-    fireEvent.change(screen.getByLabelText("Sweep values"), {
+    fireEvent.change(screen.getByLabelText(/^Sweep values/), {
       target: { value: "25, 50, 100" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
@@ -202,7 +212,7 @@ describe("SweepControls", () => {
   it("rejects non-finite values and non-integer max attempts", () => {
     const onChange = vi.fn();
     render(<SweepControls onChange={onChange} />);
-    const values = screen.getByLabelText("Sweep values");
+    const values = screen.getByLabelText(/^Sweep values/);
 
     fireEvent.change(values, { target: { value: "25, Infinity, 100" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
@@ -238,7 +248,7 @@ describe("SweepControls", () => {
         target: { value: "target-1" },
       });
     }
-    fireEvent.change(screen.getByLabelText("Sweep values"), { target: { value } });
+    fireEvent.change(screen.getByLabelText(/^Sweep values/), { target: { value } });
     fireEvent.click(screen.getByRole("button", { name: "Apply sweep" }));
 
     expect(onChange).not.toHaveBeenCalled();
@@ -247,7 +257,7 @@ describe("SweepControls", () => {
 });
 
 describe("SweepChart", () => {
-  const sweepVariants = [25, 50, 100].map((value, index) => ({
+  const sweepVariants = [0.025, 0.05, 0.1].map((value, index) => ({
     ...variant(`variant-${[900, 100, 500][index]}`, `Point ${index}`, 0.9 - index * 0.1, 120 + index * 10, 240, 1.25 + index),
     sweepParameter: "ARRIVAL_RATE" as const,
     sweepValue: value,
@@ -259,26 +269,26 @@ describe("SweepChart", () => {
     const figure = screen.getByRole("figure", { name: "Parameter sweep" });
     const points = within(figure).getAllByRole("listitem");
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: 90.00% (not enough replications)",
-      "50: 80.00% (not enough replications)",
-      "100: 70.00% (not enough replications)",
+      "25 RPS: 90.00% (not enough replications)",
+      "50 RPS: 80.00% (not enough replications)",
+      "100 RPS: 70.00% (not enough replications)",
     ]);
     expect(figure.textContent).not.toContain("900");
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), { target: { value: "p95" } });
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: 120.00 ms (not enough replications)",
-      "50: 130.00 ms (not enough replications)",
-      "100: 140.00 ms (not enough replications)",
+      "25 RPS: 120.00 ms (not enough replications)",
+      "50 RPS: 130.00 ms (not enough replications)",
+      "100 RPS: 140.00 ms (not enough replications)",
     ]);
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), {
       target: { value: "amplification" },
     });
     expect(points.map((point) => point.textContent)).toEqual([
-      "25: checkout 1.25× (not enough replications)",
-      "50: checkout 2.25× (not enough replications)",
-      "100: checkout 3.25× (not enough replications)",
+      "25 RPS: checkout 1.25× (not enough replications)",
+      "50 RPS: checkout 2.25× (not enough replications)",
+      "100 RPS: checkout 3.25× (not enough replications)",
     ]);
   });
 
@@ -291,15 +301,15 @@ describe("SweepChart", () => {
 
     const figure = screen.getByRole("figure", { name: "Parameter sweep" });
     const value = () => within(figure).getByRole("listitem").textContent;
-    expect(value()).toBe("25: 90.00% (95% CI [81.00%, 99.00%])");
+    expect(value()).toBe("25 RPS: 90.00% (95% CI [81.00%, 99.00%])");
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), { target: { value: "p95" } });
-    expect(value()).toBe("25: 120.00 ms (95% CI [110.00 ms, 130.00 ms])");
+    expect(value()).toBe("25 RPS: 120.00 ms (95% CI [110.00 ms, 130.00 ms])");
 
     fireEvent.change(screen.getByLabelText("Sweep metric"), {
       target: { value: "amplification" },
     });
-    expect(value()).toBe("25: checkout 1.25× (95% CI [1.00×, 1.50×])");
+    expect(value()).toBe("25 RPS: checkout 1.25× (95% CI [1.00×, 1.50×])");
   });
 
   it("separates mixed sweep parameters and labels the selected x-axis parameter", () => {
@@ -313,10 +323,10 @@ describe("SweepChart", () => {
 
     const figure = screen.getByRole("figure", { name: "Parameter sweep" });
     const points = () => within(figure).getAllByRole("listitem").map((point) => point.textContent);
-    expect(figure.textContent).toContain("ARRIVAL_RATE");
+    expect(figure.textContent).toContain("Arrival rate (RPS)");
     expect(points()).toEqual([
-      "25: 90.00% (not enough replications)",
-      "50: 80.00% (not enough replications)",
+      "25 RPS: 90.00% (not enough replications)",
+      "50 RPS: 80.00% (not enough replications)",
     ]);
 
     fireEvent.change(screen.getByLabelText("Sweep chart parameter"), {
@@ -350,7 +360,7 @@ describe("ResultDownload and ResultPanel integration", () => {
       id: "arrival-25",
       label: "Arrival 25",
       sweepParameter: "ARRIVAL_RATE" as const,
-      sweepValue: 25,
+      sweepValue: 0.025,
     };
     render(
       <ResultPanel
@@ -365,7 +375,7 @@ describe("ResultDownload and ResultPanel integration", () => {
     expect(comparison.textContent).toContain("Candidate");
     expect(comparison.textContent).not.toContain("Arrival 25");
     expect(within(sweep).getByRole("listitem").textContent).toBe(
-      "25: 75.00% (not enough replications)",
+      "25 RPS: 75.00% (not enough replications)",
     );
   });
 });

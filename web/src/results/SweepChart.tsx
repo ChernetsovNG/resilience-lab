@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import type { MetricSummary, SweepParameter, VariantResult } from "../api/types";
+import { arrivalRateToRps } from "../scenario/arrivalRate";
 
 type SweepMetric = "successRate" | "p95" | "amplification";
 
@@ -54,12 +55,15 @@ export function SweepChart({ variants }: SweepChartProps) {
   ];
   const selectedParameter =
     parameter !== null && parameters.includes(parameter) ? parameter : (parameters[0] ?? null);
+  const isArrivalRate = selectedParameter === "ARRIVAL_RATE";
+  const parameterLabel = isArrivalRate ? "Arrival rate (RPS)" : (selectedParameter ?? "");
+  const displaySweepValue = (value: number) => isArrivalRate ? arrivalRateToRps(value) : value;
   const points = eligible
     .filter((variant) => variant.sweepParameter === selectedParameter)
     .sort((left, right) => (left.sweepValue ?? 0) - (right.sweepValue ?? 0));
   const serviceIds = [...new Set(points.flatMap((variant) => Object.keys(variant.aggregate.services)))];
   const data: SweepPoint[] = points.map((variant) => ({
-    sweepValue: variant.sweepValue as number,
+    sweepValue: displaySweepValue(variant.sweepValue as number),
     value:
       metric === "successRate"
         ? variant.aggregate.successRate === null
@@ -87,7 +91,7 @@ export function SweepChart({ variants }: SweepChartProps) {
         onChange={(event) => setParameter(event.target.value as SweepParameter)}
       >
         {parameters.map((option) => (
-          <option key={option} value={option}>{option}</option>
+          <option key={option} value={option}>{option === "ARRIVAL_RATE" ? "Arrival rate (RPS)" : option}</option>
         ))}
       </select>
       <label htmlFor={`${id}-metric`}>Sweep metric</label>
@@ -109,7 +113,7 @@ export function SweepChart({ variants }: SweepChartProps) {
               type="number"
               ticks={data.map((point) => point.sweepValue)}
               domain={["dataMin", "dataMax"]}
-              label={{ value: selectedParameter ?? "", position: "insideBottom", offset: -10 }}
+              label={{ value: parameterLabel, position: "insideBottom", offset: -10 }}
             />
             <YAxis />
             <Tooltip />
@@ -134,7 +138,7 @@ export function SweepChart({ variants }: SweepChartProps) {
         </ResponsiveContainer>
       </div>
       <figcaption>
-        <strong>Parameter sweep: {selectedParameter}.</strong> X values come from sweep metadata.
+        <strong>Parameter sweep: {parameterLabel}.</strong> X values come from sweep metadata.
         <ul>
           {points.map((variant) => {
             const value = metric === "amplification"
@@ -148,7 +152,11 @@ export function SweepChart({ variants }: SweepChartProps) {
                   metric === "successRate" ? 100 : 1,
                   unit,
                 );
-            return <li key={variant.id}>{variant.sweepValue}: {value}</li>;
+            return (
+              <li key={variant.id}>
+                {displaySweepValue(variant.sweepValue as number)}{isArrivalRate ? " RPS" : ""}: {value}
+              </li>
+            );
           })}
         </ul>
       </figcaption>

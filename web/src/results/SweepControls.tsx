@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import type { SweepParameter, SweepSpec } from "../api/types";
+import { rpsToArrivalRate } from "../scenario/arrivalRate";
 
 interface SweepControlsProps {
   onChange: (sweep: SweepSpec) => void;
@@ -8,7 +9,7 @@ interface SweepControlsProps {
 }
 
 const parameters: { value: SweepParameter; label: string }[] = [
-  { value: "ARRIVAL_RATE", label: "Arrival rate" },
+  { value: "ARRIVAL_RATE", label: "Arrival rate (RPS)" },
   { value: "LINK_TIMEOUT", label: "Link timeout" },
   { value: "MAX_ATTEMPTS", label: "Max attempts" },
   { value: "BACKOFF_BASE", label: "Backoff base" },
@@ -39,7 +40,10 @@ function readDraft(
   valueList: string,
 ): { sweep: SweepSpec | null; error: string | null } {
   const parts = valueList.split(",").map((value) => value.trim());
-  const values = parts.map(Number);
+  const values = parts.map((part) => {
+    const value = Number(part);
+    return parameter === "ARRIVAL_RATE" ? rpsToArrivalRate(value) : value;
+  });
   if (parts.some((value) => value === "") || values.some((value) => !Number.isFinite(value))) {
     return { sweep: null, error: "Sweep values must be valid finite numbers." };
   }
@@ -138,7 +142,7 @@ export function SweepControls({ onChange, appliedSweep, onDraftStateChange }: Sw
         </div>
       ) : null}
       <div>
-        <label htmlFor={`${id}-values`}>Sweep values</label>
+        <label htmlFor={`${id}-values`}>Sweep values{parameter === "ARRIVAL_RATE" ? " (RPS)" : ""}</label>
         <input
           id={`${id}-values`}
           name="sweepValues"
