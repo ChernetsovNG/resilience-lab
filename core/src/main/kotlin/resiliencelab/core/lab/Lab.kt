@@ -34,6 +34,7 @@ import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import java.io.IOException
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 
 /** Diagnostics and versions of the computation inputs of one experiment. */
 data class ValidationReport(
@@ -209,87 +210,90 @@ class Lab(
         runDirectory: String,
         isCancelled: () -> Boolean = { false },
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
-    ): RunOutcome {
-        checkCancellation(isCancelled)
-        val manifestPath = "$runDirectory/manifest.json"
-        val manifest = artifactJson.decodeFromString(RunManifest.serializer(), workspace.read(manifestPath).text)
-        if (manifest.schemaVersion != Versions.ARTIFACT_SCHEMA) {
-            throw UnsupportedArtifactVersionException("manifest", manifest.schemaVersion)
-        }
-        if (manifest.complete) throw resumeFailure("RUN_COMPLETE", "Run is already complete", manifestPath)
-        if (
-            manifest.applicationVersion != Versions.APPLICATION ||
-            manifest.kslVersion != Versions.KSL ||
-            manifest.streamAssignment != PathStreams.ASSIGNMENT_VERSION
-        ) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run versions changed; run again", manifestPath)
-        }
-        val canonical =
-            runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
-        if (canonical != runDirectory) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run directory does not match its manifest; run again", manifestPath)
-        }
-        val loaded = load(manifest.experiment)
-        val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
-        if (loaded.artifactVersions != manifest.documents) {
-            throw resumeFailure("RUN_DOCUMENT_CHANGED", "Run documents changed; run again", manifest.experiment)
-        }
-        val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
-        if (
-            manifest.seed != expected.seed ||
-            manifest.replications != expected.replications ||
-            manifest.variants != expected.variants ||
-            manifest.grid != expected.grid ||
-            manifest.series != expected.series
-        ) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run metadata changed; run again", manifestPath)
-        }
-
-        val tasks =
-            compiled.variants.flatMap { variant ->
-                variant.points.flatMap { point ->
-                    (0 until compiled.run.replications).map { replication -> ExperimentTask(variant.id, point.id, replication) }
-                }
-            }
-        val invalid = ResumeArtifact(workspace).prepare(runDirectory, manifest, tasks)
-        val writer = ArtifactWriter(workspace)
-        val series = seriesWriters(compiled, runDirectory)
-        try {
-            executor.runSelected(
-                compiled,
-                invalid,
-                isCancelled = isCancelled,
-                onWindow = { variant, point, replication, window, rows ->
-                    series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows)
-                },
-                onReplication = { variant, point, replication, result ->
-                    writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
-                    series.getValue(ExperimentTask(variant, point, replication)).finish()
-                },
-                onProgress = onProgress,
-            )
+    ): RunOutcome =
+        withResumeLock(runDirectory) {
             checkCancellation(isCancelled)
-            return uninterruptedArtifactWrite {
-                val summary =
-                    writer.summarize(
-                        runDirectory,
-                        manifest.experiment,
-                        compiled.variants.map { it.id to it.label },
-                        compiled.run.replications,
-                        requireNotNull(manifest.series).points,
-                        manifest.grid,
-                    )
-                RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
+            val manifestPath = "$runDirectory/manifest.json"
+            val manifest = artifactJson.decodeFromString(RunManifest.serializer(), workspace.read(manifestPath).text)
+            if (manifest.schemaVersion != Versions.ARTIFACT_SCHEMA) {
+                throw UnsupportedArtifactVersionException("manifest", manifest.schemaVersion)
             }
-        } catch (failure: Exception) {
+            if (manifest.complete) throw resumeFailure("RUN_COMPLETE", "Run is already complete", manifestPath)
+            if (
+                manifest.applicationVersion != Versions.APPLICATION ||
+                manifest.kslVersion != Versions.KSL ||
+                manifest.streamAssignment != PathStreams.ASSIGNMENT_VERSION
+            ) {
+                throw resumeFailure("RUN_INCOMPATIBLE", "Run versions changed; run again", manifestPath)
+            }
+            val canonical =
+                runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
+            if (canonical != runDirectory) {
+                throw resumeFailure("RUN_INCOMPATIBLE", "Run directory does not match its manifest; run again", manifestPath)
+            }
+            val loaded = load(manifest.experiment)
+            val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+            if (loaded.artifactVersions != manifest.documents) {
+                throw resumeFailure("RUN_DOCUMENT_CHANGED", "Run documents changed; run again", manifest.experiment)
+            }
+            val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
+            if (
+                manifest.seed != expected.seed ||
+                manifest.replications != expected.replications ||
+                manifest.variants != expected.variants ||
+                manifest.grid != expected.grid ||
+                manifest.series != expected.series
+            ) {
+                throw resumeFailure("RUN_INCOMPATIBLE", "Run metadata changed; run again", manifestPath)
+            }
+
+            val tasks =
+                compiled.variants.flatMap { variant ->
+                    variant.points.flatMap { point ->
+                        (0 until compiled.run.replications).map { replication ->
+                            ExperimentTask(variant.id, point.id, replication)
+                        }
+                    }
+                }
+            val invalid = ResumeArtifact(workspace).prepare(runDirectory, manifest, tasks)
+            val writer = ArtifactWriter(workspace)
+            val series = seriesWriters(compiled, runDirectory)
             try {
-                writer.rewrite(runDirectory, manifest.copy(complete = false), null)
-            } catch (writingFailure: Exception) {
-                failure.addSuppressed(writingFailure)
+                executor.runSelected(
+                    compiled,
+                    invalid,
+                    isCancelled = isCancelled,
+                    onWindow = { variant, point, replication, window, rows ->
+                        series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows)
+                    },
+                    onReplication = { variant, point, replication, result ->
+                        writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
+                        series.getValue(ExperimentTask(variant, point, replication)).finish()
+                    },
+                    onProgress = onProgress,
+                )
+                checkCancellation(isCancelled)
+                return@withResumeLock uninterruptedArtifactWrite {
+                    val summary =
+                        writer.summarize(
+                            runDirectory,
+                            manifest.experiment,
+                            compiled.variants.map { it.id to it.label },
+                            compiled.run.replications,
+                            requireNotNull(manifest.series).points,
+                            manifest.grid,
+                        )
+                    RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
+                }
+            } catch (failure: Exception) {
+                try {
+                    writer.rewrite(runDirectory, manifest.copy(complete = false), null)
+                } catch (writingFailure: Exception) {
+                    failure.addSuppressed(writingFailure)
+                }
+                throw failure
             }
-            throw failure
         }
-    }
 
     private fun resumeFailure(
         code: String,
@@ -463,6 +467,33 @@ class Lab(
     ) : RuntimeException(diagnostic.message)
 
     companion object {
+        private class ResumeMonitor {
+            var users = 0
+        }
+
+        private val resumeMonitors = ConcurrentHashMap<String, ResumeMonitor>()
+
+        /** Serializes one run across facade instances and removes the monitor after its last waiting caller leaves. */
+        private fun <T> withResumeLock(
+            runDirectory: String,
+            action: () -> T,
+        ): T {
+            val monitor =
+                synchronized(resumeMonitors) {
+                    resumeMonitors.getOrPut(runDirectory) { ResumeMonitor() }.also { it.users++ }
+                }
+            try {
+                synchronized(monitor) {
+                    return action()
+                }
+            } finally {
+                synchronized(resumeMonitors) {
+                    monitor.users--
+                    if (monitor.users == 0) resumeMonitors.remove(runDirectory, monitor)
+                }
+            }
+        }
+
         /** Resolves [ref] against the directory of [documentPath]; null when it leaves the workspace or is not relative. */
         fun resolveRef(
             documentPath: String,

@@ -60,41 +60,52 @@ internal object CostEstimator {
     ): ExperimentEstimate {
         require(workers >= 1) { "workers must be at least 1" }
         val warnings = linkedMapOf<String, String>()
-        val tasks =
-            experiment.variants.flatMap { variant ->
-                variant.points.flatMap { point ->
-                    val chain = point.chain
-                    if (chain.services.size !in 50..5000) {
-                        warnings["ESTIMATE_EXTRAPOLATION"] =
-                            "S1 timing anchors cover 50–5000 services; actual time may differ substantially"
-                    }
-                    val perReplication = estimateTask(chain)
-                    if (perReplication.rawBytes > UI_CACHE_BYTES) {
-                        warnings["ESTIMATE_UI_CACHE"] =
-                            "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only"
-                    }
-                    (0 until experiment.run.replications).map { perReplication }
+        var taskCount = 0
+        var totalWork = 0.0
+        var longestTask = 0.0
+        var events = 0.0
+        var rows = 0L
+        var rawBytes = 0L
+        var artifactBytes = 0L
+        var parts = 0L
+        experiment.variants.forEach { variant ->
+            variant.points.forEach { point ->
+                val chain = point.chain
+                if (chain.services.size !in 50..5000) {
+                    warnings["ESTIMATE_EXTRAPOLATION"] =
+                        "S1 timing anchors cover 50–5000 services; actual time may differ substantially"
                 }
+                val perReplication = estimateTask(chain)
+                if (perReplication.rawBytes > UI_CACHE_BYTES) {
+                    warnings["ESTIMATE_UI_CACHE"] =
+                        "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only"
+                }
+                val count = experiment.run.replications
+                taskCount = Math.addExact(taskCount, count)
+                totalWork += perReplication.seconds * count
+                longestTask = maxOf(longestTask, perReplication.seconds)
+                events += perReplication.events * count
+                rows = Math.addExact(rows, Math.multiplyExact(perReplication.rows, count.toLong()))
+                rawBytes = Math.addExact(rawBytes, Math.multiplyExact(perReplication.rawBytes, count.toLong()))
+                artifactBytes = Math.addExact(artifactBytes, Math.multiplyExact(perReplication.artifactBytes, count.toLong()))
+                parts = Math.addExact(parts, Math.multiplyExact(perReplication.parts, count.toLong()))
             }
-        if (workers > 8) {
-            warnings["ESTIMATE_EXTRAPOLATION"] = "S1 parallel speedup is measured only up to 8 workers"
         }
-        val taskCount = tasks.size
-        val totalWork = tasks.sumOf { it.seconds }
-        val longestTask = tasks.maxOfOrNull { it.seconds } ?: 0.0
+        if (workers > 8) {
+            warnings["ESTIMATE_WORKER_EXTRAPOLATION"] = "S1 parallel speedup is measured only up to 8 workers"
+        }
         val effectiveWorkers = minOf(workers, taskCount).coerceAtLeast(1)
         val seconds = maxOf(totalWork / speedup(effectiveWorkers), longestTask)
-        val events = tasks.sumOf { it.events }
-        require(events.isFinite() && seconds.isFinite()) { "Experiment cost estimate exceeds numeric range" }
+        require(events.isFinite() && events >= 0.0 && seconds.isFinite()) { "Experiment cost estimate exceeds numeric range" }
         return ExperimentEstimate(
             tasks = taskCount,
             expectedEvents = events,
-            expectedRows = tasks.fold(0L) { total, task -> Math.addExact(total, task.rows) },
+            expectedRows = rows,
             workers = workers,
             estimatedSeconds = seconds,
-            estimatedUncompressedBytes = tasks.fold(0L) { total, task -> Math.addExact(total, task.rawBytes) },
-            estimatedArtifactBytes = tasks.fold(0L) { total, task -> Math.addExact(total, task.artifactBytes) },
-            estimatedParts = tasks.fold(0L) { total, task -> Math.addExact(total, task.parts) },
+            estimatedUncompressedBytes = rawBytes,
+            estimatedArtifactBytes = artifactBytes,
+            estimatedParts = parts,
             warnings = warnings.map { (code, message) -> EstimateWarning(code, message) },
         )
     }
@@ -113,13 +124,15 @@ internal object CostEstimator {
                 visits *= call.attempts
             }
         }
-        val fixedEvents = windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs) + 3 + 2 * chain.faults.size
+        val fixedEvents =
+            windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs).toDouble() +
+                3.0 + 2.0 * chain.faults.size
         return arrivals * perOriginalRequest + fixedEvents
     }
 
     private fun estimateTask(chain: ChainIr): TaskEstimate {
         val events = expectedEvents(chain)
-        require(events.isFinite()) { "Experiment event estimate exceeds numeric range" }
+        require(events.isFinite() && events >= 0.0) { "Experiment event estimate exceeds numeric range" }
         val windows = windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs)
         val rows = Math.multiplyExact((chain.services.size + 1).toLong(), windows.toLong())
         val rawBytes = Math.multiplyExact(rows, BYTES_PER_NODE_WINDOW)

@@ -223,6 +223,7 @@ class ArtifactWriter(
             if (!replaceExisting && workspace.exists(manifestPath)) throw DocumentExistsException(manifestPath)
             if (!replaceExisting && summary != null && workspace.exists(summaryPath)) throw DocumentExistsException(summaryPath)
 
+            if (replaceExisting && summary == null) workspace.delete(summaryPath)
             if (summary != null) {
                 val encoded = DocumentCodec.encode(RunSummary.serializer(), summary)
                 if (replaceExisting && workspace.exists(summaryPath)) {

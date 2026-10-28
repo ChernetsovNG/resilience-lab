@@ -92,6 +92,21 @@ class RunArtifactTest {
     }
 
     @Test
+    fun `incomplete rewrite removes a previously written summary`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val writer = ArtifactWriter(workspace)
+        writer.write(".results/e/run-1", manifest(), summary())
+
+        val rewritten = writer.rewrite(".results/e/run-1", manifest().copy(complete = false), null)
+
+        assertThat(workspace.exists(".results/e/run-1/summary.json")).isFalse()
+        assertThat(rewritten.complete).isFalse()
+        assertThat(rewritten.parts).doesNotContainKey("summary.json").doesNotContainKey("manifest.json")
+    }
+
+    @Test
     fun `rejects a manifest-only destination without creating a summary`(
         @TempDir root: Path,
     ) {

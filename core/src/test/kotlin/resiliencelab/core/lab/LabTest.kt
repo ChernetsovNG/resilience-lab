@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
+import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import resiliencelab.core.workspace.createSymbolicLink
 import java.nio.file.Files
@@ -240,6 +241,77 @@ class LabTest {
         val resumed = Lab(FileWorkspace(root)).use { it.resume(runDirectory) }
         assertThat(resumed.manifest.complete).isTrue()
         assertThat(root.resolve("$runDirectory/summary.json")).isRegularFile()
+    }
+
+    @Test
+    fun `concurrent resumes serialize and the second sees a completed run`() {
+        val root = exampleWorkspace()
+        val runDirectory = ".results/retry-storm/cancelled"
+        Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
+        val manifestPath = root.resolve("$runDirectory/manifest.json")
+        Files.writeString(manifestPath, Files.readString(manifestPath).replace("\"complete\": true", "\"complete\": false"))
+        Files.delete(root.resolve("$runDirectory/summary.json"))
+        Files.delete(root.resolve("$runDirectory/series/baseline/p0/rep-0/replication.json"))
+        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-0/replication.json"))
+        val backing = FileWorkspace(root)
+        val manifestReads = AtomicInteger()
+        val workspace =
+            object : Workspace by backing {
+                override fun read(path: String): VersionedDocument {
+                    if (path == "$runDirectory/manifest.json") manifestReads.incrementAndGet()
+                    return backing.read(path)
+                }
+            }
+        val firstProgress = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val first =
+            FutureTask<Throwable?> {
+                runCatching {
+                    Lab(workspace).use { lab ->
+                        lab.resume(runDirectory) { done, _ ->
+                            if (done == 1) {
+                                firstProgress.countDown()
+                                check(release.await(10, TimeUnit.SECONDS))
+                            }
+                        }
+                    }
+                }.exceptionOrNull()
+            }
+        val firstThread = thread(isDaemon = true) { first.run() }
+        val secondStarted = CountDownLatch(1)
+        val second =
+            FutureTask<Throwable?> {
+                secondStarted.countDown()
+                runCatching { Lab(workspace).use { it.resume(runDirectory) } }.exceptionOrNull()
+            }
+        val secondThread = thread(isDaemon = true) { second.run() }
+
+        try {
+            val progressed = firstProgress.await(5, TimeUnit.SECONDS)
+            if (!progressed) {
+                release.countDown()
+                assertThat(first.get(5, TimeUnit.SECONDS)).isNull()
+            }
+            assertThat(progressed).isTrue()
+            assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (secondThread.state != Thread.State.BLOCKED && manifestReads.get() == 1 && System.nanoTime() < deadline) {
+                Thread.yield()
+            }
+            assertThat(manifestReads.get()).isEqualTo(1)
+            assertThat(secondThread.state).isEqualTo(Thread.State.BLOCKED)
+            release.countDown()
+            assertThat(first.get(5, TimeUnit.SECONDS)).isNull()
+            val secondFailure = second.get(5, TimeUnit.SECONDS)
+            assertThat(secondFailure).isInstanceOf(InvalidExperimentException::class.java)
+            assertThat((secondFailure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_COMPLETE")
+        } finally {
+            release.countDown()
+            firstThread.interrupt()
+            secondThread.interrupt()
+            firstThread.join(5_000)
+            secondThread.join(5_000)
+        }
     }
 
     @Test

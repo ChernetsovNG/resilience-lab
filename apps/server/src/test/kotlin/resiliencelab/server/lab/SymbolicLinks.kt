@@ -15,10 +15,18 @@ internal fun createSymbolicLink(
     } catch (exception: FileAlreadyExistsException) {
         throw exception
     } catch (exception: FileSystemException) {
-        if (!System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) throw exception
+        if (!isMissingSymlinkPrivilege(exception)) throw exception
         assumeTrue(
             false,
             "Symbolic links require Windows Developer Mode or SeCreateSymbolicLinkPrivilege: ${exception.message}",
         )
         throw exception
     }
+
+internal fun isMissingSymlinkPrivilege(
+    exception: FileSystemException,
+    osName: String = System.getProperty("os.name"),
+): Boolean {
+    val message = exception.message?.lowercase().orEmpty()
+    return osName.startsWith("Windows", ignoreCase = true) && ("privilege" in message || "прав" in message)
+}
