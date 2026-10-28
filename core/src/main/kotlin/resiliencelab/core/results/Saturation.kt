@@ -101,28 +101,30 @@ object SaturationAnalyzer {
     private class NodeState {
         private var consecutive = 0
         private var streakStartMs = 0.0
-        var startMs: Double? = null
-            private set
+        private var streakSaturationMs: Double? = null
+        private var rejectionStartMs: Double? = null
+        val startMs: Double? get() = listOfNotNull(streakSaturationMs, rejectionStartMs).minOrNull()
 
         fun observe(
             metrics: WindowMetrics,
             rule: SaturationRule,
         ) {
-            if (startMs != null) return
-            val hot =
-                metrics.handlers > 0 &&
-                    metrics.durationMs > 0 &&
-                    metrics.busyHandlerTimeMs / (metrics.handlers * metrics.durationMs) >=
-                    rule.handlerUtilizationThreshold &&
-                    metrics.queueLengthIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
-            if (hot) {
-                if (consecutive == 0) streakStartMs = metrics.startMs
-                consecutive++
-                if (consecutive == rule.consecutiveWindows) startMs = streakStartMs
-            } else {
-                consecutive = 0
+            if (streakSaturationMs == null) {
+                val hot =
+                    metrics.handlers > 0 &&
+                        metrics.durationMs > 0 &&
+                        metrics.busyHandlerTimeMs / (metrics.handlers * metrics.durationMs) >=
+                        rule.handlerUtilizationThreshold &&
+                        metrics.queueLengthIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
+                if (hot) {
+                    if (consecutive == 0) streakStartMs = metrics.startMs
+                    consecutive++
+                    if (consecutive == rule.consecutiveWindows) streakSaturationMs = streakStartMs
+                } else {
+                    consecutive = 0
+                }
             }
-            if (startMs == null && metrics.queueRejections > 0) startMs = metrics.startMs
+            if (rejectionStartMs == null && metrics.queueRejections > 0) rejectionStartMs = metrics.startMs
         }
     }
 }

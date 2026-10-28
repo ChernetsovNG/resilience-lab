@@ -36,10 +36,19 @@ class SaturationTest {
     }
 
     @Test
-    fun `rejection in the third hot window keeps the earlier streak start`() {
-        val result = detect(listOf(hot(0.0), hot(10.0), hot(20.0, queueRejections = 1)))
+    fun `rejection in any hot window keeps the earlier streak start`() {
+        (0..2).forEach { rejectionWindow ->
+            val windows =
+                (0..2).map { window ->
+                    hot(window * 10.0, queueRejections = if (window == rejectionWindow) 1 else 0)
+                }
 
-        assertThat(result.degradationPath).containsExactly(SaturatedNode("service", 0.0))
+            val result = detect(windows)
+
+            assertThat(result.degradationPath)
+                .describedAs("rejection window $rejectionWindow")
+                .containsExactly(SaturatedNode("service", 0.0))
+        }
     }
 
     @Test
