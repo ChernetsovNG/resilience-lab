@@ -266,8 +266,12 @@ class CliTest {
         createIncomplete("installed-resume")
         val resumed = launch(listOf("resume", "installed-resume"))
         assertThat(resumed.exitCode).describedAs(resumed.stderr).isZero()
-        assertThat(resumed.stdout.lines().filter { it.isNotBlank() }.first())
-            .isEqualTo(".results/retry-storm/installed-resume")
+        assertThat(
+            resumed.stdout
+                .lines()
+                .filter { it.isNotBlank() }
+                .first(),
+        ).isEqualTo(".results/retry-storm/installed-resume")
         assertThat(workspace.resolve(".results/retry-storm/installed-resume/manifest.json").readText())
             .contains("\"complete\": true")
     }

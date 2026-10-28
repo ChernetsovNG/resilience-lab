@@ -151,8 +151,16 @@ class OpenApiSpecTest {
             "/api/v1/workspace/documents",
         )
         assertThat(schemas.keys)
-            .contains("ApiProblem", "BlockInstance", "ExperimentEstimate", "EstimateWarning", "JobView", "RunSummary", "SeriesIndex", "SeriesPart")
-            .doesNotContain("ApiError")
+            .contains(
+                "ApiProblem",
+                "BlockInstance",
+                "ExperimentEstimate",
+                "EstimateWarning",
+                "JobView",
+                "RunSummary",
+                "SeriesIndex",
+                "SeriesPart",
+            ).doesNotContain("ApiError")
         val params =
             schemas
                 .getValue("BlockInstance")

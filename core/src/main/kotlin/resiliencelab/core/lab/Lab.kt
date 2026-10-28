@@ -203,8 +203,7 @@ class Lab(
     private val artifactJson = Json { explicitNulls = false }
 
     /** Validates an incomplete run for resumption without changing its artifact or starting a model. */
-    fun validateResume(runDirectory: String): RunManifest =
-        withResumeLock(runDirectory) { prepareResume(runDirectory).manifest }
+    fun validateResume(runDirectory: String): RunManifest = withResumeLock(runDirectory) { prepareResume(runDirectory).manifest }
 
     /**
      * Resumes an incomplete artifact in place. Valid task files are preserved; missing or corrupt tasks are recomputed
