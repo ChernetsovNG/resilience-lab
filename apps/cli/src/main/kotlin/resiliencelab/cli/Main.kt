@@ -5,6 +5,7 @@ import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.document.DocumentSchemas
+import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.experiment.MetricSummary
 import resiliencelab.core.lab.InvalidExperimentException
@@ -12,6 +13,8 @@ import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.results.ResultsLayout
+import resiliencelab.core.results.RunCatalog
+import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
@@ -21,8 +24,8 @@ import java.util.concurrent.CancellationException
 import kotlin.system.exitProcess
 
 private const val USAGE =
-    "Usage: validate <experiment.json> | run [--workers N] <experiment.json> | " +
-        "catalog | schema <model|layout|experiment>"
+    "Usage: validate <experiment.json> | estimate <experiment.json> | run [--workers N] <experiment.json> | " +
+        "resume <run> | catalog | schema <model|layout|experiment>"
 
 private val apiJson = Json { encodeDefaults = true }
 private val documentKinds = setOf("model", "layout", "experiment")
@@ -30,7 +33,7 @@ private val documentKinds = setOf("model", "layout", "experiment")
 /** Runs one command against the current directory as the workspace and exits with its status. */
 fun main(args: Array<String>) {
     val status =
-        if (args.firstOrNull() == "run") {
+        if (args.firstOrNull() == "run" || args.firstOrNull() == "resume") {
             SignalCancellation().use { cancellation ->
                 runCommand(args.asList(), System.out, System.err, isCancelled = cancellation::isCancelled)
             }
@@ -51,9 +54,9 @@ internal typealias ExperimentRun = (
 
 /**
  * Executes one CLI command against the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
- * 2 for usage errors and invalid experiments, 1 for execution failures, 130 for cancellation. `run` writes the artifact to `.results/`,
- * progress to [stderr], and the run directory followed by one summary line per variant to [stdout]. `catalog` and `schema`
- * print core-generated JSON without opening the workspace.
+ * 2 for usage errors and invalid experiments, 1 for execution failures, 130 for cancellation. `run` and `resume` write
+ * progress to [stderr] and the run directory followed by one summary line per variant to [stdout]. `estimate` prints
+ * core JSON; `catalog` and `schema` print core-generated JSON without opening the workspace.
  */
 internal fun runCommand(
     args: List<String>,
@@ -72,16 +75,22 @@ internal fun runCommand(
     }
     val command = Command.parse(args) ?: return usage(stderr)
     val root = workspaceRoot.toAbsolutePath().normalize()
-    val experiment =
-        relativePath(root, command.experiment)
-            ?: return inputError(stderr, "experiment must be inside the workspace $root: ${command.experiment}")
+    val argument =
+        if (command.kind == CommandKind.RESUME) {
+            command.argument
+        } else {
+            relativePath(root, command.argument)
+                ?: return inputError(stderr, "experiment must be inside the workspace $root: ${command.argument}")
+        }
     val executor = command.workers?.let { ExperimentExecutor(it) } ?: ExperimentExecutor()
     return executor.use {
-        val lab = Lab(FileWorkspace(root), executor = executor)
-        if (command.run) {
-            run(lab, experiment, newRunId(), root, stdout, stderr, isCancelled, execute)
-        } else {
-            validate(lab, experiment, stderr)
+        val workspace = FileWorkspace(root)
+        val lab = Lab(workspace, executor = executor)
+        when (command.kind) {
+            CommandKind.VALIDATE -> validate(lab, argument, stderr)
+            CommandKind.ESTIMATE -> estimate(lab, argument, stdout, stderr)
+            CommandKind.RUN -> run(lab, argument, newRunId(), root, stdout, stderr, isCancelled, execute)
+            CommandKind.RESUME -> resume(lab, workspace, argument, root, stdout, stderr, isCancelled)
         }
     }
 }
@@ -99,18 +108,27 @@ private fun printSchema(
     return 0
 }
 
+private enum class CommandKind {
+    VALIDATE,
+    ESTIMATE,
+    RUN,
+    RESUME,
+}
+
 private class Command(
-    val run: Boolean,
-    val experiment: String,
+    val kind: CommandKind,
+    val argument: String,
     val workers: Int?,
 ) {
     companion object {
         fun parse(args: List<String>): Command? =
             when {
-                args.size == 2 && args[0] == "validate" -> Command(run = false, experiment = args[1], workers = null)
-                args.size == 2 && args[0] == "run" -> Command(run = true, experiment = args[1], workers = null)
+                args.size == 2 && args[0] == "validate" -> Command(CommandKind.VALIDATE, args[1], null)
+                args.size == 2 && args[0] == "estimate" -> Command(CommandKind.ESTIMATE, args[1], null)
+                args.size == 2 && args[0] == "run" -> Command(CommandKind.RUN, args[1], null)
+                args.size == 2 && args[0] == "resume" -> Command(CommandKind.RESUME, args[1], null)
                 args.size == 4 && args[0] == "run" && args[1] == "--workers" ->
-                    args[2].toIntOrNull()?.takeIf { it >= 1 }?.let { Command(run = true, experiment = args[3], workers = it) }
+                    args[2].toIntOrNull()?.takeIf { it >= 1 }?.let { Command(CommandKind.RUN, args[3], it) }
                 else -> null
             }
     }
@@ -128,6 +146,23 @@ private fun validate(
     return 0
 }
 
+private fun estimate(
+    lab: Lab,
+    experiment: String,
+    stdout: Appendable,
+    stderr: Appendable,
+): Int =
+    try {
+        val result = lab.estimate(experiment)
+        stdout.appendLine(apiJson.encodeToString(ExperimentEstimate.serializer(), result))
+        0
+    } catch (error: InvalidExperimentException) {
+        validationError(stderr, error.diagnostics)
+    } catch (error: Exception) {
+        stderr.appendLine("Execution failed: ${firstLine(error)}")
+        1
+    }
+
 private fun run(
     lab: Lab,
     experiment: String,
@@ -144,21 +179,73 @@ private fun run(
                 synchronized(stderr) { stderr.appendLine("Tasks $completed/$total") }
             }
         } catch (error: CancellationException) {
-            val directory = ResultsLayout.runDirectory(experiment, runId)
-            stderr.appendLine(
-                if (Files.isRegularFile(workspaceRoot.resolve("$directory/manifest.json"))) {
-                    "Cancelled: $directory"
-                } else {
-                    "Cancelled before an artifact was created"
-                },
-            )
-            return 130
+            return cancellation(workspaceRoot, ResultsLayout.runDirectory(experiment, runId), stderr)
         } catch (error: InvalidExperimentException) {
             return validationError(stderr, error.diagnostics)
         } catch (error: Exception) {
             stderr.appendLine("Execution failed: ${firstLine(error)}")
             return 1
         }
+    printOutcome(outcome, stdout)
+    return 0
+}
+
+private fun resume(
+    lab: Lab,
+    workspace: FileWorkspace,
+    argument: String,
+    workspaceRoot: Path,
+    stdout: Appendable,
+    stderr: Appendable,
+    isCancelled: () -> Boolean,
+): Int {
+    val entry = RunCatalog(workspace).entry(argument)
+    val directory =
+        when {
+            entry != null -> entry.directory
+            !argument.contains('/') && !argument.contains('\\') -> return inputError(stderr, "Run not found: $argument")
+            else ->
+                relativePath(workspaceRoot, argument)
+                    ?: return inputError(stderr, "run must be inside the workspace $workspaceRoot: $argument")
+        }
+    val outcome =
+        try {
+            lab.resume(directory, isCancelled) { completed, total ->
+                synchronized(stderr) { stderr.appendLine("Tasks $completed/$total") }
+            }
+        } catch (error: CancellationException) {
+            return cancellation(workspaceRoot, directory, stderr)
+        } catch (error: InvalidExperimentException) {
+            return validationError(stderr, error.diagnostics)
+        } catch (_: DocumentNotFoundException) {
+            return inputError(stderr, "Run not found: $argument")
+        } catch (error: Exception) {
+            stderr.appendLine("Execution failed: ${firstLine(error)}")
+            return 1
+        }
+    printOutcome(outcome, stdout)
+    return 0
+}
+
+private fun cancellation(
+    workspaceRoot: Path,
+    directory: String,
+    stderr: Appendable,
+): Int {
+    stderr.appendLine(
+        if (Files.isRegularFile(workspaceRoot.resolve("$directory/manifest.json"))) {
+            "Cancelled: $directory"
+        } else {
+            "Cancelled before an artifact was created"
+        },
+    )
+    return 130
+}
+
+private fun printOutcome(
+    outcome: RunOutcome,
+    stdout: Appendable,
+) {
     stdout.appendLine(outcome.runDirectory)
     outcome.summary.variants.forEach { variant ->
         variant.points.forEach { point ->
@@ -171,7 +258,6 @@ private fun run(
             )
         }
     }
-    return 0
 }
 
 private fun relativePath(
