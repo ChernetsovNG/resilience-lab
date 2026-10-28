@@ -1,8 +1,5 @@
-import type { ApiProblem, Diagnostic } from "../api/apiTypes";
-
-function locationOf(diagnostic: Diagnostic): string {
-  return [diagnostic.document, diagnostic.pointer].filter((part) => part != null && part !== "").join("#") || "experiment";
-}
+import type { ApiProblem } from "../api/apiTypes";
+import { locationOf } from "../validation/diagnostics";
 
 /** An API problem with its diagnostics (stage 1 design §4.1). */
 export function ProblemList({ problem }: { problem: ApiProblem }) {

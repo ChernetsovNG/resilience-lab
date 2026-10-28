@@ -2,11 +2,13 @@ import type {
   ApiProblem,
   Catalog,
   DocumentContent,
+  DocumentDraft,
   DocumentEntry,
   DocumentView,
   HealthView,
   JobView,
   RunSummary,
+  ValidationView,
 } from "./apiTypes";
 
 /** A failed API call with the server's problem body, or a generic one when the body is not JSON. */
@@ -53,6 +55,8 @@ export const api = {
   /** Writes a document; [version] is the one it was read with, or null for a new document. */
   saveDocument: (path: string, content: DocumentContent, version: string | null) =>
     request<DocumentEntry>(documentUrl(path), json("PUT", content, version === null ? {} : { "If-Match": `"${version}"` })),
+  validate: (experiment: string, drafts: DocumentDraft[] = []) =>
+    request<ValidationView>("/api/v1/validate", json("POST", { experiment, drafts })),
   submitJob: (experiment: string) => request<JobView>("/api/v1/jobs", json("POST", { experiment })),
   job: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}`),
   runSummary: (runId: string) => request<RunSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/summary`),

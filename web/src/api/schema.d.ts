@@ -228,6 +228,10 @@ export interface components {
             layout?: components["schemas"]["LayoutFile"] | null;
             model?: components["schemas"]["ModelFile"] | null;
         };
+        DocumentDraft: {
+            content: components["schemas"]["DocumentContent"];
+            path: string;
+        };
         DocumentEntry: {
             /** @enum {string} */
             kind: "MODEL" | "LAYOUT" | "EXPERIMENT";
@@ -417,6 +421,10 @@ export interface components {
             title: string;
             /** Format: int32 */
             version: number;
+        };
+        ValidationRequest: {
+            drafts?: components["schemas"]["DocumentDraft"][];
+            experiment: string;
         };
         ValidationView: {
             diagnostics: components["schemas"]["Diagnostic"][];
@@ -870,7 +878,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ExperimentRequest"];
+                "application/json": components["schemas"]["ValidationRequest"];
             };
         };
         responses: {

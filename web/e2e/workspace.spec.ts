@@ -23,6 +23,41 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("block-node")).toHaveCount(4);
 });
 
+test("validates zero handlers without saving and clears diagnostics after correction", async ({ page, request }, testInfo) => {
+  const url = `/api/v1/workspace/document?path=${encodeURIComponent(model)}`;
+  const original = await (await request.get(url)).json();
+  const gateway = page.getByTestId("rf__node-gateway");
+  await gateway.click();
+  const handlers = page.getByLabel("Handlers", { exact: true });
+  const savedValue = await handlers.inputValue();
+  await handlers.fill("0");
+  await handlers.press("Enter");
+
+  await expect(gateway.getByRole("img", { name: /problems: error/ })).toBeVisible();
+  await expect(handlers.locator("..").locator(".field-diagnostics")).toContainText("PARAM_RANGE");
+  await page.getByRole("tab", { name: "Problems", exact: true }).click();
+  const problems = page.getByRole("tabpanel");
+  await expect(problems.getByRole("button", { name: /PARAM_RANGE/ }).first()).toBeVisible();
+  await expect(problems).toContainText("/blocks/gateway/params/handlers");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await problems.getByRole("button", { name: /PARAM_RANGE/ }).first().click();
+  await expect(page.getByRole("tab", { name: "Model", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "gateway", exact: true })).toBeVisible();
+  expect(await (await request.get(url)).json()).toEqual(original);
+  await expectNoPageScroll(page);
+  await page.screenshot({ path: testInfo.outputPath("draft-validation.png") });
+
+  await handlers.fill(savedValue);
+  await handlers.press("Enter");
+  await expect(gateway.getByRole("img", { name: /problems: error/ })).toBeHidden();
+  await expect(handlers.locator("..").locator(".field-diagnostics")).toBeHidden();
+  await expect(problems.getByRole("button", { name: /PARAM_RANGE/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  expect(await (await request.get(url)).json()).toEqual(original);
+});
+
 test("shows variant pages read-only with their overrides and edits only on the model page", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const call = page.getByTestId("rf__edge-gateway-to-middle");

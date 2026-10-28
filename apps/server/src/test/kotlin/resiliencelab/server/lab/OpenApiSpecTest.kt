@@ -1,7 +1,9 @@
 package resiliencelab.server.lab
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -44,6 +46,22 @@ class OpenApiSpecTest {
 
         assertThat(file).exists()
         assertThat(Files.readString(file)).describedAs("apps/server/openapi.json is stale; regenerate it").isEqualTo(generated)
+    }
+
+    @Test
+    fun `validation drafts are optional in the generated request contract`() {
+        val request =
+            Json
+                .parseToJsonElement(generated())
+                .jsonObject
+                .getValue("components")
+                .jsonObject
+                .getValue("schemas")
+                .jsonObject
+                .getValue("ValidationRequest")
+                .jsonObject
+        val required = request.getValue("required").jsonArray.map { it.jsonPrimitive.content }
+        assertThat(required).contains("experiment").doesNotContain("drafts")
     }
 
     @Test

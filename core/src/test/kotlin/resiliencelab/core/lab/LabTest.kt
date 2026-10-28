@@ -40,6 +40,67 @@ class LabTest {
     }
 
     @Test
+    fun `validates draft model without replacing the saved document`() {
+        val root = exampleWorkspace()
+        val files = FileWorkspace(root)
+        val original = files.read(model)
+        val draft = original.text.replace("\"handlers\": 4", "\"handlers\": 0")
+
+        Lab(files).use { lab ->
+            val report = lab.validate(experiment, mapOf(model to draft))
+
+            assertThat(report.valid).isFalse()
+            assertThat(report.diagnostics).anySatisfy {
+                assertThat(it.document).isEqualTo(model)
+                assertThat(it.path).isEqualTo("gateway")
+                assertThat(it.pointer).isEqualTo("/blocks/gateway/params/handlers")
+            }
+            assertThat(files.read(model)).isEqualTo(original)
+            assertThat(lab.validate(experiment).valid).isTrue()
+        }
+    }
+
+    @Test
+    fun `validates newly created draft experiment model and layout together`() {
+        val root = exampleWorkspace()
+        val files = FileWorkspace(root)
+        val drafts =
+            mapOf(
+                "new/new.experiment.json" to
+                    files
+                        .read(experiment)
+                        .text
+                        .replace("retry-storm.model.json", "new.model.json")
+                        .replace("retry-storm.layout.json", "new.layout.json"),
+                "new/new.model.json" to files.read(model).text,
+                "new/new.layout.json" to """{"schemaVersion":1,"positions":{}}""",
+            )
+
+        Lab(files).use { lab ->
+            assertThat(lab.validate("new/new.experiment.json", drafts).valid).isTrue()
+        }
+        assertThat(root.resolve("new")).doesNotExist()
+    }
+
+    @Test
+    fun `drafts cannot bypass workspace path boundaries`() {
+        val root = exampleWorkspace()
+        Lab(FileWorkspace(root)).use { lab ->
+            listOf("../escape.model.json", "/escape.model.json", "a/../escape.model.json").forEach { path ->
+                assertThatThrownBy { lab.validate(experiment, mapOf(path to "{}")) }
+                    .isInstanceOf(resiliencelab.core.workspace.InvalidDocumentPathException::class.java)
+            }
+        }
+        val outside = temp.resolve("outside")
+        Files.createDirectory(outside)
+        Files.createSymbolicLink(root.resolve("link"), outside)
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy { lab.validate(experiment, mapOf("link/new.model.json" to "{}")) }
+                .isInstanceOf(resiliencelab.core.workspace.InvalidDocumentPathException::class.java)
+        }
+    }
+
+    @Test
     fun `a pre cancelled run leaves no artifact`() {
         val root = exampleWorkspace()
 
