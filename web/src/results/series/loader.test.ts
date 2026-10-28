@@ -27,8 +27,8 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
   };
 }
 
-function part(nodes: SeriesPart["nodes"]): SeriesPart {
-  return { schemaVersion: 1, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes };
+function part(nodes: SeriesPart["nodes"], fromWindow = 0, untilWindow = fromWindow + 2): SeriesPart {
+  return { schemaVersion: 1, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes };
 }
 
 function fixture() {
@@ -53,7 +53,7 @@ function fixture() {
   return { index, texts };
 }
 
-function apiFor(index: SeriesIndex, texts: string[], etags = [`"${CLIENT_SHA}"`, `"${SERVICE_SHA}"`]) {
+function apiFor(index: SeriesIndex, texts: string[], etags = index.parts.map((part) => `"${part.sha256}"`)) {
   return {
     seriesIndex: vi.fn(async () => index),
     seriesPart: vi.fn(async (_run: string, _variant: string, _cell: string, _replication: number, partNumber: number) => ({
@@ -92,15 +92,64 @@ describe("series loader", () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
-  it("loads a client part when a selected service needs its amplification denominator", async () => {
+  it("loads only the client and reuses one decoder during fallback", async () => {
     const { index, texts } = fixture();
+    const unrelated = part([{ id: "unrelated", windows: [window({ handlers: 1 }), window({ startMs: 10, handlers: 1 })] }]);
+    const allTexts = [...texts, JSON.stringify(unrelated)];
+    const expandedIndex: SeriesIndex = {
+      ...index,
+      parts: [...index.parts, {
+        file: "part-2.json.gz",
+        nodes: ["unrelated"],
+        fromWindow: 0,
+        untilWindow: 2,
+        uncompressedBytes: allTexts[2].length,
+        sha256: "c".repeat(64),
+      }],
+    };
+    const api = apiFor(expandedIndex, allTexts);
+    const close = vi.fn();
+    const factory = vi.fn(() => ({
+      decode: async (values: readonly string[]) => values.map(decodeSeriesPart),
+      close,
+    }));
+    const loader = new SeriesLoader({ api, decoderFactory: factory });
+
+    const result = await loader.load(request(["service"]));
+
+    expect(result[0].windows.map((value) => value.amplification)).toEqual([1.5, 2]);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1, 0]);
+  });
+
+  it("finds a missing client window after a full window and a split window", async () => {
+    const parts = [
+      part([
+        { id: "client", windows: [window({ originalArrivals: 10 })] },
+        { id: "service", windows: [window({ handlers: 2, admittedAttempts: 15 })] },
+      ], 0, 1),
+      part([{ id: "service", windows: [window({ startMs: 10, handlers: 2, admittedAttempts: 40 })] }], 1, 2),
+      part([{ id: "client", windows: [window({ startMs: 10, originalArrivals: 20 })] }], 1, 2),
+    ];
+    const texts = parts.map((value) => JSON.stringify(value));
+    const index: SeriesIndex = {
+      schemaVersion: 1,
+      endMs: 20,
+      windowMs: 10,
+      parts: [
+        { file: "part-0.json.gz", nodes: ["client", "service"], fromWindow: 0, untilWindow: 1, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
+        { file: "part-1.json.gz", nodes: ["service"], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
+        { file: "part-2.json.gz", nodes: ["client"], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[2].length, sha256: "c".repeat(64) },
+      ],
+    };
     const api = apiFor(index, texts);
     const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
 
     const result = await loader.load(request(["service"]));
 
     expect(result[0].windows.map((value) => value.amplification)).toEqual([1.5, 2]);
-    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1, 0]);
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1, 2]);
   });
 
   it("rejects an ETag that does not match the index checksum", async () => {

@@ -20,13 +20,15 @@ export function decodeSeriesPart(text: string): DecodedSeriesPart {
     untilWindow: part.untilWindow,
     nodes: part.nodes.map((node) => ({
       id: node.id,
-      windows: node.windows.map((window, offset) => decodeWindow(window, arrivals.get(part.fromWindow + offset) ?? 0)),
+      windows: node.windows.map((window, offset) =>
+        decodeWindow(window, arrivals.get(part.fromWindow + offset) ?? 0, part.profile),
+      ),
     })),
   };
 }
 
-function decodeWindow(window: RawWindow, originalArrivals: number): DecodedWindow {
-  const sketch = LatencySketch.decode(LATENCY_PROFILE, window.latency.sketch);
+function decodeWindow(window: RawWindow, originalArrivals: number, profile: string): DecodedWindow {
+  const sketch = LatencySketch.decode(profile, window.latency.sketch);
   const metrics = metricsOf(window, sketch);
   if (window.handlers > 0) {
     metrics.amplification = originalArrivals === 0 ? null : window.admittedAttempts / originalArrivals;
@@ -62,5 +64,3 @@ function metricsOf(window: RawWindow, sketch: LatencySketch): WindowMetricValues
     amplification: null,
   };
 }
-
-const LATENCY_PROFILE = "ddsketch-bitwise6-rational-v1";

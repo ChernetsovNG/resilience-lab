@@ -121,4 +121,11 @@ describe("window metrics", () => {
       amplification: null,
     });
   });
+
+  it("rejects the part wire profile instead of interpreting it as bitwise6", () => {
+    const invalid = part([{ id: "client", windows: [window({}), window({ startMs: 10 })] }]);
+    invalid.profile = "other";
+
+    expect(() => decodeSeriesPart(JSON.stringify(invalid))).toThrow("Unsupported sketch profile: other");
+  });
 });

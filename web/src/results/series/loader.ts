@@ -67,8 +67,12 @@ export class SeriesLoader {
   async load(request: SeriesLoadRequest): Promise<NodeSeriesMetrics[]> {
     throwIfAborted(request.signal);
     let decoder: SeriesDecoder | undefined;
+    const getDecoder = () => {
+      decoder ??= this.decoderFactory();
+      return decoder;
+    };
     try {
-      const loading = this.loadInternal(request, (value) => { decoder = value; });
+      const loading = this.loadInternal(request, getDecoder);
       return await withAbort(loading, request.signal, () => decoder?.close());
     } catch (error) {
       if (error instanceof SeriesLoadError || isAbort(error)) throw error;
@@ -83,7 +87,7 @@ export class SeriesLoader {
 
   private async loadInternal(
     request: SeriesLoadRequest,
-    setDecoder: (decoder: SeriesDecoder) => void,
+    getDecoder: () => SeriesDecoder,
   ): Promise<NodeSeriesMetrics[]> {
     const index = await this.api.seriesIndex(
       request.runId,
@@ -94,23 +98,39 @@ export class SeriesLoader {
     );
     throwIfAborted(request.signal);
     const selected = selectSeriesParts(index, request.nodes, request.fromWindow, request.untilWindow);
-    const parts = await this.loadReferences(request, selected, setDecoder);
-    if (needsClient(parts, request.nodes)) {
-      const allNodes = index.parts.flatMap((part) => part.nodes);
-      const remaining = selectSeriesParts(index, allNodes, request.fromWindow, request.untilWindow)
-        .filter((reference) => !parts.has(reference.file));
-      if (remaining.length > 0) {
-        const extra = await this.loadReferences(request, remaining, setDecoder);
-        for (const [file, part] of extra) parts.set(file, part);
-      }
-    }
+    const parts = await this.loadReferences(request, selected, getDecoder);
+    await this.ensureClients(index, parts, request, getDecoder);
     return assemble(parts, request);
+  }
+
+  private async ensureClients(
+    index: SeriesIndex,
+    parts: Map<string, DecodedSeriesPart>,
+    request: SeriesLoadRequest,
+    getDecoder: () => SeriesDecoder,
+  ): Promise<void> {
+    let missing = missingClientWindows(parts, request);
+    while (missing.size > 0) {
+      const clientIds = clientIdsOf(parts);
+      const clientParts = index.parts.filter((reference) =>
+        !parts.has(reference.file) && reference.nodes.some((id) => clientIds.has(id)) && overlapsAny(reference, missing),
+      );
+      const candidate = clientParts[0] ?? index.parts.find((reference) =>
+        !parts.has(reference.file) && overlapsAny(reference, missing),
+      );
+      if (candidate === undefined) {
+        throw new SeriesLoadError("INVALID_SERIES", "Client series are missing for requested service windows.");
+      }
+      const extra = await this.loadReferences(request, [candidate], getDecoder);
+      for (const [file, part] of extra) parts.set(file, part);
+      missing = missingClientWindows(parts, request);
+    }
   }
 
   private async loadReferences(
     request: SeriesLoadRequest,
     references: readonly SeriesPartReference[],
-    setDecoder: (decoder: SeriesDecoder) => void,
+    getDecoder: () => SeriesDecoder,
   ): Promise<Map<string, DecodedSeriesPart>> {
     const result = new Map<string, DecodedSeriesPart>();
     const missing: SeriesPartReference[] = [];
@@ -141,9 +161,7 @@ export class SeriesLoader {
       }
       return { reference, partNumber, text: raw.text };
     }));
-    const decoder = this.decoderFactory();
-    setDecoder(decoder);
-    const decoded = await decoder.decode(fetched.map((part) => part.text));
+    const decoded = await getDecoder().decode(fetched.map((part) => part.text));
     throwIfAborted(request.signal);
     if (decoded.length !== fetched.length) {
       throw new SeriesLoadError("INVALID_SERIES", "Series worker returned a different number of parts.");
@@ -181,18 +199,39 @@ function estimatedBytes(reference: SeriesPartReference, part: DecodedSeriesPart)
   return Math.max(reference.uncompressedBytes, decodedEstimate);
 }
 
-function needsClient(parts: ReadonlyMap<string, DecodedSeriesPart>, requestedNodes: readonly string[]): boolean {
-  const requested = new Set(requestedNodes);
-  let service = false;
-  let client = false;
+function clientIdsOf(parts: ReadonlyMap<string, DecodedSeriesPart>): ReadonlySet<string> {
+  const result = new Set<string>();
   for (const part of parts.values()) {
     for (const node of part.nodes) {
-      const isClient = node.windows.every((window) => window.handlers === 0);
-      client ||= isClient;
-      service ||= requested.has(node.id) && node.windows.some((window) => window.handlers > 0);
+      if (node.windows.every((window) => window.handlers === 0)) result.add(node.id);
     }
   }
-  return service && !client;
+  return result;
+}
+
+function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): Set<number> {
+  const requested = new Set(request.nodes);
+  const covered = new Set<number>();
+  const services = new Set<number>();
+  for (const part of parts.values()) {
+    for (const node of part.nodes) {
+      const client = node.windows.every((window) => window.handlers === 0);
+      for (const [offset, window] of node.windows.entries()) {
+        const index = part.fromWindow + offset;
+        if (index < request.fromWindow || index >= request.untilWindow) continue;
+        if (client) covered.add(index);
+        else if (requested.has(node.id) && window.handlers > 0) services.add(index);
+      }
+    }
+  }
+  return new Set([...services].filter((index) => !covered.has(index)));
+}
+
+function overlapsAny(reference: SeriesPartReference, windows: ReadonlySet<number>): boolean {
+  for (const window of windows) {
+    if (reference.fromWindow <= window && window < reference.untilWindow) return true;
+  }
+  return false;
 }
 
 function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): NodeSeriesMetrics[] {
