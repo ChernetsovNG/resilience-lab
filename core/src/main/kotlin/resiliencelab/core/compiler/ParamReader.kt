@@ -12,7 +12,8 @@ import resiliencelab.core.catalog.Quantities
 /** Where overridden values of one element come from: parameter path (`attempts`, `backoff.base`) → experiment pointer. */
 internal class OverrideOrigins(
     val document: String,
-    private val pointers: Map<String, String>,
+    val pointers: Map<String, String>,
+    val variant: String? = null,
 ) {
     /** Pointer of the override that set [parameter] or an object holding it; null when the value comes from the model. */
     fun pointerOf(parameter: String): String? =
@@ -156,7 +157,7 @@ internal class ParamReader(
             if (override == null) {
                 Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path)
             } else {
-                Diagnostic(code, Severity.ERROR, message, overrides.document, override, path)
+                Diagnostic(code, Severity.ERROR, message, overrides.document, override, path, overrides.variant)
             }
     }
 }

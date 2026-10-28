@@ -169,7 +169,7 @@ class ModelLinterTest {
     }
 
     @Test
-    fun `common warnings occur once while different warnings name their variants`() {
+    fun `common warnings occur once while different warnings carry their variants`() {
         val a = chain.copy(client = chain.client.copy(deadlineMs = 10.0))
         val b = a.copy(calls = a.calls.map { if (it.path == "a-b") it.copy(timeoutMs = 200.0) else it })
         val result =
@@ -181,11 +181,14 @@ class ModelLinterTest {
             )
 
         val deadlines = result.filter { it.code == "LINT_DEADLINE_BUDGET" }
-        assertThat(deadlines).hasSize(2)
-        assertThat(deadlines.single { "120" in it.message }.message).contains("one", "two").doesNotContain("three")
-        assertThat(deadlines.single { "220" in it.message }.message).contains("three").doesNotContain("one", "two")
+        assertThat(deadlines).hasSize(3)
+        assertThat(deadlines.map { it.variant }).containsExactly("one", "two", "three")
+        assertThat(deadlines.count { "120" in it.message }).isEqualTo(2)
+        assertThat(deadlines.count { "220" in it.message }).isEqualTo(1)
+        assertThat(deadlines).allSatisfy { assertThat(it.message).doesNotContain("variants:") }
         val common = linter.lint(CompiledExperiment(listOf(CompiledVariant("one", "One", a), CompiledVariant("two", "Two", a)), chain.run))
         assertThat(common.filter { it.code == "LINT_DEADLINE_BUDGET" }).hasSize(1)
+        assertThat(common.single { it.code == "LINT_DEADLINE_BUDGET" }.variant).isNull()
         assertThat(common.single { it.code == "LINT_DEADLINE_BUDGET" }.message).doesNotContain("one", "two")
     }
 

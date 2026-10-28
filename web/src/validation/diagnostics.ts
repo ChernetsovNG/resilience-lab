@@ -4,7 +4,8 @@ import { elementOf } from "../workspace/params";
 
 /** Human-readable document location shared by API and validation problem lists. */
 export function locationOf(diagnostic: Diagnostic): string {
-  return [diagnostic.document, diagnostic.pointer].filter((part) => part != null && part !== "").join("#") || "experiment";
+  const location = [diagnostic.document, diagnostic.pointer].filter((part) => part != null && part !== "").join("#") || "experiment";
+  return diagnostic.variant == null ? location : `${diagnostic.variant} · ${location}`;
 }
 
 export interface DiagnosticTarget {
@@ -21,6 +22,7 @@ export function diagnosticTarget(
 ): DiagnosticTarget {
   const target: DiagnosticTarget = { element: null, field: null, variant: null };
   if (diagnostic.document != null && diagnostic.document !== documents.modelPath && diagnostic.document !== documents.experimentPath) return target;
+  target.variant = diagnostic.variant ?? null;
   const tokens = (diagnostic.pointer ?? "").split("/").slice(1).map((token) => token.replace(/~1/g, "/").replace(/~0/g, "~"));
   const existingElement = (id: string | null | undefined) => id != null && elementOf(documents.model, id) !== null ? id : null;
   target.element = existingElement(diagnostic.path);
@@ -30,7 +32,7 @@ export function diagnosticTarget(
     if (target.element !== null && tokens[2] === "params") target.field = tokens.slice(3).join(".") || null;
   } else if (diagnostic.document === documents.experimentPath) {
     if (tokens[0] === "variants") {
-      target.variant = documents.experiment.variants[Number(tokens[1])]?.id ?? null;
+      if (diagnostic.variant === undefined) target.variant = documents.experiment.variants[Number(tokens[1])]?.id ?? null;
       if (tokens[2] === "overrides" && tokens[3] !== undefined) {
         const [element, ...parameter] = tokens[3].split(".");
         target.element ??= existingElement(element);

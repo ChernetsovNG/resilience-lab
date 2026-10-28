@@ -255,6 +255,7 @@ export interface components {
             pointer?: string | null;
             /** @enum {string} */
             severity: "ERROR" | "WARNING";
+            variant?: string | null;
         };
         DocumentContent: {
             experiment?: components["schemas"]["ExperimentFile"] | null;

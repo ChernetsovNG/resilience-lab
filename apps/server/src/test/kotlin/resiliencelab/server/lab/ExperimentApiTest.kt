@@ -42,11 +42,13 @@ class ExperimentApiTest {
         assertThat(JsonPath.read<List<String>>(valid.contentAsString, "$.diagnostics[*].code"))
             .containsExactlyInAnyOrder("LINT_TIMEOUT_BUDGET", "LINT_DEADLINE_BUDGET")
         assertThat(JsonPath.read<List<String>>(valid.contentAsString, "$.diagnostics[*].severity")).containsOnly("WARNING")
+        assertThat(JsonPath.read<List<String>>(valid.contentAsString, "$.diagnostics[*].variant")).containsOnly("baseline")
         openApi.assertResponse("post", "/api/v1/validate", valid)
 
         val missing = postJson("/api/v1/validate", """{"experiment":"missing.experiment.json"}""")
         assertThat(JsonPath.read<Boolean>(missing.contentAsString, "$.valid")).isFalse()
         assertThat(JsonPath.read<String>(missing.contentAsString, "$.diagnostics[0].code")).isEqualTo("DOCUMENT_MISSING")
+        assertThat(JsonPath.read<String?>(missing.contentAsString, "$.diagnostics[0].variant")).isNull()
         openApi.assertResponse("post", "/api/v1/validate", missing)
     }
 

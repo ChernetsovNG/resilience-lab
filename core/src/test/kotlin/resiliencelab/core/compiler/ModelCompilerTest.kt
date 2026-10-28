@@ -1,7 +1,10 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.catalog.TypeCategory
@@ -110,6 +113,45 @@ class ModelCompilerTest {
             Triple("PARAM_RANGE", "e.experiment.json", "/variants/1/overrides/gateway-to-dependency.attempts"),
             Triple("QUANTITY_INVALID", "e.experiment.json", "/variants/1/overrides/gateway-to-dependency.backoff.base"),
         )
+        assertThat(diagnostics).allSatisfy {
+            assertThat(Json.encodeToJsonElement(it).jsonObject["variant"]).isEqualTo(JsonPrimitive("no-retries"))
+        }
+    }
+
+    @Test
+    fun `linter warnings point to the overridden value and carry the variant`() {
+        listOf(
+            Triple("LINT_TIMEOUT_BUDGET", "gateway-to-dependency.timeout", "\"1ms\""),
+            Triple("LINT_RETRY_AMPLIFICATION", "gateway-to-dependency.attempts", "11"),
+            Triple("LINT_HANDLERS_LITTLE", "gateway.handlers", "1"),
+            Triple("LINT_DEADLINE_BUDGET", "client.deadline", "\"1ms\""),
+        ).forEach { (code, parameter, value) ->
+            val changed = experiment.replace("\"gateway-to-dependency.attempts\": 1", "\"$parameter\": $value")
+            val compiled = compile(experimentText = changed)
+            assertThat(compiled.diagnostics).isEmpty()
+
+            val warning = ModelLinter().lint(compiled.experiment!!).single { it.code == code }
+
+            assertThat(warning.document).isEqualTo("e.experiment.json")
+            assertThat(warning.pointer).isEqualTo("/variants/1/overrides/$parameter")
+            assertThat(warning.path).isEqualTo(parameter.substringBefore('.'))
+            assertThat(Json.encodeToJsonElement(warning).jsonObject["variant"]).isEqualTo(JsonPrimitive("no-retries"))
+            assertThat(warning.message).doesNotContain("variants:")
+        }
+    }
+
+    @Test
+    fun `a warning from the only variant override retains its variant`() {
+        val source = experiment()
+        val solo = source.variants.last().copy(id = "solo", overrides = mapOf("gateway.handlers" to JsonPrimitive(1)))
+        val compiled = compiler.compile(model(), "m.model.json", source.copy(variants = listOf(solo)), "e.experiment.json")
+
+        val warning = ModelLinter().lint(compiled.experiment!!).single()
+
+        assertThat(warning.code).isEqualTo("LINT_HANDLERS_LITTLE")
+        assertThat(warning.variant).isEqualTo("solo")
+        assertThat(warning.document).isEqualTo("e.experiment.json")
+        assertThat(warning.pointer).isEqualTo("/variants/0/overrides/gateway.handlers")
     }
 
     @Test
@@ -234,6 +276,7 @@ class ModelCompilerTest {
         assertThat(diagnostic.code).isEqualTo("OVERRIDE_PATH")
         assertThat(diagnostic.pointer).isEqualTo("/variants/1/overrides/gateway-to-dependency.retries")
         assertThat(diagnostic.document).isEqualTo("e.experiment.json")
+        assertThat(diagnostic.variant).isEqualTo("no-retries")
     }
 
     @Test
@@ -645,7 +688,14 @@ class ModelCompilerTest {
     @Test
     fun `checks variant ids`() {
         val duplicate = experiment.replace("\"id\": \"no-retries\"", "\"id\": \"baseline\"")
-        assertThat(codes(compile(experimentText = duplicate))).contains("VARIANT_DUPLICATE")
+        val duplicateDiagnostic = compile(experimentText = duplicate).diagnostics.single { it.code == "VARIANT_DUPLICATE" }
+        assertThat(duplicateDiagnostic.variant).isEqualTo("baseline")
+        assertThat(duplicateDiagnostic.pointer).isEqualTo("/variants/1/id")
+
+        val invalid = experiment.replace("\"id\": \"no-retries\"", "\"id\": \"invalid id\"")
+        val invalidDiagnostic = compile(experimentText = invalid).diagnostics.single { it.code == "ID_INVALID" }
+        assertThat(invalidDiagnostic.variant).isEqualTo("invalid id")
+        assertThat(invalidDiagnostic.pointer).isEqualTo("/variants/1/id")
 
         val none = experiment.replace(Regex("\"variants\": \\[.*]}"), "\"variants\": []}")
         assertThat(codes(compile(experimentText = none))).contains("VARIANT_EMPTY")

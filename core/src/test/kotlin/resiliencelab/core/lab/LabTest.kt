@@ -228,7 +228,8 @@ class LabTest {
         assertThat(report.diagnostics).allSatisfy {
             assertThat(it.severity).isEqualTo(resiliencelab.core.compiler.Severity.WARNING)
             assertThat(it.document).isEqualTo(model)
-            assertThat(it.message).contains("baseline").doesNotContain("no-retries")
+            assertThat(it.variant).isEqualTo("baseline")
+            assertThat(it.message).doesNotContain("variants:")
         }
         assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("80", "189")
         assertThat(report.diagnostics.single { it.code == "LINT_DEADLINE_BUDGET" }.message).contains("250", "420")

@@ -58,6 +58,66 @@ test("validates zero handlers without saving and clears diagnostics after correc
   expect(await (await request.get(url)).json()).toEqual(original);
 });
 
+test("keeps baseline lint warnings on their variant page and navigates there from Problems", async ({ page }) => {
+  const call = page.getByTestId("rf__edge-gateway-to-middle");
+  await call.click();
+  const timeout = page.getByLabel("Timeout", { exact: true });
+  const fieldMessages = timeout.locator("..").locator(".field-diagnostics");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await expect(fieldMessages).toBeHidden();
+  await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
+  await expect(call).not.toContainText("⚠");
+
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await expect(timeout).toHaveValue("80ms");
+  await expect(fieldMessages).toContainText("LINT_TIMEOUT_BUDGET");
+  await expect(call).toContainText("⚠ 1");
+  await expect(page.getByTestId("rf__node-client").getByRole("img", { name: /problems: warning/ })).toBeVisible();
+
+  await page.getByRole("tab", { name: "No retries", exact: true }).click();
+  await timeout.fill("120ms");
+  await timeout.press("Enter");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await expect(fieldMessages).toBeHidden();
+  await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
+  await expect(call).not.toContainText("⚠");
+  await page.getByRole("tab", { name: "Problems", exact: true }).click();
+  const problems = page.getByRole("tabpanel");
+  const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
+  await expect(warning).toContainText("baseline");
+  await expect(problems.getByRole("button", { name: /LINT_DEADLINE_BUDGET/ })).toContainText("baseline");
+  await warning.click();
+  await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(timeout).toHaveValue("80ms");
+  await expect(fieldMessages).toContainText("LINT_TIMEOUT_BUDGET");
+  await expectNoPageScroll(page);
+});
+
+test("keeps a warning from the only variant override off Model and opens its variant", async ({ page }) => {
+  const path = "variant-warning/single.experiment.json";
+  await withExperimentFixture(path, (document) => {
+    document.variants = [{ id: "solo", label: "Solo", overrides: { "gateway.handlers": 1 } }];
+  }, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByTestId("rf__node-gateway").click();
+    const handlers = page.getByLabel("Handlers", { exact: true });
+    const fieldMessages = handlers.locator("..").locator(".field-diagnostics");
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+    await expect(handlers).toHaveValue("4");
+    await expect(fieldMessages).toBeHidden();
+    await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
+    await page.getByRole("tab", { name: "Problems", exact: true }).click();
+    const warning = page.getByRole("tabpanel").getByRole("button", { name: /LINT_HANDLERS_LITTLE/ });
+    await expect(warning).toContainText("solo");
+    await warning.click();
+    await expect(page.getByRole("tab", { name: "Solo", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(handlers).toHaveValue("1");
+    await expect(fieldMessages).toContainText("LINT_HANDLERS_LITTLE");
+    await expectNoPageScroll(page);
+  });
+});
+
 test("shows each variant with its own overrides and editable parameters", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const call = page.getByTestId("rf__edge-gateway-to-middle");
