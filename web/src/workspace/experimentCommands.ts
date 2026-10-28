@@ -119,9 +119,15 @@ export function removeVariant(id: string): EditorCommand {
   });
 }
 
-/** Run settings apply to every variant, independently of the currently displayed page. */
+/** Run settings apply to every variant, independently of the currently displayed page.
+ * Clearing an optional field removes it from the document. */
 export function setExecutionParam<K extends keyof Execution>(name: K, value: Execution[K]): EditorCommand {
-  return editExperiment((experiment) => ({ ...experiment, execution: { ...experiment.execution, [name]: value } }));
+  return editExperiment((experiment) => {
+    const execution = { ...experiment.execution };
+    if (value === undefined) delete execution[name];
+    else execution[name] = value;
+    return { ...experiment, execution };
+  });
 }
 
 /** Append a shared fault without changing the order or content of existing faults. */

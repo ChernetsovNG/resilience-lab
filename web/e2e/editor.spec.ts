@@ -1,5 +1,5 @@
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
-import { cp, rm } from "node:fs/promises";
+import { cp, readFile, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
@@ -25,6 +25,54 @@ const test = base.extend<{ files: Files }>({
   },
 });
 test.use({ actionTimeout: 10_000 });
+
+test("edits and clears the shared series window with validation, persistence and undo", async ({ page, files }) => {
+  const windowField = page.getByLabel("Series window", { exact: true });
+  await expect(windowField).toHaveValue("");
+  await expect(windowField).toHaveAttribute("placeholder", "10ms");
+  await page.getByRole("tab", { name: "No retries", exact: true }).click();
+  await page.getByLabel("Measurement", { exact: true }).fill("2s");
+  await page.getByLabel("Measurement", { exact: true }).press("Enter");
+  await expect(windowField).toHaveAttribute("placeholder", "20ms");
+
+  const validation = page.waitForResponse((response) => response.url().endsWith("/api/v1/validate") &&
+    response.request().postDataJSON().drafts.some((draft: { content: { experiment?: ExperimentFile } }) =>
+      draft.content.experiment?.execution.window === "0ms"));
+  await windowField.fill("0ms");
+  await windowField.press("Enter");
+  const result = await (await validation).json();
+  const diagnostic = result.diagnostics.find((item: { pointer: string }) => item.pointer === "/execution/window");
+  expect(diagnostic).toBeTruthy();
+  await expect(windowField.locator("..")).toContainText(diagnostic.message);
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+
+  await windowField.fill("0.25s");
+  await windowField.press("Enter");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(windowField).toHaveValue("0ms");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(windowField).toHaveValue("0.25s");
+  await expect(windowField).not.toHaveAttribute("aria-invalid", "true");
+  await save(page);
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  expect((await stored(page, files.experiment)).content.experiment.execution.window).toBe("0.25s");
+  await page.reload();
+  await expect(windowField).toHaveValue("0.25s");
+
+  await windowField.fill("");
+  await windowField.press("Enter");
+  await expect(windowField).toHaveAttribute("placeholder", "20ms");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(windowField).toHaveValue("0.25s");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(windowField).toHaveValue("");
+  await save(page);
+  const saved = JSON.parse(await readFile(resolve("../apps/server/build/e2e-workspace", files.experiment), "utf8"));
+  expect(saved.execution).not.toHaveProperty("window");
+  await page.reload();
+  await expect(windowField).toHaveValue("");
+  await expect(windowField).toHaveAttribute("placeholder", "20ms");
+});
 
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
