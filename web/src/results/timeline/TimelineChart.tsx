@@ -1,0 +1,98 @@
+import { useMemo, useState } from "react";
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import type { WindowMetricValues } from "../series";
+import { downsample, windowAt, type TimelinePoint, type TimelineRegion } from "./data";
+
+export interface TimelineLine {
+  id: string;
+  label: string;
+  metric: keyof WindowMetricValues;
+  scale: number;
+  color: string;
+  comparison: boolean;
+  windows: readonly WindowMetricValues[];
+}
+
+interface TimelineChartProps {
+  title: string;
+  unit: string;
+  lines: TimelineLine[];
+  regions: TimelineRegion[];
+  endMs: number;
+  windowMs: number;
+  hoverWindow: number | null;
+  cursorWindow: number | null;
+  onHover: (window: number | null) => void;
+  onCursor: (window: number | null) => void;
+}
+
+const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+const tick = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
+/** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
+export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
+  const [width, setWidth] = useState(640);
+  const sampled = useMemo(() => lines.map((line) => {
+    const points: TimelinePoint[] = [];
+    for (const [window, metrics] of line.windows.entries()) {
+      const raw = metrics[line.metric];
+      const value = raw === null ? null : raw * line.scale;
+      points.push({ window, startMs: metrics.startMs, value });
+      // Close each defined segment at the end of its last window, including isolated values before a gap.
+      if (window === line.windows.length - 1 || (value !== null && line.windows[window + 1][line.metric] === null)) {
+        points.push({ window, startMs: metrics.startMs + metrics.durationMs, value });
+      }
+    }
+    return { ...line, points: downsample(points, Math.max(1, width - 68)) };
+  }), [lines, width]);
+  const active = hoverWindow ?? cursorWindow;
+  const lastWindow = Math.ceil(endMs / windowMs) - 1;
+  const pointerWindow = (event: { currentTarget: HTMLDivElement; clientX: number }) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return windowAt((event.clientX - bounds.left) / bounds.width * endMs, windowMs, endMs);
+  };
+  return <section className="timeline-chart" aria-label={title}>
+    <h3>{title} <span>({unit})</span></h3>
+    <div className="timeline-plot">
+      <ResponsiveContainer width="100%" height={176} minWidth={0} onResize={(next) => setWidth(next)}>
+        <LineChart margin={{ left: 0, right: 12, top: 12, bottom: 0 }} accessibilityLayer={false}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e4e7eb" />
+          <XAxis type="number" dataKey="startMs" domain={[0, endMs]} allowDataOverflow height={32} tickCount={6}
+            tickFormatter={(value: number) => tick.format(value)} />
+          <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => tick.format(value)} />
+          {regions.map((region, index) => <ReferenceArea key={index} x1={region.fromMs} x2={region.toMs}
+            fill={region.kind === "warmup" ? "#94a3b8" : "#f59e0b"} fillOpacity={0.14} />)}
+          {sampled.map((line) => <Line key={line.id} data={line.points} dataKey="value" type="stepAfter"
+            name={line.label} stroke={line.color} strokeWidth={1.6} strokeDasharray={line.comparison ? "6 4" : undefined}
+            dot={false} activeDot={false} connectNulls={false} isAnimationActive={false} />)}
+          {cursorWindow === null ? null : <ReferenceLine x={cursorWindow * windowMs} stroke="#111827" strokeWidth={2} />}
+          {hoverWindow === null ? null : <ReferenceLine x={hoverWindow * windowMs} stroke="#475569" strokeDasharray="3 3" />}
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="timeline-interaction" role="slider" tabIndex={0} aria-label={`${title} time cursor`}
+        aria-valuemin={0} aria-valuemax={lastWindow} aria-valuenow={cursorWindow ?? 0}
+        aria-valuetext={cursorWindow === null ? "No pinned window" : `Window ${cursorWindow}, ${cursorWindow * windowMs} ms`}
+        onPointerMove={(event) => onHover(pointerWindow(event))} onPointerLeave={() => onHover(null)}
+        onClick={(event) => onCursor(pointerWindow(event))}
+        onKeyDown={(event) => {
+          const current = cursorWindow ?? 0;
+          const next = event.key === "Home" ? 0 : event.key === "End" ? lastWindow
+            : event.key === "ArrowRight" ? Math.min(lastWindow, current + 1)
+              : event.key === "ArrowLeft" ? Math.max(0, current - 1) : null;
+          if (event.key === "Escape") { event.preventDefault(); onCursor(null); }
+          else if (next !== null) { event.preventDefault(); onCursor(next); }
+        }} />
+    </div>
+    <p className="timeline-axis">Simulation time (ms)</p>
+    <dl className="timeline-readout">
+      {lines.map((line) => {
+        const raw = active === null ? null : line.windows[active]?.[line.metric] ?? null;
+        return <div key={line.id}>
+          <dt><span className={`timeline-line-key${line.comparison ? " timeline-line-key--comparison" : ""}`}
+            style={{ borderColor: line.color }} />{line.label}</dt>
+          <dd>{raw === null ? "—" : `${number.format(raw * line.scale)} ${unit}`}</dd>
+        </div>;
+      })}
+    </dl>
+  </section>;
+}

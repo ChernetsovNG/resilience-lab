@@ -1,9 +1,11 @@
-import { useId, useState } from "react";
-import type { ApiProblem, Catalog, Diagnostic, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
+import { lazy, Suspense, useId, useState } from "react";
+import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { locationOf } from "../validation/diagnostics";
 import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
+
+const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
 
 export type ResultsPanelSize = "collapsed" | "normal" | "expanded";
 
@@ -18,6 +20,13 @@ export interface ResultsPanelProps {
   activeVariantId?: string | null;
   selectedPointId?: string;
   onPointChange?: (pointId: string) => void;
+  runId?: string | null;
+  experiment?: ExperimentFile | null;
+  selectedNodes?: readonly string[];
+  replication?: number;
+  onReplicationChange?: (replication: number) => void;
+  cursorWindow?: number | null;
+  onCursorChange?: (window: number | null) => void;
   size?: ResultsPanelSize;
   onSizeChange?: (size: ResultsPanelSize) => void;
   diagnostics?: readonly Diagnostic[];
@@ -35,9 +44,11 @@ function progressOf(job: JobView): string {
 export function ResultsPanel({
   job, summary, problem, catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
+  runId = null, experiment = null, selectedNodes = [], replication = 0, onReplicationChange, cursorWindow = null, onCursorChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
 }: ResultsPanelProps) {
   const [active, setActive] = useState("summary");
+  const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
   const points = summary?.variants[0]?.points ?? [];
   const staleNotice = stale ? <p className="banner" role="status">Results belong to a previous document version.</p> : null;
@@ -47,6 +58,10 @@ export function ResultsPanel({
         <button id={`${id}-summary`} type="button" role="tab" aria-selected={active === "summary"}
           aria-controls={`${id}-panel`} onClick={() => setActive("summary")}>
           Summary
+        </button>
+        <button id={`${id}-timeline`} type="button" role="tab" aria-selected={active === "timeline"}
+          aria-controls={`${id}-panel`} onClick={() => { setTimelineOpened(true); setActive("timeline"); }}>
+          Timeline
         </button>
         <button id={`${id}-assumptions`} type="button" role="tab" aria-selected={active === "assumptions"}
           aria-controls={`${id}-panel`} onClick={() => setActive("assumptions")}>
@@ -67,6 +82,15 @@ export function ResultsPanel({
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
+        {(active === "summary" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
+          <label htmlFor={`${id}-point`}>Grid point</label>
+          <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
+            {points.map((point) => <option key={point.id} value={point.id}>
+              {point.id}{Object.entries(point.coordinates).length === 0 ? "" : ` · ${Object.entries(point.coordinates)
+                .map(([path, value]) => `${path} = ${typeof value === "string" ? value : JSON.stringify(value)}`).join(", ")}`}
+            </option>)}
+          </select>
+        </div> : null}
         {active === "problems" ? <>
           {validationPending ? <p role="status">Validating documents…</p> : null}
           {validationProblem === null ? null : <ProblemList problem={validationProblem} />}
@@ -78,6 +102,10 @@ export function ResultsPanel({
             </li>)}
           </ul>
           {!validationPending && validationProblem === null && diagnostics.length === 0 ? <p>No problems.</p> : null}
+        </> : active === "timeline" ? <>
+          {staleNotice}
+          {summary === null || manifest === null || model === null || experiment === null || catalog === null || runId === null ?
+            <p className="results-empty">Run the experiment to see the timeline.</p> : null}
         </> : active === "assumptions" ? <>
           {staleNotice}
           {catalog === null || model === null ? <p className="results-empty">Run the experiment to see model assumptions.</p> :
@@ -90,21 +118,19 @@ export function ResultsPanel({
             <ProblemList problem={problem} />
           ) : summary !== null ? (
             <>
-              {summary.grid.length > 0 ? <div className="summary-toolbar">
-                <label htmlFor={`${id}-point`}>Grid point</label>
-                <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
-                  {points.map((point) => <option key={point.id} value={point.id}>
-                    {point.id}{Object.entries(point.coordinates).length === 0 ? "" : ` · ${Object.entries(point.coordinates)
-                      .map(([path, value]) => `${path} = ${typeof value === "string" ? value : JSON.stringify(value)}`).join(", ")}`}
-                  </option>)}
-                </select>
-              </div> : null}
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} />
             </>
           ) : (
             <p className="results-empty">{job === null ? "Run the experiment to see results." : progressOf(job)}</p>
           )}
         </>}
+        {timelineOpened && summary !== null && manifest !== null && model !== null && experiment !== null && catalog !== null && runId !== null ?
+          <div hidden={active !== "timeline"}>
+            <Suspense fallback={<p role="status">Loading timeline…</p>}><Timeline runId={runId} summary={summary} manifest={manifest} model={model} experiment={experiment} catalog={catalog}
+              enabled={active === "timeline" && size !== "collapsed"} activeVariantId={activeVariantId} pointId={selectedPointId}
+              replication={replication} cursorWindow={cursorWindow} selectedNodes={selectedNodes}
+              onReplicationChange={onReplicationChange} onCursorChange={onCursorChange} /></Suspense>
+          </div> : null}
       </div>
     </section>
   );

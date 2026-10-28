@@ -11,6 +11,7 @@ import { ProblemList } from "./layout/ProblemList";
 import { ResultsPanel, type ResultsPanelSize } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
+import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
 import { documentValuesEqual } from "./workspace/editor";
 import { applyOverrides } from "./workspace/params";
@@ -28,7 +29,7 @@ export function App() {
   const health = useHealth();
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
-  const [pointSelection, setPointSelection] = useState<{ summary: typeof run.summary; id: string }>({ summary: null, id: "p0" });
+  const results = useResultsSelection(run.job?.id ?? null);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
@@ -261,8 +262,15 @@ export function App() {
         manifest={ownRun ? run.manifest : null}
         stale={staleResults}
         activeVariantId={variant?.id ?? null}
-        selectedPointId={pointSelection.summary === run.summary ? pointSelection.id : "p0"}
-        onPointChange={(id) => setPointSelection({ summary: run.summary, id })}
+        selectedPointId={results.selection.pointId}
+        onPointChange={(pointId) => results.select({ pointId })}
+        runId={ownRun ? run.job?.runId ?? null : null}
+        experiment={ownRun ? run.documents?.experiment ?? null : null}
+        selectedNodes={selection.filter((id) => loaded !== null && Object.hasOwn(loaded.model.blocks, id))}
+        replication={results.selection.replication}
+        onReplicationChange={(replication) => results.select({ replication })}
+        cursorWindow={results.selection.window}
+        onCursorChange={(window) => results.select({ window })}
         size={resultsSize}
         onSizeChange={setResultsSize}
         diagnostics={diagnostics}
