@@ -6,6 +6,7 @@ import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
+import resiliencelab.core.engine.ksl.PathStreams
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.ResultsLayout
@@ -13,7 +14,6 @@ import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
 import resiliencelab.core.results.VariantSummary
 import resiliencelab.core.results.Versions
-import resiliencelab.core.simulation.PathStreams
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace

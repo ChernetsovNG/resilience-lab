@@ -2,8 +2,12 @@ package resiliencelab.core.execution
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.assertj.core.data.Offset.offset
+import org.junit.jupiter.api.Tag
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CompiledVariant
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
+import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
@@ -168,4 +172,135 @@ class ExperimentExecutorTest {
 
         assertThatThrownBy { failing.run(experiment) }.isInstanceOf(IllegalStateException::class.java).hasMessage("boom")
     }
+
+    @Test
+    fun `different seeds change arrival streams`() {
+        fun arrivals(seed: Long) =
+            ExperimentExecutor(workers = 1).use { executor ->
+                executor
+                    .run(experimentOf(TestChains.run(measurementMs = 100.0, seed = seed, replications = 2), "baseline" to singleService()))
+                    .variants
+                    .single()
+                    .replications
+                    .map { it.arrivalTimesMs }
+            }
+
+        assertThat(arrivals(43L)).isNotEqualTo(arrivals(42L))
+    }
+
+    @Test
+    fun `paired variants share arrival timestamps`() {
+        val result =
+            ExperimentExecutor(workers = 2).use { executor ->
+                executor.run(
+                    experimentOf(
+                        TestChains.run(measurementMs = 100.0, replications = 3),
+                        "baseline" to singleService(processing = TestChains.fixed(1.0)),
+                        "candidate" to singleService(processing = TestChains.fixed(2.0)),
+                    ),
+                )
+            }
+
+        val (baseline, candidate) = result.variants
+        baseline.replications.indices.forEach { index ->
+            assertThat(candidate.replications[index].arrivalTimesMs).isEqualTo(baseline.replications[index].arrivalTimesMs)
+        }
+    }
+
+    @Test
+    fun `each replication draws arrivals from its own path stream`() {
+        val settings = TestChains.run(measurementMs = 100.0, replications = 3)
+
+        val instant = experimentOf(settings, "baseline" to singleService(processing = TestChains.fixed(0.0)))
+
+        val result = ExperimentExecutor(workers = 3).use { it.run(instant) }
+
+        val actual =
+            result.variants
+                .single()
+                .replications
+                .map { it.arrivalTimesMs }
+        val expected = (0 until 3).map { TestChains.expectedArrivals(settings.seed, 0.25, settings.measurementMs, replication = it) }
+        assertThat(actual).isEqualTo(expected)
+        assertThat(actual[1]).isNotEqualTo(actual[0])
+    }
+
+    @Test
+    fun `a capped replication fails the whole experiment and names its variant`() {
+        val settings = TestChains.run(measurementMs = 100_000.0, replications = 2, maxRealTimeSeconds = 1L)
+        val capped =
+            singleService(
+                arrivalRatePerMs = 1_000.0,
+                processing = TestChains.fixed(100.0),
+                queueCapacity = 100_000,
+                deadlineMs = 1_000_000_000.0,
+            )
+
+        assertThatThrownBy {
+            ExperimentExecutor(workers = 2).use { executor ->
+                executor.run(
+                    experimentOf(
+                        settings,
+                        "valid" to singleService(arrivalRatePerMs = 0.001, processing = TestChains.fixed(0.0)),
+                        "capped" to capped,
+                    ),
+                )
+            }
+        }.isInstanceOf(ExperimentExecutionException::class.java)
+            .hasMessageContaining("Variant 'capped'")
+            .hasMessageContaining("replication 1")
+            .hasMessageContaining("real-time cap")
+            .hasCauseInstanceOf(ExperimentExecutionException::class.java)
+    }
+
+    @Test
+    @Tag("analytic")
+    fun `single service matches MM1 utilization and response time`() {
+        val settings = TestChains.run(warmupMs = 10_000.0, measurementMs = 400_000.0, maxRealTimeSeconds = 120L)
+        val chain = singleService(processing = TestChains.exponential(2.0), queueCapacity = 100_000, deadlineMs = 1_000_000_000.0)
+
+        val variant = ExperimentExecutor(workers = 1).use { it.run(experimentOf(settings, "mm1" to chain)).variants.single() }
+
+        val replication = variant.replications.single()
+        val utilization = replication.services.getValue("entry").handlerUtilization
+        val meanResponseMs =
+            variant.aggregate.pooledLatency.all!!
+                .meanMs
+        assertThat(replication.successes).isEqualTo(replication.originalArrivals)
+        assertThat(replication.failures).isZero()
+        assertThat(utilization).isCloseTo(0.5, offset(0.03))
+        assertThat(meanResponseMs).isCloseTo(4.0, offset(0.25))
+    }
+
+    /** One service behind the client. */
+    private fun singleService(
+        arrivalRatePerMs: Double = 0.25,
+        processing: Distribution = TestChains.fixed(1.0),
+        queueCapacity: Int = 1_000,
+        deadlineMs: Double = 10_000.0,
+    ): ChainIr {
+        val base = TestChains.simple()
+        return base.copy(
+            client = base.client.copy(arrivalRatePerMs = arrivalRatePerMs, deadlineMs = deadlineMs),
+            services =
+                listOf(
+                    base.services.first().copy(
+                        handlers = 1,
+                        queueCapacity = queueCapacity,
+                        processing = processing,
+                        failureProbability = 0.0,
+                    ),
+                ),
+            calls = emptyList(),
+        )
+    }
+
+    private fun experimentOf(
+        settings: RunSettings,
+        vararg variants: Pair<String, ChainIr>,
+    ): CompiledExperiment =
+        CompiledExperiment(
+            variants = variants.map { (id, chain) -> CompiledVariant(id, id, chain.copy(run = settings)) },
+            run = settings,
+        )
 }

@@ -2,14 +2,15 @@ package resiliencelab.core.execution
 
 import ksl.simulation.Model
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
+import resiliencelab.core.engine.ksl.PathStreamSource
+import resiliencelab.core.engine.ksl.PathStreams
+import resiliencelab.core.engine.ksl.ReliabilityModel
+import resiliencelab.core.engine.ksl.StreamPlan
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
-import resiliencelab.core.simulation.PathStreamSource
-import resiliencelab.core.simulation.PathStreams
-import resiliencelab.core.simulation.ReliabilityModel
-import resiliencelab.core.simulation.StreamPlan
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -66,7 +67,14 @@ class ExperimentExecutor internal constructor(
                 futures +=
                     pool.submit(
                         Callable {
-                            val result = replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                            val result =
+                                try {
+                                    replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                                } catch (failure: ExperimentExecutionException) {
+                                    val id = experiment.variants[variant].id
+                                    val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
+                                    throw ExperimentExecutionException(message, failure)
+                                }
                             synchronized(results) { results[variant][replication] = result }
                             progress.completeOne()
                         },

@@ -43,7 +43,7 @@ class Conflict(
 
 /**
  * Maps failures of the stage 1 endpoints to [ApiProblem]. Every handler declares its status with `@ResponseStatus`,
- * so springdoc documents the error responses; MVP endpoints keep their own handler until they are removed.
+ * so springdoc documents the error responses.
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
