@@ -4,17 +4,16 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
 class ServiceMetricsIntegrationTest {
     @Test
     fun `service measurements include initial warmup work and stop at measurement end`() {
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services =
                     listOf(
@@ -22,19 +21,18 @@ class ServiceMetricsIntegrationTest {
                             handlers = 2,
                             queueCapacity = 2,
                             processing =
-                                DurationDistribution(
-                                    kind = DistributionKind.FIXED,
+                                Distribution(
+                                    shape = DistributionShape.FIXED,
                                     meanMs = 10.0,
-                                    stdDevMs = null,
                                 ),
-                            failureRate = 0.0,
+                            failureProbability = 0.0,
                         ),
                     ),
-                links = emptyList(),
-                degradation = null,
+                calls = emptyList(),
+                faults = emptyList(),
             )
         val execution =
-            Execution(
+            RunSettings(
                 replications = 1,
                 warmupMs = 5.0,
                 measurementMs = 10.0,
@@ -42,7 +40,7 @@ class ServiceMetricsIntegrationTest {
                 maxRealTimeSeconds = 30L,
             )
         val model = Model("ServiceMetricsIntegrationTest", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution)
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution))
         InvocationDriver(
             model = model,
             reliabilityModel = reliabilityModel,

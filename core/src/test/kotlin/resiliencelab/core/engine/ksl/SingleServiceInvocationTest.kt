@@ -7,9 +7,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
 class SingleServiceInvocationTest {
@@ -17,7 +16,7 @@ class SingleServiceInvocationTest {
     fun `fixed processing succeeds at 20 ms with offered and admitted counts`() {
         val rig =
             simulate(
-                scenario = singleServiceScenario(),
+                chain = singleServiceChain(),
                 requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
             )
 
@@ -54,17 +53,17 @@ class SingleServiceInvocationTest {
 
     @Test
     fun `local failure consumes processing and releases handler without downstream invocation`() {
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services =
                     base.services.map { service ->
-                        if (service.id == "entry") service.copy(failureRate = 1.0) else service
+                        if (service.path == "entry") service.copy(failureProbability = 1.0) else service
                     },
             )
         val rig =
             simulate(
-                scenario = scenario,
+                chain = chain,
                 requests =
                     listOf(
                         InvocationSpec(arrivalTimeMs = 0.0, originalRequest = true),
@@ -99,7 +98,7 @@ class SingleServiceInvocationTest {
     fun `zero capacity queue rejection counts offered but not admitted`() {
         val rig =
             simulate(
-                scenario = singleServiceScenario(queueCapacity = 0),
+                chain = singleServiceChain(queueCapacity = 0),
                 requests =
                     listOf(
                         InvocationSpec(arrivalTimeMs = 0.0, originalRequest = false),
@@ -133,7 +132,7 @@ class SingleServiceInvocationTest {
     fun `active counters include accepted queued invocations and original requests until completion`() {
         val rig =
             simulate(
-                scenario = singleServiceScenario(),
+                chain = singleServiceChain(),
                 requests =
                     listOf(
                         InvocationSpec(arrivalTimeMs = 0.0),
@@ -167,7 +166,7 @@ class SingleServiceInvocationTest {
     fun `replication result round trips through JSON`() {
         val rig =
             simulate(
-                scenario = singleServiceScenario(),
+                chain = singleServiceChain(),
                 requests = listOf(InvocationSpec(arrivalTimeMs = 0.0)),
             )
         val result = rig.result()
@@ -179,12 +178,12 @@ class SingleServiceInvocationTest {
     }
 
     private fun simulate(
-        scenario: Scenario,
+        chain: ChainIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
     ): SimulationRig {
         val model = Model("SingleServiceInvocationTest", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution())
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution()))
         val driver = InvocationDriver(model, reliabilityModel, requests, observationTimesMs)
         model.numberOfReplications = 1
         model.lengthOfReplication = 100.0
@@ -192,25 +191,25 @@ class SingleServiceInvocationTest {
         return SimulationRig(reliabilityModel, driver)
     }
 
-    private fun singleServiceScenario(
+    private fun singleServiceChain(
         queueCapacity: Int = 2,
-        failureRate: Double = 0.0,
-    ): Scenario {
-        val base = TestData.simpleScenario()
+        failureProbability: Double = 0.0,
+    ): ChainIr {
+        val base = TestChains.simple()
         return base.copy(
             services =
                 listOf(
                     base.services.first().copy(
                         queueCapacity = queueCapacity,
-                        failureRate = failureRate,
+                        failureProbability = failureProbability,
                     ),
                 ),
-            links = emptyList(),
+            calls = emptyList(),
         )
     }
 
-    private fun execution(): Execution =
-        Execution(
+    private fun execution(): RunSettings =
+        RunSettings(
             replications = 1,
             warmupMs = 0.0,
             measurementMs = 100.0,

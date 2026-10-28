@@ -5,8 +5,7 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import org.assertj.core.api.Assertions.assertThatCode
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
 class TimingArithmeticTest {
@@ -52,7 +51,7 @@ class TimingArithmeticTest {
             arrivalRate = 1.0 / Double.MAX_VALUE,
             warmupMs = Double.MAX_VALUE,
             measurementMs = Double.MAX_VALUE,
-            streamNum = 1,
+            stream = TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS),
         )
 
         assertThatExceptionOfType(ExperimentExecutionException::class.java)
@@ -78,18 +77,18 @@ class TimingArithmeticTest {
         model: Model,
         requestDeadlineMs: Double = 500.0,
     ): ReliabilityModel {
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services = listOf(base.services.first()),
-                links = emptyList(),
-                workload = base.workload.copy(requestDeadlineMs = requestDeadlineMs),
+                calls = emptyList(),
+                client = base.client.copy(deadlineMs = requestDeadlineMs),
             )
-        return ReliabilityModel(model, scenario, execution())
+        return TestChains.reliabilityModel(model, chain.copy(run = execution()))
     }
 
-    private fun execution(): Execution =
-        Execution(
+    private fun execution(): RunSettings =
+        RunSettings(
             replications = 1,
             warmupMs = 0.0,
             measurementMs = 100.0,

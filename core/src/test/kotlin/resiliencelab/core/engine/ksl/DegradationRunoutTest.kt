@@ -3,18 +3,15 @@ package resiliencelab.core.engine.ksl
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.Model
-import ksl.utilities.random.rng.RNStreamProvider
-import ksl.utilities.random.rvariable.ExponentialRV
+import ksl.utilities.random.rvariable.KSLRandom
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.scenario.DegradationSpec
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
@@ -22,30 +19,32 @@ import kotlin.time.Duration.Companion.seconds
 class DegradationRunoutTest {
     @Test
     fun `degradation duration and failure are sampled once at actual local start`() {
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services =
                     listOf(
                         base.services.first().copy(
                             handlers = 4,
                             processing = fixed(5.0),
-                            failureRate = 0.0,
+                            failureProbability = 0.0,
                         ),
                     ),
-                links = emptyList(),
-                degradation =
-                    DegradationSpec(
-                        serviceId = "entry",
-                        startMs = 10.0,
-                        endMs = 20.0,
-                        processingMultiplier = 4.0,
-                        failureRate = 1.0,
+                calls = emptyList(),
+                faults =
+                    listOf(
+                        FaultSpan(
+                            target = "entry",
+                            fromMs = 10.0,
+                            toMs = 20.0,
+                            processingMultiplier = 4.0,
+                            failureProbability = 1.0,
+                        ),
                     ),
             )
         val rig =
             simulateManual(
-                scenario = scenario,
+                chain = chain,
                 requests = listOf(9.0, 10.0, 11.0, 20.0).map { InvocationSpec(it, measurementCohort = false) },
                 execution = execution(warmupMs = 30.0, measurementMs = 100.0),
                 replicationLengthMs = 40.0,
@@ -69,18 +68,17 @@ class DegradationRunoutTest {
 
     @Test
     fun `Poisson arrivals stop strictly before measurement end`() {
-        val scenario = singleServiceScenario(processingMs = 0.0, arrivalRate = 1.0)
+        val chain = singleServiceChain(processingMs = 0.0, arrivalRate = 1.0)
         val execution = execution(warmupMs = 0.0, measurementMs = 25.0)
         val expected =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRate = scenario.workload.arrivalRate,
-                streamNum = 3,
+                arrivalRatePerMs = chain.client.arrivalRatePerMs,
                 endMs = 25.0,
             )
         assertThat(expected).isNotEmpty()
 
-        val rig = simulateOpen(scenario, execution)
+        val rig = simulateOpen(chain, execution)
 
         assertArrivalTimes(expected, rig.result.arrivalTimesMs)
         assertThat(rig.result.arrivalTimesMs).allMatch { it >= 0.0 && it < 25.0 }
@@ -100,36 +98,35 @@ class DegradationRunoutTest {
 
     @Test
     fun `warmup work occupies resources without entering original or nested attempt metrics`() {
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services =
                     base.services.map {
-                        it.copy(handlers = 1, queueCapacity = 10_000, processing = fixed(20.0), failureRate = 0.0)
+                        it.copy(handlers = 1, queueCapacity = 10_000, processing = fixed(20.0), failureProbability = 0.0)
                     },
-                links =
+                calls =
                     listOf(
-                        base.links.single().copy(
+                        base.calls.single().copy(
                             network = fixed(0.0),
                             timeoutMs = 100_000.0,
-                            maxAttempts = 1,
+                            attempts = 1,
                         ),
                     ),
-                workload = base.workload.copy(arrivalRate = 10.0, requestDeadlineMs = 100_000.0),
+                client = base.client.copy(arrivalRatePerMs = 10.0, deadlineMs = 100_000.0),
             )
         val execution = execution(warmupMs = 10.0, measurementMs = 5.0)
         val allArrivals =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRate = scenario.workload.arrivalRate,
-                streamNum = 7,
+                arrivalRatePerMs = chain.client.arrivalRatePerMs,
                 endMs = 15.0,
             )
         val measurementArrivals = allArrivals.filter { it >= 10.0 }
         assertThat(allArrivals).anyMatch { it < 5.0 }
         assertThat(measurementArrivals).isNotEmpty()
 
-        val rig = simulateOpen(scenario, execution, observationTimesMs = listOf(5.0))
+        val rig = simulateOpen(chain, execution, observationTimesMs = listOf(5.0))
 
         val warmup = rig.observations.single()
         assertThat(warmup.entryHandlersBusy).isEqualTo(1)
@@ -172,10 +169,10 @@ class DegradationRunoutTest {
 
     @Test
     fun `deadline failure after measurement end is recorded before accepted work drains`() {
-        val window = findArrivalWindow(streamNum = 3) { it > 100.0 }
+        val window = findArrivalWindow { it > 100.0 }
         val gapMs = window.secondMs - window.firstMs
-        val scenario =
-            singleServiceScenario(
+        val chain =
+            singleServiceChain(
                 processingMs = gapMs,
                 arrivalRate = 0.01,
                 requestDeadlineMs = gapMs * 0.75,
@@ -187,7 +184,7 @@ class DegradationRunoutTest {
                 seed = window.seed,
             )
 
-        val rig = simulateOpen(scenario, execution)
+        val rig = simulateOpen(chain, execution)
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
         assertThat(rig.result.originalArrivals).isEqualTo(1)
@@ -206,29 +203,29 @@ class DegradationRunoutTest {
 
     @Test
     fun `replication drains never admitted downstream work after every other counter is zero`() {
-        val window = findArrivalWindow(streamNum = 7) { it in 60.0..70.0 }
+        val window = findArrivalWindow { it in 60.0..70.0 }
         val gapMs = window.secondMs - window.firstMs
-        val base = TestData.simpleScenario()
-        val scenario =
+        val base = TestChains.simple()
+        val chain =
             base.copy(
                 services =
                     listOf(
-                        base.services[0].copy(processing = fixed(0.0), failureRate = 0.0),
+                        base.services[0].copy(processing = fixed(0.0), failureProbability = 0.0),
                         base.services[1].copy(
                             processing = fixed(30.0),
-                            failureRate = 0.0,
+                            failureProbability = 0.0,
                             queueCapacity = 0,
                         ),
                     ),
-                links =
+                calls =
                     listOf(
-                        base.links.single().copy(
+                        base.calls.single().copy(
                             network = fixed(20.0),
                             timeoutMs = 10.0,
-                            maxAttempts = 1,
+                            attempts = 1,
                         ),
                     ),
-                workload = base.workload.copy(arrivalRate = 0.01, requestDeadlineMs = 1_000.0),
+                client = base.client.copy(arrivalRatePerMs = 0.01, deadlineMs = 1_000.0),
             )
         val execution =
             execution(
@@ -244,7 +241,7 @@ class DegradationRunoutTest {
                 measurementCohort = false,
             )
 
-        val rig = simulateOpen(scenario, execution, manualInvocations = listOf(blocker))
+        val rig = simulateOpen(chain, execution, manualInvocations = listOf(blocker))
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
         assertThat(rig.result.failedLatenciesMs).containsExactly(10.0)
@@ -275,17 +272,16 @@ class DegradationRunoutTest {
 
     @Test
     fun `execution cap before drain surfaces ExperimentExecutionException`() {
-        val scenario = singleServiceScenario(processingMs = 100.0, arrivalRate = 1_000.0)
+        val chain = singleServiceChain(processingMs = 100.0, arrivalRate = 1_000.0)
         val execution = execution(warmupMs = 0.0, measurementMs = 1_000.0)
         val firstArrivalMs =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRate = scenario.workload.arrivalRate,
-                streamNum = 3,
+                arrivalRatePerMs = chain.client.arrivalRatePerMs,
                 endMs = 100.0,
             ).first()
         val model = Model("DegradationRunoutTest-cap", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution)
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution))
         model.maximumAllowedExecutionTimePerReplication = 1.nanoseconds
 
         assertThatThrownBy { reliabilityModel.runReplication() }
@@ -294,12 +290,12 @@ class DegradationRunoutTest {
         assertThat(model.time).isLessThan(firstArrivalMs + 100.0)
     }
 
-    private fun singleServiceScenario(
+    private fun singleServiceChain(
         processingMs: Double,
         arrivalRate: Double,
         requestDeadlineMs: Double = 1_000.0,
-    ): Scenario {
-        val base = TestData.simpleScenario()
+    ): ChainIr {
+        val base = TestChains.simple()
         return base.copy(
             services =
                 listOf(
@@ -307,27 +303,27 @@ class DegradationRunoutTest {
                         handlers = 1,
                         queueCapacity = 10_000,
                         processing = fixed(processingMs),
-                        failureRate = 0.0,
+                        failureProbability = 0.0,
                     ),
                 ),
-            links = emptyList(),
-            workload =
-                base.workload.copy(
-                    arrivalRate = arrivalRate,
-                    requestDeadlineMs = requestDeadlineMs,
+            calls = emptyList(),
+            client =
+                base.client.copy(
+                    arrivalRatePerMs = arrivalRate,
+                    deadlineMs = requestDeadlineMs,
                 ),
-            degradation = null,
+            faults = emptyList(),
         )
     }
 
     private fun simulateManual(
-        scenario: Scenario,
+        chain: ChainIr,
         requests: List<InvocationSpec>,
-        execution: Execution,
+        execution: RunSettings,
         replicationLengthMs: Double,
     ): SimulationRig {
         val model = Model("DegradationRunoutTest-manual", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution)
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution))
         val driver = InvocationDriver(model, reliabilityModel, requests, emptyList())
         model.numberOfReplications = 1
         model.lengthOfReplication = replicationLengthMs
@@ -336,13 +332,13 @@ class DegradationRunoutTest {
     }
 
     private fun simulateOpen(
-        scenario: Scenario,
-        execution: Execution,
+        chain: ChainIr,
+        execution: RunSettings,
         observationTimesMs: List<Double> = emptyList(),
         manualInvocations: List<InvocationSpec> = emptyList(),
     ): SimulationRig {
         val model = Model("DegradationRunoutTest-open", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution)
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution))
         val driver = InvocationDriver(model, reliabilityModel, manualInvocations, observationTimesMs)
         val result = reliabilityModel.runReplication()
         return SimulationRig(model, reliabilityModel, driver, result)
@@ -352,8 +348,8 @@ class DegradationRunoutTest {
         warmupMs: Double,
         measurementMs: Double,
         seed: Long = 42L,
-    ): Execution =
-        Execution(
+    ): RunSettings =
+        RunSettings(
             replications = 1,
             warmupMs = warmupMs,
             measurementMs = measurementMs,
@@ -363,37 +359,16 @@ class DegradationRunoutTest {
 
     private fun expectedArrivals(
         seed: Long,
-        arrivalRate: Double,
-        streamNum: Int,
+        arrivalRatePerMs: Double,
         endMs: Double,
-    ): List<Double> {
-        val provider =
-            RNStreamProvider().apply {
-                initialSeed(SeedFactory.seedVector(seed))
-            }
-        val interArrival = ExponentialRV(mean = 1 / arrivalRate, streamNum = streamNum, streamProvider = provider)
-        val arrivals = mutableListOf<Double>()
-        var timeMs = 0.0
-        while (true) {
-            timeMs += interArrival.value
-            if (timeMs >= endMs) break
-            arrivals += timeMs
-        }
-        return arrivals
-    }
+    ): List<Double> = TestChains.expectedArrivals(seed, arrivalRatePerMs, endMs)
 
-    private fun findArrivalWindow(
-        streamNum: Int,
-        acceptGap: (Double) -> Boolean,
-    ): ArrivalWindow {
+    /** First seed from 42 whose first two arrivals at 0.01 requests/ms are [acceptGap] apart. */
+    private fun findArrivalWindow(acceptGap: (Double) -> Boolean): ArrivalWindow {
         for (seed in 42L..10_000L) {
-            val provider =
-                RNStreamProvider().apply {
-                    initialSeed(SeedFactory.seedVector(seed))
-                }
-            val interArrival = ExponentialRV(mean = 100.0, streamNum = streamNum, streamProvider = provider)
-            val firstMs = interArrival.value
-            val secondMs = firstMs + interArrival.value
+            val arrivals = TestChains.stream(seed, TestChains.CLIENT, StreamRole.ARRIVALS)
+            val firstMs = KSLRandom.rExponential(100.0, arrivals)
+            val secondMs = firstMs + KSLRandom.rExponential(100.0, arrivals)
             if (acceptGap(secondMs - firstMs)) {
                 return ArrivalWindow(seed, firstMs, secondMs)
             }
@@ -417,12 +392,7 @@ class DegradationRunoutTest {
         assertThat(model.activeDownstreamProcesses).isZero()
     }
 
-    private fun fixed(durationMs: Double): DurationDistribution =
-        DurationDistribution(
-            kind = DistributionKind.FIXED,
-            meanMs = durationMs,
-            stdDevMs = null,
-        )
+    private fun fixed(durationMs: Double): Distribution = TestChains.fixed(durationMs)
 
     private data class ArrivalWindow(
         val seed: Long,
