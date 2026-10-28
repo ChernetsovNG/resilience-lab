@@ -26,13 +26,16 @@ function queuedChanges(...responses: Array<WorkspaceChangesView | Error>) {
 
 function harness(options: {
   changes?: (since: string | null, call: number) => StubResponse | Promise<StubResponse>;
+  documents?: () => StubResponse | Promise<StubResponse>;
   put?: (path: string) => StubResponse | Promise<StubResponse>;
+  beforeDocument?: (path: string) => void | Promise<void>;
 } = {}) {
   const views = structuredClone(documentViews);
   let changeCall = 0;
   const fetchMock = stubFetch(async (url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
+      if (options.documents !== undefined) return options.documents();
       return { body: Object.values(views).map(({ path, kind, version }) => ({ path, kind, version })) };
     }
     if (url.startsWith("/api/v1/workspace/changes")) {
@@ -46,6 +49,7 @@ function harness(options: {
       const kind = path.endsWith(".layout.json") ? "LAYOUT" : path.endsWith(".model.json") ? "MODEL" : "EXPERIMENT";
       return { body: { path, kind, version: `v-${kind.toLowerCase()}-2` } };
     }
+    await options.beforeDocument?.(path);
     const document = views[path];
     return document === undefined
       ? { status: 404, body: { code: "DOCUMENT_NOT_FOUND", message: "missing", diagnostics: [] } }
@@ -259,6 +263,131 @@ describe("workspace change polling", () => {
     expect(result.current.loaded?.layout.positions.gateway).toEqual({ x: 99, y: 100 });
     expect(result.current.loaded?.versions.layout).toBe("v-layout-new");
     expect(result.current.loaded?.experiment.layoutRef).toBeNull();
+    expect(result.current.externalChange).toBeNull();
+  });
+
+  it("defers an old-version revert until the PUT response", async () => {
+    const gate = deferred();
+    harness({
+      changes: queuedChanges({ cursor: "g:1", reset: false, changes: [
+        { path: modelPath, kind: "MODEL", version: "v-model-2" },
+        { path: modelPath, kind: "MODEL", version: "v-model" },
+      ] }),
+      put: async (path) => {
+        await gate.promise;
+        return { body: { path, kind: "MODEL", version: "v-model-2" } };
+      },
+    });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    let saving!: Promise<void>;
+    act(() => { saving = result.current.save(); });
+
+    await poll();
+    expect(result.current.externalChange).toBeNull();
+    gate.release();
+    await act(async () => { await saving; });
+    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+  });
+
+  it("defers deletion of a newly created layout until the PUT response", async () => {
+    const gate = deferred();
+    const { views } = harness({
+      changes: queuedChanges({ cursor: "g:1", reset: false, changes: [
+        { path: layoutPath, kind: "LAYOUT", version: "v-layout-2" },
+        { path: layoutPath, kind: "LAYOUT", version: null },
+      ] }),
+      put: async (path) => {
+        if (path === layoutPath) await gate.promise;
+        return { body: { path, kind: path === layoutPath ? "LAYOUT" : "EXPERIMENT", version: path === layoutPath ? "v-layout-2" : "v-experiment-2" } };
+      },
+    });
+    delete views[layoutPath];
+    views[experimentPath].content.experiment!.layoutRef = null;
+    const { result } = await loaded();
+    act(() => result.current.execute((documents) => ({
+      ...documents,
+      layout: { ...documents.layout, positions: { gateway: { x: 10, y: 20 } } },
+    })));
+    let saving!: Promise<void>;
+    act(() => { saving = result.current.save(); });
+
+    await poll();
+    expect(result.current.externalChange).toBeNull();
+    gate.release();
+    await act(async () => { await saving; });
+    expect(result.current.externalChange).toEqual({ path: layoutPath, deleted: true });
+  });
+
+  it("retries a journal response that arrives while reload is reading", async () => {
+    const readGate = deferred();
+    const readStarted = deferred();
+    let pauseRead = false;
+    harness({
+      changes: (since, call) => {
+        if (call === 0) return { body: emptyChanges("g:0") };
+        return { body: since === "g:0" ? modelChange("v-external", "g:1") : emptyChanges("g:1") };
+      },
+      beforeDocument: async (path) => {
+        if (pauseRead && path === modelPath) {
+          pauseRead = false;
+          readStarted.release();
+          await readGate.promise;
+        }
+      },
+    });
+    const { result } = await loaded();
+    pauseRead = true;
+    let reloading!: Promise<void>;
+    act(() => { reloading = result.current.reload(); });
+    await act(async () => { await readStarted.promise; });
+
+    await poll();
+    readGate.release();
+    await act(async () => { await reloading; });
+    await poll();
+
+    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+  });
+
+  it("discards a reset list captured before the PUT response", async () => {
+    const listGate = deferred();
+    const listStarted = deferred();
+    let pauseList = false;
+    const { views } = harness({
+      changes: (since, call) => {
+        if (call === 0) return { body: emptyChanges("g:0") };
+        return { body: since === "g:0" ? { cursor: "h:0", reset: true, changes: [] } : emptyChanges("h:0") };
+      },
+      documents: async () => {
+        const body = Object.values(views).map(({ path, kind, version }) => ({ path, kind, version }));
+        if (pauseList) {
+          pauseList = false;
+          listStarted.release();
+          await listGate.promise;
+        }
+        return { body };
+      },
+      put: (path) => {
+        views[path].version = "v-model-2";
+        return { body: { path, kind: "MODEL", version: "v-model-2" } };
+      },
+    });
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    pauseList = true;
+    let polling!: Promise<void>;
+    await act(async () => {
+      polling = vi.advanceTimersByTimeAsync(1000);
+      await listStarted.promise;
+    });
+    await act(async () => { await result.current.save(); });
+    await act(async () => {
+      listGate.release();
+      await polling;
+    });
+    await poll();
+
     expect(result.current.externalChange).toBeNull();
   });
 });

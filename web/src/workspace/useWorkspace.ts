@@ -95,6 +95,7 @@ export function useWorkspace(): Workspace {
   const savingPaths = useRef(new Set<string>());
   const deferredChanges = useRef(new Map<string, WorkspaceChangeView>());
   const cursor = useRef<string | null>(null);
+  const persistenceRevision = useRef(0);
   const changed = dirtyDocuments(loaded);
   const dirty = Object.values(changed).some(Boolean);
   const openedExperimentPath = loaded?.experimentPath;
@@ -114,7 +115,7 @@ export function useWorkspace(): Workspace {
       const kind = (["model", "layout", "experiment"] as const).find((candidate) => current[`${candidate}Path`] === path);
       if (kind === undefined) continue;
       const version = change.version ?? null;
-      if (savingPaths.current.has(path) && version !== current.versions[kind]) {
+      if (savingPaths.current.has(path)) {
         deferredChanges.current.set(path, change);
         continue;
       }
@@ -148,6 +149,7 @@ export function useWorkspace(): Workspace {
     try {
       const next = await loadExperiment(experimentPath, recoveryLayoutPath);
       if (current === generation.current) {
+        persistenceRevision.current += 1;
         loadedRef.current = next;
         deferredChanges.current.clear();
         setExternalChanges({});
@@ -183,6 +185,8 @@ export function useWorkspace(): Workspace {
     };
     const poll = async (): Promise<void> => {
       try {
+        if (loadInFlight.current) return;
+        const revision = persistenceRevision.current;
         const since = cursor.current;
         const response = await api.changes(since ?? undefined);
         if (!active) return;
@@ -203,6 +207,8 @@ export function useWorkspace(): Workspace {
         } else if (response.changes.some((change) => change.kind === "EXPERIMENT")) {
           if (await refreshDocuments() === null) return;
         }
+        // A response consumed against a newer open/save snapshot would be classified against the wrong versions.
+        if (loadInFlight.current || revision !== persistenceRevision.current) return;
         classifyChanges(changes);
         cursor.current = response.cursor;
       } catch {
@@ -267,6 +273,7 @@ export function useWorkspace(): Workspace {
         try {
           const entry = await api.saveDocument(path, { [kind]: saved[kind] }, saved.versions[kind]);
           if (current !== generation.current) return;
+          persistenceRevision.current += 1;
           const latest = loadedRef.current;
           if (latest !== null) {
             loadedRef.current = {
