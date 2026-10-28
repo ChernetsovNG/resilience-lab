@@ -13,7 +13,7 @@ const otherPath = "retry-storm/second.experiment.json";
 const health = { status: "UP", applicationVersion: "test", kslVersion: "test" };
 const completed: JobView = {
   id: "job-1", experiment: experimentPath, runId: "run-1", status: "COMPLETED",
-  completedTasks: 4, totalTasks: 4, error: null, diagnostics: [],
+  completedTasks: 4, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
 };
 
 function deferred() {

@@ -1,10 +1,14 @@
 package resiliencelab.cli
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -146,8 +150,21 @@ class CliTest {
     }
 
     @Test
+    fun `cancellation before execution returns 130 without claiming an artifact exists`() {
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+
+        val status = runCommand(listOf("run", experiment), stdout, stderr, workspace, isCancelled = { true })
+
+        assertThat(status).isEqualTo(130)
+        assertThat(stdout.toString()).isEmpty()
+        assertThat(stderr.toString()).contains("Cancelled before an artifact was created").doesNotContain("Execution failed")
+        assertThat(workspace.resolve(".results")).doesNotExist()
+    }
+
+    @Test
     fun `execution failures return 1 with a sanitized message`() {
-        val result = execute(listOf("run", experiment)) { _, _, _, _ -> throw IllegalStateException("boom\n\tat somewhere") }
+        val result = execute(listOf("run", experiment)) { _, _, _, _, _ -> throw IllegalStateException("boom\n\tat somewhere") }
 
         assertThat(result.exitCode).isEqualTo(1)
         assertThat(result.stdout).isEmpty()
@@ -184,6 +201,84 @@ class CliTest {
         assertThat(result.exitCode).isEqualTo(2)
         assertThat(result.stdout).isEmpty()
         assertThat(result.stderr).contains("DOCUMENT_UNREADABLE").doesNotContain("\tat ")
+    }
+
+    @Test
+    fun `installed launcher handles SIGINT and SIGTERM with an incomplete artifact and code 130`() {
+        assumeFalse(System.getProperty("os.name").startsWith("Windows", ignoreCase = true))
+        val file = workspace.resolve(experiment)
+        file.writeText(file.readText().replace("\"replications\": 2", "\"replications\": 1000"))
+        val launcher = Path.of("apps/cli/build/install/cli/bin/cli").toAbsolutePath()
+        listOf("INT", "TERM").forEach { signal ->
+            val output = workspace.resolve("stdout-$signal.log")
+            val error = workspace.resolve("stderr-$signal.log")
+            val process =
+                ProcessBuilder(launcher.toString(), "run", "--workers", "1", experiment)
+                    .directory(workspace.toFile())
+                    .redirectOutput(output.toFile())
+                    .redirectError(error.toFile())
+                    .start()
+            try {
+                val deadline = System.nanoTime() + SECONDS.toNanos(30)
+                while (!error.readText().contains("Tasks ")) {
+                    check(process.isAlive && System.nanoTime() < deadline) { "CLI did not start: ${error.readText()}" }
+                    Thread.sleep(20)
+                }
+                assertThat(ProcessBuilder("kill", "-$signal", process.pid().toString()).start().waitFor()).isZero()
+                assertThat(process.waitFor(30, SECONDS)).isTrue()
+                assertThat(process.exitValue()).describedAs("SIG$signal: ${error.readText()}").isEqualTo(130)
+                assertThat(output.readText()).isEmpty()
+                val directory = Regex("Cancelled: (.+)").find(error.readText())?.groupValues?.get(1)
+                assertThat(directory).describedAs(error.readText()).isNotNull()
+                val artifact = workspace.resolve(directory!!)
+                assertThat(artifact.resolve("manifest.json").readText()).contains("\"complete\": false")
+                assertThat(artifact.resolve("summary.json")).doesNotExist()
+            } finally {
+                if (process.isAlive) {
+                    process.destroyForcibly()
+                    process.waitFor(10, SECONDS)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `second SIGINT forces exit when cooperative cancellation cannot finish`() {
+        assumeFalse(System.getProperty("os.name").startsWith("Windows", ignoreCase = true))
+        val output = workspace.resolve("blocked-command.log")
+        val classpath =
+            Path.of("apps/cli/build/classes/kotlin/test").toAbsolutePath().toString() + File.pathSeparator +
+                Path.of("apps/cli/build/install/cli/lib/*").toAbsolutePath()
+        val process =
+            ProcessBuilder(
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-cp",
+                classpath,
+                SignalCancellationProcess::class.java.name,
+            ).redirectErrorStream(true).redirectOutput(output.toFile()).start()
+
+        fun awaitOutput(marker: String) {
+            val deadline = System.nanoTime() + SECONDS.toNanos(30)
+            while (!output.readText().contains(marker)) {
+                check(process.isAlive && System.nanoTime() < deadline) { "Missing $marker: ${output.readText()}" }
+                Thread.sleep(10)
+            }
+        }
+        try {
+            awaitOutput("READY")
+            assertThat(ProcessBuilder("kill", "-INT", process.pid().toString()).start().waitFor()).isZero()
+            awaitOutput("CANCELLING")
+            assertThat(process.isAlive).isTrue()
+
+            assertThat(ProcessBuilder("kill", "-INT", process.pid().toString()).start().waitFor()).isZero()
+            assertThat(process.waitFor(5, SECONDS)).isTrue()
+            assertThat(process.exitValue()).isEqualTo(130)
+        } finally {
+            if (process.isAlive) {
+                process.destroyForcibly()
+                process.waitFor(10, SECONDS)
+            }
+        }
     }
 
     /** Runs the launcher from `installDist` as a separate process in the workspace. */
@@ -231,4 +326,17 @@ class CliTest {
         val stdout: String,
         val stderr: String,
     )
+}
+
+/** A child process whose cleanup deliberately blocks after receiving the first cancellation request. */
+private object SignalCancellationProcess {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        SignalCancellation().use { cancellation ->
+            println("READY")
+            while (!cancellation.isCancelled()) Thread.sleep(10)
+            println("CANCELLING")
+            CountDownLatch(1).await()
+        }
+    }
 }

@@ -102,6 +102,65 @@ class JobServiceTest {
     }
 
     @Test
+    fun `queued cancellation is immediate idempotent and never starts computing`() {
+        val queued = mutableListOf<Runnable>()
+        val jobs = service(Executor { queued += it }, maxTerminalJobs = 2)
+        val job = jobs.submit(experiment)
+
+        val cancelled = jobs.cancel(job.id)!!
+        assertThat(cancelled.status).isEqualTo(JobStatus.CANCELLED)
+        assertThat(cancelled.cancelRequested).isTrue()
+        assertThat(jobs.cancel(job.id)).isEqualTo(cancelled)
+        queued.single().run()
+
+        assertThat(jobs.get(job.id)).isEqualTo(cancelled)
+        assertThat(root.resolve(".results")).doesNotExist()
+        val next = jobs.submit(experiment)
+        queued.last().run()
+        assertThat(jobs.get(next.id)?.status).isEqualTo(JobStatus.COMPLETED)
+        assertThat(jobs.get(job.id)).isEqualTo(cancelled)
+    }
+
+    @Test
+    fun `failed jobs cannot be cancelled`() {
+        val jobs = service(Executor { throw RejectedExecutionException() })
+        val failed = jobs.submit(experiment)
+
+        assertThatThrownBy { jobs.cancel(failed.id) }
+            .isInstanceOf(Conflict::class.java)
+            .hasFieldOrPropertyWithValue("code", "JOB_FINISHED")
+        assertThat(jobs.get(failed.id)).isEqualTo(failed)
+    }
+
+    @Test
+    fun `shutdown cancels queued and late jobs while preserving finished jobs`() {
+        val queued = mutableListOf<Runnable>()
+        val jobs = service(Executor { queued += it })
+        val finished = jobs.submit(experiment)
+        queued.single().run()
+        val first = jobs.submit(experiment)
+        val second = jobs.submit(experiment)
+
+        jobs.close()
+        jobs.close()
+
+        listOf(first, second).forEach { job ->
+            assertThat(jobs.get(job.id)?.status).isEqualTo(JobStatus.CANCELLED)
+            assertThat(jobs.get(job.id)?.cancelRequested).isTrue()
+        }
+        assertThat(jobs.get(finished.id)?.status).isEqualTo(JobStatus.COMPLETED)
+        assertThat(jobs.get(finished.id)?.cancelRequested).isFalse()
+        val late = jobs.submit(experiment)
+        assertThat(late.status).isEqualTo(JobStatus.CANCELLED)
+        assertThat(late.cancelRequested).isTrue()
+        assertThat(queued).hasSize(3)
+        queued.drop(1).forEach { it.run() }
+        listOf(first, second, late).forEach { job ->
+            assertThat(root.resolve(".results/retry-storm/${job.runId}")).doesNotExist()
+        }
+    }
+
+    @Test
     fun `rejects valid document changes made while a job is queued`() {
         val queued = mutableListOf<Runnable>()
         val jobs = service(Executor { queued += it })

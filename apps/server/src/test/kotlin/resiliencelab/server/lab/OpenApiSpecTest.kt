@@ -105,6 +105,7 @@ class OpenApiSpecTest {
             "/api/v1/health",
             "/api/v1/jobs",
             "/api/v1/jobs/{id}",
+            "/api/v1/jobs/{id}/cancel",
             "/api/v1/runs",
             "/api/v1/runs/{id}/manifest",
             "/api/v1/runs/{id}/summary",

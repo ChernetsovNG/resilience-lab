@@ -7,25 +7,42 @@ import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
 import resiliencelab.core.lab.RunOutcome
+import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.workspace.FileWorkspace
+import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.Locale
+import java.util.concurrent.CancellationException
 import kotlin.system.exitProcess
 
 private const val USAGE = "Usage: validate <experiment.json> | run [--workers N] <experiment.json>"
 
 /** Runs one command against the current directory as the workspace and exits with its status. */
 fun main(args: Array<String>) {
-    exitProcess(runCommand(args.asList(), System.out, System.err))
+    val status =
+        if (args.firstOrNull() == "run") {
+            SignalCancellation().use { cancellation ->
+                runCommand(args.asList(), System.out, System.err, isCancelled = cancellation::isCancelled)
+            }
+        } else {
+            runCommand(args.asList(), System.out, System.err)
+        }
+    exitProcess(status)
 }
 
 /** Runs an experiment through [Lab]: the CLI counterpart of `POST /jobs`. */
-internal typealias ExperimentRun = (lab: Lab, experiment: String, runId: String, onProgress: (Int, Int) -> Unit) -> RunOutcome
+internal typealias ExperimentRun = (
+    lab: Lab,
+    experiment: String,
+    runId: String,
+    isCancelled: () -> Boolean,
+    onProgress: (Int, Int) -> Unit,
+) -> RunOutcome
 
 /**
  * Validates or runs an experiment of the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
- * 2 for usage errors and invalid experiments, 1 for execution failures. `run` writes the artifact to `.results/`,
+ * 2 for usage errors and invalid experiments, 1 for execution failures, 130 for cancellation. `run` writes the artifact to `.results/`,
  * progress to [stderr], and the run directory followed by one summary line per variant to [stdout].
  */
 internal fun runCommand(
@@ -34,7 +51,10 @@ internal fun runCommand(
     stderr: Appendable,
     workspaceRoot: Path = Path.of("").toAbsolutePath(),
     newRunId: () -> String = { RunIds.next() },
-    execute: ExperimentRun = { lab, experiment, runId, onProgress -> lab.run(experiment, runId, onProgress = onProgress) },
+    isCancelled: () -> Boolean = { false },
+    execute: ExperimentRun = { lab, experiment, runId, cancelled, onProgress ->
+        lab.run(experiment, runId, isCancelled = cancelled, onProgress = onProgress)
+    },
 ): Int {
     val command = Command.parse(args) ?: return usage(stderr)
     val root = workspaceRoot.toAbsolutePath().normalize()
@@ -45,7 +65,7 @@ internal fun runCommand(
     return executor.use {
         val lab = Lab(FileWorkspace(root), executor = executor)
         if (command.run) {
-            run(lab, experiment, newRunId(), stdout, stderr, execute)
+            run(lab, experiment, newRunId(), root, stdout, stderr, isCancelled, execute)
         } else {
             validate(lab, experiment, stderr)
         }
@@ -85,15 +105,27 @@ private fun run(
     lab: Lab,
     experiment: String,
     runId: String,
+    workspaceRoot: Path,
     stdout: Appendable,
     stderr: Appendable,
+    isCancelled: () -> Boolean,
     execute: ExperimentRun,
 ): Int {
     val outcome =
         try {
-            execute(lab, experiment, runId) { completed, total ->
+            execute(lab, experiment, runId, isCancelled) { completed, total ->
                 synchronized(stderr) { stderr.appendLine("Tasks $completed/$total") }
             }
+        } catch (error: CancellationException) {
+            val directory = ResultsLayout.runDirectory(experiment, runId)
+            stderr.appendLine(
+                if (Files.isRegularFile(workspaceRoot.resolve("$directory/manifest.json"))) {
+                    "Cancelled: $directory"
+                } else {
+                    "Cancelled before an artifact was created"
+                },
+            )
+            return 130
         } catch (error: InvalidExperimentException) {
             return validationError(stderr, error.diagnostics)
         } catch (error: Exception) {

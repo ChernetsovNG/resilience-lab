@@ -102,9 +102,13 @@ enum class JobStatus {
     RUNNING,
     COMPLETED,
     FAILED,
+    CANCELLED,
 }
 
-/** Snapshot of a job: one run of one experiment; [totalTasks] is known after the first task finishes. */
+/**
+ * Snapshot of a job: one run of one experiment; [totalTasks] is known after the first task finishes.
+ * [cancelRequested] records a cancellation request; a running job only becomes [JobStatus.CANCELLED] after it stops.
+ */
 @Serializable
 data class JobView(
     val id: String,
@@ -113,6 +117,7 @@ data class JobView(
     val status: JobStatus,
     val completedTasks: Int,
     val totalTasks: Int,
+    val cancelRequested: Boolean = false,
     val error: String? = null,
     val diagnostics: List<Diagnostic> = emptyList(),
 )
