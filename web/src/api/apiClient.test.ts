@@ -70,6 +70,18 @@ describe("API client", () => {
     ]);
   });
 
+  it("reads workspace changes with an encoded optional cursor", async () => {
+    const fetchMock = stubFetch(() => ({ body: { cursor: "gen:13", reset: false, changes: [] } }));
+
+    await api.changes("gen:12");
+    await api.changes();
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/workspace/changes?since=gen%3A12",
+      "/api/v1/workspace/changes",
+    ]);
+  });
+
   it("turns error bodies into ApiError", async () => {
     stubFetch(() => ({ status: 409, body: { code: "VERSION_CONFLICT", message: "stale", diagnostics: [] } }));
 

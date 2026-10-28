@@ -22,3 +22,5 @@ export type RunSummary = Schemas["RunSummary"];
 export type TypeDescriptor = Schemas["TypeDescriptor"];
 export type Variant = Schemas["Variant"];
 export type ValidationView = Schemas["ValidationView"];
+export type WorkspaceChangeView = Schemas["WorkspaceChangeView"];
+export type WorkspaceChangesView = Schemas["WorkspaceChangesView"];
