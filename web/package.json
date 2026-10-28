@@ -45,6 +45,7 @@
     "vitest": "5.0.5"
   },
   "overrides": {
+    "@typescript/old": "npm:typescript@6.0.2",
     "openapi-typescript": {
       "typescript": "$typescript"
     }
