@@ -100,4 +100,25 @@ describe("API client", () => {
     expect(error.status).toBe(502);
     expect(error.problem).toEqual({ code: "HTTP_502", message: "Request failed with status 502", diagnostics: [] });
   });
+
+  it("reads series parts as raw JSON with their ETag and abort signal", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn(async (...args: [RequestInfo | URL, RequestInit?]) => {
+      const url = String(args[0]);
+      return url.endsWith("/1")
+        ? new Response("{\"part\":true}", { headers: { ETag: "\"abc123\"" } })
+        : new Response(JSON.stringify({ schemaVersion: 1, endMs: 100, windowMs: 10, parts: [] }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const index = await api.seriesIndex("run/1", "no retries", "p0", 0, controller.signal);
+    const part = await api.seriesPart("run/1", "no retries", "p0", 0, 1, controller.signal);
+
+    expect(index.windowMs).toBe(10);
+    expect(part).toEqual({ text: "{\"part\":true}", etag: "\"abc123\"" });
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.signal])).toEqual([
+      ["/api/v1/runs/run%2F1/series/no%20retries/p0/0", controller.signal],
+      ["/api/v1/runs/run%2F1/series/no%20retries/p0/0/1", controller.signal],
+    ]);
+  });
 });
