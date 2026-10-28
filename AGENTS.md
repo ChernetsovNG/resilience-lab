@@ -4,12 +4,12 @@
 
 Текущий срез включает модули `core`, `apps:cli`, `apps:server` и `web`:
 
-- `core` — фундамент этапа 1: каталог типов, документы рабочей области, компилятор в IR, KSL-симуляция с потоками по путям блоков, исполнение задач, артефакты прогонов и фасад `Lab`; модель сценариев MVP со sweep остаётся до перехода web.
+- `core` — фундамент этапа 1: каталог типов, документы рабочей области, компилятор в IR, KSL-симуляция с потоками по путям блоков, исполнение задач, артефакты прогонов и фасад `Lab`; модель сценариев MVP со sweep остаётся до отдельного плана удаления MVP.
 - `apps:cli` — команды `validate` и `run [--workers N]` для экспериментов рабочей области, собираемые с помощью Gradle `application`.
-- `apps:server` — Spring Boot API этапа 1 (каталог, документы рабочей области, проверка, задания, прогоны) со спецификацией `apps/server/openapi.json` и ручки MVP для нынешнего web; задания хранятся process-local.
-- `web` — Vite/React SPA с типизированным API client, health badge, controlled Xyflow editor, формами параметров, baseline/candidate-сравнением, sweep, Recharts-графиками и импортом/экспортом JSON.
+- `apps:server` — Spring Boot API этапа 1 (каталог, документы рабочей области, проверка, задания, прогоны) со спецификацией `apps/server/openapi.json` и ручки MVP, которые больше не используются и ждут удаления; задания хранятся process-local.
+- `web` — Vite/React SPA этапа 1: экран без прокрутки, холст React Flow, инспектор параметров из каталога с сохранением модели, страницы вариантов для просмотра, запуск задания и сводка; типы API генерируются из `apps/server/openapi.json`.
 
-Первый полный MVP завершён: core, CLI, Spring API и браузерный UI реализованы; реальный Chromium-сценарий проходит через editor, API, polling, charts и download без mock API.
+Сквозной срез этапа 1: реальный Chromium-сценарий открывает пример рабочей области, меняет параметр, сохраняет модель, запускает эксперимент и видит сводку без mock API. Ручки MVP на сервере больше не используются и удаляются отдельной задачей.
 
 ## Стандартные команды сборки и проверки
 
@@ -30,11 +30,12 @@ Gradle-команды выполняются из корня репозитор�
 - `npm run test:coverage` — web unit-тесты с V8-покрытием без порогов; HTML и LCOV сохраняются в `web/coverage/`.
 - `npm run build` — type-check и production-сборка web в `web/dist/`.
 - `npm run lint` — ESLint для web.
+- `npm run api:types` — пересоздать `web/src/api/schema.d.ts` из `apps/server/openapi.json`; `npm run api:check` проверяет, что файл актуален.
 - `npm run dev` — Vite dev server с proxy `/api` на `http://127.0.0.1:8080`.
 - `npx playwright install chromium` — локальная установка Chromium; в CI браузеры и системные зависимости уже установлены в официальном Docker-образе Playwright.
-- `npm run test:e2e` — Playwright запускает изолированные `./gradlew :apps:server:bootRun` из корня и `npm run dev -- --host 127.0.0.1` из `web`, ждёт `http://127.0.0.1:8080/api/v1/health` и `http://127.0.0.1:5173`, не использует уже запущенные серверы и останавливает browser/server processes после прогона. Trace и screenshot при ошибках сохраняются в `web/test-results/`; CI также загружает `web/playwright-report/`, если он сформирован.
+- `npm run test:e2e` — Playwright запускает изолированные `./gradlew :apps:server:bootRunE2e` из корня (сервер на свежей копии `examples/` в `apps/server/build/e2e-workspace/`, поэтому E2E не меняют файлы репозитория) и `npm run dev -- --host 127.0.0.1` из `web`, ждёт `http://127.0.0.1:8080/api/v1/health` и `http://127.0.0.1:5173`, не использует уже запущенные серверы и останавливает browser/server processes после прогона. Trace и screenshot при ошибках сохраняются в `web/test-results/`; CI также загружает `web/playwright-report/`, если он сформирован.
 
-Проект использует Gradle Wrapper 9.8.2. Workflow `.github/workflows/ci.yml` запускается на `push` только в ветку `main`, на `pull_request` и вручную через `workflow_dispatch`. В нём настроены две независимые job с лимитом 20 минут каждая. `build` на обычном Ubuntu-раннере выполняет `./gradlew --no-daemon clean build`, `npm ci`, lint, `npm run test:coverage` и production build. `e2e` запускает `npm ci` и `npm run test:e2e -- --reporter=line,html` внутри официального образа `mcr.microsoft.com/playwright:v1.64.1-noble` с готовыми браузерами и системными зависимостями; установки браузеров и apt-пакетов в workflow нет. Обе job используют JDK 25 и Node.js из `web/.nvmrc`, кэши Gradle и npm. При запуске E2E `GRADLE_USER_HOME="$HOME/.gradle"` направляет Gradle в каталог, который кэширует `actions/setup-java` внутри контейнера.
+Проект использует Gradle Wrapper 9.8.2. Workflow `.github/workflows/ci.yml` запускается на `push` только в ветку `main`, на `pull_request` и вручную через `workflow_dispatch`. В нём настроены две независимые job с лимитом 20 минут каждая. `build` на обычном Ubuntu-раннере выполняет `./gradlew --no-daemon clean build`, `npm ci`, lint, проверку сгенерированных типов API (`npm run api:check`), `npm run test:coverage` и production build. `e2e` запускает `npm ci` и `npm run test:e2e -- --reporter=line,html` внутри официального образа `mcr.microsoft.com/playwright:v1.64.1-noble` с готовыми браузерами и системными зависимостями; установки браузеров и apt-пакетов в workflow нет. Обе job используют JDK 25 и Node.js из `web/.nvmrc`, кэши Gradle и npm. При запуске E2E `GRADLE_USER_HOME="$HOME/.gradle"` направляет Gradle в каталог, который кэширует `actions/setup-java` внутри контейнера.
 
 Перед E2E проверяется совпадение версии образа с `@playwright/test` из `web/package-lock.json`; при обновлении Playwright нужно также обновить `jobs.e2e.container.image`, иначе проверка завершится с понятной ошибкой. YAML anchor связывает образ контейнера и значение для проверки. HTML/XML-отчёты JaCoCo `core/build/reports/jacoco/test`, `apps/cli/build/reports/jacoco/test`, `apps/server/build/reports/jacoco/test` и V8-отчёт `web/coverage/` (артефакт `frontend-coverage`) сохраняет job `build`, а `web/test-results/` и `web/playwright-report/` — job `e2e`, в обоих случаях и при ошибке предыдущих шагов, если файлы сформированы. HTML-отчёт Playwright формируется и при успешном прогоне.
 

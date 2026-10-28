@@ -14,8 +14,8 @@ export default defineConfig({
   webServer: [
     {
       command: process.platform === "win32"
-        ? "gradlew.bat :apps:server:bootRun"
-        : "./gradlew :apps:server:bootRun",
+        ? "gradlew.bat :apps:server:bootRunE2e"
+        : "./gradlew :apps:server:bootRunE2e",
       cwd: "..",
       url: "http://127.0.0.1:8080/api/v1/health",
       timeout: 120_000,

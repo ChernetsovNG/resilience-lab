@@ -43,3 +43,23 @@ tasks.test {
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     workingDir = rootProject.projectDir
 }
+
+val e2eWorkspace = layout.buildDirectory.dir("e2e-workspace")
+
+val prepareE2eWorkspace =
+    tasks.register<Sync>("prepareE2eWorkspace") {
+        description = "Copies examples/ into a scratch workspace for browser tests."
+        from(rootProject.file("examples")) { exclude("**/.results/**") }
+        into(e2eWorkspace)
+        outputs.upToDateWhen { false }
+    }
+
+tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") {
+    description = "Runs the server on a fresh copy of examples/, so browser tests never change the repository."
+    group = "application"
+    dependsOn(prepareE2eWorkspace)
+    mainClass.set(application.mainClass)
+    classpath = sourceSets["main"].runtimeClasspath
+    workingDir = rootProject.projectDir
+    systemProperty("resilience-lab.workspace", e2eWorkspace.get().asFile.absolutePath)
+}
