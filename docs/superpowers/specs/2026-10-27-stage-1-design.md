@@ -161,7 +161,7 @@ API получает базовый путь `/api/v1` и полностью з�
 | `GET /catalog` | Каталог типов |
 | `GET /workspace/documents`, `GET/PUT/DELETE /workspace/document?path=` | Документы рабочей области с версией; путь содержит `/`, поэтому передаётся параметром |
 | `GET /workspace/changes?since=` | Внешние изменения |
-| `POST /validate` | Диагностика и линтер |
+| `POST /validate` | Диагностика и линтер; необязательные черновики документов позволяют проверить несохранённые правки |
 | `POST /estimate` | Оценка стоимости эксперимента |
 | `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`, `POST /jobs/{id}/resume` | Задания |
 | `GET /runs`, `GET /runs/{id}/manifest`, `GET /runs/{id}/summary`, `GET /runs/{id}/series/{variant}/{cell}/{rep}` | Прогоны; части рядов отдаются в gzip как есть |
