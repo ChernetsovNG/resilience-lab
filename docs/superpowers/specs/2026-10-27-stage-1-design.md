@@ -177,8 +177,8 @@ API получает базовый путь `/api/v1` и полностью з�
 | `GET /workspace/changes?since=` | Внешние изменения |
 | `POST /validate` | Диагностика и линтер; необязательные черновики документов позволяют проверить несохранённые правки |
 | `POST /estimate` | Оценка стоимости эксперимента |
-| `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`, `POST /jobs/{id}/resume` | Задания |
-| `GET /runs`, `GET /runs/{id}/manifest`, `GET /runs/{id}/summary`, `GET /runs/{id}/series/{variant}/{cell}/{rep}`, `GET /runs/{id}/series/{variant}/{cell}/{rep}/{part}` | Прогоны; для задачи — индекс частей рядов, затем сами части в gzip как есть |
+| `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel` | Задания |
+| `GET /runs`, `POST /runs/{id}/resume`, `GET /runs/{id}/manifest`, `GET /runs/{id}/summary`, `GET /runs/{id}/series/{variant}/{cell}/{rep}`, `GET /runs/{id}/series/{variant}/{cell}/{rep}/{part}` | Прогоны, включая незаконченные, и досчёт незаконченного — к прогону, а не к заданию: задания не переживают перезапуск сервера; для задачи — индекс частей рядов, затем сами части в gzip как есть |
 
 Спецификацию генерирует springdoc в `apps/server/openapi.json`. Классы ядра сервер отдаёт через kotlinx-конвертер Spring, а springdoc строит схему по тем же классам через Jackson. Поэтому JSON API содержит все поля, отсутствующее значение пишется как `null`, а типы API не используют `@SerialName`, собственные сериализаторы и полиморфизм.
 
