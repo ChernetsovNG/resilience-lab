@@ -3,6 +3,7 @@ package resiliencelab.core.compiler
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
+import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.ExperimentFile
@@ -517,6 +518,54 @@ class ModelCompilerTest {
                 .describedAs(cap)
                 .containsExactly("e.experiment.json" to "/execution/maxRealTime")
         }
+    }
+
+    @Test
+    fun `missing client catalog descriptor returns diagnostics`() = assertMissingCatalogType("client")
+
+    @Test
+    fun `missing service catalog descriptor returns diagnostics`() = assertMissingCatalogType("service")
+
+    @Test
+    fun `missing request catalog descriptor returns diagnostics`() = assertMissingCatalogType("request")
+
+    @Test
+    fun `missing call catalog descriptor returns diagnostics`() = assertMissingCatalogType("call")
+
+    private fun assertMissingCatalogType(type: String) {
+        val catalog = Stage1Catalog.catalog.copy(types = Stage1Catalog.catalog.types.filterNot { it.id == type })
+        val compiler = ModelCompiler(catalog)
+        val result = compiler.compile(model(), "m.model.json", experiment(), "e.experiment.json")
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code }).describedAs(type).contains("TYPE_UNKNOWN")
+
+        val (broken, pointer) =
+            if (type == "service") {
+                model.replace("\"rate\": \"120/s\"", "\"rate\": \"0/s\"") to "/blocks/client/params/rate"
+            } else {
+                model.replace("\"handlers\": 4", "\"handlers\": 0") to "/blocks/gateway/params/handlers"
+            }
+        val independent = compiler.compile(model(broken), "m.model.json", experiment(), "e.experiment.json")
+
+        assertThat(independent.experiment).isNull()
+        assertThat(independent.diagnostics.map { Triple(it.code, it.document, it.pointer) })
+            .describedAs(type)
+            .contains(Triple("PARAM_RANGE", "m.model.json", pointer))
+    }
+
+    @Test
+    fun `an unused missing catalog descriptor does not reject a valid model`() {
+        val catalog = Stage1Catalog.catalog.copy(types = Stage1Catalog.catalog.types.filterNot { it.id == "call" })
+        val base = model()
+        val singleService = base.copy(blocks = base.blocks - "dependency", connections = base.connections.take(1))
+        val baseExperiment = experiment()
+        val baseline = baseExperiment.copy(faults = emptyList(), variants = baseExperiment.variants.take(1))
+
+        val result = ModelCompiler(catalog).compile(singleService, "m.model.json", baseline, "e.experiment.json")
+
+        assertThat(result.diagnostics).isEmpty()
+        assertThat(result.experiment).isEqualTo(compile(singleService, baseline).experiment)
     }
 
     @Test

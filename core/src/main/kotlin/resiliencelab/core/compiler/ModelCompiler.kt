@@ -301,7 +301,7 @@ class ModelCompiler(
         overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ClientNode? {
-        val reader = reader("client", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+        val reader = reader("client", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides) ?: return null
         val rate = reader.quantity("rate")
         val deadline = reader.quantity("deadline")
         if (rate != null && !(1.0 / rate).isFinite()) {
@@ -318,7 +318,7 @@ class ModelCompiler(
         overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ServiceNode? {
-        val reader = reader("service", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+        val reader = reader("service", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides) ?: return null
         val handlers = reader.int("handlers")
         val queue = reader.int("queue")
         val processing = reader.obj("processing")?.let(::distribution)
@@ -338,7 +338,7 @@ class ModelCompiler(
         sink: Diagnostics,
     ): CallEdge? {
         val pointer = JsonPointer.of("connections", index, "params")
-        val reader = reader("call", connection.params, document, pointer, connection.id, sink, overrides)
+        val reader = reader("call", connection.params, document, pointer, connection.id, sink, overrides) ?: return null
         val network = reader.obj("network")?.let(::distribution)
         val timeout = reader.quantity("timeout")
         val attempts = reader.int("attempts")
@@ -400,7 +400,10 @@ class ModelCompiler(
         path: String,
         sink: Diagnostics,
         overrides: OverrideOrigins? = null,
-    ) = ParamReader(params, catalog.type(type)!!.params, document, pointer, path, sink.items, overrides ?: OverrideOrigins.NONE)
+    ): ParamReader? =
+        catalog.type(type)?.let {
+            ParamReader(params, it.params, document, pointer, path, sink.items, overrides ?: OverrideOrigins.NONE)
+        }
 
     private fun runSettings(
         experiment: ExperimentFile,
