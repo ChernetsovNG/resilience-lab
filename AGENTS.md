@@ -20,7 +20,7 @@ Gradle-команды выполняются из корня репозитор�
 - `./gradlew test` — все JVM-тесты.
 - `./gradlew clean build` — чистая полная сборка и все доступные JVM-проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
-- `UPDATE_SERIES_GOLDEN=1 ./gradlew :core:test --tests 'resiliencelab.core.results.WebSeriesGoldenTest' --rerun` — пересоздать `web/src/results/series/fixtures/retry-storm-baseline-rep-0.json` из рядов retry-storm и квантилей ядра; без переменной тест проверяет актуальность эталона.
+- `UPDATE_SERIES_GOLDEN=1 ./gradlew :core:test --tests 'resiliencelab.core.results.WebSeriesGoldenTest' --rerun` — пересоздать `web/src/results/series/fixtures/retry-storm-baseline-rep-0.json` из рядов retry-storm и квантилей ядра. Без переменной пример не запускается: тест проверяет, что закоммиченная часть читается текущим `SeriesPart` и сериализуется обратно без изменений, и сверяет биты p50/p95/p99 из `LatencySketch`. Побайтового сравнения свежего прогона с эталоном нет: `sumMs` может различаться в последних битах между платформами.
 - `UPDATE_SCHEMAS=1 ./gradlew :core:test --tests 'resiliencelab.core.document.DocumentSchemasTest' --rerun` — пересоздать `schemas/*.schema.json` из классов документов и каталога; без переменной тест проверяет актуальность файлов. Схемы проверяют структуру, единицы и диапазоны обычных чисел; границы строковых величин записаны в `x-quantity` в канонических единицах и проверяются ядром. Формат аннотации описан в [schemas/README.md](schemas/README.md).
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.

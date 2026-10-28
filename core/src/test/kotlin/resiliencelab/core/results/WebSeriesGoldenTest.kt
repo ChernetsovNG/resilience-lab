@@ -1,8 +1,8 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DocumentCodec
@@ -14,14 +14,29 @@ import java.nio.file.Path
 import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 
+@OptIn(ExperimentalSerializationApi::class)
 class WebSeriesGoldenTest {
     private val root = Path.of(System.getProperty("resilience-lab.project-root"))
     private val golden = root.resolve("web/src/results/series/fixtures/retry-storm-baseline-rep-0.json")
+    private val seriesJson = Json { encodeDefaults = true }
 
     @Test
-    fun `web retry storm fixture matches core series and quantile bits`(
+    fun `committed web retry storm fixture round trips and matches core quantile bits`(
         @TempDir temporary: Path,
     ) {
+        if (System.getenv("UPDATE_SERIES_GOLDEN") == "1") regenerateGolden(temporary)
+
+        val expected = Json.decodeFromString(WebSeriesGolden.serializer(), Files.readString(golden))
+        val part = seriesJson.decodeFromJsonElement(SeriesPart.serializer(), expected.part)
+        assertThat(seriesJson.encodeToJsonElement(SeriesPart.serializer(), part))
+            .describedAs("committed part must round-trip through current SeriesPart without changes")
+            .isEqualTo(expected.part)
+        assertThat(quantileBits(part))
+            .describedAs("quantile bits must match the committed core reference")
+            .isEqualTo(expected.quantiles)
+    }
+
+    private fun regenerateGolden(temporary: Path) {
         copyExamples(temporary)
         val outcome = Lab(FileWorkspace(temporary)).use { it.run("retry-storm/retry-storm.experiment.json", "golden") }
         val task = temporary.resolve("${outcome.runDirectory}/series/baseline/p0/rep-0")
@@ -38,33 +53,25 @@ class WebSeriesGoldenTest {
                 variant = "baseline",
                 replication = 0,
                 part = Json.parseToJsonElement(text),
-                quantiles =
-                    part.nodes.flatMap { node ->
-                        node.windows.mapIndexed { window, metrics ->
-                            val sketch = LatencySketch.fromBins(metrics.latency.sketch)
-                            WebQuantileBits(
-                                node = node.id,
-                                window = window,
-                                p50 = sketch.percentile(0.50).bits(),
-                                p95 = sketch.percentile(0.95).bits(),
-                                p99 = sketch.percentile(0.99).bits(),
-                            )
-                        }
-                    },
+                quantiles = quantileBits(part),
             )
-        val encoded = DocumentCodec.encode(WebSeriesGolden.serializer(), expected)
-        if (System.getenv("UPDATE_SERIES_GOLDEN") == "1") {
-            Files.createDirectories(golden.parent)
-            Files.writeString(golden, encoded)
-        }
-        assertThat(golden).exists()
-        assertThat(Files.readString(golden))
-            .describedAs("web series golden is stale; regenerate with UPDATE_SERIES_GOLDEN=1")
-            .isEqualTo(encoded)
-        assertThat(Json.parseToJsonElement(Files.readString(golden)).jsonObject.getValue("part"))
-            .describedAs("golden part preserves every field written by the series API")
-            .isEqualTo(Json.parseToJsonElement(text))
+        Files.createDirectories(golden.parent)
+        Files.writeString(golden, DocumentCodec.encode(WebSeriesGolden.serializer(), expected))
     }
+
+    private fun quantileBits(part: SeriesPart): List<WebQuantileBits> =
+        part.nodes.flatMap { node ->
+            node.windows.mapIndexed { window, metrics ->
+                val sketch = LatencySketch.fromBins(metrics.latency.sketch)
+                WebQuantileBits(
+                    node = node.id,
+                    window = window,
+                    p50 = sketch.percentile(0.50).bits(),
+                    p95 = sketch.percentile(0.95).bits(),
+                    p99 = sketch.percentile(0.99).bits(),
+                )
+            }
+        }
 
     private fun copyExamples(temporary: Path) {
         val source = root.resolve("examples/retry-storm")
@@ -90,9 +97,9 @@ private data class WebSeriesGolden(
 private data class WebQuantileBits(
     val node: String,
     val window: Int,
-    val p50: String?,
-    val p95: String?,
-    val p99: String?,
+    val p50: String? = null,
+    val p95: String? = null,
+    val p99: String? = null,
 )
 
 private fun Double?.bits(): String? =
