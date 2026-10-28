@@ -243,6 +243,69 @@ describe("useRun", () => {
     expect(result.current.manifest).toEqual(manifest);
   });
 
+  it("keeps the terminal job when a delayed cancellation response arrives after the terminal poll", async () => {
+    const response = deferred();
+    let requested = false;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        requested = true;
+        await response.promise;
+        return { status: 202, body: job("RUNNING", { cancelRequested: true }) };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job(requested ? "CANCELLED" : "RUNNING", { cancelRequested: requested }) };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = result.current.cancel(); });
+
+    await act(async () => { await pending; });
+    expect(result.current.job?.status).toBe("CANCELLED");
+    expect(result.current.running).toBe(false);
+    response.release();
+    await act(async () => { await cancelling; });
+    expect(result.current.job?.status).toBe("CANCELLED");
+    expect(result.current.running).toBe(false);
+    expect(result.current.problem).toBeNull();
+  });
+
+  it("ignores a delayed cancellation error after completed artifacts load", async () => {
+    const failure = deferred();
+    let finished = false;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        finished = true;
+        await failure.promise;
+        return { status: 500, body: { code: "CANCEL_FAILED", message: "Cancel failed", diagnostics: [] } };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job(finished ? "COMPLETED" : "RUNNING") };
+      if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = result.current.cancel(); });
+
+    await act(async () => { await pending; });
+    expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+    failure.release();
+    await act(async () => { await cancelling; });
+    expect(result.current.job?.status).toBe("COMPLETED");
+    expect(result.current.problem).toBeNull();
+    expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+  });
+
   it("ignores a late cancellation response after reset", async () => {
     const gate = deferred();
     let cancelCalls = 0;
