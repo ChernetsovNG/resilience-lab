@@ -7,6 +7,7 @@ import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
 import resiliencelab.core.workspace.Workspace
+import resiliencelab.core.workspace.createSymbolicLink
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
@@ -93,7 +94,7 @@ class LabTest {
         }
         val outside = temp.resolve("outside")
         Files.createDirectory(outside)
-        Files.createSymbolicLink(root.resolve("link"), outside)
+        createSymbolicLink(root.resolve("link"), outside)
         Lab(FileWorkspace(root)).use { lab ->
             assertThatThrownBy { lab.validate(experiment, mapOf("link/new.model.json" to "{}")) }
                 .isInstanceOf(resiliencelab.core.workspace.InvalidDocumentPathException::class.java)
