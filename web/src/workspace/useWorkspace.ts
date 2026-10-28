@@ -77,7 +77,7 @@ async function loadExperiment(experimentPath: string, recoveryLayoutPath?: strin
   };
 }
 
-/** Loads workspace documents and saves command edits with the versions read from storage (stage 1 design §6.2). */
+/** Loads workspace documents, tracks external changes and saves command edits with conditional versions (stage 1 design §6.2). */
 export function useWorkspace(): Workspace {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [experiments, setExperiments] = useState<string[]>([]);
@@ -92,7 +92,6 @@ export function useWorkspace(): Workspace {
   const saveInFlight = useRef(false);
   const loadInFlight = useRef(false);
   const loadedRef = useRef<LoadedExperiment | null>(null);
-  loadedRef.current = loaded;
   const savingPaths = useRef(new Set<string>());
   const deferredChanges = useRef(new Map<string, WorkspaceChangeView>());
   const cursor = useRef<string | null>(null);

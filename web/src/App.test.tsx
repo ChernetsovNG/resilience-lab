@@ -492,12 +492,12 @@ describe("App stage 1 integration", () => {
     expect(screen.getByText(modelPath)).toBeTruthy();
     expect(screen.getByText(/Reload will discard unsaved changes/)).toBeTruthy();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const reads = fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length;
+    const reads = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length;
 
     fireEvent.click(button("Reload"));
     expect(confirm).toHaveBeenCalledWith("Reload and discard unsaved changes to the documents?");
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
-    expect(fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length).toBe(reads);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length).toBe(reads);
 
     confirm.mockReturnValue(true);
     fireEvent.click(button("Reload"));

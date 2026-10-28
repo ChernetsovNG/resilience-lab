@@ -214,11 +214,11 @@ describe("workspace change polling", () => {
     const { result } = await loaded();
     await poll();
     expect(result.current.externalChange).toEqual({ path: modelPath, deleted: true });
-    const reads = fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length;
+    const reads = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length;
 
     await act(async () => { await result.current.reload(); });
 
-    expect(fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length).toBe(reads);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length).toBe(reads);
     expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
   });
 
