@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { DocumentView, JobView } from "./api/apiTypes";
-import { catalog, documentViews, experiment, experimentPath, manifest, model, modelPath, summary } from "./test/fixtures";
+import { catalog, costEstimate, documentViews, experiment, experimentPath, manifest, model, modelPath, summary } from "./test/fixtures";
 import { mockReactFlowDom } from "./test/reactFlow";
 import { stubFetch, type StubResponse } from "./test/stubFetch";
 
@@ -43,6 +43,7 @@ function server(override?: (url: string, init?: RequestInit) => StubResponse | P
       if (init?.method === "PUT") return { body: { path, kind: "MODEL", version: "saved" } };
       return { body: documents[path] };
     }
+    if (url === "/api/v1/estimate") return { body: costEstimate };
     if (url === "/api/v1/jobs") return { status: 202, body: completed };
     if (url === "/api/v1/runs/run-1/summary") return { body: summary };
     if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
@@ -806,4 +807,186 @@ it("changes results panel grid size without issuing document commands", async ()
   expect(button("Undo").disabled).toBe(true);
   expect(button("Save").disabled).toBe(true);
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+});
+
+
+describe("cost estimate and resume", () => {
+  it("estimates unsaved model and experiment drafts without saving or starting a job", async () => {
+    const fetchMock = server();
+    await open(); selectGateway(); editHandlers("5");
+    editField("Seed", "42");
+    fireEvent.click(button("Estimate"));
+    const estimate = await screen.findByRole("region", { name: "Cost estimate" });
+    expect(within(estimate).getByLabelText("Tasks").textContent).toBe("4");
+    expect(within(estimate).getByLabelText("Workers").textContent).toBe("2");
+    expect(within(estimate).getByLabelText("Expected events").textContent).toBe("12,345");
+    expect(within(estimate).getByLabelText("Expected rows").textContent).toBe("400");
+    expect(within(estimate).getByLabelText("Estimated time").textContent).toBe("1.25 s");
+    expect(within(estimate).getByLabelText("Uncompressed size").textContent).toBe("204,800 B");
+    expect(within(estimate).getByLabelText("Artifact size").textContent).toBe("51,200 B");
+    expect(within(estimate).getByLabelText("Parts").textContent).toBe("4");
+    const call = fetchMock.mock.calls.find(([url]) => url === "/api/v1/estimate")!;
+    const body = JSON.parse(String(call[1]?.body));
+    expect(body.experiment).toBe(experimentPath);
+    expect(body.drafts).toHaveLength(2);
+    expect(body.drafts.find((draft: { path: string }) => draft.path === modelPath).content.model.blocks.gateway.params.handlers).toBe(5);
+    expect(body.drafts.find((draft: { path: string }) => draft.path === experimentPath).content.experiment.execution.seed).toBe(42);
+    expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
+    editHandlers("6");
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+  });
+
+  it.each([false, true])("requires an explicit budget decision before Run: accepted=%s", async (accepted) => {
+    const warning = { code: "ESTIMATE_UI_CACHE", message: "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only" };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(accepted);
+    const fetchMock = server((url) => url === "/api/v1/estimate" ? { body: { ...costEstimate, warnings: [warning] } } : undefined);
+    await open();
+    fireEvent.click(button("Run"));
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    expect(confirm.mock.calls[0][0]).toContain(warning.message);
+    await waitFor(() => expect(button("Run").disabled).toBe(false));
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
+    expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
+    if (accepted) await screen.findByRole("table", { name: "Summary" });
+  });
+
+  it("fetches a fresh estimate before each Run and treats extrapolation as information", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const fetchMock = server((url) => url === "/api/v1/estimate" ? { body: { ...costEstimate,
+      warnings: [{ code: "ESTIMATE_EXTRAPOLATION", message: "Timing anchors exceeded" }],
+    } } : undefined);
+    await open();
+    fireEvent.click(button("Estimate"));
+    await screen.findByRole("region", { name: "Cost estimate" });
+    fireEvent.click(button("Run"));
+    await screen.findByRole("table", { name: "Summary" });
+    const requests = fetchMock.mock.calls.map(([url]) => url).filter((url) => url === "/api/v1/estimate" || url === "/api/v1/jobs");
+    expect(requests).toEqual(["/api/v1/estimate", "/api/v1/estimate", "/api/v1/jobs"]);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("does not start a run when estimation fails", async () => {
+    const fetchMock = server((url) => url === "/api/v1/estimate" ? {
+      status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
+    } : undefined);
+    await open(); fireEvent.click(button("Run"));
+    await screen.findByText("Estimation unavailable");
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
+    expect(button("Run").disabled).toBe(false);
+  });
+
+  it.each([false, true])("discards a late estimate after an edit: rejected=%s", async (rejected) => {
+    const gate = deferred();
+    const fetchMock = server(async (url) => {
+      if (url !== "/api/v1/estimate") return undefined;
+      await gate.promise;
+      return rejected ? { status: 400, body: { code: "OLD_ESTIMATE", message: "Old estimate error", diagnostics: [] } } : { body: costEstimate };
+    });
+    await open(); selectGateway(); fireEvent.click(button("Run"));
+    expect(button("Run").disabled).toBe(true);
+    editHandlers("5");
+    await act(async () => { gate.release(); });
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+    expect(screen.queryByText("Old estimate error")).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
+  });
+
+  it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and displays Summary", async (status) => {
+    let resumed = false;
+    server((url) => {
+      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status, error: status === "FAILED" ? "Execution stopped" : null } };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: resumed } };
+      if (url === "/api/v1/runs/run-1/resume") {
+        resumed = true;
+        return { status: 202, body: { ...completed, id: "resume-1", status: "RUNNING" } };
+      }
+      if (url === "/api/v1/jobs/resume-1") return { body: { ...completed, id: "resume-1" } };
+    });
+    await open(); fireEvent.click(button("Run"));
+    const resume = await screen.findByRole("button", { name: "Resume" });
+    fireEvent.click(resume);
+    await screen.findByRole("table", { name: "Summary" });
+    expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
+    expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+  });
+
+  it.each([
+    [409, "RUN_COMPLETE", []],
+    [400, "EXPERIMENT_INVALID", [{ code: "RUN_DOCUMENT_CHANGED", severity: "ERROR", message: "Model changed", document: modelPath, pointer: null, path: null, variant: null }]],
+  ] as const)("shows resume refusal %s with diagnostics and a new-run suggestion", async (status, code, diagnostics) => {
+    server((url) => {
+      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
+      if (url === "/api/v1/runs/run-1/resume") return { status, body: { code, message: "Cannot resume this run", diagnostics } };
+    });
+    await open(); fireEvent.click(button("Run"));
+    fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Cannot resume this run");
+    expect(alert.textContent).toContain("Start a new run");
+    if (status === 400) expect(alert.textContent).toContain("RUN_DOCUMENT_CHANGED");
+    expect(button("Run").disabled).toBe(false);
+    expect(screen.queryByRole("table", { name: "Summary" })).toBeNull();
+  });
+
+  it("does not offer Resume when cancellation created no artifact", async () => {
+    server((url) => {
+      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+      if (url === "/api/v1/runs/run-1/manifest") return { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } };
+    });
+    await open(); fireEvent.click(button("Run"));
+    await screen.findByText("Run cancelled; the run is incomplete and has no summary.");
+    await waitFor(() => expect(button("Run").disabled).toBe(false));
+    expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+  });
+});
+
+
+it("invalidates a pending Run estimate when a field becomes unparsable, then allows a fresh estimate after correction", async () => {
+  const gate = deferred();
+  let estimates = 0;
+  const fetchMock = server(async (url) => {
+    if (url !== "/api/v1/estimate") return undefined;
+    if (++estimates === 1) await gate.promise;
+    return { body: costEstimate };
+  });
+  await open(); selectGateway();
+  fireEvent.click(button("Run"));
+  editHandlers("oops");
+  expect(button("Run").disabled).toBe(true);
+  await act(async () => { gate.release(); });
+  expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
+  expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+  editHandlers("4");
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  fireEvent.click(button("Estimate"));
+  await screen.findByRole("region", { name: "Cost estimate" });
+  expect(button("Run").disabled).toBe(false);
+});
+
+
+it.each(["Estimate", "Run"])("makes the estimate visible when %s starts from expanded results", async (action) => {
+  server(); await open();
+  fireEvent.click(button("Expand results"));
+  expect(button("Restore results")).toBeTruthy();
+  fireEvent.click(button(action));
+  await screen.findByRole("region", { name: "Cost estimate" });
+  expect(button("Expand results")).toBeTruthy();
+});
+
+
+it.each(["Assumptions", "Problems", "Timeline", "collapsed"])("shows resume refusal from %s", async (view) => {
+  server((url) => {
+    if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+    if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
+    if (url === "/api/v1/runs/run-1/resume") return {
+      status: 409, body: { code: "RUN_COMPLETE", message: "Cannot resume this run", diagnostics: [] },
+    };
+  });
+  await open(); fireEvent.click(button("Run"));
+  const resume = await screen.findByRole("button", { name: "Resume" });
+  if (view === "collapsed") fireEvent.click(button("Collapse results"));
+  else fireEvent.click(screen.getByRole("tab", { name: view }));
+  fireEvent.click(resume);
+  expect((await screen.findByRole("alert")).textContent).toContain("Start a new run");
 });

@@ -11,6 +11,7 @@ export type DocumentContent = Schemas["DocumentContent"];
 export type DocumentDraft = Schemas["DocumentDraft"];
 export type DocumentEntry = Schemas["DocumentEntry"];
 export type DocumentView = Schemas["DocumentView"];
+export type ExperimentEstimate = Schemas["ExperimentEstimate"];
 export type ExperimentFile = Schemas["ExperimentFile"];
 export type HealthView = Schemas["HealthView"];
 export type JobView = Schemas["JobView"];

@@ -1,3 +1,5 @@
+import { CostEstimate } from "./run/CostEstimate";
+import { useEstimate } from "./run/useEstimate";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
@@ -37,6 +39,7 @@ export function App() {
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog, loading, undo, redo, execute } = workspace;
   const validation = useValidation(loaded);
+  const estimate = useEstimate(loaded, invalidFields);
   const variants = loaded?.experiment.variants ?? [];
   let variantId = variantPage.id;
   if (loaded !== null && variantPage.variants !== variants) {
@@ -132,13 +135,18 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
+  const requestEstimate = () => {
+    if (resultsSize === "expanded") setResultsSize("normal");
+    return estimate.request();
+  };
+
   return (
     <div className={`app app--results-${resultsSize}`}>
       <TopBar
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
-          if (invalid || workspace.loading || workspace.saving || run.running) return;
+          if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
           if (workspace.dirty && !window.confirm("Discard unsaved changes to the documents?")) return;
           setSelection([]);
           clipboard.current = null;
@@ -158,8 +166,21 @@ export function App() {
         onRedo={workspace.redo}
         running={run.running}
         runBlockedReason={runBlockedReason}
+        estimating={estimate.pending}
+        onEstimate={() => void requestEstimate()}
+        canResume={ownRun && run.manifest?.complete === false && (run.job?.status === "CANCELLED" || run.job?.status === "FAILED")}
+        onResume={() => {
+          if (resultsSize === "collapsed") setResultsSize("normal");
+          void run.resume();
+        }}
         onRun={() => {
-          if (loaded !== null) void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
+          if (loaded === null) return;
+          void requestEstimate().then((cost) => {
+            if (cost === null) return;
+            const budgets = cost.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
+            if (budgets.length > 0 && !window.confirm(`${budgets.map((warning) => warning.message).join("\n")}\nStart this run?`)) return;
+            void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
+          });
         }}
         onCancel={() => void run.cancel()}
         job={ownRun ? run.job : null}
@@ -169,6 +190,9 @@ export function App() {
       <Palette catalog={catalog} editable={structureEditable && !invalid} />
       <main className="canvas-area">
         <div className="canvas-messages">
+          {estimate.pending ? <p className="banner" role="status">Estimating experiment cost…</p> : null}
+          {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
+          {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
           {invalid ? (
             <div className="banner" role="alert">
               Fix invalid values before changing the selected element, page or experiment.

@@ -1,4 +1,4 @@
-import type { ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
+import type { DocumentDraft, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
 import { isObject, withParam } from "./params";
 
 /** Document content only: selection, pages and panels do not belong in the history. */
@@ -64,6 +64,14 @@ export function dirtyDocuments(loaded: LoadedExperiment | null): Record<Document
     model: loaded !== null && !documentValuesEqual(loaded.model, loaded.saved.model),
     experiment: loaded !== null && !documentValuesEqual(loaded.experiment, loaded.saved.experiment),
   };
+}
+
+/** Changed documents in the API draft format, shared by validation and cost estimation. */
+export function documentDrafts(loaded: LoadedExperiment): DocumentDraft[] {
+  const changed = dirtyDocuments(loaded);
+  return (["model", "layout", "experiment"] as const)
+    .filter((kind) => changed[kind])
+    .map((kind) => ({ path: loaded[`${kind}Path`], content: { [kind]: loaded[kind] } }));
 }
 
 /** Edits a parameter without filling defaults or touching the other documents. */
