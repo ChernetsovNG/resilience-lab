@@ -1210,6 +1210,12 @@
               "$ref" : "#/components/schemas/Fault"
             }
           },
+          "grid" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GridAxis"
+            }
+          },
           "layoutRef" : {
             "type" : [ "string", "null" ]
           },
@@ -1230,7 +1236,7 @@
             }
           }
         },
-        "required" : [ "execution", "faults", "modelRef", "schemaVersion", "variants" ]
+        "required" : [ "execution", "faults", "grid", "modelRef", "schemaVersion", "variants" ]
       },
       "ExperimentRequest" : {
         "type" : "object",
@@ -1262,6 +1268,38 @@
           }
         },
         "required" : [ "from", "target", "to" ]
+      },
+      "GridAxis" : {
+        "type" : "object",
+        "properties" : {
+          "path" : {
+            "type" : "string"
+          },
+          "values" : {
+            "type" : "array",
+            "items" : {
+              "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+              "additionalProperties" : true
+            }
+          }
+        },
+        "required" : [ "path", "values" ]
+      },
+      "GridPoint" : {
+        "type" : "object",
+        "properties" : {
+          "coordinates" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+              "additionalProperties" : true
+            }
+          },
+          "id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "coordinates", "id" ]
       },
       "HealthView" : {
         "type" : "object",
@@ -1534,6 +1572,25 @@
         },
         "required" : [ "description", "fields", "kind", "name", "options", "required", "sweepable", "title", "units" ]
       },
+      "PointSummary" : {
+        "type" : "object",
+        "properties" : {
+          "aggregate" : {
+            "$ref" : "#/components/schemas/AggregateMetrics"
+          },
+          "coordinates" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+              "additionalProperties" : true
+            }
+          },
+          "id" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "aggregate", "coordinates", "id" ]
+      },
       "PortDescriptor" : {
         "type" : "object",
         "properties" : {
@@ -1716,7 +1773,7 @@
           "points" : {
             "type" : "array",
             "items" : {
-              "type" : "string"
+              "$ref" : "#/components/schemas/GridPoint"
             }
           },
           "replicationBasis" : {
@@ -1949,21 +2006,24 @@
       "VariantSummary" : {
         "type" : "object",
         "properties" : {
-          "aggregate" : {
-            "$ref" : "#/components/schemas/AggregateMetrics"
-          },
           "id" : {
             "type" : "string"
           },
           "label" : {
             "type" : "string"
           },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PointSummary"
+            }
+          },
           "replications" : {
             "type" : "integer",
             "format" : "int32"
           }
         },
-        "required" : [ "aggregate", "id", "label", "replications" ]
+        "required" : [ "id", "label", "points", "replications" ]
       },
       "WindowMetrics" : {
         "type" : "object",

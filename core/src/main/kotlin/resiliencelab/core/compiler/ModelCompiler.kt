@@ -93,11 +93,12 @@ class ModelCompiler(
                                 "p$pointIndex",
                                 point.associate { it.path to it.value },
                                 ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
-                                patched.origins.flatMap { (path, origins) ->
-                                    origins.pointers.map { (parameter, pointer) ->
-                                        "$path.$parameter" to Origin(origins.document, pointer)
-                                    }
-                                }.toMap(),
+                                patched.origins
+                                    .flatMap { (path, origins) ->
+                                        origins.pointers.map { (parameter, pointer) ->
+                                            "$path.$parameter" to Origin(origins.document, pointer)
+                                        }
+                                    }.toMap(),
                             )
                         }
                     }

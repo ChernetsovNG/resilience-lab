@@ -1,7 +1,9 @@
 package resiliencelab.core.lab
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -66,6 +68,64 @@ class GridExperimentTest {
             .getValue("points")
             .jsonArray
             .map { it.jsonObject }
+
+    @Test
+    fun `grid warnings retain variants and identify points when their values differ`() {
+        val axes = """[{"path":"entry.processing.mean","values":["3ms","4ms"]}]"""
+        val workspace = workspace("warning-values", axes, modelText = model.replace("100/s", "1000/s"))
+        Lab(workspace).use { lab ->
+            val warnings = lab.validate("e.experiment.json").diagnostics.filter { it.code == "LINT_HANDLERS_LITTLE" }
+            assertThat(warnings).hasSize(2)
+            assertThat(warnings).allSatisfy {
+                assertThat(it.variant).isEqualTo("baseline")
+                assertThat(it.document).isEqualTo("m.model.json")
+                assertThat(it.pointer).isEqualTo("/blocks/entry/params/handlers")
+            }
+            assertThat(warnings[0].message).contains("p0").doesNotContain("p1")
+            assertThat(warnings[1].message).contains("p1").doesNotContain("p0")
+        }
+    }
+
+    @Test
+    fun `a warning shared by grid points stays variant scoped without duplicate messages`() {
+        val axes = """[{"path":"client.deadline","values":["10ms","20ms"]}]"""
+        val workspace = workspace("warning-common", axes, modelText = model.replace("100/s", "1000/s"))
+        val path = "e.experiment.json"
+        val document = Json.parseToJsonElement(workspace.read(path).text).jsonObject
+        val variants = document.getValue("variants").jsonArray
+        val candidate = JsonObject(variants.single().jsonObject + ("id" to JsonPrimitive("candidate")))
+        workspace.write(path, JsonObject(document + ("variants" to JsonArray(variants + candidate))).toString())
+        Lab(workspace).use { lab ->
+            val warnings = lab.validate("e.experiment.json").diagnostics.filter { it.code == "LINT_HANDLERS_LITTLE" }
+            assertThat(warnings.map { it.variant }).containsExactly("baseline", "candidate")
+            assertThat(warnings).allSatisfy { assertThat(it.message).doesNotContain("p0", "p1") }
+        }
+    }
+
+    @Test
+    fun `grid warning locations follow the overridden parameter in each point`() {
+        val axes = """[{"path":"entry.handlers","values":[1,2]}]"""
+        Lab(workspace("warning-origins", axes, modelText = model.replace("100/s", "1000/s"))).use { lab ->
+            val warnings = lab.validate("e.experiment.json").diagnostics.filter { it.code == "LINT_HANDLERS_LITTLE" }
+            assertThat(warnings.map { it.pointer }).containsExactly("/grid/0/values/0", "/grid/0/values/1")
+            assertThat(warnings).allSatisfy {
+                assertThat(it.variant).isEqualTo("baseline")
+                assertThat(it.document).isEqualTo("e.experiment.json")
+            }
+            assertThat(warnings[0].message).contains("p0")
+            assertThat(warnings[1].message).contains("p1")
+        }
+    }
+
+    @Test
+    fun `a warning present in only one grid point identifies that point`() {
+        val axes = """[{"path":"entry.processing.mean","values":["20ms","3ms"]}]"""
+        Lab(workspace("warning-subset", axes)).use { lab ->
+            val warning = lab.validate("e.experiment.json").diagnostics.single { it.code == "LINT_HANDLERS_LITTLE" }
+            assertThat(warning.variant).isEqualTo("baseline")
+            assertThat(warning.message).contains("p0").doesNotContain("p1")
+        }
+    }
 
     @Test
     fun `manifest and summary retain document axis order value order and duplicates`() {
