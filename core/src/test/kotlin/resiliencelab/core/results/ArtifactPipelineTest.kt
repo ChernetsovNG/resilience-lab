@@ -180,7 +180,7 @@ class ArtifactPipelineTest {
         assertThat(manifest.parts).isNotEmpty()
         assertThat(backing.exists(".results/retry-storm/r/summary.json")).isFalse()
         assertThat(manifest.parts.keys).hasSize(backing.listFiles(".results/retry-storm/r").size - 1)
-        assertThat(RunCatalog(backing).list()).isEmpty()
+        assertThat(RunCatalog(backing).list().single().complete).isFalse()
     }
 
     private fun example(name: String): Path {
