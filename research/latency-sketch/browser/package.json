@@ -1,0 +1,16 @@
+{
+  "name": "latency-sketch-browser-research",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "^26.0.0" },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node -e \"import('./dist/checks.js').then(m => m.selfCheck())\"",
+    "benchmark": "node run.mjs ../build/output"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "latency-sketch.jar": {
+    "bytes": 107889,
+    "sha256": "e5399d273695dcae14236d6f69cc653feecc2c7ac61a869964bd76290e0e3814"
+  },
+  "core.jar": {
+    "bytes": 429585,
+    "sha256": "11527de3fe36fc1b7fcce66f3c71e7dd9790a41b38de81674e82ad7c35934f27"
+  },
+  "sketches-java-0.8.3.jar": {
+    "bytes": 128829,
+    "sha256": "2626b1900c427c87349dd2b03238fb6151f91340c4c753011569620b289af0a1"
+  },
+  "KSLCore-R1.8.1.jar": {
+    "bytes": 9657017,
+    "sha256": "50fe800c918034f41c74749cf0962f93a4bdd2341d0cf8d90186b706da0bb241"
+  },
+  "jol-core-0.17.jar": {
+    "bytes": 116554,
+    "sha256": "bd73d9ad265d8478ccde06130200877f3a4f0a6e2d44e7fb8cbb2e6f4104cbdc"
+  }
+}
