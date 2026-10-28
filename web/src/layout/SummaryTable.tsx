@@ -12,14 +12,17 @@ function metric(summary: MetricSummary | null | undefined, format: (value: numbe
   return format(summary.mean) + interval;
 }
 
-/** Metrics by variant (stage 1 design §6.3, Summary tab). */
+/** Metrics by variant and grid point (stage 1 design §6.3, Summary tab). */
 export function SummaryTable({ summary }: { summary: RunSummary }) {
-  const services = [...new Set(summary.variants.flatMap((variant) => Object.keys(variant.aggregate.services)))].sort();
+  const rows = summary.variants.flatMap((variant) => variant.points.map((point) => ({ variant, point })));
+  const services = [...new Set(rows.flatMap(({ point }) => Object.keys(point.aggregate.services)))].sort();
   return (
     <table className="summary-table" aria-label="Summary">
       <thead>
         <tr>
           <th scope="col">Variant</th>
+          <th scope="col">Point</th>
+          <th scope="col">Coordinates</th>
           <th scope="col">Replications</th>
           <th scope="col">Success rate</th>
           <th scope="col">p95 latency</th>
@@ -32,15 +35,19 @@ export function SummaryTable({ summary }: { summary: RunSummary }) {
         </tr>
       </thead>
       <tbody>
-        {summary.variants.map((variant) => (
-          <tr key={variant.id}>
+        {rows.map(({ variant, point }) => (
+          <tr key={`${variant.id}/${point.id}`}>
             <th scope="row">{variant.label}</th>
+            <td>{point.id}</td>
+            <td>{Object.entries(point.coordinates).map(([path, value]) => (
+              <div key={path}>{path} = {typeof value === "string" ? value : JSON.stringify(value)}</div>
+            ))}</td>
             <td>{variant.replications}</td>
-            <td>{metric(variant.aggregate.successRate, percent)}</td>
-            <td>{metric(variant.aggregate.p95LatencyMs, millis)}</td>
-            <td>{metric(variant.aggregate.p99LatencyMs, millis)}</td>
+            <td>{metric(point.aggregate.successRate, percent)}</td>
+            <td>{metric(point.aggregate.p95LatencyMs, millis)}</td>
+            <td>{metric(point.aggregate.p99LatencyMs, millis)}</td>
             {services.map((service) => (
-              <td key={service}>{metric(variant.aggregate.services[service]?.admittedAmplification, times)}</td>
+              <td key={service}>{metric(point.aggregate.services[service]?.admittedAmplification, times)}</td>
             ))}
           </tr>
         ))}

@@ -76,6 +76,6 @@ class RunCatalogTest {
         assertThatThrownBy { catalog.manifest("r-old") }
             .isInstanceOf(UnsupportedArtifactVersionException::class.java)
             .hasMessageContaining("schemaVersion 1")
-            .hasMessageContaining("expected 2")
+            .hasMessageContaining("expected 3")
     }
 }

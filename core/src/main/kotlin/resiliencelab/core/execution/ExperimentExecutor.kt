@@ -1,5 +1,6 @@
 package resiliencelab.core.execution
 
+import kotlinx.serialization.json.JsonElement
 import ksl.simulation.Model
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
@@ -21,10 +22,17 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
-/** Replications of one variant and their aggregate. */
+/** Results of one variant, in grid point order. */
 data class VariantRun(
     val id: String,
     val label: String,
+    val points: List<PointRun>,
+)
+
+/** Replications and aggregate for one effective model. */
+data class PointRun(
+    val id: String,
+    val coordinates: Map<String, JsonElement>,
     val replications: List<ReplicationResult>,
     val aggregate: AggregateMetrics,
 )
@@ -35,7 +43,7 @@ data class ExperimentRun(
 )
 
 /**
- * Runs every (variant, replication) task in a fresh KSL model with path-based streams (ADR 0006). All runs of one
+ * Runs every (variant, point, replication) task in a fresh KSL model with path-based streams (ADR 0006). All runs of one
  * executor share its [workers] threads, taking tasks round robin between active jobs (ADR 0009). The stream
  * plan of all tasks is checked for collisions before any model runs, so results do not depend on the number of workers
  * or on the order of task completion. Worker threads are daemons; [close] stops them.
@@ -53,7 +61,7 @@ class ExperimentExecutor internal constructor(
     private val scheduler = RoundRobinScheduler(workers)
 
     /**
-     * Runs tasks in variant/replication order within this job. [isCancelled] must be fast and thread-safe;
+     * Runs tasks in variant/point/replication order within this job. [isCancelled] must be fast and thread-safe;
      * it is checked before tasks start and at most every 25 ms while the caller waits. Cancellation interrupts
      * this job's active workers; KSL models stop at the next event boundary. Other jobs keep their turns.
      * Progress callbacks run on workers and must return promptly or honor interruptions when blocking.
@@ -62,33 +70,47 @@ class ExperimentExecutor internal constructor(
     fun run(
         experiment: CompiledExperiment,
         isCancelled: () -> Boolean = { false },
-        onWindow: (variant: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _ -> },
-        onReplication: (variant: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _ -> },
-        onOriginalCompletion: ((variant: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)? = null,
+        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _, _ -> },
+        onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _, _ -> },
+        onOriginalCompletion: ((variant: String, point: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): ExperimentRun {
         checkCancellation(isCancelled)
         val replications = experiment.run.replications
         val plan =
             StreamPlan(
-                experiment.variants.flatMap { variant -> (0 until replications).flatMap { PathStreams.keys(variant.chain, it) } },
+                experiment.variants.flatMap { variant ->
+                    variant.points.flatMap { point -> (0 until replications).flatMap { PathStreams.keys(point.chain, it) } }
+                },
             )
-        val tasks = experiment.variants.indices.flatMap { variant -> (0 until replications).map { variant to it } }
-        val results = Array(experiment.variants.size) { arrayOfNulls<ReplicationResult>(replications) }
+        val tasks =
+            experiment.variants.indices.flatMap { variant ->
+                experiment.variants[variant].points.indices.flatMap { point ->
+                    (0 until replications).map { Triple(variant, point, it) }
+                }
+            }
+        val results = experiment.variants.map { variant -> variant.points.map { arrayOfNulls<ReplicationResult>(replications) } }
         val progress = Progress(tasks.size, onProgress)
         scheduler.run(
-            tasks.map { (variant, replication) ->
+            tasks.map { (variant, point, replication) ->
                 {
                     checkCancellation(isCancelled)
+                    val compiledVariant = experiment.variants[variant]
+                    val compiledPoint = compiledVariant.points[point]
                     val result =
                         try {
-                            replicate?.invoke(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                            replicate?.invoke(compiledPoint.chain, plan, experiment.run.seed, replication)
                                 ?: runReplication(
-                                    experiment.variants[variant].chain,
+                                    compiledPoint.chain,
                                     plan,
                                     experiment.run.seed,
                                     replication,
-                                    onWindow = { window, rows -> onWindow(experiment.variants[variant].id, replication, window, rows) },
+                                    onWindow = {
+                                        window,
+                                        rows,
+                                        ->
+                                        onWindow(compiledVariant.id, compiledPoint.id, replication, window, rows)
+                                    },
                                     onOriginalCompletion =
                                         onOriginalCompletion?.let { observer ->
                                             {
@@ -96,7 +118,8 @@ class ExperimentExecutor internal constructor(
                                                 succeeded,
                                                 ->
                                                 observer(
-                                                    experiment.variants[variant].id,
+                                                    compiledVariant.id,
+                                                    compiledPoint.id,
                                                     replication,
                                                     latency,
                                                     succeeded,
@@ -106,13 +129,13 @@ class ExperimentExecutor internal constructor(
                                 )
                         } catch (failure: ExperimentExecutionException) {
                             val id = experiment.variants[variant].id
-                            val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
+                            val message = "Variant '$id', point '${compiledPoint.id}', replication ${replication + 1}: ${failure.message}"
                             throw ExperimentExecutionException(message, failure)
                         }
                     checkCancellation(isCancelled)
-                    onReplication(experiment.variants[variant].id, replication, result)
+                    onReplication(compiledVariant.id, compiledPoint.id, replication, result)
                     checkCancellation(isCancelled)
-                    synchronized(results) { results[variant][replication] = result }
+                    synchronized(results) { results[variant][point][replication] = result }
                     progress.completeOne()
                 }
             },
@@ -120,8 +143,14 @@ class ExperimentExecutor internal constructor(
         )
         return ExperimentRun(
             experiment.variants.mapIndexed { index, variant ->
-                val variantReplications = results[index].map { requireNotNull(it) }
-                VariantRun(variant.id, variant.label, variantReplications, MetricsAggregator.aggregate(variantReplications))
+                VariantRun(
+                    variant.id,
+                    variant.label,
+                    variant.points.mapIndexed { pointIndex, point ->
+                        val pointReplications = results[index][pointIndex].map { requireNotNull(it) }
+                        PointRun(point.id, point.coordinates, pointReplications, MetricsAggregator.aggregate(pointReplications))
+                    },
+                )
             },
         ).also { checkCancellation(isCancelled) }
     }

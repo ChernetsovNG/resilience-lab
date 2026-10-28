@@ -293,6 +293,7 @@ export interface components {
             description?: string | null;
             execution: components["schemas"]["ExecutionSettings"];
             faults: components["schemas"]["Fault"][];
+            grid: components["schemas"]["GridAxis"][];
             layoutRef?: string | null;
             modelRef: string;
             notes?: string | null;
@@ -310,6 +311,20 @@ export interface components {
             processingMultiplier?: number | null;
             target: string;
             to: string;
+        };
+        GridAxis: {
+            path: string;
+            values: (unknown[] | boolean | number | null | {
+                [key: string]: unknown;
+            } | string)[];
+        };
+        GridPoint: {
+            coordinates: {
+                [key: string]: unknown[] | boolean | number | null | {
+                    [key: string]: unknown;
+                } | string;
+            };
+            id: string;
         };
         HealthView: {
             applicationVersion: string;
@@ -408,6 +423,15 @@ export interface components {
             title: string;
             units: components["schemas"]["QuantityUnit"][];
         };
+        PointSummary: {
+            aggregate: components["schemas"]["AggregateMetrics"];
+            coordinates: {
+                [key: string]: unknown[] | boolean | number | null | {
+                    [key: string]: unknown;
+                } | string;
+            };
+            id: string;
+        };
         PortDescriptor: {
             /** @enum {string} */
             direction: "IN" | "OUT";
@@ -470,7 +494,7 @@ export interface components {
         SeriesMetadata: {
             /** Format: double */
             measurementMs: number;
-            points: string[];
+            points: components["schemas"]["GridPoint"][];
             replicationBasis: string;
             sketchLibraryVersion: string;
             sketchProfile: string;
@@ -557,9 +581,9 @@ export interface components {
             };
         };
         VariantSummary: {
-            aggregate: components["schemas"]["AggregateMetrics"];
             id: string;
             label: string;
+            points: components["schemas"]["PointSummary"][];
             /** Format: int32 */
             replications: number;
         };

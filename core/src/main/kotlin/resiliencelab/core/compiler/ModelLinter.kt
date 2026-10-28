@@ -25,24 +25,20 @@ class ModelLinter(
     fun lint(experiment: CompiledExperiment): List<Diagnostic> =
         experiment.variants
             .flatMap { variant ->
-                lintChain(variant.chain).map { diagnostic ->
-                    val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
-                    val origin = variant.parameterOrigins["${diagnostic.path}.$parameter"]
-                    val located =
-                        if (origin == null) {
-                            diagnostic
-                        } else {
-                            diagnostic.copy(document = origin.document, pointer = origin.pointer, variant = variant.id)
-                        }
-                    located to variant.id
-                }
+                variant.points.flatMap { point ->
+                    lintChain(point.chain).map { diagnostic ->
+                        val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
+                        val origin = point.parameterOrigins["${diagnostic.path}.$parameter"]
+                        val located = if (origin == null) diagnostic else diagnostic.copy(
+                            document = origin.document, pointer = origin.pointer, variant = variant.id,
+                        )
+                        located to variant.id
+                    }
+                }.distinct()
             }.groupBy({ it.first }, { it.second })
             .flatMap { (diagnostic, variants) ->
-                if (variants.size == experiment.variants.size) {
-                    listOf(diagnostic)
-                } else {
-                    variants.map { diagnostic.copy(variant = it) }
-                }
+                if (variants.size == experiment.variants.size) listOf(diagnostic)
+                else variants.map { diagnostic.copy(variant = it) }
             }
 
     private fun lintChain(chain: ChainIr): List<Diagnostic> {

@@ -60,6 +60,14 @@ data class ExperimentFile(
     val execution: ExecutionSettings,
     val faults: List<Fault> = emptyList(),
     val variants: List<Variant>,
+    val grid: List<GridAxis> = emptyList(),
+)
+
+/** An ordered parameter axis; values retain document units and are checked by the compiler. */
+@Serializable
+data class GridAxis(
+    val path: String,
+    val values: List<JsonElement>,
 )
 
 /** Replications, measurement window and seed; durations are quantities such as `1s`. */

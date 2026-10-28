@@ -99,8 +99,8 @@ class CliTest {
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
         assertThat(lines[0]).isEqualTo(".results/retry-storm/run-1")
-        assertThat(lines[1]).startsWith("baseline: success ").contains("p95 ", "p99 ")
-        assertThat(lines[2]).startsWith("no-retries: success ")
+        assertThat(lines[1]).startsWith("baseline/p0: success ").contains("p95 ", "p99 ")
+        assertThat(lines[2]).startsWith("no-retries/p0: success ")
         assertThat(workspace.resolve(".results/retry-storm/run-1/manifest.json")).exists()
         assertThat(result.stderr).contains("Tasks 4/4")
     }
@@ -114,6 +114,23 @@ class CliTest {
 
         assertThat(result.exitCode).isZero()
         assertThat(workspace.resolve(".results/retry-storm/run-2/summary.json").readText()).isEqualTo(first)
+    }
+
+    @Test
+    fun `run prints every grid point with document coordinates`() {
+        val file = workspace.resolve(experiment)
+        file.writeText(file.readText().replaceFirst("{", """{"grid":[{"path":"gateway-to-middle.timeout","values":["40ms","80ms"]}],"""))
+
+        val result = execute(listOf("run", experiment))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(5)
+        assertThat(lines[1]).startsWith("baseline/p0 [gateway-to-middle.timeout=\"40ms\"]: success ")
+        assertThat(lines[2]).startsWith("baseline/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
+        assertThat(lines[3]).startsWith("no-retries/p0 [gateway-to-middle.timeout=\"40ms\"]: success ")
+        assertThat(lines[4]).startsWith("no-retries/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
+        assertThat(result.stderr).contains("Tasks 8/8")
     }
 
     @Test

@@ -2,6 +2,7 @@ package resiliencelab.core.results
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySketch
@@ -41,7 +42,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 2
+    const val ARTIFACT_SCHEMA = 3
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
@@ -82,7 +83,14 @@ data class SeriesMetadata(
     val timeUnit: String,
     val timeBasis: String,
     val replicationBasis: String,
-    val points: List<String>,
+    val points: List<GridPoint>,
+)
+
+/** Stable grid identity and coordinates, in document units; no grid means `p0` with empty coordinates. */
+@Serializable
+data class GridPoint(
+    val id: String,
+    val coordinates: Map<String, JsonElement>,
 )
 
 /** Cohort sufficient statistics of one task. Arrival timestamps are deliberately absent from persisted results. */
@@ -94,12 +102,20 @@ data class ReplicationArtifact(
     val result: ReplicationResult,
 )
 
-/** Aggregated metrics of one variant. */
+/** Metrics of one variant, separated by grid point. */
 @Serializable
 data class VariantSummary(
     val id: String,
     val label: String,
     val replications: Int,
+    val points: List<PointSummary>,
+)
+
+/** Aggregated metrics of one point, computed from persisted replications only. */
+@Serializable
+data class PointSummary(
+    val id: String,
+    val coordinates: Map<String, JsonElement>,
     val aggregate: AggregateMetrics,
 )
 
@@ -151,22 +167,27 @@ class ArtifactWriter(
         experiment: String,
         variants: List<Pair<String, String>>,
         replications: Int,
+        points: List<GridPoint>,
     ): RunSummary {
         val json = Json { explicitNulls = false }
         return RunSummary(
             Versions.ARTIFACT_SCHEMA,
             experiment,
             variants.map { (id, label) ->
-                val totals =
-                    (0 until replications).map { replication ->
-                        val path = "$runDirectory/series/$id/p0/rep-$replication/replication.json"
-                        val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
-                        require(artifact.schemaVersion == 1 && artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") {
-                            "Unsupported replication format in '$path'"
-                        }
-                        artifact.result
+                val summaries =
+                    points.map { point ->
+                        val totals =
+                            (0 until replications).map { replication ->
+                                val path = "$runDirectory/series/$id/${point.id}/rep-$replication/replication.json"
+                                val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
+                                require(artifact.schemaVersion == 1 && artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") {
+                                    "Unsupported replication format in '$path'"
+                                }
+                                artifact.result
+                            }
+                        PointSummary(point.id, point.coordinates, MetricsAggregator.aggregate(totals))
                     }
-                VariantSummary(id, label, replications, MetricsAggregator.aggregate(totals))
+                VariantSummary(id, label, replications, summaries)
             },
         )
     }

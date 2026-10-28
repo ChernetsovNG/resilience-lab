@@ -163,6 +163,7 @@ export const experiment: ExperimentFile = {
   layoutRef: "retry-storm.layout.json",
   execution: { replications: 2, warmup: "0ms", measurement: "1s", seed: 20261025, maxRealTime: "30s" },
   faults: [{ target: "dependency", from: "200ms", to: "700ms", processingMultiplier: 6, failureRate: "5%" }],
+  grid: [],
   variants: [
     { id: "baseline", label: "Baseline", overrides: {} },
     { id: "no-retries", label: "No retries", overrides: { "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1 } },
@@ -177,14 +178,14 @@ export const documentViews: Record<string, DocumentView> = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   experiment: experimentPath,
   variants: [
     {
       id: "baseline",
       label: "Baseline",
       replications: 2,
-      aggregate: {
+      points: [{ id: "p0", coordinates: {}, aggregate: {
         pooledLatency: {},
         successRate: { mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
         p95LatencyMs: { mean: 41.25, min: 40, max: 42.5 },
@@ -200,13 +201,13 @@ export const summary: RunSummary = {
             },
           },
         },
-      },
+      } }],
     },
     {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      aggregate: { pooledLatency: {}, services: {} },
+      points: [{ id: "p0", coordinates: {}, aggregate: { pooledLatency: {}, services: {} } }],
     },
   ],
 };

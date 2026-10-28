@@ -96,7 +96,13 @@ class RunArtifactTest {
                         "baseline",
                         "Baseline",
                         2,
-                        AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap()),
+                        listOf(
+                            PointSummary(
+                                "p0",
+                                emptyMap(),
+                                AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap()),
+                            ),
+                        ),
                     ),
                 ),
         )

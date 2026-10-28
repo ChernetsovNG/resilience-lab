@@ -16,6 +16,12 @@ import java.time.Duration
 import kotlin.test.Test
 
 class ModelLinterTest {
+    private fun variant(
+        id: String,
+        label: String,
+        chain: ChainIr,
+    ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
+
     private val linter = ModelLinter()
     private val noBackoff = Backoff(BackoffKind.NONE, 0.0, 0.0, 2.0)
     private val chain =
@@ -175,7 +181,7 @@ class ModelLinterTest {
         val result =
             linter.lint(
                 CompiledExperiment(
-                    listOf(CompiledVariant("one", "One", a), CompiledVariant("two", "Two", a), CompiledVariant("three", "Three", b)),
+                    listOf(variant("one", "One", a), variant("two", "Two", a), variant("three", "Three", b)),
                     chain.run,
                 ),
             )
@@ -186,7 +192,7 @@ class ModelLinterTest {
         assertThat(deadlines.count { "120" in it.message }).isEqualTo(2)
         assertThat(deadlines.count { "220" in it.message }).isEqualTo(1)
         assertThat(deadlines).allSatisfy { assertThat(it.message).doesNotContain("variants:") }
-        val common = linter.lint(CompiledExperiment(listOf(CompiledVariant("one", "One", a), CompiledVariant("two", "Two", a)), chain.run))
+        val common = linter.lint(CompiledExperiment(listOf(variant("one", "One", a), variant("two", "Two", a)), chain.run))
         assertThat(common.filter { it.code == "LINT_DEADLINE_BUDGET" }).hasSize(1)
         assertThat(common.single { it.code == "LINT_DEADLINE_BUDGET" }.variant).isNull()
         assertThat(common.single { it.code == "LINT_DEADLINE_BUDGET" }.message).doesNotContain("one", "two")
@@ -209,7 +215,7 @@ class ModelLinterTest {
         code: String,
     ): List<Diagnostic> = linter.lint(experiment(chain)).filter { it.code == code }
 
-    private fun experiment(chain: ChainIr) = CompiledExperiment(listOf(CompiledVariant("base", "Base", chain)), chain.run)
+    private fun experiment(chain: ChainIr) = CompiledExperiment(listOf(variant("base", "Base", chain)), chain.run)
 
     private fun fixed(meanMs: Double) = Distribution(DistributionShape.FIXED, meanMs)
 

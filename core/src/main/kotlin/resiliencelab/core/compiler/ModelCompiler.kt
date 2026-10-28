@@ -12,7 +12,6 @@ import resiliencelab.core.catalog.TypeCategory
 import resiliencelab.core.document.ConnectionInstance
 import resiliencelab.core.document.ExperimentFile
 import resiliencelab.core.document.ModelFile
-import resiliencelab.core.document.Variant
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -27,10 +26,17 @@ import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.windowCount
 import kotlin.math.ceil
 
-/** One compiled variant. */
+/** One compiled variant, containing points in first-axis-outermost order. */
 data class CompiledVariant(
     val id: String,
     val label: String,
+    val points: List<CompiledPoint>,
+)
+
+/** One effective model after variant and grid overrides; coordinates retain their original units. */
+data class CompiledPoint(
+    val id: String,
+    val coordinates: Map<String, JsonElement>,
     val chain: ChainIr,
     /** Source locations of explicit overrides, keyed by element.parameter. */
     val parameterOrigins: Map<String, Origin> = emptyMap(),
@@ -49,8 +55,8 @@ data class CompileResult(
 )
 
 /**
- * Compiles a model and an experiment into one chain IR per variant (ADR 0002; stage 1 design §3–4):
- * variant overrides are applied by path, parameters are read against the catalog and the stage 1 topology —
+ * Compiles a model and an experiment into one chain IR per variant and grid point (ADR 0002; stage 1 design §3–4):
+ * variant overrides and then grid values are applied by path, parameters are read against the catalog and the stage 1 topology —
  * one client, one request to the entry service and a linear chain of calls — is checked.
  */
 class ModelCompiler(
@@ -67,22 +73,33 @@ class ModelCompiler(
         val run = runSettings(experiment, experimentDocument, sink)
         val faults = faults(experiment, model, experimentDocument, sink)
         checkVariants(experiment, experimentDocument, sink)
+        val points = gridPoints(experiment, experimentDocument, sink)
         val variants =
-            experiment.variants.mapIndexedNotNull { index, variant ->
-                val patched = applyOverrides(model, variant, index, experimentDocument, sink)
-                val parts = buildChain(patched.model, modelDocument, patched.origins, sink, structureOk) ?: return@mapIndexedNotNull null
-                run?.let {
-                    CompiledVariant(
-                        id = variant.id,
-                        label = variant.label ?: variant.id,
-                        chain = ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
-                        parameterOrigins =
-                            patched.origins
-                                .flatMap { (path, origins) ->
-                                    origins.pointers.map { (parameter, pointer) -> "$path.$parameter" to Origin(origins.document, pointer) }
+            experiment.variants.mapIndexed { index, variant ->
+                val overrides =
+                    variant.overrides.toSortedMap().map { (path, value) ->
+                        ParameterPatch(path, value, JsonPointer.of("variants", index, "overrides", path))
+                    }
+                val compiled =
+                    points.mapIndexedNotNull { pointIndex, point ->
+                        val patched = applyOverrides(model, overrides + point, variant.id, experimentDocument, sink)
+                        val parts =
+                            buildChain(patched.model, modelDocument, patched.origins, sink, structureOk)
+                                ?: return@mapIndexedNotNull null
+                        run?.let {
+                            CompiledPoint(
+                                "p$pointIndex",
+                                point.associate { it.path to it.value },
+                                ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
+                                patched.origins.flatMap { (path, origins) ->
+                                    origins.pointers.map { (parameter, pointer) ->
+                                        "$path.$parameter" to Origin(origins.document, pointer)
+                                    }
                                 }.toMap(),
-                    )
-                }
+                            )
+                        }
+                    }
+                CompiledVariant(variant.id, variant.label ?: variant.id, compiled)
             }
         val diagnostics = sink.items.distinct()
         val failed = diagnostics.any { it.severity == Severity.ERROR } || run == null
@@ -94,6 +111,42 @@ class ModelCompiler(
         val model: ModelFile,
         val origins: Map<String, OverrideOrigins>,
     )
+
+    private data class ParameterPatch(
+        val path: String,
+        val value: JsonElement,
+        val pointer: String,
+        val pathPointer: String = pointer,
+    )
+
+    private fun gridPoints(
+        experiment: ExperimentFile,
+        document: String,
+        sink: Diagnostics,
+    ): List<List<ParameterPatch>> {
+        if (experiment.grid.size > 2) {
+            sink.error("GRID_AXES", "A grid must contain one or two axes", document, "/grid")
+            return emptyList()
+        }
+        val paths = mutableListOf<String>()
+        experiment.grid.forEachIndexed { index, axis ->
+            if (axis.values.isEmpty()) {
+                sink.error("GRID_VALUES", "A grid axis must contain at least one value", document, "/grid/$index/values")
+            }
+            if (paths.any { it == axis.path || it.startsWith("${axis.path}.") || axis.path.startsWith("$it.") }) {
+                sink.error("GRID_PATH", "Grid axis paths must not overlap", document, "/grid/$index/path")
+            }
+            paths += axis.path
+        }
+        return experiment.grid.fold(listOf(emptyList())) { points, axis ->
+            val index = paths.indexOf(axis.path)
+            points.flatMap { point ->
+                axis.values.mapIndexed { valueIndex, value ->
+                    point + ParameterPatch(axis.path, value, "/grid/$index/values/$valueIndex", "/grid/$index/path")
+                }
+            }
+        }
+    }
 
     private class ChainParts(
         val client: ClientNode,
@@ -156,15 +209,16 @@ class ModelCompiler(
     /** Applies overrides in key order, so an object comes before its fields whatever the document order; web does the same. */
     private fun applyOverrides(
         model: ModelFile,
-        variant: Variant,
-        index: Int,
+        overrides: List<ParameterPatch>,
+        variantId: String,
         document: String,
         sink: Diagnostics,
     ): Patched {
         var blocks = model.blocks
         val connections = model.connections.toMutableList()
         val pointers = mutableMapOf<String, MutableMap<String, String>>()
-        variant.overrides.toSortedMap().forEach { (path, value) ->
+        overrides.forEach { patch ->
+            val (path, value) = patch
             val segments = path.split('.')
             val target = segments.first()
             val paramPath = segments.drop(1)
@@ -174,12 +228,12 @@ class ModelCompiler(
             val descriptors = typeId?.let { catalog.type(it)?.params }
             if (descriptors == null || paramPath.isEmpty() || !resolves(descriptors, paramPath)) {
                 sink.error(
-                    "OVERRIDE_PATH",
+                    if (patch.pathPointer.startsWith("/grid/")) "GRID_PATH" else "OVERRIDE_PATH",
                     "Override '$path' does not name a parameter of a block or connection",
                     document,
-                    JsonPointer.of("variants", index, "overrides", path),
+                    patch.pathPointer,
                     target,
-                    variant.id,
+                    variantId,
                 )
                 return@forEach
             }
@@ -189,12 +243,14 @@ class ModelCompiler(
                 val connection = connections[connectionIndex]
                 connections[connectionIndex] = connection.copy(params = setIn(connection.params, descriptors, paramPath, value))
             }
-            pointers.getOrPut(target) { mutableMapOf() }[paramPath.joinToString(".")] =
-                JsonPointer.of("variants", index, "overrides", path)
+            val parameter = paramPath.joinToString(".")
+            val origins = pointers.getOrPut(target) { mutableMapOf() }
+            origins.keys.removeAll { it.startsWith("$parameter.") }
+            origins[parameter] = patch.pointer
         }
         return Patched(
             model.copy(blocks = blocks, connections = connections),
-            pointers.mapValues { OverrideOrigins(document, it.value, variant.id) },
+            pointers.mapValues { OverrideOrigins(document, it.value, variantId) },
         )
     }
 

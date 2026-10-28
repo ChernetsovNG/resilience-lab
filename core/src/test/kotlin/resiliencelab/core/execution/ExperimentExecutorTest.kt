@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.Tag
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.engine.ksl.TestChains
@@ -29,6 +30,12 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 
 class ExperimentExecutorTest {
+    private fun variant(
+        id: String,
+        label: String,
+        chain: ChainIr,
+    ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
+
     private val run = RunSettings(replications = 3, warmupMs = 0.0, measurementMs = 300.0, seed = 11, maxRealTimeSeconds = 30)
 
     private fun chain(attempts: Int) =
@@ -58,7 +65,7 @@ class ExperimentExecutorTest {
 
     private val experiment =
         CompiledExperiment(
-            variants = listOf(CompiledVariant("baseline", "Baseline", chain(3)), CompiledVariant("single", "Single", chain(1))),
+            variants = listOf(variant("baseline", "Baseline", chain(3)), variant("single", "Single", chain(1))),
             run = run,
         )
 
@@ -70,17 +77,33 @@ class ExperimentExecutorTest {
         assertThat(parallel).isEqualTo(sequential)
         assertThat(sequential.variants.map { it.id }).containsExactly("baseline", "single")
         assertThat(sequential.variants.map { it.label }).containsExactly("Baseline", "Single")
-        assertThat(sequential.variants.first().replications).hasSize(3)
+        assertThat(
+            sequential.variants
+                .first()
+                .points
+                .single()
+                .replications,
+        ).hasSize(3)
     }
 
     @Test
     fun `identical variants share common random numbers`() {
         val twins =
-            experiment.copy(variants = listOf(CompiledVariant("a", "A", chain(2)), CompiledVariant("b", "B", chain(2))))
+            experiment.copy(variants = listOf(variant("a", "A", chain(2)), variant("b", "B", chain(2))))
 
         val result = ExperimentExecutor(workers = 2).run(twins)
 
-        assertThat(result.variants[0].replications).isEqualTo(result.variants[1].replications)
+        assertThat(
+            result.variants[0]
+                .points
+                .single()
+                .replications,
+        ).isEqualTo(
+            result.variants[1]
+                .points
+                .single()
+                .replications,
+        )
     }
 
     @Test
@@ -200,6 +223,8 @@ class ExperimentExecutorTest {
                     .run(experimentOf(TestChains.run(measurementMs = 100.0, seed = seed, replications = 2), "baseline" to singleService()))
                     .variants
                     .single()
+                    .points
+                    .single()
                     .replications
                     .map { it.arrivalTimesMs }
             }
@@ -221,8 +246,18 @@ class ExperimentExecutorTest {
             }
 
         val (baseline, candidate) = result.variants
-        baseline.replications.indices.forEach { index ->
-            assertThat(candidate.replications[index].arrivalTimesMs).isEqualTo(baseline.replications[index].arrivalTimesMs)
+        baseline.points.single().replications.indices.forEach { index ->
+            assertThat(
+                candidate.points
+                    .single()
+                    .replications[index]
+                    .arrivalTimesMs,
+            ).isEqualTo(
+                baseline.points
+                    .single()
+                    .replications[index]
+                    .arrivalTimesMs,
+            )
         }
     }
 
@@ -236,6 +271,8 @@ class ExperimentExecutorTest {
 
         val actual =
             result.variants
+                .single()
+                .points
                 .single()
                 .replications
                 .map { it.arrivalTimesMs }
@@ -268,7 +305,7 @@ class ExperimentExecutorTest {
         }.isInstanceOf(ExperimentExecutionException::class.java)
             .hasMessageContaining("Variant 'capped'")
             .hasMessageContaining("replication ")
-            .hasMessageMatching("Variant 'capped', replication [12]: .*")
+            .hasMessageMatching("Variant 'capped', point 'p0', replication [12]: .*")
             .hasMessageContaining("real-time cap")
             .hasCauseInstanceOf(ExperimentExecutionException::class.java)
     }
@@ -285,15 +322,21 @@ class ExperimentExecutorTest {
                 executor
                     .run(
                         experimentOf(settings, "mm1" to chain),
-                        onWindow = { _, _, _, rows -> windows += rows.single { it.id == "entry" }.metrics },
+                        onWindow = { _, _, _, _, rows -> windows += rows.single { it.id == "entry" }.metrics },
                     ).variants
                     .single()
             }
 
-        val replication = variant.replications.single()
+        val replication =
+            variant.points
+                .single()
+                .replications
+                .single()
         val utilization = replication.services.getValue("entry").handlerUtilization
         val meanResponseMs =
-            variant.aggregate.pooledLatency.all!!
+            variant.points
+                .single()
+                .aggregate.pooledLatency.all!!
                 .meanMs
         assertThat(replication.successes).isEqualTo(replication.originalArrivals)
         assertThat(replication.failures).isZero()
@@ -332,7 +375,7 @@ class ExperimentExecutorTest {
         vararg variants: Pair<String, ChainIr>,
     ): CompiledExperiment =
         CompiledExperiment(
-            variants = variants.map { (id, chain) -> CompiledVariant(id, id, chain.copy(run = settings)) },
+            variants = variants.map { (id, chain) -> variant(id, id, chain.copy(run = settings)) },
             run = settings,
         )
 }

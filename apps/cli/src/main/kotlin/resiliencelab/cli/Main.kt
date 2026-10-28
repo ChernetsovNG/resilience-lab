@@ -102,11 +102,15 @@ private fun run(
         }
     stdout.appendLine(outcome.runDirectory)
     outcome.summary.variants.forEach { variant ->
-        val aggregate = variant.aggregate
-        stdout.appendLine(
-            "${variant.id}: success ${percent(aggregate.successRate)}, " +
-                "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}",
-        )
+        variant.points.forEach { point ->
+            val aggregate = point.aggregate
+            val coordinates = point.coordinates.entries.joinToString(", ") { (path, value) -> "$path=$value" }
+            val suffix = if (coordinates.isEmpty()) "" else " [$coordinates]"
+            stdout.appendLine(
+                "${variant.id}/${point.id}$suffix: success ${percent(aggregate.successRate)}, " +
+                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}",
+            )
+        }
     }
     return 0
 }
