@@ -763,3 +763,26 @@ it("targets the pasted fragment with subsequent arrow and delete actions", async
   expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
   expect(button("Save").disabled).toBe(true);
 });
+
+it.each(["model", "experiment"] as const)("marks results stale after %s edits and clears the mark after undo", async (kind) => {
+  server();
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Summary" });
+  if (kind === "model") {
+    selectGateway();
+    editHandlers("5");
+  } else {
+    editField("Seed", "43");
+  }
+  const stale = "Results belong to a previous document version.";
+  await screen.findByText(stale);
+
+  fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
+  expect(screen.getByText(stale)).toBeTruthy();
+  expect(screen.getByText("Student 95% confidence intervals are not clipped.")).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.queryByText(stale)).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+  expect(screen.queryByText(stale)).toBeNull();
+});

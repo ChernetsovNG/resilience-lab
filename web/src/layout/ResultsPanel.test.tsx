@@ -38,3 +38,14 @@ it("selects a grid point by ID and coordinates, but hides the selector without a
   view.rerender(<ResultsPanel job={null} summary={summary} problem={null} selectedPointId="p0" onPointChange={onPointChange} />);
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
 });
+
+it("explains that a cancelled run is incomplete and has no summary", () => {
+  render(<ResultsPanel job={{
+    id: "job-1", experiment: "chain.experiment.json", runId: "run-1", status: "CANCELLED",
+    completedTasks: 1, totalTasks: 4, cancelRequested: true, error: null, diagnostics: [],
+  }} summary={null} problem={null} />);
+
+  expect(screen.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeTruthy();
+  expect(screen.queryByRole("table", { name: "Summary" })).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+});

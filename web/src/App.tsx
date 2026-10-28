@@ -12,6 +12,7 @@ import { ResultsPanel } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
 import { setVariantParam } from "./workspace/experimentCommands";
+import { documentValuesEqual } from "./workspace/editor";
 import { applyOverrides } from "./workspace/params";
 import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
@@ -53,6 +54,9 @@ export function App() {
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
+  const staleResults = ownRun && loaded !== null && run.documents !== null && (
+    !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
+  );
   const diagnostics = validation.report?.diagnostics ?? [];
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
@@ -251,6 +255,10 @@ export function App() {
         job={ownRun ? run.job : null}
         summary={ownRun ? run.summary : null}
         problem={ownRun ? run.problem : null}
+        catalog={catalog}
+        model={ownRun ? run.documents?.model ?? null : null}
+        manifest={ownRun ? run.manifest : null}
+        stale={staleResults}
         activeVariantId={variant?.id ?? null}
         selectedPointId={pointSelection.summary === run.summary ? pointSelection.id : "p0"}
         onPointChange={(id) => setPointSelection({ summary: run.summary, id })}
