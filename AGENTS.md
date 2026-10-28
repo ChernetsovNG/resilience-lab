@@ -64,6 +64,7 @@ Dependabot еженедельно проверяет npm, Gradle, GitHub Actions
 - Задания хранятся в памяти процесса: перезапуск backend удаляет их.
 - Compose монтирует `${RESILIENCE_LAB_WORKSPACE:-./examples}` в `/workspace` на запись. Документы, `.workspace.lock` и `.results/` сохраняются на хосте; внешние правки видны через `GET /api/v1/workspace/changes`.
 - Backend получает UID/GID из `RESILIENCE_LAB_UID` и `RESILIENCE_LAB_GID`, по умолчанию `1000:1000`. На Linux задайте вывод `id -u` и `id -g`, если идентификаторы пользователя отличаются; Docker Desktop на Windows и macOS сопоставляет запись с пользователем хоста сам.
+- На Docker Desktop и Colima `.workspace.lock` связывает процессы внутри Linux VM, но не связывает процессы хоста и контейнера. Пока работает Compose, не запускайте на хосте CLI или `./gradlew :apps:server:bootRun` с той же рабочей областью. На native Linux блокировка между хостом и контейнером действует.
 
 ### Backend API
 

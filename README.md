@@ -62,6 +62,12 @@ RESILIENCE_LAB_UID=$(id -u) RESILIENCE_LAB_GID=$(id -g) docker compose up --buil
 Windows и macOS сам сопоставляет запись с пользователем хоста; обычно менять
 эти переменные там не нужно.
 
+На Docker Desktop и Colima `.workspace.lock` связывает процессы внутри Linux VM,
+но не связывает процессы хоста и контейнера. Пока работает Compose, не запускайте
+на хосте CLI или `./gradlew :apps:server:bootRun` с той же рабочей областью:
+блокировка не сериализует их записи с backend. На native Linux блокировка между
+хостом и контейнером действует.
+
 Остановить контейнеры:
 
 ```sh
