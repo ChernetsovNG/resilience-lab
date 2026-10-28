@@ -80,7 +80,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(metrics.locator("span")).toHaveText(frame.metrics);
     await expect(edge).toHaveText(frame.edge);
 
-    await page.getByTestId("rf__node-dependency").click();
+    await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
     const timelineCursor = page.getByTestId("timeline-cursor");
     await expect(timelineCursor).toContainText(`Window ${during} ·`);
