@@ -9,6 +9,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.web.bind.annotation.RequestMethod
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -21,6 +23,9 @@ import java.nio.file.Path
 class OpenApiSpecTest {
     @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @Autowired
+    private lateinit var handlerMapping: RequestMappingHandlerMapping
 
     private val file = Path.of("openapi.json")
 
@@ -39,6 +44,32 @@ class OpenApiSpecTest {
 
         assertThat(file).exists()
         assertThat(Files.readString(file)).describedAs("apps/server/openapi.json is stale; regenerate it").isEqualTo(generated)
+    }
+
+    @Test
+    fun `registered API operations match the committed contract`() {
+        val methods = RequestMethod.entries.map { it.name.lowercase() }.toSet()
+        val documented =
+            Json
+                .parseToJsonElement(Files.readString(file))
+                .jsonObject
+                .getValue("paths")
+                .jsonObject
+                .flatMap { (path, item) ->
+                    item.jsonObject.keys
+                        .filter { it in methods }
+                        .map { "${it.uppercase()} $path" }
+                }
+        val registered =
+            handlerMapping.handlerMethods.keys.flatMap { mapping ->
+                mapping.patternValues.filter { it.startsWith("/api/v1/") }.flatMap { path ->
+                    mapping.methodsCondition.methods
+                        .ifEmpty { RequestMethod.entries.toSet() }
+                        .map { "${it.name} $path" }
+                }
+            }
+
+        assertThat(registered).containsExactlyInAnyOrderElementsOf(documented)
     }
 
     @Test
