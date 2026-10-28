@@ -87,8 +87,8 @@
 
 ### Task 4: Final verification and delivery
 
-- [ ] Run `./gradlew clean build` from the repository root; expect `BUILD SUCCESSFUL`.
-- [ ] From `web`, run `npm ci`, `npm run lint`, `npm run api:check`, `npm test -- --run`, `npm run build`, and `npm run test:e2e`; expect all to pass.
-- [ ] Run `git diff --check origin/main` and inspect the complete diff for scope.
-- [ ] Fetch and rebase onto `origin/main`; repeat affected checks if the rebase changes the result.
-- [ ] Commit with Conventional Commits, push the branch, and open a PR containing `Closes #90` and exact verification results.
+- [x] Run `./gradlew clean build` from the repository root; expect `BUILD SUCCESSFUL`.
+- [x] From `web`, run `npm ci`, `npm run lint`, `npm run api:check`, `npm test -- --run`, `npm run build`, and `npm run test:e2e`; expect all to pass.
+- [x] Run `git diff --check origin/main` and inspect the complete diff for scope.
+- [x] Fetch and rebase onto `origin/main`; repeat affected checks if the rebase changes the result.
+- [x] Commit with Conventional Commits, push the branch, and open a PR containing `Closes #90` and exact verification results.
