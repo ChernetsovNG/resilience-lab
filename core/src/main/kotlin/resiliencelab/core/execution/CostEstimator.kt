@@ -22,7 +22,12 @@ data class ExperimentEstimate(
     val warnings: List<EstimateWarning>,
 )
 
-/** A budget or calibration warning; it does not block the experiment. */
+/**
+ * [code] identifies an ADR 0008 budget or a calibration limitation; neither blocks the experiment:
+ * - `ESTIMATE_UI_CACHE` — budget: estimated uncompressed task data exceed the 64 MiB decoded UI cache.
+ * - `ESTIMATE_EXTRAPOLATION` — calibration: the model exceeds the S1 anchor range of 50–5000 services.
+ * - `ESTIMATE_WORKER_EXTRAPOLATION` — calibration: more than 8 workers exceed measured S1 speedups.
+ */
 @Serializable
 data class EstimateWarning(
     val code: String,
@@ -71,7 +76,7 @@ internal object CostEstimator {
         experiment.variants.forEach { variant ->
             variant.points.forEach { point ->
                 val chain = point.chain
-                if (chain.services.size !in 50..5000) {
+                if (chain.services.size > 5000) {
                     warnings["ESTIMATE_EXTRAPOLATION"] =
                         "S1 timing anchors cover 50–5000 services; actual time may differ substantially"
                 }

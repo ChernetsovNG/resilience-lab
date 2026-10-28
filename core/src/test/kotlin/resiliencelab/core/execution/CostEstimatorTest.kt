@@ -30,7 +30,7 @@ class CostEstimatorTest {
         assertThat(estimate.estimatedArtifactBytes).isEqualTo(83_968)
         assertThat(estimate.estimatedParts).isEqualTo(2)
         assertThat(estimate.estimatedSeconds).isPositive()
-        assertThat(estimate.warnings.map { it.code }).contains("ESTIMATE_EXTRAPOLATION")
+        assertThat(estimate.warnings.map { it.code }).doesNotContain("ESTIMATE_EXTRAPOLATION")
     }
 
     @Test
@@ -87,7 +87,11 @@ class CostEstimatorTest {
 
     @Test
     fun `model and worker extrapolation warnings remain independent`() {
-        val estimate = CostEstimator.estimate(experiment(TestChains.simple()), workers = 9)
+        val base = TestChains.simple()
+        val services = (0 until 5_001).map { index -> ServiceNode("service-$index", 1, 2, TestChains.fixed(1.0), 0.0) }
+        val chain = base.copy(entry = "service-0", services = services, calls = emptyList())
+
+        val estimate = CostEstimator.estimate(experiment(chain), workers = 9)
 
         assertThat(estimate.warnings.map { it.code })
             .contains("ESTIMATE_EXTRAPOLATION", "ESTIMATE_WORKER_EXTRAPOLATION")
