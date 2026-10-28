@@ -8,6 +8,12 @@ import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
 import kotlin.test.Test
@@ -30,6 +36,90 @@ class LabTest {
             }
         }
         return target
+    }
+
+    @Test
+    fun `a pre cancelled run leaves no artifact`() {
+        val root = exampleWorkspace()
+
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy { lab.run(experiment, "cancelled", isCancelled = { true }) }
+                .isInstanceOf(CancellationException::class.java)
+        }
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `cancellation at final progress leaves no artifact`() {
+        val root = exampleWorkspace()
+        val cancelled = AtomicBoolean()
+
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy {
+                lab.run(experiment, "cancelled", lab.validate(experiment).documentVersions, isCancelled = cancelled::get) { done, total ->
+                    if (done == total) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `a concurrent cancelled job does not change artifact bytes`() {
+        val expectedRoot = exampleWorkspace()
+        val actualRoot = exampleWorkspace()
+        val cancelledRoot = exampleWorkspace()
+        val cancelledFile = cancelledRoot.resolve(experiment)
+        val original = Files.readString(cancelledFile)
+        val shortened = original.replace("\"replications\": 2", "\"replications\": 1")
+        assertThat(shortened).isNotEqualTo(original)
+        Files.writeString(cancelledFile, shortened)
+        ExperimentExecutor(workers = 1).use { executor ->
+            Lab(FileWorkspace(expectedRoot), executor = executor).use { it.run(experiment, "run-1") }
+        }
+
+        val cancelled = AtomicBoolean()
+        val firstProgress = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        ExperimentExecutor(workers = 3).use { executor ->
+            val cancelledRun =
+                FutureTask {
+                    runCatching {
+                        Lab(FileWorkspace(cancelledRoot), executor = executor).use { lab ->
+                            lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                                if (done == 1) {
+                                    firstProgress.countDown()
+                                    check(release.await(5, TimeUnit.SECONDS))
+                                }
+                            }
+                        }
+                    }.exceptionOrNull()
+                }
+            val runner = thread(isDaemon = true) { cancelledRun.run() }
+            try {
+                assertThat(firstProgress.await(5, TimeUnit.SECONDS)).isTrue()
+                Lab(FileWorkspace(actualRoot), executor = executor).use { lab ->
+                    lab.run(experiment, "run-1") { _, _ ->
+                        cancelled.set(true)
+                        release.countDown()
+                    }
+                }
+                assertThat(cancelledRun.get(3, TimeUnit.SECONDS)).isInstanceOf(CancellationException::class.java)
+            } finally {
+                cancelled.set(true)
+                release.countDown()
+                runner.interrupt()
+                runner.join(5_000)
+            }
+        }
+
+        assertThat(cancelledRoot.resolve(".results")).doesNotExist()
+        listOf("manifest.json", "summary.json").forEach { file ->
+            val relative = ".results/retry-storm/run-1/$file"
+            assertThat(
+                Files.readAllBytes(actualRoot.resolve(relative)),
+            ).containsExactly(*Files.readAllBytes(expectedRoot.resolve(relative)))
+        }
     }
 
     @Test

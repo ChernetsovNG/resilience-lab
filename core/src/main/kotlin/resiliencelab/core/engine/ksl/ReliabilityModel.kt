@@ -2,11 +2,14 @@ package resiliencelab.core.engine.ksl
 
 import ksl.modeling.entity.KSLProcess
 import ksl.modeling.entity.ProcessModel
+import ksl.simulation.Executive
 import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
+import ksl.utilities.observers.ObserverIfc
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
+import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -17,6 +20,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Arrivals stop at measurement end, but a replication finishes only after every original client outcome is known
  * and all accepted work, including orphaned work, has drained.
+ * A worker interruption stops the replication at an event boundary and raises [CancellationException] after
+ * terminating suspended processes; cancelled work is never returned as a complete replication.
  */
 class ReliabilityModel(
     model: Model,
@@ -62,6 +67,15 @@ class ReliabilityModel(
     init {
         model.lengthOfReplication = Double.POSITIVE_INFINITY
         model.maximumAllowedExecutionTimePerReplication = chain.run.maxRealTimeSeconds.seconds
+        executive.attachObserver(
+            object : ObserverIfc<KSLEvent<*>?> {
+                override fun onChange(newValue: KSLEvent<*>?) {
+                    if (executive.status == Executive.Status.BEFORE_EVENT && Thread.currentThread().isInterrupted) {
+                        stopReplication("Experiment was cancelled")
+                    }
+                }
+            },
+        )
     }
 
     override fun initialize() {
@@ -129,6 +143,7 @@ class ReliabilityModel(
     override fun afterReplication() {
         val fullyDrained = isFullyDrained()
         super.afterReplication()
+        if (Thread.currentThread().isInterrupted) throw CancellationException("Experiment was cancelled")
         if (executive.isExecutionTimeExceeded) {
             throw ExperimentExecutionException("Replication exceeded its real-time cap before full drain")
         }

@@ -9,6 +9,7 @@ import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.PathStreams
 import resiliencelab.core.execution.ExperimentExecutor
+import resiliencelab.core.execution.checkCancellation
 import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.RunManifest
@@ -19,6 +20,7 @@ import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import java.io.IOException
+import java.util.concurrent.CancellationException
 
 /** Diagnostics and versions of the computation inputs of one experiment. */
 data class ValidationReport(
@@ -66,24 +68,34 @@ class Lab(
         return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
     }
 
-    /** Runs a valid experiment and writes its reproducible result artifact under the workspace results directory. */
+    /**
+     * Runs a valid experiment and writes its reproducible result artifact under the workspace results directory.
+     * [isCancelled] must be fast and thread-safe. Cancellation is accepted until artifact writing starts;
+     * a cancelled run writes no files. Once writing starts, it finishes without further cancellation checks.
+     * @throws CancellationException if cancellation is observed before writing the artifact.
+     */
     fun run(
         experimentPath: String,
         runId: String,
+        isCancelled: () -> Boolean = { false },
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
-    ): RunOutcome = run(experimentPath, runId, expectedVersions = null, onProgress)
+    ): RunOutcome = run(experimentPath, runId, expectedVersions = null, isCancelled = isCancelled, onProgress = onProgress)
 
     /**
      * Runs only the computation inputs accepted by validation when [expectedVersions] is supplied. The check uses
      * the same loaded documents as compilation and execution, so a queued job cannot silently run later edits.
      * A mismatch raises [InvalidExperimentException] with `DOCUMENT_CHANGED` before computing or writing results.
+     * [isCancelled] has the same contract as the overload without [expectedVersions].
+     * @throws CancellationException if cancellation is observed before writing the artifact.
      */
     fun run(
         experimentPath: String,
         runId: String,
         expectedVersions: Map<String, String>?,
+        isCancelled: () -> Boolean = { false },
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): RunOutcome {
+        checkCancellation(isCancelled)
         val runDirectory = ResultsLayout.runDirectory(experimentPath, runId)
         val loaded = load(experimentPath)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
@@ -99,7 +111,7 @@ class Lab(
                 ),
             )
         }
-        val result = executor.run(compiled, onProgress)
+        val result = executor.run(compiled, isCancelled = isCancelled, onProgress = onProgress)
         val summary =
             RunSummary(
                 schemaVersion = 1,
@@ -120,6 +132,7 @@ class Lab(
                 parts = emptyMap(),
                 complete = true,
             )
+        checkCancellation(isCancelled)
         return RunOutcome(runDirectory, ArtifactWriter(workspace).write(runDirectory, manifest, summary), summary)
     }
 

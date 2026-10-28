@@ -34,7 +34,7 @@ internal fun runCommand(
     stderr: Appendable,
     workspaceRoot: Path = Path.of("").toAbsolutePath(),
     newRunId: () -> String = { RunIds.next() },
-    execute: ExperimentRun = { lab, experiment, runId, onProgress -> lab.run(experiment, runId, onProgress) },
+    execute: ExperimentRun = { lab, experiment, runId, onProgress -> lab.run(experiment, runId, onProgress = onProgress) },
 ): Int {
     val command = Command.parse(args) ?: return usage(stderr)
     val root = workspaceRoot.toAbsolutePath().normalize()
