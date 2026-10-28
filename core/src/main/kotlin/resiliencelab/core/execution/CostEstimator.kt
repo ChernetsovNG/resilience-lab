@@ -25,8 +25,7 @@ data class ExperimentEstimate(
 /**
  * [code] identifies an ADR 0008 budget or a calibration limitation; neither blocks the experiment:
  * - `ESTIMATE_UI_CACHE` — budget: estimated uncompressed task data exceed the 64 MiB decoded UI cache.
- * - `ESTIMATE_EXTRAPOLATION` — calibration: the model exceeds the S1 anchor range of 50–5000 services.
- * - `ESTIMATE_WORKER_EXTRAPOLATION` — calibration: more than 8 workers exceed measured S1 speedups.
+ * - `ESTIMATE_EXTRAPOLATION` — calibration: more than 5000 services exceed the measured S1 timing anchors.
  */
 @Serializable
 data class EstimateWarning(
@@ -95,9 +94,6 @@ internal object CostEstimator {
                 artifactBytes = Math.addExact(artifactBytes, Math.multiplyExact(perReplication.artifactBytes, count.toLong()))
                 parts = Math.addExact(parts, Math.multiplyExact(perReplication.parts, count.toLong()))
             }
-        }
-        if (workers > 8) {
-            warnings["ESTIMATE_WORKER_EXTRAPOLATION"] = "S1 parallel speedup is measured only up to 8 workers"
         }
         val effectiveWorkers = minOf(workers, taskCount).coerceAtLeast(1)
         val seconds = maxOf(totalWork / speedup(effectiveWorkers), longestTask)
