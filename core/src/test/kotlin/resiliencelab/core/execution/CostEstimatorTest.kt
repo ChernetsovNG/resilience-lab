@@ -86,7 +86,7 @@ class CostEstimatorTest {
     }
 
     @Test
-    fun `model and worker extrapolation warnings remain independent`() {
+    fun `model extrapolation warning remains independent of workers`() {
         val base = TestChains.simple()
         val services = (0 until 5_001).map { index -> ServiceNode("service-$index", 1, 2, TestChains.fixed(1.0), 0.0) }
         val chain = base.copy(entry = "service-0", services = services, calls = emptyList())
@@ -94,6 +94,20 @@ class CostEstimatorTest {
         val estimate = CostEstimator.estimate(experiment(chain), workers = 9)
 
         assertThat(estimate.warnings.map { it.code })
-            .contains("ESTIMATE_EXTRAPOLATION", "ESTIMATE_WORKER_EXTRAPOLATION")
+            .contains("ESTIMATE_EXTRAPOLATION")
+            .doesNotContain("ESTIMATE_WORKER_EXTRAPOLATION")
+    }
+
+    @Test
+    fun `worker extrapolation keeps conservative time without warning`() {
+        listOf(4, 16).forEach { replications ->
+            val experiment = experiment(TestChains.simple().copy(run = TestChains.run(replications = replications)))
+
+            val eight = CostEstimator.estimate(experiment, workers = 8)
+            val sixteen = CostEstimator.estimate(experiment, workers = 16)
+
+            assertThat(sixteen.warnings.map { it.code }).doesNotContain("ESTIMATE_WORKER_EXTRAPOLATION")
+            assertThat(sixteen.estimatedSeconds).isGreaterThanOrEqualTo(eight.estimatedSeconds)
+        }
     }
 }
