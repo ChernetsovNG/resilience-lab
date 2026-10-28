@@ -960,7 +960,7 @@
         }, {
           "in" : "header",
           "name" : "If-Match",
-          "required" : false,
+          "required" : true,
           "schema" : {
             "type" : "string"
           }

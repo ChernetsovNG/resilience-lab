@@ -352,7 +352,7 @@ class FileWorkspaceTest {
         Files.writeString(root.resolve("existing.model.json"), "existing\n")
         FileWorkspace(root, scanInterval = Duration.ofSeconds(30)).use { files ->
             val baseline = files.changes(null)
-            assertThat(baseline.cursor).isZero()
+            assertThat(baseline.cursor.sequence).isZero()
             assertThat(baseline.reset).isFalse()
             assertThat(baseline.changes).isEmpty()
 
@@ -361,7 +361,7 @@ class FileWorkspaceTest {
             files.delete("a.model.json", expectedVersion = updated)
 
             val batch = files.changes(baseline.cursor)
-            assertThat(batch.cursor).isEqualTo(3)
+            assertThat(batch.cursor.sequence).isEqualTo(3)
             assertThat(batch.reset).isFalse()
             assertThat(batch.changes).containsExactly(
                 WorkspaceChange("a.model.json", DocumentKind.MODEL, created),
@@ -376,20 +376,61 @@ class FileWorkspaceTest {
     }
 
     @Test
+    fun `journals canonical paths for normalized API mutations`() {
+        FileWorkspace(root, scanInterval = Duration.ofSeconds(30)).use { files ->
+            val baseline = files.changes(null).cursor
+            val created = files.create("nested/../a.model.json", "1\n")
+            val updated = files.write("nested/../a.model.json", "2\n", expectedVersion = created)
+
+            files.delete("nested/../a.model.json", expectedVersion = updated)
+
+            val batch = files.changes(baseline)
+            assertThat(batch.cursor.sequence).isEqualTo(3)
+            assertThat(batch.changes.map { it.path }).containsExactly("a.model.json", "a.model.json", "a.model.json")
+            assertThat(batch.changes.map { it.version }).containsExactly(created, updated, null)
+        }
+    }
+
+    @Test
     fun `resets a cursor evicted from bounded history or coming from the future`() {
         FileWorkspace(root, scanInterval = Duration.ofSeconds(30), historyLimit = 2).use { files ->
             val baseline = files.changes(null).cursor
             repeat(3) { files.create("$it.model.json", "$it\n") }
 
             val stale = files.changes(baseline)
-            assertThat(stale.cursor).isEqualTo(3)
+            assertThat(stale.cursor.sequence).isEqualTo(3)
             assertThat(stale.reset).isTrue()
             assertThat(stale.changes).isEmpty()
-            assertThat(files.changes(3).reset).isFalse()
-            val future = files.changes(4)
+            assertThat(files.changes(stale.cursor).reset).isFalse()
+            val future = files.changes(stale.cursor.copy(sequence = 4))
             assertThat(future.reset).isTrue()
-            assertThat(future.cursor).isEqualTo(3)
+            assertThat(future.cursor.sequence).isEqualTo(3)
             assertThat(future.changes).isEmpty()
+        }
+    }
+
+    @Test
+    fun `resets cursors from a previous journal even after its sequence catches up`() {
+        Files.writeString(root.resolve("a.model.json"), "initial\n")
+        val previous = FileWorkspace(root, scanInterval = Duration.ofSeconds(30))
+        val initial = previous.changes(null).cursor
+        previous.write("a.model.json", "before restart\n")
+        val caughtUp = previous.changes(null).cursor
+        previous.close()
+        Files.writeString(root.resolve("a.model.json"), "offline change\n")
+
+        FileWorkspace(root, scanInterval = Duration.ofSeconds(30)).use { current ->
+            val restarted = current.changes(initial)
+            assertThat(restarted.reset).isTrue()
+            assertThat(restarted.cursor.generation).isNotEqualTo(initial.generation)
+            assertThat(restarted.changes).isEmpty()
+
+            Files.writeString(root.resolve("b.model.json"), "new process\n")
+            val next = current.changes(restarted.cursor)
+            assertThat(next.reset).isFalse()
+            val caughtUpReset = current.changes(caughtUp)
+            assertThat(caughtUpReset.reset).isTrue()
+            assertThat(caughtUpReset.changes).isEmpty()
         }
     }
 
@@ -412,6 +453,17 @@ class FileWorkspaceTest {
             assertThat(batch.reset).isFalse()
             assertThat(batch.changes).isEmpty()
         }
+    }
+
+    @Test
+    fun `propagates scan failures instead of returning a healthy stale batch`() {
+        val scanRoot = Files.createDirectory(root.resolve("scan-root"))
+        val files = FileWorkspace(scanRoot, scanInterval = Duration.ofSeconds(30))
+        val baseline = files.changes(null).cursor
+        Files.delete(scanRoot)
+
+        assertThatThrownBy { files.changes(baseline) }.isInstanceOf(IOException::class.java)
+        files.close()
     }
 
     @Test
@@ -458,7 +510,7 @@ class FileWorkspaceTest {
 
     private fun awaitChange(
         workspace: FileWorkspace,
-        since: Long,
+        since: WorkspaceCursor,
         path: String,
         kind: DocumentKind,
         version: String?,

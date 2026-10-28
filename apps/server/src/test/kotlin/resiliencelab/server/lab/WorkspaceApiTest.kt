@@ -167,7 +167,7 @@ class WorkspaceApiTest {
         assertThat(putDocument(apiPath, body, ifMatch = null).status).isEqualTo(200)
         val api = awaitChange(initial.cursor, apiPath, version(apiPath))
         assertThat(api.reset).isFalse()
-        assertThat(api.cursor.toLong()).isGreaterThan(initial.cursor.toLong())
+        assertThat(api.cursor).isNotEqualTo(initial.cursor)
         assertThat(api.changes.single { it.path == apiPath }.kind).isEqualTo(DocumentKind.LAYOUT)
 
         val externalPath = "changes-external.model.json"

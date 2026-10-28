@@ -2,6 +2,7 @@ package resiliencelab.core.workspace
 
 import kotlinx.serialization.Serializable
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.ClosedWatchServiceException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -12,6 +13,7 @@ import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 import java.nio.file.WatchKey
 import java.nio.file.WatchService
 import java.time.Duration
+import java.util.UUID
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.thread
 import kotlin.io.path.isDirectory
@@ -33,6 +35,31 @@ enum class DocumentKind(
     }
 }
 
+/** Opaque cursor: [generation] identifies the process journal and [sequence] orders its changes. */
+data class WorkspaceCursor(
+    val generation: String,
+    val sequence: Long,
+) {
+    init {
+        require(sequence >= 0) { "Cursor sequence must be non-negative" }
+        require(runCatching { UUID.fromString(generation).toString() == generation }.getOrDefault(false)) {
+            "Cursor generation must be a canonical UUID"
+        }
+    }
+
+    override fun toString(): String = "$generation:$sequence"
+
+    companion object {
+        fun parse(value: String): WorkspaceCursor {
+            val parts = value.split(':')
+            require(parts.size == 2) { "Cursor must have generation and sequence" }
+            val sequence = parts[1].toLongOrNull()
+            require(sequence != null) { "Cursor sequence must be a decimal integer" }
+            return WorkspaceCursor(parts[0], sequence)
+        }
+    }
+}
+
 /** One document mutation; [version] is null after deletion. */
 data class WorkspaceChange(
     val path: String,
@@ -42,7 +69,7 @@ data class WorkspaceChange(
 
 /** Changes after a cursor, or a reset request when the cursor is no longer represented in the journal. */
 data class WorkspaceChangeBatch(
-    val cursor: Long,
+    val cursor: WorkspaceCursor,
     val reset: Boolean,
     val changes: List<WorkspaceChange>,
 )
@@ -61,6 +88,7 @@ internal class WorkspaceChangeJournal(
     private val watchServiceFactory: () -> WatchService = { root.fileSystem.newWatchService() },
 ) : AutoCloseable {
     private val monitor = Any()
+    private val generation = UUID.randomUUID().toString()
     private val observed = mutableMapOf<String, String>()
     private val entries = ArrayDeque<JournalEntry>()
     private val registrations = mutableMapOf<Path, WatchKey>()
@@ -89,21 +117,22 @@ internal class WorkspaceChangeJournal(
         }
     }
 
-    fun changes(since: Long?): WorkspaceChangeBatch {
+    fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch {
         start()
         synchronized(mutationMonitor) {
-            runCatching { refresh() }
+            refresh()
         }
         return synchronized(monitor) {
-            if (since == null) return@synchronized WorkspaceChangeBatch(cursor, reset = false, changes = emptyList())
+            val current = WorkspaceCursor(generation, cursor)
+            if (since == null) return@synchronized WorkspaceChangeBatch(current, reset = false, changes = emptyList())
             val oldest = entries.firstOrNull()?.cursor ?: (cursor + 1)
-            if (since > cursor || since < oldest - 1) {
-                return@synchronized WorkspaceChangeBatch(cursor, reset = true, changes = emptyList())
+            if (since.generation != generation || since.sequence > cursor || since.sequence < oldest - 1) {
+                return@synchronized WorkspaceChangeBatch(current, reset = true, changes = emptyList())
             }
             WorkspaceChangeBatch(
-                cursor,
+                current,
                 reset = false,
-                changes = entries.filter { it.cursor > since }.map { it.change },
+                changes = entries.filter { it.cursor > since.sequence }.map { it.change },
             )
         }
     }
@@ -118,6 +147,8 @@ internal class WorkspaceChangeJournal(
                 try {
                     registerDirectories()
                 } catch (_: IOException) {
+                    service = null
+                } catch (_: UncheckedIOException) {
                     service = null
                 } catch (_: UnsupportedOperationException) {
                     service = null
@@ -173,6 +204,8 @@ internal class WorkspaceChangeJournal(
                 }
             } catch (_: IOException) {
                 // The next scan retries transient filesystem failures.
+            } catch (_: UncheckedIOException) {
+                // The next scan retries transient directory traversal failures.
             } catch (_: SecurityException) {
                 // The next scan retries transient filesystem access failures.
             }
@@ -213,20 +246,24 @@ internal class WorkspaceChangeJournal(
 
     private fun snapshot(): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        Files.walk(root).use { paths ->
-            paths.filter { it.isRegularFile(NOFOLLOW_LINKS) }.forEach { file ->
-                val relative = root.relativize(file)
-                if (!isHidden(relative)) {
-                    val path = relative.joinToString("/")
-                    if (DocumentKind.of(path) != null) {
-                        try {
-                            result[path] = DocumentVersion.of(Files.readAllBytes(file))
-                        } catch (_: IOException) {
-                            // A concurrent editor can remove a file between listing and reading; the next scan retries.
+        try {
+            Files.walk(root).use { paths ->
+                paths.filter { it.isRegularFile(NOFOLLOW_LINKS) }.forEach { file ->
+                    val relative = root.relativize(file)
+                    if (!isHidden(relative)) {
+                        val path = relative.joinToString("/")
+                        if (DocumentKind.of(path) != null) {
+                            try {
+                                result[path] = DocumentVersion.of(Files.readAllBytes(file))
+                            } catch (_: IOException) {
+                                // A concurrent editor can remove a file between listing and reading; the next scan retries.
+                            }
                         }
                     }
                 }
             }
+        } catch (exception: UncheckedIOException) {
+            throw exception.cause ?: IOException("Workspace scan failed", exception)
         }
         return result
     }

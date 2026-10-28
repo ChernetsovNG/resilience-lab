@@ -53,8 +53,8 @@
 - Test: `core/src/test/kotlin/resiliencelab/core/workspace/FileWorkspaceTest.kt`
 
 **Interfaces:**
-- Produces: `DocumentKind.of(path)`, `Workspace.changes(since: Long?): WorkspaceChangeBatch`, and `FileWorkspace.close()`.
-- `WorkspaceChangeBatch(cursor: Long, reset: Boolean, changes: List<WorkspaceChange>)`; each change has `path`, `kind`, and nullable `version`.
+- Produces: `DocumentKind.of(path)`, `Workspace.changes(since: WorkspaceCursor?): WorkspaceChangeBatch`, and `FileWorkspace.close()`.
+- `WorkspaceChangeBatch(cursor: WorkspaceCursor, reset: Boolean, changes: List<WorkspaceChange>)`; each change has `path`, `kind`, and nullable `version`. A cursor combines a process UUID and a sequence, so pre-restart cursors always reset.
 - `FileWorkspace(root, scanInterval: Duration = Duration.ofSeconds(1), historyLimit: Int = 1000)` supports short test intervals and bounded-history tests.
 
 - [x] Write tests for empty baseline, API create/write/delete events, cursor polling, history eviction reset, future-cursor reset, and filtering hidden/non-document files.

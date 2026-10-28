@@ -61,7 +61,7 @@ data class WorkspaceChangeView(
     val version: String?,
 )
 
-/** A bounded change feed response with an opaque decimal cursor and a reset signal for stale cursors. */
+/** A bounded change feed response with an opaque process-generation cursor and a reset signal for stale cursors. */
 @Serializable
 data class WorkspaceChangesView(
     val cursor: String,

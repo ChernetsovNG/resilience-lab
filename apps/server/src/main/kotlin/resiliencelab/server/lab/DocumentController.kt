@@ -1,5 +1,6 @@
 package resiliencelab.server.lab
 
+import io.swagger.v3.oas.annotations.Parameter
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.workspace.Workspace
+import resiliencelab.core.workspace.WorkspaceCursor
 import java.io.IOException
 
 /**
@@ -71,6 +73,7 @@ class DocumentController(
     @Throws(IOException::class)
     fun deleteDocument(
         @RequestParam path: String,
+        @Parameter(required = true)
         @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
     ): ResponseEntity<Void> {
         kindOf(path)
@@ -88,9 +91,10 @@ class DocumentController(
         @RequestParam(required = false) since: String?,
     ): WorkspaceChangesView {
         val cursor =
-            since?.let { value ->
-                value.toLongOrNull()?.takeIf { it >= 0 }
-                    ?: throw BadRequest("CURSOR_INVALID", "Change cursor must be a non-negative decimal integer")
+            try {
+                since?.let(WorkspaceCursor::parse)
+            } catch (_: IllegalArgumentException) {
+                throw BadRequest("CURSOR_INVALID", "Change cursor must have a valid generation and non-negative sequence")
             }
         val batch = workspace.changes(cursor)
         return WorkspaceChangesView(

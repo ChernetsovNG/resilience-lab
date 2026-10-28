@@ -103,7 +103,7 @@ interface Workspace {
     ): String
 
     /** Returns changes after [since], or the current cursor and no changes when [since] is null. */
-    fun changes(since: Long?): WorkspaceChangeBatch
+    fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch
 }
 
 /**
@@ -216,7 +216,7 @@ class FileWorkspace(
             DocumentVersion.of(bytes)
         }
 
-    override fun changes(since: Long?): WorkspaceChangeBatch = journal.changes(since)
+    override fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch = journal.changes(since)
 
     override fun close() = journal.close()
 
@@ -233,7 +233,7 @@ class FileWorkspace(
                         throw InvalidDocumentPathException(path)
                     }
                     val result = action(file)
-                    journal.record(path, version(result))
+                    journal.record(root.relativize(file).joinToString("/"), version(result))
                     result
                 }
             }

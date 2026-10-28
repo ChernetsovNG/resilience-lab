@@ -1618,8 +1618,8 @@ export interface operations {
             query: {
                 path: string;
             };
-            header?: {
-                "If-Match"?: string;
+            header: {
+                "If-Match": string;
             };
             path?: never;
             cookie?: never;
