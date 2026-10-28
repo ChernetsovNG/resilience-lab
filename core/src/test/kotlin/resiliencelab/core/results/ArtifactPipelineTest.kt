@@ -139,6 +139,12 @@ class ArtifactPipelineTest {
             )
         assertThat(DocumentCodec.encode(RunSummary.serializer(), rebuilt))
             .isEqualTo(workspace.read("${first.runDirectory}/summary.json").text)
+        assertThat(workspace.read("${first.runDirectory}/summary.json").text)
+            .contains(
+                "\"consecutiveWindows\": 3",
+                "\"handlerUtilizationThreshold\": 0.95",
+                "\"meanQueueLengthThreshold\": 0.0",
+            )
         assertThat(first.manifest.complete).isTrue()
         assertThat(first.manifest.schemaVersion).isEqualTo(5)
         first.summary.variants.forEach { variant ->

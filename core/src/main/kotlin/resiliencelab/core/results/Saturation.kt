@@ -1,13 +1,14 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 
 /** Thresholds of the event-time saturation rule. Queue and utilization conditions use the same closed windows. */
 @Serializable
 data class SaturationRule(
-    val consecutiveWindows: Int = 3,
-    val handlerUtilizationThreshold: Double = 0.95,
-    val meanQueueLengthThreshold: Double = 0.0,
+    @EncodeDefault val consecutiveWindows: Int = 3,
+    @EncodeDefault val handlerUtilizationThreshold: Double = 0.95,
+    @EncodeDefault val meanQueueLengthThreshold: Double = 0.0,
 )
 
 /** One saturated node and the start of its first qualifying window. */
