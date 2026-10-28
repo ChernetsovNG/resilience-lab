@@ -467,7 +467,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/ExperimentRequest"
+                "$ref" : "#/components/schemas/ValidationRequest"
               }
             }
           },
@@ -927,6 +927,18 @@
             } ]
           }
         }
+      },
+      "DocumentDraft" : {
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "$ref" : "#/components/schemas/DocumentContent"
+          },
+          "path" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "content", "path" ]
       },
       "DocumentEntry" : {
         "type" : "object",
@@ -1456,6 +1468,21 @@
           }
         },
         "required" : [ "category", "description", "id", "params", "ports", "title", "version" ]
+      },
+      "ValidationRequest" : {
+        "type" : "object",
+        "properties" : {
+          "drafts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DocumentDraft"
+            }
+          },
+          "experiment" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "experiment" ]
       },
       "ValidationView" : {
         "type" : "object",

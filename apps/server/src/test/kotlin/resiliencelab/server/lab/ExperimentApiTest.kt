@@ -13,6 +13,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit.SECONDS
 
 @SpringBootTest
@@ -47,6 +48,66 @@ class ExperimentApiTest {
         assertThat(JsonPath.read<Boolean>(missing.contentAsString, "$.valid")).isFalse()
         assertThat(JsonPath.read<String>(missing.contentAsString, "$.diagnostics[0].code")).isEqualTo("DOCUMENT_MISSING")
         openApi.assertResponse("post", "/api/v1/validate", missing)
+    }
+
+    @Test
+    fun `validates an unsaved model without changing stored files`() {
+        val path = "retry-storm/retry-storm.model.json"
+        val original = Files.readString(root.resolve(path))
+        val draft = original.replace("\"handlers\": 4", "\"handlers\": 0")
+        val response =
+            postJson(
+                "/api/v1/validate",
+                """{"experiment":"$experiment","drafts":[{"path":"$path","content":{"model":$draft}}]}""",
+            )
+
+        assertThat(response.status).isEqualTo(200)
+        assertThat(JsonPath.read<Boolean>(response.contentAsString, "$.valid")).isFalse()
+        assertThat(JsonPath.read<List<String>>(response.contentAsString, "$.diagnostics[*].pointer"))
+            .contains("/blocks/gateway/params/handlers")
+        assertThat(Files.readString(root.resolve(path))).isEqualTo(original)
+        openApi.assertResponse("post", "/api/v1/validate", response)
+        assertThat(JsonPath.read<Boolean>(postJson("/api/v1/validate", """{"experiment":"$experiment"}""").contentAsString, "$.valid"))
+            .isTrue()
+    }
+
+    @Test
+    fun `validates drafts of documents that do not exist yet`() {
+        val model = Files.readString(root.resolve("retry-storm/retry-storm.model.json"))
+        val draftExperiment =
+            Files
+                .readString(root.resolve(experiment))
+                .replace("retry-storm.model.json", "new.model.json")
+                .replace("retry-storm.layout.json", "new.layout.json")
+        val response =
+            postJson(
+                "/api/v1/validate",
+                """{"experiment":"new/new.experiment.json","drafts":[
+                {"path":"new/new.experiment.json","content":{"experiment":$draftExperiment}},
+                {"path":"new/new.model.json","content":{"model":$model}},
+                {"path":"new/new.layout.json","content":{"layout":{"schemaVersion":1,"positions":{}}}}
+            ]}""",
+            )
+
+        assertThat(response.status).isEqualTo(200)
+        assertThat(JsonPath.read<Boolean>(response.contentAsString, "$.valid")).isTrue()
+        assertThat(root.resolve("new")).doesNotExist()
+        openApi.assertResponse("post", "/api/v1/validate", response)
+    }
+
+    @Test
+    fun `rejects ambiguous draft content duplicate paths and paths outside workspace`() {
+        val layout = """{"layout":{"schemaVersion":1,"positions":{}}}"""
+        listOf(
+            """[{"path":"bad.model.json","content":$layout}]""",
+            """[{"path":"../bad.layout.json","content":$layout}]""",
+            """[{"path":"bad.layout.json","content":$layout},{"path":"bad.layout.json","content":$layout}]""",
+            """[{"path":"bad.layout.json","content":{}}]""",
+        ).forEach { drafts ->
+            val response = postJson("/api/v1/validate", """{"experiment":"$experiment","drafts":$drafts}""")
+            assertThat(response.status).isEqualTo(400)
+            openApi.assertResponse("post", "/api/v1/validate", response)
+        }
     }
 
     @Test

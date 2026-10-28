@@ -1,8 +1,9 @@
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { BlockInstance } from "../api/apiTypes";
+import type { BlockInstance, Diagnostic } from "../api/apiTypes";
+import { DiagnosticBadge } from "../validation/DiagnosticDisplay";
 
-export type BlockNodeType = Node<{ id: string; block: BlockInstance }, "block">;
+export type BlockNodeType = Node<{ id: string; block: BlockInstance; diagnostics?: readonly Diagnostic[] }, "block">;
 
 function summaryOf(block: BlockInstance): string {
   const params = block.params;
@@ -17,6 +18,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
     <div className={`block-node block-node--${data.block.type}`} data-testid="block-node">
       {data.block.type === "client" ? null : <Handle type="target" position={Position.Left} isConnectable={false} />}
       <strong>{data.id}</strong>
+      <DiagnosticBadge diagnostics={data.diagnostics ?? []} />
       <span>{summaryOf(data.block)}</span>
       <Handle type="source" position={Position.Right} isConnectable={false} />
     </div>

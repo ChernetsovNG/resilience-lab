@@ -20,6 +20,8 @@ export interface TopBarProps {
   onRedo: () => void;
   running: boolean;
   onRun: () => void;
+  /** Validation errors, an unfinished check or an unavailable validator prevent running. */
+  runBlockedReason?: string;
   job: JobView | null;
   health: HealthView | null;
   healthError: string | null;
@@ -63,8 +65,8 @@ export function TopBar(props: TopBarProps) {
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || loading || saving || dirty || invalid || running}
-        title={invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined}
+        disabled={experiment === null || loading || saving || dirty || invalid || running || props.runBlockedReason !== undefined}
+        title={props.runBlockedReason ?? (invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined)}
       >
         Run
       </button>

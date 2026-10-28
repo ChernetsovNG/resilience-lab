@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Diagnostic } from "./api/apiTypes";
+import { diagnosticTarget } from "./validation/diagnostics";
+import { useValidation } from "./validation/useValidation";
 import { Canvas } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
@@ -25,6 +28,7 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog, loading, undo, redo } = workspace;
+  const validation = useValidation(loaded);
   const variants = loaded?.experiment.variants ?? [];
   const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
@@ -32,6 +36,24 @@ export function App() {
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
+  const diagnostics = validation.report?.diagnostics ?? [];
+  const elementDiagnostics = new Map<string, Diagnostic[]>();
+  const fieldDiagnostics = new Map<string, Diagnostic[]>();
+  for (const diagnostic of diagnostics) {
+    if (loaded === null) break;
+    const target = diagnosticTarget(diagnostic, loaded);
+    if (target.variant !== null && target.variant !== variant?.id) continue;
+    if (target.element !== null) {
+      elementDiagnostics.set(target.element, [...(elementDiagnostics.get(target.element) ?? []), diagnostic]);
+    }
+    const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
+    if (target.field !== null && (setting ? selected === null : target.element === selected)) {
+      fieldDiagnostics.set(target.field, [...(fieldDiagnostics.get(target.field) ?? []), diagnostic]);
+    }
+  }
+  const runBlockedReason = validation.pending ? "Wait for validation to finish"
+    : validation.problem !== null ? "Validation failed; edit or reload the documents to retry"
+      : validation.report?.valid === false ? "Fix validation errors before running" : undefined;
 
   const onValidity = useCallback((key: string, valid: boolean) => {
     setInvalidFields((current) => {
@@ -86,6 +108,7 @@ export function App() {
         onUndo={workspace.undo}
         onRedo={workspace.redo}
         running={run.running}
+        runBlockedReason={runBlockedReason}
         onRun={() => {
           if (loaded !== null) void run.run(loaded.experimentPath);
         }}
@@ -125,6 +148,7 @@ export function App() {
               model={model}
               layout={loaded.layout}
               selected={selected}
+              elementDiagnostics={elementDiagnostics}
               onSelect={(id) => {
                 if (!invalid) setSelected(id);
               }}
@@ -146,12 +170,23 @@ export function App() {
           overrides={overrides}
           onParam={workspace.setParam}
           onValidity={onValidity}
+          fieldDiagnostics={fieldDiagnostics}
         />
       )}
       <ResultsPanel
         job={ownRun ? run.job : null}
         summary={ownRun ? run.summary : null}
         problem={ownRun ? run.problem : null}
+        diagnostics={diagnostics}
+        validationPending={validation.pending}
+        validationProblem={validation.problem}
+        onDiagnostic={(diagnostic) => {
+          if (loaded === null || invalid || loading) return;
+          const target = diagnosticTarget(diagnostic, loaded);
+          setVariantId(target.variant);
+          const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
+          setSelected(setting ? null : target.element);
+        }}
       />
     </div>
   );

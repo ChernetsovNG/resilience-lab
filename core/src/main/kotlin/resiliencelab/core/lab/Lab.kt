@@ -16,6 +16,7 @@ import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
 import resiliencelab.core.results.VariantSummary
 import resiliencelab.core.results.Versions
+import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
@@ -64,8 +65,22 @@ class Lab(
     }
 
     /** Validates an experiment and all referenced documents in the workspace. */
-    fun validate(experimentPath: String): ValidationReport {
-        val loaded = load(experimentPath)
+    fun validate(experimentPath: String): ValidationReport = validate(experimentPath, emptyMap())
+
+    /**
+     * Validates with in-memory document text at canonical workspace-relative paths, including new documents.
+     * Drafts replace reads only; storage is never changed. Versions describe the text actually validated.
+     * @throws InvalidDocumentPathException when a draft path is not canonical or leaves the workspace.
+     */
+    fun validate(
+        experimentPath: String,
+        drafts: Map<String, String>,
+    ): ValidationReport {
+        drafts.keys.forEach { path ->
+            if (resolveRef("", path) != path) throw InvalidDocumentPathException(path)
+            workspace.exists(path) // Enforce the storage boundary, including symbolic links, also for new drafts.
+        }
+        val loaded = load(experimentPath, drafts)
         val warnings = loaded.experiment?.let { ModelLinter().lint(it) }.orEmpty()
         return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
     }
@@ -169,16 +184,22 @@ class Lab(
         val versions: Map<String, String>,
     )
 
-    private fun load(experimentPath: String): Loaded =
+    private fun load(
+        experimentPath: String,
+        drafts: Map<String, String> = emptyMap(),
+    ): Loaded =
         try {
-            loadDocuments(experimentPath)
+            loadDocuments(experimentPath, drafts)
         } catch (exception: UnreadableDocumentException) {
             failed(exception.diagnostic)
         }
 
-    private fun loadDocuments(experimentPath: String): Loaded {
+    private fun loadDocuments(
+        experimentPath: String,
+        drafts: Map<String, String>,
+    ): Loaded {
         val experimentDocument =
-            read(experimentPath)
+            read(experimentPath, drafts)
                 ?: return failed(
                     Diagnostic("DOCUMENT_MISSING", Severity.ERROR, "Document '$experimentPath' does not exist", experimentPath),
                 )
@@ -189,7 +210,7 @@ class Lab(
             }
         val modelPath = resolveRef(experimentPath, experiment.modelRef)
         val modelDocument =
-            modelPath?.let(::read)
+            modelPath?.let { read(it, drafts) }
                 ?: return failed(
                     Diagnostic(
                         "MODEL_REF",
@@ -205,7 +226,7 @@ class Lab(
                 is DecodeResult.Failed -> return Loaded(null, decoded.diagnostics, emptyMap())
             }
         val result = compiler.compile(model, modelDocument.path, experiment, experimentPath)
-        val layout = experiment.layoutRef?.let { checkLayout(experimentPath, it) }.orEmpty()
+        val layout = experiment.layoutRef?.let { checkLayout(experimentPath, it, drafts) }.orEmpty()
         val versions = sortedMapOf(experimentPath to experimentDocument.version, modelDocument.path to modelDocument.version)
         return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions)
     }
@@ -214,9 +235,10 @@ class Lab(
     private fun checkLayout(
         experimentPath: String,
         layoutRef: String,
+        drafts: Map<String, String>,
     ): List<Diagnostic> {
         val layoutDocument =
-            resolveRef(experimentPath, layoutRef)?.let(::read)
+            resolveRef(experimentPath, layoutRef)?.let { read(it, drafts) }
                 ?: return listOf(
                     Diagnostic(
                         "LAYOUT_REF",
@@ -233,9 +255,20 @@ class Lab(
     }
 
     /** The document, or null when it does not exist or its path is invalid; a failed read is a diagnostic, not a crash. */
-    private fun read(path: String): VersionedDocument? =
+    private fun read(
+        path: String,
+        drafts: Map<String, String>,
+    ): VersionedDocument? =
         try {
-            if (workspace.exists(path)) workspace.read(path) else null
+            val exists = workspace.exists(path)
+            val draft = drafts[path]
+            if (draft != null) {
+                VersionedDocument(path, draft, DocumentVersion.of(draft))
+            } else if (exists) {
+                workspace.read(path)
+            } else {
+                null
+            }
         } catch (exception: InvalidDocumentPathException) {
             null
         } catch (exception: IOException) {

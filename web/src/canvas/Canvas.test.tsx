@@ -8,6 +8,15 @@ import { VariantTabs } from "./VariantTabs";
 beforeAll(mockReactFlowDom);
 
 describe("Canvas", () => {
+  it("shows finding counts and the greatest severity on blocks and connections", async () => {
+    const warning = { code: "LINT_TIMEOUT_BUDGET", severity: "WARNING" as const, message: "Check timeout" };
+    render(<Canvas model={model} layout={layout} selected={null} onSelect={vi.fn()} elementDiagnostics={new Map([
+      ["gateway", [warning, { ...warning, severity: "ERROR" }]],
+      ["gateway-to-middle", [warning]],
+    ])} />);
+    expect(await screen.findByRole("img", { name: "2 problems: error" })).toBeTruthy();
+    expect((await screen.findByTestId("rf__edge-gateway-to-middle")).textContent).toContain("⚠ 1");
+  });
   it("draws blocks with key parameters and reports the selection", async () => {
     const onSelect = vi.fn();
     render(<Canvas model={model} layout={layout} selected={null} onSelect={onSelect} />);

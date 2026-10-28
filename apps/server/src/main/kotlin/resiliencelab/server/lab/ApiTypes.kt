@@ -1,5 +1,6 @@
 package resiliencelab.server.lab
 
+import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.Serializable
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.document.ExperimentFile
@@ -69,6 +70,21 @@ data class DocumentView(
 @Serializable
 data class ExperimentRequest(
     val experiment: String,
+)
+
+/** In-memory content at a canonical workspace-relative path; validation never saves it. */
+@Serializable
+data class DocumentDraft(
+    val path: String,
+    val content: DocumentContent,
+)
+
+/** Validates stored documents with optional replacements, including documents not created yet. */
+@Serializable
+data class ValidationRequest(
+    val experiment: String,
+    @field:Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    val drafts: List<DocumentDraft> = emptyList(),
 )
 
 /** Diagnostics of one experiment; [valid] is false when any diagnostic is an error. */

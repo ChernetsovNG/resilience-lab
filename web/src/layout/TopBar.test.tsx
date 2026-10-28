@@ -11,6 +11,14 @@ function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
 
 describe("TopBar", () => {
+  it("blocks running with a validation explanation", () => {
+    const state = props({ runBlockedReason: "Fix validation errors before running" });
+    render(<TopBar {...state} />);
+    expect(button("Run").disabled).toBe(true);
+    expect(button("Run").title).toBe("Fix validation errors before running");
+    fireEvent.click(button("Run"));
+    expect(state.onRun).not.toHaveBeenCalled();
+  });
   it.each(["loading", "saving", "running", "invalid"] as const)("prevents experiment switching while %s", (flag) => {
     render(<TopBar {...props({ [flag]: true })} />);
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Experiment" }).disabled).toBe(true);

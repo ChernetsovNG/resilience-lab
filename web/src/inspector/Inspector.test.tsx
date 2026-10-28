@@ -53,13 +53,14 @@ describe("Inspector", () => {
     expect(onParam).toHaveBeenCalledWith("gateway", "queue", undefined);
   });
 
-  it("checks catalog ranges in canonical units at both bounds", () => {
+  it("shows catalog range errors but commits parseable values for core validation", () => {
     const onParam = renderInspector();
 
     commit("Handlers", "0");
     expect(screen.getByRole("alert").textContent).toContain(">= 1");
     commit("Failure rate", "150%");
-    expect(onParam).not.toHaveBeenCalled();
+    expect(onParam).toHaveBeenCalledWith("gateway", "handlers", 0);
+    expect(onParam).toHaveBeenCalledWith("gateway", "failureRate", "150%");
 
     commit("Handlers", "1");
     commit("Failure rate", "100%");
@@ -160,8 +161,28 @@ describe("Inspector", () => {
     const onParam = renderInspector({ catalog: rangedCatalog, selected: "gateway-to-middle" });
     commit("Timeout", "0.1s");
     expect(screen.getByRole("alert").textContent).toContain("> 100ms");
-    expect(onParam).not.toHaveBeenCalled();
+    expect(onParam).toHaveBeenCalledWith("gateway-to-middle", "timeout", "0.1s");
     commit("Timeout", "0.101s");
     expect(onParam).toHaveBeenCalledWith("gateway-to-middle", "timeout", "0.101s");
+  });
+
+  it("shows diagnostics beside nested parameter fields and common experiment fields", () => {
+    const warning = { code: "LINT_TIMEOUT_BUDGET", severity: "WARNING" as const, message: "Increase the timeout budget" };
+    const { unmount } = render(<Inspector
+      catalog={catalog} model={model} experiment={experiment} selected="gateway-to-middle" editable overrides={{}}
+      onParam={vi.fn()} onValidity={vi.fn()} fieldDiagnostics={new Map([["backoff.base", [warning]]])}
+    />);
+    expect(screen.getByText(/Increase the timeout budget/).closest(".param-field")?.textContent).toContain("Base delay");
+    unmount();
+    renderInspector({ selected: null, fieldDiagnostics: new Map([
+      ["execution.replications", [{ ...warning, severity: "ERROR", message: "Invalid replications" }]],
+      ["faults.0.failureRate", [{ ...warning, message: "Invalid fault probability" }]],
+      ["faults", [{ ...warning, message: "Overlapping faults" }]],
+      ["faults.0", [{ ...warning, message: "Empty fault" }]],
+    ]) });
+    expect(screen.getByText(/Invalid replications/)).toBeTruthy();
+    expect(screen.getByText(/Invalid fault probability/)).toBeTruthy();
+    expect(screen.getByText(/Overlapping faults/)).toBeTruthy();
+    expect(screen.getByText(/Empty fault/)).toBeTruthy();
   });
 });

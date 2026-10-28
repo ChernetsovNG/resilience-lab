@@ -338,3 +338,55 @@ select {
 .problem-list {
   color: #991b1b;
 }
+
+.diagnostic--error,
+.diagnostic-badge.diagnostic--error {
+  color: #b91c1c;
+}
+
+.diagnostic--warning,
+.diagnostic-badge.diagnostic--warning {
+  color: #92400e;
+}
+
+.diagnostic-badge {
+  justify-self: start;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.react-flow__edge.diagnostic--error .react-flow__edge-text {
+  fill: #b91c1c;
+}
+
+.react-flow__edge.diagnostic--warning .react-flow__edge-text {
+  fill: #92400e;
+}
+
+.field-diagnostics {
+  margin: 0.2rem 0;
+  padding-left: 1rem;
+  font-size: 0.75rem;
+}
+
+.validation-problems {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.validation-problems button {
+  padding: 0.3rem;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.results-panel [role="tab"][aria-selected="true"] {
+  color: #1d4ed8;
+  border-color: #2563eb;
+}

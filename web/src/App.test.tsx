@@ -32,6 +32,7 @@ function server(override?: (url: string, init?: RequestInit) => StubResponse | P
     if (response !== undefined) return response;
     if (url === "/api/v1/health") return { body: health };
     if (url === "/api/v1/catalog") return { body: catalog };
+    if (url === "/api/v1/validate") return { body: { experiment: JSON.parse(String(init?.body)).experiment, valid: true, diagnostics: [] } };
     if (url === "/api/v1/workspace/documents") return { body: Object.values(documents) };
     if (url.startsWith("/api/v1/workspace/document?")) {
       const path = new URL(url, "http://localhost").searchParams.get("path")!;
@@ -48,6 +49,7 @@ async function open() {
   const view = render(<App />);
   await screen.findByRole("heading", { name: "Run settings" });
   await screen.findByTestId("rf__node-gateway");
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
   return view;
 }
 function selectGateway() { fireEvent.click(screen.getByTestId("rf__node-gateway")); }
@@ -57,6 +59,49 @@ function editHandlers(value: string) {
 }
 const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
 const experimentSelect = () => screen.getByRole("combobox", { name: "Experiment" }) as HTMLSelectElement;
+
+it("validates unsaved values, shows errors in every view and removes them after correction", async () => {
+  server((url, init) => {
+    if (url !== "/api/v1/validate") return undefined;
+    const body = JSON.parse(String(init?.body));
+    const invalid = body.drafts.some((draft: { content: { model?: typeof model } }) => draft.content.model?.blocks.gateway.params.handlers === 0);
+    return { body: { experiment: experimentPath, valid: !invalid, diagnostics: invalid ? [
+      { code: "PARAM_RANGE", severity: "ERROR", message: "At least one handler", document: modelPath, pointer: "/blocks/gateway/params/handlers", path: "gateway" },
+    ] : [] } };
+  });
+  await open(); selectGateway(); editHandlers("0");
+  await screen.findByRole("img", { name: "1 problems: error" });
+  expect(screen.getByText(/At least one handler/).closest(".param-field")?.textContent).toContain("Handlers");
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  expect(within(screen.getByRole("tabpanel")).getByText(/PARAM_RANGE/)).toBeTruthy();
+  expect(button("Run").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(false);
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /At least one handler/ }));
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
+  await waitFor(() => expect(screen.queryByRole("img", { name: "1 problems: error" })).toBeNull());
+  expect(screen.queryByText(/At least one handler/)).toBeNull();
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+});
+
+it("blocks Run on saved validation errors and navigates to an override's variant and element", async () => {
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
+    { code: "PARAM_RANGE", severity: "ERROR", message: "Invalid override timeout", document: experimentPath,
+      pointer: "/variants/1/overrides/gateway-to-middle.timeout", path: "gateway-to-middle" },
+  ] } } : undefined);
+  render(<App />);
+  await screen.findByRole("heading", { name: "Run settings" });
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Invalid override timeout/ }));
+  expect(screen.getByRole("tab", { name: "No retries" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  expect(within(screen.getByRole("complementary", { name: "Inspector" })).getByText(/Invalid override timeout/).closest(".param-field")).toBeTruthy();
+  expect(button("Run").disabled).toBe(true);
+  expect(button("Run").title).toContain("validation errors");
+});
 
 describe("App stage 1 integration", () => {
   it("loads the workspace, renders its four blocks and keeps variant pages read-only", async () => {
@@ -92,7 +137,7 @@ describe("App stage 1 integration", () => {
     expect(experimentSelect().value).toBe(experimentPath);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("oops");
     expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT" || init?.method === "POST")).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "PUT" || url === "/api/v1/jobs")).toBe(false);
     editHandlers("5");
     expect(experimentSelect().disabled).toBe(false);
     expect(button("Save").disabled).toBe(false);
@@ -170,7 +215,7 @@ describe("App stage 1 integration", () => {
     selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Save").disabled).toBe(true);
-    expect(button("Run").disabled).toBe(false);
+    await waitFor(() => expect(button("Run").disabled).toBe(false));
   });
 
   it("blocks experiment switching while running and clears completed results for another experiment", async () => {
