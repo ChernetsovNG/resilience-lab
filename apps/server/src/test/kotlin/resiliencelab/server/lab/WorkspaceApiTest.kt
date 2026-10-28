@@ -14,6 +14,7 @@ import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import resiliencelab.core.document.DecodeResult
@@ -122,6 +123,79 @@ class WorkspaceApiTest {
     }
 
     @Test
+    fun `deletes a document only with the required current If-Match`() {
+        val path = "delete/delete-me.layout.json"
+        val file = root.resolve(path)
+        Files.createDirectories(file.parent)
+        Files.copy(root.resolve(layout), file)
+        val current = version(path)
+
+        val required = deleteDocument(path, ifMatch = null)
+        assertThat(required.status).isEqualTo(428)
+        assertThat(code(required)).isEqualTo("VERSION_REQUIRED")
+        openApi.assertResponse("delete", "/api/v1/workspace/document", required)
+
+        val missing = deleteDocument("delete/missing.layout.json", ifMatch = "*")
+        assertThat(missing.status).isEqualTo(404)
+        assertThat(code(missing)).isEqualTo("DOCUMENT_NOT_FOUND")
+        openApi.assertResponse("delete", "/api/v1/workspace/document", missing)
+
+        val stale = deleteDocument(path, ifMatch = "\"stale\"")
+        assertThat(stale.status).isEqualTo(409)
+        assertThat(code(stale)).isEqualTo("VERSION_CONFLICT")
+        assertThat(file).exists()
+        openApi.assertResponse("delete", "/api/v1/workspace/document", stale)
+
+        val deleted = deleteDocument(path, ifMatch = "\"$current\"")
+        assertThat(deleted.status).isEqualTo(204)
+        assertThat(deleted.contentAsByteArray).isEmpty()
+        assertThat(file).doesNotExist()
+        openApi.assertResponse("delete", "/api/v1/workspace/document", deleted)
+    }
+
+    @Test
+    fun `reports API writes and external document creation modification and deletion`() {
+        val initialResponse = getChanges(since = null)
+        val initial = decodeChanges(initialResponse)
+        assertThat(initial.reset).isFalse()
+        assertThat(initial.changes).isEmpty()
+        openApi.assertResponse("get", "/api/v1/workspace/changes", initialResponse)
+
+        val current = (DocumentCodec.decodeLayout(read(layout), layout) as DecodeResult.Ok).value
+        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = current))
+        val apiPath = "changes-api.layout.json"
+        assertThat(putDocument(apiPath, body, ifMatch = null).status).isEqualTo(200)
+        val api = awaitChange(initial.cursor, apiPath, version(apiPath))
+        assertThat(api.reset).isFalse()
+        assertThat(api.cursor.toLong()).isGreaterThan(initial.cursor.toLong())
+        assertThat(api.changes.single { it.path == apiPath }.kind).isEqualTo(DocumentKind.LAYOUT)
+
+        val externalPath = "changes-external.model.json"
+        val external = root.resolve(externalPath)
+        Files.writeString(external, "one\n")
+        val created = awaitChange(api.cursor, externalPath, DocumentVersion.of("one\n"))
+        assertThat(created.changes.single { it.path == externalPath }.kind).isEqualTo(DocumentKind.MODEL)
+
+        Files.writeString(external, "two\n")
+        val updated = awaitChange(created.cursor, externalPath, DocumentVersion.of("two\n"))
+
+        Files.delete(external)
+        val deleted = awaitChange(updated.cursor, externalPath, version = null)
+        assertThat(deleted.changes.single { it.path == externalPath }.kind).isEqualTo(DocumentKind.MODEL)
+    }
+
+    @Test
+    fun `rejects malformed change cursors`() {
+        listOf("not-a-cursor", "-1").forEach { cursor ->
+            val response = getChanges(cursor)
+
+            assertThat(response.status).isEqualTo(400)
+            assertThat(code(response)).isEqualTo("CURSOR_INVALID")
+            openApi.assertResponse("get", "/api/v1/workspace/changes", response)
+        }
+    }
+
+    @Test
     fun `rejects wrong kinds, invalid content, bad paths and missing documents`() {
         val modelBody =
             apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 1, blocks = emptyMap())))
@@ -184,6 +258,41 @@ class WorkspaceApiTest {
         val request = put("/api/v1/workspace/document").param("path", path).contentType(APPLICATION_JSON).content(body)
         ifMatch?.let { request.header(HttpHeaders.IF_MATCH, it) }
         return mockMvc.perform(request).andReturn().response
+    }
+
+    private fun deleteDocument(
+        path: String,
+        ifMatch: String?,
+    ): MockHttpServletResponse {
+        val request = delete("/api/v1/workspace/document").param("path", path)
+        ifMatch?.let { request.header(HttpHeaders.IF_MATCH, it) }
+        return mockMvc.perform(request).andReturn().response
+    }
+
+    private fun getChanges(since: String?): MockHttpServletResponse {
+        val request = get("/api/v1/workspace/changes")
+        since?.let { request.param("since", it) }
+        return mockMvc.perform(request).andReturn().response
+    }
+
+    private fun decodeChanges(response: MockHttpServletResponse): WorkspaceChangesView =
+        apiJson.decodeFromString(WorkspaceChangesView.serializer(), response.contentAsString)
+
+    private fun awaitChange(
+        since: String,
+        path: String,
+        version: String?,
+    ): WorkspaceChangesView {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            val response = getChanges(since)
+            assertThat(response.status).isEqualTo(200)
+            val batch = decodeChanges(response)
+            openApi.assertResponse("get", "/api/v1/workspace/changes", response)
+            if (batch.changes.any { it.path == path && it.version == version }) return batch
+            Thread.sleep(25)
+        }
+        throw AssertionError("Change '$path' at version '$version' was not observed within five seconds")
     }
 
     private fun code(response: MockHttpServletResponse): String = JsonPath.read(response.contentAsString, "$.code")

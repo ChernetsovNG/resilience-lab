@@ -112,6 +112,7 @@ class OpenApiSpecTest {
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}",
             "/api/v1/validate",
+            "/api/v1/workspace/changes",
             "/api/v1/workspace/document",
             "/api/v1/workspace/documents",
         )

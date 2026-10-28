@@ -10,6 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.WRITE
+import java.time.Duration
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -54,6 +55,31 @@ class FileWorkspaceTest {
             .isInstanceOf(VersionConflictException::class.java)
         assertThatThrownBy { workspace.write("new.model.json", "x\n", expectedVersion = first) }
             .isInstanceOf(VersionConflictException::class.java)
+    }
+
+    @Test
+    fun `deletes a document at the expected version`() {
+        val version = workspace.write("a.model.json", "1\n")
+
+        workspace.delete("a.model.json", expectedVersion = version)
+
+        assertThat(workspace.exists("a.model.json")).isFalse()
+    }
+
+    @Test
+    fun `rejects deletion against a stale version`() {
+        val version = workspace.write("a.model.json", "1\n")
+        workspace.write("a.model.json", "2\n", expectedVersion = version)
+
+        assertThatThrownBy { workspace.delete("a.model.json", expectedVersion = version) }
+            .isInstanceOf(VersionConflictException::class.java)
+        assertThat(workspace.read("a.model.json").text).isEqualTo("2\n")
+    }
+
+    @Test
+    fun `rejects deletion of a missing document`() {
+        assertThatThrownBy { workspace.delete("missing.model.json", expectedVersion = "stale") }
+            .isInstanceOf(DocumentNotFoundException::class.java)
     }
 
     @Test
@@ -249,13 +275,17 @@ class FileWorkspaceTest {
         text: String,
     ): Process {
         val classpath =
-            listOf(WorkspaceWriterProcess::class.java, FileWorkspace::class.java, Unit::class.java)
-                .map {
-                    File(
-                        it.protectionDomain.codeSource.location
-                            .toURI(),
-                    ).path
-                }.distinct()
+            listOf(
+                WorkspaceWriterProcess::class.java,
+                FileWorkspace::class.java,
+                Unit::class.java,
+                kotlinx.serialization.KSerializer::class.java,
+            ).map {
+                File(
+                    it.protectionDomain.codeSource.location
+                        .toURI(),
+                ).path
+            }.distinct()
                 .joinToString(File.pathSeparator)
         return ProcessBuilder(
             Path.of(System.getProperty("java.home"), "bin", "java").toString(),
@@ -315,5 +345,134 @@ class FileWorkspaceTest {
             .containsExactly(".results/e/run-1/manifest.json", ".results/e/run-1/summary.json")
         assertThat(workspace.listFiles("missing")).isEmpty()
         assertThatThrownBy { workspace.listFiles("../outside") }.isInstanceOf(InvalidDocumentPathException::class.java)
+    }
+
+    @Test
+    fun `journals API mutations with cursors from an empty baseline`() {
+        Files.writeString(root.resolve("existing.model.json"), "existing\n")
+        FileWorkspace(root, scanInterval = Duration.ofSeconds(30)).use { files ->
+            val baseline = files.changes(null)
+            assertThat(baseline.cursor).isZero()
+            assertThat(baseline.reset).isFalse()
+            assertThat(baseline.changes).isEmpty()
+
+            val created = files.create("a.model.json", "1\n")
+            val updated = files.write("a.model.json", "2\n", expectedVersion = created)
+            files.delete("a.model.json", expectedVersion = updated)
+
+            val batch = files.changes(baseline.cursor)
+            assertThat(batch.cursor).isEqualTo(3)
+            assertThat(batch.reset).isFalse()
+            assertThat(batch.changes).containsExactly(
+                WorkspaceChange("a.model.json", DocumentKind.MODEL, created),
+                WorkspaceChange("a.model.json", DocumentKind.MODEL, updated),
+                WorkspaceChange("a.model.json", DocumentKind.MODEL, null),
+            )
+            assertThat(files.changes(batch.cursor).changes).isEmpty()
+            val latest = files.changes(null)
+            assertThat(latest.cursor).isEqualTo(batch.cursor)
+            assertThat(latest.changes).isEmpty()
+        }
+    }
+
+    @Test
+    fun `resets a cursor evicted from bounded history or coming from the future`() {
+        FileWorkspace(root, scanInterval = Duration.ofSeconds(30), historyLimit = 2).use { files ->
+            val baseline = files.changes(null).cursor
+            repeat(3) { files.create("$it.model.json", "$it\n") }
+
+            val stale = files.changes(baseline)
+            assertThat(stale.cursor).isEqualTo(3)
+            assertThat(stale.reset).isTrue()
+            assertThat(stale.changes).isEmpty()
+            assertThat(files.changes(3).reset).isFalse()
+            val future = files.changes(4)
+            assertThat(future.reset).isTrue()
+            assertThat(future.cursor).isEqualTo(3)
+            assertThat(future.changes).isEmpty()
+        }
+    }
+
+    @Test
+    fun `keeps non-documents hidden directories and symbolic links out of the journal`(
+        @TempDir outside: Path,
+    ) {
+        FileWorkspace(root, scanInterval = Duration.ofSeconds(30)).use { files ->
+            val baseline = files.changes(null).cursor
+
+            files.create("notes.json", "{}\n")
+            files.create(".hidden/a.model.json", "{}\n")
+            files.create(".results/a.model.json", "{}\n")
+            Files.writeString(root.resolve("notes.model.txt"), "not a document")
+            val external = Files.writeString(outside.resolve("outside.model.json"), "outside\n")
+            Files.createSymbolicLink(root.resolve("alias.model.json"), external)
+
+            val batch = files.changes(baseline)
+            assertThat(batch.cursor).isEqualTo(baseline)
+            assertThat(batch.reset).isFalse()
+            assertThat(batch.changes).isEmpty()
+        }
+    }
+
+    @Test
+    fun `falls back to scanning when the watch service is unavailable`() {
+        WorkspaceChangeJournal(root, Duration.ofMillis(25), 100, Any()) {
+            throw IOException("WatchService unavailable")
+        }.use { journal ->
+            val baseline = journal.changes(null).cursor
+            Files.writeString(root.resolve("fallback.model.json"), "external\n")
+            val deadline = System.currentTimeMillis() + 5_000
+            var found = false
+            while (System.currentTimeMillis() < deadline && !found) {
+                found =
+                    journal.changes(baseline).changes.any {
+                        it.path == "fallback.model.json" && it.version == DocumentVersion.of("external\n")
+                    }
+                if (!found) Thread.sleep(25)
+            }
+
+            assertThat(found).isTrue()
+        }
+    }
+
+    @Test
+    fun `observes external creation modification and deletion within five seconds`() {
+        FileWorkspace(root, scanInterval = Duration.ofMillis(25)).use { files ->
+            val path = "nested/external.layout.json"
+            val file = root.resolve(path)
+            Files.createDirectories(file.parent)
+            var cursor = files.changes(null).cursor
+
+            Files.writeString(file, "one\n")
+            val created = awaitChange(files, cursor, path, DocumentKind.LAYOUT, DocumentVersion.of("one\n"))
+            cursor = created.cursor
+
+            Files.writeString(file, "two\n")
+            val updated = awaitChange(files, cursor, path, DocumentKind.LAYOUT, DocumentVersion.of("two\n"))
+            cursor = updated.cursor
+
+            Files.delete(file)
+            awaitChange(files, cursor, path, DocumentKind.LAYOUT, null)
+        }
+    }
+
+    private fun awaitChange(
+        workspace: FileWorkspace,
+        since: Long,
+        path: String,
+        kind: DocumentKind,
+        version: String?,
+    ): WorkspaceChangeBatch {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            val batch = workspace.changes(since)
+            val match = batch.changes.firstOrNull { it.path == path && it.version == version }
+            if (match != null) {
+                assertThat(match.kind).isEqualTo(kind)
+                return batch
+            }
+            Thread.sleep(25)
+        }
+        throw AssertionError("Change '$path' at version '$version' was not observed within five seconds")
     }
 }

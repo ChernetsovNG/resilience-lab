@@ -1,0 +1,265 @@
+package resiliencelab.core.workspace
+
+import kotlinx.serialization.Serializable
+import java.io.IOException
+import java.nio.file.ClosedWatchServiceException
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.Path
+import java.nio.file.StandardWatchEventKinds.ENTRY_CREATE
+import java.nio.file.StandardWatchEventKinds.ENTRY_DELETE
+import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
+import java.nio.file.WatchKey
+import java.nio.file.WatchService
+import java.time.Duration
+import java.util.concurrent.TimeUnit.MILLISECONDS
+import kotlin.concurrent.thread
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.pathString
+
+/** Workspace document kinds by file suffix (ADR 0005). */
+@Serializable
+enum class DocumentKind(
+    val suffix: String,
+) {
+    MODEL(".model.json"),
+    LAYOUT(".layout.json"),
+    EXPERIMENT(".experiment.json"),
+    ;
+
+    companion object {
+        fun of(path: String): DocumentKind? = entries.firstOrNull { path.endsWith(it.suffix) }
+    }
+}
+
+/** One document mutation; [version] is null after deletion. */
+data class WorkspaceChange(
+    val path: String,
+    val kind: DocumentKind,
+    val version: String?,
+)
+
+/** Changes after a cursor, or a reset request when the cursor is no longer represented in the journal. */
+data class WorkspaceChangeBatch(
+    val cursor: Long,
+    val reset: Boolean,
+    val changes: List<WorkspaceChange>,
+)
+
+private data class JournalEntry(
+    val cursor: Long,
+    val change: WorkspaceChange,
+)
+
+/** In-memory journal backed by filesystem events and full scans, so missed platform events do not hide changes. */
+internal class WorkspaceChangeJournal(
+    private val root: Path,
+    private val scanInterval: Duration,
+    private val historyLimit: Int,
+    private val mutationMonitor: Any,
+    private val watchServiceFactory: () -> WatchService = { root.fileSystem.newWatchService() },
+) : AutoCloseable {
+    private val monitor = Any()
+    private val observed = mutableMapOf<String, String>()
+    private val entries = ArrayDeque<JournalEntry>()
+    private val registrations = mutableMapOf<Path, WatchKey>()
+    private var cursor = 0L
+    private var worker: Thread? = null
+    private var watcher: WatchService? = null
+
+    @Volatile
+    private var closed = false
+
+    init {
+        require(!scanInterval.isZero && !scanInterval.isNegative) { "Scan interval must be positive" }
+        require(historyLimit > 0) { "History limit must be positive" }
+        observed.putAll(snapshot())
+    }
+
+    /** Records a mutation already serialized with scans through [mutationMonitor]. */
+    fun record(
+        path: String,
+        version: String?,
+    ) {
+        if (!isDocumentPath(path)) return
+        synchronized(monitor) {
+            updateObserved(path, version)
+            append(path, version)
+        }
+    }
+
+    fun changes(since: Long?): WorkspaceChangeBatch {
+        start()
+        synchronized(mutationMonitor) {
+            runCatching { refresh() }
+        }
+        return synchronized(monitor) {
+            if (since == null) return@synchronized WorkspaceChangeBatch(cursor, reset = false, changes = emptyList())
+            val oldest = entries.firstOrNull()?.cursor ?: (cursor + 1)
+            if (since > cursor || since < oldest - 1) {
+                return@synchronized WorkspaceChangeBatch(cursor, reset = true, changes = emptyList())
+            }
+            WorkspaceChangeBatch(
+                cursor,
+                reset = false,
+                changes = entries.filter { it.cursor > since }.map { it.change },
+            )
+        }
+    }
+
+    private fun start() {
+        synchronized(monitor) {
+            check(!closed) { "Workspace is closed" }
+            if (worker != null) return
+            var service = createWatchService()
+            watcher = service
+            if (service != null) {
+                try {
+                    registerDirectories()
+                } catch (_: IOException) {
+                    service = null
+                } catch (_: UnsupportedOperationException) {
+                    service = null
+                } catch (_: SecurityException) {
+                    service = null
+                }
+                if (service == null) {
+                    runCatching { watcher?.close() }
+                    watcher = null
+                    registrations.clear()
+                }
+            }
+            worker =
+                thread(isDaemon = true, name = "workspace-changes") {
+                    watchLoop(service)
+                }
+        }
+    }
+
+    private fun createWatchService(): WatchService? =
+        try {
+            watchServiceFactory()
+        } catch (_: IOException) {
+            null
+        } catch (_: UnsupportedOperationException) {
+            null
+        } catch (_: SecurityException) {
+            null
+        }
+
+    private fun watchLoop(service: WatchService?) {
+        while (!closed) {
+            try {
+                if (service == null) {
+                    Thread.sleep(scanInterval.toMillis())
+                } else {
+                    val key = service.poll(scanInterval.toMillis(), MILLISECONDS)
+                    if (key != null) {
+                        key.pollEvents()
+                        key.reset()
+                    }
+                }
+            } catch (_: ClosedWatchServiceException) {
+                break
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            try {
+                synchronized(mutationMonitor) {
+                    registerDirectories()
+                    refresh()
+                }
+            } catch (_: IOException) {
+                // The next scan retries transient filesystem failures.
+            } catch (_: SecurityException) {
+                // The next scan retries transient filesystem access failures.
+            }
+        }
+    }
+
+    private fun registerDirectories() {
+        val service = watcher ?: return
+        val live = mutableSetOf<Path>()
+        Files.walk(root).use { paths ->
+            paths.filter { it.isDirectory(NOFOLLOW_LINKS) && !isHidden(root.relativize(it)) }.forEach { directory ->
+                live.add(directory)
+                if (!registrations.containsKey(directory)) {
+                    registrations[directory] = directory.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE)
+                }
+            }
+        }
+        val stale = registrations.filterKeys { it !in live || !registrations.getValue(it).isValid }.keys
+        stale.forEach {
+            registrations.remove(it)?.cancel()
+        }
+    }
+
+    /** Must be called with [mutationMonitor] held, in the same order as workspace mutations. */
+    private fun refresh() {
+        val current = snapshot()
+        synchronized(monitor) {
+            (observed.keys + current.keys).sorted().forEach { path ->
+                val previous = observed[path]
+                val version = current[path]
+                if (previous != version) {
+                    updateObserved(path, version)
+                    append(path, version)
+                }
+            }
+        }
+    }
+
+    private fun snapshot(): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        Files.walk(root).use { paths ->
+            paths.filter { it.isRegularFile(NOFOLLOW_LINKS) }.forEach { file ->
+                val relative = root.relativize(file)
+                if (!isHidden(relative)) {
+                    val path = relative.joinToString("/")
+                    if (DocumentKind.of(path) != null) {
+                        try {
+                            result[path] = DocumentVersion.of(Files.readAllBytes(file))
+                        } catch (_: IOException) {
+                            // A concurrent editor can remove a file between listing and reading; the next scan retries.
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private fun isHidden(path: Path): Boolean = path.any { it.pathString.startsWith(".") }
+
+    private fun isDocumentPath(path: String): Boolean = DocumentKind.of(path) != null && path.split('/').none { it.startsWith(".") }
+
+    private fun updateObserved(
+        path: String,
+        version: String?,
+    ) {
+        if (version == null) observed.remove(path) else observed[path] = version
+    }
+
+    private fun append(
+        path: String,
+        version: String?,
+    ) {
+        val kind = DocumentKind.of(path) ?: return
+        entries += JournalEntry(++cursor, WorkspaceChange(path, kind, version))
+        while (entries.size > historyLimit) entries.removeFirst()
+    }
+
+    override fun close() {
+        val running: Thread?
+        synchronized(monitor) {
+            if (closed) return
+            closed = true
+            running = worker
+            runCatching { watcher?.close() }
+        }
+        running?.interrupt()
+        running?.join(5_000)
+    }
+}

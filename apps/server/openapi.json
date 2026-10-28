@@ -51,6 +51,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "catalog-controller" ]
@@ -99,6 +109,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "health-controller" ]
@@ -150,6 +170,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "job-controller" ]
@@ -206,6 +236,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "job-controller" ]
@@ -262,6 +302,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "job-controller" ]
@@ -318,6 +368,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "job-controller" ]
@@ -369,6 +429,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -435,6 +505,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -524,6 +604,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -623,6 +713,16 @@
             },
             "description" : "Conflict"
           },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          },
           "500" : {
             "content" : {
               "application/json" : {
@@ -688,6 +788,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -756,12 +866,162 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "validation-controller" ]
       }
     },
+    "/api/v1/workspace/changes" : {
+      "get" : {
+        "operationId" : "getWorkspaceChanges",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WorkspaceChangesView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          }
+        },
+        "tags" : [ "document-controller" ]
+      }
+    },
     "/api/v1/workspace/document" : {
+      "delete" : {
+        "operationId" : "deleteDocument",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "tags" : [ "document-controller" ]
+      },
       "get" : {
         "operationId" : "getDocument",
         "parameters" : [ {
@@ -812,6 +1072,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -894,6 +1164,16 @@
             },
             "description" : "Conflict"
           },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          },
           "500" : {
             "content" : {
               "application/json" : {
@@ -954,6 +1234,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           },
           "500" : {
             "content" : {
@@ -2144,6 +2434,40 @@
           }
         },
         "required" : [ "admittedAttempts", "busyHandlerTimeMs", "durationMs", "failures", "handlers", "latency", "offeredAttempts", "originalArrivals", "queueLengthIntegralMs", "queueRejections", "retries", "startMs", "successes", "timeouts" ]
+      },
+      "WorkspaceChangeView" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "MODEL", "LAYOUT", "EXPERIMENT" ]
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "kind", "path" ]
+      },
+      "WorkspaceChangesView" : {
+        "type" : "object",
+        "properties" : {
+          "changes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/WorkspaceChangeView"
+            }
+          },
+          "cursor" : {
+            "type" : "string"
+          },
+          "reset" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "changes", "cursor", "reset" ]
       }
     }
   }
