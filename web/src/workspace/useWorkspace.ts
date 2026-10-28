@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ApiError, api } from "../api/apiClient";
-import type { ApiProblem, Catalog, LayoutFile } from "../api/apiTypes";
+import type { ApiProblem, Catalog, DocumentEntry, LayoutFile, WorkspaceChangeView } from "../api/apiTypes";
 import {
   dirtyDocuments, editorReducer, initialEditorState, setModelParam,
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
+
+export interface ExternalDocumentChange {
+  path: string;
+  deleted: boolean;
+}
 
 export interface Workspace {
   catalog: Catalog | null;
@@ -19,6 +24,7 @@ export interface Workspace {
   /** A stored document changed since it was read; only a reload continues. */
   conflict: boolean;
   conflictPath: string | null;
+  externalChange: ExternalDocumentChange | null;
   problem: ApiProblem | null;
   canUndo: boolean;
   canRedo: boolean;
@@ -80,15 +86,60 @@ export function useWorkspace(): Workspace {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
+  const [externalChanges, setExternalChanges] = useState<Readonly<Record<string, ExternalDocumentChange>>>({});
   const generation = useRef(0);
   // A ref also blocks duplicate saves before React publishes the saving state.
   const saveInFlight = useRef(false);
   const loadInFlight = useRef(false);
+  const loadedRef = useRef<LoadedExperiment | null>(null);
+  loadedRef.current = loaded;
+  const savingPaths = useRef(new Set<string>());
+  const deferredChanges = useRef(new Map<string, WorkspaceChangeView>());
+  const cursor = useRef<string | null>(null);
   const changed = dirtyDocuments(loaded);
   const dirty = Object.values(changed).some(Boolean);
   const openedExperimentPath = loaded?.experimentPath;
-  const recoveryLayoutPath = loaded !== null && (loaded.versions.layout !== null || conflictPath === loaded.layoutPath)
-    ? loaded.layoutPath : undefined;
+  const externalList = Object.values(externalChanges);
+  const externalChange = externalList.find((change) => change.deleted) ?? externalList[0] ?? null;
+  const recoveryLayoutPath = loaded !== null && (
+    loaded.versions.layout !== null || conflictPath === loaded.layoutPath || externalChanges[loaded.layoutPath] !== undefined
+  ) ? loaded.layoutPath : undefined;
+
+  const classifyChanges = useCallback((changes: readonly WorkspaceChangeView[]) => {
+    const current = loadedRef.current;
+    if (current === null) return;
+    const latest = new Map<string, WorkspaceChangeView>();
+    for (const change of changes) latest.set(change.path, change);
+    for (const change of latest.values()) {
+      const path = change.path;
+      const kind = (["model", "layout", "experiment"] as const).find((candidate) => current[`${candidate}Path`] === path);
+      if (kind === undefined) continue;
+      const version = change.version ?? null;
+      if (savingPaths.current.has(path) && version !== current.versions[kind]) {
+        deferredChanges.current.set(path, change);
+        continue;
+      }
+      setExternalChanges((previous) => {
+        if (version === current.versions[kind]) {
+          if (previous[path] === undefined) return previous;
+          const next = { ...previous };
+          delete next[path];
+          return next;
+        }
+        const deleted = version === null;
+        if (previous[path]?.deleted === deleted) return previous;
+        return { ...previous, [path]: { path, deleted } };
+      });
+    }
+  }, []);
+
+  const flushChange = useCallback((path: string) => {
+    savingPaths.current.delete(path);
+    const change = deferredChanges.current.get(path);
+    if (change === undefined) return;
+    deferredChanges.current.delete(path);
+    classifyChanges([change]);
+  }, [classifyChanges]);
 
   const load = useCallback(async (experimentPath: string, recoveryLayoutPath?: string) => {
     const current = ++generation.current;
@@ -97,7 +148,12 @@ export function useWorkspace(): Workspace {
     setProblem(null);
     try {
       const next = await loadExperiment(experimentPath, recoveryLayoutPath);
-      if (current === generation.current) dispatch({ type: "open", loaded: next });
+      if (current === generation.current) {
+        loadedRef.current = next;
+        deferredChanges.current.clear();
+        setExternalChanges({});
+        dispatch({ type: "open", loaded: next });
+      }
     } catch (error) {
       if (current === generation.current) setProblem(problemOf(error));
     } finally {
@@ -119,19 +175,70 @@ export function useWorkspace(): Workspace {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([api.catalog(), api.documents()])
-      .then(async ([nextCatalog, documents]) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refreshDocuments = async (): Promise<DocumentEntry[] | null> => {
+      const documents = await api.documents();
+      if (!active) return null;
+      setExperiments(documents.filter((document) => document.kind === "EXPERIMENT").map((document) => document.path).sort());
+      return documents;
+    };
+    const poll = async (): Promise<void> => {
+      try {
+        const since = cursor.current;
+        const response = await api.changes(since ?? undefined);
+        if (!active) return;
+        let changes = response.changes;
+        if (since === null || response.reset) {
+          const documents = await refreshDocuments();
+          if (documents === null) return;
+          const current = loadedRef.current;
+          const versions = new Map(documents.map((document) => [document.path, document.version]));
+          changes = current === null ? [] : (["model", "layout", "experiment"] as const).map((kind) => {
+            const path = current[`${kind}Path`];
+            return {
+              path,
+              kind: kind === "model" ? "MODEL" : kind === "layout" ? "LAYOUT" : "EXPERIMENT",
+              version: versions.get(path) ?? null,
+            };
+          });
+        } else if (response.changes.some((change) => change.kind === "EXPERIMENT")) {
+          if (await refreshDocuments() === null) return;
+        }
+        classifyChanges(changes);
+        cursor.current = response.cursor;
+      } catch {
+        // A failed poll keeps both the cursor and editor state untouched; the next attempt retries it.
+      } finally {
+        if (active) timer = setTimeout(() => void poll(), 1000);
+      }
+    };
+    const initialize = async (): Promise<void> => {
+      try {
+        const initial = await api.changes();
+        if (active) cursor.current = initial.cursor;
+      } catch {
+        // The first successful poll reconciles a workspace loaded without an initial cursor.
+      }
+      if (!active) return;
+      try {
+        const [nextCatalog, documents] = await Promise.all([api.catalog(), api.documents()]);
         if (!active) return;
         const paths = documents.filter((document) => document.kind === "EXPERIMENT").map((document) => document.path).sort();
         setCatalog(nextCatalog);
         setExperiments(paths);
         if (paths.length > 0) await load(paths[0]);
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (active) setProblem(problemOf(error));
-      });
-    return () => { active = false; };
-  }, [load]);
+      } finally {
+        if (active) timer = setTimeout(() => void poll(), 1000);
+      }
+    };
+    void initialize();
+    return () => {
+      active = false;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [load, classifyChanges]);
 
   const execute = useCallback((command: EditorCommand) => {
     if (!loadInFlight.current) dispatch({ type: "command", command });
@@ -157,30 +264,43 @@ export function useWorkspace(): Workspace {
       for (const kind of ["layout", "model", "experiment"] as const) {
         if (!dirtyDocuments(saved)[kind]) continue;
         const path = saved[`${kind}Path`];
+        savingPaths.current.add(path);
         try {
           const entry = await api.saveDocument(path, { [kind]: saved[kind] }, saved.versions[kind]);
           if (current !== generation.current) return;
+          const latest = loadedRef.current;
+          if (latest !== null) {
+            loadedRef.current = {
+              ...latest,
+              saved: { ...latest.saved, [kind]: saved[kind] },
+              versions: { ...latest.versions, [kind]: entry.version },
+            };
+          }
           dispatch({ type: "saved", kind, documents: saved, version: entry.version });
         } catch (error) {
           if (current !== generation.current) return;
           if (error instanceof ApiError && error.status === 409) dispatch({ type: "conflict", path });
           else setProblem(problemOf(error));
           break;
+        } finally {
+          flushChange(path);
         }
       }
     } finally {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [loaded, dirty, conflictPath]);
+  }, [loaded, dirty, conflictPath, flushChange]);
 
   const reload = useCallback(async () => {
-    if (loaded !== null && !saveInFlight.current) await load(loaded.experimentPath, recoveryLayoutPath);
-  }, [loaded, load, recoveryLayoutPath]);
+    if (loaded !== null && !saveInFlight.current && externalChange?.deleted !== true) {
+      await load(loaded.experimentPath, recoveryLayoutPath);
+    }
+  }, [loaded, load, recoveryLayoutPath, externalChange]);
 
   return {
     catalog, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
-    conflict: conflictPath !== null, conflictPath, problem, open, setParam, execute,
+    conflict: conflictPath !== null, conflictPath, externalChange, problem, open, setParam, execute,
     canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload,
   };
 }

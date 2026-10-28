@@ -9,6 +9,7 @@ import type {
   JobView,
   RunSummary,
   ValidationView,
+  WorkspaceChangesView,
 } from "./apiTypes";
 
 /** A failed API call with the server's problem body, or a generic one when the body is not JSON. */
@@ -51,6 +52,7 @@ export const api = {
   health: () => request<HealthView>("/api/v1/health"),
   catalog: () => request<Catalog>("/api/v1/catalog"),
   documents: () => request<DocumentEntry[]>("/api/v1/workspace/documents"),
+  changes: (since?: string) => request<WorkspaceChangesView>(`/api/v1/workspace/changes${since === undefined ? "" : `?since=${encodeURIComponent(since)}`}`),
   document: (path: string) => request<DocumentView>(documentUrl(path)),
   /** Writes a document; [version] is the one it was read with, or null for a new document. */
   saveDocument: (path: string, content: DocumentContent, version: string | null) =>
