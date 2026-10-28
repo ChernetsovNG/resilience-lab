@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../../api/apiTypes";
-import { SeriesLoader, type WindowMetricValues } from "../series";
+import { seriesLoader, type WindowMetricValues } from "../series";
 import { timelineRegions } from "./data";
 import { TimelineChart, type TimelineLine } from "./TimelineChart";
 import { useTimelineSeries } from "./useTimelineSeries";
@@ -27,7 +27,6 @@ const groups: { title: string; unit: string; scale: number; metrics: Metric[] }[
   { title: "Queue", unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: "Mean queue", node: "service" }] },
 ];
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
-const loader = new SeriesLoader();
 
 interface TimelineProps {
   enabled?: boolean;
@@ -71,8 +70,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const endMs = (metadata?.warmupMs ?? 0) + (metadata?.measurementMs ?? 0);
   const windowMs = metadata?.windowMs ?? 1;
   const count = Math.ceil(endMs / windowMs);
-  const primary = useTimelineSeries(loader, runId, enabled && metadata ? variant?.id ?? null : null, pointId, replication, nodes, count);
-  const overlay = useTimelineSeries(loader, runId, enabled && metadata ? compared?.id ?? null : null, pointId, replication, nodes, count);
+  const primary = useTimelineSeries(seriesLoader, runId, enabled && metadata ? variant?.id ?? null : null, pointId, replication, nodes, count);
+  const overlay = useTimelineSeries(seriesLoader, runId, enabled && metadata ? compared?.id ?? null : null, pointId, replication, nodes, count);
   if (!enabled && hover !== null) setHover(null);
   const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog),
     [metadata, experiment, catalog]);

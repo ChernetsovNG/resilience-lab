@@ -12,6 +12,7 @@ export type CallEdgeType = Edge<{
   parametersEditable: boolean;
   disabled: boolean;
   amplification?: number | null;
+  windowed?: boolean;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "call">;
@@ -19,7 +20,7 @@ export type CallEdgeType = Edge<{
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<CallEdgeType>) {
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const { connection, catalog, overridden, diagnostics, parametersEditable, disabled, onParam, onValidity, amplification } = data!;
+  const { connection, catalog, overridden, diagnostics, parametersEditable, disabled, onParam, onValidity, amplification, windowed } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     editable: parametersEditable, disabled, onValidity };
@@ -41,7 +42,8 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
             {overridden ? <span role="img" aria-label="Overridden parameters">◆</span> : null}
           </div> : null}
           {amplification === undefined ? null : <span className="canvas-edge-results"
-            title="Called service admitted amplification: mean across replications, as in Summary.">
+            title={windowed ? "Window approximation: admitted attempts / original client arrivals; attempts may belong to earlier requests."
+              : "Called service admitted amplification: mean across replications, as in Summary."}>
             Amplification {amplification === null ? "n/a" : `${amplification.toFixed(2)}×`}
           </span>}
         </div>
