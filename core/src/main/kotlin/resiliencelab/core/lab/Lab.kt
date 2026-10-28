@@ -184,6 +184,7 @@ class Lab(
                         compiled.run.replications,
                         requireNotNull(manifest.series).points,
                         manifest.grid,
+                        callChain(compiled),
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
             }
@@ -254,6 +255,7 @@ class Lab(
                             compiled.run.replications,
                             requireNotNull(manifest.series).points,
                             manifest.grid,
+                            callChain(compiled),
                         )
                     RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
                 }
@@ -527,4 +529,16 @@ class Lab(
             return segments.joinToString("/").ifEmpty { null }
         }
     }
+}
+
+/** Variants and grid points override parameters only, so the validated call topology is shared. */
+private fun callChain(compiled: CompiledExperiment): List<String> {
+    val chain =
+        compiled.variants
+            .first()
+            .points
+            .first()
+            .chain
+    val targets = chain.calls.associate { it.from to it.to }
+    return generateSequence(chain.entry) { targets[it] }.toList()
 }

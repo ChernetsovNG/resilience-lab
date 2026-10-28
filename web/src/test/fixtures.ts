@@ -184,7 +184,7 @@ export const documentViews: Record<string, DocumentView> = {
 };
 
 export const noSaturation = {
-  rule: { consecutiveWindows: 3, handlerUtilizationThreshold: 0.95, meanQueueLengthThreshold: 0 },
+  rule: { minimumDurationMs: 100, handlerUtilizationThreshold: 0.95, meanQueueLengthThreshold: 0.5, queueRejectionsThreshold: 0 },
   withoutSaturation: 2,
   firstNodes: [],
   replications: [
@@ -194,7 +194,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   grid: [],
   experiment: experimentPath,
   variants: [

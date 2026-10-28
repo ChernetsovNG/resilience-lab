@@ -13,6 +13,7 @@ class SaturationArtifactReader(
     fun read(
         directory: String,
         replication: Int,
+        callChain: List<String>,
     ): ReplicationSaturation {
         val index = json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         val windows =
@@ -26,6 +27,6 @@ class SaturationArtifactReader(
                     }
                 }
             }
-        return SaturationAnalyzer.detect(replication, windows)
+        return SaturationAnalyzer.detect(replication, windows, callChain = callChain)
     }
 }
