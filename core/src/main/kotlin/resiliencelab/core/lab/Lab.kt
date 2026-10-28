@@ -10,6 +10,8 @@ import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.PathStreams
+import resiliencelab.core.execution.CostEstimator
+import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.execution.checkCancellation
@@ -84,13 +86,29 @@ class Lab(
         experimentPath: String,
         drafts: Map<String, String>,
     ): ValidationReport {
+        checkDraftPaths(drafts)
+        val loaded = load(experimentPath, drafts)
+        val warnings = loaded.experiment?.let { ModelLinter().lint(it) }.orEmpty()
+        return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
+    }
+
+    /** Estimates task, event, time, and storage costs from compiled IR without starting a model. */
+    fun estimate(
+        experimentPath: String,
+        drafts: Map<String, String> = emptyMap(),
+        workers: Int = ExperimentExecutor.defaultWorkers(),
+    ): ExperimentEstimate {
+        checkDraftPaths(drafts)
+        val loaded = load(experimentPath, drafts)
+        val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        return CostEstimator.estimate(compiled, workers)
+    }
+
+    private fun checkDraftPaths(drafts: Map<String, String>) {
         drafts.keys.forEach { path ->
             if (resolveRef("", path) != path) throw InvalidDocumentPathException(path)
             workspace.exists(path) // Enforce the storage boundary, including symbolic links, also for new drafts.
         }
-        val loaded = load(experimentPath, drafts)
-        val warnings = loaded.experiment?.let { ModelLinter().lint(it) }.orEmpty()
-        return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
     }
 
     /**

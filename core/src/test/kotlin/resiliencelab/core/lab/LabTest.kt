@@ -373,6 +373,71 @@ class LabTest {
     }
 
     @Test
+    fun `estimates the example without executing a model or writing results`() {
+        val root = exampleWorkspace()
+        val calls = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                calls.incrementAndGet()
+                error("Estimation must not start KSL")
+            }
+
+        val estimate = Lab(FileWorkspace(root), executor = executor).use { it.estimate(experiment, workers = 1) }
+        executor.close()
+
+        assertThat(calls.get()).isZero()
+        assertThat(estimate.tasks).isEqualTo(4)
+        assertThat(estimate.expectedEvents).isPositive()
+        assertThat(estimate.expectedRows).isEqualTo(1_600)
+        assertThat(estimate.estimatedParts).isEqualTo(4)
+        assertThat(estimate.estimatedSeconds).isPositive()
+        assertThat(estimate.estimatedArtifactBytes).isPositive()
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `estimate uses drafts and rejects invalid worker counts`() {
+        val root = exampleWorkspace()
+        val files = FileWorkspace(root)
+        val original = files.read(model)
+        val draft = original.text.replace("120/s", "240/s")
+        Lab(files).use { lab ->
+            val baseline = lab.estimate(experiment, workers = 1)
+            val changed = lab.estimate(experiment, mapOf(model to draft), workers = 1)
+
+            assertThat(changed.expectedEvents).isGreaterThan(baseline.expectedEvents)
+            assertThat(changed.estimatedSeconds).isGreaterThan(baseline.estimatedSeconds)
+            assertThatThrownBy { lab.estimate(experiment, workers = 0) }.isInstanceOf(IllegalArgumentException::class.java)
+        }
+        assertThat(files.read(model)).isEqualTo(original)
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `example time estimate is within eight times of measured execution`() {
+        val root = exampleWorkspace()
+        ExperimentExecutor(workers = 1).use { executor ->
+            Lab(FileWorkspace(root), executor = executor).use { lab ->
+                lab.run(experiment, "warmup")
+                val estimate = lab.estimate(experiment, workers = 1)
+                val started = System.nanoTime()
+                lab.run(experiment, "measured")
+                val measuredSeconds = (System.nanoTime() - started) / 1_000_000_000.0
+                val ratio =
+                    maxOf(
+                        estimate.estimatedSeconds / measuredSeconds,
+                        measuredSeconds / estimate.estimatedSeconds,
+                    )
+                println(
+                    "retry-storm cost calibration: estimate=${estimate.estimatedSeconds}s, " +
+                        "measured=${measuredSeconds}s, ratio=$ratio",
+                )
+                assertThat(ratio).isLessThanOrEqualTo(8.0)
+            }
+        }
+    }
+
+    @Test
     fun `reports missing and unreadable documents and broken references`() {
         val root = exampleWorkspace()
         val lab = Lab(FileWorkspace(root))

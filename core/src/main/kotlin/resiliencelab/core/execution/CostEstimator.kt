@@ -1,0 +1,171 @@
+package resiliencelab.core.execution
+
+import kotlinx.serialization.Serializable
+import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.windowCount
+import resiliencelab.core.results.SeriesWriter
+import kotlin.math.ceil
+import kotlin.math.max
+
+/** Deterministic pre-run estimate suitable for direct API and CLI output. */
+@Serializable
+data class ExperimentEstimate(
+    val tasks: Int,
+    val expectedEvents: Double,
+    val expectedRows: Long,
+    val workers: Int,
+    val estimatedSeconds: Double,
+    val estimatedUncompressedBytes: Long,
+    val estimatedArtifactBytes: Long,
+    val estimatedParts: Long,
+    val warnings: List<EstimateWarning>,
+)
+
+/** A budget or calibration warning; it does not block the experiment. */
+@Serializable
+data class EstimateWarning(
+    val code: String,
+    val message: String,
+)
+
+/** Applies S1 timing and S3/S5 storage anchors without constructing a KSL model. */
+internal object CostEstimator {
+    private data class TaskEstimate(
+        val events: Double,
+        val rows: Long,
+        val rawBytes: Long,
+        val artifactBytes: Long,
+        val parts: Long,
+        val seconds: Double,
+    )
+
+    private data class TimingAnchor(
+        val services: Int,
+        val interceptSeconds: Double,
+        val secondsPerMillionEvents: Double,
+    )
+
+    private val timingAnchors =
+        listOf(
+            TimingAnchor(50, 0.037698, 0.331004),
+            TimingAnchor(500, 0.012782, 0.408272),
+            TimingAnchor(5000, 0.080353, 1.003791),
+        )
+    private val speedups = listOf(1 to 1.0, 2 to 1.679, 4 to 2.569, 8 to 3.184)
+
+    fun estimate(
+        experiment: CompiledExperiment,
+        workers: Int,
+    ): ExperimentEstimate {
+        require(workers >= 1) { "workers must be at least 1" }
+        val warnings = linkedMapOf<String, String>()
+        val tasks =
+            experiment.variants.flatMap { variant ->
+                variant.points.flatMap { point ->
+                    val chain = point.chain
+                    if (chain.services.size !in 50..5000) {
+                        warnings["ESTIMATE_EXTRAPOLATION"] =
+                            "S1 timing anchors cover 50–5000 services; actual time may differ substantially"
+                    }
+                    val perReplication = estimateTask(chain)
+                    if (perReplication.rawBytes > UI_CACHE_BYTES) {
+                        warnings["ESTIMATE_UI_CACHE"] =
+                            "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only"
+                    }
+                    (0 until experiment.run.replications).map { perReplication }
+                }
+            }
+        if (workers > 8) {
+            warnings["ESTIMATE_EXTRAPOLATION"] = "S1 parallel speedup is measured only up to 8 workers"
+        }
+        val taskCount = tasks.size
+        val totalWork = tasks.sumOf { it.seconds }
+        val longestTask = tasks.maxOfOrNull { it.seconds } ?: 0.0
+        val effectiveWorkers = minOf(workers, taskCount).coerceAtLeast(1)
+        val seconds = maxOf(totalWork / speedup(effectiveWorkers), longestTask)
+        val events = tasks.sumOf { it.events }
+        require(events.isFinite() && seconds.isFinite()) { "Experiment cost estimate exceeds numeric range" }
+        return ExperimentEstimate(
+            tasks = taskCount,
+            expectedEvents = events,
+            expectedRows = tasks.fold(0L) { total, task -> Math.addExact(total, task.rows) },
+            workers = workers,
+            estimatedSeconds = seconds,
+            estimatedUncompressedBytes = tasks.fold(0L) { total, task -> Math.addExact(total, task.rawBytes) },
+            estimatedArtifactBytes = tasks.fold(0L) { total, task -> Math.addExact(total, task.artifactBytes) },
+            estimatedParts = tasks.fold(0L) { total, task -> Math.addExact(total, task.parts) },
+            warnings = warnings.map { (code, message) -> EstimateWarning(code, message) },
+        )
+    }
+
+    /** Configured attempts give a conservative event estimate; stochastic queue wakeups are not predicted exactly. */
+    private fun expectedEvents(chain: ChainIr): Double {
+        val arrivals = chain.client.arrivalRatePerMs * (chain.run.warmupMs + chain.run.measurementMs)
+        var visits = 1.0
+        var perOriginalRequest = 2.0
+        chain.services.forEachIndexed { index, service ->
+            perOriginalRequest += 3.0 * visits
+            if (index > 0) perOriginalRequest += 2.0 * visits
+            val call = chain.outgoingCall(service.path)
+            if (call != null) {
+                perOriginalRequest += 2.0 * visits * call.attempts
+                visits *= call.attempts
+            }
+        }
+        val fixedEvents = windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs) + 3 + 2 * chain.faults.size
+        return arrivals * perOriginalRequest + fixedEvents
+    }
+
+    private fun estimateTask(chain: ChainIr): TaskEstimate {
+        val events = expectedEvents(chain)
+        require(events.isFinite()) { "Experiment event estimate exceeds numeric range" }
+        val windows = windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs)
+        val rows = Math.multiplyExact((chain.services.size + 1).toLong(), windows.toLong())
+        val rawBytes = Math.multiplyExact(rows, BYTES_PER_NODE_WINDOW)
+        val parts = ceil(rawBytes.toDouble() / SeriesWriter.MAX_PART_BYTES).toLong().coerceAtLeast(1)
+        val compressedBytes = ceil(rawBytes * GZIP_RATIO).toLong()
+        val metadataBytes = Math.multiplyExact((chain.services.size + 1).toLong(), 1024)
+        val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, 512)), metadataBytes)
+        val anchor = timingAnchor(chain.services.size)
+        val seconds =
+            anchor.interceptSeconds +
+                anchor.secondsPerMillionEvents * events / 1_000_000 +
+                rows * WRITE_SECONDS_PER_ROW
+        return TaskEstimate(events, rows, rawBytes, artifactBytes, parts, seconds)
+    }
+
+    private fun timingAnchor(services: Int): TimingAnchor {
+        if (services <= timingAnchors.first().services) return timingAnchors.first()
+        if (services >= timingAnchors.last().services) return timingAnchors.last()
+        timingAnchors.zipWithNext().forEach { (low, high) ->
+            if (services in low.services..high.services) {
+                val fraction = (services - low.services).toDouble() / (high.services - low.services)
+                return TimingAnchor(
+                    services,
+                    low.interceptSeconds + fraction * (high.interceptSeconds - low.interceptSeconds),
+                    low.secondsPerMillionEvents +
+                        fraction * (high.secondsPerMillionEvents - low.secondsPerMillionEvents),
+                )
+            }
+        }
+        error("No S1 timing anchor for $services services")
+    }
+
+    private fun speedup(workers: Int): Double {
+        if (workers <= 1) return 1.0
+        if (workers >= 8) return 3.184
+        speedups.zipWithNext().forEach { (low, high) ->
+            if (workers in low.first..high.first) {
+                val fraction = (workers - low.first).toDouble() / (high.first - low.first)
+                return low.second + fraction * (high.second - low.second)
+            }
+        }
+        return max(1.0, workers.toDouble())
+    }
+
+    private const val BYTES_PER_NODE_WINDOW = 512L
+    private const val GZIP_RATIO = 0.25
+    private const val UI_CACHE_BYTES = 64L * 1024 * 1024
+    private const val WRITE_SECONDS_PER_ROW = 7.6316 / 3_000_000
+}
