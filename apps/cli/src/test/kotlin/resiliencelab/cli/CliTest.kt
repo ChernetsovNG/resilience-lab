@@ -4,8 +4,10 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -240,6 +242,45 @@ class CliTest {
         }
     }
 
+    @Test
+    fun `second SIGINT forces exit when cooperative cancellation cannot finish`() {
+        assumeFalse(System.getProperty("os.name").startsWith("Windows", ignoreCase = true))
+        val output = workspace.resolve("blocked-command.log")
+        val classpath =
+            Path.of("apps/cli/build/classes/kotlin/test").toAbsolutePath().toString() + File.pathSeparator +
+                Path.of("apps/cli/build/install/cli/lib/*").toAbsolutePath()
+        val process =
+            ProcessBuilder(
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-cp",
+                classpath,
+                SignalCancellationProcess::class.java.name,
+            ).redirectErrorStream(true).redirectOutput(output.toFile()).start()
+
+        fun awaitOutput(marker: String) {
+            val deadline = System.nanoTime() + SECONDS.toNanos(30)
+            while (!output.readText().contains(marker)) {
+                check(process.isAlive && System.nanoTime() < deadline) { "Missing $marker: ${output.readText()}" }
+                Thread.sleep(10)
+            }
+        }
+        try {
+            awaitOutput("READY")
+            assertThat(ProcessBuilder("kill", "-INT", process.pid().toString()).start().waitFor()).isZero()
+            awaitOutput("CANCELLING")
+            assertThat(process.isAlive).isTrue()
+
+            assertThat(ProcessBuilder("kill", "-INT", process.pid().toString()).start().waitFor()).isZero()
+            assertThat(process.waitFor(5, SECONDS)).isTrue()
+            assertThat(process.exitValue()).isEqualTo(130)
+        } finally {
+            if (process.isAlive) {
+                process.destroyForcibly()
+                process.waitFor(10, SECONDS)
+            }
+        }
+    }
+
     /** Runs the launcher from `installDist` as a separate process in the workspace. */
     private fun launch(args: List<String>): CommandResult {
         val launcherDirectory = Path.of("apps", "cli", "build", "install", "cli", "bin").toAbsolutePath()
@@ -285,4 +326,17 @@ class CliTest {
         val stdout: String,
         val stderr: String,
     )
+}
+
+/** A child process whose cleanup deliberately blocks after receiving the first cancellation request. */
+private object SignalCancellationProcess {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        SignalCancellation().use { cancellation ->
+            println("READY")
+            while (!cancellation.isCancelled()) Thread.sleep(10)
+            println("CANCELLING")
+            CountDownLatch(1).await()
+        }
+    }
 }

@@ -18,10 +18,11 @@ class JobService(
     private val executor: Executor,
     private val maxTerminalJobs: Int = 100,
     private val newRunId: () -> String,
-) {
+) : AutoCloseable {
     private val lock = Any()
     private val jobs = LinkedHashMap<String, JobView>()
     private val terminal = ArrayDeque<String>()
+    private var stopping = false
 
     init {
         require(maxTerminalJobs >= 1) { "maxTerminalJobs must be at least 1" }
@@ -32,7 +33,10 @@ class JobService(
         val report = lab.validate(experiment)
         if (!report.valid) throw InvalidExperimentException(report.diagnostics)
         val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, 0)
-        synchronized(lock) { jobs[job.id] = job }
+        synchronized(lock) {
+            jobs[job.id] = job
+            if (stopping) return cancel(job.id)!!
+        }
         try {
             executor.execute { execute(job.id, report.documentVersions) }
         } catch (exception: RejectedExecutionException) {
@@ -45,6 +49,20 @@ class JobService(
 
     /** Jobs, newest first. */
     fun list(): List<JobView> = synchronized(lock) { jobs.values.reversed() }
+
+    /**
+     * Cancels every active job before Spring closes the calling executor and then the core pool.
+     * Submissions racing with shutdown are cancelled without being scheduled. The calling executor drains writes.
+     */
+    override fun close() {
+        synchronized(lock) {
+            stopping = true
+            jobs.values
+                .filter { it.status == JobStatus.QUEUED || it.status == JobStatus.RUNNING }
+                .map { it.id }
+                .forEach { cancel(it) }
+        }
+    }
 
     /**
      * Requests cooperative cancellation. Queued jobs stop immediately without creating an artifact; running jobs stay

@@ -95,7 +95,8 @@ class LabConfiguration {
     @Bean
     fun labJobExecutor(): ExecutorService = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("lab-job-", 0).factory())
 
-    @Bean
+    /** Spring destroys this dependent bean first, requesting cancellation before the executors drain and close. */
+    @Bean(destroyMethod = "close")
     fun jobService(
         lab: Lab,
         @Qualifier("labJobExecutor") executor: ExecutorService,
