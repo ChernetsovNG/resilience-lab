@@ -15,6 +15,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
@@ -128,6 +129,120 @@ class LabTest {
     }
 
     @Test
+    fun `resumed and continuous artifacts are byte identical and a corrupt part is recomputed`() {
+        val expectedRoot = exampleWorkspace()
+        val actualRoot = exampleWorkspace()
+        Lab(FileWorkspace(expectedRoot)).use { it.run(experiment, "run-1") }
+        val cancelled = AtomicBoolean()
+        Lab(FileWorkspace(actualRoot)).use { lab ->
+            assertThatThrownBy {
+                lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        val runDirectory = ".results/retry-storm/cancelled"
+        val corrupt = actualRoot.resolve("$runDirectory/series/baseline/p0/rep-0/part-0.json.gz")
+        Files.write(corrupt, byteArrayOf(1, 2, 3))
+
+        val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
+
+        assertThat(resumed.manifest.complete).isTrue()
+        val expectedDirectory = ".results/retry-storm/run-1"
+        val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
+        val actualFiles = FileWorkspace(actualRoot).listFiles(runDirectory).map { it.removePrefix("$runDirectory/") }
+        assertThat(actualFiles).containsExactlyElementsOf(expectedFiles)
+        expectedFiles.forEach { relative ->
+            assertThat(Files.readAllBytes(actualRoot.resolve("$runDirectory/$relative")))
+                .describedAs(relative)
+                .containsExactly(*Files.readAllBytes(expectedRoot.resolve("$expectedDirectory/$relative")))
+        }
+    }
+
+    @Test
+    fun `resume rejects changed documents without mutating the artifact`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val modelFile = root.resolve(model)
+        Files.writeString(modelFile, Files.readString(modelFile).replace("\"handlers\": 4", "\"handlers\": 5"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_DOCUMENT_CHANGED")
+        assertThat(failure.message).contains("run again")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume rejects an incompatible application without mutating the artifact`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val manifest = root.resolve("$runDirectory/manifest.json")
+        Files.writeString(manifest, Files.readString(manifest).replace("0.1.0", "0.2.0"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_INCOMPATIBLE")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume rebuilds summary without executing valid tasks`() {
+        val root = exampleWorkspace()
+        val runDirectory = ".results/retry-storm/cancelled"
+        Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
+        val originalManifest = Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))
+        val originalSummary = Files.readAllBytes(root.resolve("$runDirectory/summary.json"))
+        Files.writeString(
+            root.resolve("$runDirectory/manifest.json"),
+            Files.readString(root.resolve("$runDirectory/manifest.json")).replace("\"complete\": true", "\"complete\": false"),
+        )
+        Files.delete(root.resolve("$runDirectory/summary.json"))
+        val calls = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                calls.incrementAndGet()
+                error("A valid task must not be recomputed")
+            }
+
+        val resumed = Lab(FileWorkspace(root), executor = executor).use { it.resume(runDirectory) }
+        executor.close()
+
+        assertThat(calls.get()).isZero()
+        assertThat(resumed.manifest.complete).isTrue()
+        assertThat(Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))).containsExactly(*originalManifest)
+        assertThat(Files.readAllBytes(root.resolve("$runDirectory/summary.json"))).containsExactly(*originalSummary)
+    }
+
+    @Test
+    fun `cancellation during resume leaves a resumable artifact without summary`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-1/replication.json"))
+        val cancelled = AtomicBoolean()
+
+        assertThatThrownBy {
+            Lab(FileWorkspace(root)).use { lab ->
+                lab.resume(runDirectory, isCancelled = cancelled::get) { done, total ->
+                    if (total > 0 && done == total) cancelled.set(true)
+                }
+            }
+        }.isInstanceOf(CancellationException::class.java)
+
+        assertIncomplete(root)
+        val resumed = Lab(FileWorkspace(root)).use { it.resume(runDirectory) }
+        assertThat(resumed.manifest.complete).isTrue()
+        assertThat(root.resolve("$runDirectory/summary.json")).isRegularFile()
+    }
+
+    @Test
     fun `caller interruption after summary creation still completes the manifest`() {
         val root = exampleWorkspace()
         val caller = Thread.currentThread()
@@ -212,6 +327,26 @@ class LabTest {
             ).containsExactly(*Files.readAllBytes(expectedRoot.resolve(relative)))
         }
     }
+
+    private fun createIncomplete(root: Path) {
+        val cancelled = AtomicBoolean()
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy {
+                lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        assertIncomplete(root)
+    }
+
+    private fun artifactHashes(
+        workspace: FileWorkspace,
+        runDirectory: String,
+    ): Map<String, String> =
+        workspace.listFiles(runDirectory).associateWith { path ->
+            resiliencelab.core.workspace.DocumentVersion.of(workspace.readBytes(path))
+        }
 
     private fun assertIncomplete(root: Path) {
         val directory = root.resolve(".results/retry-storm/cancelled")
