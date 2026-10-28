@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import resiliencelab.core.document.DocumentCodec
+import resiliencelab.core.document.GridAxis
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.MetricsAggregator
@@ -42,7 +43,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 3
+    const val ARTIFACT_SCHEMA = 4
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
@@ -54,7 +55,7 @@ class UnsupportedArtifactVersionException(
 /**
  * Reproducibility record of a run (ADR 0008): versions, stream assignment, versions of the documents read,
  * seed, SHA-256 of every part file and completeness. Contains no timestamps, so equal inputs give byte-identical
- * manifests.
+ * manifests. [grid] preserves document axis and value order independently of coordinate-map key order.
  */
 @Serializable
 data class RunManifest(
@@ -69,6 +70,7 @@ data class RunManifest(
     val variants: List<String>,
     val parts: Map<String, String>,
     val complete: Boolean,
+    val grid: List<GridAxis>,
     val series: SeriesMetadata? = null,
 )
 
@@ -119,12 +121,13 @@ data class PointSummary(
     val aggregate: AggregateMetrics,
 )
 
-/** Summary of a run, loaded first by the UI. */
+/** Summary of a run, loaded first by the UI; [grid] retains document axis and value order for Map. */
 @Serializable
 data class RunSummary(
     val schemaVersion: Int,
     val experiment: String,
     val variants: List<VariantSummary>,
+    val grid: List<GridAxis>,
 )
 
 /** Workspace locations of run artifacts (ADR 0008, item 1). */
@@ -168,6 +171,7 @@ class ArtifactWriter(
         variants: List<Pair<String, String>>,
         replications: Int,
         points: List<GridPoint>,
+        grid: List<GridAxis>,
     ): RunSummary {
         val json = Json { explicitNulls = false }
         return RunSummary(
@@ -189,6 +193,7 @@ class ArtifactWriter(
                     }
                 VariantSummary(id, label, replications, summaries)
             },
+            grid,
         )
     }
 

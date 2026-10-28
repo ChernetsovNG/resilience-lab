@@ -11,6 +11,7 @@ import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.catalog.TypeCategory
 import resiliencelab.core.document.ConnectionInstance
 import resiliencelab.core.document.ExperimentFile
+import resiliencelab.core.document.GridAxis
 import resiliencelab.core.document.ModelFile
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
@@ -46,6 +47,7 @@ data class CompiledPoint(
 data class CompiledExperiment(
     val variants: List<CompiledVariant>,
     val run: RunSettings,
+    val grid: List<GridAxis> = emptyList(),
 )
 
 /** Compiler output: an experiment when there are no errors, and all diagnostics. */
@@ -103,7 +105,7 @@ class ModelCompiler(
             }
         val diagnostics = sink.items.distinct()
         val failed = diagnostics.any { it.severity == Severity.ERROR } || run == null
-        return CompileResult(if (failed) null else CompiledExperiment(variants, run), diagnostics)
+        return CompileResult(if (failed) null else CompiledExperiment(variants, run, experiment.grid), diagnostics)
     }
 
     /** A variant's model and, per element, where its overridden values come from. */

@@ -462,6 +462,7 @@ export interface components {
                 [key: string]: string;
             };
             experiment: string;
+            grid: components["schemas"]["GridAxis"][];
             kslVersion: string;
             parts: {
                 [key: string]: string;
@@ -478,6 +479,7 @@ export interface components {
         };
         RunSummary: {
             experiment: string;
+            grid: components["schemas"]["GridAxis"][];
             /** Format: int32 */
             schemaVersion: number;
             variants: components["schemas"]["VariantSummary"][];

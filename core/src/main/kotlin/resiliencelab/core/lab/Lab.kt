@@ -163,6 +163,7 @@ class Lab(
                 variants = compiled.variants.map { it.id },
                 parts = emptyMap(),
                 complete = true,
+                grid = compiled.grid,
                 series =
                     SeriesMetadata(
                         compiled.run.warmupMs,
@@ -201,6 +202,7 @@ class Lab(
                         compiled.variants.map { it.id to it.label },
                         compiled.run.replications,
                         requireNotNull(manifest.series).points,
+                        manifest.grid,
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
             }

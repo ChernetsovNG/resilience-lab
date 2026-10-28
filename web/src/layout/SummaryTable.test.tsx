@@ -47,14 +47,18 @@ describe("ProblemList", () => {
 it("shows every grid point with coordinates, units and its own metrics", () => {
   render(
     <SummaryTable summary={{
-      schemaVersion: 3,
+      schemaVersion: 4,
+      grid: [
+        { path: "call.timeout", values: ["40ms", "80ms"] },
+        { path: "service.handlers", values: [1] },
+      ],
       experiment: "grid.experiment.json",
       variants: [{
         id: "baseline", label: "Baseline", replications: 2,
         points: [
           { id: "p0", coordinates: { "call.timeout": "40ms", "service.handlers": 1 },
             aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 0.5, min: 0.4, max: 0.6 } } },
-          { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 2 },
+          { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 1 },
             aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 1, min: 1, max: 1 } } },
         ],
       }],

@@ -152,6 +152,10 @@ class ExperimentApiTest {
         assertThat(JsonPath.read<Int>(finished.contentAsString, "$.totalTasks")).isEqualTo(24)
         val runId = JsonPath.read<String>(finished.contentAsString, "$.runId")
         val summary = mockMvc.perform(get("/api/v1/runs/{id}/summary", runId)).andReturn().response
+        assertThat(JsonPath.read<List<String>>(summary.contentAsString, "$.grid[*].path"))
+            .containsExactly("gateway-to-middle.timeout", "gateway-to-middle.attempts")
+        assertThat(JsonPath.read<List<Int>>(summary.contentAsString, "$.grid[1].values"))
+            .containsExactly(1, 2, 3)
         assertThat(JsonPath.read<List<String>>(summary.contentAsString, "$.variants[0].points[*].id"))
             .containsExactly("p0", "p1", "p2", "p3", "p4", "p5")
         assertThat(JsonPath.read<String>(summary.contentAsString, "$.variants[0].points[5].coordinates['gateway-to-middle.timeout']"))
@@ -160,6 +164,10 @@ class ExperimentApiTest {
             .isEqualTo(3)
         openApi.assertResponse("get", "/api/v1/runs/{id}/summary", summary)
         val manifest = mockMvc.perform(get("/api/v1/runs/{id}/manifest", runId)).andReturn().response
+        assertThat(JsonPath.read<List<String>>(manifest.contentAsString, "$.grid[*].path"))
+            .containsExactly("gateway-to-middle.timeout", "gateway-to-middle.attempts")
+        assertThat(JsonPath.read<List<String>>(manifest.contentAsString, "$.grid[0].values"))
+            .containsExactly("40ms", "80ms")
         openApi.assertResponse("get", "/api/v1/runs/{id}/manifest", manifest)
     }
 

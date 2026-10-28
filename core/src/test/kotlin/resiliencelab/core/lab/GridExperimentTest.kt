@@ -68,6 +68,19 @@ class GridExperimentTest {
             .map { it.jsonObject }
 
     @Test
+    fun `manifest and summary retain document axis order value order and duplicates`() {
+        val axes = """[{"path":"entry.handlers","values":[2,1,2]},{"path":"client.deadline","values":["30ms","10ms"]}]"""
+        val workspace = workspace("axes", axes)
+        run(workspace, 3)
+
+        val expected = Json.parseToJsonElement(axes)
+        listOf("manifest", "summary").forEach { name ->
+            val artifact = Json.parseToJsonElement(workspace.read(".results/e/r/$name.json").text).jsonObject
+            assertThat(artifact["grid"]).describedAs(name).isEqualTo(expected)
+        }
+    }
+
+    @Test
     fun `two by three grid persists ordered coordinates and separate task directories`() {
         val workspace = workspace("ordered")
         val progress = mutableListOf<Pair<Int, Int>>()
@@ -115,6 +128,10 @@ class GridExperimentTest {
         run(overridden)
 
         assertThat(points(original).single().getValue("coordinates").jsonObject).isEmpty()
+        listOf("manifest", "summary").forEach { name ->
+            val artifact = Json.parseToJsonElement(original.read(".results/e/r/$name.json").text).jsonObject
+            assertThat(artifact["grid"]).isEqualTo(Json.parseToJsonElement("[]"))
+        }
         assertThat(points(grid).first().getValue("aggregate")).isEqualTo(points(original).single().getValue("aggregate"))
         assertThat(points(overridden)).isEqualTo(points(grid))
         assertThat(grid.read(".results/e/r/series/baseline/p0/rep-0/replication.json").text)

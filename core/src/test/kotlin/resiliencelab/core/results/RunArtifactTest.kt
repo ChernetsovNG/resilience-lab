@@ -105,6 +105,7 @@ class RunArtifactTest {
                         ),
                     ),
                 ),
+            grid = emptyList(),
         )
 
     private fun manifest() =
@@ -120,5 +121,6 @@ class RunArtifactTest {
             variants = listOf("baseline"),
             parts = emptyMap(),
             complete = true,
+            grid = emptyList(),
         )
 }

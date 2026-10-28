@@ -1611,6 +1611,12 @@
           "experiment" : {
             "type" : "string"
           },
+          "grid" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GridAxis"
+            }
+          },
           "kslVersion" : {
             "type" : "string"
           },
@@ -1649,13 +1655,19 @@
             }
           }
         },
-        "required" : [ "applicationVersion", "complete", "documents", "experiment", "kslVersion", "parts", "replications", "schemaVersion", "seed", "streamAssignment", "variants" ]
+        "required" : [ "applicationVersion", "complete", "documents", "experiment", "grid", "kslVersion", "parts", "replications", "schemaVersion", "seed", "streamAssignment", "variants" ]
       },
       "RunSummary" : {
         "type" : "object",
         "properties" : {
           "experiment" : {
             "type" : "string"
+          },
+          "grid" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GridAxis"
+            }
           },
           "schemaVersion" : {
             "type" : "integer",
@@ -1668,7 +1680,7 @@
             }
           }
         },
-        "required" : [ "experiment", "schemaVersion", "variants" ]
+        "required" : [ "experiment", "grid", "schemaVersion", "variants" ]
       },
       "SeriesIndex" : {
         "type" : "object",

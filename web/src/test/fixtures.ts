@@ -178,7 +178,8 @@ export const documentViews: Record<string, DocumentView> = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  grid: [],
   experiment: experimentPath,
   variants: [
     {
