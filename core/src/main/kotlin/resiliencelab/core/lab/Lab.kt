@@ -3,6 +3,7 @@ package resiliencelab.core.lab
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.ModelCompiler
+import resiliencelab.core.compiler.ModelLinter
 import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
@@ -61,7 +62,8 @@ class Lab(
     /** Validates an experiment and all referenced documents in the workspace. */
     fun validate(experimentPath: String): ValidationReport {
         val loaded = load(experimentPath)
-        return ValidationReport(experimentPath, loaded.diagnostics, loaded.versions)
+        val warnings = loaded.experiment?.let { ModelLinter().lint(it) }.orEmpty()
+        return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
     }
 
     /** Runs a valid experiment and writes its reproducible result artifact under the workspace results directory. */

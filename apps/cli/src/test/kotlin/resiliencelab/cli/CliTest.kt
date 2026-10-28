@@ -56,7 +56,7 @@ class CliTest {
 
         assertThat(result.exitCode).isZero()
         assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Valid experiment: $experiment")
+        assertThat(result.stderr).contains("Valid experiment: $experiment", "WARNING", "LINT_TIMEOUT_BUDGET", "LINT_DEADLINE_BUDGET")
     }
 
     @Test
