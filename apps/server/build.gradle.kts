@@ -62,4 +62,5 @@ tasks.register<org.springframework.boot.gradle.tasks.run.BootRun>("bootRunE2e") 
     classpath = sourceSets["main"].runtimeClasspath
     workingDir = rootProject.projectDir
     systemProperty("resilience-lab.workspace", e2eWorkspace.get().asFile.absolutePath)
+    systemProperty("server.port", providers.environmentVariable("E2E_BACKEND_PORT").orElse("8080").get())
 }

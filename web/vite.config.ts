@@ -1,11 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8080",
+      "/api": `http://127.0.0.1:${mode === "e2e" ? process.env.E2E_BACKEND_PORT ?? "8080" : "8080"}`,
     },
   },
   test: {
@@ -20,4 +20,4 @@ export default defineConfig({
       reportOnFailure: true,
     },
   },
-});
+}));
