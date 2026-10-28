@@ -4,21 +4,20 @@ import kotlinx.serialization.Serializable
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.ClosedWatchServiceException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
-import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardWatchEventKinds.ENTRY_CREATE
 import java.nio.file.StandardWatchEventKinds.ENTRY_DELETE
 import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 import java.nio.file.WatchKey
 import java.nio.file.WatchService
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import kotlin.concurrent.thread
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.pathString
 
 /** Workspace document kinds by file suffix (ADR 0005). */
 @Serializable
@@ -93,6 +92,7 @@ internal class WorkspaceChangeJournal(
     private val entries = ArrayDeque<JournalEntry>()
     private val registrations = mutableMapOf<Path, WatchKey>()
     private var cursor = 0L
+    private var initialized = false
     private var worker: Thread? = null
     private var watcher: WatchService? = null
 
@@ -102,7 +102,6 @@ internal class WorkspaceChangeJournal(
     init {
         require(!scanInterval.isZero && !scanInterval.isNegative) { "Scan interval must be positive" }
         require(historyLimit > 0) { "History limit must be positive" }
-        observed.putAll(snapshot())
     }
 
     /** Records a mutation already serialized with scans through [mutationMonitor]. */
@@ -118,6 +117,9 @@ internal class WorkspaceChangeJournal(
     }
 
     fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch {
+        synchronized(mutationMonitor) {
+            initialize()
+        }
         start()
         synchronized(mutationMonitor) {
             refresh()
@@ -215,17 +217,35 @@ internal class WorkspaceChangeJournal(
     private fun registerDirectories() {
         val service = watcher ?: return
         val live = mutableSetOf<Path>()
-        Files.walk(root).use { paths ->
-            paths.filter { it.isDirectory(NOFOLLOW_LINKS) && !isHidden(root.relativize(it)) }.forEach { directory ->
-                live.add(directory)
-                if (!registrations.containsKey(directory)) {
-                    registrations[directory] = directory.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE)
+        walkVisibleWorkspace(
+            root,
+            object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(
+                    dir: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
+                    live.add(dir)
+                    if (!registrations.containsKey(dir)) {
+                        registrations[dir] = dir.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE)
+                    }
+                    return FileVisitResult.CONTINUE
                 }
-            }
-        }
+            },
+        )
         val stale = registrations.filterKeys { it !in live || !registrations.getValue(it).isValid }.keys
         stale.forEach {
             registrations.remove(it)?.cancel()
+        }
+    }
+
+    /** Captures initial documents as baseline without emitting them; earlier API events remain in the journal. */
+    private fun initialize() {
+        if (initialized) return
+        val baseline = snapshot()
+        synchronized(monitor) {
+            if (initialized) return
+            observed.putAll(baseline)
+            initialized = true
         }
     }
 
@@ -247,28 +267,32 @@ internal class WorkspaceChangeJournal(
     private fun snapshot(): Map<String, String> {
         val result = mutableMapOf<String, String>()
         try {
-            Files.walk(root).use { paths ->
-                paths.filter { it.isRegularFile(NOFOLLOW_LINKS) }.forEach { file ->
-                    val relative = root.relativize(file)
-                    if (!isHidden(relative)) {
-                        val path = relative.joinToString("/")
-                        if (DocumentKind.of(path) != null) {
-                            try {
-                                result[path] = DocumentVersion.of(Files.readAllBytes(file))
-                            } catch (_: IOException) {
-                                // A concurrent editor can remove a file between listing and reading; the next scan retries.
+            walkVisibleWorkspace(
+                root,
+                object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(
+                        file: Path,
+                        attrs: BasicFileAttributes,
+                    ): FileVisitResult {
+                        if (attrs.isRegularFile) {
+                            val path = root.relativize(file).joinToString("/")
+                            if (DocumentKind.of(path) != null) {
+                                try {
+                                    result[path] = DocumentVersion.of(Files.readAllBytes(file))
+                                } catch (_: IOException) {
+                                    // A concurrent editor can remove a file between listing and reading; the next scan retries.
+                                }
                             }
                         }
+                        return FileVisitResult.CONTINUE
                     }
-                }
-            }
+                },
+            )
         } catch (exception: UncheckedIOException) {
             throw exception.cause ?: IOException("Workspace scan failed", exception)
         }
         return result
     }
-
-    private fun isHidden(path: Path): Boolean = path.any { it.pathString.startsWith(".") }
 
     private fun isDocumentPath(path: String): Boolean = DocumentKind.of(path) != null && path.split('/').none { it.startsWith(".") }
 

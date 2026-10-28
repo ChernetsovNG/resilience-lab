@@ -2,15 +2,18 @@ package resiliencelab.core.workspace
 
 import java.nio.channels.FileChannel
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.time.Duration
 import kotlin.io.path.isDirectory
@@ -125,16 +128,24 @@ class FileWorkspace(
     private val lockFile: Path = this.root.resolve(".workspace.lock")
     private val journal = WorkspaceChangeJournal(this.root, scanInterval, historyLimit, mutationMonitor)
 
-    override fun list(): List<String> =
-        Files.walk(root).use { paths ->
-            paths
-                .filter { it.isRegularFile(NOFOLLOW_LINKS) && it.fileName.toString().endsWith(".json") }
-                .map { root.relativize(it) }
-                .filter { relative -> relative.none { it.toString().startsWith(".") } }
-                .map { it.joinToString("/") }
-                .sorted()
-                .toList()
-        }
+    override fun list(): List<String> {
+        val result = mutableListOf<String>()
+        walkVisibleWorkspace(
+            root,
+            object : SimpleFileVisitor<Path>() {
+                override fun visitFile(
+                    file: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
+                    if (attrs.isRegularFile && file.fileName.toString().endsWith(".json")) {
+                        result += root.relativize(file).joinToString("/")
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+            },
+        )
+        return result.sorted()
+    }
 
     override fun listFiles(directory: String): List<String> {
         val start = resolve(directory)
