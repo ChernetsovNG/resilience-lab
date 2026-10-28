@@ -24,13 +24,24 @@ class ModelLinter(
     /** Returns advisory diagnostics; callers must continue to accept warning-only models. */
     fun lint(experiment: CompiledExperiment): List<Diagnostic> =
         experiment.variants
-            .flatMap { variant -> lintChain(variant.chain).map { it to variant.id } }
-            .groupBy({ it.first }, { it.second })
-            .map { (diagnostic, variants) ->
+            .flatMap { variant ->
+                lintChain(variant.chain).map { diagnostic ->
+                    val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
+                    val origin = variant.parameterOrigins["${diagnostic.path}.$parameter"]
+                    val located =
+                        if (origin == null) {
+                            diagnostic
+                        } else {
+                            diagnostic.copy(document = origin.document, pointer = origin.pointer, variant = variant.id)
+                        }
+                    located to variant.id
+                }
+            }.groupBy({ it.first }, { it.second })
+            .flatMap { (diagnostic, variants) ->
                 if (variants.size == experiment.variants.size) {
-                    diagnostic
+                    listOf(diagnostic)
                 } else {
-                    diagnostic.copy(message = "${diagnostic.message} (variants: ${variants.joinToString(", ")})")
+                    variants.map { diagnostic.copy(variant = it) }
                 }
             }
 

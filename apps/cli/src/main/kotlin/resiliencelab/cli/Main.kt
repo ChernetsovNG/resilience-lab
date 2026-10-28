@@ -147,8 +147,10 @@ private fun validationError(
     return 2
 }
 
-private fun location(diagnostic: Diagnostic): String =
-    listOfNotNull(diagnostic.document, diagnostic.pointer).joinToString("#").ifEmpty { "experiment" }
+private fun location(diagnostic: Diagnostic): String {
+    val location = listOfNotNull(diagnostic.document, diagnostic.pointer).joinToString("#").ifEmpty { "experiment" }
+    return diagnostic.variant?.let { "$it · $location" } ?: location
+}
 
 private fun percent(summary: MetricSummary?): String = summary?.let { String.format(Locale.ROOT, "%.1f%%", it.mean * 100) } ?: "n/a"
 

@@ -21,6 +21,8 @@ data class Diagnostic(
     val document: String? = null,
     val pointer: String? = null,
     val path: String? = null,
+    /** Variant ID for a variant-specific finding; null for model-wide or common findings. */
+    val variant: String? = null,
 )
 
 /** JSON Pointer construction (RFC 6901). */
@@ -45,8 +47,9 @@ class Diagnostics {
         document: String?,
         pointer: String? = null,
         path: String? = null,
+        variant: String? = null,
     ) {
-        items += Diagnostic(code, Severity.ERROR, message, document, pointer, path)
+        items += Diagnostic(code, Severity.ERROR, message, document, pointer, path, variant)
     }
 
     fun errorCount(): Int = items.count { it.severity == Severity.ERROR }

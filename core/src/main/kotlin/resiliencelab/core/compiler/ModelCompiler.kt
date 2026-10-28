@@ -32,6 +32,8 @@ data class CompiledVariant(
     val id: String,
     val label: String,
     val chain: ChainIr,
+    /** Source locations of explicit overrides, keyed by element.parameter. */
+    val parameterOrigins: Map<String, Origin> = emptyMap(),
 )
 
 /** All variants of an experiment with shared run settings. */
@@ -74,6 +76,11 @@ class ModelCompiler(
                         id = variant.id,
                         label = variant.label ?: variant.id,
                         chain = ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
+                        parameterOrigins =
+                            patched.origins
+                                .flatMap { (path, origins) ->
+                                    origins.pointers.map { (parameter, pointer) -> "$path.$parameter" to Origin(origins.document, pointer) }
+                                }.toMap(),
                     )
                 }
             }
@@ -172,6 +179,7 @@ class ModelCompiler(
                     document,
                     JsonPointer.of("variants", index, "overrides", path),
                     target,
+                    variant.id,
                 )
                 return@forEach
             }
@@ -184,7 +192,10 @@ class ModelCompiler(
             pointers.getOrPut(target) { mutableMapOf() }[paramPath.joinToString(".")] =
                 JsonPointer.of("variants", index, "overrides", path)
         }
-        return Patched(model.copy(blocks = blocks, connections = connections), pointers.mapValues { OverrideOrigins(document, it.value) })
+        return Patched(
+            model.copy(blocks = blocks, connections = connections),
+            pointers.mapValues { OverrideOrigins(document, it.value, variant.id) },
+        )
     }
 
     private fun resolves(
@@ -533,8 +544,12 @@ class ModelCompiler(
         val seen = mutableSetOf<String>()
         experiment.variants.forEachIndexed { index, variant ->
             val pointer = JsonPointer.of("variants", index, "id")
-            if (!ID.matches(variant.id)) sink.error("ID_INVALID", "Variant id '${variant.id}' must match ${ID.pattern}", document, pointer)
-            if (!seen.add(variant.id)) sink.error("VARIANT_DUPLICATE", "Variant id '${variant.id}' is repeated", document, pointer)
+            if (!ID.matches(variant.id)) {
+                sink.error("ID_INVALID", "Variant id '${variant.id}' must match ${ID.pattern}", document, pointer, variant = variant.id)
+            }
+            if (!seen.add(variant.id)) {
+                sink.error("VARIANT_DUPLICATE", "Variant id '${variant.id}' is repeated", document, pointer, variant = variant.id)
+            }
         }
     }
 

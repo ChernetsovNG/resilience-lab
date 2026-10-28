@@ -902,6 +902,9 @@
           "severity" : {
             "type" : "string",
             "enum" : [ "ERROR", "WARNING" ]
+          },
+          "variant" : {
+            "type" : [ "string", "null" ]
           }
         },
         "required" : [ "code", "message", "severity" ]

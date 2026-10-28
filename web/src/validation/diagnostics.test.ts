@@ -36,6 +36,20 @@ describe("diagnostic locations", () => {
       .toEqual({ element: "gateway", field: null, variant: null });
   });
 
+  it("uses explicit variant metadata for a model value and prefers it over pointer inference", () => {
+    const finding = { ...diagnostic(modelPath, "/connections/1/params/timeout"), variant: "baseline" };
+    expect(diagnosticTarget(finding, documents))
+      .toEqual({ element: "gateway-to-middle", field: "timeout", variant: "baseline" });
+    expect(diagnosticTarget({ ...finding, document: experimentPath, pointer: "/variants/1/overrides/gateway.handlers" }, documents).variant)
+      .toBe("baseline");
+  });
+
+  it("keeps an explicit null variant common even when the pointer names an override", () => {
+    const finding = { ...diagnostic(experimentPath, "/variants/1/overrides/gateway.handlers"), variant: null };
+    expect(diagnosticTarget(finding, documents))
+      .toEqual({ element: "gateway", field: "handlers", variant: null });
+  });
+
   it("counts findings and gives errors precedence over warnings", () => {
     const error = diagnostic(modelPath, null);
     expect(summarizeDiagnostics([])).toBeNull();
