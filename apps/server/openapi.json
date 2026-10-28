@@ -119,6 +119,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "estimate-controller" ]
@@ -639,6 +649,16 @@
               }
             },
             "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
           }
         },
         "tags" : [ "run-controller" ]
