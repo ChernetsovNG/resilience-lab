@@ -394,6 +394,193 @@
         "tags" : [ "run-controller" ]
       }
     },
+    "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}" : {
+      "get" : {
+        "operationId" : "getRunSeriesIndex",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variant",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cell",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "rep",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesIndex"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
+    "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}" : {
+      "get" : {
+        "operationId" : "getRunSeriesPart",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variant",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cell",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "rep",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          }
+        }, {
+          "in" : "path",
+          "name" : "part",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesPart"
+                }
+              }
+            },
+            "description" : "Original gzip part; Content-Encoding: gzip. Clients decode it as SeriesPart."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
     "/api/v1/runs/{id}/summary" : {
       "get" : {
         "operationId" : "getRunSummary",
@@ -1266,6 +1453,21 @@
         },
         "required" : [ "blocks", "connections", "schemaVersion" ]
       },
+      "NodeSeries" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "windows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/WindowMetrics"
+            }
+          }
+        },
+        "required" : [ "id", "windows" ]
+      },
       "ParamDescriptor" : {
         "type" : "object",
         "properties" : {
@@ -1465,6 +1667,30 @@
         },
         "required" : [ "experiment", "schemaVersion", "variants" ]
       },
+      "SeriesIndex" : {
+        "type" : "object",
+        "properties" : {
+          "endMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "parts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesPartReference"
+            }
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "windowMs" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "endMs", "parts", "schemaVersion", "windowMs" ]
+      },
       "SeriesMetadata" : {
         "type" : "object",
         "properties" : {
@@ -1503,6 +1729,63 @@
           }
         },
         "required" : [ "measurementMs", "points", "replicationBasis", "sketchLibraryVersion", "sketchProfile", "timeBasis", "timeUnit", "warmupMs", "windowMs" ]
+      },
+      "SeriesPart" : {
+        "type" : "object",
+        "properties" : {
+          "fromWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/NodeSeries"
+            }
+          },
+          "profile" : {
+            "type" : "string"
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "untilWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "fromWindow", "nodes", "profile", "schemaVersion", "untilWindow" ]
+      },
+      "SeriesPartReference" : {
+        "type" : "object",
+        "properties" : {
+          "file" : {
+            "type" : "string"
+          },
+          "fromWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "sha256" : {
+            "type" : "string"
+          },
+          "uncompressedBytes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "untilWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "file", "fromWindow", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
       },
       "ServiceTotals" : {
         "type" : "object",
@@ -1666,6 +1949,67 @@
           }
         },
         "required" : [ "aggregate", "id", "label", "replications" ]
+      },
+      "WindowMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "admittedAttempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "busyHandlerTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "durationMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failures" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "handlers" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "latency" : {
+            "$ref" : "#/components/schemas/LatencyStatistics"
+          },
+          "offeredAttempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "originalArrivals" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "queueLengthIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "queueRejections" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "retries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "successes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "timeouts" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "admittedAttempts", "busyHandlerTimeMs", "durationMs", "failures", "handlers", "latency", "offeredAttempts", "originalArrivals", "queueLengthIntegralMs", "queueRejections", "retries", "startMs", "successes", "timeouts" ]
       }
     }
   }

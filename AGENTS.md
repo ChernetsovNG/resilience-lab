@@ -79,6 +79,8 @@ Web запускает проверку через 500 мс после посл�
 
 В web поле `Series window` в `Experiment settings (shared)` задаёт `execution.window` в единицах из каталога. Очистка удаляет поле из документа; подсказка пересчитывает `measurement / 100` без записи значения по умолчанию. Правка входит в undo/redo, диагностика `/execution/window` видна у поля.
 
+`GET /api/v1/runs/{id}/series/{variant}/{cell}/{rep}` возвращает типизированный `SeriesIndex` задачи законченного прогона; `cell` имеет вид `p0`, `p1` и далее. `GET /api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}` отдаёт исходные байты `part-<part>.json.gz`: `Content-Type: application/json`, `Content-Encoding: gzip`, сильный `ETag` из SHA-256 части в индексе и `Cache-Control: max-age=31536000, public, immutable`. Браузер распаковывает тело сам; схема ответа в OpenAPI описывает распакованный `SeriesPart`. Номера повторений и частей — целые от 0 до 2147483647 без ведущих нулей. Неверный формат параметров даёт 400 `SERIES_PATH`, неизвестный объект или отсутствующий файл — 404 `SERIES_NOT_FOUND`. Читаются только обычные файлы внутри каталога прогона; часть должна быть перечислена в индексе. Формат содержимого описан в [docs/results-format.md](docs/results-format.md).
+
 ### CLI
 
 - `./gradlew :apps:cli:run --args="validate examples/retry-storm/retry-storm.experiment.json"` — проверить пример эксперимента.
