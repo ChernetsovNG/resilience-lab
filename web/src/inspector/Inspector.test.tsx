@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { catalog, experiment, model } from "../test/fixtures";
+import { catalog, experiment, layout, model } from "../test/fixtures";
 import { applyOverrides, withParam } from "../workspace/params";
+import type { EditorDocuments } from "../workspace/editor";
 import { Inspector } from "./Inspector";
 import type { InspectorProps } from "./Inspector";
 
@@ -118,6 +119,37 @@ describe("Inspector", () => {
     expect(input("Processing multiplier").value).toBe("6");
   });
 
+  it("keeps the series window unset and updates its default hint from measurement", () => {
+    const onCommand = vi.fn();
+    const props: InspectorProps = { catalog, model, experiment, selected: null, editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), onCommand };
+    const view = render(<Inspector {...props} />);
+    expect(input("Series window").value).toBe("");
+    expect(input("Series window").placeholder).toBe("10ms");
+    view.rerender(<Inspector {...props} experiment={{ ...experiment, execution: { ...experiment.execution, measurement: "2min" } }} />);
+    expect(input("Series window").value).toBe("");
+    expect(input("Series window").placeholder).toBe("1200ms");
+    view.rerender(<Inspector {...props} experiment={{ ...experiment, execution: { ...experiment.execution, measurement: "invalid" } }} />);
+    expect(input("Series window").placeholder).toBe("");
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("uses catalog duration units for the series window and its default hint", () => {
+    const customCatalog = structuredClone(catalog);
+    customCatalog.types[0].params.find((param) => param.name === "deadline")!.units = [
+      { symbol: "tick", numerator: 2, denominator: 1 }, { symbol: "s", numerator: 1000, denominator: 1 },
+    ];
+    let documents: EditorDocuments = { model, experiment, layout };
+    renderInspector({ selected: null, catalog: customCatalog,
+      onCommand: (command) => { documents = command(documents); } });
+    expect(input("Series window").placeholder).toBe("5tick");
+    commit("Series window", "25tick");
+    expect(documents.experiment.execution.window).toBe("25tick");
+    commit("Series window", "25ms");
+    expect(input("Series window").closest(".param-field")?.querySelector('[role="alert"]')?.textContent).toContain("tick, s");
+    expect(documents.experiment.execution.window).toBe("25tick");
+  });
+
   it("keeps an invalid editable draft across parent rerenders until correction", () => {
     const onParam = vi.fn();
     const onValidity = vi.fn();
@@ -179,11 +211,13 @@ describe("Inspector", () => {
     unmount();
     renderInspector({ selected: null, fieldDiagnostics: new Map([
       ["execution.replications", [{ ...warning, severity: "ERROR", message: "Invalid replications" }]],
+      ["execution.window", [{ ...warning, severity: "ERROR", message: "Invalid series window" }]],
       ["faults.0.failureRate", [{ ...warning, message: "Invalid fault probability" }]],
       ["faults", [{ ...warning, message: "Overlapping faults" }]],
       ["faults.0", [{ ...warning, message: "Empty fault" }]],
     ]) });
     expect(screen.getByText(/Invalid replications/)).toBeTruthy();
+    expect(screen.getByText(/Invalid series window/).closest(".param-field")).toBe(input("Series window").closest(".param-field"));
     expect(screen.getByText(/Invalid fault probability/)).toBeTruthy();
     expect(screen.getByText(/Overlapping faults/)).toBeTruthy();
     expect(screen.getByText(/Empty fault/)).toBeTruthy();

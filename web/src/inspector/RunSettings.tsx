@@ -2,6 +2,7 @@ import type { Catalog, Diagnostic, ExperimentFile, ModelFile, ParamDescriptor } 
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
 import { addFault, removeFault, setExecutionParam, setFaultParam } from "../workspace/experimentCommands";
+import { canonicalOf } from "../workspace/quantities";
 import { ParamField } from "./ParamField";
 
 interface Props {
@@ -31,9 +32,16 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
   const duration = (name: string, title: string, positive = false) => descriptor(catalog, name, title, "QUANTITY", {
     dimension: "DURATION", ...(positive ? { exclusiveMinimum: 0 } : { minimum: 0 }),
   });
+  const seriesWindow = { ...duration("window", "Series window", true), required: false };
+  const measurement = canonicalOf(experiment.execution.measurement, seriesWindow.units);
+  const unit = seriesWindow.units[0];
+  if (measurement !== null && unit !== undefined) {
+    seriesWindow.default = `${((measurement / 100) * unit.denominator) / unit.numerator}${unit.symbol}`;
+  }
   const executionFields = [
     descriptor(catalog, "replications", "Replications", "INTEGER", { minimum: 1, maximum: 2_147_483_647 }),
     duration("warmup", "Warm-up"), duration("measurement", "Measurement", true),
+    seriesWindow,
     descriptor(catalog, "seed", "Seed", "INTEGER", { minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
     duration("maxRealTime", "Real-time limit", true),
   ];
@@ -54,7 +62,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
         <ParamField key={field.name} descriptor={field} value={experiment.execution[field.name as keyof ExperimentFile["execution"]]}
           path={`execution.${field.name}`} editable={editable} isOverridden={() => false} onValidity={onValidity}
           fieldDiagnostics={fieldDiagnostics}
-          onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number))} />
+          onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number | undefined))} />
       ))}
       <h3>Faults</h3>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />

@@ -133,6 +133,17 @@ describe("variant management commands", () => {
 });
 
 describe("shared experiment commands and history", () => {
+  it("sets and removes the series window without changing other experiment settings", () => {
+    const edited = setExecutionParam("window", "0.25s")(documents);
+    expect(edited.experiment).toEqual({ ...experiment, execution: { ...experiment.execution, window: "0.25s" } });
+    const cleared = setExecutionParam("window", undefined)(edited);
+    expect(cleared.experiment.execution).not.toHaveProperty("window");
+    expect(cleared.experiment).toEqual(experiment);
+    expect(edited.experiment.execution.window).toBe("0.25s");
+    expect(cleared.model).toBe(model);
+    expect(cleared.layout).toBe(layout);
+  });
+
   it("edits execution and fault fields and removes cleared optional values", () => {
     let result = setExecutionParam("seed", 9_007_199_254_740_991)(documents);
     result = setExecutionParam("measurement", "2s")(result);
@@ -150,7 +161,7 @@ describe("shared experiment commands and history", () => {
       setVariantParam("no-retries", "gateway-to-middle", "backoff.base", "4ms", catalog),
       resetVariantParam("no-retries", "gateway-to-middle", "attempts", catalog),
       addVariant("new", "New", "no-retries"), updateVariant("no-retries", { id: "changed", label: "Changed" }),
-      removeVariant("no-retries"), setExecutionParam("replications", 5),
+      removeVariant("no-retries"), setExecutionParam("replications", 5), setExecutionParam("window", "25ms"),
       setFaultParam(0, "to", "800ms"), removeFault(0),
       addFault({ target: "middle", from: "0ms", to: "1s", failureRate: "10%" }),
     ];
