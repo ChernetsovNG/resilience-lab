@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { summary } from "../test/fixtures";
+import { noSaturation, summary } from "../test/fixtures";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 
@@ -47,7 +47,7 @@ describe("ProblemList", () => {
 it("shows every grid point with coordinates, units and its own metrics", () => {
   render(
     <SummaryTable summary={{
-      schemaVersion: 4,
+      schemaVersion: 5,
       grid: [
         { path: "call.timeout", values: ["40ms", "80ms"] },
         { path: "service.handlers", values: [1] },
@@ -56,9 +56,9 @@ it("shows every grid point with coordinates, units and its own metrics", () => {
       variants: [{
         id: "baseline", label: "Baseline", replications: 2,
         points: [
-          { id: "p0", coordinates: { "call.timeout": "40ms", "service.handlers": 1 },
+          { id: "p0", coordinates: { "call.timeout": "40ms", "service.handlers": 1 }, saturation: noSaturation,
             aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 0.5, min: 0.4, max: 0.6 } } },
-          { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 1 },
+          { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 1 }, saturation: noSaturation,
             aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 1, min: 1, max: 1 } } },
         ],
       }],

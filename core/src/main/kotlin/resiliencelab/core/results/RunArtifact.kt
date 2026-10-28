@@ -43,7 +43,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 4
+    const val ARTIFACT_SCHEMA = 5
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
@@ -113,12 +113,13 @@ data class VariantSummary(
     val points: List<PointSummary>,
 )
 
-/** Aggregated metrics of one point, computed from persisted replications only. */
+/** Aggregated metrics and saturation insight of one point, computed from persisted task files only. */
 @Serializable
 data class PointSummary(
     val id: String,
     val coordinates: Map<String, JsonElement>,
     val aggregate: AggregateMetrics,
+    val saturation: SaturationSummary,
 )
 
 /** Summary of a run, loaded first by the UI; [grid] retains document axis and value order for Map. */
@@ -164,7 +165,7 @@ class ArtifactWriter(
         }
     }
 
-    /** Rebuilds the summary using only persisted totals, reducing them in variant/point/replication order. */
+    /** Rebuilds metrics and insights from persisted totals and series in variant/point/replication order. */
     fun summarize(
         runDirectory: String,
         experiment: String,
@@ -174,22 +175,29 @@ class ArtifactWriter(
         grid: List<GridAxis>,
     ): RunSummary {
         val json = Json { explicitNulls = false }
+        val saturationReader = SaturationArtifactReader(workspace)
         return RunSummary(
             Versions.ARTIFACT_SCHEMA,
             experiment,
             variants.map { (id, label) ->
                 val summaries =
                     points.map { point ->
-                        val totals =
+                        val stored =
                             (0 until replications).map { replication ->
-                                val path = "$runDirectory/series/$id/${point.id}/rep-$replication/replication.json"
+                                val directory = "$runDirectory/series/$id/${point.id}/rep-$replication"
+                                val path = "$directory/replication.json"
                                 val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
                                 require(artifact.schemaVersion == 1 && artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") {
                                     "Unsupported replication format in '$path'"
                                 }
-                                artifact.result
+                                artifact.result to saturationReader.read(directory, replication)
                             }
-                        PointSummary(point.id, point.coordinates, MetricsAggregator.aggregate(totals))
+                        PointSummary(
+                            point.id,
+                            point.coordinates,
+                            MetricsAggregator.aggregate(stored.map { it.first }),
+                            SaturationAnalyzer.aggregate(stored.map { it.second }),
+                        )
                     }
                 VariantSummary(id, label, replications, summaries)
             },

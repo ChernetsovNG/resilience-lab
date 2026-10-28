@@ -1805,6 +1805,31 @@
         },
         "required" : [ "from", "target", "to" ]
       },
+      "FirstNodeSaturation" : {
+        "type" : "object",
+        "properties" : {
+          "maxStartMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "medianStartMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "minStartMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "replicationCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "maxStartMs", "medianStartMs", "minStartMs", "node", "replicationCount" ]
+      },
       "GridAxis" : {
         "type" : "object",
         "properties" : {
@@ -2126,9 +2151,12 @@
           },
           "id" : {
             "type" : "string"
+          },
+          "saturation" : {
+            "$ref" : "#/components/schemas/SaturationSummary"
           }
         },
-        "required" : [ "aggregate", "coordinates", "id" ]
+        "required" : [ "aggregate", "coordinates", "id", "saturation" ]
       },
       "PortDescriptor" : {
         "type" : "object",
@@ -2173,6 +2201,22 @@
           }
         },
         "required" : [ "denominator", "numerator", "symbol" ]
+      },
+      "ReplicationSaturation" : {
+        "type" : "object",
+        "properties" : {
+          "degradationPath" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SaturatedNode"
+            }
+          },
+          "replication" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "degradationPath", "replication" ]
       },
       "RunEntry" : {
         "type" : "object",
@@ -2280,6 +2324,62 @@
           }
         },
         "required" : [ "experiment", "grid", "schemaVersion", "variants" ]
+      },
+      "SaturatedNode" : {
+        "type" : "object",
+        "properties" : {
+          "node" : {
+            "type" : "string"
+          },
+          "startMs" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "node", "startMs" ]
+      },
+      "SaturationRule" : {
+        "type" : "object",
+        "properties" : {
+          "consecutiveWindows" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "handlerUtilizationThreshold" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "meanQueueLengthThreshold" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "consecutiveWindows", "handlerUtilizationThreshold", "meanQueueLengthThreshold" ]
+      },
+      "SaturationSummary" : {
+        "type" : "object",
+        "properties" : {
+          "firstNodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/FirstNodeSaturation"
+            }
+          },
+          "replications" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicationSaturation"
+            }
+          },
+          "rule" : {
+            "$ref" : "#/components/schemas/SaturationRule"
+          },
+          "withoutSaturation" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "firstNodes", "replications", "rule", "withoutSaturation" ]
       },
       "SeriesIndex" : {
         "type" : "object",

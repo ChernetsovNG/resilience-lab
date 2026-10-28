@@ -139,8 +139,24 @@ class ArtifactPipelineTest {
             )
         assertThat(DocumentCodec.encode(RunSummary.serializer(), rebuilt))
             .isEqualTo(workspace.read("${first.runDirectory}/summary.json").text)
+        assertThat(workspace.read("${first.runDirectory}/summary.json").text)
+            .contains(
+                "\"consecutiveWindows\": 3",
+                "\"handlerUtilizationThreshold\": 0.95",
+                "\"meanQueueLengthThreshold\": 0.0",
+            )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(4)
+        assertThat(first.manifest.schemaVersion).isEqualTo(5)
+        first.summary.variants.forEach { variant ->
+            variant.points.forEach { point ->
+                assertThat(point.saturation.rule).isEqualTo(SaturationRule())
+                assertThat(point.saturation.replications).hasSize(2)
+                assertThat(
+                    point.saturation.withoutSaturation +
+                        point.saturation.replications.count { it.degradationPath.isNotEmpty() },
+                ).isEqualTo(2)
+            }
+        }
         assertThat(first.manifest.parts.keys).hasSize(files.size - 1)
         first.manifest.parts.forEach { (path, checksum) ->
             assertThat(DocumentVersion.of(workspace.readBytes("${first.runDirectory}/$path"))).isEqualTo(checksum)

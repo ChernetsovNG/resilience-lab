@@ -399,6 +399,17 @@ export interface components {
             target: string;
             to: string;
         };
+        FirstNodeSaturation: {
+            /** Format: double */
+            maxStartMs: number;
+            /** Format: double */
+            medianStartMs: number;
+            /** Format: double */
+            minStartMs: number;
+            node: string;
+            /** Format: int32 */
+            replicationCount: number;
+        };
         GridAxis: {
             path: string;
             values: (unknown[] | boolean | number | null | {
@@ -519,6 +530,7 @@ export interface components {
                 } | string;
             };
             id: string;
+            saturation: components["schemas"]["SaturationSummary"];
         };
         PortDescriptor: {
             /** @enum {string} */
@@ -537,6 +549,11 @@ export interface components {
             /** Format: double */
             numerator: number;
             symbol: string;
+        };
+        ReplicationSaturation: {
+            degradationPath: components["schemas"]["SaturatedNode"][];
+            /** Format: int32 */
+            replication: number;
         };
         RunEntry: {
             complete: boolean;
@@ -572,6 +589,26 @@ export interface components {
             /** Format: int32 */
             schemaVersion: number;
             variants: components["schemas"]["VariantSummary"][];
+        };
+        SaturatedNode: {
+            node: string;
+            /** Format: double */
+            startMs: number;
+        };
+        SaturationRule: {
+            /** Format: int32 */
+            consecutiveWindows: number;
+            /** Format: double */
+            handlerUtilizationThreshold: number;
+            /** Format: double */
+            meanQueueLengthThreshold: number;
+        };
+        SaturationSummary: {
+            firstNodes: components["schemas"]["FirstNodeSaturation"][];
+            replications: components["schemas"]["ReplicationSaturation"][];
+            rule: components["schemas"]["SaturationRule"];
+            /** Format: int32 */
+            withoutSaturation: number;
         };
         SeriesIndex: {
             /** Format: double */

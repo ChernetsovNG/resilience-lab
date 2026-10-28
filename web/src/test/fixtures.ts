@@ -177,8 +177,18 @@ export const documentViews: Record<string, DocumentView> = {
   [layoutPath]: { path: layoutPath, kind: "LAYOUT", version: "v-layout", content: { layout } },
 };
 
+export const noSaturation = {
+  rule: { consecutiveWindows: 3, handlerUtilizationThreshold: 0.95, meanQueueLengthThreshold: 0 },
+  withoutSaturation: 2,
+  firstNodes: [],
+  replications: [
+    { replication: 0, degradationPath: [] },
+    { replication: 1, degradationPath: [] },
+  ],
+};
+
 export const summary: RunSummary = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -186,7 +196,7 @@ export const summary: RunSummary = {
       id: "baseline",
       label: "Baseline",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, aggregate: {
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: {
         pooledLatency: {},
         successRate: { mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
         p95LatencyMs: { mean: 41.25, min: 40, max: 42.5 },
@@ -208,7 +218,7 @@ export const summary: RunSummary = {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, aggregate: { pooledLatency: {}, services: {} } }],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { pooledLatency: {}, services: {} } }],
     },
   ],
 };

@@ -207,6 +207,12 @@ class RunArtifactTest {
                                 "p0",
                                 emptyMap(),
                                 AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap()),
+                                SaturationSummary(
+                                    SaturationRule(),
+                                    2,
+                                    emptyList(),
+                                    listOf(ReplicationSaturation(0, emptyList()), ReplicationSaturation(1, emptyList())),
+                                ),
                             ),
                         ),
                     ),
