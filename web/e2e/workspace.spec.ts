@@ -366,6 +366,81 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await expectNoPageScroll(page);
 });
 
+test("shows summary, assumptions and every results panel size without page scroll", async ({ page }) => {
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
+  const summary = page.getByRole("table", { name: "Summary" });
+  await expect(summary.locator("tbody tr")).toHaveCount(2);
+  await expect(summary.getByRole("row", { name: /Baseline/ })).toContainText("%");
+  await expect(summary.getByRole("row", { name: /No retries/ })).toContainText("%");
+
+  await page.getByRole("tab", { name: "Assumptions", exact: true }).click();
+  const panel = page.getByRole("tabpanel");
+  await expect(panel).toContainText("Summary metrics use the cohort");
+  await expect(panel).toContainText("A handler is allocated once");
+  await expect(panel).toContainText("Late responses are discarded");
+  await expect(panel).toContainText("Run conditions");
+  await expect(panel).toContainText("Replications");
+  await expect(panel).toContainText("20261025");
+  await expect(panel).toContainText("1000 ms");
+  await expect(panel).toContainText("10 ms");
+  await expect(panel).toContainText("ddsketch-bitwise6-rational-v1");
+  await expect(panel).toContainText("Application version");
+  await expect(panel).toContainText("KSL version");
+  await expectNoPageScroll(page);
+
+  await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole("tab", { name: "Summary", exact: true })).toBeVisible();
+  await expect(page.getByTestId("results-job-status")).toContainText("COMPLETED");
+  await expectNoPageScroll(page);
+  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await expectNoPageScroll(page);
+
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await expect(page.locator(".palette")).toBeHidden();
+  await expect(page.locator(".canvas-area")).toBeHidden();
+  await expect(page.locator(".inspector")).toBeHidden();
+  const topBar = await page.locator(".top-bar").boundingBox();
+  const expanded = await page.locator(".results-panel").boundingBox();
+  expect(expanded!.y).toBe(topBar!.y + topBar!.height);
+  expect(expanded!.height).toBe(720 - topBar!.y - topBar!.height);
+  await expectNoPageScroll(page);
+  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await expect(page.locator(".palette")).toBeVisible();
+  await expect(page.locator(".canvas-area")).toBeVisible();
+  await expect(page.locator(".inspector")).toBeVisible();
+  await expectNoPageScroll(page);
+});
+
+test("cancels a long run from the UI and enables Run again", async ({ page }) => {
+  const path = "cancel-run/long.experiment.json";
+  await withExperimentFixture(path, (document) => {
+    document.execution.replications = 50;
+    document.execution.measurement = "10s";
+    document.execution.window = "100ms";
+    document.execution.maxRealTime = "60s";
+  }, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    const run = page.getByRole("button", { name: "Run", exact: true });
+    await expect(run).toBeEnabled();
+    await run.click();
+    const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+    await expect(cancel).toBeVisible();
+    await cancel.click();
+
+    await expect(page.getByTestId("job-status")).toHaveText("CANCELLED", { timeout: 60_000 });
+    await expect(run).toBeEnabled();
+    await expect(page.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeVisible();
+    await expect(page.getByRole("table", { name: "Summary" })).toHaveCount(0);
+    await expect(cancel).toHaveCount(0);
+    await expectNoPageScroll(page);
+  });
+});
+
 // Fixtures belong only to bootRunE2e's disposable workspace, never examples/.
 async function withExperimentFixture(path: string, edit: (document: ExperimentFile) => void, exercise: () => Promise<void>) {
   const workspace = resolve("../apps/server/build/e2e-workspace");
