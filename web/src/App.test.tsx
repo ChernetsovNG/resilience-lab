@@ -425,6 +425,7 @@ describe("App stage 1 integration", () => {
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(experimentSelect().value).toBe(otherPath);
     expect(screen.queryByLabelText("Handlers")).toBeNull();
+    await screen.findByTestId("rf__node-gateway");
     selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
   });
