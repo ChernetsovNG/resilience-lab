@@ -1,5 +1,7 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
@@ -289,6 +291,232 @@ class ModelCompilerTest {
 
         val fixedWithStdDev = model.replace("\"mean\": \"1ms\"", "\"mean\": \"1ms\", \"stdDev\": \"1ms\"")
         assertThat(compile(modelText = fixedWithStdDev).diagnostics.single().code).isEqualTo("DISTRIBUTION_RULE")
+    }
+
+    private fun compile(
+        model: ModelFile,
+        experiment: ExperimentFile = experiment(),
+    ) = compiler.compile(model, "m.model.json", experiment, "e.experiment.json")
+
+    @Test
+    fun `unknown endpoints do not hide an independent cycle or parameter error`() {
+        val base = model()
+        val call = base.connections[1]
+        val broken =
+            base.copy(
+                connections =
+                    base.connections +
+                        listOf(
+                            call.copy(id = "back", from = "dependency", to = "gateway"),
+                            call.copy(id = "malformed", from = "missing-from", to = "missing-to"),
+                        ),
+                blocks =
+                    base.blocks + (
+                        "gateway" to
+                            base.blocks.getValue("gateway").copy(
+                                params = JsonObject(base.blocks.getValue("gateway").params + ("handlers" to JsonPrimitive(0))),
+                            )
+                    ),
+            )
+
+        val result = compile(broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code to it.pointer }).contains(
+            "CONNECTION_ENDPOINT" to "/connections/3/from",
+            "CONNECTION_ENDPOINT" to "/connections/3/to",
+            "PARAM_RANGE" to "/blocks/gateway/params/handlers",
+        )
+        assertThat(result.diagnostics).anySatisfy {
+            assertThat(it.message).contains("cycle")
+            assertThat(it.document).isEqualTo("m.model.json")
+            assertThat(it.path).isIn("gateway", "dependency")
+        }
+    }
+
+    @Test
+    fun `unknown endpoints do not hide independent branching or invent unreachable services`() {
+        val base = model()
+        val call = base.connections[1]
+        val broken =
+            base.copy(
+                blocks = base.blocks + ("other" to base.blocks.getValue("dependency")),
+                connections =
+                    base.connections +
+                        listOf(
+                            call.copy(id = "branch", to = "other"),
+                            call.copy(id = "malformed", from = "missing-from", to = "missing-to"),
+                        ),
+            )
+
+        val result = compile(broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code to it.pointer }).contains(
+            "CONNECTION_ENDPOINT" to "/connections/3/from",
+            "CONNECTION_ENDPOINT" to "/connections/3/to",
+        )
+        assertThat(result.diagnostics).anySatisfy {
+            assertThat(it.message).contains("more than one outgoing")
+            assertThat(it.pointer).isEqualTo("/blocks/gateway")
+        }
+        assertThat(result.diagnostics).noneSatisfy { assertThat(it.message).contains("not reachable") }
+    }
+
+    @Test
+    fun `unknown endpoints do not hide an independent disconnected service`() {
+        val base = model()
+        val broken =
+            base.copy(
+                blocks = base.blocks + ("orphan" to base.blocks.getValue("dependency")),
+                connections = base.connections + base.connections[1].copy(id = "malformed", from = "missing-from", to = "missing-to"),
+            )
+
+        val result = compile(broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code to it.pointer }).contains(
+            "CONNECTION_ENDPOINT" to "/connections/2/from",
+            "CONNECTION_ENDPOINT" to "/connections/2/to",
+        )
+        assertThat(result.diagnostics).anySatisfy {
+            assertThat(it.message).contains("not reachable")
+            assertThat(it.pointer).isEqualTo("/blocks/orphan")
+            assertThat(it.path).isEqualTo("orphan")
+        }
+    }
+
+    @Test
+    fun `detects cycles in disconnected components`() {
+        val base = model()
+        val call = base.connections[1]
+        val broken =
+            base.copy(
+                blocks = base.blocks + mapOf("a" to base.blocks.getValue("dependency"), "b" to base.blocks.getValue("dependency")),
+                connections =
+                    base.connections +
+                        listOf(
+                            call.copy(id = "a-b", from = "a", to = "b"),
+                            call.copy(id = "b-a", from = "b", to = "a"),
+                        ),
+            )
+
+        val result = compile(broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.filter { "not reachable" in it.message }.map { it.path }).containsExactly("a", "b")
+        assertThat(result.diagnostics).anySatisfy {
+            assertThat(it.message).contains("cycle")
+            assertThat(it.path).isIn("a", "b")
+        }
+    }
+
+    @Test
+    fun `invalid override paths do not hide independent values in any variant`() {
+        val base = experiment()
+        val broken =
+            base.copy(
+                variants =
+                    base.variants.map {
+                        it.copy(overrides = mapOf("missing.timeout" to JsonPrimitive("1s"), "gateway.handlers" to JsonPrimitive(0)))
+                    },
+            )
+
+        val result = compile(model(), broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { Triple(it.code, it.document, it.pointer) }).containsExactlyInAnyOrder(
+            Triple("OVERRIDE_PATH", "e.experiment.json", "/variants/0/overrides/missing.timeout"),
+            Triple("PARAM_RANGE", "e.experiment.json", "/variants/0/overrides/gateway.handlers"),
+            Triple("OVERRIDE_PATH", "e.experiment.json", "/variants/1/overrides/missing.timeout"),
+            Triple("PARAM_RANGE", "e.experiment.json", "/variants/1/overrides/gateway.handlers"),
+        )
+    }
+
+    @Test
+    fun `invalid lognormal mean does not hide missing standard deviation`() {
+        listOf("0ms" to "PARAM_RANGE", "bad" to "QUANTITY_INVALID").forEach { (mean, code) ->
+            val broken = model.replace("\"kind\": \"exponential\", \"mean\": \"8ms\"", "\"kind\": \"lognormal\", \"mean\": \"$mean\"")
+            val result = compile(modelText = broken)
+
+            assertThat(result.experiment).isNull()
+            assertThat(result.diagnostics.map { it.code to it.pointer }).containsExactlyInAnyOrder(
+                code to "/blocks/dependency/params/processing/mean",
+                "PARAM_MISSING" to "/blocks/dependency/params/processing/stdDev",
+            )
+        }
+    }
+
+    @Test
+    fun `invalid network lognormal mean preserves missing standard deviation pointer`() {
+        val broken =
+            model.replace(
+                "\"timeout\": \"80ms\"",
+                "\"network\": {\"kind\": \"lognormal\", \"mean\": \"bad\"}, \"timeout\": \"80ms\"",
+            )
+        val result = compile(modelText = broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { Triple(it.code, it.document, it.pointer) }).containsExactlyInAnyOrder(
+            Triple("QUANTITY_INVALID", "m.model.json", "/connections/1/params/network/mean"),
+            Triple("PARAM_MISSING", "m.model.json", "/connections/1/params/network/stdDev"),
+        )
+        assertThat(result.diagnostics.map { it.path }).containsOnly("gateway-to-dependency")
+    }
+
+    @Test
+    fun `unresolved call endpoints produce no invented topology errors`() {
+        val base = model()
+        val broken =
+            base.copy(
+                connections = base.connections + base.connections[1].copy(id = "malformed", from = "missing-from", to = "missing-to"),
+            )
+
+        val result = compile(broken)
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code to it.pointer }).containsExactlyInAnyOrder(
+            "CONNECTION_ENDPOINT" to "/connections/2/from",
+            "CONNECTION_ENDPOINT" to "/connections/2/to",
+        )
+    }
+
+    @Test
+    fun `invalid request endpoints do not crash or invent reachability diagnostics`() {
+        val base = model()
+        listOf("missing", "client").forEach { target ->
+            val broken = base.copy(connections = listOf(base.connections[0].copy(to = target), base.connections[1]))
+
+            val result = compile(broken)
+
+            assertThat(result.experiment).isNull()
+            assertThat(result.diagnostics.map { it.code }).containsAnyOf("CONNECTION_ENDPOINT", "CONNECTION_TYPE")
+            assertThat(result.diagnostics).noneSatisfy { assertThat(it.message).contains("not reachable") }
+        }
+    }
+
+    @Test
+    fun `positive real time caps round up to at least one second`() {
+        mapOf("4.9e-324ms" to 1L, "1ms" to 1L, "1001ms" to 2L, "30s" to 30L).forEach { (cap, seconds) ->
+            val base = experiment()
+            val result = compile(model(), base.copy(execution = base.execution.copy(maxRealTime = cap)))
+
+            assertThat(result.diagnostics).describedAs(cap).isEmpty()
+            assertThat(result.experiment!!.run.maxRealTimeSeconds).describedAs(cap).isEqualTo(seconds)
+        }
+    }
+
+    @Test
+    fun `rejects zero negative malformed and nonfinite real time caps`() {
+        listOf("0ms", "-1ms", "bad", "1e309ms").forEach { cap ->
+            val base = experiment()
+            val result = compile(model(), base.copy(execution = base.execution.copy(maxRealTime = cap)))
+
+            assertThat(result.experiment).isNull()
+            assertThat(result.diagnostics.map { it.document to it.pointer })
+                .describedAs(cap)
+                .containsExactly("e.experiment.json" to "/execution/maxRealTime")
+        }
     }
 
     @Test

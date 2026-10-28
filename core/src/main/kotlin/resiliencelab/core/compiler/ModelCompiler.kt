@@ -65,19 +65,15 @@ class ModelCompiler(
         val faults = faults(experiment, model, experimentDocument, sink)
         checkVariants(experiment, experimentDocument, sink)
         val variants =
-            if (!structureOk) {
-                emptyList()
-            } else {
-                experiment.variants.mapIndexedNotNull { index, variant ->
-                    val patched = applyOverrides(model, variant, index, experimentDocument, sink) ?: return@mapIndexedNotNull null
-                    val parts = buildChain(patched.model, modelDocument, patched.origins, sink) ?: return@mapIndexedNotNull null
-                    run?.let {
-                        CompiledVariant(
-                            id = variant.id,
-                            label = variant.label ?: variant.id,
-                            chain = ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
-                        )
-                    }
+            experiment.variants.mapIndexedNotNull { index, variant ->
+                val patched = applyOverrides(model, variant, index, experimentDocument, sink)
+                val parts = buildChain(patched.model, modelDocument, patched.origins, sink, structureOk) ?: return@mapIndexedNotNull null
+                run?.let {
+                    CompiledVariant(
+                        id = variant.id,
+                        label = variant.label ?: variant.id,
+                        chain = ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
+                    )
                 }
             }
         val diagnostics = sink.items.distinct()
@@ -156,11 +152,10 @@ class ModelCompiler(
         index: Int,
         document: String,
         sink: Diagnostics,
-    ): Patched? {
+    ): Patched {
         var blocks = model.blocks
         val connections = model.connections.toMutableList()
         val pointers = mutableMapOf<String, MutableMap<String, String>>()
-        var ok = true
         variant.overrides.toSortedMap().forEach { (path, value) ->
             val segments = path.split('.')
             val target = segments.first()
@@ -177,7 +172,6 @@ class ModelCompiler(
                     JsonPointer.of("variants", index, "overrides", path),
                     target,
                 )
-                ok = false
                 return@forEach
             }
             if (block != null) {
@@ -189,7 +183,6 @@ class ModelCompiler(
             pointers.getOrPut(target) { mutableMapOf() }[paramPath.joinToString(".")] =
                 JsonPointer.of("variants", index, "overrides", path)
         }
-        if (!ok) return null
         return Patched(model.copy(blocks = blocks, connections = connections), pointers.mapValues { OverrideOrigins(document, it.value) })
     }
 
@@ -219,6 +212,7 @@ class ModelCompiler(
         document: String,
         origins: Map<String, OverrideOrigins>,
         sink: Diagnostics,
+        structureOk: Boolean,
     ): ChainParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
@@ -240,38 +234,62 @@ class ModelCompiler(
             sink.error("TOPOLOGY_CHAIN", "Exactly one request connection must start at the client", document, "/connections")
         }
         val entry = requests.singleOrNull()?.value?.to
-        if (entry != null) checkChain(entry, services.keys, calls.map { it.value }, document, sink)
-        if (sink.errorCount() > before) return null
+        checkChain(entry?.takeIf { it in services }, services.keys, calls.map { it.value }, document, sink)
+        if (!structureOk || sink.errorCount() > before) return null
         return ChainParts(clientNodes.single()!!, entry!!, serviceNodes.map { it!! }, callEdges.map { it!! })
     }
 
     private fun checkChain(
-        entry: String,
+        entry: String?,
         services: Set<String>,
         calls: List<ConnectionInstance>,
         document: String,
         sink: Diagnostics,
     ) {
-        val outgoing = calls.groupBy { it.from }
-        val incoming = calls.groupBy { it.to }
+        val outgoing = calls.filter { it.from in services }.groupBy { it.from }
+        val incoming = calls.filter { it.to in services }.groupBy { it.to }
+        val validOutgoing = calls.filter { it.from in services && it.to in services }.groupBy { it.from }
         outgoing.filterValues { it.size > 1 }.keys.sorted().forEach {
             sink.error("TOPOLOGY_CHAIN", "Service '$it' has more than one outgoing call", document, JsonPointer.of("blocks", it), it)
         }
         incoming.filterValues { it.size > 1 }.keys.sorted().forEach {
             sink.error("TOPOLOGY_CHAIN", "Service '$it' has more than one incoming call", document, JsonPointer.of("blocks", it), it)
         }
-        if (entry in incoming) {
+        if (entry != null && entry in incoming) {
             sink.error("TOPOLOGY_CHAIN", "Entry service '$entry' must not receive calls", document, JsonPointer.of("blocks", entry), entry)
         }
-        val visited = linkedSetOf<String>()
-        var current: String? = entry
-        while (current != null && visited.add(current)) {
-            current = outgoing[current]?.singleOrNull()?.to
+        val visited = mutableSetOf<String>()
+        val active = mutableSetOf<String>()
+        services.sorted().forEach { start ->
+            if (!visited.add(start)) return@forEach
+            active.add(start)
+            val pending = ArrayDeque<Pair<String, Iterator<ConnectionInstance>>>()
+            pending.addLast(start to validOutgoing[start].orEmpty().iterator())
+            while (pending.isNotEmpty()) {
+                val (current, edges) = pending.last()
+                if (!edges.hasNext()) {
+                    active.remove(current)
+                    pending.removeLast()
+                    continue
+                }
+                val next = edges.next().to
+                if (next in active) {
+                    sink.error("TOPOLOGY_CHAIN", "Calls form a cycle through '$next'", document, JsonPointer.of("blocks", next), next)
+                } else if (visited.add(next)) {
+                    active.add(next)
+                    pending.addLast(next to validOutgoing[next].orEmpty().iterator())
+                }
+            }
         }
-        if (current != null) {
-            sink.error("TOPOLOGY_CHAIN", "Calls form a cycle through '$current'", document, JsonPointer.of("blocks", current), current)
+        if (entry == null) return
+        val reachable = mutableSetOf<String>()
+        val pending = ArrayDeque<String>()
+        pending.addLast(entry)
+        while (pending.isNotEmpty()) {
+            val current = pending.removeFirst()
+            if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.to) }
         }
-        (services - visited).sorted().forEach {
+        (services - reachable).sorted().forEach {
             sink.error("TOPOLOGY_CHAIN", "Service '$it' is not reachable from the client", document, JsonPointer.of("blocks", it), it)
         }
     }
@@ -337,6 +355,9 @@ class ModelCompiler(
         val kind = reader.choice("kind")
         val mean = reader.quantity("mean")
         val stdDev = reader.quantity("stdDev")
+        if (kind == "lognormal" && !reader.has("stdDev")) {
+            reader.fail<Unit>("PARAM_MISSING", "stdDev", "lognormal requires stdDev")
+        }
         if (kind == null || mean == null) return null
         if (kind != "lognormal" && reader.has("stdDev")) {
             return reader.fail("DISTRIBUTION_RULE", "stdDev", "stdDev applies only to lognormal")
@@ -349,7 +370,7 @@ class ModelCompiler(
             "exponential" -> Distribution(DistributionShape.EXPONENTIAL, mean)
             else ->
                 if (stdDev == null) {
-                    if (reader.has("stdDev")) null else reader.fail("PARAM_MISSING", "stdDev", "lognormal requires stdDev")
+                    null
                 } else {
                     Distribution(DistributionShape.LOGNORMAL, mean, stdDev)
                 }
@@ -401,7 +422,13 @@ class ModelCompiler(
             sink.error("EXECUTION_RANGE", "warmup plus measurement must be finite", document, "/execution/measurement")
         }
         if (sink.errorCount() > before || warmup == null || measurement == null || maxRealTime == null) return null
-        return RunSettings(execution.replications, warmup, measurement, execution.seed, ceil(maxRealTime / 1_000.0).toLong())
+        return RunSettings(
+            execution.replications,
+            warmup,
+            measurement,
+            execution.seed,
+            ceil(maxRealTime / 1_000.0).toLong().coerceAtLeast(1L),
+        )
     }
 
     private fun faults(
