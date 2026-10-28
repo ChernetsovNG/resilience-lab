@@ -239,7 +239,11 @@ class ExperimentExecutorTest {
         assertThatThrownBy {
             ExperimentExecutor(workers = 2).use { executor ->
                 executor.run(
-                    experimentOf(settings, "valid" to singleService(processing = TestChains.fixed(0.0)), "capped" to capped),
+                    experimentOf(
+                        settings,
+                        "valid" to singleService(arrivalRatePerMs = 0.001, processing = TestChains.fixed(0.0)),
+                        "capped" to capped,
+                    ),
                 )
             }
         }.isInstanceOf(ExperimentExecutionException::class.java)
@@ -268,7 +272,7 @@ class ExperimentExecutorTest {
         assertThat(meanResponseMs).isCloseTo(4.0, offset(0.25))
     }
 
-    /** One service behind the client, as the MVP `ExperimentRunnerTest.scenario()`. */
+    /** One service behind the client. */
     private fun singleService(
         arrivalRatePerMs: Double = 0.25,
         processing: Distribution = TestChains.fixed(1.0),
