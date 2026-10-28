@@ -292,6 +292,7 @@ export interface components {
             type: string;
         };
         Catalog: {
+            assumptions: string[];
             /** Format: int32 */
             schemaVersion: number;
             types: components["schemas"]["TypeDescriptor"][];
@@ -679,6 +680,7 @@ export interface components {
             timeouts: number;
         };
         TypeDescriptor: {
+            assumptions: string[];
             /** @enum {string} */
             category: "BLOCK" | "CONNECTION";
             connects?: components["schemas"]["ConnectionRule"] | null;

@@ -5,7 +5,7 @@ import { TopBar, type TopBarProps } from "./TopBar";
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
   return { experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
-    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), job: null, health: null, healthError: null, ...overrides };
+    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), onCancel: vi.fn(), job: null, health: null, healthError: null, ...overrides };
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
@@ -64,6 +64,33 @@ describe("TopBar", () => {
     expect(state.onRun).toHaveBeenCalledOnce();
     fireEvent.change(screen.getByRole("combobox", { name: "Experiment" }), { target: { value: "second.experiment.json" } });
     expect(state.onExperiment).toHaveBeenCalledWith("second.experiment.json");
+  });
+
+  it.each(["QUEUED", "RUNNING"] as const)("cancels a %s job", (status) => {
+    const state = props({ running: true, job: {
+      id: "job-1", experiment: "first.experiment.json", runId: "run-1", status,
+      completedTasks: 0, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
+    } });
+    render(<TopBar {...state} />);
+    fireEvent.click(button("Cancel"));
+    expect(state.onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("shows cancellation requested and disables another cancellation", () => {
+    render(<TopBar {...props({ running: true, job: {
+      id: "job-1", experiment: "first.experiment.json", runId: "run-1", status: "RUNNING",
+      completedTasks: 1, totalTasks: 4, cancelRequested: true, error: null, diagnostics: [],
+    } })} />);
+    expect(button("Cancel").disabled).toBe(true);
+    expect(screen.getByTestId("job-status").textContent).toBe("RUNNING · cancellation requested");
+  });
+
+  it("does not offer cancellation for a terminal job", () => {
+    render(<TopBar {...props({ job: {
+      id: "job-1", experiment: "first.experiment.json", runId: "run-1", status: "COMPLETED",
+      completedTasks: 4, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
+    } })} />);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });
 });
 

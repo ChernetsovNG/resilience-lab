@@ -39,21 +39,27 @@ describe("API client", () => {
     expect((fetchMock.mock.calls[0][1]?.headers as Record<string, string>)["If-Match"]).toBeUndefined();
   });
 
-  it("submits jobs and reads runs", async () => {
+  it("submits and cancels jobs and reads run artifacts", async () => {
     const fetchMock = stubFetch((url) => ({ body: url.includes("/summary")
       ? { schemaVersion: 1, experiment: "e.experiment.json", variants: [] }
-      : { id: "job 1", experiment: "e.experiment.json", status: "QUEUED", runId: "run-1", completedTasks: 0, totalTasks: 1, diagnostics: [], error: null } }));
+      : url.includes("/manifest") ? { schemaVersion: 4, experiment: "e.experiment.json" }
+        : { id: "job 1", experiment: "e.experiment.json", status: "QUEUED", runId: "run-1", completedTasks: 0, totalTasks: 1, diagnostics: [], error: null } }));
 
     await api.submitJob("e.experiment.json");
     await api.job("job 1");
     await api.runSummary("run/1");
+    await api.runManifest("run/1");
+    await api.cancelJob("job 1");
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "/api/v1/jobs",
       "/api/v1/jobs/job%201",
       "/api/v1/runs/run%2F1/summary",
+      "/api/v1/runs/run%2F1/manifest",
+      "/api/v1/jobs/job%201/cancel",
     ]);
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ experiment: "e.experiment.json" });
+    expect(fetchMock.mock.calls[4][1]?.method).toBe("POST");
   });
 
   it("reads health, catalog and workspace documents", async () => {
