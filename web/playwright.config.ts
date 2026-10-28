@@ -28,12 +28,14 @@ if (backendPort === webPort) {
   throw new Error("E2E_BACKEND_PORT and E2E_WEB_PORT must use different ports.");
 }
 
-// Workers reload this config after the servers have started.
-if (process.env.TEST_WORKER_INDEX === undefined) {
+// Check once per launch: workers and UI mode reload this config after the servers have started,
+// and they inherit or share this process environment.
+if (process.env.E2E_PORTS_CHECKED === undefined) {
   await Promise.all([
     assertPortAvailable(backendPort, "E2E_BACKEND_PORT"),
     assertPortAvailable(webPort, "E2E_WEB_PORT"),
   ]);
+  process.env.E2E_PORTS_CHECKED = "1";
 }
 
 export default defineConfig({
