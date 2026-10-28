@@ -597,12 +597,14 @@ export interface components {
             startMs: number;
         };
         SaturationRule: {
-            /** Format: int32 */
-            consecutiveWindows: number;
             /** Format: double */
             handlerUtilizationThreshold: number;
             /** Format: double */
             meanQueueLengthThreshold: number;
+            /** Format: double */
+            minimumDurationMs: number;
+            /** Format: int32 */
+            queueRejectionsThreshold: number;
         };
         SaturationSummary: {
             firstNodes: components["schemas"]["FirstNodeSaturation"][];

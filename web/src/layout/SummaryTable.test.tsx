@@ -61,7 +61,7 @@ it("shows every grid point and highlights the active variant and selected point"
       activeVariantId="baseline"
       selectedPointId="p1"
       summary={{
-        schemaVersion: 5,
+        schemaVersion: 6,
         grid: [
           { path: "call.timeout", values: ["40ms", "80ms"] },
           { path: "service.handlers", values: [1] },

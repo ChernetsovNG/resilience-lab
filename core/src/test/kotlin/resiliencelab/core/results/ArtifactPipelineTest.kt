@@ -136,17 +136,19 @@ class ArtifactPipelineTest {
                 first.manifest.replications,
                 requireNotNull(first.manifest.series).points,
                 first.manifest.grid,
+                listOf("gateway", "middle", "dependency"),
             )
         assertThat(DocumentCodec.encode(RunSummary.serializer(), rebuilt))
             .isEqualTo(workspace.read("${first.runDirectory}/summary.json").text)
         assertThat(workspace.read("${first.runDirectory}/summary.json").text)
             .contains(
-                "\"consecutiveWindows\": 3",
+                "\"minimumDurationMs\": 100.0",
                 "\"handlerUtilizationThreshold\": 0.95",
-                "\"meanQueueLengthThreshold\": 0.0",
+                "\"meanQueueLengthThreshold\": 0.5",
+                "\"queueRejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(5)
+        assertThat(first.manifest.schemaVersion).isEqualTo(6)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.saturation.rule).isEqualTo(SaturationRule())

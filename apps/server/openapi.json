@@ -2347,10 +2347,6 @@
       "SaturationRule" : {
         "type" : "object",
         "properties" : {
-          "consecutiveWindows" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
           "handlerUtilizationThreshold" : {
             "type" : "number",
             "format" : "double"
@@ -2358,9 +2354,17 @@
           "meanQueueLengthThreshold" : {
             "type" : "number",
             "format" : "double"
+          },
+          "minimumDurationMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "queueRejectionsThreshold" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         },
-        "required" : [ "consecutiveWindows", "handlerUtilizationThreshold", "meanQueueLengthThreshold" ]
+        "required" : [ "handlerUtilizationThreshold", "meanQueueLengthThreshold", "minimumDurationMs", "queueRejectionsThreshold" ]
       },
       "SaturationSummary" : {
         "type" : "object",

@@ -3,12 +3,17 @@ package resiliencelab.core.results
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 
-/** Thresholds of the event-time saturation rule. Queue and utilization conditions use the same closed windows. */
+/**
+ * Thresholds of the event-time saturation rule. Queue and utilization conditions use the same closed windows.
+ * Backlog must persist for [minimumDurationMs]; overflow needs window starts spanning the same duration.
+ * Isolated rejections do not confirm saturation, even in a window longer than the duration threshold.
+ */
 @Serializable
 data class SaturationRule(
-    @EncodeDefault val consecutiveWindows: Int = 3,
+    @EncodeDefault val minimumDurationMs: Double = 100.0,
     @EncodeDefault val handlerUtilizationThreshold: Double = 0.95,
-    @EncodeDefault val meanQueueLengthThreshold: Double = 0.0,
+    @EncodeDefault val meanQueueLengthThreshold: Double = 0.5,
+    @EncodeDefault val queueRejectionsThreshold: Int = 0,
 )
 
 /** One saturated node and the start of its first qualifying window. */
@@ -19,7 +24,7 @@ data class SaturatedNode(
 )
 
 /**
- * Degradation path of one replication, ordered by onset and then node id for deterministic ties.
+ * Degradation path of one replication, ordered by onset, downstream position, then node id for deterministic ties.
  * An empty path explicitly means that no node saturated.
  */
 @Serializable
@@ -52,17 +57,27 @@ data class SaturationSummary(
 
 /** Applies the stage 1 saturation rule and aggregates independent replications without hiding empty paths. */
 object SaturationAnalyzer {
+    /**
+     * Reads [windows] chronologically for each node. [callChain] lists nodes upstream to downstream; equal onsets
+     * put downstream nodes first, with node id as the fallback for nodes outside the chain.
+     */
     fun detect(
         replication: Int,
         windows: Sequence<NodeWindow>,
         rule: SaturationRule = SaturationRule(),
+        callChain: List<String> = emptyList(),
     ): ReplicationSaturation {
+        val positions = callChain.withIndex().associate { it.value to it.index }
         val states = mutableMapOf<String, NodeState>()
         windows.forEach { row -> states.getOrPut(row.id) { NodeState() }.observe(row.metrics, rule) }
         val path =
             states
                 .mapNotNull { (node, state) -> state.startMs?.let { SaturatedNode(node, it) } }
-                .sortedWith(compareBy<SaturatedNode> { it.startMs }.thenBy { it.node })
+                .sortedWith(
+                    compareBy<SaturatedNode> { it.startMs }
+                        .thenByDescending { positions[it.node] ?: -1 }
+                        .thenBy { it.node },
+                )
         return ReplicationSaturation(replication, path)
     }
 
@@ -99,32 +114,56 @@ object SaturationAnalyzer {
     }
 
     private class NodeState {
-        private var consecutive = 0
-        private var streakStartMs = 0.0
-        private var streakSaturationMs: Double? = null
-        private var rejectionStartMs: Double? = null
-        val startMs: Double? get() = listOfNotNull(streakSaturationMs, rejectionStartMs).minOrNull()
+        private val backlog = PressureInterval()
+        private val overflow = PressureInterval()
+        val startMs: Double? get() = listOfNotNull(backlog.startMs, overflow.startMs).minOrNull()
 
         fun observe(
             metrics: WindowMetrics,
             rule: SaturationRule,
         ) {
-            if (streakSaturationMs == null) {
-                val hot =
+            val queued =
+                metrics.durationMs > 0 &&
                     metrics.handlers > 0 &&
-                        metrics.durationMs > 0 &&
-                        metrics.busyHandlerTimeMs / (metrics.handlers * metrics.durationMs) >=
-                        rule.handlerUtilizationThreshold &&
-                        metrics.queueLengthIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
-                if (hot) {
-                    if (consecutive == 0) streakStartMs = metrics.startMs
-                    consecutive++
-                    if (consecutive == rule.consecutiveWindows) streakSaturationMs = streakStartMs
-                } else {
-                    consecutive = 0
-                }
+                    metrics.busyHandlerTimeMs / (metrics.handlers * metrics.durationMs) >= rule.handlerUtilizationThreshold &&
+                    metrics.queueLengthIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
+            backlog.observe(metrics, rule, queued, metrics.startMs + metrics.durationMs)
+            // A rejection count does not establish pressure throughout its window; require later observations.
+            overflow.observe(
+                metrics,
+                rule,
+                metrics.durationMs > 0 && metrics.queueRejections > rule.queueRejectionsThreshold,
+                metrics.startMs,
+            )
+        }
+    }
+
+    private class PressureInterval {
+        private var streakStartMs: Double? = null
+        private var previousEndMs: Double? = null
+        var startMs: Double? = null
+            private set
+
+        fun observe(
+            metrics: WindowMetrics,
+            rule: SaturationRule,
+            qualifies: Boolean,
+            confirmedUntilMs: Double,
+        ) {
+            if (startMs != null) return
+            if (!qualifies) {
+                streakStartMs = null
+                previousEndMs = null
+                return
             }
-            if (rejectionStartMs == null && metrics.queueRejections > 0) rejectionStartMs = metrics.startMs
+            val endMs = metrics.startMs + metrics.durationMs
+            // Allow only binary64 rounding at adjacent boundaries and the minimum-duration comparison.
+            val toleranceMs = 4 * Math.ulp(maxOf(endMs, rule.minimumDurationMs))
+            if (previousEndMs == null || kotlin.math.abs(metrics.startMs - requireNotNull(previousEndMs)) > toleranceMs) {
+                streakStartMs = metrics.startMs
+            }
+            previousEndMs = endMs
+            if (confirmedUntilMs - requireNotNull(streakStartMs) + toleranceMs >= rule.minimumDurationMs) startMs = streakStartMs
         }
     }
 }
