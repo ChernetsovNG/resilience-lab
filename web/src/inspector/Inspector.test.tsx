@@ -186,3 +186,14 @@ describe("Inspector", () => {
     expect(screen.getByText(/Empty fault/)).toBeTruthy();
   });
 });
+
+
+it("shows a missing required choice as unset until the user selects it", () => {
+  const empty = { ...model, blocks: { ...model.blocks, gateway: { type: "service", params: {} } } };
+  renderInspector({ model: empty });
+  const distribution = screen.getByLabelText("Distribution") as HTMLSelectElement;
+  expect(distribution.value).toBe("");
+  expect(distribution.selectedOptions[0].disabled).toBe(true);
+  fireEvent.change(distribution, { target: { value: "fixed" } });
+  expect(distribution.value).toBe("fixed");
+});

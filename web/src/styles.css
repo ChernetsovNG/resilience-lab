@@ -390,3 +390,34 @@ select {
   color: #1d4ed8;
   border-color: #2563eb;
 }
+
+
+.palette li:has(button) {
+  padding: 0;
+}
+
+.palette button {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: grab;
+}
+
+.palette button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.canvas-notice {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  z-index: 5;
+  padding: 0.5rem;
+  border: 1px solid #f59e0b;
+  border-radius: 0.35rem;
+  background: #fffbeb;
+}

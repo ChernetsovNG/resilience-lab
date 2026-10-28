@@ -103,6 +103,8 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
   }
   const parsed = parse(descriptor, draft);
   const documentValue = parse(descriptor, draft, false);
+  // Missing document values stay undoable; only unsaved unparseable text blocks navigation.
+  const validDraft = documentValue.ok || draft === shown;
   const validityRef = useRef(onValidity);
 
   useEffect(() => {
@@ -110,8 +112,8 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
   }, [onValidity]);
 
   useEffect(() => {
-    validityRef.current(path, !editable || documentValue.ok);
-  }, [path, editable, documentValue.ok]);
+    validityRef.current(path, !editable || validDraft);
+  }, [path, editable, validDraft]);
 
   useEffect(
     () => () => {
@@ -146,7 +148,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
             onCommit(event.target.value === "" ? undefined : event.target.value);
           }}
         >
-          {descriptor.required ? null : <option value="">{fallback === "" ? "Default" : `Default (${fallback})`}</option>}
+          {descriptor.required ? <option value="" disabled>Select…</option> : <option value="">{fallback === "" ? "Default" : `Default (${fallback})`}</option>}
           {descriptor.options.map((option) => (
             <option key={option} value={option}>
               {option}

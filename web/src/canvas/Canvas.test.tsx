@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { experiment, layout, model } from "../test/fixtures";
+import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
 import { Canvas } from "./Canvas";
 import { VariantTabs } from "./VariantTabs";
@@ -10,7 +10,7 @@ beforeAll(mockReactFlowDom);
 describe("Canvas", () => {
   it("shows finding counts and the greatest severity on blocks and connections", async () => {
     const warning = { code: "LINT_TIMEOUT_BUDGET", severity: "WARNING" as const, message: "Check timeout" };
-    render(<Canvas model={model} layout={layout} selected={null} onSelect={vi.fn()} elementDiagnostics={new Map([
+    render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()} elementDiagnostics={new Map([
       ["gateway", [warning, { ...warning, severity: "ERROR" }]],
       ["gateway-to-middle", [warning]],
     ])} />);
@@ -19,30 +19,30 @@ describe("Canvas", () => {
   });
   it("draws blocks with key parameters and reports the selection", async () => {
     const onSelect = vi.fn();
-    render(<Canvas model={model} layout={layout} selected={null} onSelect={onSelect} />);
+    render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={onSelect} />);
     expect(await screen.findAllByTestId("block-node")).toHaveLength(4);
     expect(screen.getByText("4 handlers · queue 16")).toBeTruthy();
     expect(screen.getByText("120/s · deadline 250ms")).toBeTruthy();
     fireEvent.click(screen.getByTestId("rf__node-gateway"));
-    expect(onSelect).toHaveBeenCalledWith("gateway");
+    expect(onSelect).toHaveBeenCalledWith(["gateway"]);
   });
 
   it("labels call connections, selects an edge and clears selection on the pane", async () => {
     const onSelect = vi.fn();
-    const { container } = render(<Canvas model={model} layout={layout} selected={null} onSelect={onSelect} />);
+    const { container } = render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={onSelect} />);
     const edge = await screen.findByTestId("rf__edge-gateway-to-middle");
     expect(screen.getByText("80ms · 3×")).toBeTruthy();
     expect(screen.getByText("60ms · 3×")).toBeTruthy();
     expect(screen.getByTestId("rf__edge-client-to-gateway").textContent).toBe("");
     fireEvent.click(edge);
-    expect(onSelect).toHaveBeenLastCalledWith("gateway-to-middle");
+    expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
     fireEvent.click(container.querySelector(".react-flow__pane")!);
-    expect(onSelect).toHaveBeenLastCalledWith(null);
+    expect(onSelect).toHaveBeenCalledWith([]);
   });
 
   it("reflects controlled selection and keeps block positions and ports read-only", async () => {
     const props = { model, layout, onSelect: vi.fn() };
-    const { container, rerender } = render(<Canvas {...props} selected="gateway" />);
+    const { container, rerender } = render(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} selected={["gateway"]} />);
     const node = await screen.findByTestId("rf__node-gateway");
     expect(node.classList.contains("selected")).toBe(true);
     expect(node.style.transform).toBe("translate(260px,100px)");
@@ -50,7 +50,7 @@ describe("Canvas", () => {
     expect(container.querySelector(".react-flow__handle.connectable")).toBeNull();
     expect(screen.getByTestId("rf__node-client").querySelector(".react-flow__handle.target")).toBeNull();
     expect(node.querySelector(".react-flow__handle.target")).toBeTruthy();
-    rerender(<Canvas {...props} selected="gateway-to-middle" />);
+    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} selected={["gateway-to-middle"]} />);
     expect(node.classList.contains("selected")).toBe(false);
     expect((await screen.findByTestId("rf__edge-gateway-to-middle")).classList.contains("selected")).toBe(true);
   });
@@ -61,11 +61,11 @@ describe("Canvas", () => {
       blocks: { client: model.blocks.client, ["constructor"]: model.blocks.gateway },
       connections: [],
     };
-    const props = { model: fallbackModel, selected: null, onSelect: vi.fn() };
-    const { rerender } = render(<Canvas {...props} layout={null} />);
+    const props = { model: fallbackModel, selected: [], onSelect: vi.fn() };
+    const { rerender } = render(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={null} />);
     expect((await screen.findByTestId("rf__node-client")).style.transform).toBe("translate(0px,100px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
-    rerender(<Canvas {...props} layout={{ schemaVersion: 1, positions: { client: { x: 40, y: 60 } } }} />);
+    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={{ schemaVersion: 1, positions: { client: { x: 40, y: 60 } } }} />);
     expect(screen.getByTestId("rf__node-client").style.transform).toBe("translate(40px,60px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
   });
@@ -78,7 +78,7 @@ describe("Canvas", () => {
         connection.id === "gateway-to-middle" ? { ...connection, params: { timeout: "80ms" } } : connection,
       ),
     };
-    render(<Canvas model={defaultsModel} layout={layout} selected={null} onSelect={vi.fn()} />);
+    render(<Canvas catalog={catalog} onCommand={vi.fn()} model={defaultsModel} layout={layout} selected={[]} onSelect={vi.fn()} />);
     expect(await screen.findByText("4 handlers · queue 0")).toBeTruthy();
     expect(await screen.findByText("80ms · 1×")).toBeTruthy();
   });

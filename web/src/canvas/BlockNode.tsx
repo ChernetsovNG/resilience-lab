@@ -1,14 +1,14 @@
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { BlockInstance, Diagnostic } from "../api/apiTypes";
+import type { BlockInstance, Diagnostic, TypeDescriptor } from "../api/apiTypes";
 import { DiagnosticBadge } from "../validation/DiagnosticDisplay";
 
-export type BlockNodeType = Node<{ id: string; block: BlockInstance; diagnostics?: readonly Diagnostic[] }, "block">;
+export type BlockNodeType = Node<{ id: string; block: BlockInstance; ports: TypeDescriptor["ports"]; editable: boolean; diagnostics?: readonly Diagnostic[] }, "block">;
 
 function summaryOf(block: BlockInstance): string {
   const params = block.params;
-  if (block.type === "client") return `${String(params.rate)} · deadline ${String(params.deadline)}`;
-  if (block.type === "service") return `${String(params.handlers)} handlers · queue ${String(params.queue ?? 0)}`;
+  if (block.type === "client") return `${String(params.rate ?? "Rate required")} · deadline ${String(params.deadline ?? "required")}`;
+  if (block.type === "service") return `${String(params.handlers ?? "Required")} handlers · queue ${String(params.queue ?? 0)}`;
   return block.type;
 }
 
@@ -16,11 +16,13 @@ function summaryOf(block: BlockInstance): string {
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   return (
     <div className={`block-node block-node--${data.block.type}`} data-testid="block-node">
-      {data.block.type === "client" ? null : <Handle type="target" position={Position.Left} isConnectable={false} />}
+      {data.ports.map((port) => (
+        <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
+          position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
+      ))}
       <strong>{data.id}</strong>
       <DiagnosticBadge diagnostics={data.diagnostics ?? []} />
       <span>{summaryOf(data.block)}</span>
-      <Handle type="source" position={Position.Right} isConnectable={false} />
     </div>
   );
 }
