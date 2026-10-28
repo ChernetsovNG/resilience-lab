@@ -34,6 +34,10 @@ function server(override?: (url: string, init?: RequestInit) => StubResponse | P
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/validate") return { body: { experiment: JSON.parse(String(init?.body)).experiment, valid: true, diagnostics: [] } };
     if (url === "/api/v1/workspace/documents") return { body: Object.values(documents) };
+    if (url.startsWith("/api/v1/workspace/changes")) {
+      const since = new URL(url, "http://localhost").searchParams.get("since");
+      return { body: { cursor: since ?? "test:0", reset: false, changes: [] } };
+    }
     if (url.startsWith("/api/v1/workspace/document?")) {
       const path = new URL(url, "http://localhost").searchParams.get("path")!;
       if (init?.method === "PUT") return { body: { path, kind: "MODEL", version: "saved" } };
@@ -470,6 +474,76 @@ describe("App stage 1 integration", () => {
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Save").disabled).toBe(true);
     await waitFor(() => expect(button("Run").disabled).toBe(false));
+  });
+
+  it("confirms before reloading external changes over drafts and clears history after acceptance", async () => {
+    let reported = false;
+    const fetchMock = server((url) => {
+      if (url.startsWith("/api/v1/workspace/changes?") && !reported) {
+        reported = true;
+        return { body: { cursor: "test:1", reset: false, changes: [{ path: modelPath, kind: "MODEL", version: "external" }] } };
+      }
+      if (reported && url.startsWith("/api/v1/workspace/document?") && url.includes(encodeURIComponent(modelPath))) {
+        return { body: { ...documentViews[modelPath], version: "fresh", content: { model: { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 9 } } } } } } };
+      }
+    });
+    await open(); selectGateway(); editHandlers("5");
+    await screen.findByText(/The document changed on disk/, undefined, { timeout: 3000 });
+    expect(screen.getByText(modelPath)).toBeTruthy();
+    expect(screen.getByText(/Reload will discard unsaved changes/)).toBeTruthy();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const reads = fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length;
+
+    fireEvent.click(button("Reload"));
+    expect(confirm).toHaveBeenCalledWith("Reload and discard unsaved changes to the documents?");
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
+    expect(fetchMock.mock.calls.filter(([url]) => url.startsWith("/api/v1/workspace/document?")).length).toBe(reads);
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(button("Reload"));
+    await screen.findByRole("heading", { name: "Run settings" });
+    selectGateway();
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
+    expect(button("Undo").disabled).toBe(true);
+    expect(button("Redo").disabled).toBe(true);
+  });
+
+  it("shows an external deletion without a Reload button and keeps the editor draft", async () => {
+    let reported = false;
+    server((url) => {
+      if (url.startsWith("/api/v1/workspace/changes?") && !reported) {
+        reported = true;
+        return { body: { cursor: "test:1", reset: false, changes: [{ path: modelPath, kind: "MODEL", version: null }] } };
+      }
+    });
+    await open(); selectGateway(); editHandlers("5");
+
+    await screen.findByText(/The document was deleted on disk/, undefined, { timeout: 3000 });
+    expect(screen.getByText(modelPath)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
+  });
+
+  it("reloads an external change without confirmation when there are no drafts", async () => {
+    let reported = false;
+    server((url) => {
+      if (url.startsWith("/api/v1/workspace/changes?") && !reported) {
+        reported = true;
+        return { body: { cursor: "test:1", reset: false, changes: [{ path: modelPath, kind: "MODEL", version: "external" }] } };
+      }
+      if (reported && url.startsWith("/api/v1/workspace/document?") && url.includes(encodeURIComponent(modelPath))) {
+        return { body: { ...documentViews[modelPath], version: "fresh", content: { model: { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 9 } } } } } } };
+      }
+    });
+    const confirm = vi.spyOn(window, "confirm");
+    await open();
+    await screen.findByText(/The document changed on disk/, undefined, { timeout: 3000 });
+
+    fireEvent.click(button("Reload"));
+    await screen.findByRole("heading", { name: "Run settings" });
+    expect(confirm).not.toHaveBeenCalled();
+    selectGateway();
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
   });
 
   it("blocks experiment switching while running and clears completed results for another experiment", async () => {

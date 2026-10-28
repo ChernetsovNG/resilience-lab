@@ -1,5 +1,5 @@
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
@@ -130,6 +130,60 @@ test("keeps every canvas value clickable and opens gateway mean with an error-co
   await input.fill("invalid");
   await expect(mean.locator(".inline-param-error")).toHaveCSS("color", "rgb(220, 38, 38)");
 });
+
+test("shows and reloads an external model edit within five seconds", async ({ page, files }) => {
+  await writeHandlers(files, 9);
+  const alert = page.getByRole("alert").filter({ hasText: files.model });
+  await expect(alert).toContainText("The document changed on disk", { timeout: 5000 });
+
+  await alert.getByRole("button", { name: "Reload", exact: true }).click();
+  await page.getByTestId("rf__node-gateway").click();
+  await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("9");
+});
+
+test("keeps a draft when external model reload is dismissed and reloads after confirmation", async ({ page, files }) => {
+  await page.getByTestId("rf__node-gateway").click();
+  const handlers = page.getByLabel("Handlers", { exact: true });
+  await handlers.fill("6");
+  await handlers.press("Enter");
+  await writeHandlers(files, 9);
+  const alert = page.getByRole("alert").filter({ hasText: files.model });
+  await expect(alert).toContainText("Reload will discard unsaved changes", { timeout: 5000 });
+
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await alert.getByRole("button", { name: "Reload", exact: true }).click();
+  await expect(handlers).toHaveValue("6");
+  await expect(alert).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await alert.getByRole("button", { name: "Reload", exact: true }).click();
+  await page.getByTestId("rf__node-gateway").click();
+  await expect(handlers).toHaveValue("9");
+});
+
+test("does not show an external-change banner for an own save journal entry", async ({ page, files }) => {
+  await page.getByTestId("rf__node-gateway").click();
+  const handlers = page.getByLabel("Handlers", { exact: true });
+  await handlers.fill("6");
+  await handlers.press("Enter");
+  const ownEntry = page.waitForResponse(async (response) => {
+    if (!response.url().includes("/api/v1/workspace/changes?")) return false;
+    const body = await response.json();
+    return body.changes.some((change: { path: string }) => change.path === files.model);
+  });
+
+  await save(page);
+  await ownEntry;
+
+  await expect(page.getByRole("alert").filter({ hasText: "The document changed on disk" })).toHaveCount(0);
+});
+
+async function writeHandlers(files: Files, value: number) {
+  const path = resolve("../apps/server/build/e2e-workspace", files.model);
+  const source: ModelFile = JSON.parse(await readFile(path, "utf8"));
+  source.blocks.gateway.params.handlers = value;
+  await writeFile(path, JSON.stringify(source));
+}
 
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);

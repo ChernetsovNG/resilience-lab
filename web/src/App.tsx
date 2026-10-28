@@ -166,19 +166,28 @@ export function App() {
               Fix invalid values before changing the selected element, page or experiment.
             </div>
           ) : null}
-          {workspace.conflict ? (
+          {workspace.externalChange !== null || workspace.conflict ? (
             <div className="banner" role="alert">
-              The document changed on disk: <code>{workspace.conflictPath}</code>.{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelection([]);
-                  clipboard.current = null;
-                  void workspace.reload();
-                }}
-              >
-                Reload
-              </button>
+              {workspace.externalChange?.deleted ? (
+                <>The document was deleted on disk: <code>{workspace.externalChange.path}</code>.</>
+              ) : (
+                <>
+                  The document changed on disk: <code>{workspace.externalChange?.path ?? workspace.conflictPath}</code>.{" "}
+                  {workspace.externalChange !== null && workspace.dirty ? "Reload will discard unsaved changes. " : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (workspace.externalChange !== null && workspace.dirty &&
+                        !window.confirm("Reload and discard unsaved changes to the documents?")) return;
+                      setSelection([]);
+                      clipboard.current = null;
+                      void workspace.reload();
+                    }}
+                  >
+                    Reload
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
