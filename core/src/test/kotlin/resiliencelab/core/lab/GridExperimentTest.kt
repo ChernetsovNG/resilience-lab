@@ -196,6 +196,33 @@ class GridExperimentTest {
         }
     }
 
+    @Test
+    fun `conditional distribution errors identify the grid value that changes the rule`() {
+        val fixed = model.replace("\"exponential\"", "\"fixed\"")
+        val lognormal =
+            model
+                .replace("\"exponential\"", "\"lognormal\"")
+                .replace("\"mean\":\"3ms\"", "\"mean\":\"3ms\",\"stdDev\":\"1ms\"")
+        val cases =
+            listOf(
+                Triple(model, "lognormal", "{}"),
+                Triple(lognormal, "fixed", "{}"),
+                Triple(fixed.replace("\"mean\":\"3ms\"", "\"mean\":\"0ms\""), "exponential", "{}"),
+                Triple(fixed, "exponential", """{"entry.processing.mean":"0ms"}"""),
+            )
+        cases.forEachIndexed { index, (source, kind, overrides) ->
+            val axes = """[{"path":"entry.processing.kind","values":["$kind"]}]"""
+            Lab(workspace("conditional-$index", axes, overrides, source)).use { lab ->
+                val report = lab.validate("e.experiment.json")
+                assertThat(report.valid).isFalse()
+                assertThat(report.diagnostics).anySatisfy {
+                    assertThat(it.document).isEqualTo("e.experiment.json")
+                    assertThat(it.pointer).isEqualTo("/grid/0/values/0")
+                }
+            }
+        }
+    }
+
     private fun coordinates(
         handlers: Int,
         deadline: String,

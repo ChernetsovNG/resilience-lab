@@ -437,14 +437,14 @@ class ModelCompiler(
         val mean = reader.quantity("mean")
         val stdDev = reader.quantity("stdDev")
         if (kind == "lognormal" && !reader.has("stdDev")) {
-            reader.fail<Unit>("PARAM_MISSING", "stdDev", "lognormal requires stdDev")
+            reader.fail<Unit>("PARAM_MISSING", "stdDev", "lognormal requires stdDev", dependsOn = "kind")
         }
         if (kind == null || mean == null) return null
         if (kind != "lognormal" && reader.has("stdDev")) {
-            return reader.fail("DISTRIBUTION_RULE", "stdDev", "stdDev applies only to lognormal")
+            return reader.fail("DISTRIBUTION_RULE", "stdDev", "stdDev applies only to lognormal", dependsOn = "kind")
         }
         if (kind != "fixed" && mean <= 0.0) {
-            return reader.fail("PARAM_RANGE", "mean", "mean must be greater than zero for $kind")
+            return reader.fail("PARAM_RANGE", "mean", "mean must be greater than zero for $kind", dependsOn = "kind")
         }
         return when (kind) {
             "fixed" -> Distribution(DistributionShape.FIXED, mean)

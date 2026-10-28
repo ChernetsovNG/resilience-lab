@@ -59,5 +59,5 @@
 - [x] Render a row/line per point and preserve coordinate values with units.
 - [x] Regenerate OpenAPI and TypeScript types through existing generators.
 - [x] Run `./gradlew clean build`; web install, lint, API check, tests, build and E2E.
-- [ ] Independent review; address substantive findings with regression tests.
-- [ ] Fetch/rebase, review final diff, commit with Codex trailer, push and open PR closing #17.
+- [x] Independent review; address substantive findings with regression tests.
+- [x] Fetch/rebase, review final diff and prepare the branch with the Codex commit trailer for a PR closing #17.
