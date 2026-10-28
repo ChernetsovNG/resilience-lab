@@ -411,6 +411,39 @@ select {
   font-size: 0.875rem;
 }
 
+.timeline-toolbar, .timeline-regions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  font-size: 0.8rem;
+}
+
+.timeline-toolbar label { display: flex; align-items: center; gap: 0.35rem; }
+.timeline-choices { margin: 0.5rem 0; font-size: 0.8rem; }
+.timeline-choices summary { cursor: pointer; }
+.timeline-choices fieldset { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; border: 1px solid #d5dbe3; }
+.timeline-choices label { display: inline-flex; align-items: center; gap: 0.3rem; }
+.timeline-regions span { padding: 0.2rem 0.4rem; border-radius: 0.2rem; }
+.timeline-region--warmup { background: #e2e8f0; }
+.timeline-region--fault { background: #fef3c7; }
+.timeline-cursor { margin: 0.5rem 0; font-size: 0.8rem; min-height: 1.2rem; }
+.timeline-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 0.75rem; }
+.timeline-chart { min-width: 0; padding: 0.5rem; border: 1px solid #d5dbe3; border-radius: 0.35rem; }
+.timeline-chart h3 { margin: 0 0 0.25rem; font-size: 0.85rem; }
+.timeline-chart h3 span { color: #52606d; font-weight: normal; }
+.timeline-plot { position: relative; }
+.timeline-plot .recharts-text { font-size: 10px; }
+.timeline-interaction { position: absolute; inset: 12px 12px 32px 56px; cursor: crosshair; touch-action: none; }
+.timeline-interaction:focus-visible { outline: 2px solid #2563eb; }
+.timeline-axis { margin: 0 12px 0.25rem 56px; text-align: center; color: #52606d; font-size: 0.65rem; }
+.timeline-readout { margin: 0.25rem 0 0; font-size: 0.75rem; }
+.timeline-readout > div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.timeline-readout dt { min-width: 0; overflow-wrap: anywhere; }
+.timeline-readout dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.timeline-line-key { display: inline-block; width: 1.25rem; margin-right: 0.35rem; border-top: 2px solid; vertical-align: middle; }
+.timeline-line-key--comparison { border-top-style: dashed; }
+
 .summary-table {
   border-collapse: separate;
   border-spacing: 0;

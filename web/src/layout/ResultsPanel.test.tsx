@@ -3,6 +3,12 @@ import { expect, it, vi } from "vitest";
 import { summary } from "../test/fixtures";
 import { ResultsPanel } from "./ResultsPanel";
 
+it("offers Timeline and explains that it needs a run", () => {
+  render(<ResultsPanel job={null} summary={null} problem={null} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+  expect(screen.getByRole("tabpanel").textContent).toContain("Run the experiment to see the timeline.");
+});
+
 it("lists all diagnostics in Problems and navigates from a finding", () => {
   const finding = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "At least one handler", document: "chain.model.json", pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" };
   const onDiagnostic = vi.fn();
