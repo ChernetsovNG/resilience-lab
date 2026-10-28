@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { DocumentView, JobView } from "./api/apiTypes";
-import { catalog, documentViews, experiment, experimentPath, model, modelPath, summary } from "./test/fixtures";
+import { catalog, documentViews, experiment, experimentPath, manifest, model, modelPath, summary } from "./test/fixtures";
 import { mockReactFlowDom } from "./test/reactFlow";
 import { stubFetch, type StubResponse } from "./test/stubFetch";
 
@@ -45,6 +45,7 @@ function server(override?: (url: string, init?: RequestInit) => StubResponse | P
     }
     if (url === "/api/v1/jobs") return { status: 202, body: completed };
     if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+    if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
     throw new Error(`Unexpected request: ${url}`);
   });
 }
@@ -761,4 +762,48 @@ it("targets the pasted fragment with subsequent arrow and delete actions", async
   expect(screen.getByTestId("rf__node-middle")).toBeTruthy();
   expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
   expect(button("Save").disabled).toBe(true);
+});
+
+it.each(["model", "experiment"] as const)("marks results stale after %s edits and clears the mark after undo", async (kind) => {
+  server();
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Summary" });
+  if (kind === "model") {
+    selectGateway();
+    editHandlers("5");
+  } else {
+    editField("Seed", "43");
+  }
+  const stale = "Results belong to a previous document version.";
+  await screen.findByText(stale);
+
+  fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
+  expect(screen.getByText(stale)).toBeTruthy();
+  expect(screen.getByText("Student 95% confidence intervals are not clipped.")).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.queryByText(stale)).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+  expect(screen.queryByText(stale)).toBeNull();
+});
+
+it("changes results panel grid size without issuing document commands", async () => {
+  const fetchMock = server();
+  await open();
+  const app = document.querySelector(".app")!;
+  expect(app.className).toContain("app--results-normal");
+
+  fireEvent.click(button("Expand results"));
+  expect(app.className).toContain("app--results-expanded");
+  fireEvent.click(button("Restore results"));
+  expect(app.className).toContain("app--results-normal");
+  fireEvent.click(button("Collapse results"));
+  expect(app.className).toContain("app--results-collapsed");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(button("Restore results"));
+  expect(app.className).toContain("app--results-normal");
+
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Save").disabled).toBe(true);
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
 });

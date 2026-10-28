@@ -72,16 +72,18 @@ data class TypeDescriptor(
     val category: TypeCategory,
     val title: String,
     val description: String,
+    val assumptions: List<String> = emptyList(),
     val ports: List<PortDescriptor> = emptyList(),
     val connects: ConnectionRule? = null,
     val params: List<ParamDescriptor> = emptyList(),
 )
 
-/** Versioned set of computable types. */
+/** Versioned set of computable types and shared model and measurement assumptions. */
 @Serializable
 data class Catalog(
     val schemaVersion: Int,
     val types: List<TypeDescriptor>,
+    val assumptions: List<String> = emptyList(),
 ) {
     fun type(id: String): TypeDescriptor? = types.firstOrNull { it.id == id }
 }

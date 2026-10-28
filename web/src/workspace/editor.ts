@@ -44,24 +44,25 @@ function documentsOf({ model, layout, experiment }: EditorDocuments): EditorDocu
   return { model, layout, experiment };
 }
 
-function equal(left: unknown, right: unknown): boolean {
+/** Structural document equality; object key order does not affect the result. */
+export function documentValuesEqual(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (Array.isArray(left) && Array.isArray(right)) {
-    return left.length === right.length && left.every((value, index) => equal(value, right[index]));
+    return left.length === right.length && left.every((value, index) => documentValuesEqual(value, right[index]));
   }
   if (!isObject(left) || !isObject(right)) return false;
   const keys = Object.keys(left);
-  return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && equal(left[key], right[key]));
+  return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && documentValuesEqual(left[key], right[key]));
 }
 
 /** Per-document unsaved changes, including edits that returned to their saved values. */
 export function dirtyDocuments(loaded: LoadedExperiment | null): Record<DocumentKind, boolean> {
   return {
     layout: loaded !== null && (
-      (loaded.versions.layout === null && loaded.experiment.layoutRef != null) || !equal(loaded.layout, loaded.saved.layout)
+      (loaded.versions.layout === null && loaded.experiment.layoutRef != null) || !documentValuesEqual(loaded.layout, loaded.saved.layout)
     ),
-    model: loaded !== null && !equal(loaded.model, loaded.saved.model),
-    experiment: loaded !== null && !equal(loaded.experiment, loaded.saved.experiment),
+    model: loaded !== null && !documentValuesEqual(loaded.model, loaded.saved.model),
+    experiment: loaded !== null && !documentValuesEqual(loaded.experiment, loaded.saved.experiment),
   };
 }
 
@@ -79,10 +80,10 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     case "command": {
       const before = documentsOf(loaded);
       let after = action.command(before);
-      if (!equal(before.layout, after.layout) && after.experiment.layoutRef == null) {
+      if (!documentValuesEqual(before.layout, after.layout) && after.experiment.layoutRef == null) {
         after = { ...after, experiment: { ...after.experiment, layoutRef: loaded.layoutPath.split("/").at(-1)! } };
       }
-      if (equal(before, after)) return state;
+      if (documentValuesEqual(before, after)) return state;
       return { ...state, loaded: { ...loaded, ...after }, past: [...past, before].slice(-100), future: [] };
     }
     case "undo": {

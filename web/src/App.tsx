@@ -8,10 +8,11 @@ import { useHealth } from "./components/useHealth";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
-import { ResultsPanel } from "./layout/ResultsPanel";
+import { ResultsPanel, type ResultsPanelSize } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
 import { setVariantParam } from "./workspace/experimentCommands";
+import { documentValuesEqual } from "./workspace/editor";
 import { applyOverrides } from "./workspace/params";
 import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
@@ -27,6 +28,8 @@ export function App() {
   const health = useHealth();
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
+  const [pointSelection, setPointSelection] = useState<{ summary: typeof run.summary; id: string }>({ summary: null, id: "p0" });
+  const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -52,6 +55,9 @@ export function App() {
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
+  const staleResults = ownRun && loaded !== null && run.documents !== null && (
+    !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
+  );
   const diagnostics = validation.report?.diagnostics ?? [];
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
@@ -126,7 +132,7 @@ export function App() {
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
   return (
-    <div className="app">
+    <div className={`app app--results-${resultsSize}`}>
       <TopBar
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
@@ -152,8 +158,9 @@ export function App() {
         running={run.running}
         runBlockedReason={runBlockedReason}
         onRun={() => {
-          if (loaded !== null) void run.run(loaded.experimentPath);
+          if (loaded !== null) void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
         }}
+        onCancel={() => void run.cancel()}
         job={ownRun ? run.job : null}
         health={health.health}
         healthError={health.error}
@@ -249,6 +256,15 @@ export function App() {
         job={ownRun ? run.job : null}
         summary={ownRun ? run.summary : null}
         problem={ownRun ? run.problem : null}
+        catalog={catalog}
+        model={ownRun ? run.documents?.model ?? null : null}
+        manifest={ownRun ? run.manifest : null}
+        stale={staleResults}
+        activeVariantId={variant?.id ?? null}
+        selectedPointId={pointSelection.summary === run.summary ? pointSelection.id : "p0"}
+        onPointChange={(id) => setPointSelection({ summary: run.summary, id })}
+        size={resultsSize}
+        onSizeChange={setResultsSize}
         diagnostics={diagnostics}
         validationPending={validation.pending}
         validationProblem={validation.problem}

@@ -5,15 +5,26 @@ import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 
 describe("SummaryTable", () => {
-  it("shows one row per variant with confidence intervals and service amplification", () => {
+  it("shows confidence intervals, service amplification and pooled handler utilization", () => {
     render(<SummaryTable summary={summary} />);
     const table = screen.getByRole("table", { name: "Summary" });
     const baseline = within(table).getByRole("row", { name: /Baseline/ });
     expect(baseline.textContent).toContain("97.5% (95% CI 95.0%–100.0%)");
     expect(baseline.textContent).toContain("41.3 ms");
     expect(baseline.textContent).toContain("1.20×");
+    expect(baseline.textContent).toContain("50.0%");
     expect(within(table).getByRole("columnheader", { name: "gateway admitted ×" })).toBeTruthy();
-    expect(within(table).getByRole("row", { name: /No retries/ }).textContent).toContain("n/a");
+    expect(within(table).getByRole("columnheader", { name: "gateway handler utilization (busy/capacity)" })).toBeTruthy();
+    const noRetriesCells = within(table).getByRole("row", { name: /No retries/ }).querySelectorAll("td");
+    expect(noRetriesCells[noRetriesCells.length - 3].textContent).toBe("n/a");
+    expect(noRetriesCells[noRetriesCells.length - 2].textContent).toBe("n/a");
+  });
+
+  it("renders unavailable utilization instead of dividing by zero capacity", () => {
+    const zero = structuredClone(summary);
+    zero.variants[0].points[0].aggregate.services.gateway.totals.handlerCapacityTimeMs = 0;
+    render(<SummaryTable summary={zero} />);
+    expect(screen.getByRole("row", { name: /Baseline/ }).textContent.match(/n\/a/g)).toHaveLength(1);
   });
 
   it("preserves Student confidence limits outside the physical success-rate range", () => {
@@ -66,25 +77,29 @@ describe("ProblemList", () => {
   });
 });
 
-it("shows every grid point with coordinates, units and its own metrics", () => {
+it("shows every grid point and highlights the active variant and selected point", () => {
   render(
-    <SummaryTable summary={{
-      schemaVersion: 5,
-      grid: [
-        { path: "call.timeout", values: ["40ms", "80ms"] },
-        { path: "service.handlers", values: [1] },
-      ],
-      experiment: "grid.experiment.json",
-      variants: [{
-        id: "baseline", label: "Baseline", replications: 2,
-        points: [
-          { id: "p0", coordinates: { "call.timeout": "40ms", "service.handlers": 1 }, saturation: noSaturation,
-            aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 0.5, min: 0.4, max: 0.6 } } },
-          { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 1 }, saturation: noSaturation,
-            aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 1, min: 1, max: 1 } } },
+    <SummaryTable
+      activeVariantId="baseline"
+      selectedPointId="p1"
+      summary={{
+        schemaVersion: 5,
+        grid: [
+          { path: "call.timeout", values: ["40ms", "80ms"] },
+          { path: "service.handlers", values: [1] },
         ],
-      }],
-    }} />,
+        experiment: "grid.experiment.json",
+        variants: [{
+          id: "baseline", label: "Baseline", replications: 2,
+          points: [
+            { id: "p0", coordinates: { "call.timeout": "40ms", "service.handlers": 1 }, saturation: noSaturation,
+              aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 0.5, min: 0.4, max: 0.6 } } },
+            { id: "p1", coordinates: { "call.timeout": "80ms", "service.handlers": 1 }, saturation: noSaturation,
+              aggregate: { pooledLatency: {}, services: {}, successRate: { mean: 1, min: 1, max: 1 } } },
+          ],
+        }],
+      }}
+    />,
   );
 
   const rows = screen.getAllByRole("row");
@@ -93,7 +108,11 @@ it("shows every grid point with coordinates, units and its own metrics", () => {
   expect(within(rows[1]).getByText(/call.timeout.*40ms/)).toBeDefined();
   expect(within(rows[1]).getByText(/service.handlers.*1/)).toBeDefined();
   expect(within(rows[1]).getByText("50.0%")).toBeDefined();
+  expect(rows[1].className).toContain("summary-row--active-variant");
+  expect(rows[1].className).not.toContain("summary-row--selected-point");
   expect(within(rows[2]).getByText("p1")).toBeDefined();
   expect(within(rows[2]).getByText(/call.timeout.*80ms/)).toBeDefined();
   expect(within(rows[2]).getByText("100.0%")).toBeDefined();
+  expect(rows[2].className).toContain("summary-row--active-variant");
+  expect(rows[2].className).toContain("summary-row--selected-point");
 });

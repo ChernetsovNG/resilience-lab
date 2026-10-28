@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Diagnostic, JobView } from "../api/apiTypes";
-import { experimentPath, summary } from "../test/fixtures";
+import { experiment, experimentPath, manifest, model, summary } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
 import { useRun } from "./useRun";
 
@@ -12,6 +12,7 @@ afterEach(() => {
 const diagnostic: Diagnostic = {
   code: "PARAM_MISSING", severity: "ERROR", message: "Required parameter 'handlers' is missing",
 };
+const documents = { model, experiment };
 
 function job(status: JobView["status"], extra: Partial<JobView> = {}): JobView {
   return {
@@ -29,17 +30,18 @@ function deferred() {
 
 async function run() {
   const hook = renderHook(() => useRun(1));
-  await act(async () => { await hook.result.current.run(experimentPath); });
+  await act(async () => { await hook.result.current.run(experimentPath, documents); });
   return hook.result;
 }
 
 describe("useRun", () => {
-  it("submits the experiment, polls queued/running jobs and loads the summary", async () => {
+  it("submits the experiment, polls queued/running jobs and loads run artifacts", async () => {
     const statuses: JobView["status"][] = ["RUNNING", "COMPLETED"];
     const fetchMock = stubFetch((url, init) => {
       if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("QUEUED") };
       if (url === "/api/v1/jobs/job-1") return { body: job(statuses.shift() ?? "COMPLETED") };
       if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -48,6 +50,8 @@ describe("useRun", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ experiment: experimentPath });
     expect(result.current.job?.status).toBe("COMPLETED");
     expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+    expect(result.current.documents).toEqual(documents);
     expect(result.current.experiment).toBe(experimentPath);
     expect(result.current.problem).toBeNull();
     expect(result.current.running).toBe(false);
@@ -93,14 +97,16 @@ describe("useRun", () => {
     let fail = false;
     stubFetch((url) => url === "/api/v1/jobs"
       ? { status: 202, body: job(fail ? "FAILED" : "COMPLETED", { error: fail ? "boom" : null }) }
-      : { body: summary });
+      : { body: url.includes("/summary") ? summary : manifest });
     const result = await run();
     expect(result.current.summary).toEqual(summary);
 
     act(() => result.current.reset());
     expect(result.current.summary).toBeNull();
+    expect(result.current.manifest).toBeNull();
+    expect(result.current.documents).toBeNull();
     fail = true;
-    await act(async () => { await result.current.run(experimentPath); });
+    await act(async () => { await result.current.run(experimentPath, documents); });
     expect(result.current.problem?.message).toBe("boom");
     act(() => result.current.reset());
     expect(result.current.job).toBeNull();
@@ -124,29 +130,30 @@ describe("useRun", () => {
         await newGate.promise;
         return { status: 202, body: job("FAILED", { id: "job-2", experiment: newerPath, error: "new failure" }) };
       }
-      if (url === "/api/v1/jobs/job-1" || url === "/api/v1/runs/run-1/summary") {
+      if (url === "/api/v1/jobs/job-1" || url === "/api/v1/runs/run-1/summary" || url === "/api/v1/runs/run-1/manifest") {
         reached.release();
         await oldGate.promise;
-        return { body: stage === "poll" ? job("COMPLETED") : summary };
+        return { body: stage === "poll" ? job("COMPLETED") : url.includes("/summary") ? summary : manifest };
       }
       throw new Error(`Unexpected request: ${url}`);
     });
     const { result } = renderHook(() => useRun(1));
     let oldRun!: Promise<void>;
-    act(() => { oldRun = result.current.run(experimentPath); });
+    act(() => { oldRun = result.current.run(experimentPath, documents); });
     await act(async () => { await reached.promise; });
     expect(result.current.running).toBe(true);
 
     let newRun: Promise<void> = Promise.resolve();
     act(() => {
       if (action === "reset") result.current.reset();
-      else newRun = result.current.run(newerPath);
+      else newRun = result.current.run(newerPath, documents);
     });
     oldGate.release();
     await act(async () => { await oldRun; });
 
     expect(result.current.job).toBeNull();
     expect(result.current.summary).toBeNull();
+    expect(result.current.manifest).toBeNull();
     expect(result.current.problem).toBeNull();
     expect(result.current.experiment).toBe(action === "reset" ? null : newerPath);
     expect(result.current.running).toBe(action === "newer run");
@@ -164,13 +171,13 @@ describe("useRun", () => {
     const gate = deferred();
     let submissions = 0;
     stubFetch(async (url) => {
-      if (url !== "/api/v1/jobs") return { body: summary };
+      if (url !== "/api/v1/jobs") return { body: url.includes("/summary") ? summary : manifest };
       if (++submissions > 1) await gate.promise;
       return { status: 202, body: job("COMPLETED") };
     });
     const result = await run();
     let pending!: Promise<void>;
-    act(() => { pending = result.current.run(experimentPath); });
+    act(() => { pending = result.current.run(experimentPath, documents); });
     expect(result.current.job).toBeNull();
     expect(result.current.summary).toBeNull();
     expect(result.current.problem).toBeNull();
@@ -178,5 +185,153 @@ describe("useRun", () => {
     gate.release();
     await act(async () => { await pending; });
     await waitFor(() => expect(result.current.summary).toEqual(summary));
+  });
+
+  it("cancels an active job without reporting a failure", async () => {
+    let cancelRequested = false;
+    const fetchMock = stubFetch((url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        cancelRequested = true;
+        return { status: 202, body: job("RUNNING", { cancelRequested: true }) };
+      }
+      if (url === "/api/v1/jobs/job-1") {
+        return { body: job(cancelRequested ? "CANCELLED" : "RUNNING", { cancelRequested }) };
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+
+    await act(async () => { await result.current.cancel(); });
+    expect(result.current.job?.cancelRequested).toBe(true);
+    await act(async () => { await pending; });
+
+    expect(result.current.job?.status).toBe("CANCELLED");
+    expect(result.current.problem).toBeNull();
+    expect(result.current.running).toBe(false);
+    expect(result.current.summary).toBeNull();
+    expect(result.current.manifest).toBeNull();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/cancel"))).toHaveLength(1);
+  });
+
+  it("treats JOB_FINISHED as a race and loads the completed result", async () => {
+    let finished = false;
+    stubFetch((url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        finished = true;
+        return { status: 409, body: { code: "JOB_FINISHED", message: "Job already finished", diagnostics: [] } };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job(finished ? "COMPLETED" : "RUNNING") };
+      if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+
+    await act(async () => { await result.current.cancel(); });
+    expect(result.current.job?.status).toBe("COMPLETED");
+    expect(result.current.problem).toBeNull();
+    await act(async () => { await pending; });
+    expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+  });
+
+  it("keeps the terminal job when a delayed cancellation response arrives after the terminal poll", async () => {
+    const response = deferred();
+    let requested = false;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        requested = true;
+        await response.promise;
+        return { status: 202, body: job("RUNNING", { cancelRequested: true }) };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job(requested ? "CANCELLED" : "RUNNING", { cancelRequested: requested }) };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = result.current.cancel(); });
+
+    await act(async () => { await pending; });
+    expect(result.current.job?.status).toBe("CANCELLED");
+    expect(result.current.running).toBe(false);
+    response.release();
+    await act(async () => { await cancelling; });
+    expect(result.current.job?.status).toBe("CANCELLED");
+    expect(result.current.running).toBe(false);
+    expect(result.current.problem).toBeNull();
+  });
+
+  it("ignores a delayed cancellation error after completed artifacts load", async () => {
+    const failure = deferred();
+    let finished = false;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        finished = true;
+        await failure.promise;
+        return { status: 500, body: { code: "CANCEL_FAILED", message: "Cancel failed", diagnostics: [] } };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job(finished ? "COMPLETED" : "RUNNING") };
+      if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = result.current.cancel(); });
+
+    await act(async () => { await pending; });
+    expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+    failure.release();
+    await act(async () => { await cancelling; });
+    expect(result.current.job?.status).toBe("COMPLETED");
+    expect(result.current.problem).toBeNull();
+    expect(result.current.summary).toEqual(summary);
+    expect(result.current.manifest).toEqual(manifest);
+  });
+
+  it("ignores a late cancellation response after reset", async () => {
+    const gate = deferred();
+    let cancelCalls = 0;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: job("RUNNING") };
+      if (url === "/api/v1/jobs/job-1/cancel" && init?.method === "POST") {
+        cancelCalls += 1;
+        await gate.promise;
+        return { status: 202, body: job("RUNNING", { cancelRequested: true }) };
+      }
+      if (url === "/api/v1/jobs/job-1") return { body: job("RUNNING") };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, documents); });
+    await waitFor(() => expect(result.current.job?.status).toBe("RUNNING"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = result.current.cancel(); });
+    await waitFor(() => expect(cancelCalls).toBe(1));
+
+    act(() => result.current.reset());
+    gate.release();
+    await act(async () => { await cancelling; await pending; });
+    expect(result.current.job).toBeNull();
+    expect(result.current.problem).toBeNull();
+    expect(result.current.running).toBe(false);
   });
 });

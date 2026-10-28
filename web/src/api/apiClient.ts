@@ -7,6 +7,7 @@ import type {
   DocumentView,
   HealthView,
   JobView,
+  RunManifest,
   RunSummary,
   SeriesIndex,
   ValidationView,
@@ -73,10 +74,12 @@ export const api = {
     request<ValidationView>("/api/v1/validate", json("POST", { experiment, drafts })),
   submitJob: (experiment: string) => request<JobView>("/api/v1/jobs", json("POST", { experiment })),
   job: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}`),
+  cancelJob: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   runSummary: (runId: string) => request<RunSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/summary`),
   seriesIndex: (runId: string, variant: string, cell: string, replication: number, abort?: AbortSignal) =>
     request<SeriesIndex>(seriesUrl(runId, variant, cell, replication), signal(abort)),
   /** Browser fetch decompresses gzip; the worker, not this client, parses the returned JSON text. */
   seriesPart: (runId: string, variant: string, cell: string, replication: number, part: number, abort?: AbortSignal) =>
     requestText(`${seriesUrl(runId, variant, cell, replication)}/${part}`, signal(abort)),
+  runManifest: (runId: string) => request<RunManifest>(`/api/v1/runs/${encodeURIComponent(runId)}/manifest`),
 };
