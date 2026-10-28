@@ -376,7 +376,7 @@ describe("workspace change polling", () => {
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
     pauseList = true;
-    let polling!: Promise<void>;
+    let polling!: Promise<unknown>;
     await act(async () => {
       polling = vi.advanceTimersByTimeAsync(1000);
       await listStarted.promise;
