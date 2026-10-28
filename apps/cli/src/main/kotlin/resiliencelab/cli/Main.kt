@@ -1,6 +1,10 @@
 package resiliencelab.cli
 
+import kotlinx.serialization.json.Json
+import resiliencelab.core.catalog.Catalog
+import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.compiler.Diagnostic
+import resiliencelab.core.document.DocumentSchemas
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.experiment.MetricSummary
 import resiliencelab.core.lab.InvalidExperimentException
@@ -16,7 +20,12 @@ import java.util.Locale
 import java.util.concurrent.CancellationException
 import kotlin.system.exitProcess
 
-private const val USAGE = "Usage: validate <experiment.json> | run [--workers N] <experiment.json>"
+private const val USAGE =
+    "Usage: validate <experiment.json> | run [--workers N] <experiment.json> | " +
+        "catalog | schema <model|layout|experiment>"
+
+private val apiJson = Json { encodeDefaults = true }
+private val documentKinds = setOf("model", "layout", "experiment")
 
 /** Runs one command against the current directory as the workspace and exits with its status. */
 fun main(args: Array<String>) {
@@ -41,9 +50,10 @@ internal typealias ExperimentRun = (
 ) -> RunOutcome
 
 /**
- * Validates or runs an experiment of the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
+ * Executes one CLI command against the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
  * 2 for usage errors and invalid experiments, 1 for execution failures, 130 for cancellation. `run` writes the artifact to `.results/`,
- * progress to [stderr], and the run directory followed by one summary line per variant to [stdout].
+ * progress to [stderr], and the run directory followed by one summary line per variant to [stdout]. `catalog` and `schema`
+ * print core-generated JSON without opening the workspace.
  */
 internal fun runCommand(
     args: List<String>,
@@ -56,6 +66,10 @@ internal fun runCommand(
         lab.run(experiment, runId, isCancelled = cancelled, onProgress = onProgress)
     },
 ): Int {
+    when {
+        args == listOf("catalog") -> return printCatalog(stdout)
+        args.size == 2 && args[0] == "schema" && args[1] in documentKinds -> return printSchema(args[1], stdout)
+    }
     val command = Command.parse(args) ?: return usage(stderr)
     val root = workspaceRoot.toAbsolutePath().normalize()
     val experiment =
@@ -70,6 +84,19 @@ internal fun runCommand(
             validate(lab, experiment, stderr)
         }
     }
+}
+
+private fun printCatalog(stdout: Appendable): Int {
+    stdout.appendLine(apiJson.encodeToString(Catalog.serializer(), Stage1Catalog.catalog))
+    return 0
+}
+
+private fun printSchema(
+    kind: String,
+    stdout: Appendable,
+): Int {
+    stdout.append(DocumentSchemas().generate().getValue("$kind.schema.json"))
+    return 0
 }
 
 private class Command(
