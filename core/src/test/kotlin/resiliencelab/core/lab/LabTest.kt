@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
+import resiliencelab.core.workspace.Workspace
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
@@ -62,6 +63,34 @@ class LabTest {
             }.isInstanceOf(CancellationException::class.java)
         }
         assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `caller interruption after summary creation still completes the manifest`() {
+        val root = exampleWorkspace()
+        val caller = Thread.currentThread()
+        val files = FileWorkspace(root)
+        val workspace =
+            object : Workspace by files {
+                override fun create(
+                    path: String,
+                    text: String,
+                ): String {
+                    val version = files.create(path, text)
+                    if (path.endsWith("/summary.json")) caller.interrupt()
+                    return version
+                }
+            }
+
+        try {
+            val outcome = Lab(workspace).use { it.run(experiment, "run-1") }
+            assertThat(Thread.interrupted()).isTrue()
+            assertThat(outcome.manifest.complete).isTrue()
+            assertThat(root.resolve("${outcome.runDirectory}/summary.json")).isRegularFile()
+            assertThat(root.resolve("${outcome.runDirectory}/manifest.json")).isRegularFile()
+        } finally {
+            Thread.interrupted()
+        }
     }
 
     @Test

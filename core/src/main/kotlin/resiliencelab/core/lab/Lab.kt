@@ -21,6 +21,8 @@ import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import java.io.IOException
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
 
 /** Diagnostics and versions of the computation inputs of one experiment. */
 data class ValidationReport(
@@ -72,6 +74,7 @@ class Lab(
      * Runs a valid experiment and writes its reproducible result artifact under the workspace results directory.
      * [isCancelled] must be fast and thread-safe. Cancellation is accepted until artifact writing starts;
      * a cancelled run writes no files. Once writing starts, it finishes without further cancellation checks.
+     * Caller interruptions during writing are restored after the write, without interrupting file I/O.
      * @throws CancellationException if cancellation is observed before writing the artifact.
      */
     fun run(
@@ -133,7 +136,31 @@ class Lab(
                 complete = true,
             )
         checkCancellation(isCancelled)
-        return RunOutcome(runDirectory, ArtifactWriter(workspace).write(runDirectory, manifest, summary), summary)
+        return RunOutcome(runDirectory, writeArtifact(runDirectory, manifest, summary), summary)
+    }
+
+    /** After the final cancellation check, keep caller interruptions away from interruptible workspace file I/O. */
+    private fun writeArtifact(
+        runDirectory: String,
+        manifest: RunManifest,
+        summary: RunSummary,
+    ): RunManifest {
+        val write = FutureTask { ArtifactWriter(workspace).write(runDirectory, manifest, summary) }
+        Thread.ofVirtual().name("artifact-write").start(write)
+        var interrupted = false
+        try {
+            while (true) {
+                try {
+                    return write.get()
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                } catch (exception: ExecutionException) {
+                    throw exception.cause ?: exception
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
+        }
     }
 
     private class Loaded(

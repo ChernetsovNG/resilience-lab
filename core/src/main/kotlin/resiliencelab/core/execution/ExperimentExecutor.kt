@@ -55,6 +55,7 @@ class ExperimentExecutor internal constructor(
      * Runs tasks in variant/replication order within this job. [isCancelled] must be fast and thread-safe;
      * it is checked before tasks start and at most every 25 ms while the caller waits. Cancellation interrupts
      * this job's active workers; KSL models stop at the next event boundary. Other jobs keep their turns.
+     * Progress callbacks run on workers and must return promptly or honor interruptions when blocking.
      * @throws CancellationException if cancellation is observed or the calling thread is interrupted.
      */
     fun run(
