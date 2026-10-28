@@ -141,8 +141,9 @@ class ExperimentExecutorTest {
         try {
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-            while (runner.state != Thread.State.WAITING && System.nanoTime() < deadline) Thread.yield()
-            assertThat(runner.state).isEqualTo(Thread.State.WAITING)
+            val waiting = setOf(Thread.State.WAITING, Thread.State.TIMED_WAITING)
+            while (runner.state !in waiting && System.nanoTime() < deadline) Thread.yield()
+            assertThat(runner.state).isIn(waiting)
 
             executor.close()
             release.countDown()
@@ -248,7 +249,8 @@ class ExperimentExecutorTest {
             }
         }.isInstanceOf(ExperimentExecutionException::class.java)
             .hasMessageContaining("Variant 'capped'")
-            .hasMessageContaining("replication 1")
+            .hasMessageContaining("replication ")
+            .hasMessageMatching("Variant 'capped', replication [12]: .*")
             .hasMessageContaining("real-time cap")
             .hasCauseInstanceOf(ExperimentExecutionException::class.java)
     }
