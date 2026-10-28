@@ -22,6 +22,28 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={wide} />);
     expect(screen.getByRole("row", { name: /Baseline/ }).textContent).toContain("50.0% (95% CI -20.0%–120.0%)");
   });
+
+  it("shows an insight in every variant and point row", () => {
+    const run = structuredClone(summary);
+    run.variants[0].points.push({
+      ...run.variants[0].points[0], id: "p1", saturation: {
+        ...noSaturation, withoutSaturation: 1,
+        firstNodes: [{ node: "dependency", replicationCount: 1, medianStartMs: 80, minStartMs: 80, maxStartMs: 80 }],
+        replications: [
+          { replication: 0, degradationPath: [{ node: "dependency", startMs: 80 }] },
+          { replication: 1, degradationPath: [] },
+        ],
+      },
+    });
+    render(<SummaryTable summary={run} />);
+    for (const label of [/Baseline/, /No retries/]) {
+      const row = within(screen.getAllByRole("row", { name: label })[0]);
+      expect(row.getByText("No saturation.")).toBeTruthy();
+      expect(row.getByText("2 of 2 replications without saturation.")).toBeTruthy();
+    }
+    const saturated = within(screen.getByRole("row", { name: /Baseline p1/ }));
+    expect(saturated.getByText("dependency first in 1 of 2 replications; median start 80.0 ms, range 80.0–80.0 ms.")).toBeTruthy();
+  });
 });
 
 describe("ProblemList", () => {

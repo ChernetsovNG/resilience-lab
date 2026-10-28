@@ -19,6 +19,7 @@ export type MetricSummary = Schemas["MetricSummary"];
 export type ModelFile = Schemas["ModelFile"];
 export type ParamDescriptor = Schemas["ParamDescriptor"];
 export type RunSummary = Schemas["RunSummary"];
+export type SaturationSummary = Schemas["SaturationSummary"];
 export type SeriesIndex = Schemas["SeriesIndex"];
 export type SeriesPart = Schemas["SeriesPart"];
 export type TypeDescriptor = Schemas["TypeDescriptor"];

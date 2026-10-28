@@ -1,4 +1,5 @@
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
+import { SaturationInsight } from "../results/SaturationInsight";
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const millis = (value: number) => `${value.toFixed(1)} ms`;
@@ -32,6 +33,7 @@ export function SummaryTable({ summary }: { summary: RunSummary }) {
               {service} admitted ×
             </th>
           ))}
+          <th scope="col">Saturation insight</th>
         </tr>
       </thead>
       <tbody>
@@ -49,6 +51,7 @@ export function SummaryTable({ summary }: { summary: RunSummary }) {
             {services.map((service) => (
               <td key={service}>{metric(point.aggregate.services[service]?.admittedAmplification, times)}</td>
             ))}
+            <td><SaturationInsight saturation={point.saturation} replications={variant.replications} /></td>
           </tr>
         ))}
       </tbody>
