@@ -2,7 +2,6 @@ package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
-import resiliencelab.core.scenario.RetrySpec
 import kotlin.math.pow
 
 /**
@@ -30,11 +29,4 @@ object RetryPolicyEvaluator {
             }
         }
     }
-
-    /** MVP overload; removed with the `scenario` package. */
-    fun backoffMs(
-        retry: RetrySpec,
-        failedAttemptNumber: Int,
-        jitter: () -> Double,
-    ): Double = backoffMs(LegacyScenarioAdapter.backoff(retry), failedAttemptNumber, jitter)
 }

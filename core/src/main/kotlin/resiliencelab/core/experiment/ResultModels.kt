@@ -1,27 +1,6 @@
 package resiliencelab.core.experiment
 
 import kotlinx.serialization.Serializable
-import resiliencelab.core.scenario.SweepParameter
-
-/** Versioned experiment output containing both replication-level evidence and variant aggregates. */
-@Serializable
-data class ExperimentResult(
-    val schemaVersion: Int,
-    val applicationVersion: String,
-    val kslVersion: String,
-    val variants: List<VariantResult>,
-)
-
-/** Results for one scenario, retaining independent replications alongside their aggregate. */
-@Serializable
-data class VariantResult(
-    val id: String,
-    val label: String,
-    val sweepParameter: SweepParameter? = null,
-    val sweepValue: Double? = null,
-    val replications: List<ReplicationResult>,
-    val aggregate: AggregateMetrics,
-)
 
 /**
  * A fully drained replication for the cohort arriving during the measurement interval.

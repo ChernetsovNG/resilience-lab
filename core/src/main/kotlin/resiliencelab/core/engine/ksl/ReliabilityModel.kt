@@ -7,8 +7,6 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.Scenario
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -26,19 +24,6 @@ class ReliabilityModel(
     private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
 ) : ProcessModel(model) {
-    /** MVP constructor: maps [scenario] onto the chain IR with the MVP stream numbering; removed together with the MVP API. */
-    constructor(
-        model: Model,
-        scenario: Scenario,
-        execution: Execution,
-        onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
-    ) : this(
-        model,
-        LegacyScenarioAdapter.chain(scenario, execution),
-        LegacyScenarioAdapter.streams(model, scenario, execution.seed),
-        onReplicationCompleted,
-    )
-
     private val measurementStartMs = chain.run.warmupMs
     private val measurementEndMs = chain.run.warmupMs + chain.run.measurementMs
 

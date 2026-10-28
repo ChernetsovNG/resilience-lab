@@ -17,23 +17,6 @@ internal class ArrivalGenerator(
     measurementMs: Double,
     private val stream: RNStreamIfc,
 ) : ModelElement(reliabilityModel, "workload:arrival-generator") {
-    /** MVP overload; removed with the `scenario` package. */
-    constructor(
-        reliabilityModel: ReliabilityModel,
-        entryServiceId: String,
-        arrivalRate: Double,
-        warmupMs: Double,
-        measurementMs: Double,
-        streamNum: Int,
-    ) : this(
-        reliabilityModel,
-        entryServiceId,
-        arrivalRate,
-        warmupMs,
-        measurementMs,
-        reliabilityModel.streamProvider.rnStream(streamNum),
-    )
-
     private val meanInterArrivalMs = 1 / arrivalRate
     private val arrivalEndMs = warmupMs + measurementMs
     private val arrivalAction =
