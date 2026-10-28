@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/apiClient";
-import type { ApiProblem, DocumentDraft, ValidationView } from "../api/apiTypes";
-import { dirtyDocuments, type LoadedExperiment } from "../workspace/editor";
+import type { ApiProblem, ValidationView } from "../api/apiTypes";
+import { documentDrafts, type LoadedExperiment } from "../workspace/editor";
 import { problemOf } from "../workspace/useWorkspace";
 
 interface ValidationState {
@@ -18,11 +18,7 @@ export function useValidation(loaded: LoadedExperiment | null) {
     if (loaded === null) return;
     let active = true;
     const timer = window.setTimeout(() => {
-      const changed = dirtyDocuments(loaded);
-      const drafts: DocumentDraft[] = (["model", "layout", "experiment"] as const)
-        .filter((kind) => changed[kind])
-        .map((kind) => ({ path: loaded[`${kind}Path`], content: { [kind]: loaded[kind] } }));
-      void api.validate(loaded.experimentPath, drafts).then(
+      void api.validate(loaded.experimentPath, documentDrafts(loaded)).then(
         (report) => { if (active) setState({ snapshot: loaded, report, problem: null }); },
         (error: unknown) => { if (active) setState({ snapshot: loaded, report: null, problem: problemOf(error) }); },
       );

@@ -5,7 +5,7 @@ import { TopBar, type TopBarProps } from "./TopBar";
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
   return { experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
-    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), onCancel: vi.fn(), job: null, health: null, healthError: null, ...overrides };
+    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), estimating: false, onEstimate: vi.fn(), canResume: false, onResume: vi.fn(), onCancel: vi.fn(), job: null, health: null, healthError: null, ...overrides };
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });

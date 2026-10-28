@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
+import type { ExperimentEstimate, ExperimentFile, JobView, ModelFile } from "../src/api/apiTypes";
 
 const experiment = "retry-storm/retry-storm.experiment.json";
 const model = "retry-storm/retry-storm.model.json";
@@ -415,7 +415,7 @@ test("shows summary, assumptions and every results panel size without page scrol
   await expectNoPageScroll(page);
 });
 
-test("cancels a long run from the UI and enables Run again", async ({ page }) => {
+test("cancels a long run from the UI and resumes it to Summary", async ({ page, request }) => {
   const path = "cancel-run/long.experiment.json";
   await withExperimentFixture(path, (document) => {
     document.execution.replications = 50;
@@ -427,7 +427,10 @@ test("cancels a long run from the UI and enables Run again", async ({ page }) =>
     await page.getByLabel("Experiment").selectOption(path);
     const run = page.getByRole("button", { name: "Run", exact: true });
     await expect(run).toBeEnabled();
+    const submitted = page.waitForResponse((response) => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");
     await run.click();
+    const job: JobView = await (await submitted).json();
+    await expect.poll(async () => (await (await request.get(`/api/v1/jobs/${job.id}`)).json()).completedTasks).toBeGreaterThan(0);
     const cancel = page.getByRole("button", { name: "Cancel", exact: true });
     await expect(cancel).toBeVisible();
     await cancel.click();
@@ -437,6 +440,14 @@ test("cancels a long run from the UI and enables Run again", async ({ page }) =>
     await expect(page.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeVisible();
     await expect(page.getByRole("table", { name: "Summary" })).toHaveCount(0);
     await expect(cancel).toHaveCount(0);
+    const resume = page.getByRole("button", { name: "Resume", exact: true });
+    await expect(resume).toBeEnabled();
+    await resume.click();
+    await expect(page.getByRole("table", { name: "Summary" })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+    await expect(resume).toHaveCount(0);
+    const result = await (await request.get(`/api/v1/runs/${job.runId}/manifest`)).json();
+    expect(result.complete).toBe(true);
     await expectNoPageScroll(page);
   });
 });
@@ -540,5 +551,99 @@ test("keeps toolbar actions and health visible for a long experiment path in cle
     await expect(page.getByText("Unsaved changes")).toBeHidden();
     await expectToolbarContained();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  });
+});
+
+
+test("estimates saved documents and unsaved drafts exactly as the API without starting a run", async ({ page, request }, testInfo) => {
+  const display = async (estimate: ExperimentEstimate) => {
+    const panel = page.getByRole("region", { name: "Cost estimate" });
+    await expect(panel).toBeVisible();
+    const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 3 });
+    for (const [label, expected] of [
+      ["Tasks", number(estimate.tasks)], ["Workers", number(estimate.workers)],
+      ["Expected events", number(estimate.expectedEvents)], ["Expected rows", number(estimate.expectedRows)],
+      ["Estimated time", `${number(estimate.estimatedSeconds)} s`],
+      ["Uncompressed size", `${number(estimate.estimatedUncompressedBytes)} B`],
+      ["Artifact size", `${number(estimate.estimatedArtifactBytes)} B`], ["Parts", number(estimate.estimatedParts)],
+    ]) await expect(panel.getByLabel(label, { exact: true })).toHaveText(expected);
+    for (const warning of estimate.warnings) await expect(panel).toContainText(warning.message);
+  };
+  const estimate = async () => {
+    const response = page.waitForResponse((response) => response.url().endsWith("/api/v1/estimate") && response.request().method() === "POST");
+    await page.getByRole("button", { name: "Estimate", exact: true }).click();
+    return response;
+  };
+  let jobs = 0;
+  page.on("request", (request) => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  const saved = await estimate();
+  const savedBody: ExperimentEstimate = await saved.json();
+  const fromApi = await request.post("/api/v1/estimate", { data: { experiment, drafts: [] } });
+  expect(savedBody).toEqual(await fromApi.json());
+  await display(savedBody);
+
+  const path = "estimate-drafts/drafts.experiment.json";
+  await withExperimentFixture(path, () => {}, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    const modelUrl = `/api/v1/workspace/document?path=${encodeURIComponent("estimate-drafts/fixture.model.json")}`;
+    const original = await (await request.get(modelUrl)).json();
+    await page.getByTestId("rf__node-gateway").click();
+    const handlers = page.getByLabel("Handlers", { exact: true });
+    await handlers.fill("5"); await handlers.press("Enter");
+    await page.getByText("Experiment settings (shared)", { exact: true }).click();
+    const seed = page.getByLabel("Seed", { exact: true });
+    await seed.fill("42"); await seed.press("Enter");
+    const draft = await estimate();
+    const input = draft.request().postDataJSON();
+    expect(input.drafts).toHaveLength(2);
+    const expected = await request.post("/api/v1/estimate", { data: input });
+    const result = await draft.json();
+    expect(result).toEqual(await expected.json());
+    await display(result);
+    expect(await (await request.get(modelUrl)).json()).toEqual(original);
+    expect(jobs).toBe(0);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+    await expectNoPageScroll(page);
+    await page.screenshot({ path: testInfo.outputPath("cost-estimate-drafts.png") });
+  });
+});
+
+test("refuses resume after the model changes and suggests a new run", async ({ page, request }) => {
+  const path = "resume-changed/changed.experiment.json";
+  await withExperimentFixture(path, (document) => {
+    document.execution.replications = 50;
+    document.execution.measurement = "10s";
+    document.execution.window = "100ms";
+    document.execution.maxRealTime = "60s";
+  }, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    const run = page.getByRole("button", { name: "Run", exact: true });
+    await expect(run).toBeEnabled();
+    const submitted = page.waitForResponse((response) => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");
+    await run.click();
+    const job: JobView = await (await submitted).json();
+    await expect.poll(async () => (await (await request.get(`/api/v1/jobs/${job.id}`)).json()).completedTasks).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText("CANCELLED", { timeout: 60_000 });
+    const resume = page.getByRole("button", { name: "Resume", exact: true });
+    await expect(resume).toBeEnabled();
+    await page.getByTestId("rf__node-gateway").click();
+    const handlers = page.getByLabel("Handlers", { exact: true });
+    await handlers.fill("5"); await handlers.press("Enter");
+    await expect(resume).toBeDisabled();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(resume).toBeEnabled();
+    await page.getByRole("tab", { name: "Assumptions", exact: true }).click();
+    await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+    await resume.click();
+    const problem = page.getByRole("alert");
+    await expect(problem).toContainText("RUN_DOCUMENT_CHANGED");
+    await expect(problem).toContainText("Start a new run");
+    await expect(run).toBeEnabled();
+    await expect(page.getByRole("table", { name: "Summary" })).toHaveCount(0);
+    await expectNoPageScroll(page);
   });
 });

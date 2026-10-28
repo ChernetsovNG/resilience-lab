@@ -1,3 +1,4 @@
+import type { components } from "../api/schema";
 import type {
   Catalog,
   DocumentView,
@@ -253,4 +254,10 @@ export const manifest: RunManifest = {
     replicationBasis: "measurement-cohort-with-run-out",
     points: [{ id: "p0", coordinates: {} }],
   },
+};
+
+export const costEstimate: components["schemas"]["ExperimentEstimate"] = {
+  tasks: 4, expectedEvents: 12345, expectedRows: 400, workers: 2,
+  estimatedSeconds: 1.25, estimatedUncompressedBytes: 204800,
+  estimatedArtifactBytes: 51200, estimatedParts: 4, warnings: [],
 };

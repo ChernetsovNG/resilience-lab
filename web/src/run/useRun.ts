@@ -18,13 +18,14 @@ export interface Run {
   problem: ApiProblem | null;
   running: boolean;
   run: (experimentPath: string, documents: RunDocuments) => Promise<void>;
+  resume: () => Promise<void>;
   cancel: () => Promise<void>;
   reset: () => void;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Submits and polls a job, then loads its summary and manifest; terminal state is authoritative within each generation. */
+/** Submits or resumes a job and loads its artifacts; terminal state is authoritative within each generation. */
 export function useRun(pollMs = 500): Run {
   const [experiment, setExperiment] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
@@ -55,18 +56,14 @@ export function useRun(pollMs = 500): Run {
     setRunning(false);
   }, []);
 
-  const run = useCallback(async (experimentPath: string, submitted: RunDocuments) => {
+  const track = useCallback(async (submit: () => Promise<JobView>, resuming = false) => {
     const current = ++generation.current;
     const live = () => current === generation.current;
-    setExperiment(experimentPath);
-    setJob(null);
     setSummary(null);
-    setManifest(null);
-    setDocuments(submitted);
     setProblem(null);
     setRunning(true);
     try {
-      let next = await api.submitJob(experimentPath);
+      let next = await submit();
       while (next.status === "QUEUED" || next.status === "RUNNING") {
         if (!live()) return;
         publishJob(current, next);
@@ -83,15 +80,43 @@ export function useRun(pollMs = 500): Run {
           setSummary(loadedSummary);
           setManifest(loadedManifest);
         }
-      } else if (next.status !== "CANCELLED") {
-        setProblem({ code: "JOB_FAILED", message: next.error ?? "Job failed", diagnostics: next.diagnostics });
+      } else {
+        if (next.status === "FAILED") {
+          setProblem({ code: "JOB_FAILED", message: `${next.error ?? "Job failed"}${resuming ? " Start a new run with Run." : ""}`, diagnostics: next.diagnostics });
+        }
+        try {
+          const loadedManifest = await api.runManifest(next.runId);
+          if (live()) setManifest(loadedManifest);
+        } catch (error) {
+          // A queued cancellation or a preflight failure may create no artifact.
+          if (live() && next.status === "CANCELLED" && !(error instanceof ApiError && error.status === 404)) {
+            setProblem(problemOf(error));
+          }
+        }
       }
     } catch (error) {
-      if (live()) setProblem(problemOf(error));
+      if (live()) {
+        const failure = problemOf(error);
+        const restart = resuming && error instanceof ApiError && (error.status === 400 || failure.code === "RUN_COMPLETE");
+        setProblem({ ...failure, message: `${failure.message}${restart ? " Start a new run with Run." : ""}` });
+      }
     } finally {
       if (live()) setRunning(false);
     }
   }, [pollMs, publishJob]);
+
+  const run = useCallback(async (experimentPath: string, submitted: RunDocuments) => {
+    setExperiment(experimentPath);
+    setJob(null);
+    setManifest(null);
+    setDocuments(submitted);
+    await track(() => api.submitJob(experimentPath));
+  }, [track]);
+
+  const resume = useCallback(async () => {
+    if (job === null || manifest?.complete !== false || (job.status !== "CANCELLED" && job.status !== "FAILED")) return;
+    await track(() => api.resumeRun(job.runId), true);
+  }, [job, manifest, track]);
 
   const cancel = useCallback(async () => {
     if (job === null || (job.status !== "QUEUED" && job.status !== "RUNNING")) return;
@@ -115,5 +140,5 @@ export function useRun(pollMs = 500): Run {
     }
   }, [job, publishJob]);
 
-  return { experiment, job, summary, manifest, documents, problem, running, run, cancel, reset };
+  return { experiment, job, summary, manifest, documents, problem, running, run, resume, cancel, reset };
 }

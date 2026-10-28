@@ -658,3 +658,32 @@ select {
   border-radius: 0.35rem;
   background: #fffbeb;
 }
+
+
+.cost-estimate {
+  margin: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.35rem;
+  background: #f8fafc;
+  font-size: 0.8rem;
+}
+
+.cost-estimate dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+}
+
+.cost-estimate dt {
+  color: #52606d;
+}
+
+.cost-estimate dd {
+  margin: 0;
+}
+
+.cost-estimate ul {
+  margin-bottom: 0;
+}

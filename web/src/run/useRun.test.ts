@@ -69,7 +69,9 @@ describe("useRun", () => {
   });
 
   it.each(["Experiment execution failed", null])("reports a failed job with error %s", async (error) => {
-    const fetchMock = stubFetch(() => ({ status: 202, body: job("FAILED", { error, diagnostics: [diagnostic] }) }));
+    const fetchMock = stubFetch((url) => url === "/api/v1/jobs"
+      ? { status: 202, body: job("FAILED", { error, diagnostics: [diagnostic] }) }
+      : { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } });
 
     const result = await run();
 
@@ -77,7 +79,7 @@ describe("useRun", () => {
     expect(result.current.summary).toBeNull();
     expect(result.current.job?.status).toBe("FAILED");
     expect(result.current.running).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/summary"))).toBe(false);
   });
 
   it.each(["poll", "summary"])("reports a network error during %s", async (stage) => {
@@ -198,6 +200,7 @@ describe("useRun", () => {
       if (url === "/api/v1/jobs/job-1") {
         return { body: job(cancelRequested ? "CANCELLED" : "RUNNING", { cancelRequested }) };
       }
+      if (url === "/api/v1/runs/run-1/manifest") return { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } };
       throw new Error(`Unexpected request: ${url}`);
     });
     const { result } = renderHook(() => useRun(1));
@@ -254,6 +257,7 @@ describe("useRun", () => {
         return { status: 202, body: job("RUNNING", { cancelRequested: true }) };
       }
       if (url === "/api/v1/jobs/job-1") return { body: job(requested ? "CANCELLED" : "RUNNING", { cancelRequested: requested }) };
+      if (url === "/api/v1/runs/run-1/manifest") return { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } };
       throw new Error(`Unexpected request: ${url}`);
     });
     const { result } = renderHook(() => useRun(1));
@@ -334,4 +338,57 @@ describe("useRun", () => {
     expect(result.current.problem).toBeNull();
     expect(result.current.running).toBe(false);
   });
+});
+
+
+it("cancels a resumed job using its new job ID and keeps the original run documents", async () => {
+  let cancelled = false;
+  const fetchMock = stubFetch((url, init) => {
+    if (url === "/api/v1/jobs") return { status: 202, body: job("CANCELLED") };
+    if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
+    if (url === "/api/v1/runs/run-1/resume" && init?.method === "POST") return { status: 202, body: job("RUNNING", { id: "resume-1" }) };
+    if (url === "/api/v1/jobs/resume-1/cancel" && init?.method === "POST") {
+      cancelled = true;
+      return { status: 202, body: job("RUNNING", { id: "resume-1", cancelRequested: true }) };
+    }
+    if (url === "/api/v1/jobs/resume-1") return { body: job(cancelled ? "CANCELLED" : "RUNNING", { id: "resume-1", cancelRequested: cancelled }) };
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const result = await run();
+  expect(result.current.manifest?.complete).toBe(false);
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.resume(); });
+  await waitFor(() => expect(result.current.job?.id).toBe("resume-1"));
+  await act(async () => { await result.current.cancel(); await pending; });
+  expect(result.current.job?.status).toBe("CANCELLED");
+  expect(result.current.manifest?.complete).toBe(false);
+  expect(result.current.summary).toBeNull();
+  expect(result.current.problem).toBeNull();
+  expect(result.current.documents).toEqual(documents);
+  expect(result.current.experiment).toBe(experimentPath);
+  expect(result.current.running).toBe(false);
+  expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(1);
+});
+
+it("ignores a late resume acceptance after reset", async () => {
+  const gate = deferred();
+  stubFetch(async (url) => {
+    if (url === "/api/v1/jobs") return { status: 202, body: job("CANCELLED") };
+    if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
+    if (url === "/api/v1/runs/run-1/resume") {
+      await gate.promise;
+      return { status: 202, body: job("COMPLETED", { id: "resume-1" }) };
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const result = await run();
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.resume(); });
+  act(() => result.current.reset());
+  await act(async () => { gate.release(); await pending; });
+  expect(result.current.job).toBeNull();
+  expect(result.current.manifest).toBeNull();
+  expect(result.current.summary).toBeNull();
+  expect(result.current.problem).toBeNull();
+  expect(result.current.running).toBe(false);
 });

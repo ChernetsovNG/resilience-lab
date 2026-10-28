@@ -5,6 +5,7 @@ import type {
   DocumentDraft,
   DocumentEntry,
   DocumentView,
+  ExperimentEstimate,
   HealthView,
   JobView,
   RunManifest,
@@ -72,6 +73,9 @@ export const api = {
     request<DocumentEntry>(documentUrl(path), json("PUT", content, version === null ? {} : { "If-Match": `"${version}"` })),
   validate: (experiment: string, drafts: DocumentDraft[] = []) =>
     request<ValidationView>("/api/v1/validate", json("POST", { experiment, drafts })),
+  estimate: (experiment: string, drafts: DocumentDraft[] = []) =>
+    request<ExperimentEstimate>("/api/v1/estimate", json("POST", { experiment, drafts })),
+  resumeRun: (runId: string) => request<JobView>(`/api/v1/runs/${encodeURIComponent(runId)}/resume`, { method: "POST" }),
   submitJob: (experiment: string) => request<JobView>("/api/v1/jobs", json("POST", { experiment })),
   job: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}`),
   cancelJob: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),

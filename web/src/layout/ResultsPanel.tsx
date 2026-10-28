@@ -82,6 +82,7 @@ export function ResultsPanel({
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
+        {problem === null ? null : <ProblemList problem={problem} />}
         {(active === "summary" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
           <label htmlFor={`${id}-point`}>Grid point</label>
           <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
@@ -112,10 +113,8 @@ export function ResultsPanel({
             <Assumptions catalog={catalog} model={model} manifest={manifest} />}
         </> : <>
           {staleNotice}
-          {job?.status === "CANCELLED" ? (
+          {problem !== null ? null : job?.status === "CANCELLED" ? (
             <p className="results-empty">Run cancelled; the run is incomplete and has no summary.</p>
-          ) : problem !== null ? (
-            <ProblemList problem={problem} />
           ) : summary !== null ? (
             <>
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} />

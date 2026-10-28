@@ -20,6 +20,10 @@ export interface TopBarProps {
   onRedo: () => void;
   running: boolean;
   onRun: () => void;
+  estimating: boolean;
+  onEstimate: () => void;
+  canResume: boolean;
+  onResume: () => void;
   onCancel: () => void;
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
@@ -29,7 +33,7 @@ export interface TopBarProps {
 }
 
 /**
- * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run/cancel, job status, backend health. Switching waits
+ * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, estimate, run/resume/cancel, job status, backend health. Switching waits
  * for opening, saving, running and invalid drafts; saving and running wait for valid drafts and saved changes.
  */
 export function TopBar(props: TopBarProps) {
@@ -43,7 +47,7 @@ export function TopBar(props: TopBarProps) {
       <select
         aria-label="Experiment"
         value={experiment ?? ""}
-        disabled={loading || saving || running || invalid}
+        disabled={loading || saving || running || props.estimating || invalid}
         onChange={(event) => onExperiment(event.target.value)}
       >
         {experiment === null ? <option value="">No experiment</option> : null}
@@ -63,15 +67,22 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
         Save
       </button>
+      <button type="button" onClick={props.onEstimate}
+        disabled={experiment === null || loading || saving || invalid || running || props.estimating}>
+        Estimate
+      </button>
       <button
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || loading || saving || dirty || invalid || running || props.runBlockedReason !== undefined}
+        disabled={experiment === null || loading || saving || dirty || invalid || running || props.estimating || props.runBlockedReason !== undefined}
         title={props.runBlockedReason ?? (invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined)}
       >
         Run
       </button>
+      {props.canResume ? <button type="button" onClick={props.onResume}
+        disabled={loading || saving || dirty || invalid || running || props.estimating}
+        title={dirty ? "Save changes before resuming" : undefined}>Resume</button> : null}
       {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>Cancel</button> : null}
       <span className="job-status" data-testid="job-status">
         {job === null ? "" : `${job.status}${active && job.cancelRequested ? " · cancellation requested" : ""}`}
