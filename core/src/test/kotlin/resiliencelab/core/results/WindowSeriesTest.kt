@@ -5,7 +5,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.io.TempDir
+import resiliencelab.core.engine.ksl.AttemptEvent
 import resiliencelab.core.engine.ksl.WindowCollector
+import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.ServiceNode
@@ -17,6 +19,74 @@ import kotlin.test.Test
 
 class WindowSeriesTest {
     @Test
+    fun `consecutive windows fill parts to the byte budget without splitting their nodes`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/packed/series/v/p0/rep-0"
+        val rows =
+            List(12) { window ->
+                listOf("service-a", "service-ё").map { id -> NodeWindow(id, WindowMetrics(window.toDouble(), 1.0, handlers = 1)) }
+            }
+
+        fun expected(
+            from: Int,
+            until: Int,
+        ) = SeriesPart(
+            fromWindow = from,
+            untilWindow = until,
+            nodes = rows.first().mapIndexed { node, row -> NodeSeries(row.id, (from until until).map { rows[it][node].metrics }) },
+        )
+        val json = Json { encodeDefaults = true }
+
+        fun size(part: SeriesPart) = json.encodeToString(SeriesPart.serializer(), part).toByteArray(Charsets.UTF_8).size
+        val budget = (0 until 11).maxOf { size(expected(it, it + 2)) }
+        val writer = SeriesWriter(workspace, directory, 12.0, 1.0, maxPartBytes = budget)
+        rows.forEachIndexed { index, window -> writer.writeWindow(index, window.reversed()) }
+        val index = writer.finish()
+        assertThat(index.parts).hasSize(6)
+        for (part in index.parts) {
+            val bytes = GZIPInputStream(workspace.readBytes("$directory/${part.file}").inputStream()).use { it.readAllBytes() }
+            assertThat(bytes.size).isEqualTo(part.uncompressedBytes).isLessThanOrEqualTo(budget)
+            assertThat(Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8)))
+                .isEqualTo(expected(part.fromWindow, part.untilWindow))
+            assertThat(part.nodes).containsExactly("service-a", "service-ё")
+            if (part.untilWindow < rows.size) assertThat(size(expected(part.fromWindow, part.untilWindow + 1))).isGreaterThan(budget)
+        }
+    }
+
+    @Test
+    fun `queue rejections do not dilute service residence sketches but admitted zero latency remains`() {
+        val closed = mutableListOf<List<NodeWindow>>()
+        val collector = WindowCollector("client", listOf(service()), 20.0, 10.0) { _, rows -> closed += rows }
+        collector.attemptEvent("service", 0.0, AttemptEvent.OFFERED)
+        collector.attemptEvent("service", 0.0, AttemptEvent.ADMITTED)
+        collector.attemptCompletion("service", 4.0, 4.0, true)
+        collector.attemptEvent("service", 5.0, AttemptEvent.OFFERED)
+        collector.attemptEvent("service", 5.0, AttemptEvent.ADMITTED)
+        collector.attemptCompletion("service", 5.0, 0.0, true)
+        repeat(200) {
+            collector.attemptEvent("service", 6.0, AttemptEvent.OFFERED)
+            collector.attemptEvent("service", 6.0, AttemptEvent.QUEUE_REJECTED)
+        }
+        repeat(100) {
+            collector.attemptEvent("service", 12.0, AttemptEvent.OFFERED)
+            collector.attemptEvent("service", 12.0, AttemptEvent.QUEUE_REJECTED)
+        }
+        collector.finish()
+        val mixed = closed[0].single { it.id == "service" }.metrics
+        assertThat(mixed.queueRejections).isEqualTo(200)
+        assertThat(mixed.latency.count).isEqualTo(2L)
+        assertThat(mixed.latency.sumMs).isEqualTo(4.0)
+        assertThat(mixed.latency.sketch[0]).isEqualTo(1L)
+        assertThat(LatencySketch.fromBins(mixed.latency.sketch).percentile(0.95)!!).isCloseTo(4.0, offset(4.0 / 128))
+        val rejected = closed[1].single { it.id == "service" }.metrics
+        assertThat(rejected.queueRejections).isEqualTo(100)
+        assertThat(rejected.latency.count).isZero()
+        assertThat(rejected.latency.sketch).containsExactly(0L)
+    }
+
+    @Test
     fun `fractional explicit and default windows share the collector completeness rule`(
         @TempDir root: Path,
     ) {
@@ -25,7 +95,7 @@ class WindowSeriesTest {
             val collector = WindowCollector("client", listOf(service()), end, step, writer::writeWindow)
             collector.finish()
             val index = writer.finish()
-            assertThat(index.parts).hasSize(expected)
+            assertThat(index.parts).hasSize(1)
             assertThat(index.parts.last().untilWindow).isEqualTo(expected)
         }
     }
@@ -92,7 +162,9 @@ class WindowSeriesTest {
             assertThat(bytes.size).isEqualTo(part.uncompressedBytes).isLessThanOrEqualTo(SeriesWriter.MAX_PART_BYTES)
             val decoded = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
             assertThat(decoded.nodes.map { it.id }).isEqualTo(part.nodes)
+            assertThat(part.untilWindow - part.fromWindow).isEqualTo(1)
             decoded.nodes.forEach { node ->
+                assertThat(node.windows).hasSize(part.untilWindow - part.fromWindow)
                 for (window in part.fromWindow until part.untilWindow) assertThat(covered.add(node.id to window)).isTrue()
             }
         }

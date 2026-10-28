@@ -89,7 +89,7 @@ class Lab(
 
     /**
      * Runs a valid experiment and writes its reproducible result artifact under the workspace results directory.
-     * [isCancelled] must be fast and thread-safe. Closed windows and finished tasks are persisted immediately.
+     * [isCancelled] must be fast and thread-safe. Closed windows fill bounded parts; finished tasks are persisted immediately.
      * Cancellation keeps their files and publishes an incomplete manifest after active writers finish, without a
      * summary. Final summary/manifest publication finishes without further cancellation checks; caller interruptions
      * are restored afterwards. An already-cancelled call writes no files.

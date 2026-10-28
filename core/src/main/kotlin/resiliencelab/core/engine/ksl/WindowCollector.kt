@@ -52,10 +52,7 @@ internal class WindowCollector(
         when (event) {
             AttemptEvent.OFFERED -> row.offeredAttempts++
             AttemptEvent.ADMITTED -> row.admittedAttempts++
-            AttemptEvent.QUEUE_REJECTED -> {
-                row.queueRejections++
-                row.latency.add(0.0)
-            }
+            AttemptEvent.QUEUE_REJECTED -> row.queueRejections++
             AttemptEvent.TIMEOUT -> row.timeouts++
             AttemptEvent.RETRY -> row.retries++
         }

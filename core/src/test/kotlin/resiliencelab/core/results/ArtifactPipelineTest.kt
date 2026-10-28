@@ -115,6 +115,14 @@ class ArtifactPipelineTest {
         val workspace = FileWorkspace(sequential)
         val files = workspace.listFiles(first.runDirectory)
         assertThat(files).anyMatch { it.endsWith("/replication.json") }.anyMatch { it.endsWith("/index.json") }
+        val indexes = files.filter { it.endsWith("/index.json") }
+        assertThat(indexes).hasSize(4)
+        indexes.forEach { path ->
+            val index = Json.decodeFromString(SeriesIndex.serializer(), workspace.read(path).text)
+            assertThat(index.parts).hasSize(1)
+            assertThat(index.parts.single().fromWindow).isZero()
+            assertThat(index.parts.single().untilWindow).isEqualTo(100)
+        }
         for (path in files) {
             val bytes = workspace.readBytes(path)
             assertThat(Files.readAllBytes(parallel.resolve(path))).describedAs(path).isEqualTo(bytes)
