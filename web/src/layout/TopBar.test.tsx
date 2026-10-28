@@ -5,7 +5,7 @@ import { TopBar, type TopBarProps } from "./TopBar";
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
   return { experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
-    onSave: vi.fn(), running: false, onRun: vi.fn(), job: null, health: null, healthError: null, ...overrides };
+    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), job: null, health: null, healthError: null, ...overrides };
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
@@ -34,7 +34,7 @@ describe("TopBar", () => {
     expect(state.onSave).toHaveBeenCalledOnce();
   });
 
-  it.each(["invalid", "loading", "running"] as const)("prevents running while %s", (flag) => {
+  it.each(["invalid", "loading", "running", "saving"] as const)("prevents running while %s", (flag) => {
     const state = props({ [flag]: true });
     render(<TopBar {...state} />);
     expect(button("Run").disabled).toBe(true);
@@ -57,4 +57,11 @@ describe("TopBar", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Experiment" }), { target: { value: "second.experiment.json" } });
     expect(state.onExperiment).toHaveBeenCalledWith("second.experiment.json");
   });
+});
+
+
+it.each(["invalid", "loading"] as const)("blocks undo and redo while %s", (flag) => {
+  render(<TopBar {...props({ canUndo: true, canRedo: true, [flag]: true })} />);
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Redo").disabled).toBe(true);
 });

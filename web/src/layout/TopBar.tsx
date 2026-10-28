@@ -14,6 +14,10 @@ export interface TopBarProps {
   conflict: boolean;
   saving: boolean;
   onSave: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   running: boolean;
   onRun: () => void;
   job: JobView | null;
@@ -26,7 +30,7 @@ export interface TopBarProps {
  * opening, saving, running and invalid drafts; saving and running wait for valid drafts, and running also for saved changes.
  */
 export function TopBar(props: TopBarProps) {
-  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, job, health, healthError } =
+  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, job, health, healthError, canUndo, canRedo, onUndo, onRedo } =
     props;
   return (
     <header className="top-bar">
@@ -45,6 +49,12 @@ export function TopBar(props: TopBarProps) {
           </option>
         ))}
       </select>
+      <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title="Undo (Ctrl/Cmd+Z)">
+        Undo
+      </button>
+      <button type="button" onClick={onRedo} disabled={!canRedo || invalid || loading} title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">
+        Redo
+      </button>
       {dirty ? <span className="dirty-mark">Unsaved changes</span> : null}
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
         Save
@@ -53,7 +63,7 @@ export function TopBar(props: TopBarProps) {
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || loading || dirty || invalid || running}
+        disabled={experiment === null || loading || saving || dirty || invalid || running}
         title={invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined}
       >
         Run

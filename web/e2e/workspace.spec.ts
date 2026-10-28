@@ -55,10 +55,21 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
 
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(handlers).toHaveValue("4");
+  await expect(page.getByText("Unsaved changes")).toBeHidden();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(handlers).toHaveValue("6");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeHidden();
   const stored = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(model)}`)).json();
   expect(stored.content.model.blocks.gateway.params.handlers).toBe(6);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+  await page.reload();
+  await page.getByTestId("rf__node-gateway").click();
+  await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("6");
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Redo", exact: true })).toBeDisabled();
 
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
