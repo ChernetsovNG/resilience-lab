@@ -102,14 +102,18 @@ Vite передаёт запросы `/api` локальному backend на `1
 ./gradlew :apps:cli:installDist
 apps/cli/build/install/cli/bin/cli validate examples/retry-storm/retry-storm.experiment.json
 apps/cli/build/install/cli/bin/cli run examples/retry-storm/retry-storm.experiment.json
+apps/cli/build/install/cli/bin/cli catalog
+apps/cli/build/install/cli/bin/cli schema model
 ```
 
 [Пример retry storm](examples/retry-storm/) сравнивает три попытки на вызовах
 с одной при замедлении конечного сервиса. `validate` проверяет модель и
 эксперимент; `run` записывает результат в `.results/retry-storm/<прогон>/`
-и печатает путь к нему и краткую сводку по вариантам. Ход расчёта и
-диагностика идут в stderr. Рабочая область CLI — текущий каталог;
-`run --workers N <эксперимент>` задаёт число потоков расчёта.
+и печатает путь к нему и краткую сводку по вариантам. `catalog` печатает
+каталог типов в stdout; `schema <model|layout|experiment>` — JSON-схему
+соответствующего документа. Ход расчёта и диагностика идут в stderr.
+Рабочая область CLI — текущий каталог; `run --workers N <эксперимент>`
+задаёт число потоков расчёта.
 
 ## Документация
 

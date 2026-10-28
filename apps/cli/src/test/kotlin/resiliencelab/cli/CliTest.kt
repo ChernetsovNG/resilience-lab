@@ -1,9 +1,12 @@
 package resiliencelab.cli
 
+import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
+import resiliencelab.core.catalog.Catalog
+import resiliencelab.core.catalog.Stage1Catalog
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -45,12 +48,39 @@ class CliTest {
             listOf("run", "--workers", "many", experiment),
             listOf("validate", "--workers", "2", experiment),
             listOf("sweep", "sweep.json"),
+            listOf("catalog", "extra"),
+            listOf("schema"),
+            listOf("schema", "unknown"),
+            listOf("schema", "model", "extra"),
         ).forEach { args ->
             val result = execute(args)
 
             assertThat(result.exitCode).describedAs(args.toString()).isEqualTo(2)
             assertThat(result.stdout).describedAs(args.toString()).isEmpty()
-            assertThat(result.stderr).describedAs(args.toString()).contains("Usage:")
+            assertThat(result.stderr)
+                .describedAs(args.toString())
+                .contains("Usage:", "catalog", "schema <model|layout|experiment>")
+        }
+    }
+
+    @Test
+    fun `catalog prints the JSON returned by the API`() {
+        val result = execute(listOf("catalog"))
+
+        val expected = Json { encodeDefaults = true }.encodeToString(Catalog.serializer(), Stage1Catalog.catalog)
+        assertThat(result.exitCode).isZero()
+        assertThat(result.stdout).isEqualTo(expected + "\n")
+        assertThat(result.stderr).isEmpty()
+    }
+
+    @Test
+    fun `schema prints each committed schema byte for byte`() {
+        listOf("model", "layout", "experiment").forEach { kind ->
+            val result = execute(listOf("schema", kind))
+
+            assertThat(result.exitCode).describedAs(kind).isZero()
+            assertThat(result.stdout).describedAs(kind).isEqualTo(Path.of("schemas/$kind.schema.json").readText())
+            assertThat(result.stderr).describedAs(kind).isEmpty()
         }
     }
 
