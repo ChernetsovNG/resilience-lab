@@ -7,6 +7,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
+import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
@@ -28,9 +29,9 @@ class SingleServiceInvocationTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0)
-        assertThat(result.allLatenciesMs).containsExactly(20.0)
-        assertThat(result.successfulLatenciesMs).containsExactly(20.0)
-        assertThat(result.failedLatenciesMs).isEmpty()
+        assertLatencies(result.allLatency, 20.0)
+        assertLatencies(result.successfulLatency, 20.0)
+        assertThat(result.failedLatency.count).isZero()
         assertThat(result.originalArrivals).isEqualTo(1)
         assertThat(result.successes).isEqualTo(1)
         assertThat(result.failures).isZero()
@@ -42,9 +43,11 @@ class SingleServiceInvocationTest {
                 retries = 0,
                 failures = 0,
                 queueRejections = 0,
-                handlerUtilization = 0.2,
-                meanQueueLength = 0.0,
-                p95QueueLength = 0.0,
+                handlers = 1,
+                measurementMs = 100.0,
+                busyHandlerTimeMs = 20.0,
+                queueLengthIntegralMs = 0.0,
+                queueDurationsMs = mapOf(0.0 to 100.0),
             ),
         )
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
@@ -78,9 +81,9 @@ class SingleServiceInvocationTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0)
-        assertThat(result.allLatenciesMs).containsExactly(20.0)
-        assertThat(result.successfulLatenciesMs).isEmpty()
-        assertThat(result.failedLatenciesMs).containsExactly(20.0)
+        assertLatencies(result.allLatency, 20.0)
+        assertThat(result.successfulLatency.count).isZero()
+        assertLatencies(result.failedLatency, 20.0)
         assertThat(result.originalArrivals).isEqualTo(1)
         assertThat(result.successes).isZero()
         assertThat(result.failures).isEqualTo(1)
@@ -113,9 +116,9 @@ class SingleServiceInvocationTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(1.0)
-        assertThat(result.allLatenciesMs).containsExactly(0.0)
-        assertThat(result.successfulLatenciesMs).isEmpty()
-        assertThat(result.failedLatenciesMs).containsExactly(0.0)
+        assertLatencies(result.allLatency, 0.0)
+        assertThat(result.successfulLatency.count).isZero()
+        assertLatencies(result.failedLatency, 0.0)
         assertThat(result.originalArrivals).isEqualTo(1)
         assertThat(result.successes).isZero()
         assertThat(result.failures).isEqualTo(1)
@@ -153,8 +156,8 @@ class SingleServiceInvocationTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0, 1.0)
-        assertThat(result.allLatenciesMs).containsExactly(20.0, 39.0)
-        assertThat(result.successfulLatenciesMs).containsExactly(20.0, 39.0)
+        assertLatencies(result.allLatency, 20.0, 39.0)
+        assertLatencies(result.successfulLatency, 20.0, 39.0)
         assertThat(result.originalArrivals).isEqualTo(2)
         assertThat(result.successes).isEqualTo(2)
         assertThat(result.failures).isZero()
@@ -174,7 +177,8 @@ class SingleServiceInvocationTest {
         val encoded = Json.encodeToString(ReplicationResult.serializer(), result)
         val decoded = Json.decodeFromString(ReplicationResult.serializer(), encoded)
 
-        assertThat(decoded).isEqualTo(result)
+        assertThat(encoded).doesNotContain("arrivalTimesMs")
+        assertThat(decoded).isEqualTo(result.copy(arrivalTimesMs = emptyList()))
     }
 
     private fun simulate(

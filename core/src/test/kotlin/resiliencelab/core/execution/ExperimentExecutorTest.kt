@@ -101,7 +101,16 @@ class ExperimentExecutorTest {
                 peak.accumulateAndGet(active.incrementAndGet()) { a, b -> maxOf(a, b) }
                 Thread.sleep(20)
                 active.decrementAndGet()
-                ReplicationResult(emptyList(), emptyList(), emptyList(), emptyList(), 0, 0, 0, emptyMap())
+                ReplicationResult(
+                    emptyList(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    0,
+                    0,
+                    0,
+                    emptyMap(),
+                )
             }
 
         val runs = (1..2).map { thread { executor.run(experiment) } }
@@ -127,7 +136,16 @@ class ExperimentExecutorTest {
                         // Keep the active replication alive until the test releases it.
                     }
                 }
-                ReplicationResult(emptyList(), emptyList(), emptyList(), emptyList(), 0, 0, 0, emptyMap())
+                ReplicationResult(
+                    emptyList(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    resiliencelab.core.experiment.LatencyStatistics(),
+                    0,
+                    0,
+                    0,
+                    emptyMap(),
+                )
             }
         val runner =
             thread {
@@ -261,7 +279,16 @@ class ExperimentExecutorTest {
         val settings = TestChains.run(warmupMs = 10_000.0, measurementMs = 400_000.0, maxRealTimeSeconds = 120L)
         val chain = singleService(processing = TestChains.exponential(2.0), queueCapacity = 100_000, deadlineMs = 1_000_000_000.0)
 
-        val variant = ExperimentExecutor(workers = 1).use { it.run(experimentOf(settings, "mm1" to chain)).variants.single() }
+        val windows = mutableListOf<resiliencelab.core.results.WindowMetrics>()
+        val variant =
+            ExperimentExecutor(workers = 1).use { executor ->
+                executor
+                    .run(
+                        experimentOf(settings, "mm1" to chain),
+                        onWindow = { _, _, _, rows -> windows += rows.single { it.id == "entry" }.metrics },
+                    ).variants
+                    .single()
+            }
 
         val replication = variant.replications.single()
         val utilization = replication.services.getValue("entry").handlerUtilization
@@ -271,6 +298,9 @@ class ExperimentExecutorTest {
         assertThat(replication.successes).isEqualTo(replication.originalArrivals)
         assertThat(replication.failures).isZero()
         assertThat(utilization).isCloseTo(0.5, offset(0.03))
+        val windowUtilization = windows.sumOf { it.busyHandlerTimeMs } / windows.sumOf { it.handlers * it.durationMs }
+        assertThat(windowUtilization).isCloseTo(utilization, offset(0.03))
+        windows.forEach { assertThat(it.busyHandlerTimeMs / (it.handlers * it.durationMs)).isBetween(0.0, 1.0) }
         assertThat(meanResponseMs).isCloseTo(4.0, offset(0.25))
     }
 

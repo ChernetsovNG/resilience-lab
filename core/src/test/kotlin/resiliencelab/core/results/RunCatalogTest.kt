@@ -1,6 +1,7 @@
 package resiliencelab.core.results
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
 import kotlin.test.Test
@@ -16,7 +17,7 @@ class RunCatalogTest {
     ) {
         val manifest =
             RunManifest(
-                schemaVersion = 1,
+                schemaVersion = Versions.ARTIFACT_SCHEMA,
                 applicationVersion = Versions.APPLICATION,
                 kslVersion = Versions.KSL,
                 streamAssignment = "v1",
@@ -28,7 +29,7 @@ class RunCatalogTest {
                 parts = emptyMap(),
                 complete = complete,
             )
-        ArtifactWriter(workspace).write(directory, manifest, RunSummary(1, experiment, emptyList()))
+        ArtifactWriter(workspace).write(directory, manifest, RunSummary(Versions.ARTIFACT_SCHEMA, experiment, emptyList()))
     }
 
     @Test
@@ -66,5 +67,15 @@ class RunCatalogTest {
     @Test
     fun `is empty without results`() {
         assertThat(catalog.list()).isEmpty()
+    }
+
+    @Test
+    fun `explicit reads of old artifacts report unsupported versions before decoding`() {
+        workspace.create(".results/old/r-old/manifest.json", "{\"schemaVersion\":1}")
+        assertThat(catalog.list()).isEmpty()
+        assertThatThrownBy { catalog.manifest("r-old") }
+            .isInstanceOf(UnsupportedArtifactVersionException::class.java)
+            .hasMessageContaining("schemaVersion 1")
+            .hasMessageContaining("expected 2")
     }
 }

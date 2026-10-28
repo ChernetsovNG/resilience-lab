@@ -180,6 +180,7 @@ export interface components {
         AggregateServiceMetrics: {
             admittedAmplification?: components["schemas"]["MetricSummary"] | null;
             offeredAmplification?: components["schemas"]["MetricSummary"] | null;
+            totals: components["schemas"]["ServiceTotals"];
         };
         ApiProblem: {
             code: string;
@@ -253,6 +254,7 @@ export interface components {
             /** Format: int64 */
             seed: number;
             warmup: string;
+            window?: string | null;
         };
         ExperimentFile: {
             description?: string | null;
@@ -301,6 +303,14 @@ export interface components {
             p95Ms: number;
             /** Format: double */
             p99Ms: number;
+            statistics: components["schemas"]["LatencyStatistics"];
+        };
+        LatencyStatistics: {
+            /** Format: int64 */
+            count: number;
+            sketch: number[];
+            /** Format: double */
+            sumMs: number;
         };
         LatencySummary: {
             all?: components["schemas"]["LatencyDistribution"] | null;
@@ -401,6 +411,7 @@ export interface components {
             schemaVersion: number;
             /** Format: int64 */
             seed: number;
+            series?: components["schemas"]["SeriesMetadata"] | null;
             streamAssignment: string;
             variants: string[];
         };
@@ -409,6 +420,44 @@ export interface components {
             /** Format: int32 */
             schemaVersion: number;
             variants: components["schemas"]["VariantSummary"][];
+        };
+        SeriesMetadata: {
+            /** Format: double */
+            measurementMs: number;
+            points: string[];
+            replicationBasis: string;
+            sketchLibraryVersion: string;
+            sketchProfile: string;
+            timeBasis: string;
+            timeUnit: string;
+            /** Format: double */
+            warmupMs: number;
+            /** Format: double */
+            windowMs: number;
+        };
+        ServiceTotals: {
+            /** Format: int64 */
+            admittedAttempts: number;
+            /** Format: double */
+            busyHandlerTimeMs: number;
+            /** Format: int64 */
+            failures: number;
+            /** Format: double */
+            handlerCapacityTimeMs: number;
+            /** Format: double */
+            measurementMs: number;
+            /** Format: int64 */
+            offeredAttempts: number;
+            /** Format: int64 */
+            originalArrivals: number;
+            /** Format: double */
+            queueLengthIntegralMs: number;
+            /** Format: int64 */
+            queueRejections: number;
+            /** Format: int64 */
+            retries: number;
+            /** Format: int64 */
+            timeouts: number;
         };
         TypeDescriptor: {
             /** @enum {string} */

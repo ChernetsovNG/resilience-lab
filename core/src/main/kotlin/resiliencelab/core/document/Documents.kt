@@ -70,6 +70,7 @@ data class ExecutionSettings(
     val measurement: String,
     val seed: Long,
     val maxRealTime: String = "30s",
+    val window: String? = null,
 )
 
 /** A degradation of the [target] service while local processing starts within [from, to). */

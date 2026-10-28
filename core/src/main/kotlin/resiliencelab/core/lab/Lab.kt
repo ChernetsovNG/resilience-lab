@@ -10,20 +10,22 @@ import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.PathStreams
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.execution.checkCancellation
+import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
-import resiliencelab.core.results.VariantSummary
+import resiliencelab.core.results.SeriesMetadata
+import resiliencelab.core.results.SeriesWriter
 import resiliencelab.core.results.Versions
+import resiliencelab.core.results.uninterruptedArtifactWrite
+import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.InvalidDocumentPathException
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
 import java.io.IOException
 import java.util.concurrent.CancellationException
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.FutureTask
 
 /** Diagnostics and versions of the computation inputs of one experiment. */
 data class ValidationReport(
@@ -87,10 +89,11 @@ class Lab(
 
     /**
      * Runs a valid experiment and writes its reproducible result artifact under the workspace results directory.
-     * [isCancelled] must be fast and thread-safe. Cancellation is accepted until artifact writing starts;
-     * a cancelled run writes no files. Once writing starts, it finishes without further cancellation checks.
-     * Caller interruptions during writing are restored after the write, without interrupting file I/O.
-     * @throws CancellationException if cancellation is observed before writing the artifact.
+     * [isCancelled] must be fast and thread-safe. Closed windows fill bounded parts; finished tasks are persisted immediately.
+     * Cancellation keeps their files and publishes an incomplete manifest after active writers finish, without a
+     * summary. Final summary/manifest publication finishes without further cancellation checks; caller interruptions
+     * are restored afterwards. An already-cancelled call writes no files.
+     * @throws CancellationException if cancellation is observed before final artifact publication.
      */
     fun run(
         experimentPath: String,
@@ -129,52 +132,80 @@ class Lab(
                 ),
             )
         }
-        val result = executor.run(compiled, isCancelled = isCancelled, onProgress = onProgress)
-        val summary =
-            RunSummary(
-                schemaVersion = 1,
-                experiment = experimentPath,
-                variants = result.variants.map { VariantSummary(it.id, it.label, it.replications.size, it.aggregate) },
-            )
+        if (workspace.listFiles(runDirectory).isNotEmpty()) throw DocumentExistsException(runDirectory)
+        val writer = ArtifactWriter(workspace)
+        val series =
+            compiled.variants
+                .flatMap { variant ->
+                    (0 until compiled.run.replications).map { replication ->
+                        (variant.id to replication) to
+                            SeriesWriter(
+                                workspace,
+                                "$runDirectory/series/${variant.id}/p0/rep-$replication",
+                                compiled.run.warmupMs + compiled.run.measurementMs,
+                                compiled.run.windowMs,
+                            )
+                    }
+                }.toMap()
         val manifest =
             RunManifest(
-                schemaVersion = 1,
+                schemaVersion = Versions.ARTIFACT_SCHEMA,
                 applicationVersion = Versions.APPLICATION,
                 kslVersion = Versions.KSL,
                 streamAssignment = PathStreams.ASSIGNMENT_VERSION,
                 experiment = experimentPath,
-                documents = loaded.versions,
+                documents = loaded.artifactVersions,
                 seed = compiled.run.seed,
                 replications = compiled.run.replications,
                 variants = compiled.variants.map { it.id },
                 parts = emptyMap(),
                 complete = true,
+                series =
+                    SeriesMetadata(
+                        compiled.run.warmupMs,
+                        compiled.run.measurementMs,
+                        compiled.run.windowMs,
+                        LatencySketch.PROFILE,
+                        LatencySketch.LIBRARY_VERSION,
+                        "ms",
+                        "event-time",
+                        "measurement-arrival-cohort-including-run-out",
+                        listOf("p0"),
+                    ),
             )
-        checkCancellation(isCancelled)
-        return RunOutcome(runDirectory, writeArtifact(runDirectory, manifest, summary), summary)
-    }
-
-    /** After the final cancellation check, keep caller interruptions away from interruptible workspace file I/O. */
-    private fun writeArtifact(
-        runDirectory: String,
-        manifest: RunManifest,
-        summary: RunSummary,
-    ): RunManifest {
-        val write = FutureTask { ArtifactWriter(workspace).write(runDirectory, manifest, summary) }
-        Thread.ofVirtual().name("artifact-write").start(write)
-        var interrupted = false
         try {
-            while (true) {
+            executor.run(
+                compiled,
+                isCancelled = isCancelled,
+                onWindow = { variant, replication, window, rows ->
+                    series.getValue(variant to replication).writeWindow(window, rows)
+                },
+                onReplication = { variant, replication, result ->
+                    writer.writeReplication("$runDirectory/series/$variant/p0/rep-$replication", result)
+                    series.getValue(variant to replication).finish()
+                },
+                onProgress = onProgress,
+            )
+            checkCancellation(isCancelled)
+            return uninterruptedArtifactWrite {
+                val summary =
+                    writer.summarize(
+                        runDirectory,
+                        experimentPath,
+                        compiled.variants.map { it.id to it.label },
+                        compiled.run.replications,
+                    )
+                RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
+            }
+        } catch (failure: Exception) {
+            if (!workspace.exists("$runDirectory/manifest.json")) {
                 try {
-                    return write.get()
-                } catch (_: InterruptedException) {
-                    interrupted = true
-                } catch (exception: ExecutionException) {
-                    throw exception.cause ?: exception
+                    writer.write(runDirectory, manifest.copy(complete = false), null)
+                } catch (writingFailure: Exception) {
+                    failure.addSuppressed(writingFailure)
                 }
             }
-        } finally {
-            if (interrupted) Thread.currentThread().interrupt()
+            throw failure
         }
     }
 
@@ -182,6 +213,7 @@ class Lab(
         val experiment: CompiledExperiment?,
         val diagnostics: List<Diagnostic>,
         val versions: Map<String, String>,
+        val artifactVersions: Map<String, String> = versions,
     )
 
     private fun load(
@@ -228,7 +260,12 @@ class Lab(
         val result = compiler.compile(model, modelDocument.path, experiment, experimentPath)
         val layout = experiment.layoutRef?.let { checkLayout(experimentPath, it, drafts) }.orEmpty()
         val versions = sortedMapOf(experimentPath to experimentDocument.version, modelDocument.path to modelDocument.version)
-        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions)
+        val artifactVersions =
+            sortedMapOf(
+                experimentPath to DocumentVersion.of(DocumentCodec.encodeExperiment(experiment)),
+                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(model)),
+            )
+        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions, artifactVersions)
     }
 
     /** The optional layout must be a readable layout document inside the workspace (ADR 0005, item 3). */

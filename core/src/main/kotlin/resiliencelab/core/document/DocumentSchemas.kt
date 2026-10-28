@@ -221,6 +221,7 @@ class DocumentSchemas(
                 "warmup" to duration("warmup", allowZero = true),
                 "measurement" to duration("measurement"),
                 "maxRealTime" to duration("maxRealTime"),
+                "window" to duration("window", required = false),
             )
         val fault = "resiliencelab.core.document.Fault"
         definitions[fault] =
@@ -254,6 +255,7 @@ class DocumentSchemas(
     private fun duration(
         name: String,
         allowZero: Boolean = false,
+        required: Boolean = true,
     ): JsonObject =
         parameter(
             ParamDescriptor(
@@ -261,7 +263,7 @@ class DocumentSchemas(
                 ParamKind.QUANTITY,
                 name,
                 "Simulation duration.",
-                required = true,
+                required = required,
                 dimension = Dimension.DURATION,
                 units = Quantities.unitsOf(Dimension.DURATION),
                 minimum = if (allowZero) 0.0 else null,

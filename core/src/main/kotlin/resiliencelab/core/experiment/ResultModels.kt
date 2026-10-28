@@ -1,6 +1,7 @@
 package resiliencelab.core.experiment
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * A fully drained replication for the cohort arriving during the measurement interval.
@@ -8,10 +9,10 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class ReplicationResult(
-    val arrivalTimesMs: List<Double>,
-    val allLatenciesMs: List<Double>,
-    val successfulLatenciesMs: List<Double>,
-    val failedLatenciesMs: List<Double>,
+    @Transient val arrivalTimesMs: List<Double> = emptyList(),
+    val allLatency: LatencyStatistics,
+    val successfulLatency: LatencyStatistics,
+    val failedLatency: LatencyStatistics,
     val originalArrivals: Int,
     val successes: Int,
     val failures: Int,
@@ -31,10 +32,25 @@ data class ServiceMetrics(
     val retries: Int,
     val failures: Int,
     val queueRejections: Int,
-    val handlerUtilization: Double,
-    val meanQueueLength: Double,
-    val p95QueueLength: Double,
-)
+    val handlers: Int,
+    val measurementMs: Double,
+    val busyHandlerTimeMs: Double,
+    val queueLengthIntegralMs: Double,
+    val queueDurationsMs: Map<Double, Double>,
+) {
+    val handlerUtilization: Double get() = busyHandlerTimeMs / (handlers * measurementMs)
+    val meanQueueLength: Double get() = queueLengthIntegralMs / measurementMs
+    val p95QueueLength: Double
+        get() {
+            val target = 0.95 * queueDurationsMs.values.sum()
+            var cumulative = 0.0
+            for ((length, duration) in queueDurationsMs.toSortedMap()) {
+                cumulative += duration
+                if (cumulative >= target) return length
+            }
+            return 0.0
+        }
+}
 
 /** Aggregates pooled latency with replication-level success, percentile, and service amplification summaries. */
 @Serializable
@@ -60,11 +76,14 @@ data class LatencyDistribution(
     val meanMs: Double,
     val p95Ms: Double,
     val p99Ms: Double,
+    val statistics: LatencyStatistics,
 )
 
 /**
  * Describes replication-level metric values, with uncertainty available only when at least two values exist.
  * Student confidence limits are not clipped to the metric's physical range.
+ * Latency percentiles use the S5 sketch profile (at most 0.78125% representation error in the tested latency
+ * range), retaining KSL interpolation. This approximation bound is separate from replication uncertainty.
  */
 @Serializable
 data class MetricSummary(
@@ -81,4 +100,21 @@ data class MetricSummary(
 data class AggregateServiceMetrics(
     val admittedAmplification: MetricSummary?,
     val offeredAmplification: MetricSummary?,
+    val totals: ServiceTotals,
+)
+
+/** Pooled numerators, denominators and time integrals; rates can be reconstructed without averaging rates. */
+@Serializable
+data class ServiceTotals(
+    val originalArrivals: Long,
+    val offeredAttempts: Long,
+    val admittedAttempts: Long,
+    val timeouts: Long,
+    val retries: Long,
+    val failures: Long,
+    val queueRejections: Long,
+    val busyHandlerTimeMs: Double,
+    val handlerCapacityTimeMs: Double,
+    val queueLengthIntegralMs: Double,
+    val measurementMs: Double,
 )

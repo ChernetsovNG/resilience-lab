@@ -781,8 +781,12 @@
             }, {
               "type" : "null"
             } ]
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/ServiceTotals"
           }
-        }
+        },
+        "required" : [ "totals" ]
       },
       "ApiProblem" : {
         "type" : "object",
@@ -994,6 +998,9 @@
           },
           "warmup" : {
             "type" : "string"
+          },
+          "window" : {
+            "type" : [ "string", "null" ]
           }
         },
         "required" : [ "maxRealTime", "measurement", "replications", "seed", "warmup" ]
@@ -1131,9 +1138,33 @@
           "p99Ms" : {
             "type" : "number",
             "format" : "double"
+          },
+          "statistics" : {
+            "$ref" : "#/components/schemas/LatencyStatistics"
           }
         },
-        "required" : [ "meanMs", "p95Ms", "p99Ms" ]
+        "required" : [ "meanMs", "p95Ms", "p99Ms", "statistics" ]
+      },
+      "LatencyStatistics" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sketch" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "sumMs" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "count", "sketch", "sumMs" ]
       },
       "LatencySummary" : {
         "type" : "object",
@@ -1396,6 +1427,13 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "series" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/SeriesMetadata"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "streamAssignment" : {
             "type" : "string"
           },
@@ -1426,6 +1464,95 @@
           }
         },
         "required" : [ "experiment", "schemaVersion", "variants" ]
+      },
+      "SeriesMetadata" : {
+        "type" : "object",
+        "properties" : {
+          "measurementMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "replicationBasis" : {
+            "type" : "string"
+          },
+          "sketchLibraryVersion" : {
+            "type" : "string"
+          },
+          "sketchProfile" : {
+            "type" : "string"
+          },
+          "timeBasis" : {
+            "type" : "string"
+          },
+          "timeUnit" : {
+            "type" : "string"
+          },
+          "warmupMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "windowMs" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "measurementMs", "points", "replicationBasis", "sketchLibraryVersion", "sketchProfile", "timeBasis", "timeUnit", "warmupMs", "windowMs" ]
+      },
+      "ServiceTotals" : {
+        "type" : "object",
+        "properties" : {
+          "admittedAttempts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "busyHandlerTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "handlerCapacityTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "measurementMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "offeredAttempts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "originalArrivals" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "queueLengthIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "queueRejections" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "retries" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "timeouts" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "admittedAttempts", "busyHandlerTimeMs", "failures", "handlerCapacityTimeMs", "measurementMs", "offeredAttempts", "originalArrivals", "queueLengthIntegralMs", "queueRejections", "retries", "timeouts" ]
       },
       "TypeDescriptor" : {
         "type" : "object",

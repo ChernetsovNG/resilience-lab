@@ -9,6 +9,7 @@ kotlin {
 
 dependencies {
     implementation("io.github.rossetti:KSLCore:R1.8.1")
+    implementation("com.datadoghq:sketches-java:0.8.3")
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-schema-generator-json:0.6.0") {
         // Reuse KSL's logger: kotlin-logging 8 adds initialization chatter to the CLI's stdout.
