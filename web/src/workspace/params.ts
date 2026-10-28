@@ -19,12 +19,14 @@ export function elementOf(model: ModelFile, id: string): { type: string; params:
   return connection === undefined ? null : { type: connection.type, params: connection.params };
 }
 
-/** Copy of [model] with parameter [name] of element [id] set to [value]; undefined removes it so its default applies. */
+/** Copy of [model] with parameter path [name] of element [id] set to [value]; undefined removes it so its default applies. */
 export function withParam(model: ModelFile, id: string, name: string, value: unknown): ModelFile {
   const update = (params: Params): Params => {
+    const [root, ...fields] = name.split(".");
     const next = { ...params };
-    if (value === undefined) delete next[name];
-    else next[name] = value;
+    if (fields.length > 0) next[root] = setField(objectOr(next[root], undefined), fields, value);
+    else if (value === undefined) delete next[root];
+    else next[root] = value;
     return next;
   };
   const block = ownEntry(model.blocks, id);
@@ -70,7 +72,11 @@ export function isOverridden(overrides: Params, id: string, path: string): boole
 
 function setField(target: Params, path: string[], value: unknown): Params {
   const [head, ...rest] = path;
-  return { ...target, [head]: rest.length === 0 ? value : setField(objectOr(target[head], undefined), rest, value) };
+  if (rest.length > 0) return { ...target, [head]: setField(objectOr(target[head], undefined), rest, value) };
+  const next = { ...target };
+  if (value === undefined) delete next[head];
+  else next[head] = value;
+  return next;
 }
 
 function objectOr(value: unknown, fallback: unknown): Params {

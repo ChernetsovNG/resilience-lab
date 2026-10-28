@@ -8,6 +8,22 @@ import { VariantTabs } from "./VariantTabs";
 beforeAll(mockReactFlowDom);
 
 describe("Canvas", () => {
+  function renderEditable(onParam = vi.fn(), onValidity = vi.fn()) {
+    render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+      parametersEditable onParam={onParam} onValidity={onValidity} />);
+    return { onParam, onValidity };
+  }
+
+  function openParam(id: string): HTMLInputElement {
+    const parameter = screen.getByTestId(`canvas-param-${id}`);
+    fireEvent.doubleClick(parameter);
+    return parameter.querySelector("input")!;
+  }
+
+  function submit(input: HTMLInputElement) {
+    fireEvent.submit(input.closest("form")!);
+  }
+
   it("shows finding counts and the greatest severity on blocks and connections", async () => {
     const warning = { code: "LINT_TIMEOUT_BUDGET", severity: "WARNING" as const, message: "Check timeout" };
     render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()} elementDiagnostics={new Map([
@@ -15,13 +31,15 @@ describe("Canvas", () => {
       ["gateway-to-middle", [warning]],
     ])} />);
     expect(await screen.findByRole("img", { name: "2 problems: error" })).toBeTruthy();
-    expect((await screen.findByTestId("rf__edge-gateway-to-middle")).textContent).toContain("⚠ 1");
+    expect((await screen.findByTestId("canvas-edge-label-gateway-to-middle")).textContent).toContain("⚠ 1");
   });
   it("draws blocks with key parameters and reports the selection", async () => {
     const onSelect = vi.fn();
     render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={onSelect} />);
     expect(await screen.findAllByTestId("block-node")).toHaveLength(4);
-    expect(screen.getByText("4 handlers · queue 16")).toBeTruthy();
+    expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
+    expect(screen.getByTestId("canvas-param-gateway-queue").textContent).toBe("16");
+    expect(screen.getByTestId("canvas-param-gateway-processing.mean").textContent).toBe("1ms");
     expect(screen.getByText("120/s · deadline 250ms")).toBeTruthy();
     fireEvent.click(screen.getByTestId("rf__node-gateway"));
     expect(onSelect).toHaveBeenCalledWith(["gateway"]);
@@ -31,10 +49,14 @@ describe("Canvas", () => {
     const onSelect = vi.fn();
     const { container } = render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={onSelect} />);
     const edge = await screen.findByTestId("rf__edge-gateway-to-middle");
-    expect(screen.getByText("80ms · 3×")).toBeTruthy();
-    expect(screen.getByText("60ms · 3×")).toBeTruthy();
+    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+    expect(screen.getByTestId("canvas-param-gateway-to-middle-attempts").textContent).toBe("3");
+    expect(screen.getByTestId("canvas-param-middle-to-dependency-timeout").textContent).toBe("60ms");
     expect(screen.getByTestId("rf__edge-client-to-gateway").textContent).toBe("");
     fireEvent.click(edge);
+    expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
+    onSelect.mockClear();
+    fireEvent.click(screen.getByTestId("canvas-edge-label-gateway-to-middle"));
     expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
     fireEvent.click(container.querySelector(".react-flow__pane")!);
     expect(onSelect).toHaveBeenCalledWith([]);
@@ -79,8 +101,88 @@ describe("Canvas", () => {
       ),
     };
     render(<Canvas catalog={catalog} onCommand={vi.fn()} model={defaultsModel} layout={layout} selected={[]} onSelect={vi.fn()} />);
-    expect(await screen.findByText("4 handlers · queue 0")).toBeTruthy();
-    expect(await screen.findByText("80ms · 1×")).toBeTruthy();
+    expect((await screen.findByTestId("canvas-param-gateway-queue")).textContent).toBe("0");
+    expect((await screen.findByTestId("canvas-param-gateway-to-middle-attempts")).textContent).toBe("1");
+  });
+
+  it("edits service handlers, queue and processing mean from the node", async () => {
+    const { onParam } = renderEditable();
+    await screen.findAllByTestId("block-node");
+
+    const handlers = openParam("gateway-handlers");
+    fireEvent.change(handlers, { target: { value: "6" } });
+    submit(handlers);
+    const queue = openParam("gateway-queue");
+    fireEvent.change(queue, { target: { value: "20" } });
+    submit(queue);
+    const mean = openParam("gateway-processing.mean");
+    fireEvent.change(mean, { target: { value: "3ms" } });
+    submit(mean);
+
+    expect(onParam).toHaveBeenNthCalledWith(1, "gateway", "handlers", 6);
+    expect(onParam).toHaveBeenNthCalledWith(2, "gateway", "queue", 20);
+    expect(onParam).toHaveBeenNthCalledWith(3, "gateway", "processing.mean", "3ms");
+  });
+
+  it("edits timeout and attempts from the call label", async () => {
+    const { onParam } = renderEditable();
+    await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+
+    const timeout = openParam("gateway-to-middle-timeout");
+    fireEvent.change(timeout, { target: { value: "90ms" } });
+    submit(timeout);
+    const attempts = openParam("gateway-to-middle-attempts");
+    fireEvent.change(attempts, { target: { value: "2" } });
+    submit(attempts);
+
+    expect(onParam).toHaveBeenNthCalledWith(1, "gateway-to-middle", "timeout", "90ms");
+    expect(onParam).toHaveBeenNthCalledWith(2, "gateway-to-middle", "attempts", 2);
+  });
+
+  it("does not reset an active draft on another double click", async () => {
+    renderEditable();
+    await screen.findAllByTestId("block-node");
+    const input = openParam("gateway-handlers");
+    fireEvent.change(input, { target: { value: "6" } });
+    fireEvent.doubleClick(screen.getByTestId("canvas-param-gateway-handlers"));
+
+    expect(input.value).toBe("6");
+  });
+
+  it("keeps a malformed draft with an error and reports invalid state", async () => {
+    const { onParam, onValidity } = renderEditable();
+    await screen.findAllByTestId("block-node");
+    const input = openParam("gateway-handlers");
+    fireEvent.change(input, { target: { value: "4.5" } });
+    submit(input);
+
+    expect(input.value).toBe("4.5");
+    expect(screen.getByRole("alert").textContent).toContain("Enter a whole number");
+    expect(onParam).not.toHaveBeenCalled();
+    expect(onValidity).toHaveBeenLastCalledWith("gateway.handlers", false);
+  });
+
+  it("cancels an inline draft with Escape without committing it", async () => {
+    const { onParam, onValidity } = renderEditable();
+    await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+    const input = openParam("gateway-to-middle-timeout");
+    fireEvent.change(input, { target: { value: "invalid" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+    expect(screen.queryByRole("textbox", { name: "Timeout" })).toBeNull();
+    expect(onParam).not.toHaveBeenCalled();
+    expect(onValidity).toHaveBeenLastCalledWith("gateway-to-middle.timeout", true);
+  });
+
+  it("commits parseable range errors for core draft validation", async () => {
+    const { onParam } = renderEditable();
+    await screen.findAllByTestId("block-node");
+    const input = openParam("gateway-handlers");
+    fireEvent.change(input, { target: { value: "0" } });
+    submit(input);
+
+    expect(onParam).toHaveBeenCalledWith("gateway", "handlers", 0);
   });
 });
 

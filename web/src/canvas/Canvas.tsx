@@ -1,16 +1,18 @@
 import { useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
 import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import type { Edge, NodeChange } from "@xyflow/react";
-import type { Catalog, ConnectionInstance, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
+import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import type { EditorCommand } from "../workspace/editor";
 import { addBlock, addConnection, connectionRule, moveBlocks, positionOf } from "../workspace/structure";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
+import { CallEdge } from "./CallEdge";
 import "@xyflow/react/dist/style.css";
 
 const nodeTypes = { block: BlockNode };
+const edgeTypes = { call: CallEdge };
 
 export interface CanvasProps {
   /** The model as the active variant page sees it. */
@@ -21,15 +23,13 @@ export interface CanvasProps {
   selected: string[];
   onSelect: Dispatch<SetStateAction<string[]>>;
   editable?: boolean;
+  parametersEditable?: boolean;
   /** Invalid field drafts prevent selection changes as well as structural edits. */
   disabled?: boolean;
   onCommand: (command: EditorCommand) => void;
+  onParam?: (id: string, path: string, value: unknown) => void;
+  onValidity?: (key: string, valid: boolean) => void;
   elementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
-}
-
-function labelOf(connection: ConnectionInstance): string | undefined {
-  if (connection.type !== "call") return undefined;
-  return `${String(connection.params.timeout ?? "Timeout required")} · ${String(connection.params.attempts ?? 1)}×`;
 }
 
 /** The model on a React Flow canvas (ADR 0004); documents and one-command gestures own all edits. */
@@ -37,7 +37,8 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
-function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, disabled = false, onCommand, elementDiagnostics, overrides = {} }: CanvasProps) {
+function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, overrides = {} }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition } = useReactFlow();
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
@@ -48,20 +49,30 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
     type: "block",
     position: ownEntry(moving, id) ?? positionOf(model, layout, id),
     measured: ownEntry(sizes, id),
-    data: { id, block, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id), ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable },
+    data: {
+      id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
+      ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable, parametersEditable, disabled,
+      onParam: (elementId, path, value) => onParam?.(elementId, path, value),
+      onValidity: (key, valid) => onValidity?.(key, valid),
+    },
     selected: selected.includes(id),
     ariaLabel: id,
   }));
   const edges: Edge[] = model.connections.map((connection) => {
-    const summary = summarizeDiagnostics(elementDiagnostics?.get(connection.id) ?? []);
-    const label = [labelOf(connection), summary === null ? undefined : `${summary.severity === "ERROR" ? "!" : "⚠"} ${summary.count}`].filter(Boolean).join(" · ") || undefined;
+    const diagnostics = elementDiagnostics?.get(connection.id) ?? [];
+    const summary = summarizeDiagnostics(diagnostics);
     return {
       id: connection.id,
+      type: connection.type === "call" ? "call" : undefined,
       source: connection.from,
       target: connection.to,
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
-      label: overridden(connection.id) ? <span>{label} <span role="img" aria-label="Overridden parameters">◆</span></span> : label,
+      data: {
+        connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
+        onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
+        onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
+      },
       className: summary === null ? undefined : `diagnostic--${summary.severity.toLowerCase()}`,
       selected: selected.includes(connection.id),
       ariaLabel: connection.id,
@@ -116,6 +127,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       fitView
       snapToGrid
       snapGrid={[20, 20]}
