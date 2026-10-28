@@ -1,0 +1,195 @@
+{
+  "node": "v26.12.1",
+  "chromium": "156.0.8078.4",
+  "inputBytes": {
+    "fixtures.json": 1176047,
+    "selected-ui.json": 667237,
+    "selected-ui.json.gz": 202862
+  },
+  "profile": "ddsketch-bitwise6-rational-v1",
+  "warmups": 2,
+  "measurements": 7,
+  "windows": 600,
+  "fixtureCases": 26,
+  "mergeOrders": [
+    "forward",
+    "reverse",
+    "random",
+    "balanced"
+  ],
+  "crossOriginIsolated": true,
+  "validation": "canonical-arrays-and-binary64-quantiles-every-trial",
+  "timingScope": "Input fetched before timing; gzip includes UTF-8 decoding; validation/decoding separate; merge and quantiles exclude comparison and encoding.",
+  "json": {
+    "trials": [
+      {
+        "parseMs": 0.6349999904632568,
+        "validateDecodeMs": 2.684999942779541,
+        "mergeMs": 2.1850000619888306,
+        "quantilesMs": 0.9750000238418579,
+        "mergeAndQuantilesMs": 3.1600000858306885
+      },
+      {
+        "parseMs": 0.6749999523162842,
+        "validateDecodeMs": 3.2549999952316284,
+        "mergeMs": 2.215000033378601,
+        "quantilesMs": 0.9399999380111694,
+        "mergeAndQuantilesMs": 3.1549999713897705
+      },
+      {
+        "parseMs": 0.6550000905990601,
+        "validateDecodeMs": 2.6299999952316284,
+        "mergeMs": 2.1899999380111694,
+        "quantilesMs": 1.5099999904632568,
+        "mergeAndQuantilesMs": 3.6999999284744263
+      },
+      {
+        "parseMs": 0.6000000238418579,
+        "validateDecodeMs": 2.6299999952316284,
+        "mergeMs": 2.240000009536743,
+        "quantilesMs": 0.8149999380111694,
+        "mergeAndQuantilesMs": 3.0549999475479126
+      },
+      {
+        "parseMs": 0.5950000286102295,
+        "validateDecodeMs": 3.2899999618530273,
+        "mergeMs": 2.1050000190734863,
+        "quantilesMs": 0.940000057220459,
+        "mergeAndQuantilesMs": 3.0450000762939453
+      },
+      {
+        "parseMs": 0.7200000286102295,
+        "validateDecodeMs": 3.0049999952316284,
+        "mergeMs": 2.2799999713897705,
+        "quantilesMs": 0.9300000667572021,
+        "mergeAndQuantilesMs": 3.2100000381469727
+      },
+      {
+        "parseMs": 0.6349999904632568,
+        "validateDecodeMs": 2.7200000286102295,
+        "mergeMs": 2.2949999570846558,
+        "quantilesMs": 1.0049999952316284,
+        "mergeAndQuantilesMs": 3.299999952316284
+      }
+    ],
+    "summaryMs": {
+      "parseMs": {
+        "median": 0.6349999904632568,
+        "min": 0.5950000286102295,
+        "max": 0.7200000286102295
+      },
+      "validateDecodeMs": {
+        "median": 2.7200000286102295,
+        "min": 2.6299999952316284,
+        "max": 3.2899999618530273
+      },
+      "mergeMs": {
+        "median": 2.215000033378601,
+        "min": 2.1050000190734863,
+        "max": 2.2949999570846558
+      },
+      "quantilesMs": {
+        "median": 0.940000057220459,
+        "min": 0.8149999380111694,
+        "max": 1.5099999904632568
+      },
+      "mergeAndQuantilesMs": {
+        "median": 3.1600000858306885,
+        "min": 3.0450000762939453,
+        "max": 3.6999999284744263
+      }
+    }
+  },
+  "gzip": {
+    "trials": [
+      {
+        "parseMs": 0.7099999189376831,
+        "validateDecodeMs": 2.7050000429153442,
+        "mergeMs": 2.200000047683716,
+        "quantilesMs": 1.0099999904632568,
+        "mergeAndQuantilesMs": 3.2100000381469727,
+        "decompressUtf8Ms": 2.0299999713897705
+      },
+      {
+        "parseMs": 0.5950000286102295,
+        "validateDecodeMs": 2.909999966621399,
+        "mergeMs": 2.8100000619888306,
+        "quantilesMs": 0.9649999141693115,
+        "mergeAndQuantilesMs": 3.774999976158142,
+        "decompressUtf8Ms": 1.8899999856948853
+      },
+      {
+        "parseMs": 0.5999999046325684,
+        "validateDecodeMs": 2.625,
+        "mergeMs": 2.200000047683716,
+        "quantilesMs": 0.8849999904632568,
+        "mergeAndQuantilesMs": 3.0850000381469727,
+        "decompressUtf8Ms": 1.559999942779541
+      },
+      {
+        "parseMs": 0.7849999666213989,
+        "validateDecodeMs": 2.6299999952316284,
+        "mergeMs": 2.1450001001358032,
+        "quantilesMs": 0.9599999189376831,
+        "mergeAndQuantilesMs": 3.1050000190734863,
+        "decompressUtf8Ms": 1.6800000667572021
+      },
+      {
+        "parseMs": 0.6050000190734863,
+        "validateDecodeMs": 2.6050000190734863,
+        "mergeMs": 2.909999966621399,
+        "quantilesMs": 0.9700000286102295,
+        "mergeAndQuantilesMs": 3.8799999952316284,
+        "decompressUtf8Ms": 1.5550000667572021
+      },
+      {
+        "parseMs": 0.625,
+        "validateDecodeMs": 2.6950000524520874,
+        "mergeMs": 2.2249999046325684,
+        "quantilesMs": 0.9950000047683716,
+        "mergeAndQuantilesMs": 3.21999990940094,
+        "decompressUtf8Ms": 1.524999976158142
+      },
+      {
+        "parseMs": 0.6150000095367432,
+        "validateDecodeMs": 3.3799999952316284,
+        "mergeMs": 2.274999976158142,
+        "quantilesMs": 1.0749999284744263,
+        "mergeAndQuantilesMs": 3.3499999046325684,
+        "decompressUtf8Ms": 1.9299999475479126
+      }
+    ],
+    "summaryMs": {
+      "parseMs": {
+        "median": 0.6150000095367432,
+        "min": 0.5950000286102295,
+        "max": 0.7849999666213989
+      },
+      "validateDecodeMs": {
+        "median": 2.6950000524520874,
+        "min": 2.6050000190734863,
+        "max": 3.3799999952316284
+      },
+      "mergeMs": {
+        "median": 2.2249999046325684,
+        "min": 2.1450001001358032,
+        "max": 2.909999966621399
+      },
+      "quantilesMs": {
+        "median": 0.9700000286102295,
+        "min": 0.8849999904632568,
+        "max": 1.0749999284744263
+      },
+      "mergeAndQuantilesMs": {
+        "median": 3.21999990940094,
+        "min": 3.0850000381469727,
+        "max": 3.8799999952316284
+      },
+      "decompressUtf8Ms": {
+        "median": 1.6800000667572021,
+        "min": 1.524999976158142,
+        "max": 2.0299999713897705
+      }
+    }
+  }
+}
