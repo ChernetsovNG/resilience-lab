@@ -59,19 +59,19 @@ test("validates zero handlers without saving and clears diagnostics after correc
 });
 
 test("keeps baseline lint warnings on their variant page and navigates there from Problems", async ({ page }) => {
-  const call = page.getByTestId("rf__edge-gateway-to-middle");
-  await call.click();
+  const callLabel = page.getByTestId("canvas-edge-label-gateway-to-middle");
+  await callLabel.click();
   const timeout = page.getByLabel("Timeout", { exact: true });
   const fieldMessages = timeout.locator("..").locator(".field-diagnostics");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
-  await expect(call).not.toContainText("⚠");
+  await expect(callLabel).not.toContainText("⚠");
 
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await expect(timeout).toHaveValue("80ms");
   await expect(fieldMessages).toContainText("LINT_TIMEOUT_BUDGET");
-  await expect(call).toContainText("⚠ 1");
+  await expect(callLabel).toContainText("⚠ 1");
   await expect(page.getByTestId("rf__node-client").getByRole("img", { name: /problems: warning/ })).toBeVisible();
 
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
@@ -80,7 +80,7 @@ test("keeps baseline lint warnings on their variant page and navigates there fro
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
-  await expect(call).not.toContainText("⚠");
+  await expect(callLabel).not.toContainText("⚠");
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
   const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
@@ -120,9 +120,9 @@ test("keeps a warning from the only variant override off Model and opens its var
 
 test("shows each variant with its own overrides and editable parameters", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
-  const call = page.getByTestId("rf__edge-gateway-to-middle");
-  await expect(call).toContainText("· 1×");
-  await call.click();
+  const callLabel = page.getByTestId("canvas-edge-label-gateway-to-middle");
+  await expect(callLabel).toContainText("· 1×");
+  await callLabel.click();
 
   const attempts = page.getByLabel("Attempts", { exact: true });
   await expect(attempts).toHaveValue("1");
@@ -194,7 +194,7 @@ test("saves variant field overrides without changing the model and restores mode
     await page.reload();
     await page.getByLabel("Experiment").selectOption(path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
-    await page.getByTestId("rf__edge-gateway-to-middle").click();
+    await page.getByTestId("canvas-edge-label-gateway-to-middle").click();
     const timeout = page.getByLabel("Timeout", { exact: true });
     await timeout.fill("90ms");
     await timeout.press("Enter");
@@ -213,7 +213,7 @@ test("saves variant field overrides without changing the model and restores mode
     await page.reload();
     await page.getByLabel("Experiment").selectOption(path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
-    await page.getByTestId("rf__edge-gateway-to-middle").click();
+    await page.getByTestId("canvas-edge-label-gateway-to-middle").click();
     await expect(timeout).toHaveValue("90ms");
     await expect(base).toHaveValue("4ms");
     await page.getByRole("button", { name: "Reset Timeout", exact: true }).click();

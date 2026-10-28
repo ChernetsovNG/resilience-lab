@@ -11,6 +11,7 @@ import { ProblemList } from "./layout/ProblemList";
 import { ResultsPanel } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
+import { setVariantParam } from "./workspace/experimentCommands";
 import { applyOverrides } from "./workspace/params";
 import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
@@ -195,8 +196,14 @@ export function App() {
               elementDiagnostics={elementDiagnostics}
               overrides={overrides}
               editable={structureEditable && !invalid}
+              parametersEditable={editable}
               disabled={invalid}
               onCommand={workspace.execute}
+              onParam={(id, path, value) => {
+                if (variant === undefined) workspace.setParam(id, path, value);
+                else workspace.execute(setVariantParam(variant.id, id, path, value ?? null, catalog));
+              }}
+              onValidity={onValidity}
               onSelect={(next) => {
                 if (!invalid) setSelection(next);
               }}

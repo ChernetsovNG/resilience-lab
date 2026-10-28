@@ -74,6 +74,35 @@ test("edits and clears the shared series window with validation, persistence and
   await expect(windowField).toHaveAttribute("placeholder", "20ms");
 });
 
+test("edits timeout on the canvas with undo and a persisted variant override", async ({ page, files }) => {
+  const originalModel = (await stored(page, files.model)).content.model as ModelFile;
+  const timeout = page.getByTestId("canvas-param-gateway-to-middle-timeout");
+  const input = timeout.getByRole("textbox", { name: "Timeout", exact: true });
+  await expect(timeout).toHaveText("80ms");
+
+  await timeout.dblclick();
+  await input.fill("90ms");
+  await input.press("Enter");
+  await expect(timeout).toHaveText("90ms");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(timeout).toHaveText("80ms");
+
+  await page.getByRole("tab", { name: "No retries", exact: true }).click();
+  await timeout.dblclick();
+  await input.fill("100ms");
+  await input.press("Enter");
+  await expect(timeout).toHaveText("100ms");
+  await save(page);
+
+  const experiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
+  expect(experiment.variants.find((variant) => variant.id === "no-retries")!.overrides["gateway-to-middle.timeout"]).toBe("100ms");
+  expect((await stored(page, files.model)).content.model).toEqual(originalModel);
+
+  await page.reload();
+  await page.getByRole("tab", { name: "No retries", exact: true }).click();
+  await expect(timeout).toHaveText("100ms");
+});
+
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
   expect(response.ok()).toBe(true);
@@ -119,7 +148,7 @@ test("extends the chain through real drag and ports, persists positions and comm
   await connect(page, "dependency", "service-1");
   const edge = page.getByTestId("rf__edge-dependency-to-service-1");
   await expect(edge).toBeAttached();
-  await edge.click();
+  await page.getByTestId("canvas-edge-label-dependency-to-service-1").click();
   await page.getByLabel("Timeout", { exact: true }).fill("80ms");
   await page.getByLabel("Timeout", { exact: true }).press("Enter");
   await save(page);

@@ -177,6 +177,36 @@ it("saves precise variant overrides only to the experiment and resets fields and
   expect((screen.getByLabelText("Base delay") as HTMLInputElement).value).toBe("4ms");
 });
 
+it("edits canvas timeout with undo and saves variant edits only as overrides", async () => {
+  const fetchMock = server();
+  await open();
+  const editTimeout = async (value: string) => {
+    const parameter = await screen.findByTestId("canvas-param-gateway-to-middle-timeout");
+    fireEvent.doubleClick(parameter);
+    const input = parameter.querySelector("input")!;
+    fireEvent.change(input, { target: { value } });
+    fireEvent.submit(input.closest("form")!);
+  };
+
+  await editTimeout("90ms");
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("90ms");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  await editTimeout("100ms");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+  expect(puts).toHaveLength(1);
+  expect(String(puts[0][0])).toContain(encodeURIComponent(experimentPath));
+  expect(JSON.parse(String(puts[0][1]?.body)).experiment.variants[1].overrides).toEqual({
+    "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "gateway-to-middle.timeout": "100ms",
+  });
+});
+
 it("adds, copies, renames and confirms deletion of a variant while keeping its page active", async () => {
   server();
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

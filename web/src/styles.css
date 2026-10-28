@@ -391,6 +391,10 @@ select {
   background: #fff;
 }
 
+.react-flow__edgelabel-renderer {
+  z-index: 1001;
+}
+
 .canvas-edge-label {
   position: absolute;
   display: flex;

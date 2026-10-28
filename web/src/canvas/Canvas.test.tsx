@@ -55,6 +55,9 @@ describe("Canvas", () => {
     expect(screen.getByTestId("rf__edge-client-to-gateway").textContent).toBe("");
     fireEvent.click(edge);
     expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
+    onSelect.mockClear();
+    fireEvent.click(screen.getByTestId("canvas-edge-label-gateway-to-middle"));
+    expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
     fireEvent.click(container.querySelector(".react-flow__pane")!);
     expect(onSelect).toHaveBeenCalledWith([]);
   });
