@@ -134,6 +134,7 @@ class OpenApiSpecTest {
 
         assertThat(document.getValue("paths").jsonObject.keys).containsExactlyInAnyOrder(
             "/api/v1/catalog",
+            "/api/v1/estimate",
             "/api/v1/health",
             "/api/v1/jobs",
             "/api/v1/jobs/{id}",
@@ -149,7 +150,7 @@ class OpenApiSpecTest {
             "/api/v1/workspace/documents",
         )
         assertThat(schemas.keys)
-            .contains("ApiProblem", "BlockInstance", "JobView", "RunSummary", "SeriesIndex", "SeriesPart")
+            .contains("ApiProblem", "BlockInstance", "ExperimentEstimate", "EstimateWarning", "JobView", "RunSummary", "SeriesIndex", "SeriesPart")
             .doesNotContain("ApiError")
         val params =
             schemas

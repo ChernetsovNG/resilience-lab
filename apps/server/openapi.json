@@ -66,6 +66,64 @@
         "tags" : [ "catalog-controller" ]
       }
     },
+    "/api/v1/estimate" : {
+      "post" : {
+        "operationId" : "estimateExperiment",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ValidationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExperimentEstimate"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "estimate-controller" ]
+      }
+    },
     "/api/v1/health" : {
       "get" : {
         "operationId" : "health",
@@ -1515,6 +1573,18 @@
         },
         "required" : [ "content", "kind", "path", "version" ]
       },
+      "EstimateWarning" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "message" ]
+      },
       "ExecutionSettings" : {
         "type" : "object",
         "properties" : {
@@ -1540,6 +1610,50 @@
           }
         },
         "required" : [ "maxRealTime", "measurement", "replications", "seed", "warmup" ]
+      },
+      "ExperimentEstimate" : {
+        "type" : "object",
+        "properties" : {
+          "estimatedArtifactBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedParts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "estimatedSeconds" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "estimatedUncompressedBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expectedEvents" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "expectedRows" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tasks" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EstimateWarning"
+            }
+          },
+          "workers" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "estimatedArtifactBytes", "estimatedParts", "estimatedSeconds", "estimatedUncompressedBytes", "expectedEvents", "expectedRows", "tasks", "warnings", "workers" ]
       },
       "ExperimentFile" : {
         "type" : "object",
@@ -1987,6 +2101,9 @@
       "RunEntry" : {
         "type" : "object",
         "properties" : {
+          "complete" : {
+            "type" : "boolean"
+          },
           "directory" : {
             "type" : "string"
           },
@@ -1997,7 +2114,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "directory", "experiment", "id" ]
+        "required" : [ "complete", "directory", "experiment", "id" ]
       },
       "RunManifest" : {
         "type" : "object",

@@ -82,7 +82,7 @@ data class DocumentDraft(
     val content: DocumentContent,
 )
 
-/** Validates stored documents with optional replacements, including documents not created yet. */
+/** Experiment with optional in-memory replacements used by validation and estimation; drafts are never saved. */
 @Serializable
 data class ValidationRequest(
     val experiment: String,
