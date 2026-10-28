@@ -27,5 +27,7 @@ tasks.test {
     systemProperty("resilience-lab.project-root", rootProject.projectDir.absolutePath)
     inputs.files(rootProject.fileTree("schemas") { include("*.schema.json") })
     inputs.dir(rootProject.file("examples"))
+    inputs.files(rootProject.fileTree("web/src/results/series/fixtures") { include("*.json") })
     inputs.property("updateSchemas", providers.environmentVariable("UPDATE_SCHEMAS").orElse(""))
+    inputs.property("updateSeriesGolden", providers.environmentVariable("UPDATE_SERIES_GOLDEN").orElse(""))
 }

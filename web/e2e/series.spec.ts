@@ -6,6 +6,17 @@ import type { JobView } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
 
 test("browser decodes original gzip series through the same-origin proxy", async ({ page, request }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    let workerCount = 0;
+    Object.defineProperty(window, "__seriesWorkerCount", { get: () => workerCount });
+    window.Worker = class extends NativeWorker {
+      constructor(scriptURL: string | URL, options?: WorkerOptions) {
+        super(scriptURL, options);
+        if (String(scriptURL).includes("series.worker")) workerCount += 1;
+      }
+    };
+  });
   await page.goto("/");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
   const submitted = await request.post("/api/v1/jobs", {
@@ -47,6 +58,33 @@ test("browser decodes original gzip series through the same-origin proxy", async
       }
     }
   }
+
+  for (const variant of manifest.variants) {
+    const loaded = await page.evaluate(async ({ runId, variantId }) => {
+      const [{ SeriesLoader }, { api }] = await Promise.all([
+        import("/src/results/series/index.ts"),
+        import("/src/api/apiClient.ts"),
+      ]);
+      const loader = new SeriesLoader();
+      const index = await api.seriesIndex(runId, variantId, "p0", 0);
+      const untilWindow = Math.max(...index.parts.map((part) => part.untilWindow));
+      const nodeIds = [...new Set(index.parts.flatMap((part) => part.nodes))];
+      const nodes = await loader.load({
+        runId,
+        variant: variantId,
+        cell: "p0",
+        replication: 0,
+        nodes: nodeIds,
+        fromWindow: 0,
+        untilWindow,
+      });
+      return { untilWindow, nodes: nodes.map((node) => ({ id: node.id, windows: node.windows.length })) };
+    }, { runId: job.runId, variantId: variant });
+    expect(loaded.nodes).toHaveLength(4);
+    for (const node of loaded.nodes) expect(node.windows, node.id).toBe(loaded.untilWindow);
+  }
+  expect(await page.evaluate(() => (window as unknown as { __seriesWorkerCount: number }).__seriesWorkerCount))
+    .toBeGreaterThanOrEqual(manifest.variants.length);
 });
 
 function readRaw(url: URL): Promise<{ bytes: Buffer; headers: IncomingHttpHeaders }> {

@@ -8,6 +8,7 @@ import type {
   HealthView,
   JobView,
   RunSummary,
+  SeriesIndex,
   ValidationView,
   WorkspaceChangesView,
 } from "./apiTypes";
@@ -33,6 +34,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestText(path: string, init?: RequestInit): Promise<{ text: string; etag: string | null }> {
+  const response = await fetch(path, init);
+  if (!response.ok) {
+    throw new ApiError(response.status, await problemOf(response));
+  }
+  return { text: await response.text(), etag: response.headers.get("ETag") };
+}
+
 async function problemOf(response: Response): Promise<ApiProblem> {
   try {
     return (await response.json()) as ApiProblem;
@@ -46,6 +55,9 @@ function json(method: string, body: unknown, headers: Record<string, string> = {
 }
 
 const documentUrl = (path: string) => `/api/v1/workspace/document?path=${encodeURIComponent(path)}`;
+const signal = (value?: AbortSignal) => value === undefined ? undefined : { signal: value };
+const seriesUrl = (runId: string, variant: string, cell: string, replication: number) =>
+  `/api/v1/runs/${encodeURIComponent(runId)}/series/${encodeURIComponent(variant)}/${encodeURIComponent(cell)}/${replication}`;
 
 /** Stage 1 API (ADR 0010); paths and types come from `apps/server/openapi.json`. */
 export const api = {
@@ -62,4 +74,9 @@ export const api = {
   submitJob: (experiment: string) => request<JobView>("/api/v1/jobs", json("POST", { experiment })),
   job: (id: string) => request<JobView>(`/api/v1/jobs/${encodeURIComponent(id)}`),
   runSummary: (runId: string) => request<RunSummary>(`/api/v1/runs/${encodeURIComponent(runId)}/summary`),
+  seriesIndex: (runId: string, variant: string, cell: string, replication: number, abort?: AbortSignal) =>
+    request<SeriesIndex>(seriesUrl(runId, variant, cell, replication), signal(abort)),
+  /** Browser fetch decompresses gzip; the worker, not this client, parses the returned JSON text. */
+  seriesPart: (runId: string, variant: string, cell: string, replication: number, part: number, abort?: AbortSignal) =>
+    requestText(`${seriesUrl(runId, variant, cell, replication)}/${part}`, signal(abort)),
 };
