@@ -24,6 +24,7 @@ import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.windowCount
 import kotlin.math.ceil
 
 /** One compiled variant. */
@@ -432,11 +433,25 @@ class ModelCompiler(
         val warmup = duration(execution.warmup, "/execution/warmup", document, sink, allowZero = true)
         val measurement = duration(execution.measurement, "/execution/measurement", document, sink, allowZero = false)
         val maxRealTime = duration(execution.maxRealTime, "/execution/maxRealTime", document, sink, allowZero = false)
+        val window =
+            execution.window?.let { duration(it, "/execution/window", document, sink, allowZero = false) }
+                ?: measurement?.div(100.0)
         if (execution.seed !in 0L..MAX_SEED) {
             sink.error("SEED_RANGE", "seed must be an integer from 0 to $MAX_SEED", document, "/execution/seed")
         }
         if (warmup != null && measurement != null && !(warmup + measurement).isFinite()) {
             sink.error("EXECUTION_RANGE", "warmup plus measurement must be finite", document, "/execution/measurement")
+        }
+        if (warmup != null &&
+            measurement != null &&
+            (warmup + measurement).isFinite() &&
+            window != null
+        ) {
+            try {
+                windowCount(warmup + measurement, window)
+            } catch (failure: IllegalArgumentException) {
+                sink.error("EXECUTION_RANGE", requireNotNull(failure.message), document, "/execution/window")
+            }
         }
         if (sink.errorCount() > before || warmup == null || measurement == null || maxRealTime == null) return null
         return RunSettings(
@@ -445,6 +460,7 @@ class ModelCompiler(
             measurement,
             execution.seed,
             ceil(maxRealTime / 1_000.0).toLong().coerceAtLeast(1L),
+            requireNotNull(window),
         )
     }
 

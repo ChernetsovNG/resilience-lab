@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.lab.InvalidExperimentException
+import resiliencelab.core.results.UnsupportedArtifactVersionException
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.InvalidDocumentPathException
@@ -47,6 +48,11 @@ class Conflict(
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
+    @ExceptionHandler(UnsupportedArtifactVersionException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun unsupportedRunVersion(exception: UnsupportedArtifactVersionException): ApiProblem =
+        ApiProblem("RUN_VERSION_UNSUPPORTED", exception.message ?: "Unsupported run format; run again")
+
     @ExceptionHandler(BadRequest::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun badRequest(exception: BadRequest): ApiProblem = exception.problem()

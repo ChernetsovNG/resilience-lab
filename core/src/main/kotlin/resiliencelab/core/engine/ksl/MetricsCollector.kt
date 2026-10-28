@@ -1,9 +1,11 @@
 package resiliencelab.core.engine.ksl
 
+import resiliencelab.core.experiment.LatencyAccumulator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.results.NodeWindow
 
 /**
  * Collects original-request outcomes and caused-attempt counters only for the measured arrival cohort, including
@@ -11,15 +13,19 @@ import resiliencelab.core.ir.ServiceNode
  * measurement interval, so warm-up and run-out do not extend those time averages.
  */
 class MetricsCollector(
-    services: List<ServiceNode>,
+    private val services: List<ServiceNode>,
     private val measurementStartMs: Double,
     private val measurementEndMs: Double,
     private val currentTimeMs: () -> Double,
+    private val clientId: String = "client",
+    private val windowMs: Double = (measurementEndMs - measurementStartMs) / 100.0,
+    private val onWindow: (Int, List<NodeWindow>) -> Unit = { _, _ -> },
 ) {
     private val arrivalTimesMs = mutableListOf<Double>()
-    private val allLatenciesMs = mutableListOf<Double>()
-    private val successfulLatenciesMs = mutableListOf<Double>()
-    private val failedLatenciesMs = mutableListOf<Double>()
+    private var allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
+    private var successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
+    private var failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
+    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, onWindow)
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
@@ -35,9 +41,9 @@ class MetricsCollector(
         }
         return ReplicationResult(
             arrivalTimesMs = arrivalTimesMs.toList(),
-            allLatenciesMs = allLatenciesMs.toList(),
-            successfulLatenciesMs = successfulLatenciesMs.toList(),
-            failedLatenciesMs = failedLatenciesMs.toList(),
+            allLatency = allLatency.snapshot(),
+            successfulLatency = successfulLatency.snapshot(),
+            failedLatency = failedLatency.snapshot(),
             originalArrivals = originalArrivals,
             successes = successes,
             failures = failures,
@@ -47,9 +53,10 @@ class MetricsCollector(
 
     internal fun reset() {
         arrivalTimesMs.clear()
-        allLatenciesMs.clear()
-        successfulLatenciesMs.clear()
-        failedLatenciesMs.clear()
+        allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
+        successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
+        failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
+        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, onWindow)
         originalArrivals = 0
         successes = 0
         failures = 0
@@ -71,6 +78,7 @@ class MetricsCollector(
         timeMs: Double,
         queueLength: Int,
     ) {
+        windows.queueLength(serviceId, timeMs, queueLength)
         serviceMetrics.getValue(serviceId).queueLengthSeries.record(timeMs, queueLength.toDouble())
     }
 
@@ -79,56 +87,102 @@ class MetricsCollector(
         timeMs: Double,
         busyHandlers: Int,
     ) {
+        windows.busyHandlers(serviceId, timeMs, busyHandlers)
         serviceMetrics.getValue(serviceId).busyHandlerSeries.record(timeMs, busyHandlers.toDouble())
     }
 
     internal fun finishMeasurement(timeMs: Double) {
         serviceMetrics.values.forEach { it.finish(timeMs) }
+        if (timeMs >= measurementEndMs) windows.finish()
     }
 
-    internal fun recordOriginalArrival(timeMs: Double) {
-        arrivalTimesMs += timeMs
-        originalArrivals++
+    internal fun closeWindows(timeMs: Double) {
+        windows.closeThrough(timeMs)
+    }
+
+    internal fun recordOriginalArrival(
+        timeMs: Double,
+        measured: Boolean = true,
+    ) {
+        windows.originalArrival(timeMs)
+        if (measured) {
+            arrivalTimesMs += timeMs
+            originalArrivals++
+        }
     }
 
     internal fun recordOriginalCompletion(
         arrivalTimeMs: Double,
         completionTimeMs: Double,
         succeeded: Boolean,
+        measured: Boolean = true,
     ) {
         val latencyMs = completionTimeMs - arrivalTimeMs
-        allLatenciesMs += latencyMs
+        windows.originalCompletion(completionTimeMs, latencyMs, succeeded)
+        if (!measured) return
+        allLatency.add(latencyMs)
         if (succeeded) {
-            successfulLatenciesMs += latencyMs
+            successfulLatency.add(latencyMs)
             successes++
         } else {
-            failedLatenciesMs += latencyMs
+            failedLatency.add(latencyMs)
             failures++
         }
     }
 
-    internal fun recordOffered(serviceId: String) {
-        serviceMetrics.getValue(serviceId).offeredAttempts++
+    internal fun recordOffered(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.OFFERED)
+        if (measured) serviceMetrics.getValue(serviceId).offeredAttempts++
     }
 
-    internal fun recordAdmitted(serviceId: String) {
-        serviceMetrics.getValue(serviceId).admittedAttempts++
+    internal fun recordAdmitted(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.ADMITTED)
+        if (measured) serviceMetrics.getValue(serviceId).admittedAttempts++
     }
 
-    internal fun recordLocalFailure(serviceId: String) {
-        serviceMetrics.getValue(serviceId).failures++
+    internal fun recordLocalFailure(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        if (measured) serviceMetrics.getValue(serviceId).failures++
     }
 
-    internal fun recordQueueRejection(serviceId: String) {
-        serviceMetrics.getValue(serviceId).queueRejections++
+    internal fun recordQueueRejection(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.QUEUE_REJECTED)
+        if (measured) serviceMetrics.getValue(serviceId).queueRejections++
     }
 
-    internal fun recordTimeout(serviceId: String) {
-        serviceMetrics.getValue(serviceId).timeouts++
+    internal fun recordTimeout(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.TIMEOUT)
+        if (measured) serviceMetrics.getValue(serviceId).timeouts++
     }
 
-    internal fun recordRetry(serviceId: String) {
-        serviceMetrics.getValue(serviceId).retries++
+    internal fun recordRetry(
+        serviceId: String,
+        measured: Boolean = true,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.RETRY)
+        if (measured) serviceMetrics.getValue(serviceId).retries++
+    }
+
+    internal fun recordAttemptCompletion(
+        serviceId: String,
+        residenceMs: Double,
+        succeeded: Boolean,
+    ) {
+        windows.attemptCompletion(serviceId, currentTimeMs(), residenceMs, succeeded)
     }
 
     private class MutableServiceMetrics(
@@ -169,9 +223,11 @@ class MetricsCollector(
                 retries = retries,
                 failures = failures,
                 queueRejections = queueRejections,
-                handlerUtilization = busyHandlerSeries.average / configuredHandlers,
-                meanQueueLength = queueLengthSeries.average,
-                p95QueueLength = queueLengthSeries.p95,
+                handlers = configuredHandlers,
+                measurementMs = measurementEndMs - measurementStartMs,
+                busyHandlerTimeMs = busyHandlerSeries.integral,
+                queueLengthIntegralMs = queueLengthSeries.integral,
+                queueDurationsMs = queueLengthSeries.durations,
             )
     }
 }

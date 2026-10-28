@@ -87,6 +87,7 @@ data class RunSettings(
     val measurementMs: Double,
     val seed: Long,
     val maxRealTimeSeconds: Long,
+    val windowMs: Double = measurementMs / 100.0,
 )
 
 /**

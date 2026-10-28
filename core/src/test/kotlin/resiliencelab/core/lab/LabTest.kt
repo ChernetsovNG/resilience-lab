@@ -112,7 +112,7 @@ class LabTest {
     }
 
     @Test
-    fun `cancellation at final progress leaves no artifact`() {
+    fun `cancellation at final progress retains task files with an incomplete manifest`() {
         val root = exampleWorkspace()
         val cancelled = AtomicBoolean()
 
@@ -123,7 +123,7 @@ class LabTest {
                 }
             }.isInstanceOf(CancellationException::class.java)
         }
-        assertThat(root.resolve(".results")).doesNotExist()
+        assertIncomplete(root)
     }
 
     @Test
@@ -203,13 +203,21 @@ class LabTest {
             }
         }
 
-        assertThat(cancelledRoot.resolve(".results")).doesNotExist()
+        assertIncomplete(cancelledRoot)
         listOf("manifest.json", "summary.json").forEach { file ->
             val relative = ".results/retry-storm/run-1/$file"
             assertThat(
                 Files.readAllBytes(actualRoot.resolve(relative)),
             ).containsExactly(*Files.readAllBytes(expectedRoot.resolve(relative)))
         }
+    }
+
+    private fun assertIncomplete(root: Path) {
+        val directory = root.resolve(".results/retry-storm/cancelled")
+        assertThat(Files.readString(directory.resolve("manifest.json"))).contains("\"complete\": false")
+        assertThat(directory.resolve("summary.json")).doesNotExist()
+        assertThat(FileWorkspace(root).listFiles(".results/retry-storm/cancelled"))
+            .anyMatch { it.endsWith("/replication.json") }
     }
 
     @Test

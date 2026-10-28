@@ -22,6 +22,12 @@ class TimeWeightedSeries(
     val average: Double
         get() = weightedArea / (measurementEndMs - measurementStartMs)
 
+    /** Sufficient time integral, before division by interval length or handler capacity. */
+    val integral: Double get() = weightedArea
+
+    /** Duration spent at each queue length; permits reconstructing the time-weighted percentile after reload. */
+    val durations: Map<Double, Double> get() = durationsMs.toMap()
+
     val p95: Double
         get() {
             val totalDurationMs = durationsMs.values.sum()

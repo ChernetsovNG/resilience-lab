@@ -184,6 +184,19 @@ class ExperimentApiTest {
         assertThat(JsonPath.read<String>(missing.contentAsString, "$.code")).isEqualTo("RUN_NOT_FOUND")
     }
 
+    @Test
+    fun `old result versions return a clear diagnostic instead of a decode failure`() {
+        val directory = root.resolve(".results/old/unsupported")
+        Files.createDirectories(directory)
+        Files.writeString(directory.resolve("manifest.json"), "{\"schemaVersion\":1}")
+        listOf("manifest", "summary").forEach { part ->
+            val response = mockMvc.perform(get("/api/v1/runs/{id}/$part", "unsupported")).andReturn().response
+            assertThat(response.status).isEqualTo(400)
+            assertThat(JsonPath.read<String>(response.contentAsString, "$.code")).isEqualTo("RUN_VERSION_UNSUPPORTED")
+            openApi.assertResponse("get", "/api/v1/runs/{id}/$part", response)
+        }
+    }
+
     private fun postJson(
         path: String,
         body: String,

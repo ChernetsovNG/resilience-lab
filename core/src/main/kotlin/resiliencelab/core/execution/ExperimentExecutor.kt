@@ -11,6 +11,7 @@ import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.results.NodeWindow
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -41,9 +42,9 @@ data class ExperimentRun(
  */
 class ExperimentExecutor internal constructor(
     private val workers: Int,
-    private val replicate: (ChainIr, StreamPlan, Long, Int) -> ReplicationResult,
+    private val replicate: ((ChainIr, StreamPlan, Long, Int) -> ReplicationResult)?,
 ) : AutoCloseable {
-    constructor(workers: Int = defaultWorkers()) : this(workers, ::runReplication)
+    constructor(workers: Int = defaultWorkers()) : this(workers, null)
 
     init {
         require(workers >= 1) { "workers must be at least 1" }
@@ -61,6 +62,9 @@ class ExperimentExecutor internal constructor(
     fun run(
         experiment: CompiledExperiment,
         isCancelled: () -> Boolean = { false },
+        onWindow: (variant: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _ -> },
+        onReplication: (variant: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _ -> },
+        onOriginalCompletion: ((variant: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): ExperimentRun {
         checkCancellation(isCancelled)
@@ -78,12 +82,35 @@ class ExperimentExecutor internal constructor(
                     checkCancellation(isCancelled)
                     val result =
                         try {
-                            replicate(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                            replicate?.invoke(experiment.variants[variant].chain, plan, experiment.run.seed, replication)
+                                ?: runReplication(
+                                    experiment.variants[variant].chain,
+                                    plan,
+                                    experiment.run.seed,
+                                    replication,
+                                    onWindow = { window, rows -> onWindow(experiment.variants[variant].id, replication, window, rows) },
+                                    onOriginalCompletion =
+                                        onOriginalCompletion?.let { observer ->
+                                            {
+                                                latency,
+                                                succeeded,
+                                                ->
+                                                observer(
+                                                    experiment.variants[variant].id,
+                                                    replication,
+                                                    latency,
+                                                    succeeded,
+                                                )
+                                            }
+                                        },
+                                )
                         } catch (failure: ExperimentExecutionException) {
                             val id = experiment.variants[variant].id
                             val message = "Variant '$id', replication ${replication + 1}: ${failure.message}"
                             throw ExperimentExecutionException(message, failure)
                         }
+                    checkCancellation(isCancelled)
+                    onReplication(experiment.variants[variant].id, replication, result)
                     checkCancellation(isCancelled)
                     synchronized(results) { results[variant][replication] = result }
                     progress.completeOne()
@@ -120,6 +147,8 @@ private class RoundRobinScheduler(
         val pending = tasks.iterator()
         var remaining = tasks.size
         val finished = CompletableFuture<Unit>()
+        val drained = CompletableFuture<Unit>()
+        var running = 0
         val threads = mutableSetOf<Thread>()
     }
 
@@ -160,6 +189,8 @@ private class RoundRobinScheduler(
             throw exception.cause ?: exception
         } finally {
             synchronized(lock) { finish(job, CancellationException("Experiment was cancelled")) }
+            // Workers finish their current artifact writes before a final incomplete manifest can be published.
+            job.drained.join()
         }
     }
 
@@ -170,6 +201,7 @@ private class RoundRobinScheduler(
             val task = job.pending.next()
             if (job.pending.hasNext()) ready.addLast(job)
             active++
+            job.running++
             pool.execute { perform(job, task) }
         }
     }
@@ -195,6 +227,8 @@ private class RoundRobinScheduler(
             synchronized(lock) {
                 job.threads -= worker
                 active--
+                job.running--
+                if (job.finished.isDone && job.running == 0) job.drained.complete(Unit)
                 Thread.interrupted()
                 dispatch()
             }
@@ -215,6 +249,7 @@ private class RoundRobinScheduler(
             job.finished.completeExceptionally(failure)
             job.threads.forEach { it.interrupt() }
         }
+        if (job.running == 0) job.drained.complete(Unit)
     }
 
     override fun close() {
@@ -222,7 +257,8 @@ private class RoundRobinScheduler(
             closed = true
             jobs.toList().forEach { finish(it, CancellationException("Experiment executor was closed")) }
         }
-        pool.shutdownNow()
+        // Issued tasks still queued must enter perform() and release their drain accounting.
+        pool.shutdown()
     }
 }
 
@@ -251,7 +287,15 @@ private fun runReplication(
     plan: StreamPlan,
     seed: Long,
     replication: Int,
+    onWindow: (Int, List<NodeWindow>) -> Unit,
+    onOriginalCompletion: ((Double, Boolean) -> Unit)?,
 ): ReplicationResult {
     val model = Model("resilience-lab-task", autoCSVReports = false)
-    return ReliabilityModel(model, chain, PathStreamSource(plan, seed, replication.toLong())).runReplication()
+    return ReliabilityModel(
+        model,
+        chain,
+        PathStreamSource(plan, seed, replication.toLong()),
+        onWindow = onWindow,
+        onOriginalCompletion = onOriginalCompletion,
+    ).runReplication()
 }

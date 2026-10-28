@@ -28,6 +28,8 @@ class ReliabilityModel(
     private val chain: ChainIr,
     private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
+    onWindow: (Int, List<resiliencelab.core.results.NodeWindow>) -> Unit = { _, _ -> },
+    private val onOriginalCompletion: ((Double, Boolean) -> Unit)? = null,
 ) : ProcessModel(model) {
     private val measurementStartMs = chain.run.warmupMs
     private val measurementEndMs = chain.run.warmupMs + chain.run.measurementMs
@@ -38,6 +40,9 @@ class ReliabilityModel(
             measurementStartMs = measurementStartMs,
             measurementEndMs = measurementEndMs,
             currentTimeMs = { time },
+            clientId = chain.client.path,
+            windowMs = chain.run.windowMs,
+            onWindow = onWindow,
         )
     private val runtimes =
         chain.services
@@ -84,6 +89,7 @@ class ReliabilityModel(
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
         runtimes.values.forEach { it.resetFaults() }
+        scheduleWindowClose(1)
         schedule(
             eventAction =
                 ModelElement.EventActionIfc<Nothing> {
@@ -119,6 +125,19 @@ class ReliabilityModel(
                 priority = KSLEvent.DEFAULT_PRIORITY - 1,
             )
         }
+    }
+
+    private fun scheduleWindowClose(number: Int) {
+        val boundary = minOf(measurementEndMs, number.toDouble() * chain.run.windowMs)
+        schedule(
+            eventAction =
+                ModelElement.EventActionIfc<Nothing> {
+                    metrics.closeWindows(boundary)
+                    if (boundary < measurementEndMs) scheduleWindowClose(number + 1)
+                },
+            timeToEvent = boundary - time,
+            priority = KSLEvent.DEFAULT_PRIORITY - 2,
+        )
     }
 
     private var workloadPrepared = false
@@ -240,9 +259,7 @@ class ReliabilityModel(
                 timeoutEvent = timeoutEvent,
                 caller = caller,
                 recordTimeout = {
-                    if (caller.measurementCohort) {
-                        metrics.recordTimeout(callingServiceId)
-                    }
+                    metrics.recordTimeout(callingServiceId, caller.measurementCohort)
                 },
             )
         return attempt
@@ -286,9 +303,7 @@ class ReliabilityModel(
             check(!admitted) { "Invocation was already admitted" }
             admitted = true
             activeInvocations++
-            if (measurementCohort) {
-                metrics.recordAdmitted(runtime.serviceId)
-            }
+            metrics.recordAdmitted(runtime.serviceId, measurementCohort)
         }
 
         private fun onOriginalDeadline() {
@@ -322,13 +337,14 @@ class ReliabilityModel(
             val completedOutcome = requireNotNull(originalOutcome)
             originalClientActive = false
             activeOriginalRequests--
-            if (measurementCohort) {
-                metrics.recordOriginalCompletion(
-                    arrivalTimeMs = arrivalTimeMs,
-                    completionTimeMs = time,
-                    succeeded = completedOutcome == AttemptOutcome.SUCCEEDED,
-                )
-            }
+            val succeeded = completedOutcome == AttemptOutcome.SUCCEEDED
+            metrics.recordOriginalCompletion(
+                arrivalTimeMs = arrivalTimeMs,
+                completionTimeMs = time,
+                succeeded = succeeded,
+                measured = measurementCohort,
+            )
+            if (measurementCohort) onOriginalCompletion?.invoke(time - arrivalTimeMs, succeeded)
         }
 
         internal val work: KSLProcess =
@@ -337,15 +353,12 @@ class ReliabilityModel(
                     if (incomingNetwork != null) {
                         delay(incomingNetwork.nextNetworkDelayMs())
                     }
-                    if (measurementCohort) {
-                        metrics.recordOffered(runtime.serviceId)
-                    }
+                    val serviceArrivalMs = time
+                    metrics.recordOffered(runtime.serviceId, measurementCohort)
                     if (originalRequest) {
                         originalClientActive = true
                         activeOriginalRequests++
-                        if (measurementCohort) {
-                            metrics.recordOriginalArrival(arrivalTimeMs)
-                        }
+                        metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
                     }
                     try {
                         val allocation = seize(runtime.resource)
@@ -355,9 +368,7 @@ class ReliabilityModel(
                             delay(durationMs)
                             if (localFailure) {
                                 currentOutcome = AttemptOutcome.LOCAL_FAILURE
-                                if (measurementCohort) {
-                                    metrics.recordLocalFailure(runtime.serviceId)
-                                }
+                                metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
                             } else {
                                 val call = runtime.outgoingCall
                                 if (call == null) {
@@ -371,8 +382,8 @@ class ReliabilityModel(
                                             currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
                                             break
                                         }
-                                        if (attemptNumber > 1 && measurementCohort) {
-                                            metrics.recordRetry(runtime.serviceId)
+                                        if (attemptNumber > 1) {
+                                            metrics.recordRetry(runtime.serviceId, measurementCohort)
                                         }
                                         val child =
                                             createInvocation(
@@ -420,12 +431,17 @@ class ReliabilityModel(
                             }
                         } finally {
                             release(allocation)
+                            if (currentOutcome != AttemptOutcome.PENDING) {
+                                metrics.recordAttemptCompletion(
+                                    runtime.serviceId,
+                                    time - serviceArrivalMs,
+                                    currentOutcome == AttemptOutcome.SUCCEEDED,
+                                )
+                            }
                         }
                     } catch (exception: QueueFullException) {
                         currentOutcome = AttemptOutcome.QUEUE_REJECTED
-                        if (measurementCohort) {
-                            metrics.recordQueueRejection(runtime.serviceId)
-                        }
+                        metrics.recordQueueRejection(runtime.serviceId, measurementCohort)
                     }
                     if (incomingNetwork != null) {
                         delay(incomingNetwork.nextNetworkDelayMs())

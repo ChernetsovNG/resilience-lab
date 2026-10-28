@@ -177,7 +177,7 @@ export const documentViews: Record<string, DocumentView> = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   experiment: experimentPath,
   variants: [
     {
@@ -189,7 +189,17 @@ export const summary: RunSummary = {
         successRate: { mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
         p95LatencyMs: { mean: 41.25, min: 40, max: 42.5 },
         p99LatencyMs: { mean: 80, min: 79, max: 81 },
-        services: { gateway: { admittedAmplification: { mean: 1.2, min: 1.1, max: 1.3 } } },
+        services: {
+          gateway: {
+            admittedAmplification: { mean: 1.2, min: 1.1, max: 1.3 },
+            totals: {
+              originalArrivals: 200, offeredAttempts: 260, admittedAttempts: 240,
+              timeouts: 20, retries: 40, failures: 10, queueRejections: 20,
+              busyHandlerTimeMs: 1000, handlerCapacityTimeMs: 2000,
+              queueLengthIntegralMs: 200, measurementMs: 2000,
+            },
+          },
+        },
       },
     },
     {

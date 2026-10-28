@@ -1,16 +1,54 @@
 package resiliencelab.core.results
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.experiment.AggregateMetrics
+import resiliencelab.core.experiment.LatencySketch
+import resiliencelab.core.experiment.MetricsAggregator
+import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.workspace.DocumentExistsException
+import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+
+/**
+ * Lets an in-flight artifact operation finish despite cancellation of its caller. FileChannel.lock is interruptible,
+ * so merely clearing a worker's flag before I/O is insufficient: another interrupt can arrive during the lock.
+ * The dedicated virtual thread is never interrupted; all caller interruptions are restored after it finishes.
+ */
+internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
+    val write = FutureTask(action)
+    Thread.ofVirtual().name("artifact-write").start(write)
+    var interrupted = false
+    try {
+        while (true) {
+            try {
+                return write.get()
+            } catch (_: InterruptedException) {
+                interrupted = true
+            } catch (failure: ExecutionException) {
+                throw failure.cause ?: failure
+            }
+        }
+    } finally {
+        if (interrupted) Thread.currentThread().interrupt()
+    }
+}
 
 /** Versions recorded in every manifest (ADR 0008; D6). */
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
+    const val ARTIFACT_SCHEMA = 2
 }
+
+/** Stored results are versioned independently of input documents; old formats require a fresh run. */
+class UnsupportedArtifactVersionException(
+    kind: String,
+    actual: Int?,
+) : IllegalArgumentException("Unsupported $kind schemaVersion ${actual ?: "missing"}; expected ${Versions.ARTIFACT_SCHEMA}; run again")
 
 /**
  * Reproducibility record of a run (ADR 0008): versions, stream assignment, versions of the documents read,
@@ -30,6 +68,30 @@ data class RunManifest(
     val variants: List<String>,
     val parts: Map<String, String>,
     val complete: Boolean,
+    val series: SeriesMetadata? = null,
+)
+
+/** Time grid, sketch version and population semantics shared by all series tasks. All durations are in ms. */
+@Serializable
+data class SeriesMetadata(
+    val warmupMs: Double,
+    val measurementMs: Double,
+    val windowMs: Double,
+    val sketchProfile: String,
+    val sketchLibraryVersion: String,
+    val timeUnit: String,
+    val timeBasis: String,
+    val replicationBasis: String,
+    val points: List<String>,
+)
+
+/** Cohort sufficient statistics of one task. Arrival timestamps are deliberately absent from persisted results. */
+@Serializable
+data class ReplicationArtifact(
+    val schemaVersion: Int,
+    val profile: String,
+    val unit: String,
+    val result: ReplicationResult,
 )
 
 /** Aggregated metrics of one variant. */
@@ -72,20 +134,64 @@ object ResultsLayout {
 class ArtifactWriter(
     private val workspace: Workspace,
 ) {
+    /** Publishes a task's fully drained cohort totals immediately, before reporting its completion. */
+    fun writeReplication(
+        taskDirectory: String,
+        result: ReplicationResult,
+    ) {
+        uninterruptedArtifactWrite {
+            val artifact = ReplicationArtifact(1, LatencySketch.PROFILE, "ms", result)
+            workspace.create("$taskDirectory/replication.json", DocumentCodec.encode(ReplicationArtifact.serializer(), artifact))
+        }
+    }
+
+    /** Rebuilds the summary using only persisted totals, reducing them in variant/point/replication order. */
+    fun summarize(
+        runDirectory: String,
+        experiment: String,
+        variants: List<Pair<String, String>>,
+        replications: Int,
+    ): RunSummary {
+        val json = Json { explicitNulls = false }
+        return RunSummary(
+            Versions.ARTIFACT_SCHEMA,
+            experiment,
+            variants.map { (id, label) ->
+                val totals =
+                    (0 until replications).map { replication ->
+                        val path = "$runDirectory/series/$id/p0/rep-$replication/replication.json"
+                        val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
+                        require(artifact.schemaVersion == 1 && artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") {
+                            "Unsupported replication format in '$path'"
+                        }
+                        artifact.result
+                    }
+                VariantSummary(id, label, replications, MetricsAggregator.aggregate(totals))
+            },
+        )
+    }
+
     /** Writes [summary], then [manifest] with the checksums of the written parts, and returns that manifest. */
     fun write(
         runDirectory: String,
         manifest: RunManifest,
-        summary: RunSummary,
-    ): RunManifest {
-        val summaryPath = "$runDirectory/summary.json"
-        val manifestPath = "$runDirectory/manifest.json"
-        if (workspace.exists(summaryPath)) throw DocumentExistsException(summaryPath)
-        if (workspace.exists(manifestPath)) throw DocumentExistsException(manifestPath)
+        summary: RunSummary?,
+    ): RunManifest =
+        uninterruptedArtifactWrite {
+            val summaryPath = "$runDirectory/summary.json"
+            val manifestPath = "$runDirectory/manifest.json"
+            if (workspace.exists(manifestPath)) throw DocumentExistsException(manifestPath)
+            if (summary != null && workspace.exists(summaryPath)) throw DocumentExistsException(summaryPath)
 
-        val summaryVersion = workspace.create(summaryPath, DocumentCodec.encode(RunSummary.serializer(), summary))
-        val written = manifest.copy(parts = mapOf("summary.json" to summaryVersion))
-        workspace.create(manifestPath, DocumentCodec.encode(RunManifest.serializer(), written))
-        return written
-    }
+            if (summary != null) workspace.create(summaryPath, DocumentCodec.encode(RunSummary.serializer(), summary))
+            val parts =
+                workspace
+                    .listFiles(runDirectory)
+                    .associate { path ->
+                        path.removePrefix("$runDirectory/") to DocumentVersion.of(workspace.readBytes(path))
+                    }.toSortedMap()
+            val written = manifest.copy(parts = parts, complete = summary != null && manifest.complete)
+            workspace.create(manifestPath, DocumentCodec.encode(RunManifest.serializer(), written))
+            written
+        }
 }

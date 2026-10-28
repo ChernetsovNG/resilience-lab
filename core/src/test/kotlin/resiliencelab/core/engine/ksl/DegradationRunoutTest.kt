@@ -8,6 +8,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.FaultSpan
@@ -137,7 +138,7 @@ class DegradationRunoutTest {
         assertThat(rig.result.originalArrivals).isEqualTo(measurementArrivals.size)
         assertThat(rig.result.successes).isEqualTo(measurementArrivals.size)
         assertThat(rig.result.failures).isZero()
-        assertThat(rig.result.allLatenciesMs).hasSize(measurementArrivals.size)
+        assertThat(rig.result.allLatency.count).isEqualTo(measurementArrivals.size.toLong())
         for (serviceId in listOf("entry", "backend")) {
             assertThat(
                 rig.result.services
@@ -160,10 +161,11 @@ class DegradationRunoutTest {
                     .failures,
             ).isZero()
         }
-        assertThat(rig.result.allLatenciesMs).allMatch { it >= 40.0 }
-        assertThat(rig.result.arrivalTimesMs.zip(rig.result.allLatenciesMs)).allMatch { (arrival, latency) ->
-            arrival + latency > 15.0
-        }
+        val bins =
+            resiliencelab.core.experiment.LatencySketch
+                .fromBins(rig.result.allLatency.sketch)
+        assertThat(bins.percentile(0.00001)!!).isGreaterThanOrEqualTo(40.0 * (1 - 1.0 / 128))
+        assertThat(rig.result.arrivalTimesMs).allMatch { it + 40.0 > 15.0 }
         assertDrained(rig.reliabilityModel)
     }
 
@@ -190,7 +192,7 @@ class DegradationRunoutTest {
         assertThat(rig.result.originalArrivals).isEqualTo(1)
         assertThat(rig.result.successes).isZero()
         assertThat(rig.result.failures).isEqualTo(1)
-        assertThat(rig.result.failedLatenciesMs).containsExactly(gapMs * 0.75)
+        assertLatencies(rig.result.failedLatency, gapMs * 0.75)
         assertThat(
             rig.result.services
                 .getValue("entry")
@@ -244,7 +246,7 @@ class DegradationRunoutTest {
         val rig = simulateOpen(chain, execution, manualInvocations = listOf(blocker))
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
-        assertThat(rig.result.failedLatenciesMs).containsExactly(10.0)
+        assertLatencies(rig.result.failedLatency, 10.0)
         assertThat(
             rig.result.services
                 .getValue("entry")

@@ -42,10 +42,13 @@ class DocumentExistsException(
 
 /** Versions of document text. */
 object DocumentVersion {
-    fun of(text: String): String =
+    fun of(text: String): String = of(text.toByteArray(Charsets.UTF_8))
+
+    /** SHA-256 of the stored bytes, including compressed artifact parts. */
+    fun of(bytes: ByteArray): String =
         MessageDigest
             .getInstance("SHA-256")
-            .digest(text.toByteArray(Charsets.UTF_8))
+            .digest(bytes)
             .joinToString("") { "%02x".format(it) }
 }
 
@@ -58,6 +61,9 @@ interface Workspace {
     fun listFiles(directory: String): List<String>
 
     fun read(path: String): VersionedDocument
+
+    /** Reads a binary artifact with the same path confinement as document reads. */
+    fun readBytes(path: String): ByteArray
 
     fun exists(path: String): Boolean
 
@@ -78,6 +84,12 @@ interface Workspace {
     fun create(
         path: String,
         text: String,
+    ): String
+
+    /** Creates binary content without replacement; returns the SHA-256 of the stored bytes. */
+    fun createBytes(
+        path: String,
+        bytes: ByteArray,
     ): String
 }
 
@@ -126,6 +138,12 @@ class FileWorkspace(
         return VersionedDocument(path, text, DocumentVersion.of(text))
     }
 
+    override fun readBytes(path: String): ByteArray {
+        val file = resolve(path)
+        if (!file.isRegularFile()) throw DocumentNotFoundException(path)
+        return Files.readAllBytes(file)
+    }
+
     override fun exists(path: String): Boolean = resolve(path).isRegularFile()
 
     override fun write(
@@ -144,15 +162,20 @@ class FileWorkspace(
     override fun create(
         path: String,
         text: String,
+    ): String = createBytes(path, text.toByteArray(Charsets.UTF_8))
+
+    override fun createBytes(
+        path: String,
+        bytes: ByteArray,
     ): String =
         mutate(path) { file ->
             Files.createDirectories(file.parent)
             try {
-                Files.write(file, text.toByteArray(Charsets.UTF_8), CREATE_NEW, WRITE)
+                Files.write(file, bytes, CREATE_NEW, WRITE)
             } catch (_: FileAlreadyExistsException) {
                 throw DocumentExistsException(path)
             }
-            DocumentVersion.of(text)
+            DocumentVersion.of(bytes)
         }
 
     private fun mutate(

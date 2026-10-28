@@ -4,6 +4,7 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
+import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.RunSettings
@@ -59,11 +60,11 @@ class ServiceMetricsIntegrationTest {
         val result = reliabilityModel.metrics.replicationResult()
 
         assertThat(result.arrivalTimesMs).containsExactly(12.0)
-        assertThat(result.allLatenciesMs).containsExactly(10.0)
+        assertLatencies(result.allLatency, 10.0)
         assertThat(result.originalArrivals).isEqualTo(1)
         assertThat(result.successes).isEqualTo(1)
         assertThat(result.failures).isZero()
-        assertThat(result.arrivalTimesMs[0] + result.allLatenciesMs[0]).isGreaterThan(15.0)
+        assertThat(result.arrivalTimesMs[0] + result.allLatency.sumMs).isGreaterThan(15.0)
         val service = result.services.getValue("entry")
         assertThat(service.offeredAttempts).isEqualTo(1)
         assertThat(service.admittedAttempts).isEqualTo(1)

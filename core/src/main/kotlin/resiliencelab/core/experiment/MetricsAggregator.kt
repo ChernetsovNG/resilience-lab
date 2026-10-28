@@ -11,9 +11,9 @@ object MetricsAggregator {
     fun aggregate(replications: List<ReplicationResult>): AggregateMetrics {
         val pooledLatency =
             LatencySummary(
-                all = latencyDistribution(replications.flatMap { it.allLatenciesMs }),
-                successful = latencyDistribution(replications.flatMap { it.successfulLatenciesMs }),
-                failed = latencyDistribution(replications.flatMap { it.failedLatenciesMs }),
+                all = latencyDistribution(replications.map { it.allLatency }),
+                successful = latencyDistribution(replications.map { it.successfulLatency }),
+                failed = latencyDistribution(replications.map { it.failedLatency }),
             )
         val successRate =
             metricSummary(
@@ -21,11 +21,11 @@ object MetricsAggregator {
             )
         val p95LatencyMs =
             metricSummary(
-                replications.mapNotNull { percentile(it.allLatenciesMs, 0.95) },
+                replications.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.95) },
             )
         val p99LatencyMs =
             metricSummary(
-                replications.mapNotNull { percentile(it.allLatenciesMs, 0.99) },
+                replications.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.99) },
             )
         val serviceIds = replications.flatMap { it.services.keys }.distinct()
         val services =
@@ -39,6 +39,7 @@ object MetricsAggregator {
                                 }
                             },
                         ),
+                    totals = serviceTotals(replications, serviceId),
                     offeredAmplification =
                         metricSummary(
                             replications.mapNotNull { replication ->
@@ -58,21 +59,38 @@ object MetricsAggregator {
         )
     }
 
-    private fun latencyDistribution(valuesMs: List<Double>): LatencyDistribution? {
-        if (valuesMs.isEmpty()) return null
+    private fun latencyDistribution(values: List<LatencyStatistics>): LatencyDistribution? {
+        val accumulator = LatencyAccumulator(context = "pooled latency")
+        values.forEach { accumulator.merge(it) }
+        val statistics = accumulator.snapshot()
+        if (statistics.count == 0L) return null
+        val sketch = LatencySketch.fromBins(statistics.sketch)
         return LatencyDistribution(
-            meanMs = Statistic(valuesMs.toDoubleArray()).average,
-            p95Ms = Statistic.percentile(valuesMs.toDoubleArray(), 0.95),
-            p99Ms = Statistic.percentile(valuesMs.toDoubleArray(), 0.99),
+            meanMs = statistics.sumMs / statistics.count,
+            p95Ms = requireNotNull(sketch.percentile(0.95)),
+            p99Ms = requireNotNull(sketch.percentile(0.99)),
+            statistics = statistics,
         )
     }
 
-    private fun percentile(
-        valuesMs: List<Double>,
-        probability: Double,
-    ): Double? {
-        if (valuesMs.isEmpty()) return null
-        return Statistic.percentile(valuesMs.toDoubleArray(), probability)
+    private fun serviceTotals(
+        replications: List<ReplicationResult>,
+        serviceId: String,
+    ): ServiceTotals {
+        val services = replications.mapNotNull { it.services[serviceId] }
+        return ServiceTotals(
+            originalArrivals = replications.filter { serviceId in it.services }.sumOf { it.originalArrivals.toLong() },
+            offeredAttempts = services.sumOf { it.offeredAttempts.toLong() },
+            admittedAttempts = services.sumOf { it.admittedAttempts.toLong() },
+            timeouts = services.sumOf { it.timeouts.toLong() },
+            retries = services.sumOf { it.retries.toLong() },
+            failures = services.sumOf { it.failures.toLong() },
+            queueRejections = services.sumOf { it.queueRejections.toLong() },
+            busyHandlerTimeMs = services.sumOf { it.busyHandlerTimeMs },
+            handlerCapacityTimeMs = services.sumOf { it.handlers * it.measurementMs },
+            queueLengthIntegralMs = services.sumOf { it.queueLengthIntegralMs },
+            measurementMs = services.sumOf { it.measurementMs },
+        )
     }
 
     private fun ratio(

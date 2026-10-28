@@ -53,9 +53,9 @@ class MetricsAggregatorTest {
         assertLatency(pooledFailed!!, meanMs = 50.0, p95Ms = 60.0, p99Ms = 60.0)
 
         assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertSummary(aggregate.p95LatencyMs!!, 50.0, sqrt(200.0), 40.0, 60.0)
+        assertQuantileSummary(aggregate.p95LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.95)
         assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertSummary(aggregate.p99LatencyMs!!, 50.0, sqrt(200.0), 40.0, 60.0)
+        assertQuantileSummary(aggregate.p99LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.99)
 
         val service = aggregate.services["entry"]
         assertThat(service).isNotNull()
@@ -98,21 +98,9 @@ class MetricsAggregatorTest {
         assertThat(pooled).isNotNull()
         assertLatency(pooled!!, meanMs = 100.5, p95Ms = 190.95, p99Ms = 198.99)
         assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertSummary(
-            aggregate.p95LatencyMs!!,
-            mean = 145.95,
-            stdDev = sqrt(5_000.0),
-            min = 95.95,
-            max = 195.95,
-        )
+        assertQuantileSummary(aggregate.p95LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.95)
         assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertSummary(
-            aggregate.p99LatencyMs!!,
-            mean = 149.99,
-            stdDev = sqrt(5_000.0),
-            min = 99.99,
-            max = 199.99,
-        )
+        assertQuantileSummary(aggregate.p99LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.99)
     }
 
     @Test
@@ -133,9 +121,9 @@ class MetricsAggregatorTest {
         assertThat(aggregate.successRate).isNotNull()
         assertSingleValue(aggregate.successRate!!, 1.0)
         assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertSingleValue(aggregate.p95LatencyMs!!, 10.0)
+        assertSingleValue(aggregate.p95LatencyMs!!, sketchPercentile(listOf(10.0), 0.95))
         assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertSingleValue(aggregate.p99LatencyMs!!, 10.0)
+        assertSingleValue(aggregate.p99LatencyMs!!, sketchPercentile(listOf(10.0), 0.99))
         assertThat(aggregate.pooledLatency.failed).isNull()
         val service = aggregate.services["entry"]
         assertThat(service).isNotNull()
@@ -176,6 +164,23 @@ class MetricsAggregatorTest {
         assertThat(Json.decodeFromString(AggregateMetrics.serializer(), encoded)).isEqualTo(aggregate)
     }
 
+    private fun sketchPercentile(
+        values: List<Double>,
+        p: Double,
+    ): Double = LatencySketch().apply { values.forEach { add(it) } }.percentile(p)!!
+
+    private fun assertQuantileSummary(
+        actual: MetricSummary,
+        values: List<List<Double>>,
+        p: Double,
+    ) {
+        val statistic = Statistic(values.map { sketchPercentile(it, p) }.toDoubleArray())
+        assertSummary(actual, statistic.average, statistic.standardDeviation, statistic.min, statistic.max)
+        val interval = statistic.confidenceInterval(0.95)
+        assertThat(actual.ci95Low!!).isCloseTo(interval.lowerLimit, offset(1e-9))
+        assertThat(actual.ci95High!!).isCloseTo(interval.upperLimit, offset(1e-9))
+    }
+
     private fun assertSummary(
         actual: MetricSummary,
         mean: Double,
@@ -209,8 +214,8 @@ class MetricsAggregatorTest {
         p99Ms: Double,
     ) {
         assertThat(actual.meanMs).isCloseTo(meanMs, offset(1e-9))
-        assertThat(actual.p95Ms).isCloseTo(p95Ms, offset(1e-9))
-        assertThat(actual.p99Ms).isCloseTo(p99Ms, offset(1e-9))
+        assertThat(actual.p95Ms).isCloseTo(p95Ms, offset(p95Ms / 128 + 1e-9))
+        assertThat(actual.p99Ms).isCloseTo(p99Ms, offset(p99Ms / 128 + 1e-9))
     }
 
     private fun replication(
@@ -224,9 +229,9 @@ class MetricsAggregatorTest {
     ): ReplicationResult =
         ReplicationResult(
             arrivalTimesMs = List(originalArrivals) { it.toDouble() },
-            allLatenciesMs = allLatencies,
-            successfulLatenciesMs = successfulLatencies,
-            failedLatenciesMs = failedLatencies,
+            allLatency = latencyStatistics(allLatencies),
+            successfulLatency = latencyStatistics(successfulLatencies),
+            failedLatency = latencyStatistics(failedLatencies),
             originalArrivals = originalArrivals,
             successes = successes,
             failures = failures,
@@ -244,8 +249,10 @@ class MetricsAggregatorTest {
             retries = 0,
             failures = 0,
             queueRejections = 0,
-            handlerUtilization = 0.0,
-            meanQueueLength = 0.0,
-            p95QueueLength = 0.0,
+            handlers = 1,
+            measurementMs = 1.0,
+            busyHandlerTimeMs = 0.0,
+            queueLengthIntegralMs = 0.0,
+            queueDurationsMs = emptyMap(),
         )
 }

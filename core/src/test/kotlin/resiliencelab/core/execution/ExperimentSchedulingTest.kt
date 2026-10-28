@@ -11,11 +11,13 @@ import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.PathStreamSource
 import resiliencelab.core.engine.ksl.ReliabilityModel
 import resiliencelab.core.engine.ksl.TestChains
+import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.ReplicationResult
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +25,47 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 
 class ExperimentSchedulingTest {
+    @Test
+    fun `closing drains a dispatched task queued behind a finishing worker`() {
+        val executor = ExperimentExecutor(workers = 1) { _, _, _, _ -> emptyResult() }
+        val scheduler =
+            ExperimentExecutor::class.java
+                .getDeclaredField("scheduler")
+                .apply { isAccessible = true }
+                .get(executor)
+        val pool =
+            scheduler.javaClass
+                .getDeclaredField("pool")
+                .apply { isAccessible = true }
+                .get(scheduler) as ThreadPoolExecutor
+        val occupied = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        pool.execute {
+            occupied.countDown()
+            try {
+                release.await(5, TimeUnit.SECONDS)
+            } catch (_: InterruptedException) {
+                // Reproduce shutdownNow removing a dispatched task before perform can account for it.
+            }
+        }
+        val run = FutureTask { runCatching { executor.run(experiment(seed = 11, replications = 1)) }.exceptionOrNull() }
+        val caller = thread(isDaemon = true) { run.run() }
+        try {
+            assertThat(occupied.await(5, TimeUnit.SECONDS)).isTrue()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (pool.queue.isEmpty() && System.nanoTime() < deadline) Thread.yield()
+            assertThat(pool.queue).hasSize(1)
+            executor.close()
+            release.countDown()
+            assertThat(run.get(3, TimeUnit.SECONDS)).isInstanceOf(CancellationException::class.java)
+        } finally {
+            release.countDown()
+            executor.close()
+            caller.interrupt()
+            caller.join(1000)
+        }
+    }
+
     @Test
     fun `later short job finishes before a long job with round robin task order`() {
         val firstTaskStarted = CountDownLatch(1)
@@ -194,7 +237,8 @@ class ExperimentSchedulingTest {
         return CompiledExperiment(listOf(CompiledVariant("baseline", "Baseline", TestChains.simple().copy(run = settings))), settings)
     }
 
-    private fun emptyResult() = ReplicationResult(emptyList(), emptyList(), emptyList(), emptyList(), 0, 0, 0, emptyMap())
+    private fun emptyResult() =
+        ReplicationResult(emptyList(), LatencyStatistics(), LatencyStatistics(), LatencyStatistics(), 0, 0, 0, emptyMap())
 
     private fun awaitWaiting(runner: Thread) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
