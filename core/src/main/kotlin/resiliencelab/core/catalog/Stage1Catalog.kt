@@ -7,10 +7,47 @@ import kotlinx.serialization.json.put
 
 /** Stage 1 catalog: a client, blocking services, the client request and synchronous calls (stage 1 design §3.1). */
 object Stage1Catalog {
+    private val typeAssumptions =
+        mapOf(
+            "client" to
+                listOf(
+                    "Requests arrive as an open Poisson stream; each original request has an absolute end-to-end deadline.",
+                    "After the deadline the client stops waiting, but admitted work continues.",
+                ),
+            "service" to
+                listOf(
+                    "A handler is allocated once and held through local processing, all downstream attempts, and backoff; " +
+                        "retries do not re-enter the caller queue.",
+                    "An upstream timeout or deadline does not release downstream handlers or remove admitted work.",
+                ),
+            "request" to
+                listOf("Client requests enter the first service without network delay, per-attempt timeout, or retries."),
+            "call" to
+                listOf(
+                    "A timeout stops the caller from waiting; it does not cancel downstream work, " +
+                        "which remains as orphaned work and continues consuming resources.",
+                    "Late responses are discarded after timeout or deadline.",
+                    "Cancellation does not propagate along the call chain.",
+                ),
+        )
+
     val catalog: Catalog =
         Catalog(
             schemaVersion = 1,
-            types = listOf(client(), service(), request(), call()).map { type -> type.copy(params = type.params.map(::withUnits)) },
+            types =
+                listOf(client(), service(), request(), call()).map { type ->
+                    type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
+                },
+            assumptions =
+                listOf(
+                    "Summary metrics use the cohort of original requests arriving during the measurement interval; " +
+                        "their outcomes and caused attempts include run-out.",
+                    "Time series use event-time windows covering warmup and measurement; run-out is excluded from series windows.",
+                    "Latency quantiles use the ddsketch-bitwise6-rational-v1 profile with KSL interpolation; " +
+                        "representation error is at most 0.78125% in the tested 0.001–60000 ms range.",
+                    "Means over independent replications use Student 95% confidence intervals; " +
+                        "interval bounds are not clipped to physical metric ranges.",
+                ),
         )
 
     /** Quantity parameters list the units [Quantities] accepts for their dimension (ADR 0001, items 1 and 6). */

@@ -52,6 +52,9 @@ class WorkspaceApiTest {
         assertThat(response.status).isEqualTo(200)
         assertThat(JsonPath.read<List<String>>(response.contentAsString, "$.types[*].id"))
             .containsExactly("client", "service", "request", "call")
+        assertThat(JsonPath.read<List<String>>(response.contentAsString, "$.assumptions[*]")).isNotEmpty()
+        assertThat(JsonPath.read<List<List<String>>>(response.contentAsString, "$.types[*].assumptions"))
+            .allSatisfy { assumptions -> assertThat(assumptions).isNotEmpty() }
         openApi.assertResponse("get", "/api/v1/catalog", response)
     }
 

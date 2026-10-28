@@ -31,6 +31,18 @@ class Stage1CatalogTest {
     }
 
     @Test
+    fun `documents model and measurement assumptions`() {
+        val shared = catalog.assumptions.joinToString("\n")
+        assertThat(shared).contains("cohort", "run-out", "event-time", "0.78125%", "Student", "not clipped")
+        assertThat(catalog.types).allSatisfy { type -> assertThat(type.assumptions).isNotEmpty() }
+
+        val service = catalog.type("service")!!.assumptions.joinToString("\n")
+        assertThat(service).contains("handler", "downstream", "backoff")
+        val call = catalog.type("call")!!.assumptions.joinToString("\n")
+        assertThat(call).contains("orphaned work", "Late responses", "does not cancel")
+    }
+
+    @Test
     fun `survives a JSON round trip`() {
         val json = Json.encodeToString(Catalog.serializer(), catalog)
         assertThat(Json.decodeFromString(Catalog.serializer(), json)).isEqualTo(catalog)
