@@ -1,5 +1,5 @@
 import type { DocumentDraft, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
-import { isObject, withParam } from "./params";
+import { isObject, ownEntry, withParam } from "./params";
 
 /** Document content only: selection, pages and panels do not belong in the history. */
 export interface EditorDocuments {
@@ -21,6 +21,34 @@ export interface LoadedExperiment extends EditorDocuments {
   saved: EditorDocuments;
   /** A missing layout has empty in-memory content and a null version until its first write. */
   versions: Record<DocumentKind, string | null>;
+}
+
+type ModelElement = ModelFile["blocks"][string] | ModelFile["connections"][number];
+const elementOrigins = new WeakMap<ModelElement["params"], object>();
+
+/** Session-only identity follows parameter records: renames retain them, edits register copies; nothing enters document JSON. */
+export function elementIdentity(element: ModelElement): object {
+  return elementOrigins.get(element.params) ?? element.params;
+}
+
+function rememberElementCopies(before: ModelFile, after: ModelFile): void {
+  if (before === after) return;
+  const remember = (previous: ModelElement, current: ModelElement) => {
+    if (previous.params !== current.params && !elementOrigins.has(current.params)) {
+      elementOrigins.set(current.params, elementIdentity(previous));
+    }
+  };
+  for (const [id, block] of Object.entries(after.blocks)) {
+    const previous = ownEntry(before.blocks, id);
+    if (previous?.type === block.type) remember(previous, block);
+  }
+  const connections = new Map(before.connections.map((connection) => [connection.id, connection]));
+  for (const connection of after.connections) {
+    const previous = connections.get(connection.id);
+    if (previous !== undefined && previous.type === connection.type && previous.from === connection.from && previous.to === connection.to) {
+      remember(previous, connection);
+    }
+  }
 }
 
 interface EditorState {
@@ -81,7 +109,10 @@ export function setModelParam(id: string, name: string, value: unknown): EditorC
 
 /** Commands and history share the same document snapshots; saves update only persistence metadata. */
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
-  if (action.type === "open") return { ...initialEditorState, loaded: action.loaded };
+  if (action.type === "open") {
+    if (state.loaded?.modelPath === action.loaded.modelPath) rememberElementCopies(state.loaded.saved.model, action.loaded.model);
+    return { ...initialEditorState, loaded: action.loaded };
+  }
   const { loaded, past, future } = state;
   if (loaded === null) return state;
   switch (action.type) {
@@ -92,6 +123,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         after = { ...after, experiment: { ...after.experiment, layoutRef: loaded.layoutPath.split("/").at(-1)! } };
       }
       if (documentValuesEqual(before, after)) return state;
+      rememberElementCopies(before.model, after.model);
       return { ...state, loaded: { ...loaded, ...after }, past: [...past, before].slice(-100), future: [] };
     }
     case "undo": {

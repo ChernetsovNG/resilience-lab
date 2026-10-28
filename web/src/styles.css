@@ -535,6 +535,7 @@ select {
 .canvas-edge-label {
   position: absolute;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.15rem;
   padding: 0.1rem 0.25rem;
@@ -686,4 +687,63 @@ select {
 
 .cost-estimate ul {
   margin-bottom: 0;
+}
+
+.canvas-results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #d5dbe3;
+  background: #f8fafc;
+  color: #334e68;
+  font-size: 0.8rem;
+}
+
+.canvas-results-toolbar label,
+.utilization-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.utilization-scale {
+  width: 5rem;
+  height: 0.75rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.15rem;
+}
+
+.canvas-results-stale {
+  color: #92400e;
+}
+
+.block-results {
+  display: grid;
+  gap: 0.1rem;
+  border-top: 1px solid #9aa5b1;
+  padding-top: 0.25rem;
+}
+
+.block-node .saturation-badge {
+  position: absolute;
+  top: -0.6rem;
+  right: -0.6rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid #b45309;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.canvas-edge-parameters {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.canvas-edge-results {
+  white-space: nowrap;
+  color: #334e68;
 }
