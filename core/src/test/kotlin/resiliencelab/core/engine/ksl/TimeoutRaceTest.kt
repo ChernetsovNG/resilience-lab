@@ -4,16 +4,14 @@ import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.KSLEvent
 import ksl.simulation.Model
-import ksl.utilities.random.rng.RNStreamProvider
-import ksl.utilities.random.rvariable.ExponentialRV
+import ksl.utilities.random.rvariable.KSLRandom
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
 class TimeoutRaceTest {
@@ -21,7 +19,7 @@ class TimeoutRaceTest {
     fun `same-time response wins and cancels the timeout`() {
         val rig =
             simulate(
-                scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
+                chain = chain(entryProcessingMs = 0.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
                 requests = listOf(InvocationSpec()),
             )
 
@@ -56,7 +54,7 @@ class TimeoutRaceTest {
     fun `caller times out at 50 while orphaned downstream succeeds at 80`() {
         val rig =
             simulate(
-                scenario = scenario(entryProcessingMs = 0.0, backendProcessingMs = 80.0, timeoutMs = 50.0),
+                chain = chain(entryProcessingMs = 0.0, backendProcessingMs = 80.0, timeoutMs = 50.0),
                 requests = listOf(InvocationSpec()),
                 observationTimesMs = listOf(25.0, 50.5, 79.5, 80.5),
             )
@@ -111,11 +109,11 @@ class TimeoutRaceTest {
 
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 10.0,
-                        network = DurationDistribution(DistributionKind.EXPONENTIAL, networkMeanMs, stdDevMs = null),
+                        network = Distribution(DistributionShape.EXPONENTIAL, networkMeanMs),
                         timeoutMs = 500.0,
                     ),
                 requests = listOf(InvocationSpec()),
@@ -159,7 +157,7 @@ class TimeoutRaceTest {
     fun `caller queue and one local preprocessing are outside the attempt timeout`() {
         val rig =
             simulate(
-                scenario = scenario(entryProcessingMs = 30.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
+                chain = chain(entryProcessingMs = 30.0, backendProcessingMs = 50.0, timeoutMs = 50.0),
                 requests =
                     listOf(
                         InvocationSpec(originalRequest = false),
@@ -206,8 +204,8 @@ class TimeoutRaceTest {
     fun `response before the deadline cancels the scheduled timeout`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 20.0,
                         network = fixed(5.0),
@@ -242,8 +240,8 @@ class TimeoutRaceTest {
     fun `timeout expires while the response network is still in flight`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 10.0,
                         network = fixed(5.0),
@@ -287,8 +285,8 @@ class TimeoutRaceTest {
     fun `downstream process remains live after caller timeout during request network`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 5.0,
                         network = fixed(20.0),
@@ -329,8 +327,8 @@ class TimeoutRaceTest {
     fun `never admitted orphan remains live throughout its response network`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 30.0,
                         network = fixed(20.0),
@@ -382,8 +380,8 @@ class TimeoutRaceTest {
     fun `replication termination during request network balances downstream liveness`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 0.0,
                         backendProcessingMs = 5.0,
                         network = fixed(20.0),
@@ -423,23 +421,20 @@ class TimeoutRaceTest {
         assertThat(result.services.getValue("backend").queueRejections).isZero()
     }
 
+    /** Request and response delays of the first attempt: the first two draws of the call's network stream. */
     private fun networkSamples(meanMs: Double): Pair<Double, Double> {
-        val provider =
-            RNStreamProvider().apply {
-                initialSeed(SeedFactory.seedVector(42L))
-            }
-        val samples = ExponentialRV(meanMs, streamNum = 5, streamProvider = provider)
-        return samples.value to samples.value
+        val network = TestChains.stream(42L, "entry-to-backend", StreamRole.NETWORK)
+        return KSLRandom.rExponential(meanMs, network) to KSLRandom.rExponential(meanMs, network)
     }
 
-    private fun scenario(
+    private fun chain(
         entryProcessingMs: Double,
         backendProcessingMs: Double,
-        network: DurationDistribution = fixed(0.0),
+        network: Distribution = fixed(0.0),
         timeoutMs: Double,
         backendQueueCapacity: Int? = null,
-    ): Scenario {
-        val base = TestData.simpleScenario()
+    ): ChainIr {
+        val base = TestChains.simple()
         return base.copy(
             services =
                 listOf(
@@ -449,28 +444,23 @@ class TimeoutRaceTest {
                         queueCapacity = backendQueueCapacity ?: base.services[1].queueCapacity,
                     ),
                 ),
-            links =
+            calls =
                 listOf(
-                    base.links.single().copy(network = network, timeoutMs = timeoutMs, maxAttempts = 1),
+                    base.calls.single().copy(network = network, timeoutMs = timeoutMs, attempts = 1),
                 ),
         )
     }
 
-    private fun fixed(durationMs: Double): DurationDistribution =
-        DurationDistribution(
-            kind = DistributionKind.FIXED,
-            meanMs = durationMs,
-            stdDevMs = null,
-        )
+    private fun fixed(durationMs: Double): Distribution = TestChains.fixed(durationMs)
 
     private fun simulate(
-        scenario: Scenario,
+        chain: ChainIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
         replicationLengthMs: Double = 100.0,
     ): SimulationRig {
         val model = Model("TimeoutRaceTest", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution())
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution()))
         val driver = InvocationDriver(model, reliabilityModel, requests, observationTimesMs)
         model.numberOfReplications = 1
         model.lengthOfReplication = replicationLengthMs
@@ -478,8 +468,8 @@ class TimeoutRaceTest {
         return SimulationRig(model, reliabilityModel, driver)
     }
 
-    private fun execution(): Execution =
-        Execution(
+    private fun execution(): RunSettings =
+        RunSettings(
             replications = 1,
             warmupMs = 0.0,
             measurementMs = 1_000.0,

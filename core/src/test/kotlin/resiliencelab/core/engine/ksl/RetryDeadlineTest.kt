@@ -3,28 +3,24 @@ package resiliencelab.core.engine.ksl
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.Model
-import ksl.utilities.random.rng.RNStreamProvider
-import ksl.utilities.random.rvariable.UniformRV
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.scenario.DistributionKind
-import resiliencelab.core.scenario.DurationDistribution
-import resiliencelab.core.scenario.Execution
-import resiliencelab.core.scenario.RetryKind
-import resiliencelab.core.scenario.RetrySpec
-import resiliencelab.core.scenario.Scenario
-import resiliencelab.core.scenario.TestData
+import resiliencelab.core.ir.Backoff
+import resiliencelab.core.ir.BackoffKind
+import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
 class RetryDeadlineTest {
     @Test
     fun `none backoff is zero without sampling jitter`() {
-        val retry = RetrySpec(RetryKind.NONE, 100.0, 7_000.0, base = 3.0)
+        val backoff = TestChains.backoff(BackoffKind.NONE, 100.0, 7_000.0, multiplier = 3.0)
         var jitterSampled = false
 
         val delayMs =
-            RetryPolicyEvaluator.backoffMs(retry, failedAttemptNumber = 1) {
+            RetryPolicyEvaluator.backoffMs(backoff, failedAttemptNumber = 1) {
                 jitterSampled = true
                 0.999
             }
@@ -35,8 +31,8 @@ class RetryDeadlineTest {
 
     @Test
     fun `fixed backoff is the minimum of base and cap`() {
-        val belowCap = RetrySpec(RetryKind.FIXED, 100.0, 7_000.0, base = 3.0)
-        val aboveCap = belowCap.copy(maxBackoffMs = 50.0)
+        val belowCap = TestChains.backoff(BackoffKind.FIXED, 100.0, 7_000.0, multiplier = 3.0)
+        val aboveCap = belowCap.copy(maxMs = 50.0)
 
         assertThat(RetryPolicyEvaluator.backoffMs(belowCap, 1) { 0.999 }).isCloseTo(100.0, offset(0.0))
         assertThat(RetryPolicyEvaluator.backoffMs(aboveCap, 4) { 0.999 }).isCloseTo(50.0, offset(0.0))
@@ -44,11 +40,11 @@ class RetryDeadlineTest {
 
     @Test
     fun `exponential backoff uses configurable base three and the cap`() {
-        val retry = RetrySpec(RetryKind.EXPONENTIAL_FULL_JITTER, 100.0, 7_000.0, base = 3.0)
+        val backoff = TestChains.backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 100.0, 7_000.0, multiplier = 3.0)
 
         val delaysMs =
             (1..6).map { failedAttempt ->
-                RetryPolicyEvaluator.backoffMs(retry, failedAttempt) { 1.0 }
+                RetryPolicyEvaluator.backoffMs(backoff, failedAttempt) { 1.0 }
             }
 
         assertThat(delaysMs).containsExactly(100.0, 300.0, 900.0, 2700.0, 7000.0, 7000.0)
@@ -56,10 +52,10 @@ class RetryDeadlineTest {
 
     @Test
     fun `full jitter scales the capped exponential delay`() {
-        val retry = RetrySpec(RetryKind.EXPONENTIAL_FULL_JITTER, 100.0, 7_000.0, base = 3.0)
+        val backoff = TestChains.backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 100.0, 7_000.0, multiplier = 3.0)
 
-        val zero = RetryPolicyEvaluator.backoffMs(retry, failedAttemptNumber = 5) { 0.0 }
-        val almostCap = RetryPolicyEvaluator.backoffMs(retry, failedAttemptNumber = 5) { 0.999 }
+        val zero = RetryPolicyEvaluator.backoffMs(backoff, failedAttemptNumber = 5) { 0.0 }
+        val almostCap = RetryPolicyEvaluator.backoffMs(backoff, failedAttemptNumber = 5) { 0.999 }
 
         assertThat(zero).isCloseTo(0.0, offset(0.0))
         assertThat(almostCap).isCloseTo(6_993.0, offset(1e-9))
@@ -70,11 +66,11 @@ class RetryDeadlineTest {
     fun `queue rejection is retried with a fresh child and then succeeds`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 10.0,
                         backendQueueCapacity = 0,
-                        retry = fixedBackoff(20.0),
+                        backoff = fixedBackoff(20.0),
                     ),
                 requests =
                     listOf(
@@ -109,7 +105,7 @@ class RetryDeadlineTest {
     fun `downstream local failure is retryable`() {
         val rig =
             simulate(
-                scenario = scenario(backendFailureRate = 0.5),
+                chain = chain(backendFailureRate = 0.5),
                 requests = listOf(InvocationSpec()),
                 seed = failureThenSuccessSeed(),
             )
@@ -130,7 +126,7 @@ class RetryDeadlineTest {
     fun `five max attempts means five total attempts and four retries`() {
         val rig =
             simulate(
-                scenario = scenario(backendFailureRate = 1.0, maxAttempts = 5),
+                chain = chain(backendFailureRate = 1.0, attempts = 5),
                 requests = listOf(InvocationSpec()),
             )
 
@@ -150,11 +146,11 @@ class RetryDeadlineTest {
     fun `caller handler stays allocated during backoff while a second request waits`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 10.0,
                         backendQueueCapacity = 0,
-                        retry = fixedBackoff(20.0),
+                        backoff = fixedBackoff(20.0),
                     ),
                 requests =
                     listOf(
@@ -193,12 +189,12 @@ class RetryDeadlineTest {
     fun `deadline during backoff prevents another attempt and completes the client once`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 100.0,
                         backendQueueCapacity = 0,
-                        maxAttempts = 5,
-                        retry = fixedBackoff(100.0),
+                        attempts = 5,
+                        backoff = fixedBackoff(100.0),
                         requestDeadlineMs = 50.0,
                     ),
                 requests =
@@ -246,11 +242,11 @@ class RetryDeadlineTest {
     fun `deadline during entry queue leaves queued orphan executing with one client failure`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 50.0,
                         requestDeadlineMs = 10.0,
-                    ).copy(links = emptyList()),
+                    ).copy(calls = emptyList()),
                 requests =
                     listOf(
                         InvocationSpec(originalRequest = false),
@@ -306,8 +302,8 @@ class RetryDeadlineTest {
     fun `deadline during local processing drains accepted work without starting downstream`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         entryProcessingMs = 50.0,
                         requestDeadlineMs = 10.0,
                         timeoutMs = 500.0,
@@ -348,11 +344,11 @@ class RetryDeadlineTest {
     fun `response at capped timeout and original deadline wins once without timeout`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 40.0,
                         timeoutMs = 500.0,
-                        maxAttempts = 1,
+                        attempts = 1,
                         requestDeadlineMs = 40.0,
                     ),
                 requests = listOf(InvocationSpec()),
@@ -385,11 +381,11 @@ class RetryDeadlineTest {
     fun `capped timeout without response at deadline keeps deadline outcome`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 80.0,
                         timeoutMs = 500.0,
-                        maxAttempts = 1,
+                        attempts = 1,
                         requestDeadlineMs = 40.0,
                     ),
                 requests = listOf(InvocationSpec()),
@@ -431,7 +427,7 @@ class RetryDeadlineTest {
     fun `original deadline is propagated to nested attempt timeouts and orphan drain`() {
         val rig =
             simulate(
-                scenario = threeServiceScenario(),
+                chain = threeServiceChain(),
                 requests = listOf(InvocationSpec()),
                 replicationLengthMs = 150.0,
             )
@@ -482,11 +478,11 @@ class RetryDeadlineTest {
     fun `timeout is retried while the orphaned first child still completes`() {
         val rig =
             simulate(
-                scenario =
-                    scenario(
+                chain =
+                    chain(
                         backendProcessingMs = 5.0,
                         timeoutMs = 6.0,
-                        retry = fixedBackoff(4.0),
+                        backoff = fixedBackoff(4.0),
                     ),
                 requests =
                     listOf(
@@ -527,94 +523,81 @@ class RetryDeadlineTest {
         assertDrained(rig)
     }
 
-    private fun scenario(
+    private fun chain(
         entryProcessingMs: Double = 0.0,
         backendProcessingMs: Double = 0.0,
         entryFailureRate: Double = 0.0,
         backendFailureRate: Double = 0.0,
         backendQueueCapacity: Int = 2,
         timeoutMs: Double = 50.0,
-        maxAttempts: Int = 2,
-        retry: RetrySpec = RetrySpec(RetryKind.NONE, 0.0, 0.0),
+        attempts: Int = 2,
+        backoff: Backoff = TestChains.backoff(BackoffKind.NONE, 0.0, 0.0),
         requestDeadlineMs: Double = 500.0,
-    ): Scenario {
-        val base = TestData.simpleScenario()
+    ): ChainIr {
+        val base = TestChains.simple()
         return base.copy(
             services =
                 listOf(
                     base.services[0].copy(
                         processing = fixed(entryProcessingMs),
-                        failureRate = entryFailureRate,
+                        failureProbability = entryFailureRate,
                     ),
                     base.services[1].copy(
                         processing = fixed(backendProcessingMs),
-                        failureRate = backendFailureRate,
+                        failureProbability = backendFailureRate,
                         queueCapacity = backendQueueCapacity,
                     ),
                 ),
-            links =
+            calls =
                 listOf(
-                    base.links.single().copy(
+                    base.calls.single().copy(
                         timeoutMs = timeoutMs,
-                        maxAttempts = maxAttempts,
-                        retry = retry,
+                        attempts = attempts,
+                        backoff = backoff,
                     ),
                 ),
-            workload = base.workload.copy(requestDeadlineMs = requestDeadlineMs),
+            client = base.client.copy(deadlineMs = requestDeadlineMs),
         )
     }
 
-    private fun threeServiceScenario(): Scenario {
-        val base = scenario(timeoutMs = 500.0, requestDeadlineMs = 40.0)
-        val third = base.services[1].copy(id = "third", processing = fixed(100.0))
+    private fun threeServiceChain(): ChainIr {
+        val base = chain(timeoutMs = 500.0, requestDeadlineMs = 40.0)
+        val third = base.services[1].copy(path = "third", processing = fixed(100.0))
         val secondLink =
-            base.links.single().copy(
-                id = "backend-to-third",
+            base.calls.single().copy(
+                path = "backend-to-third",
                 from = "backend",
                 to = "third",
             )
         return base.copy(
             services = base.services + third,
-            links = base.links + secondLink,
+            calls = base.calls + secondLink,
         )
     }
 
-    private fun fixedBackoff(durationMs: Double): RetrySpec =
-        RetrySpec(
-            kind = RetryKind.FIXED,
-            baseBackoffMs = durationMs,
-            maxBackoffMs = durationMs,
-        )
+    private fun fixedBackoff(durationMs: Double): Backoff = TestChains.fixedBackoff(durationMs)
 
-    private fun fixed(durationMs: Double): DurationDistribution =
-        DurationDistribution(
-            kind = DistributionKind.FIXED,
-            meanMs = durationMs,
-            stdDevMs = null,
-        )
+    private fun fixed(durationMs: Double): Distribution = TestChains.fixed(durationMs)
 
+    /** First seed from 42 whose backend fails the first local attempt and succeeds the second at failure probability 0.5. */
     private fun failureThenSuccessSeed(): Long {
         var candidate = 42L
         while (true) {
-            val provider =
-                RNStreamProvider().apply {
-                    initialSeed(SeedFactory.seedVector(candidate))
-                }
-            val samples = UniformRV(0.0, 1.0, streamNum = 4, streamProvider = provider)
-            if (samples.value < 0.5 && samples.value >= 0.5) return candidate
+            val outcomes = TestChains.stream(candidate, "backend", StreamRole.OUTCOME)
+            if (outcomes.randU01() < 0.5 && outcomes.randU01() >= 0.5) return candidate
             candidate++
         }
     }
 
     private fun simulate(
-        scenario: Scenario,
+        chain: ChainIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
         replicationLengthMs: Double = 200.0,
         seed: Long = 42L,
     ): SimulationRig {
         val model = Model("RetryDeadlineTest", autoCSVReports = false)
-        val reliabilityModel = ReliabilityModel(model, scenario, execution(seed))
+        val reliabilityModel = TestChains.reliabilityModel(model, chain.copy(run = execution(seed)))
         val driver = InvocationDriver(model, reliabilityModel, requests, observationTimesMs)
         model.numberOfReplications = 1
         model.lengthOfReplication = replicationLengthMs
@@ -622,8 +605,8 @@ class RetryDeadlineTest {
         return SimulationRig(model, reliabilityModel, driver)
     }
 
-    private fun execution(seed: Long): Execution =
-        Execution(
+    private fun execution(seed: Long): RunSettings =
+        RunSettings(
             replications = 1,
             warmupMs = 0.0,
             measurementMs = 1_000.0,
