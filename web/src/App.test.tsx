@@ -306,3 +306,128 @@ it("leaves field undo native and prevents history actions from discarding invali
   fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
   expect(input.value).toBe("4");
 });
+
+
+it("renames a block with cascading document writes and restores all documents with undo", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByTestId("rf__node-dependency"));
+  const identifier = screen.getByLabelText("Identifier");
+  fireEvent.change(identifier, { target: { value: "middle" } });
+  expect(button("Save").disabled).toBe(true);
+  expect(screen.getByText("This identifier is already used.")).toBeTruthy();
+  fireEvent.keyDown(identifier, { key: "Escape" });
+  expect((identifier as HTMLInputElement).value).toBe("dependency");
+  fireEvent.change(identifier, { target: { value: "storage" } });
+  fireEvent.keyDown(identifier, { key: "Enter" });
+  await screen.findByTestId("rf__node-storage");
+  expect(screen.queryByTestId("rf__node-dependency")).toBeNull();
+  expect(screen.getByRole("heading", { name: "storage" })).toBeTruthy();
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const contents = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
+    .map(([, init]) => JSON.parse(String(init?.body)));
+  expect(contents.map((content) => Object.keys(content)[0])).toEqual(["layout", "model", "experiment"]);
+  expect(contents[0].layout.positions.storage).toEqual({ x: 780, y: 100 });
+  expect(contents[1].model.connections[2].to).toBe("storage");
+  expect(contents[2].experiment.faults[0].target).toBe("storage");
+  fireEvent.click(button("Undo"));
+  await screen.findByTestId("rf__node-dependency");
+  expect(screen.queryByTestId("rf__node-storage")).toBeNull();
+  expect(button("Save").disabled).toBe(false);
+});
+
+it("deletes a selection with its edges and overrides in one undo step, leaving form deletion native", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByTestId("rf__node-middle"));
+  const input = screen.getByLabelText("Handlers");
+  const native = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true });
+  fireEvent(input, native);
+  expect(native.defaultPrevented).toBe(false);
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(3));
+  expect(screen.queryByTestId("rf__edge-gateway-to-middle")).toBeNull();
+  expect(screen.queryByTestId("rf__edge-middle-to-dependency")).toBeNull();
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const saved = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([, init]) => JSON.parse(String(init?.body)));
+  expect(saved.find((body) => body.experiment).experiment.variants[1].overrides).toEqual({});
+  fireEvent.click(button("Undo"));
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(4));
+  expect(screen.getByTestId("rf__edge-gateway-to-middle")).toBeTruthy();
+});
+
+it("copies multi-selected blocks and internal connections; variant pages reject structural shortcuts", async () => {
+  server();
+  await open();
+  selectGateway();
+  fireEvent.click(screen.getByTestId("rf__node-middle"), { ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+  fireEvent.keyDown(document.body, { key: "v", metaKey: true });
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(6));
+  expect(screen.getByTestId("rf__edge-service-1-to-service-2")).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(4));
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  expect(button("Save").disabled).toBe(true);
+  expect((within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("creates an empty-parameter block by dropping a catalog type and undoes model and layout together", async () => {
+  server();
+  const { container } = await open();
+  fireEvent.drop(container.querySelector(".react-flow")!, {
+    clientX: 80, clientY: 40, dataTransfer: { getData: () => "service" },
+  });
+  await screen.findByTestId("rf__node-service-1");
+  expect(screen.getAllByTestId("block-node")).toHaveLength(5);
+  fireEvent.click(screen.getByTestId("rf__node-service-1"));
+  expect(screen.getAllByText("Required").length).toBeGreaterThan(0);
+  // Missing document values are validation issues; only an invalid typed draft blocks navigation.
+  expect(button("Undo").disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "oops" } });
+  expect(button("Undo").disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "" } });
+  fireEvent.click(button("Undo"));
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(4));
+  expect(button("Save").disabled).toBe(true);
+});
+
+
+it("persists a keyboard move as a layout command and restores it with undo", async () => {
+  server();
+  await open(); selectGateway();
+  const node = screen.getByTestId("rf__node-gateway");
+  fireEvent.keyDown(node, { key: "ArrowRight", code: "ArrowRight" });
+  expect(node.style.transform).toBe("translate(280px,100px)");
+  expect(button("Save").disabled).toBe(false);
+  fireEvent.click(button("Undo"));
+  expect(node.style.transform).toBe("translate(260px,100px)");
+  expect(button("Save").disabled).toBe(true);
+});
+
+
+it("targets the pasted fragment with subsequent arrow and delete actions", async () => {
+  server();
+  await open(); selectGateway();
+  fireEvent.click(screen.getByTestId("rf__node-middle"), { ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "c", ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
+  const copy = await screen.findByTestId("rf__node-service-1");
+  expect(copy.classList.contains("selected")).toBe(true);
+  expect(screen.getByTestId("rf__node-gateway").classList.contains("selected")).toBe(false);
+  fireEvent.keyDown(copy, { key: "ArrowRight", code: "ArrowRight" });
+  expect(copy.style.transform).toBe("translate(320px,140px)");
+  expect(screen.getByTestId("rf__node-gateway").style.transform).toBe("translate(260px,100px)");
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(4));
+  expect(screen.getByTestId("rf__node-gateway")).toBeTruthy();
+  expect(screen.getByTestId("rf__node-middle")).toBeTruthy();
+  expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
+  expect(button("Save").disabled).toBe(true);
+});

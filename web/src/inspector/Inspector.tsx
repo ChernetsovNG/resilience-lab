@@ -1,6 +1,7 @@
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import { elementOf, isOverridden } from "../workspace/params";
+import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
 
 export interface InspectorProps {
@@ -12,6 +13,7 @@ export interface InspectorProps {
   /** False on variant pages: values are shown, not edited. */
   editable: boolean;
   overrides: Record<string, unknown>;
+  onRename?: (id: string, next: string) => void;
   onParam: (id: string, name: string, value: unknown) => void;
   /** Validity of a field draft by `elementId.path`; a field that unmounts reports itself valid. */
   onValidity: (key: string, valid: boolean) => void;
@@ -19,7 +21,7 @@ export interface InspectorProps {
 }
 
 /** Context inspector (product vision §5.5): the selected element from the catalog, run settings otherwise. */
-export function Inspector({ catalog, model, experiment, selected, editable, overrides, onParam, onValidity, fieldDiagnostics }: InspectorProps) {
+export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity, fieldDiagnostics }: InspectorProps) {
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
@@ -32,6 +34,10 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
             {type.title}
             {editable ? "" : " · read-only on this variant page"}
           </p>
+          {onRename === undefined ? null : (
+            <IdentifierField key={selected} model={model} identifier={selected} editable={editable}
+              onRename={onRename} onValidity={onValidity} />
+          )}
           {type.params.length === 0 ? <p>No parameters.</p> : null}
           {type.params.map((descriptor) => (
             <ParamField

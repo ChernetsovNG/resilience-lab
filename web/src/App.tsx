@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Diagnostic } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
@@ -12,6 +12,7 @@ import { ResultsPanel } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
 import { applyOverrides } from "./workspace/params";
+import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
 
 /**
@@ -25,9 +26,11 @@ export function App() {
   const health = useHealth();
   /** Active variant page; null, or an ID the open experiment lacks, shows the model page. */
   const [variantId, setVariantId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const selected = selection.at(-1) ?? null;
+  const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
-  const { loaded, catalog, loading, undo, redo } = workspace;
+  const { loaded, catalog, loading, undo, redo, execute } = workspace;
   const validation = useValidation(loaded);
   const variants = loaded?.experiment.variants ?? [];
   const variant = variants.find((candidate) => candidate.id === variantId);
@@ -67,10 +70,35 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (invalid || loading || event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+      if (invalid || loading || event.defaultPrevented || event.altKey) return;
       const target = event.target;
       if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
       const key = event.key.toLowerCase();
+      if (editable && loaded !== null) {
+        if ((key === "delete" || key === "backspace") && selection.length > 0) {
+          event.preventDefault();
+          execute(deleteElements(selection));
+          setSelection([]);
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "c") {
+          const fragment = copySelection(loaded, selection);
+          if (Object.keys(fragment.blocks).length > 0) {
+            event.preventDefault();
+            clipboard.current = { path: loaded.experimentPath, fragment, offset: 0 };
+          }
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "v" && clipboard.current?.path === loaded.experimentPath) {
+          event.preventDefault();
+          clipboard.current.offset += 40;
+          const command = pasteSelection(clipboard.current.fragment, clipboard.current.offset);
+          const pasted = command(loaded);
+          const before = new Set([...Object.keys(loaded.model.blocks), ...loaded.model.connections.map((edge) => edge.id)]);
+          execute(command);
+          setSelection([...Object.keys(pasted.model.blocks), ...pasted.model.connections.map((edge) => edge.id)]
+            .filter((id) => !before.has(id)));
+        }
+      }
+      if (!(event.ctrlKey || event.metaKey)) return;
       if (key === "z") {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -82,7 +110,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [invalid, loading, undo, redo]);
+  }, [invalid, loading, undo, redo, editable, loaded, selection, execute]);
 
   return (
     <div className="app">
@@ -92,7 +120,8 @@ export function App() {
         onExperiment={(path) => {
           if (invalid || workspace.loading || workspace.saving || run.running) return;
           if (workspace.dirty && !window.confirm("Discard unsaved changes to the documents?")) return;
-          setSelected(null);
+          setSelection([]);
+          clipboard.current = null;
           setVariantId(null);
           run.reset();
           void workspace.open(path, true);
@@ -116,7 +145,7 @@ export function App() {
         health={health.health}
         healthError={health.error}
       />
-      <Palette catalog={catalog} />
+      <Palette catalog={catalog} editable={editable && !invalid} />
       <main className="canvas-area">
         <div className="canvas-messages">
           {invalid ? (
@@ -130,7 +159,8 @@ export function App() {
               <button
                 type="button"
                 onClick={() => {
-                  setSelected(null);
+                  setSelection([]);
+                  clipboard.current = null;
                   void workspace.reload();
                 }}
               >
@@ -141,16 +171,21 @@ export function App() {
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
         </div>
         <div className="canvas">
-          {model === null || loaded === null ? (
+          {model === null || loaded === null || catalog === null ? (
             <p className="canvas-empty">Loading workspace…</p>
           ) : (
             <Canvas
               model={model}
               layout={loaded.layout}
-              selected={selected}
+              key={loaded.experimentPath}
+              catalog={catalog}
+              selected={selection}
               elementDiagnostics={elementDiagnostics}
-              onSelect={(id) => {
-                if (!invalid) setSelected(id);
+              editable={editable && !invalid}
+              disabled={invalid}
+              onCommand={workspace.execute}
+              onSelect={(next) => {
+                if (!invalid) setSelection(next);
               }}
             />
           )}
@@ -168,6 +203,10 @@ export function App() {
           selected={selected}
           editable={editable}
           overrides={overrides}
+          onRename={(id, next) => {
+            workspace.execute(renameElement(id, next));
+            setSelection((current) => current.map((value) => value === id ? next : value));
+          }}
           onParam={workspace.setParam}
           onValidity={onValidity}
           fieldDiagnostics={fieldDiagnostics}
@@ -185,7 +224,7 @@ export function App() {
           const target = diagnosticTarget(diagnostic, loaded);
           setVariantId(target.variant);
           const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
-          setSelected(setting ? null : target.element);
+          setSelection(setting || target.element === null ? [] : [target.element]);
         }}
       />
     </div>
