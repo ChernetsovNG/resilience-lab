@@ -56,6 +56,8 @@ select {
 }
 
 .top-bar select {
+  max-width: 32rem;
+  min-width: 0;
   padding: 0.3rem 0.5rem;
   border: 1px solid #9aa5b1;
   border-radius: 0.35rem;
@@ -139,6 +141,8 @@ select {
 .canvas-area {
   grid-area: canvas;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
 }
@@ -187,6 +191,7 @@ select {
 
 .variant-tabs {
   display: flex;
+  overflow-x: auto;
   gap: 0.25rem;
   padding: 0.35rem 0.5rem;
   border-top: 1px solid #d5dbe3;
@@ -194,6 +199,8 @@ select {
 }
 
 .variant-tabs button {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 0.25rem 0.75rem;
   border: 1px solid #d5dbe3;
   border-radius: 0 0 0.35rem 0.35rem;
