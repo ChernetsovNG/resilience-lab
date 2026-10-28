@@ -8,6 +8,9 @@ export interface ResultsPanelProps {
   job: JobView | null;
   summary: RunSummary | null;
   problem: ApiProblem | null;
+  activeVariantId?: string | null;
+  selectedPointId?: string;
+  onPointChange?: (pointId: string) => void;
   diagnostics?: readonly Diagnostic[];
   validationPending?: boolean;
   validationProblem?: ApiProblem | null;
@@ -19,9 +22,13 @@ function progressOf(job: JobView): string {
 }
 
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
-export function ResultsPanel({ job, summary, problem, diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic }: ResultsPanelProps) {
+export function ResultsPanel({
+  job, summary, problem, activeVariantId = null, selectedPointId = "p0", onPointChange,
+  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
+}: ResultsPanelProps) {
   const [active, setActive] = useState("summary");
   const id = useId();
+  const points = summary?.variants[0]?.points ?? [];
   return (
     <section className="results-panel" aria-label="Results">
       <div role="tablist" aria-label="Result views">
@@ -34,7 +41,7 @@ export function ResultsPanel({ job, summary, problem, diagnostics = [], validati
           Problems ({diagnostics.length})
         </button>
       </div>
-      <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`}>
+      <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}>
         {active === "problems" ? <>
           {validationPending ? <p role="status">Validating documents…</p> : null}
           {validationProblem === null ? null : <ProblemList problem={validationProblem} />}
@@ -49,7 +56,18 @@ export function ResultsPanel({ job, summary, problem, diagnostics = [], validati
         </> : problem !== null ? (
           <ProblemList problem={problem} />
         ) : summary !== null ? (
-          <SummaryTable summary={summary} />
+          <>
+            {summary.grid.length > 0 ? <div className="summary-toolbar">
+              <label htmlFor={`${id}-point`}>Grid point</label>
+              <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
+                {points.map((point) => <option key={point.id} value={point.id}>
+                  {point.id}{Object.entries(point.coordinates).length === 0 ? "" : ` · ${Object.entries(point.coordinates)
+                    .map(([path, value]) => `${path} = ${typeof value === "string" ? value : JSON.stringify(value)}`).join(", ")}`}
+                </option>)}
+              </select>
+            </div> : null}
+            <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} />
+          </>
         ) : (
           <p className="results-empty">{job === null ? "Run the experiment to see results." : progressOf(job)}</p>
         )}

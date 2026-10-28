@@ -360,9 +360,31 @@ select {
   padding: 0.75rem;
 }
 
-.summary-table {
-  border-collapse: collapse;
+.summary-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
   font-size: 0.875rem;
+}
+
+.summary-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.summary-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.summary-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  background: #fff;
 }
 
 .summary-table th,
@@ -371,6 +393,15 @@ select {
   border-bottom: 1px solid #e4e7eb;
   text-align: left;
   white-space: nowrap;
+}
+
+.summary-table tr.summary-row--active-variant > th {
+  color: #1d4ed8;
+}
+
+.summary-table tr.summary-row--selected-point > th,
+.summary-table tr.summary-row--selected-point > td {
+  background: #eff6ff;
 }
 
 .problem-list {
