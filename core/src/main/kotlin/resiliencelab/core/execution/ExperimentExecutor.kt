@@ -130,18 +130,21 @@ class ExperimentExecutor internal constructor(
                 },
             )
         val tasks =
-            experiment.variants.indices.flatMap { variant ->
-                experiment.variants[variant].points.indices.flatMap { point ->
-                    (0 until replications).map { Triple(variant, point, it) }
+            experiment
+                .variants
+                .indices
+                .flatMap { variant ->
+                    experiment.variants[variant].points.indices.flatMap { point ->
+                        (0 until replications).map { Triple(variant, point, it) }
+                    }
+                }.filter { (variant, point, replication) ->
+                    selectedTasks == null ||
+                        ExperimentTask(
+                            experiment.variants[variant].id,
+                            experiment.variants[variant].points[point].id,
+                            replication,
+                        ) in selectedTasks
                 }
-            }.filter { (variant, point, replication) ->
-                selectedTasks == null ||
-                    ExperimentTask(
-                        experiment.variants[variant].id,
-                        experiment.variants[variant].points[point].id,
-                        replication,
-                    ) in selectedTasks
-            }
         val results = experiment.variants.map { variant -> variant.points.map { arrayOfNulls<ReplicationResult>(replications) } }
         val progress = Progress(tasks.size, onProgress)
         scheduler.run(

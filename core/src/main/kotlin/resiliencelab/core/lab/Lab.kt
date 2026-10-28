@@ -301,19 +301,21 @@ class Lab(
         compiled: CompiledExperiment,
         runDirectory: String,
     ): Map<ExperimentTask, SeriesWriter> =
-        compiled.variants.flatMap { variant ->
-            variant.points.flatMap { point ->
-                (0 until compiled.run.replications).map { replication ->
-                    ExperimentTask(variant.id, point.id, replication) to
-                        SeriesWriter(
-                            workspace,
-                            "$runDirectory/series/${variant.id}/${point.id}/rep-$replication",
-                            compiled.run.warmupMs + compiled.run.measurementMs,
-                            compiled.run.windowMs,
-                        )
+        compiled
+            .variants
+            .flatMap { variant ->
+                variant.points.flatMap { point ->
+                    (0 until compiled.run.replications).map { replication ->
+                        ExperimentTask(variant.id, point.id, replication) to
+                            SeriesWriter(
+                                workspace,
+                                "$runDirectory/series/${variant.id}/${point.id}/rep-$replication",
+                                compiled.run.warmupMs + compiled.run.measurementMs,
+                                compiled.run.windowMs,
+                            )
+                    }
                 }
-            }
-        }.toMap()
+            }.toMap()
 
     private fun newManifest(
         experimentPath: String,

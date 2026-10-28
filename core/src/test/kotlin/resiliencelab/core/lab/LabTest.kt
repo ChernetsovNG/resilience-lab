@@ -345,7 +345,8 @@ class LabTest {
         runDirectory: String,
     ): Map<String, String> =
         workspace.listFiles(runDirectory).associateWith { path ->
-            resiliencelab.core.workspace.DocumentVersion.of(workspace.readBytes(path))
+            resiliencelab.core.workspace.DocumentVersion
+                .of(workspace.readBytes(path))
         }
 
     private fun assertIncomplete(root: Path) {

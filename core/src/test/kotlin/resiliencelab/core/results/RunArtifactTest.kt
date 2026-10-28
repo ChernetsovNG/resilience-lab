@@ -4,9 +4,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DocumentCodec
+import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySummary
-import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.DocumentExistsException
