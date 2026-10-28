@@ -13,6 +13,20 @@ describe("withParam", () => {
     expect(elementOf(model, "missing")).toBeNull();
   });
 
+  it("updates a nested parameter without replacing its sibling fields", () => {
+    const changed = withParam(model, "gateway", "processing.mean", "3ms");
+
+    expect(changed.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "3ms" });
+    expect(model.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "1ms" });
+  });
+
+  it("removes a nested parameter without removing its sibling fields", () => {
+    const changed = withParam(model, "gateway", "processing.mean", undefined);
+
+    expect(changed.blocks.gateway.params.processing).toEqual({ kind: "fixed" });
+    expect(model.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "1ms" });
+  });
+
   it("treats inherited names such as constructor as ordinary IDs", () => {
     const withConstructor = {
       ...model,
