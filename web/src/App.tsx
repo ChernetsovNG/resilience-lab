@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Diagnostic } from "./api/apiTypes";
+import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
 import { Canvas } from "./canvas/Canvas";
@@ -16,16 +16,16 @@ import { copySelection, deleteElements, pasteSelection, renameElement, type Clip
 import { useWorkspace } from "./workspace/useWorkspace";
 
 /**
- * One-screen layout (product vision §5.5, stage 1 design §6.1). The model page edits the model; a variant page shows the
- * model with the variant's overrides, read-only in the stage 1 slice even when the variant has none. Results are shown
+ * One-screen layout (product vision §5.5, stage 1 design §6.1). The model page edits the model; a variant page edits the
+ * variant's parameter overrides. Run settings and faults belong to the shared experiment. Results are shown
  * only for the experiment they were computed for.
  */
 export function App() {
   const workspace = useWorkspace();
   const run = useRun();
   const health = useHealth();
-  /** Active variant page; null, or an ID the open experiment lacks, shows the model page. */
-  const [variantId, setVariantId] = useState<string | null>(null);
+  /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
+  const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -33,9 +33,21 @@ export function App() {
   const { loaded, catalog, loading, undo, redo, execute } = workspace;
   const validation = useValidation(loaded);
   const variants = loaded?.experiment.variants ?? [];
+  let variantId = variantPage.id;
+  if (loaded !== null && variantPage.variants !== variants) {
+    if (variantId !== null && !variants.some((candidate) => candidate.id === variantId)) {
+      const index = variantPage.variants.findIndex((candidate) => candidate.id === variantId);
+      const renamed = index >= 0 && variants.length === variantPage.variants.length &&
+        variantPage.variants.every((previous, position) => position === index || previous.id === variants[position].id);
+      variantId = renamed ? variants[index].id : null;
+    }
+    setVariantPage({ id: variantId, variants });
+  }
+  const selectVariant = (id: string | null) => setVariantPage({ id, variants });
   const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
-  const editable = variant === undefined && !workspace.loading;
+  const editable = !workspace.loading;
+  const structureEditable = editable && variant === undefined;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
@@ -50,7 +62,7 @@ export function App() {
       elementDiagnostics.set(target.element, [...(elementDiagnostics.get(target.element) ?? []), diagnostic]);
     }
     const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
-    if (target.field !== null && (setting ? selected === null : target.element === selected)) {
+    if (target.field !== null && (setting || target.element === selected)) {
       fieldDiagnostics.set(target.field, [...(fieldDiagnostics.get(target.field) ?? []), diagnostic]);
     }
   }
@@ -74,7 +86,7 @@ export function App() {
       const target = event.target;
       if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
       const key = event.key.toLowerCase();
-      if (editable && loaded !== null) {
+      if (structureEditable && loaded !== null) {
         if ((key === "delete" || key === "backspace") && selection.length > 0) {
           event.preventDefault();
           execute(deleteElements(selection));
@@ -110,7 +122,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [invalid, loading, undo, redo, editable, loaded, selection, execute]);
+  }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
   return (
     <div className="app">
@@ -122,7 +134,7 @@ export function App() {
           if (workspace.dirty && !window.confirm("Discard unsaved changes to the documents?")) return;
           setSelection([]);
           clipboard.current = null;
-          setVariantId(null);
+          selectVariant(null);
           run.reset();
           void workspace.open(path, true);
         }}
@@ -145,7 +157,7 @@ export function App() {
         health={health.health}
         healthError={health.error}
       />
-      <Palette catalog={catalog} editable={editable && !invalid} />
+      <Palette catalog={catalog} editable={structureEditable && !invalid} />
       <main className="canvas-area">
         <div className="canvas-messages">
           {invalid ? (
@@ -181,7 +193,8 @@ export function App() {
               catalog={catalog}
               selected={selection}
               elementDiagnostics={elementDiagnostics}
-              editable={editable && !invalid}
+              overrides={overrides}
+              editable={structureEditable && !invalid}
               disabled={invalid}
               onCommand={workspace.execute}
               onSelect={(next) => {
@@ -190,7 +203,7 @@ export function App() {
             />
           )}
         </div>
-        <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid} onSelect={setVariantId} />
+        <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid} onSelect={selectVariant} />
       </main>
       {model === null || loaded === null || catalog === null ? (
         <aside className="inspector" aria-label="Inspector" />
@@ -202,6 +215,10 @@ export function App() {
           experiment={loaded.experiment}
           selected={selected}
           editable={editable}
+          variantId={variant?.id ?? null}
+          invalid={invalid}
+          onCommand={workspace.execute}
+          onVariantSelect={selectVariant}
           overrides={overrides}
           onRename={(id, next) => {
             workspace.execute(renameElement(id, next));
@@ -222,7 +239,7 @@ export function App() {
         onDiagnostic={(diagnostic) => {
           if (loaded === null || invalid || loading) return;
           const target = diagnosticTarget(diagnostic, loaded);
-          setVariantId(target.variant);
+          selectVariant(target.variant);
           const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
           setSelection(setting || target.element === null ? [] : [target.element]);
         }}

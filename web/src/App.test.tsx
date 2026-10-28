@@ -103,8 +103,210 @@ it("blocks Run on saved validation errors and navigates to an override's variant
   expect(button("Run").title).toContain("validation errors");
 });
 
+it("shows override diagnostics only at fields on their own variant page and blocks Run on every page", async () => {
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
+    { code: "PARAM_RANGE", severity: "ERROR", message: "Baseline mean error", document: experimentPath,
+      pointer: "/variants/0/overrides/gateway.processing/mean", path: "gateway" },
+    { code: "PARAM_RANGE", severity: "ERROR", message: "No retries mean error", document: experimentPath,
+      pointer: "/variants/1/overrides/gateway.processing.mean", path: "gateway" },
+  ] } } : undefined);
+  render(<App />);
+  await screen.findByRole("heading", { name: "Run settings" });
+  await waitFor(() => expect(button("Run").title).toContain("validation errors"));
+  selectGateway();
+  const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+  expect(inspector.queryByText("PARAM_RANGE: Baseline mean error")).toBeNull();
+  expect(inspector.queryByText("PARAM_RANGE: No retries mean error")).toBeNull();
+  for (const [page, own, other] of [["Baseline", "Baseline mean error", "No retries mean error"],
+    ["No retries", "No retries mean error", "Baseline mean error"]]) {
+    fireEvent.click(screen.getByRole("tab", { name: page }));
+    expect(screen.getByLabelText("Mean").closest(".param-field")?.textContent).toContain(own);
+    expect(inspector.queryByText(`PARAM_RANGE: ${other}`)).toBeNull();
+    expect(button("Run").disabled).toBe(true);
+  }
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Baseline mean error/ }));
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByLabelText("Mean").closest(".param-field")?.textContent).toContain("Baseline mean error");
+});
+
+it("keeps shared settings diagnostics beside editable fields while an element is selected", async () => {
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
+    { code: "SEED_RANGE", severity: "ERROR", message: "Invalid shared seed", document: experimentPath, pointer: "/execution/seed", path: null },
+    { code: "FAULT_INTERVAL", severity: "ERROR", message: "Invalid fault end", document: experimentPath, pointer: "/faults/0/to", path: "dependency" },
+  ] } } : undefined);
+  render(<App />);
+  await screen.findByRole("heading", { name: "Run settings" });
+  await waitFor(() => expect(button("Run").title).toContain("validation errors"));
+  selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  expect(screen.getByLabelText("Seed").closest(".param-field")?.textContent).toContain("Invalid shared seed");
+  expect(screen.getByLabelText("Fault end").closest(".param-field")?.textContent).toContain("Invalid fault end");
+  expect(button("Run").disabled).toBe(true);
+});
+
+function editField(label: string, value: string) {
+  const field = screen.getByLabelText(label);
+  fireEvent.change(field, { target: { value } });
+  fireEvent.blur(field);
+}
+
+it("saves precise variant overrides only to the experiment and resets fields and objects with undo", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.click(await screen.findByTestId("rf__edge-gateway-to-middle"));
+  editField("Timeout", "90ms");
+  editField("Base delay", "4ms");
+  expect((await screen.findByTestId("rf__edge-gateway-to-middle")).textContent).toContain("◆");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+  expect(puts).toHaveLength(1);
+  expect(String(puts[0][0])).toContain(encodeURIComponent(experimentPath));
+  expect(puts[0][1]?.headers).toMatchObject({ "If-Match": '"v-experiment"' });
+  expect(JSON.parse(String(puts[0][1]?.body)).experiment.variants[1].overrides).toEqual({
+    "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "gateway-to-middle.timeout": "90ms", "gateway-to-middle.backoff.base": "4ms",
+  });
+  fireEvent.click(button("Reset Timeout"));
+  expect((screen.getByLabelText("Timeout") as HTMLInputElement).value).toBe("80ms");
+  fireEvent.click(button("Reset Backoff"));
+  expect((screen.getByLabelText("Base delay") as HTMLInputElement).value).toBe("2ms");
+  fireEvent.click(button("Undo"));
+  expect((screen.getByLabelText("Base delay") as HTMLInputElement).value).toBe("4ms");
+});
+
+it("adds, copies, renames and confirms deletion of a variant while keeping its page active", async () => {
+  server();
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  await open();
+  fireEvent.click(button("Add variant"));
+  expect(screen.getByRole("tab", { name: "Variant 1" }).getAttribute("aria-selected")).toBe("true");
+  editField("Variant label", "My variant");
+  editField("Variant ID", "my-variant");
+  expect(screen.getByRole("tab", { name: "My variant" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "My variant" }).getAttribute("aria-selected")).toBe("true");
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("variant-1");
+  fireEvent.click(button("Redo"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("my-variant");
+  editField("Variant ID", "baseline");
+  expect(screen.getByText("This variant ID is already used")).toBeTruthy();
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Add variant").disabled).toBe(true);
+  editField("Variant ID", "my-variant");
+  fireEvent.click(button("Copy variant"));
+  expect(screen.getByRole("tab", { name: "My variant copy" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Delete variant"));
+  expect(confirm).toHaveBeenCalled();
+  expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
+  confirm.mockReturnValue(true);
+  fireEvent.click(button("Delete variant"));
+  expect(screen.queryByRole("tab", { name: "My variant copy" })).toBeNull();
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
+});
+
+it("edits shared execution and fault settings from a variant and preserves invalid drafts", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  editField("Replications", "3");
+  editField("Warm-up", "100ms");
+  editField("Measurement", "2s");
+  editField("Seed", "9007199254740991");
+  editField("Real-time limit", "10s");
+  fireEvent.change(screen.getByLabelText("Fault target"), { target: { value: "middle" } });
+  editField("Fault start", "100ms");
+  editField("Fault end", "500ms");
+  editField("Processing multiplier", "4");
+  editField("Fault failure rate", "25%");
+  editField("Seed", "9007199254740992");
+  expect(button("Save").disabled).toBe(true);
+  expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
+  editField("Seed", "9007199254740991");
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect((screen.getByLabelText("Replications") as HTMLInputElement).value).toBe("3");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.execution).toEqual({ replications: 3, warmup: "100ms", measurement: "2s", seed: 9007199254740991, maxRealTime: "10s" });
+  expect(saved.faults).toEqual([{ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 4, failureRate: "25%" }]);
+  expect(saved.variants).toEqual(experiment.variants);
+  fireEvent.click(button("Add fault"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(2);
+  fireEvent.click(button("Remove fault 2"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(1);
+  fireEvent.click(button("Undo"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(2);
+});
+
+it("reads duration and probability units for shared fields from the catalog", async () => {
+  const customCatalog = structuredClone(catalog);
+  const changeUnits = (params: typeof customCatalog.types[number]["params"]) => {
+    for (const param of params) {
+      if (param.dimension === "DURATION") param.units = [{ symbol: "tick", numerator: 2, denominator: 1 }];
+      if (param.dimension === "PROBABILITY") param.units = [{ symbol: "permille", numerator: 1, denominator: 1000 }];
+      changeUnits(param.fields);
+    }
+  };
+  customCatalog.types.forEach((type) => changeUnits(type.params));
+  const fetchMock = server((url) => url === "/api/v1/catalog" ? { body: customCatalog } : undefined);
+  await open();
+  editField("Measurement", "20tick");
+  editField("Fault failure rate", "250permille");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.execution.measurement).toBe("20tick");
+  expect(saved.faults[0].failureRate).toBe("250permille");
+});
+
+it.each(["Handlers", "Seed"])("preserves an invalid %s draft when a variant ID rename is attempted", async (field) => {
+  server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  if (field === "Handlers") selectGateway();
+  editField(field, "invalid");
+  editField("Variant ID", "renamed");
+  expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe("invalid");
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Run").disabled).toBe(true);
+  expect(screen.getByRole("tab", { name: "No retries" }).getAttribute("aria-selected")).toBe("true");
+  editField(field, field === "Handlers" ? "5" : "42");
+  fireEvent.blur(screen.getByLabelText("Variant ID"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("renamed");
+  expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe(field === "Handlers" ? "5" : "42");
+});
+
+it("keeps variant identity when undo restores a different deleted variant before it", async () => {
+  const third = { id: "third", label: "Third", overrides: {} };
+  const fetchMock = server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
+    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [...experiment.variants, third] } } },
+  } : undefined);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.click(button("Delete variant"));
+  fireEvent.click(screen.getByRole("tab", { name: "Third" }));
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "Third" }).getAttribute("aria-selected")).toBe("true");
+  selectGateway();
+  editHandlers("7");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.variants[1]).toEqual(experiment.variants[1]);
+  expect(saved.variants[2].overrides).toEqual({ "gateway.handlers": 7 });
+});
+
 describe("App stage 1 integration", () => {
-  it("loads the workspace, renders its four blocks and keeps variant pages read-only", async () => {
+  it("loads the workspace, renders its four blocks and lets each variant edit its overrides", async () => {
     server();
     await open();
     expect(screen.getAllByTestId("block-node")).toHaveLength(4);
@@ -114,10 +316,10 @@ describe("App stage 1 integration", () => {
     expect((screen.getByLabelText("Attempts") as HTMLInputElement).value).toBe("3");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
     expect((screen.getByLabelText("Attempts") as HTMLInputElement).value).toBe("1");
-    expect((screen.getByLabelText("Attempts") as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText("Attempts") as HTMLInputElement).readOnly).toBe(false);
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     expect((screen.getByLabelText("Attempts") as HTMLInputElement).value).toBe("3");
-    expect((screen.getByLabelText("Attempts") as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText("Attempts") as HTMLInputElement).readOnly).toBe(false);
   });
 
   it("preserves an invalid draft and blocks element, pane, variant, experiment, Save and Run navigation", async () => {
@@ -142,7 +344,7 @@ describe("App stage 1 integration", () => {
     expect(experimentSelect().disabled).toBe(false);
     expect(button("Save").disabled).toBe(false);
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
-    expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(false);
   });
 
   it.each(["baseline", "model"])("isolates equal-valued Inspector drafts between Model and variant %s", async (id) => {
@@ -153,7 +355,7 @@ describe("App stage 1 integration", () => {
     fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "04" } });
     fireEvent.click(screen.getByRole("tab", { name: "Variant page" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
-    expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(true);
+    expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(false);
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
   });
@@ -169,7 +371,7 @@ describe("App stage 1 integration", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherPath)))).toBe(false);
     confirm.mockReturnValue(true);
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    await screen.findByText("99");
+    await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(experimentSelect().value).toBe(otherPath);
     expect(screen.queryByLabelText("Handlers")).toBeNull();
     selectGateway();
@@ -232,7 +434,7 @@ describe("App stage 1 integration", () => {
     await screen.findByRole("table");
     expect(within(screen.getByRole("region", { name: "Results" })).getByText(/97\.5%/)).toBeTruthy();
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    await screen.findByText("99");
+    await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.getByTestId("job-status").textContent).toBe("");
     fireEvent.change(experimentSelect(), { target: { value: experimentPath } });
@@ -241,16 +443,19 @@ describe("App stage 1 integration", () => {
   });
 });
 
-it("keeps navigation available when a read-only variant contains invalid stored data", async () => {
+it("keeps navigation available until invalid stored variant data is edited", async () => {
   server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
     body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "invalid", label: "Invalid variant", overrides: { "gateway.handlers": 0 } }] } } },
   } : undefined);
   await open(); selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Invalid variant" }));
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("0");
-  expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(true);
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(false);
   expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(false);
   expect(experimentSelect().disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "oops" } });
+  expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "4" } });
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
 });

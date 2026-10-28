@@ -111,8 +111,11 @@ describe("Inspector", () => {
   it("shows run settings and faults without a selection", () => {
     renderInspector({ selected: null });
 
-    expect(screen.getByText("Replications").nextElementSibling?.textContent).toBe("2");
-    expect(screen.getByText(/dependency: 200ms–700ms/).textContent).toContain("processing ×6");
+    expect(input("Replications").value).toBe("2");
+    expect((screen.getByLabelText("Fault target") as HTMLSelectElement).value).toBe("dependency");
+    expect(input("Fault start").value).toBe("200ms");
+    expect(input("Fault end").value).toBe("700ms");
+    expect(input("Processing multiplier").value).toBe("6");
   });
 
   it("keeps an invalid editable draft across parent rerenders until correction", () => {
