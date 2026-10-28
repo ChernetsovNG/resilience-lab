@@ -6,11 +6,14 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import resiliencelab.core.results.RunCatalog
 import resiliencelab.core.results.RunEntry
@@ -21,11 +24,12 @@ import resiliencelab.core.results.SeriesPart
 import java.io.IOException
 import java.time.Duration
 
-/** Finished runs from `.results/` (ADR 0008); they outlive server restarts, jobs do not. */
+/** Complete and incomplete runs from `.results/`; they outlive server restarts, jobs do not. */
 @RestController
 @RequestMapping("/api/v1/runs")
 class RunController(
     private val runs: RunCatalog,
+    private val jobs: JobService,
 ) {
     @GetMapping
     @Throws(IOException::class)
@@ -36,6 +40,12 @@ class RunController(
     fun getRunManifest(
         @PathVariable id: String,
     ): RunManifest = runs.manifest(id) ?: throw notFound(id)
+
+    @PostMapping("/{id}/resume")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    fun resumeRun(
+        @PathVariable id: String,
+    ): JobView = jobs.resume(runs.entry(id) ?: throw notFound(id))
 
     @GetMapping("/{id}/summary")
     @Throws(IOException::class)

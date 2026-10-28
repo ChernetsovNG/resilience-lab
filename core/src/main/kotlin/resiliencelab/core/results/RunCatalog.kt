@@ -10,12 +10,13 @@ import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.Workspace
 
-/** A finished run: its manifest exists and says the run is complete (ADR 0008). */
+/** A run with a readable manifest and its persisted completion state (ADR 0008). */
 @Serializable
 data class RunEntry(
     val id: String,
     val experiment: String,
     val directory: String,
+    val complete: Boolean,
 )
 
 /** Original gzip bytes and their SHA-256 from the task index. */
@@ -27,7 +28,12 @@ data class StoredSeriesPart(
 /** A series address contains an invalid identifier or a negative replication/part number. */
 class InvalidSeriesPathException : IllegalArgumentException("Invalid run series path")
 
-/** Finds finished runs under `.results/<experiment>/<run>/`. */
+/** A summary cannot be read before the run has been completed and its summary published. */
+class RunIncompleteException(
+    id: String,
+) : RuntimeException("Run '$id' is incomplete")
+
+/** Finds complete and incomplete runs under `.results/<experiment>/<run>/`. */
 class RunCatalog(
     private val workspace: Workspace,
 ) {
@@ -35,7 +41,7 @@ class RunCatalog(
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json { explicitNulls = false }
 
-    /** Finished runs, newest first; incomplete runs and runs whose manifest cannot be read are skipped. */
+    /** Runs with readable manifests, newest first; unreadable manifests are skipped. */
     fun list(): List<RunEntry> =
         workspace
             .listFiles(RESULTS)
@@ -44,14 +50,16 @@ class RunCatalog(
                 val directory = path.removeSuffix("/$MANIFEST_FILE")
                 runCatching { readManifest(directory) }
                     .getOrNull()
-                    ?.takeIf { it.complete }
-                    ?.let { RunEntry(directory.substringAfterLast('/'), it.experiment, directory) }
+                    ?.let { RunEntry(directory.substringAfterLast('/'), it.experiment, directory, it.complete) }
             }.sortedWith(compareByDescending<RunEntry> { it.id }.thenBy { it.directory })
+
+    fun entry(id: String): RunEntry? = find(id)
 
     fun manifest(id: String): RunManifest? = find(id)?.let { readManifest(it.directory) }
 
     fun summary(id: String): RunSummary? =
         find(id)?.let {
+            if (!it.complete) throw RunIncompleteException(id)
             val text = workspace.read("${it.directory}/$SUMMARY_FILE").text
             checkVersion(text, "summary")
             json.decodeFromString(RunSummary.serializer(), text)
@@ -122,7 +130,7 @@ class RunCatalog(
                 } catch (_: Exception) {
                     continue
                 }
-            if (manifest.complete) return RunEntry(id, manifest.experiment, directory)
+            return RunEntry(id, manifest.experiment, directory, manifest.complete)
         }
         return null
     }

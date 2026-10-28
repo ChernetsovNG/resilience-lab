@@ -178,6 +178,57 @@ class LabTest {
     }
 
     @Test
+    fun `resume preflight preserves a valid incomplete artifact and does not execute tasks`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+        val calls = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                calls.incrementAndGet()
+                error("Preflight must not start KSL")
+            }
+
+        val manifest = Lab(FileWorkspace(root), executor = executor).use { it.validateResume(runDirectory) }
+        executor.close()
+
+        assertThat(manifest.complete).isFalse()
+        assertThat(calls.get()).isZero()
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume preflight rejects a complete artifact without mutating it`() {
+        val root = exampleWorkspace()
+        val runDirectory = ".results/retry-storm/cancelled"
+        Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.validateResume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_COMPLETE")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume preflight rejects changed documents without mutating the artifact`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val modelFile = root.resolve(model)
+        Files.writeString(modelFile, Files.readString(modelFile).replace("\"handlers\": 4", "\"handlers\": 5"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.validateResume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_DOCUMENT_CHANGED")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
     fun `resume rejects an incompatible application without mutating the artifact`() {
         val root = exampleWorkspace()
         createIncomplete(root)

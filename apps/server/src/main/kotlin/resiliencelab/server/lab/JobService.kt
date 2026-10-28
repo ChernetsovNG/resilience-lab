@@ -3,6 +3,7 @@ package resiliencelab.server.lab
 import org.slf4j.LoggerFactory
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
+import resiliencelab.core.results.RunEntry
 import java.util.UUID
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
@@ -43,6 +44,54 @@ class JobService(
             finish(job.id) { it.copy(status = JobStatus.FAILED, error = "Job queue is full") }
         }
         return get(job.id) ?: job
+    }
+
+    /** Validates and queues an in-place resume of [run]; execution repeats every core check. */
+    fun resume(run: RunEntry): JobView {
+        try {
+            lab.validateResume(run.directory)
+        } catch (exception: InvalidExperimentException) {
+            if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
+                throw Conflict("RUN_COMPLETE", "Run '${run.id}' is already complete", exception.diagnostics)
+            }
+            throw exception
+        }
+        val job = JobView(UUID.randomUUID().toString(), run.experiment, run.id, JobStatus.QUEUED, 0, 0)
+        synchronized(lock) {
+            jobs[job.id] = job
+            if (stopping) return cancel(job.id)!!
+        }
+        try {
+            executor.execute { executeResume(job.id, run.directory) }
+        } catch (exception: RejectedExecutionException) {
+            finish(job.id) { it.copy(status = JobStatus.FAILED, error = "Job queue is full") }
+        }
+        return get(job.id) ?: job
+    }
+
+    private fun executeResume(
+        id: String,
+        runDirectory: String,
+    ) {
+        synchronized(lock) {
+            jobs[id]
+                ?.takeIf { it.status == JobStatus.QUEUED }
+                ?.copy(status = JobStatus.RUNNING)
+                ?.also { jobs[id] = it }
+        } ?: return
+        try {
+            lab.resume(runDirectory, isCancelled = { get(id)?.cancelRequested != false }) { completed, total ->
+                update(id) { it.copy(completedTasks = maxOf(it.completedTasks, completed), totalTasks = total) }
+            }
+            finish(id) { it.copy(status = JobStatus.COMPLETED) }
+        } catch (exception: CancellationException) {
+            finish(id) { it.copy(status = JobStatus.CANCELLED) }
+        } catch (exception: InvalidExperimentException) {
+            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment has errors", diagnostics = exception.diagnostics) }
+        } catch (exception: Exception) {
+            logger.error("Resume job {} failed", id, exception)
+            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment execution failed") }
+        }
     }
 
     fun get(id: String): JobView? = synchronized(lock) { jobs[id] }

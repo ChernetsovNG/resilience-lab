@@ -14,18 +14,7 @@ class ValidationController(
     fun validateExperiment(
         @RequestBody request: ValidationRequest,
     ): ValidationView {
-        val drafts =
-            request.drafts.associate { draft ->
-                val kind =
-                    DocumentKind.of(draft.path)
-                        ?: throw BadRequest("DOCUMENT_KIND", "'${draft.path}' is not a model, layout or experiment document")
-                val text =
-                    Documents.encode(kind, draft.content)
-                        ?: throw BadRequest("DOCUMENT_KIND", "Content must hold exactly one document of the kind of '${draft.path}'")
-                draft.path to text
-            }
-        if (drafts.size != request.drafts.size) throw BadRequest("DRAFT_PATH", "Draft document paths must be unique")
-        val report = lab.validate(request.experiment, drafts)
+        val report = lab.validate(request.experiment, Documents.draftTexts(request.drafts))
         return ValidationView(report.experimentPath, report.valid, report.diagnostics)
     }
 }

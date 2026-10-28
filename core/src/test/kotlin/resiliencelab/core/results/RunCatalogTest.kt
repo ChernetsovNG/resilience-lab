@@ -41,7 +41,8 @@ class RunCatalogTest {
 
         assertThat(catalog.list().map { it.id }).containsExactly("20261027-100000-000-0002", "20261027-090000-000-0001")
         assertThat(catalog.list().first())
-            .isEqualTo(RunEntry("20261027-100000-000-0002", "b.experiment.json", ".results/b/20261027-100000-000-0002"))
+            .isEqualTo(RunEntry("20261027-100000-000-0002", "b.experiment.json", ".results/b/20261027-100000-000-0002", true))
+        assertThat(catalog.entry("20261027-090000-000-0001")?.complete).isTrue()
         assertThat(catalog.manifest("20261027-090000-000-0001")!!.experiment).isEqualTo("a.experiment.json")
         assertThat(catalog.summary("20261027-090000-000-0001")!!.experiment).isEqualTo("a.experiment.json")
         assertThat(catalog.manifest("missing")).isNull()
@@ -57,12 +58,16 @@ class RunCatalogTest {
     }
 
     @Test
-    fun `does not present an incomplete run as finished`() {
+    fun `lists an incomplete run but rejects only its summary`() {
         finish(".results/a/r1", "a.experiment.json", complete = false)
+        val entry = RunEntry("r1", "a.experiment.json", ".results/a/r1", false)
 
-        assertThat(catalog.list()).isEmpty()
-        assertThat(catalog.manifest("r1")).isNull()
-        assertThat(catalog.summary("r1")).isNull()
+        assertThat(catalog.list()).containsExactly(entry)
+        assertThat(catalog.entry("r1")).isEqualTo(entry)
+        assertThat(catalog.manifest("r1")?.complete).isFalse()
+        assertThatThrownBy { catalog.summary("r1") }
+            .isInstanceOf(RunIncompleteException::class.java)
+            .hasMessageContaining("r1")
     }
 
     @Test

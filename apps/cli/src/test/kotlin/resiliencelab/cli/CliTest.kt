@@ -2,16 +2,22 @@ package resiliencelab.cli
 
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Stage1Catalog
+import resiliencelab.core.execution.ExperimentEstimate
+import resiliencelab.core.lab.Lab
+import resiliencelab.core.workspace.FileWorkspace
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -43,6 +49,10 @@ class CliTest {
             listOf("unknown", experiment),
             listOf("validate"),
             listOf("run"),
+            listOf("estimate"),
+            listOf("resume"),
+            listOf("estimate", experiment, "extra"),
+            listOf("resume", "run-1", "extra"),
             listOf("run", experiment, "extra"),
             listOf("run", "--workers", "0", experiment),
             listOf("run", "--workers", "many", experiment),
@@ -177,6 +187,93 @@ class CliTest {
         assertThat(result.stdout).isEmpty()
         assertThat(result.stderr).contains("PARAM_MISSING")
         assertThat(workspace.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `estimate prints the core JSON without writing results`() {
+        val expected = Lab(FileWorkspace(workspace)).use { it.estimate(experiment) }
+
+        val result = execute(listOf("estimate", experiment))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        assertThat(result.stderr).isEmpty()
+        assertThat(result.stdout)
+            .isEqualTo(Json { encodeDefaults = true }.encodeToString(ExperimentEstimate.serializer(), expected) + "\n")
+        assertThat(workspace.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `estimate reports invalid experiments and paths`() {
+        breakModel()
+        val invalid = execute(listOf("estimate", experiment))
+        assertThat(invalid.exitCode).isEqualTo(2)
+        assertThat(invalid.stdout).isEmpty()
+        assertThat(invalid.stderr).contains("PARAM_MISSING")
+
+        val outside = execute(listOf("estimate", "../outside.experiment.json"))
+        assertThat(outside.exitCode).isEqualTo(2)
+        assertThat(outside.stderr).contains("experiment must be inside the workspace")
+    }
+
+    @Test
+    fun `resume by id matches continuous artifact bytes`() {
+        assertResumeMatchesContinuous("run-2")
+    }
+
+    @Test
+    fun `resume by absolute directory matches continuous artifact bytes`() {
+        assertResumeMatchesContinuous(workspace.resolve(".results/retry-storm/run-2").toString())
+    }
+
+    @Test
+    fun `resume rejects unknown complete and escaping runs`() {
+        val unknown = execute(listOf("resume", "missing"))
+        assertThat(unknown.exitCode).isEqualTo(2)
+        assertThat(unknown.stdout).isEmpty()
+        assertThat(unknown.stderr).contains("Run not found: missing")
+
+        assertThat(execute(listOf("run", experiment)).exitCode).isZero()
+        val complete = execute(listOf("resume", "run-1"))
+        assertThat(complete.exitCode).isEqualTo(2)
+        assertThat(complete.stderr).contains("RUN_COMPLETE")
+
+        val outside = execute(listOf("resume", "../outside"))
+        assertThat(outside.exitCode).isEqualTo(2)
+        assertThat(outside.stderr).contains("run must be inside the workspace")
+    }
+
+    @Test
+    fun `pre cancelled resume returns 130 and keeps the incomplete artifact`() {
+        createIncomplete("run-2")
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+
+        val status = runCommand(listOf("resume", "run-2"), stdout, stderr, workspace, isCancelled = { true })
+
+        assertThat(status).isEqualTo(130)
+        assertThat(stdout.toString()).isEmpty()
+        assertThat(stderr.toString()).contains("Cancelled: .results/retry-storm/run-2")
+        assertThat(workspace.resolve(".results/retry-storm/run-2/manifest.json").readText()).contains("\"complete\": false")
+    }
+
+    @Test
+    fun `installed launcher prints estimate JSON and resumes a run`() {
+        val estimate = launch(listOf("estimate", experiment))
+        assertThat(estimate.exitCode).describedAs(estimate.stderr).isZero()
+        assertThat(estimate.stderr).isEmpty()
+        assertThat(Json.decodeFromString(ExperimentEstimate.serializer(), estimate.stdout).tasks).isEqualTo(4)
+
+        createIncomplete("installed-resume")
+        val resumed = launch(listOf("resume", "installed-resume"))
+        assertThat(resumed.exitCode).describedAs(resumed.stderr).isZero()
+        assertThat(
+            resumed.stdout
+                .lines()
+                .filter { it.isNotBlank() }
+                .first(),
+        ).isEqualTo(".results/retry-storm/installed-resume")
+        assertThat(workspace.resolve(".results/retry-storm/installed-resume/manifest.json").readText())
+            .contains("\"complete\": true")
     }
 
     @Test
@@ -330,6 +427,47 @@ class CliTest {
         val exitCode = process.waitFor()
         return CommandResult(exitCode, stdout, errorFile.readText())
     }
+
+    private fun assertResumeMatchesContinuous(argument: String) {
+        assertThat(execute(listOf("run", experiment)).exitCode).isZero()
+        val expectedDirectory = ".results/retry-storm/run-1"
+        val expected = artifactBytes(expectedDirectory)
+        createIncomplete("run-2")
+        val missing = FileWorkspace(workspace).listFiles(".results/retry-storm/run-2").first { it.endsWith("/replication.json") }
+        Files.delete(workspace.resolve(missing))
+
+        val result = execute(listOf("resume", argument))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(3)
+        assertThat(lines[0]).isEqualTo(".results/retry-storm/run-2")
+        assertThat(result.stderr).contains("Tasks ")
+        val actual = artifactBytes(".results/retry-storm/run-2")
+        assertThat(actual.keys).isEqualTo(expected.keys)
+        expected.forEach { (path, bytes) ->
+            assertThat(actual.getValue(path)).describedAs(path).containsExactly(*bytes)
+        }
+    }
+
+    private fun createIncomplete(runId: String) {
+        val cancelled = AtomicBoolean()
+        assertThatThrownBy {
+            Lab(FileWorkspace(workspace)).use { lab ->
+                lab.run(experiment, runId, isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }
+        }.isInstanceOf(CancellationException::class.java)
+        val directory = workspace.resolve(".results/retry-storm/$runId")
+        assertThat(directory.resolve("manifest.json").readText()).contains("\"complete\": false")
+        assertThat(directory.resolve("summary.json")).doesNotExist()
+    }
+
+    private fun artifactBytes(directory: String): Map<String, ByteArray> =
+        FileWorkspace(workspace).listFiles(directory).associate { path ->
+            path.removePrefix("$directory/") to Files.readAllBytes(workspace.resolve(path))
+        }
 
     private fun breakModel() {
         val file = workspace.resolve(model)

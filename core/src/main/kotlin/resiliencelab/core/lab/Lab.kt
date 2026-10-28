@@ -202,6 +202,9 @@ class Lab(
     @OptIn(ExperimentalSerializationApi::class)
     private val artifactJson = Json { explicitNulls = false }
 
+    /** Validates an incomplete run for resumption without changing its artifact or starting a model. */
+    fun validateResume(runDirectory: String): RunManifest = withResumeLock(runDirectory) { prepareResume(runDirectory).manifest }
+
     /**
      * Resumes an incomplete artifact in place. Valid task files are preserved; missing or corrupt tasks are recomputed
      * with their original replication IDs. Document or version mismatches fail before any artifact mutation.
@@ -213,40 +216,9 @@ class Lab(
     ): RunOutcome =
         withResumeLock(runDirectory) {
             checkCancellation(isCancelled)
-            val manifestPath = "$runDirectory/manifest.json"
-            val manifest = artifactJson.decodeFromString(RunManifest.serializer(), workspace.read(manifestPath).text)
-            if (manifest.schemaVersion != Versions.ARTIFACT_SCHEMA) {
-                throw UnsupportedArtifactVersionException("manifest", manifest.schemaVersion)
-            }
-            if (manifest.complete) throw resumeFailure("RUN_COMPLETE", "Run is already complete", manifestPath)
-            if (
-                manifest.applicationVersion != Versions.APPLICATION ||
-                manifest.kslVersion != Versions.KSL ||
-                manifest.streamAssignment != PathStreams.ASSIGNMENT_VERSION
-            ) {
-                throw resumeFailure("RUN_INCOMPATIBLE", "Run versions changed; run again", manifestPath)
-            }
-            val canonical =
-                runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
-            if (canonical != runDirectory) {
-                throw resumeFailure("RUN_INCOMPATIBLE", "Run directory does not match its manifest; run again", manifestPath)
-            }
-            val loaded = load(manifest.experiment)
-            val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
-            if (loaded.artifactVersions != manifest.documents) {
-                throw resumeFailure("RUN_DOCUMENT_CHANGED", "Run documents changed; run again", manifest.experiment)
-            }
-            val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
-            if (
-                manifest.seed != expected.seed ||
-                manifest.replications != expected.replications ||
-                manifest.variants != expected.variants ||
-                manifest.grid != expected.grid ||
-                manifest.series != expected.series
-            ) {
-                throw resumeFailure("RUN_INCOMPATIBLE", "Run metadata changed; run again", manifestPath)
-            }
-
+            val prepared = prepareResume(runDirectory)
+            val manifest = prepared.manifest
+            val compiled = prepared.compiled
             val tasks =
                 compiled.variants.flatMap { variant ->
                     variant.points.flatMap { point ->
@@ -294,6 +266,48 @@ class Lab(
                 throw failure
             }
         }
+
+    private class PreparedResume(
+        val manifest: RunManifest,
+        val compiled: CompiledExperiment,
+    )
+
+    private fun prepareResume(runDirectory: String): PreparedResume {
+        val manifestPath = "$runDirectory/manifest.json"
+        val manifest = artifactJson.decodeFromString(RunManifest.serializer(), workspace.read(manifestPath).text)
+        if (manifest.schemaVersion != Versions.ARTIFACT_SCHEMA) {
+            throw UnsupportedArtifactVersionException("manifest", manifest.schemaVersion)
+        }
+        if (manifest.complete) throw resumeFailure("RUN_COMPLETE", "Run is already complete", manifestPath)
+        if (
+            manifest.applicationVersion != Versions.APPLICATION ||
+            manifest.kslVersion != Versions.KSL ||
+            manifest.streamAssignment != PathStreams.ASSIGNMENT_VERSION
+        ) {
+            throw resumeFailure("RUN_INCOMPATIBLE", "Run versions changed; run again", manifestPath)
+        }
+        val canonical =
+            runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
+        if (canonical != runDirectory) {
+            throw resumeFailure("RUN_INCOMPATIBLE", "Run directory does not match its manifest; run again", manifestPath)
+        }
+        val loaded = load(manifest.experiment)
+        val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        if (loaded.artifactVersions != manifest.documents) {
+            throw resumeFailure("RUN_DOCUMENT_CHANGED", "Run documents changed; run again", manifest.experiment)
+        }
+        val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
+        if (
+            manifest.seed != expected.seed ||
+            manifest.replications != expected.replications ||
+            manifest.variants != expected.variants ||
+            manifest.grid != expected.grid ||
+            manifest.series != expected.series
+        ) {
+            throw resumeFailure("RUN_INCOMPATIBLE", "Run metadata changed; run again", manifestPath)
+        }
+        return PreparedResume(manifest, compiled)
+    }
 
     private fun resumeFailure(
         code: String,
