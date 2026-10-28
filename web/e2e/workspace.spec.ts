@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { ExperimentFile } from "../src/api/apiTypes";
+import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
 
 const experiment = "retry-storm/retry-storm.experiment.json";
 const model = "retry-storm/retry-storm.model.json";
@@ -58,7 +58,7 @@ test("validates zero handlers without saving and clears diagnostics after correc
   expect(await (await request.get(url)).json()).toEqual(original);
 });
 
-test("shows variant pages read-only with their overrides and edits only on the model page", async ({ page }) => {
+test("shows each variant with its own overrides and editable parameters", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const call = page.getByTestId("rf__edge-gateway-to-middle");
   await expect(call).toContainText("· 1×");
@@ -66,16 +66,180 @@ test("shows variant pages read-only with their overrides and edits only on the m
 
   const attempts = page.getByLabel("Attempts", { exact: true });
   await expect(attempts).toHaveValue("1");
-  await expect(attempts).not.toBeEditable();
+  await expect(attempts).toBeEditable();
   await expect(page.locator(".param-field--overridden")).toContainText("overridden");
 
   await page.getByRole("tab", { name: "Baseline" }).click();
   await expect(attempts).toHaveValue("3");
-  await expect(attempts).not.toBeEditable();
+  await expect(attempts).toBeEditable();
 
   await page.getByRole("tab", { name: "Model" }).click();
   await expect(attempts).toHaveValue("3");
   await expect(attempts).toBeEditable();
+});
+
+test("validates variant drafts on their own page and blocks Run until errors are fixed", async ({ page, request }) => {
+  const path = "variant-validation/drafts.experiment.json";
+  const document = async (path: string) => (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+  await withExperimentFixture(path, () => {}, async () => {
+    const original = await document(path);
+    const modelPath = "variant-validation/fixture.model.json";
+    const originalModel = await document(modelPath);
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByRole("tab", { name: "No retries", exact: true }).click();
+    await page.getByTestId("rf__node-gateway").click();
+    const handlers = page.getByLabel("Handlers", { exact: true });
+    const fieldMessages = handlers.locator("..").locator(".field-diagnostics");
+    await handlers.fill("0");
+    await handlers.press("Enter");
+    await expect(fieldMessages).toContainText("PARAM_RANGE");
+    expect(await document(path)).toEqual(original);
+    const run = page.getByRole("button", { name: "Run", exact: true });
+    await expect(run).toHaveAttribute("title", "Fix validation errors before running");
+    for (const name of ["Model", "Baseline"]) {
+      await page.getByRole("tab", { name, exact: true }).click();
+      await expect(handlers).toHaveValue("4");
+      await expect(fieldMessages).toBeHidden();
+      await expect(run).toBeDisabled();
+      await expect(run).toHaveAttribute("title", "Fix validation errors before running");
+    }
+    await page.getByRole("tab", { name: "Problems", exact: true }).click();
+    await page.getByRole("tabpanel").getByRole("button", { name: /\/variants\/1\/overrides\/gateway\.handlers/ }).click();
+    await expect(page.getByRole("tab", { name: "No retries", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(handlers).toHaveValue("0");
+    await expect(fieldMessages).toContainText("PARAM_RANGE");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    await expect(run).toBeDisabled();
+    await expect(run).toHaveAttribute("title", "Fix validation errors before running");
+    await page.getByRole("button", { name: "Reset Handlers", exact: true }).click();
+    await expect(handlers).toHaveValue("4");
+    await expect(fieldMessages).toBeHidden();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    await expect(run).toBeEnabled();
+    expect((await document(path)).content).toEqual(original.content);
+    expect(await document(modelPath)).toEqual(originalModel);
+    await expectNoPageScroll(page);
+  });
+});
+
+test("saves variant field overrides without changing the model and restores model values", async ({ page, request }) => {
+  const path = "variant-editor/edits.experiment.json";
+  const modelPath = "variant-editor/fixture.model.json";
+  const document = async (path: string) => (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+  await withExperimentFixture(path, () => {}, async () => {
+    const originalModel = (await document(modelPath)).content.model;
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByRole("tab", { name: "No retries", exact: true }).click();
+    await page.getByTestId("rf__edge-gateway-to-middle").click();
+    const timeout = page.getByLabel("Timeout", { exact: true });
+    await timeout.fill("90ms");
+    await timeout.press("Enter");
+    const base = page.getByLabel("Base delay", { exact: true });
+    await base.fill("4ms");
+    await base.press("Enter");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    const edited = (await document(path)).content.experiment;
+    expect(edited.variants[1].overrides).toMatchObject({
+      "gateway-to-middle.timeout": "90ms", "gateway-to-middle.backoff.base": "4ms",
+    });
+    expect(edited.variants[1].overrides).not.toHaveProperty("gateway-to-middle.backoff");
+    expect((await document(modelPath)).content.model).toEqual(originalModel);
+
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByRole("tab", { name: "No retries", exact: true }).click();
+    await page.getByTestId("rf__edge-gateway-to-middle").click();
+    await expect(timeout).toHaveValue("90ms");
+    await expect(base).toHaveValue("4ms");
+    await page.getByRole("button", { name: "Reset Timeout", exact: true }).click();
+    await expect(timeout).toHaveValue("80ms");
+    await page.getByRole("button", { name: "Reset Backoff", exact: true }).click();
+    await expect(base).toHaveValue("2ms");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    const restored = (await document(path)).content.experiment;
+    expect(restored.variants[1].overrides).not.toHaveProperty("gateway-to-middle.timeout");
+    expect(restored.variants[1].overrides).not.toHaveProperty("gateway-to-middle.backoff.base");
+    expect(restored.variants[1].overrides["gateway-to-middle.attempts"]).toBe(1);
+    expect((await document(modelPath)).content.model).toEqual(originalModel);
+    await expectNoPageScroll(page);
+  });
+});
+
+test("adds a variant, edits shared run settings and faults, and runs three variants", async ({ page, request }) => {
+  const path = "variant-run/three.experiment.json";
+  await withExperimentFixture(path, () => {}, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByRole("button", { name: "Add variant", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Variant 1", exact: true })).toHaveAttribute("aria-selected", "true");
+    const label = page.getByLabel("Variant label", { exact: true });
+    await label.fill("Alternative");
+    await label.press("Enter");
+    const id = page.getByLabel("Variant ID", { exact: true });
+    await id.fill("alternative");
+    await id.press("Enter");
+    for (const [name, value] of [["Replications", "2"], ["Seed", "42"], ["Real-time limit", "10s"],
+      ["Fault start", "100ms"], ["Fault end", "500ms"], ["Processing multiplier", "2"], ["Fault failure rate", "5%"]]) {
+      const field = page.getByLabel(name, { exact: true });
+      await field.fill(value);
+      await field.press("Enter");
+    }
+    await page.getByRole("combobox", { name: "Fault target", exact: true }).selectOption("middle");
+    await page.getByRole("tab", { name: "Model", exact: true }).click();
+    await expect(page.getByLabel("Seed", { exact: true })).toHaveValue("42");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    expect(saved.content.experiment.variants[2]).toMatchObject({ id: "alternative", label: "Alternative", overrides: {} });
+    expect(saved.content.experiment.execution).toMatchObject({ seed: 42, replications: 2, maxRealTime: "10s" });
+    expect(saved.content.experiment.faults[0]).toEqual({ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 2, failureRate: "5%" });
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
+    const summary = page.getByRole("table", { name: "Summary" });
+    await expect(summary.locator("tbody tr")).toHaveCount(3);
+    await expect(summary.getByRole("row", { name: /Alternative/ })).toContainText("%");
+    await expectNoPageScroll(page);
+  });
+});
+
+test("preserves an absent optional field when editing an existing object override", async ({ page, request }) => {
+  const path = "variant-object/processing.experiment.json";
+  await withExperimentFixture(path, (document) => {
+    document.variants[1].overrides["gateway.processing"] = { kind: "fixed", mean: "3ms" };
+  }, async () => {
+    const modelFile = resolve("../apps/server/build/e2e-workspace/variant-object/fixture.model.json");
+    const source: ModelFile = JSON.parse(await readFile(modelFile, "utf8"));
+    source.blocks.gateway.params.processing = { kind: "lognormal", mean: "2ms", stdDev: "1ms" };
+    await writeFile(modelFile, JSON.stringify(source));
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    await page.getByRole("tab", { name: "No retries", exact: true }).click();
+    await page.getByTestId("rf__node-gateway").click();
+    const mean = page.getByLabel("Mean", { exact: true });
+    await mean.fill("4ms");
+    await mean.press("Enter");
+    const deviation = page.getByLabel("Standard deviation", { exact: true });
+    await expect(deviation).toHaveValue("");
+    await deviation.fill("2ms");
+    await deviation.press("Enter");
+    await deviation.fill("");
+    await deviation.press("Enter");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    expect(saved.content.experiment.variants[1].overrides).toMatchObject({
+      "gateway.processing.kind": "fixed", "gateway.processing.mean": "4ms", "gateway.processing.stdDev": null,
+    });
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
+    expect(JSON.parse(await readFile(modelFile, "utf8"))).toEqual(source);
+  });
 });
 
 test("edits the model, saves it, runs the experiment and shows the summary", async ({ page, request }) => {

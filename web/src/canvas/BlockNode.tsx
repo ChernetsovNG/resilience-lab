@@ -3,7 +3,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Diagnostic, TypeDescriptor } from "../api/apiTypes";
 import { DiagnosticBadge } from "../validation/DiagnosticDisplay";
 
-export type BlockNodeType = Node<{ id: string; block: BlockInstance; ports: TypeDescriptor["ports"]; editable: boolean; diagnostics?: readonly Diagnostic[] }, "block">;
+export type BlockNodeType = Node<{ id: string; block: BlockInstance; ports: TypeDescriptor["ports"]; editable: boolean; overridden?: boolean; diagnostics?: readonly Diagnostic[] }, "block">;
 
 function summaryOf(block: BlockInstance): string {
   const params = block.params;
@@ -20,7 +20,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
       ))}
-      <strong>{data.id}</strong>
+      <strong>{data.id} {data.overridden ? <span role="img" aria-label="Overridden parameters">◆</span> : null}</strong>
       <DiagnosticBadge diagnostics={data.diagnostics ?? []} />
       <span>{summaryOf(data.block)}</span>
     </div>

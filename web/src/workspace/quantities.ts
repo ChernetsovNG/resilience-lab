@@ -14,3 +14,36 @@ export function canonicalOf(text: string, units: readonly ParamDescriptor["units
   const value = (Number(match[1]) * unit.numerator) / unit.denominator;
   return Number.isFinite(value) ? value : null;
 }
+
+function decimal(text: string): [bigint, bigint] {
+  const [significand, exponent = "0"] = text.toLowerCase().split("e");
+  const [whole, fraction = ""] = significand.split(".");
+  return [BigInt(whole + fraction), BigInt(exponent) - BigInt(fraction.length)];
+}
+
+function product(...factors: [bigint, bigint][]): string {
+  const coefficient = factors.reduce((value, [factor]) => value * factor, 1n);
+  if (coefficient === 0n) return "0";
+  const digits = coefficient.toString();
+  const significant = digits.replace(/0+$/, "");
+  const exponent = factors.reduce((value, [, power]) => value + power, BigInt(digits.length - significant.length));
+  return `${significant}e${exponent}`;
+}
+
+/**
+ * Exact decimal equality after unit conversion, without binary rounding or expanding powers of ten.
+ * Cross-multiplication also handles catalog scales that are fractions.
+ */
+export function equivalentQuantities(left: string, right: string, units: readonly ParamDescriptor["units"][number][]): boolean {
+  const parts = (text: string) => {
+    const match = pattern.exec(text);
+    const unit = units.find((candidate) => candidate.symbol === match?.[2]);
+    return match === null || unit === undefined || canonicalOf(text, units) === null ? null : {
+      value: decimal(match[1]), numerator: decimal(String(unit.numerator)), denominator: decimal(String(unit.denominator)),
+    };
+  };
+  const a = parts(left);
+  const b = parts(right);
+  return a !== null && b !== null &&
+    product(a.value, a.numerator, b.denominator) === product(b.value, b.numerator, a.denominator);
+}

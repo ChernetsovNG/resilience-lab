@@ -15,6 +15,7 @@ const nodeTypes = { block: BlockNode };
 export interface CanvasProps {
   /** The model as the active variant page sees it. */
   model: ModelFile;
+  overrides?: Record<string, unknown>;
   layout: LayoutFile | null;
   catalog: Catalog;
   selected: string[];
@@ -36,7 +37,8 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
-function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, disabled = false, onCommand, elementDiagnostics }: CanvasProps) {
+function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, disabled = false, onCommand, elementDiagnostics, overrides = {} }: CanvasProps) {
+  const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition } = useReactFlow();
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
@@ -46,20 +48,20 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
     type: "block",
     position: ownEntry(moving, id) ?? positionOf(model, layout, id),
     measured: ownEntry(sizes, id),
-    data: { id, block, diagnostics: elementDiagnostics?.get(id), ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable },
+    data: { id, block, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id), ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable },
     selected: selected.includes(id),
     ariaLabel: id,
   }));
   const edges: Edge[] = model.connections.map((connection) => {
     const summary = summarizeDiagnostics(elementDiagnostics?.get(connection.id) ?? []);
-    const label = labelOf(connection);
+    const label = [labelOf(connection), summary === null ? undefined : `${summary.severity === "ERROR" ? "!" : "⚠"} ${summary.count}`].filter(Boolean).join(" · ") || undefined;
     return {
       id: connection.id,
       source: connection.from,
       target: connection.to,
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
-      label: summary === null ? label : [label, `${summary.severity === "ERROR" ? "!" : "⚠"} ${summary.count}`].filter(Boolean).join(" · "),
+      label: overridden(connection.id) ? <span>{label} <span role="img" aria-label="Overridden parameters">◆</span></span> : label,
       className: summary === null ? undefined : `diagnostic--${summary.severity.toLowerCase()}`,
       selected: selected.includes(connection.id),
       ariaLabel: connection.id,

@@ -11,7 +11,7 @@ export interface VariantTabsProps {
 
 /**
  * Pages below the canvas, as in draw.io (product vision §5.5): the model page first, then one page per variant. Only
- * the model page edits the model; a variant page shows it with the variant's overrides, even when there are none.
+ * the model page edits the model; a variant page edits its overrides, even when there are none yet.
  */
 export function VariantTabs({ variants, active, disabled = false, onSelect }: VariantTabsProps) {
   return (

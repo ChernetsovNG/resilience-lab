@@ -288,6 +288,40 @@ select {
   font-size: 0.75rem;
 }
 
+.variant-settings {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #d5dbe3;
+}
+
+.inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.variant-settings input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.param-reset {
+  justify-self: start;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.experiment-settings summary {
+  margin: 0.75rem 0;
+  cursor: pointer;
+}
+
+.param-group--overridden {
+  border-color: #f59e0b;
+}
+
 .param-error {
   color: #dc2626;
   font-size: 0.75rem;
