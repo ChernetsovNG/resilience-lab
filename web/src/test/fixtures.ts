@@ -5,6 +5,7 @@ import type {
   LayoutFile,
   ModelFile,
   ParamDescriptor,
+  RunManifest,
   RunSummary,
 } from "../api/apiTypes";
 
@@ -41,6 +42,7 @@ function distribution(name: string, title: string, fallback?: ParamDescriptor["d
 
 export const catalog: Catalog = {
   schemaVersion: 1,
+  assumptions: ["Student 95% confidence intervals are not clipped."],
   types: [
     {
       id: "client",
@@ -48,6 +50,7 @@ export const catalog: Catalog = {
       category: "BLOCK",
       title: "Client",
       description: "Open Poisson stream of original requests with an end-to-end deadline.",
+      assumptions: ["Client deadlines bound waiting."],
       ports: [{ id: "out", direction: "OUT" }],
       params: [
         param({ name: "rate", kind: "QUANTITY", title: "Arrival rate", required: true, dimension: "RATE" }),
@@ -60,6 +63,7 @@ export const catalog: Catalog = {
       category: "BLOCK",
       title: "Service",
       description: "Blocking service.",
+      assumptions: ["Handlers are held during downstream calls and backoff."],
       ports: [
         { id: "in", direction: "IN" },
         { id: "out", direction: "OUT" },
@@ -77,6 +81,7 @@ export const catalog: Catalog = {
       category: "CONNECTION",
       title: "Request",
       description: "Delivers original requests to the entry service.",
+      assumptions: ["Requests have no network delay or retries."],
       ports: [],
       connects: { fromType: "client", toType: "service" },
       params: [],
@@ -87,6 +92,7 @@ export const catalog: Catalog = {
       category: "CONNECTION",
       title: "Call",
       description: "Synchronous call with timeout, retries and backoff.",
+      assumptions: ["Late responses are discarded; orphaned work continues."],
       ports: [],
       connects: { fromType: "service", toType: "service" },
       params: [
@@ -221,4 +227,30 @@ export const summary: RunSummary = {
       points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { pooledLatency: {}, services: {} } }],
     },
   ],
+};
+
+export const manifest: RunManifest = {
+  schemaVersion: 4,
+  applicationVersion: "test-app",
+  kslVersion: "R1.8.1",
+  streamAssignment: "sha256-substreams-v1",
+  experiment: experimentPath,
+  documents: { [experimentPath]: "experiment-hash", [modelPath]: "model-hash" },
+  seed: 20261025,
+  replications: 2,
+  variants: ["baseline", "no-retries"],
+  parts: {},
+  complete: true,
+  grid: [],
+  series: {
+    warmupMs: 100,
+    measurementMs: 1000,
+    windowMs: 10,
+    sketchProfile: "ddsketch-bitwise6-rational-v1",
+    sketchLibraryVersion: "0.8.3",
+    timeUnit: "ms",
+    timeBasis: "event-time",
+    replicationBasis: "measurement-cohort-with-run-out",
+    points: [{ id: "p0", coordinates: {} }],
+  },
 };

@@ -152,8 +152,9 @@ export function App() {
         running={run.running}
         runBlockedReason={runBlockedReason}
         onRun={() => {
-          if (loaded !== null) void run.run(loaded.experimentPath);
+          if (loaded !== null) void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
         }}
+        onCancel={() => void run.cancel()}
         job={ownRun ? run.job : null}
         health={health.health}
         healthError={health.error}

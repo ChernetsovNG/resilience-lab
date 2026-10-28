@@ -20,6 +20,7 @@ export interface TopBarProps {
   onRedo: () => void;
   running: boolean;
   onRun: () => void;
+  onCancel: () => void;
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
   job: JobView | null;
@@ -28,12 +29,13 @@ export interface TopBarProps {
 }
 
 /**
- * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run, job status, backend health. Switching waits for
- * opening, saving, running and invalid drafts; saving and running wait for valid drafts, and running also for saved changes.
+ * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, run/cancel, job status, backend health. Switching waits
+ * for opening, saving, running and invalid drafts; saving and running wait for valid drafts and saved changes.
  */
 export function TopBar(props: TopBarProps) {
-  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, job, health, healthError, canUndo, canRedo, onUndo, onRedo } =
+  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, onCancel, job, health, healthError, canUndo, canRedo, onUndo, onRedo } =
     props;
+  const active = job !== null && (job.status === "QUEUED" || job.status === "RUNNING");
   return (
     <header className="top-bar">
       <h1>Resilience Lab</h1>
@@ -70,8 +72,9 @@ export function TopBar(props: TopBarProps) {
       >
         Run
       </button>
+      {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>Cancel</button> : null}
       <span className="job-status" data-testid="job-status">
-        {job === null ? "" : job.status}
+        {job === null ? "" : `${job.status}${active && job.cancelRequested ? " · cancellation requested" : ""}`}
       </span>
       <span className="spacer" />
       <HealthBadge health={health} error={healthError} />
