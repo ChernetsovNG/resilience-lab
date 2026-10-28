@@ -118,7 +118,7 @@ describe("App stage 1 integration", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await open(); selectGateway(); editHandlers("5");
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the model?");
+    expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the documents?");
     expect(experimentSelect().value).toBe(experimentPath);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherPath)))).toBe(false);
@@ -162,7 +162,7 @@ describe("App stage 1 integration", () => {
       }
     });
     await open(); selectGateway(); editHandlers("5"); fireEvent.click(button("Save"));
-    await screen.findByText(/The model changed on disk/);
+    await screen.findByText(/The document changed on disk/);
     expect(button("Save").disabled).toBe(true);
     editHandlers("oops");
     fireEvent.click(button("Reload"));
@@ -208,4 +208,56 @@ it("keeps navigation available when a read-only variant contains invalid stored 
   expect(experimentSelect().disabled).toBe(false);
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
+});
+
+
+it("exposes undo and redo buttons without putting selection or variant navigation in history", async () => {
+  server();
+  await open();
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Redo").disabled).toBe(true);
+  selectGateway(); editHandlers("5");
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(button("Undo"));
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+  expect(button("Save").disabled).toBe(true);
+  fireEvent.click(button("Redo"));
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
+  expect(button("Save").disabled).toBe(false);
+});
+
+it("supports Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y outside form fields", async () => {
+  server();
+  await open(); selectGateway(); editHandlers("5");
+  const handlers = () => (screen.getByLabelText("Handlers") as HTMLInputElement).value;
+  fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+  expect(handlers()).toBe("4");
+  fireEvent.keyDown(document.body, { key: "Z", ctrlKey: true, shiftKey: true });
+  expect(handlers()).toBe("5");
+  fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+  expect(handlers()).toBe("4");
+  fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+  expect(handlers()).toBe("5");
+  fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "y", ctrlKey: true });
+  expect(handlers()).toBe("5");
+});
+
+it("leaves field undo native and prevents history actions from discarding invalid drafts", async () => {
+  server();
+  await open(); selectGateway(); editHandlers("5");
+  const input = screen.getByLabelText("Handlers") as HTMLInputElement;
+  const nativeUndo = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true });
+  fireEvent(input, nativeUndo);
+  expect(nativeUndo.defaultPrevented).toBe(false);
+  expect(input.value).toBe("5");
+  fireEvent.change(input, { target: { value: "invalid" } });
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Redo").disabled).toBe(true);
+  fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+  expect(input.value).toBe("invalid");
+  fireEvent.change(input, { target: { value: "5" } });
+  fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+  expect(input.value).toBe("4");
 });

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Canvas } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
@@ -24,7 +24,7 @@ export function App() {
   const [variantId, setVariantId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
-  const { loaded, catalog } = workspace;
+  const { loaded, catalog, loading, undo, redo } = workspace;
   const variants = loaded?.experiment.variants ?? [];
   const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
@@ -43,6 +43,25 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (invalid || loading || event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (key === "y" && event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [invalid, loading, undo, redo]);
+
   return (
     <div className="app">
       <TopBar
@@ -50,7 +69,7 @@ export function App() {
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
           if (invalid || workspace.loading || workspace.saving || run.running) return;
-          if (workspace.dirty && !window.confirm("Discard unsaved changes to the model?")) return;
+          if (workspace.dirty && !window.confirm("Discard unsaved changes to the documents?")) return;
           setSelected(null);
           setVariantId(null);
           run.reset();
@@ -62,6 +81,10 @@ export function App() {
         conflict={workspace.conflict}
         saving={workspace.saving}
         onSave={() => void workspace.save()}
+        canUndo={workspace.canUndo}
+        canRedo={workspace.canRedo}
+        onUndo={workspace.undo}
+        onRedo={workspace.redo}
         running={run.running}
         onRun={() => {
           if (loaded !== null) void run.run(loaded.experimentPath);
@@ -80,7 +103,7 @@ export function App() {
           ) : null}
           {workspace.conflict ? (
             <div className="banner" role="alert">
-              The model changed on disk.{" "}
+              The document changed on disk: <code>{workspace.conflictPath}</code>.{" "}
               <button
                 type="button"
                 onClick={() => {
