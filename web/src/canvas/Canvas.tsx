@@ -2,6 +2,7 @@ import { useState, type Dispatch, type MouseEvent, type SetStateAction } from "r
 import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import type { Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
+import type { CanvasResults } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import type { EditorCommand } from "../workspace/editor";
@@ -18,6 +19,7 @@ export interface CanvasProps {
   /** The model as the active variant page sees it. */
   model: ModelFile;
   overrides?: Record<string, unknown>;
+  results?: CanvasResults | null;
   layout: LayoutFile | null;
   catalog: Catalog;
   selected: string[];
@@ -38,7 +40,7 @@ export function Canvas(props: CanvasProps) {
 }
 
 function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
-  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, overrides = {} }: CanvasProps) {
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, overrides = {}, results = null }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition } = useReactFlow();
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
@@ -50,6 +52,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
     position: ownEntry(moving, id) ?? positionOf(model, layout, id),
     measured: ownEntry(sizes, id),
     data: {
+      result: block.type === "service" ? results?.services.get(id) : undefined,
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable, parametersEditable, disabled,
       onParam: (elementId, path, value) => onParam?.(elementId, path, value),
@@ -59,17 +62,20 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
     ariaLabel: id,
   }));
   const edges: Edge[] = model.connections.map((connection) => {
+    const result = results?.connections.get(connection.id);
+    const amplification = result?.from === connection.from && result.to === connection.to && result.type === connection.type
+      ? result.amplification : undefined;
     const diagnostics = elementDiagnostics?.get(connection.id) ?? [];
     const summary = summarizeDiagnostics(diagnostics);
     return {
       id: connection.id,
-      type: connection.type === "call" ? "call" : undefined,
+      type: connection.type === "call" || connection.type === "request" ? "call" : undefined,
       source: connection.from,
       target: connection.to,
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
-        connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
+        amplification, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
       },

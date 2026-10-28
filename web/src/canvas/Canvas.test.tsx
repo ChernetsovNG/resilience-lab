@@ -4,6 +4,8 @@ import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
 import { Canvas } from "./Canvas";
 import { VariantTabs } from "./VariantTabs";
+import { canvasResults } from "../results/canvasResults";
+import { summary } from "../test/fixtures";
 
 beforeAll(mockReactFlowDom);
 
@@ -215,4 +217,22 @@ describe("VariantTabs", () => {
     }
     expect(onSelect).not.toHaveBeenCalled();
   });
+});
+
+it("does not give old results to new nodes, new edges or retargeted edges", async () => {
+  const current = {
+    ...model,
+    blocks: { ...model.blocks, added: model.blocks.gateway },
+    connections: [
+      ...model.connections.map((edge) => edge.id === "gateway-to-middle" ? { ...edge, to: "gateway" } : edge),
+      { id: "new-call", from: "added", to: "gateway", type: "call", params: { timeout: "50ms" } },
+    ],
+  };
+  render(<Canvas catalog={catalog} onCommand={vi.fn()} model={current} layout={layout} selected={[]} onSelect={vi.fn()}
+    results={canvasResults(summary, model, "baseline", "p0")} />);
+  expect(await screen.findByTestId("canvas-results-gateway")).toBeTruthy();
+  expect(screen.queryByTestId("canvas-results-added")).toBeNull();
+  expect(screen.getByTestId("canvas-edge-label-new-call").textContent).not.toContain("Amplification");
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").textContent).not.toContain("Amplification");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.20×");
 });

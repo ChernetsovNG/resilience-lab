@@ -1,5 +1,7 @@
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
+
+import { canvasResults, utilizationColor } from "./results/canvasResults";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
@@ -32,6 +34,7 @@ export function App() {
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.job?.id ?? null);
+  const [showDiagramResults, setShowDiagramResults] = useState(true);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
@@ -62,6 +65,9 @@ export function App() {
   const staleResults = ownRun && loaded !== null && run.documents !== null && (
     !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
   );
+  const selectedPointId = results.selection.pointId;
+  const diagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined
+    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId) : null;
   const diagnostics = validation.report?.diagnostics ?? [];
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
@@ -223,6 +229,24 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
+          {diagramResults === null ? null : (
+            <div className="canvas-results-toolbar" role="region" aria-label="Canvas results">
+              <label>
+                <input type="checkbox" checked={showDiagramResults} onChange={(event) => setShowDiagramResults(event.target.checked)} />
+                Show results on diagram
+              </label>
+              {showDiagramResults ? <>
+                <span>Summary · {variant?.label ?? variant?.id} · {selectedPointId} · measurement interval</span>
+                <span className="utilization-legend" aria-label="Handler utilization scale">
+                  Utilization (pooled): 0%
+                  <span className="utilization-scale" aria-hidden="true"
+                    style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
+                  100%
+                </span>
+                {staleResults ? <span className="canvas-results-stale" role="status">Results belong to a previous document version.</span> : null}
+              </> : null}
+            </div>
+          )}
         </div>
         <div className="canvas">
           {model === null || loaded === null || catalog === null ? (
@@ -236,6 +260,7 @@ export function App() {
               selected={selection}
               elementDiagnostics={elementDiagnostics}
               overrides={overrides}
+              results={showDiagramResults ? diagramResults : null}
               editable={structureEditable && !invalid}
               parametersEditable={editable}
               disabled={invalid}
