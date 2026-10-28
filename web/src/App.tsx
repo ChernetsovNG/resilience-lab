@@ -203,7 +203,7 @@ export function App() {
                 if (variant === undefined) workspace.setParam(id, path, value);
                 else workspace.execute(setVariantParam(variant.id, id, path, value ?? null, catalog));
               }}
-              onValidity={onValidity}
+              onValidity={(key, valid) => onValidity(`canvas:${key}`, valid)}
               onSelect={(next) => {
                 if (!invalid) setSelection(next);
               }}

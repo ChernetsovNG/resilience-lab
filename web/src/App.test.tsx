@@ -296,6 +296,27 @@ it("reads duration and probability units for shared fields from the catalog", as
   expect(saved.faults[0].failureRate).toBe("250permille");
 });
 
+it("keeps navigation blocked while either the canvas or Inspector draft is invalid", async () => {
+  server();
+  await open();
+  selectGateway();
+  const parameter = await screen.findByTestId("canvas-param-gateway-handlers");
+  fireEvent.doubleClick(parameter);
+  const canvasInput = parameter.querySelector("input")!;
+  fireEvent.change(canvasInput, { target: { value: "invalid" } });
+  const inspectorInput = within(screen.getByRole("complementary", { name: "Inspector" })).getByLabelText("Handlers");
+  fireEvent.change(inspectorInput, { target: { value: "invalid" } });
+  expect(screen.getByText(/Fix invalid values before changing/)).toBeTruthy();
+
+  fireEvent.keyDown(canvasInput, { key: "Escape" });
+  expect(screen.getByText(/Fix invalid values before changing/)).toBeTruthy();
+  expect((screen.getByRole("tab", { name: "Baseline" }) as HTMLButtonElement).disabled).toBe(true);
+
+  fireEvent.change(inspectorInput, { target: { value: "4" } });
+  expect(screen.queryByText(/Fix invalid values before changing/)).toBeNull();
+  expect((screen.getByRole("tab", { name: "Baseline" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
 it.each(["Handlers", "Seed"])("preserves an invalid %s draft when a variant ID rename is attempted", async (field) => {
   server();
   await open();
