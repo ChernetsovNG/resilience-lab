@@ -35,6 +35,17 @@ class FileWorkspaceTest {
     }
 
     @Test
+    fun `deletes a regular file idempotently within the workspace`() {
+        workspace.write("a.model.json", "{}\n")
+
+        workspace.delete("a.model.json")
+        workspace.delete("a.model.json")
+
+        assertThat(workspace.exists("a.model.json")).isFalse()
+        assertThatThrownBy { workspace.delete("../outside") }.isInstanceOf(InvalidDocumentPathException::class.java)
+    }
+
+    @Test
     fun `rejects writes against a stale version`() {
         val first = workspace.write("a.model.json", "1\n")
         workspace.write("a.model.json", "2\n", expectedVersion = first)

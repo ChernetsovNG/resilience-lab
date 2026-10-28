@@ -67,6 +67,9 @@ interface Workspace {
 
     fun exists(path: String): Boolean
 
+    /** Deletes a regular file if it exists; missing files are ignored. */
+    fun delete(path: String)
+
     /**
      * Writes [text] and returns its version. When [expectedVersion] is set, the current version must match it;
      * otherwise [VersionConflictException] is thrown and nothing is written.
@@ -146,6 +149,15 @@ class FileWorkspace(
 
     override fun exists(path: String): Boolean = resolve(path).isRegularFile()
 
+    override fun delete(path: String) =
+        mutate(path) { file ->
+            if (Files.exists(file, NOFOLLOW_LINKS) && !file.isRegularFile(NOFOLLOW_LINKS)) {
+                throw InvalidDocumentPathException(path)
+            }
+            Files.deleteIfExists(file)
+            Unit
+        }
+
     override fun write(
         path: String,
         text: String,
@@ -178,10 +190,10 @@ class FileWorkspace(
             DocumentVersion.of(bytes)
         }
 
-    private fun mutate(
+    private fun <T> mutate(
         path: String,
-        action: (Path) -> String,
-    ): String =
+        action: (Path) -> T,
+    ): T =
         synchronized(mutationMonitor) {
             FileChannel.open(lockFile, CREATE, WRITE, NOFOLLOW_LINKS).use { channel ->
                 channel.lock().use {

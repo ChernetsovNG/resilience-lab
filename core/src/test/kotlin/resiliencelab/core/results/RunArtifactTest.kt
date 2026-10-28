@@ -6,6 +6,9 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySummary
+import resiliencelab.core.execution.ExperimentTask
+import resiliencelab.core.lab.Lab
+import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
@@ -71,6 +74,24 @@ class RunArtifactTest {
     }
 
     @Test
+    fun `rewrite replaces summary and manifest without hashing the old manifest`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val writer = ArtifactWriter(workspace)
+        writer.write(".results/e/run-1", manifest(), summary())
+
+        val rewritten = writer.rewrite(".results/e/run-1", manifest().copy(seed = 9), summary().copy(experiment = "replacement"))
+
+        val summaryText = workspace.read(".results/e/run-1/summary.json").text
+        assertThat(summaryText).contains("replacement")
+        assertThat(rewritten.parts).doesNotContainKey("manifest.json")
+        assertThat(rewritten.parts["summary.json"]).isEqualTo(DocumentVersion.of(summaryText))
+        assertThat(workspace.read(".results/e/run-1/manifest.json").text)
+            .isEqualTo(DocumentCodec.encode(RunManifest.serializer(), rewritten))
+    }
+
+    @Test
     fun `rejects a manifest-only destination without creating a summary`(
         @TempDir root: Path,
     ) {
@@ -84,6 +105,76 @@ class RunArtifactTest {
 
         assertThat(workspace.exists(".results/e/run-1/summary.json")).isFalse()
         assertThat(workspace.read(manifestPath).text).isEqualTo(originalManifest)
+    }
+
+    @Test
+    fun `prepare selects only the task with a bad file checksum`(
+        @TempDir root: Path,
+    ) {
+        listOf("replication.json", "index.json", "part-0.json.gz").forEach { fileName ->
+            val caseRoot = root.resolve(fileName)
+            Files.createDirectories(caseRoot)
+            val outcome = runExample(caseRoot)
+            val workspace = FileWorkspace(caseRoot)
+            val tasks = exampleTasks()
+            val target = tasks.first()
+            val targetDirectory = "${outcome.runDirectory}/series/${target.variant}/${target.point}/rep-${target.replication}"
+            val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-1/replication.json"
+            val validBytes = workspace.readBytes(validPath)
+            val corrupted = caseRoot.resolve("$targetDirectory/$fileName")
+            if (fileName.endsWith(".gz")) {
+                Files.write(corrupted, byteArrayOf(1, 2, 3))
+            } else {
+                Files.writeString(corrupted, "corrupted")
+            }
+
+            val invalid = ResumeArtifact(workspace).prepare(outcome.runDirectory, outcome.manifest.copy(complete = false), tasks)
+
+            assertThat(invalid).containsExactly(target)
+            assertThat(workspace.readBytes(validPath)).isEqualTo(validBytes)
+            assertThat(workspace.exists("${outcome.runDirectory}/summary.json")).isFalse()
+        }
+    }
+
+    @Test
+    fun `prepare removes incomplete and unrelated files but preserves valid tasks`(
+        @TempDir root: Path,
+    ) {
+        val outcome = runExample(root)
+        val workspace = FileWorkspace(root)
+        val tasks = exampleTasks()
+        val target = tasks[2]
+        val targetDirectory = "${outcome.runDirectory}/series/${target.variant}/${target.point}/rep-${target.replication}"
+        Files.delete(root.resolve("$targetDirectory/replication.json"))
+        workspace.create("$targetDirectory/stale.json", "stale")
+        workspace.create("${outcome.runDirectory}/orphan.json", "orphan")
+        val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-0/replication.json"
+        val validBytes = workspace.readBytes(validPath)
+
+        val invalid = ResumeArtifact(workspace).prepare(outcome.runDirectory, outcome.manifest.copy(complete = false), tasks)
+
+        assertThat(invalid).containsExactly(target)
+        assertThat(workspace.listFiles(targetDirectory)).isEmpty()
+        assertThat(workspace.exists("${outcome.runDirectory}/orphan.json")).isFalse()
+        assertThat(workspace.exists("${outcome.runDirectory}/summary.json")).isFalse()
+        assertThat(workspace.readBytes(validPath)).isEqualTo(validBytes)
+    }
+
+    private fun exampleTasks() =
+        listOf("baseline", "no-retries").flatMap { variant ->
+            (0 until 2).map { replication -> ExperimentTask(variant, "p0", replication) }
+        }
+
+    private fun runExample(root: Path): RunOutcome {
+        val source = Path.of(System.getProperty("resilience-lab.project-root"), "examples", "retry-storm")
+        Files.walk(source).use { paths ->
+            paths.filter { Files.isRegularFile(it) }.forEach { file ->
+                val destination = root.resolve("retry-storm").resolve(source.relativize(file))
+                Files.createDirectories(destination.parent)
+                Files.copy(file, destination)
+            }
+        }
+        return Lab(FileWorkspace(root)).use { it.run("retry-storm/retry-storm.experiment.json", "r") }
     }
 
     private fun summary() =

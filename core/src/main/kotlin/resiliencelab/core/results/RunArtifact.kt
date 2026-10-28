@@ -202,22 +202,49 @@ class ArtifactWriter(
         runDirectory: String,
         manifest: RunManifest,
         summary: RunSummary?,
+    ): RunManifest = write(runDirectory, manifest, summary, replaceExisting = false)
+
+    /** Replaces an incomplete artifact's summary and manifest after its invalid tasks have been recomputed. */
+    fun rewrite(
+        runDirectory: String,
+        manifest: RunManifest,
+        summary: RunSummary?,
+    ): RunManifest = write(runDirectory, manifest, summary, replaceExisting = true)
+
+    private fun write(
+        runDirectory: String,
+        manifest: RunManifest,
+        summary: RunSummary?,
+        replaceExisting: Boolean,
     ): RunManifest =
         uninterruptedArtifactWrite {
             val summaryPath = "$runDirectory/summary.json"
             val manifestPath = "$runDirectory/manifest.json"
-            if (workspace.exists(manifestPath)) throw DocumentExistsException(manifestPath)
-            if (summary != null && workspace.exists(summaryPath)) throw DocumentExistsException(summaryPath)
+            if (!replaceExisting && workspace.exists(manifestPath)) throw DocumentExistsException(manifestPath)
+            if (!replaceExisting && summary != null && workspace.exists(summaryPath)) throw DocumentExistsException(summaryPath)
 
-            if (summary != null) workspace.create(summaryPath, DocumentCodec.encode(RunSummary.serializer(), summary))
+            if (summary != null) {
+                val encoded = DocumentCodec.encode(RunSummary.serializer(), summary)
+                if (replaceExisting && workspace.exists(summaryPath)) {
+                    workspace.write(summaryPath, encoded)
+                } else {
+                    workspace.create(summaryPath, encoded)
+                }
+            }
             val parts =
                 workspace
                     .listFiles(runDirectory)
+                    .filter { it != manifestPath }
                     .associate { path ->
                         path.removePrefix("$runDirectory/") to DocumentVersion.of(workspace.readBytes(path))
                     }.toSortedMap()
             val written = manifest.copy(parts = parts, complete = summary != null && manifest.complete)
-            workspace.create(manifestPath, DocumentCodec.encode(RunManifest.serializer(), written))
+            val encoded = DocumentCodec.encode(RunManifest.serializer(), written)
+            if (replaceExisting && workspace.exists(manifestPath)) {
+                workspace.write(manifestPath, encoded)
+            } else {
+                workspace.create(manifestPath, encoded)
+            }
             written
         }
 }
