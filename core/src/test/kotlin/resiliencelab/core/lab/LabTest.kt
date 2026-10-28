@@ -6,7 +6,9 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
+import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
+import resiliencelab.core.workspace.createSymbolicLink
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
@@ -14,6 +16,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.io.path.copyTo
 import kotlin.io.path.createDirectories
@@ -93,7 +96,7 @@ class LabTest {
         }
         val outside = temp.resolve("outside")
         Files.createDirectory(outside)
-        Files.createSymbolicLink(root.resolve("link"), outside)
+        createSymbolicLink(root.resolve("link"), outside)
         Lab(FileWorkspace(root)).use { lab ->
             assertThatThrownBy { lab.validate(experiment, mapOf("link/new.model.json" to "{}")) }
                 .isInstanceOf(resiliencelab.core.workspace.InvalidDocumentPathException::class.java)
@@ -124,6 +127,195 @@ class LabTest {
             }.isInstanceOf(CancellationException::class.java)
         }
         assertIncomplete(root)
+    }
+
+    @Test
+    fun `resumed and continuous artifacts are byte identical and a corrupt part is recomputed`() {
+        val expectedRoot = exampleWorkspace()
+        val actualRoot = exampleWorkspace()
+        Lab(FileWorkspace(expectedRoot)).use { it.run(experiment, "run-1") }
+        val cancelled = AtomicBoolean()
+        Lab(FileWorkspace(actualRoot)).use { lab ->
+            assertThatThrownBy {
+                lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        val runDirectory = ".results/retry-storm/cancelled"
+        val corrupt = FileWorkspace(actualRoot).listFiles(runDirectory).first { it.endsWith(".json.gz") }
+        Files.write(actualRoot.resolve(corrupt), byteArrayOf(1, 2, 3))
+
+        val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
+
+        assertThat(resumed.manifest.complete).isTrue()
+        val expectedDirectory = ".results/retry-storm/run-1"
+        val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
+        val actualFiles = FileWorkspace(actualRoot).listFiles(runDirectory).map { it.removePrefix("$runDirectory/") }
+        assertThat(actualFiles).containsExactlyElementsOf(expectedFiles)
+        expectedFiles.forEach { relative ->
+            assertThat(Files.readAllBytes(actualRoot.resolve("$runDirectory/$relative")))
+                .describedAs(relative)
+                .containsExactly(*Files.readAllBytes(expectedRoot.resolve("$expectedDirectory/$relative")))
+        }
+    }
+
+    @Test
+    fun `resume rejects changed documents without mutating the artifact`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val modelFile = root.resolve(model)
+        Files.writeString(modelFile, Files.readString(modelFile).replace("\"handlers\": 4", "\"handlers\": 5"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_DOCUMENT_CHANGED")
+        assertThat(failure.message).contains("run again")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume rejects an incompatible application without mutating the artifact`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val manifest = root.resolve("$runDirectory/manifest.json")
+        Files.writeString(manifest, Files.readString(manifest).replace("0.1.0", "0.2.0"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        val failure = runCatching { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }.exceptionOrNull()
+
+        assertThat(failure).isInstanceOf(InvalidExperimentException::class.java)
+        assertThat((failure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_INCOMPATIBLE")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
+    fun `resume rebuilds summary without executing valid tasks`() {
+        val root = exampleWorkspace()
+        val runDirectory = ".results/retry-storm/cancelled"
+        Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
+        val originalManifest = Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))
+        val originalSummary = Files.readAllBytes(root.resolve("$runDirectory/summary.json"))
+        Files.writeString(
+            root.resolve("$runDirectory/manifest.json"),
+            Files.readString(root.resolve("$runDirectory/manifest.json")).replace("\"complete\": true", "\"complete\": false"),
+        )
+        Files.delete(root.resolve("$runDirectory/summary.json"))
+        val calls = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                calls.incrementAndGet()
+                error("A valid task must not be recomputed")
+            }
+
+        val resumed = Lab(FileWorkspace(root), executor = executor).use { it.resume(runDirectory) }
+        executor.close()
+
+        assertThat(calls.get()).isZero()
+        assertThat(resumed.manifest.complete).isTrue()
+        assertThat(Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))).containsExactly(*originalManifest)
+        assertThat(Files.readAllBytes(root.resolve("$runDirectory/summary.json"))).containsExactly(*originalSummary)
+    }
+
+    @Test
+    fun `cancellation during resume leaves a resumable artifact without summary`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val missing = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json") }
+        Files.delete(root.resolve(missing))
+        val cancelled = AtomicBoolean()
+
+        assertThatThrownBy {
+            Lab(FileWorkspace(root)).use { lab ->
+                lab.resume(runDirectory, isCancelled = cancelled::get) { done, total ->
+                    if (total > 0 && done == total) cancelled.set(true)
+                }
+            }
+        }.isInstanceOf(CancellationException::class.java)
+
+        assertIncomplete(root)
+        val resumed = Lab(FileWorkspace(root)).use { it.resume(runDirectory) }
+        assertThat(resumed.manifest.complete).isTrue()
+        assertThat(root.resolve("$runDirectory/summary.json")).isRegularFile()
+    }
+
+    @Test
+    fun `concurrent resumes serialize and the second sees a completed run`() {
+        val root = exampleWorkspace()
+        val runDirectory = ".results/retry-storm/cancelled"
+        Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
+        val manifestPath = root.resolve("$runDirectory/manifest.json")
+        Files.writeString(manifestPath, Files.readString(manifestPath).replace("\"complete\": true", "\"complete\": false"))
+        Files.delete(root.resolve("$runDirectory/summary.json"))
+        Files.delete(root.resolve("$runDirectory/series/baseline/p0/rep-0/replication.json"))
+        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-0/replication.json"))
+        val backing = FileWorkspace(root)
+        val manifestReads = AtomicInteger()
+        val workspace =
+            object : Workspace by backing {
+                override fun read(path: String): VersionedDocument {
+                    if (path == "$runDirectory/manifest.json") manifestReads.incrementAndGet()
+                    return backing.read(path)
+                }
+            }
+        val timeoutSeconds = 30L
+        val firstProgress = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val first =
+            FutureTask<Throwable?> {
+                runCatching {
+                    Lab(workspace).use { lab ->
+                        lab.resume(runDirectory) { done, _ ->
+                            if (done == 1) {
+                                firstProgress.countDown()
+                                check(release.await(timeoutSeconds, TimeUnit.SECONDS))
+                            }
+                        }
+                    }
+                }.exceptionOrNull()
+            }
+        val firstThread = thread(isDaemon = true) { first.run() }
+        val secondStarted = CountDownLatch(1)
+        val second =
+            FutureTask<Throwable?> {
+                secondStarted.countDown()
+                runCatching { Lab(workspace).use { it.resume(runDirectory) } }.exceptionOrNull()
+            }
+        var secondThread: Thread? = null
+
+        try {
+            val progressed = firstProgress.await(timeoutSeconds, TimeUnit.SECONDS)
+            if (!progressed) {
+                release.countDown()
+                assertThat(first.get(timeoutSeconds, TimeUnit.SECONDS)).isNull()
+            }
+            assertThat(progressed).isTrue()
+            val runningSecond = thread(isDaemon = true) { second.run() }
+            secondThread = runningSecond
+            assertThat(secondStarted.await(timeoutSeconds, TimeUnit.SECONDS)).isTrue()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+            while (runningSecond.state != Thread.State.BLOCKED && manifestReads.get() == 1 && System.nanoTime() < deadline) {
+                Thread.yield()
+            }
+            assertThat(manifestReads.get()).isEqualTo(1)
+            assertThat(runningSecond.state).isEqualTo(Thread.State.BLOCKED)
+            release.countDown()
+            assertThat(first.get(timeoutSeconds, TimeUnit.SECONDS)).isNull()
+            val secondFailure = second.get(timeoutSeconds, TimeUnit.SECONDS)
+            assertThat(secondFailure).isInstanceOf(InvalidExperimentException::class.java)
+            assertThat((secondFailure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_COMPLETE")
+        } finally {
+            release.countDown()
+            firstThread.interrupt()
+            secondThread?.interrupt()
+            firstThread.join(5_000)
+            secondThread?.join(5_000)
+        }
     }
 
     @Test
@@ -212,6 +404,27 @@ class LabTest {
         }
     }
 
+    private fun createIncomplete(root: Path) {
+        val cancelled = AtomicBoolean()
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy {
+                lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        assertIncomplete(root)
+    }
+
+    private fun artifactHashes(
+        workspace: FileWorkspace,
+        runDirectory: String,
+    ): Map<String, String> =
+        workspace.listFiles(runDirectory).associateWith { path ->
+            resiliencelab.core.workspace.DocumentVersion
+                .of(workspace.readBytes(path))
+        }
+
     private fun assertIncomplete(root: Path) {
         val directory = root.resolve(".results/retry-storm/cancelled")
         assertThat(Files.readString(directory.resolve("manifest.json"))).contains("\"complete\": false")
@@ -234,6 +447,71 @@ class LabTest {
         assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("80", "189")
         assertThat(report.diagnostics.single { it.code == "LINT_DEADLINE_BUDGET" }.message).contains("250", "420")
         assertThat(report.valid).isTrue()
+    }
+
+    @Test
+    fun `estimates the example without executing a model or writing results`() {
+        val root = exampleWorkspace()
+        val calls = AtomicInteger()
+        val executor =
+            ExperimentExecutor(workers = 1) { _, _, _, _ ->
+                calls.incrementAndGet()
+                error("Estimation must not start KSL")
+            }
+
+        val estimate = Lab(FileWorkspace(root), executor = executor).use { it.estimate(experiment, workers = 1) }
+        executor.close()
+
+        assertThat(calls.get()).isZero()
+        assertThat(estimate.tasks).isEqualTo(4)
+        assertThat(estimate.expectedEvents).isPositive()
+        assertThat(estimate.expectedRows).isEqualTo(1_600)
+        assertThat(estimate.estimatedParts).isEqualTo(4)
+        assertThat(estimate.estimatedSeconds).isPositive()
+        assertThat(estimate.estimatedArtifactBytes).isPositive()
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `estimate uses drafts and rejects invalid worker counts`() {
+        val root = exampleWorkspace()
+        val files = FileWorkspace(root)
+        val original = files.read(model)
+        val draft = original.text.replace("120/s", "240/s")
+        Lab(files).use { lab ->
+            val baseline = lab.estimate(experiment, workers = 1)
+            val changed = lab.estimate(experiment, mapOf(model to draft), workers = 1)
+
+            assertThat(changed.expectedEvents).isGreaterThan(baseline.expectedEvents)
+            assertThat(changed.estimatedSeconds).isGreaterThan(baseline.estimatedSeconds)
+            assertThatThrownBy { lab.estimate(experiment, workers = 0) }.isInstanceOf(IllegalArgumentException::class.java)
+        }
+        assertThat(files.read(model)).isEqualTo(original)
+        assertThat(root.resolve(".results")).doesNotExist()
+    }
+
+    @Test
+    fun `example time estimate is within eight times of measured execution`() {
+        val root = exampleWorkspace()
+        ExperimentExecutor(workers = 1).use { executor ->
+            Lab(FileWorkspace(root), executor = executor).use { lab ->
+                lab.run(experiment, "warmup")
+                val estimate = lab.estimate(experiment, workers = 1)
+                val started = System.nanoTime()
+                lab.run(experiment, "measured")
+                val measuredSeconds = (System.nanoTime() - started) / 1_000_000_000.0
+                val ratio =
+                    maxOf(
+                        estimate.estimatedSeconds / measuredSeconds,
+                        measuredSeconds / estimate.estimatedSeconds,
+                    )
+                println(
+                    "retry-storm cost calibration: estimate=${estimate.estimatedSeconds}s, " +
+                        "measured=${measuredSeconds}s, ratio=$ratio",
+                )
+                assertThat(ratio).isLessThanOrEqualTo(8.0)
+            }
+        }
     }
 
     @Test

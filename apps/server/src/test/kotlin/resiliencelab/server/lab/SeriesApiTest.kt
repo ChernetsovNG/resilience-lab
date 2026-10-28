@@ -131,13 +131,13 @@ class SeriesApiTest {
         val source = root.resolve("${run.runDirectory}/series/baseline/p0/rep-0")
         val directory = root.resolve("${run.runDirectory}/series/linked/p0/rep-0")
         Files.createDirectories(directory)
-        Files.createSymbolicLink(directory.resolve("index.json"), source.resolve("index.json"))
+        createSymbolicLink(directory.resolve("index.json"), source.resolve("index.json"))
         val linkedIndex = mockMvc.perform(get(indexRoute, runId, "linked", "p0", "0")).andReturn().response
         assertThat(linkedIndex.status).isEqualTo(404)
 
         Files.delete(directory.resolve("index.json"))
         Files.copy(source.resolve("index.json"), directory.resolve("index.json"))
-        Files.createSymbolicLink(directory.resolve("part-0.json.gz"), source.resolve("part-0.json.gz"))
+        createSymbolicLink(directory.resolve("part-0.json.gz"), source.resolve("part-0.json.gz"))
         val linkedPart = mockMvc.perform(get(partRoute, runId, "linked", "p0", "0", "0")).andReturn().response
         assertThat(linkedPart.status).isEqualTo(404)
 

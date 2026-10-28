@@ -75,6 +75,52 @@ class ExperimentExecutor internal constructor(
         onOriginalCompletion: ((variant: String, point: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): ExperimentRun {
+        val results =
+            execute(
+                experiment = experiment,
+                selectedTasks = null,
+                isCancelled = isCancelled,
+                onWindow = onWindow,
+                onReplication = onReplication,
+                onOriginalCompletion = onOriginalCompletion,
+                onProgress = onProgress,
+            )
+        return ExperimentRun(
+            experiment.variants.mapIndexed { index, variant ->
+                VariantRun(
+                    variant.id,
+                    variant.label,
+                    variant.points.mapIndexed { pointIndex, point ->
+                        val pointReplications = results[index][pointIndex].map { requireNotNull(it) }
+                        PointRun(point.id, point.coordinates, pointReplications, MetricsAggregator.aggregate(pointReplications))
+                    },
+                )
+            },
+        ).also { checkCancellation(isCancelled) }
+    }
+
+    /** Runs only invalid tasks during resume, retaining their original replication numbers and progress total. */
+    internal fun runSelected(
+        experiment: CompiledExperiment,
+        tasks: Collection<ExperimentTask>,
+        isCancelled: () -> Boolean = { false },
+        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _, _ -> },
+        onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _, _ -> },
+        onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
+    ) {
+        execute(experiment, tasks, isCancelled, onWindow, onReplication, null, onProgress)
+        checkCancellation(isCancelled)
+    }
+
+    private fun execute(
+        experiment: CompiledExperiment,
+        selectedTasks: Collection<ExperimentTask>?,
+        isCancelled: () -> Boolean,
+        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit,
+        onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit,
+        onOriginalCompletion: ((variant: String, point: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)?,
+        onProgress: (completed: Int, total: Int) -> Unit,
+    ): List<List<Array<ReplicationResult?>>> {
         checkCancellation(isCancelled)
         val replications = experiment.run.replications
         val plan =
@@ -84,11 +130,21 @@ class ExperimentExecutor internal constructor(
                 },
             )
         val tasks =
-            experiment.variants.indices.flatMap { variant ->
-                experiment.variants[variant].points.indices.flatMap { point ->
-                    (0 until replications).map { Triple(variant, point, it) }
+            experiment
+                .variants
+                .indices
+                .flatMap { variant ->
+                    experiment.variants[variant].points.indices.flatMap { point ->
+                        (0 until replications).map { Triple(variant, point, it) }
+                    }
+                }.filter { (variant, point, replication) ->
+                    selectedTasks == null ||
+                        ExperimentTask(
+                            experiment.variants[variant].id,
+                            experiment.variants[variant].points[point].id,
+                            replication,
+                        ) in selectedTasks
                 }
-            }
         val results = experiment.variants.map { variant -> variant.points.map { arrayOfNulls<ReplicationResult>(replications) } }
         val progress = Progress(tasks.size, onProgress)
         scheduler.run(
@@ -141,18 +197,7 @@ class ExperimentExecutor internal constructor(
             },
             isCancelled,
         )
-        return ExperimentRun(
-            experiment.variants.mapIndexed { index, variant ->
-                VariantRun(
-                    variant.id,
-                    variant.label,
-                    variant.points.mapIndexed { pointIndex, point ->
-                        val pointReplications = results[index][pointIndex].map { requireNotNull(it) }
-                        PointRun(point.id, point.coordinates, pointReplications, MetricsAggregator.aggregate(pointReplications))
-                    },
-                )
-            },
-        ).also { checkCancellation(isCancelled) }
+        return results
     }
 
     /** Stops the worker threads; tasks still running are interrupted. */

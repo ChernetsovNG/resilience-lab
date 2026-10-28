@@ -35,6 +35,17 @@ class FileWorkspaceTest {
     }
 
     @Test
+    fun `deletes a regular file idempotently within the workspace`() {
+        workspace.write("a.model.json", "{}\n")
+
+        workspace.delete("a.model.json")
+        workspace.delete("a.model.json")
+
+        assertThat(workspace.exists("a.model.json")).isFalse()
+        assertThatThrownBy { workspace.delete("../outside") }.isInstanceOf(InvalidDocumentPathException::class.java)
+    }
+
+    @Test
     fun `rejects writes against a stale version`() {
         val first = workspace.write("a.model.json", "1\n")
         workspace.write("a.model.json", "2\n", expectedVersion = first)
@@ -68,7 +79,7 @@ class FileWorkspaceTest {
         @TempDir outside: Path,
     ) {
         Files.writeString(outside.resolve("outside.layout.json"), "{}\n")
-        Files.createSymbolicLink(root.resolve("external"), outside)
+        createSymbolicLink(root.resolve("external"), outside)
 
         assertThatThrownBy { workspace.read("external/outside.layout.json") }.isInstanceOf(InvalidDocumentPathException::class.java)
         assertThatThrownBy { workspace.write("external/outside.layout.json", "x\n") }.isInstanceOf(InvalidDocumentPathException::class.java)
@@ -128,14 +139,14 @@ class FileWorkspaceTest {
         @TempDir aliases: Path,
     ) {
         Files.writeString(root.resolve("a.model.json"), "original\n")
-        Files.createSymbolicLink(root.resolve("internal.model.json"), root.resolve("a.model.json"))
-        val alias = Files.createSymbolicLink(aliases.resolve("workspace"), root)
+        createSymbolicLink(root.resolve("internal.model.json"), root.resolve("a.model.json"))
+        val alias = createSymbolicLink(aliases.resolve("workspace"), root)
         val aliasedWorkspace = FileWorkspace(alias)
 
         assertThat(aliasedWorkspace.list()).containsExactly("a.model.json")
         assertThat(aliasedWorkspace.read("a.model.json").text).isEqualTo("original\n")
         Files.delete(alias)
-        Files.createSymbolicLink(alias, Files.createDirectory(aliases.resolve("other")))
+        createSymbolicLink(alias, Files.createDirectory(aliases.resolve("other")))
         aliasedWorkspace.write("b.model.json", "pinned\n")
         assertThat(workspace.read("b.model.json").text).isEqualTo("pinned\n")
         assertThat(aliasedWorkspace.list()).containsExactly("a.model.json", "b.model.json")
@@ -262,8 +273,8 @@ class FileWorkspaceTest {
         workspace.write("a.model.json", "original\n")
         val lock = root.resolve(".workspace.lock")
         val identity = Files.createLink(root.resolve(".lock-identity"), lock)
-        Files.createSymbolicLink(root.resolve("lock-alias"), lock)
-        Files.createSymbolicLink(root.resolve("root-alias"), root)
+        createSymbolicLink(root.resolve("lock-alias"), lock)
+        createSymbolicLink(root.resolve("root-alias"), root)
         listOf(
             ".workspace.lock",
             "./.workspace.lock",
