@@ -158,7 +158,7 @@ it("saves precise variant overrides only to the experiment and resets fields and
   fireEvent.click(await screen.findByTestId("rf__edge-gateway-to-middle"));
   editField("Timeout", "90ms");
   editField("Base delay", "4ms");
-  expect((await screen.findByTestId("rf__edge-gateway-to-middle")).textContent).toContain("◆");
+  expect((await screen.findByTestId("canvas-edge-label-gateway-to-middle")).textContent).toContain("◆");
   fireEvent.click(button("Save"));
   await waitFor(() => expect(button("Save").disabled).toBe(true));
   const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
