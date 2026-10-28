@@ -100,6 +100,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRunSeriesIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRunSeriesPart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/summary": {
         parameters: {
             query?: never;
@@ -348,6 +380,10 @@ export interface components {
             /** Format: int32 */
             schemaVersion: number;
         };
+        NodeSeries: {
+            id: string;
+            windows: components["schemas"]["WindowMetrics"][];
+        };
         ParamDescriptor: {
             default?: unknown[] | boolean | number | null | {
                 [key: string]: unknown;
@@ -421,6 +457,15 @@ export interface components {
             schemaVersion: number;
             variants: components["schemas"]["VariantSummary"][];
         };
+        SeriesIndex: {
+            /** Format: double */
+            endMs: number;
+            parts: components["schemas"]["SeriesPartReference"][];
+            /** Format: int32 */
+            schemaVersion: number;
+            /** Format: double */
+            windowMs: number;
+        };
         SeriesMetadata: {
             /** Format: double */
             measurementMs: number;
@@ -434,6 +479,27 @@ export interface components {
             warmupMs: number;
             /** Format: double */
             windowMs: number;
+        };
+        SeriesPart: {
+            /** Format: int32 */
+            fromWindow: number;
+            nodes: components["schemas"]["NodeSeries"][];
+            profile: string;
+            /** Format: int32 */
+            schemaVersion: number;
+            /** Format: int32 */
+            untilWindow: number;
+        };
+        SeriesPartReference: {
+            file: string;
+            /** Format: int32 */
+            fromWindow: number;
+            nodes: string[];
+            sha256: string;
+            /** Format: int32 */
+            uncompressedBytes: number;
+            /** Format: int32 */
+            untilWindow: number;
         };
         ServiceTotals: {
             /** Format: int64 */
@@ -495,6 +561,35 @@ export interface components {
             label: string;
             /** Format: int32 */
             replications: number;
+        };
+        WindowMetrics: {
+            /** Format: int32 */
+            admittedAttempts: number;
+            /** Format: double */
+            busyHandlerTimeMs: number;
+            /** Format: double */
+            durationMs: number;
+            /** Format: int32 */
+            failures: number;
+            /** Format: int32 */
+            handlers: number;
+            latency: components["schemas"]["LatencyStatistics"];
+            /** Format: int32 */
+            offeredAttempts: number;
+            /** Format: int32 */
+            originalArrivals: number;
+            /** Format: double */
+            queueLengthIntegralMs: number;
+            /** Format: int32 */
+            queueRejections: number;
+            /** Format: int32 */
+            retries: number;
+            /** Format: double */
+            startMs: number;
+            /** Format: int32 */
+            successes: number;
+            /** Format: int32 */
+            timeouts: number;
         };
     };
     responses: never;
@@ -820,6 +915,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunManifest"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getRunSeriesIndex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                variant: string;
+                cell: string;
+                rep: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesIndex"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getRunSeriesPart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                variant: string;
+                cell: string;
+                rep: number;
+                part: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original gzip part; Content-Encoding: gzip. Clients decode it as SeriesPart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPart"];
                 };
             };
             /** @description Bad Request */

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.lab.InvalidExperimentException
+import resiliencelab.core.results.InvalidSeriesPathException
 import resiliencelab.core.results.UnsupportedArtifactVersionException
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentNotFoundException
@@ -45,9 +46,14 @@ class Conflict(
 /**
  * Maps failures of the stage 1 endpoints to [ApiProblem]. Every handler declares its status with `@ResponseStatus`,
  * so springdoc documents the error responses.
+ * Series addresses use `SERIES_PATH` (400) for invalid segments and `SERIES_NOT_FOUND` (404) for missing data.
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
+    @ExceptionHandler(InvalidSeriesPathException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun invalidSeriesPath(exception: InvalidSeriesPathException): ApiProblem = ApiProblem("SERIES_PATH", exception.message!!)
+
     @ExceptionHandler(UnsupportedArtifactVersionException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun unsupportedRunVersion(exception: UnsupportedArtifactVersionException): ApiProblem =

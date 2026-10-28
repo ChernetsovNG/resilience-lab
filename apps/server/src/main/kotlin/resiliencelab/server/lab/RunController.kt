@@ -1,5 +1,13 @@
 package resiliencelab.server.lab
 
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import org.springframework.http.CacheControl
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
@@ -8,7 +16,10 @@ import resiliencelab.core.results.RunCatalog
 import resiliencelab.core.results.RunEntry
 import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
+import resiliencelab.core.results.SeriesIndex
+import resiliencelab.core.results.SeriesPart
 import java.io.IOException
+import java.time.Duration
 
 /** Finished runs from `.results/` (ADR 0008); they outlive server restarts, jobs do not. */
 @RestController
@@ -31,6 +42,49 @@ class RunController(
     fun getRunSummary(
         @PathVariable id: String,
     ): RunSummary = runs.summary(id) ?: throw notFound(id)
+
+    @GetMapping("/{id}/series/{variant}/{cell}/{rep}")
+    @Throws(IOException::class)
+    fun getRunSeriesIndex(
+        @PathVariable id: String,
+        @PathVariable variant: String,
+        @PathVariable cell: String,
+        @Parameter(schema = Schema(type = "integer", format = "int32", minimum = "0"))
+        @PathVariable rep: String,
+    ): SeriesIndex = runs.seriesIndex(id, variant, cell, seriesNumber(rep)) ?: throw seriesNotFound()
+
+    /** The response schema describes the decoded JSON; the wire body is the original gzip file. */
+    @GetMapping("/{id}/series/{variant}/{cell}/{rep}/{part}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    @ApiResponse(
+        responseCode = "200",
+        description = "Original gzip part; Content-Encoding: gzip. Clients decode it as SeriesPart.",
+        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = SeriesPart::class))],
+    )
+    @Throws(IOException::class)
+    fun getRunSeriesPart(
+        @PathVariable id: String,
+        @PathVariable variant: String,
+        @PathVariable cell: String,
+        @Parameter(schema = Schema(type = "integer", format = "int32", minimum = "0"))
+        @PathVariable rep: String,
+        @Parameter(schema = Schema(type = "integer", format = "int32", minimum = "0"))
+        @PathVariable part: String,
+    ): ResponseEntity<ByteArray> {
+        val stored = runs.seriesPart(id, variant, cell, seriesNumber(rep), seriesNumber(part)) ?: throw seriesNotFound()
+        return ResponseEntity
+            .ok()
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(HttpHeaders.CONTENT_ENCODING, "gzip")
+            .eTag("\"${stored.sha256}\"")
+            .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
+            .body(stored.bytes)
+    }
+
+    private fun seriesNumber(value: String): Int =
+        value.takeIf { Regex("0|[1-9][0-9]*").matches(it) }?.toIntOrNull()
+            ?: throw BadRequest("SERIES_PATH", "Replication and part must be nonnegative int32 numbers without leading zeros")
+
+    private fun seriesNotFound() = NotFound("SERIES_NOT_FOUND", "Run series does not exist")
 
     private fun notFound(id: String) = NotFound("RUN_NOT_FOUND", "Run '$id' does not exist")
 }

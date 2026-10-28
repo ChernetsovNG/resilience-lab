@@ -6,6 +6,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import resiliencelab.core.compiler.ModelCompiler
+import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.Workspace
 
 /** A finished run: its manifest exists and says the run is complete (ADR 0008). */
@@ -15,6 +17,15 @@ data class RunEntry(
     val experiment: String,
     val directory: String,
 )
+
+/** Original gzip bytes and their SHA-256 from the task index. */
+data class StoredSeriesPart(
+    val bytes: ByteArray,
+    val sha256: String,
+)
+
+/** A series address contains an invalid identifier or a negative replication/part number. */
+class InvalidSeriesPathException : IllegalArgumentException("Invalid run series path")
 
 /** Finds finished runs under `.results/<experiment>/<run>/`. */
 class RunCatalog(
@@ -45,6 +56,59 @@ class RunCatalog(
             checkVersion(text, "summary")
             json.decodeFromString(RunSummary.serializer(), text)
         }
+
+    /** Reads a finished task's index; an unknown run or task returns `null`. */
+    fun seriesIndex(
+        id: String,
+        variant: String,
+        cell: String,
+        rep: Int,
+    ): SeriesIndex? = seriesDirectory(id, variant, cell, rep)?.let { readSeriesIndex(it) }
+
+    /** Reads only a part named by the index, without decompressing or re-encoding its stored gzip bytes. */
+    fun seriesPart(
+        id: String,
+        variant: String,
+        cell: String,
+        rep: Int,
+        part: Int,
+    ): StoredSeriesPart? {
+        if (part < 0) throw InvalidSeriesPathException()
+        val directory = seriesDirectory(id, variant, cell, rep) ?: return null
+        val reference = readSeriesIndex(directory)?.parts?.find { it.file == "part-$part.json.gz" } ?: return null
+        val bytes = readSeriesFile(directory, reference.file) ?: return null
+        return StoredSeriesPart(bytes, reference.sha256)
+    }
+
+    private fun seriesDirectory(
+        id: String,
+        variant: String,
+        cell: String,
+        rep: Int,
+    ): String? {
+        if (!RUN_ID.matches(id) || !ModelCompiler.ID.matches(variant) || !CELL.matches(cell) || rep < 0) {
+            throw InvalidSeriesPathException()
+        }
+        return find(id)?.let { "${it.directory}/series/$variant/$cell/rep-$rep" }
+    }
+
+    private fun readSeriesIndex(directory: String): SeriesIndex? =
+        readSeriesFile(directory, "index.json")?.let { json.decodeFromString<SeriesIndex>(it.toString(Charsets.UTF_8)) }
+
+    private fun readSeriesFile(
+        directory: String,
+        file: String,
+    ): ByteArray? {
+        val path = "$directory/$file"
+        // Listing from the run root excludes symbolic links in every series path component.
+        val runDirectory = directory.split('/').take(3).joinToString("/")
+        if (path !in workspace.listFiles(runDirectory)) return null
+        return try {
+            workspace.readBytes(path)
+        } catch (_: DocumentNotFoundException) {
+            null
+        }
+    }
 
     private fun find(id: String): RunEntry? {
         for (path in workspace.listFiles(RESULTS).filter { MANIFEST.matches(it) }) {
@@ -87,5 +151,7 @@ class RunCatalog(
         const val MANIFEST_FILE = "manifest.json"
         const val SUMMARY_FILE = "summary.json"
         val MANIFEST = Regex("""^\.results/[^/]+/[^/]+/manifest\.json$""")
+        val RUN_ID = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+        val CELL = Regex("^p(0|[1-9][0-9]*)$")
     }
 }

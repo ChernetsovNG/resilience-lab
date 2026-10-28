@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.assertj.core.api.Assertions.assertThat
 import org.springframework.mock.web.MockHttpServletResponse
+import java.util.zip.GZIPInputStream
 
 /**
  * Checks responses against the generated OpenAPI document with the JSON Schema rules the API uses: `$ref`,
@@ -53,7 +54,14 @@ class OpenApiConformance(
                 .jsonObject
                 .getValue("schema")
                 .jsonObject
-        check(schema, Json.parseToJsonElement(response.getContentAsString(Charsets.UTF_8)), "$method $path ${response.status}")
+        val bytes = response.contentAsByteArray
+        val body =
+            if (response.getHeader("Content-Encoding") == "gzip") {
+                GZIPInputStream(bytes.inputStream()).use { it.readAllBytes() }.toString(Charsets.UTF_8)
+            } else {
+                bytes.toString(Charsets.UTF_8)
+            }
+        check(schema, Json.parseToJsonElement(body), "$method $path ${response.status}")
     }
 
     private fun check(
