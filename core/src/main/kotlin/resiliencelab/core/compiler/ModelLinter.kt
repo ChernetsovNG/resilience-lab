@@ -21,21 +21,42 @@ class ModelLinter(
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
     }
 
-    /** Returns advisory diagnostics; callers must continue to accept warning-only models. */
+    /**
+     * Returns advisory diagnostics; callers must continue to accept warning-only models. Grid findings retain
+     * their variant and name the affected points unless the same finding occurs at every point of that variant.
+     */
     fun lint(experiment: CompiledExperiment): List<Diagnostic> =
         experiment.variants
             .flatMap { variant ->
-                lintChain(variant.chain).map { diagnostic ->
-                    val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
-                    val origin = variant.parameterOrigins["${diagnostic.path}.$parameter"]
-                    val located =
-                        if (origin == null) {
-                            diagnostic
-                        } else {
-                            diagnostic.copy(document = origin.document, pointer = origin.pointer, variant = variant.id)
+                variant.points
+                    .flatMap { point ->
+                        lintChain(point.chain).map { diagnostic ->
+                            val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
+                            val origin = point.parameterOrigins["${diagnostic.path}.$parameter"]
+                            val located =
+                                if (origin == null) {
+                                    diagnostic
+                                } else {
+                                    diagnostic.copy(
+                                        document = origin.document,
+                                        pointer = origin.pointer,
+                                        variant = variant.id,
+                                    )
+                                }
+                            located to point.id
                         }
-                    located to variant.id
-                }
+                    }.groupBy({ it.first }, { it.second })
+                    .map { (diagnostic, points) ->
+                        diagnostic.copy(
+                            message =
+                                if (points.size == variant.points.size) {
+                                    diagnostic.message
+                                } else {
+                                    "${diagnostic.message} (points: ${points.joinToString(", ")})"
+                                },
+                            variant = if (experiment.grid.isNotEmpty()) variant.id else diagnostic.variant,
+                        ) to variant.id
+                    }
             }.groupBy({ it.first }, { it.second })
             .flatMap { (diagnostic, variants) ->
                 if (variants.size == experiment.variants.size) {

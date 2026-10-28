@@ -132,6 +132,46 @@ class ExperimentApiTest {
     }
 
     @Test
+    fun `grid jobs report every task and return point summaries matching OpenAPI`() {
+        val path = "grid.experiment.json"
+        Files.writeString(
+            root.resolve(path),
+            """
+            {"schemaVersion":1,"modelRef":"retry-storm/retry-storm.model.json",
+             "execution":{"replications":2,"warmup":"0ms","measurement":"100ms","seed":42},
+             "variants":[{"id":"baseline"},{"id":"candidate"}],
+             "grid":[{"path":"gateway-to-middle.timeout","values":["40ms","80ms"]},
+                     {"path":"gateway-to-middle.attempts","values":[1,2,3]}]}
+            """.trimIndent(),
+        )
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$path"}""")
+        assertThat(submitted.status).isEqualTo(202)
+        val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
+        assertThat(JsonPath.read<String>(finished.contentAsString, "$.status")).isEqualTo("COMPLETED")
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.completedTasks")).isEqualTo(24)
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.totalTasks")).isEqualTo(24)
+        val runId = JsonPath.read<String>(finished.contentAsString, "$.runId")
+        val summary = mockMvc.perform(get("/api/v1/runs/{id}/summary", runId)).andReturn().response
+        assertThat(JsonPath.read<List<String>>(summary.contentAsString, "$.grid[*].path"))
+            .containsExactly("gateway-to-middle.timeout", "gateway-to-middle.attempts")
+        assertThat(JsonPath.read<List<Int>>(summary.contentAsString, "$.grid[1].values"))
+            .containsExactly(1, 2, 3)
+        assertThat(JsonPath.read<List<String>>(summary.contentAsString, "$.variants[0].points[*].id"))
+            .containsExactly("p0", "p1", "p2", "p3", "p4", "p5")
+        assertThat(JsonPath.read<String>(summary.contentAsString, "$.variants[0].points[5].coordinates['gateway-to-middle.timeout']"))
+            .isEqualTo("80ms")
+        assertThat(JsonPath.read<Int>(summary.contentAsString, "$.variants[0].points[5].coordinates['gateway-to-middle.attempts']"))
+            .isEqualTo(3)
+        openApi.assertResponse("get", "/api/v1/runs/{id}/summary", summary)
+        val manifest = mockMvc.perform(get("/api/v1/runs/{id}/manifest", runId)).andReturn().response
+        assertThat(JsonPath.read<List<String>>(manifest.contentAsString, "$.grid[*].path"))
+            .containsExactly("gateway-to-middle.timeout", "gateway-to-middle.attempts")
+        assertThat(JsonPath.read<List<String>>(manifest.contentAsString, "$.grid[0].values"))
+            .containsExactly("40ms", "80ms")
+        openApi.assertResponse("get", "/api/v1/runs/{id}/manifest", manifest)
+    }
+
+    @Test
     fun `rejects invalid jobs, malformed requests and unknown ids`() {
         val invalid = postJson("/api/v1/jobs", """{"experiment":"missing.experiment.json"}""")
         assertThat(invalid.status).isEqualTo(400)

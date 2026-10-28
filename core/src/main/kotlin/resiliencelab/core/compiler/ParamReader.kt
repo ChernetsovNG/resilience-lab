@@ -102,13 +102,17 @@ internal class ParamReader(
         return ParamReader(value, descriptor.fields, document, childPointer, path, diagnostics, overrides, "$prefix$name.")
     }
 
-    /** Reports an error about parameter [name] and returns null. */
+    /**
+     * Reports an error about parameter [name] and returns null. For a conditional rule, [dependsOn] names the
+     * other parameter controlling it; a grid origin takes precedence over a model or variant origin.
+     */
     fun <T> fail(
         code: String,
         name: String,
         message: String,
+        dependsOn: String? = null,
     ): T? {
-        report(code, message, name)
+        report(code, message, name, dependsOn)
         return null
     }
 
@@ -151,8 +155,10 @@ internal class ParamReader(
         code: String,
         message: String,
         name: String,
+        dependsOn: String? = null,
     ) {
-        val override = overrides.pointerOf(prefix + name)
+        val origins = listOfNotNull(overrides.pointerOf(prefix + name), dependsOn?.let { overrides.pointerOf(prefix + it) })
+        val override = origins.firstOrNull { it.startsWith("/grid/") } ?: origins.firstOrNull()
         diagnostics +=
             if (override == null) {
                 Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path)

@@ -260,6 +260,23 @@
       ],
       "type": "object"
     },
+    "resiliencelab.core.document.GridAxis": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "values": {
+          "items": {},
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "values"
+      ],
+      "type": "object"
+    },
     "resiliencelab.core.document.Variant": {
       "additionalProperties": false,
       "properties": {
@@ -299,6 +316,12 @@
     "faults": {
       "items": {
         "$ref": "#/$defs/resiliencelab.core.document.Fault"
+      },
+      "type": "array"
+    },
+    "grid": {
+      "items": {
+        "$ref": "#/$defs/resiliencelab.core.document.GridAxis"
       },
       "type": "array"
     },

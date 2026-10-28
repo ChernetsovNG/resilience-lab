@@ -134,11 +134,13 @@ class ArtifactPipelineTest {
                 experiment,
                 first.summary.variants.map { it.id to it.label },
                 first.manifest.replications,
+                requireNotNull(first.manifest.series).points,
+                first.manifest.grid,
             )
         assertThat(DocumentCodec.encode(RunSummary.serializer(), rebuilt))
             .isEqualTo(workspace.read("${first.runDirectory}/summary.json").text)
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(2)
+        assertThat(first.manifest.schemaVersion).isEqualTo(4)
         assertThat(first.manifest.parts.keys).hasSize(files.size - 1)
         first.manifest.parts.forEach { (path, checksum) ->
             assertThat(DocumentVersion.of(workspace.readBytes("${first.runDirectory}/$path"))).isEqualTo(checksum)

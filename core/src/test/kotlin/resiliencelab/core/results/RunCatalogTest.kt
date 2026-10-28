@@ -28,8 +28,9 @@ class RunCatalogTest {
                 variants = emptyList(),
                 parts = emptyMap(),
                 complete = complete,
+                grid = emptyList(),
             )
-        ArtifactWriter(workspace).write(directory, manifest, RunSummary(Versions.ARTIFACT_SCHEMA, experiment, emptyList()))
+        ArtifactWriter(workspace).write(directory, manifest, RunSummary(Versions.ARTIFACT_SCHEMA, experiment, emptyList(), emptyList()))
     }
 
     @Test
@@ -71,11 +72,13 @@ class RunCatalogTest {
 
     @Test
     fun `explicit reads of old artifacts report unsupported versions before decoding`() {
-        workspace.create(".results/old/r-old/manifest.json", "{\"schemaVersion\":1}")
-        assertThat(catalog.list()).isEmpty()
-        assertThatThrownBy { catalog.manifest("r-old") }
-            .isInstanceOf(UnsupportedArtifactVersionException::class.java)
-            .hasMessageContaining("schemaVersion 1")
-            .hasMessageContaining("expected 2")
+        listOf(1, 2, 3).forEach { version ->
+            workspace.create(".results/old/r-old-$version/manifest.json", "{\"schemaVersion\":$version}")
+            assertThat(catalog.list()).isEmpty()
+            assertThatThrownBy { catalog.manifest("r-old-$version") }
+                .isInstanceOf(UnsupportedArtifactVersionException::class.java)
+                .hasMessageContaining("schemaVersion $version")
+                .hasMessageContaining("expected 4")
+        }
     }
 }

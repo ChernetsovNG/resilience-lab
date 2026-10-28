@@ -37,7 +37,7 @@ class SketchAccuracyIntegrationTest {
         val plan =
             StreamPlan(
                 compiled.variants.flatMap { variant ->
-                    (0 until compiled.run.replications).flatMap { PathStreams.keys(variant.chain, it) }
+                    (0 until compiled.run.replications).flatMap { PathStreams.keys(variant.points.single().chain, it) }
                 },
             )
         compiled.variants.forEach { variant ->
@@ -48,7 +48,7 @@ class SketchAccuracyIntegrationTest {
                 val result =
                     ReliabilityModel(
                         Model("sketch-accuracy", autoCSVReports = false),
-                        variant.chain,
+                        variant.points.single().chain,
                         PathStreamSource(plan, compiled.run.seed, replication.toLong()),
                         onOriginalCompletion = { latency, succeeded ->
                             all += latency

@@ -7,12 +7,14 @@ import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.PathStreamSource
 import resiliencelab.core.engine.ksl.ReliabilityModel
 import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.ir.ChainIr
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
@@ -25,6 +27,12 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 
 class ExperimentSchedulingTest {
+    private fun variant(
+        id: String,
+        label: String,
+        chain: ChainIr,
+    ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
+
     @Test
     fun `closing drains a dispatched task queued behind a finishing worker`() {
         val executor = ExperimentExecutor(workers = 1) { _, _, _, _ -> emptyResult() }
@@ -103,6 +111,8 @@ class ExperimentSchedulingTest {
                 shortRun
                     .get(5, TimeUnit.SECONDS)
                     .variants
+                    .single()
+                    .points
                     .single()
                     .replications,
             ).hasSize(2)
@@ -234,7 +244,7 @@ class ExperimentSchedulingTest {
         measurementMs: Double = 100.0,
     ): CompiledExperiment {
         val settings = TestChains.run(seed = seed, replications = replications, measurementMs = measurementMs, maxRealTimeSeconds = 5L)
-        return CompiledExperiment(listOf(CompiledVariant("baseline", "Baseline", TestChains.simple().copy(run = settings))), settings)
+        return CompiledExperiment(listOf(variant("baseline", "Baseline", TestChains.simple().copy(run = settings))), settings)
     }
 
     private fun emptyResult() =

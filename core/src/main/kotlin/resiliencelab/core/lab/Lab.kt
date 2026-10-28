@@ -12,6 +12,7 @@ import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.execution.checkCancellation
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.results.ArtifactWriter
+import resiliencelab.core.results.GridPoint
 import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
@@ -137,14 +138,16 @@ class Lab(
         val series =
             compiled.variants
                 .flatMap { variant ->
-                    (0 until compiled.run.replications).map { replication ->
-                        (variant.id to replication) to
-                            SeriesWriter(
-                                workspace,
-                                "$runDirectory/series/${variant.id}/p0/rep-$replication",
-                                compiled.run.warmupMs + compiled.run.measurementMs,
-                                compiled.run.windowMs,
-                            )
+                    variant.points.flatMap { point ->
+                        (0 until compiled.run.replications).map { replication ->
+                            Triple(variant.id, point.id, replication) to
+                                SeriesWriter(
+                                    workspace,
+                                    "$runDirectory/series/${variant.id}/${point.id}/rep-$replication",
+                                    compiled.run.warmupMs + compiled.run.measurementMs,
+                                    compiled.run.windowMs,
+                                )
+                        }
                     }
                 }.toMap()
         val manifest =
@@ -160,6 +163,7 @@ class Lab(
                 variants = compiled.variants.map { it.id },
                 parts = emptyMap(),
                 complete = true,
+                grid = compiled.grid,
                 series =
                     SeriesMetadata(
                         compiled.run.warmupMs,
@@ -170,19 +174,22 @@ class Lab(
                         "ms",
                         "event-time",
                         "measurement-arrival-cohort-including-run-out",
-                        listOf("p0"),
+                        compiled.variants
+                            .first()
+                            .points
+                            .map { GridPoint(it.id, it.coordinates) },
                     ),
             )
         try {
             executor.run(
                 compiled,
                 isCancelled = isCancelled,
-                onWindow = { variant, replication, window, rows ->
-                    series.getValue(variant to replication).writeWindow(window, rows)
+                onWindow = { variant, point, replication, window, rows ->
+                    series.getValue(Triple(variant, point, replication)).writeWindow(window, rows)
                 },
-                onReplication = { variant, replication, result ->
-                    writer.writeReplication("$runDirectory/series/$variant/p0/rep-$replication", result)
-                    series.getValue(variant to replication).finish()
+                onReplication = { variant, point, replication, result ->
+                    writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
+                    series.getValue(Triple(variant, point, replication)).finish()
                 },
                 onProgress = onProgress,
             )
@@ -194,6 +201,8 @@ class Lab(
                         experimentPath,
                         compiled.variants.map { it.id to it.label },
                         compiled.run.replications,
+                        requireNotNull(manifest.series).points,
+                        manifest.grid,
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
             }

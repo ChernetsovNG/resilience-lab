@@ -302,6 +302,34 @@ test("preserves an absent optional field when editing an existing object overrid
   });
 });
 
+test("preserves grid axes when saving and shows every point from the real API", async ({ page, request }) => {
+  const path = "parameter-grid/grid.experiment.json";
+  const grid = [
+    { path: "gateway-to-middle.timeout", values: ["40ms", "80ms"] },
+    { path: "gateway-to-middle.attempts", values: [1, 2, 3] },
+  ];
+  await withExperimentFixture(path, (document) => { document.grid = grid; }, async () => {
+    await page.reload();
+    await page.getByLabel("Experiment").selectOption(path);
+    const seed = page.getByLabel("Seed", { exact: true });
+    await seed.fill("42");
+    await seed.press("Enter");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes")).toBeHidden();
+    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    expect(saved.content.experiment.grid).toEqual(grid);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
+    const summary = page.getByRole("table", { name: "Summary" });
+    await expect(summary.locator("tbody tr")).toHaveCount(12);
+    await expect(summary.getByRole("row", { name: /Baseline p0 / })).toContainText("gateway-to-middle.timeout = 40ms");
+    await expect(summary.getByRole("row", { name: /Baseline p5 / })).toContainText("gateway-to-middle.attempts = 3");
+    await expect(summary.getByRole("row", { name: /No retries p5 / })).toContainText("%");
+    await expectNoPageScroll(page);
+  });
+});
+
 test("edits the model, saves it, runs the experiment and shows the summary", async ({ page, request }) => {
   await expectNoPageScroll(page);
   await page.getByTestId("rf__node-gateway").click();

@@ -62,7 +62,12 @@ class ModelCompilerTest {
         assertThat(compiled.run.replications).isEqualTo(2)
         assertThat(compiled.run.measurementMs).isEqualTo(1_000.0)
         assertThat(compiled.run.maxRealTimeSeconds).isEqualTo(30L)
-        val baseline = compiled.variants.first { it.id == "baseline" }.chain
+        val baseline =
+            compiled.variants
+                .first { it.id == "baseline" }
+                .points
+                .single()
+                .chain
         assertThat(baseline.client.arrivalRatePerMs).isEqualTo(0.12)
         assertThat(baseline.client.deadlineMs).isEqualTo(250.0)
         assertThat(baseline.entry).isEqualTo("gateway")
@@ -81,7 +86,9 @@ class ModelCompilerTest {
         val noRetries = compiled.variants.first { it.id == "no-retries" }
         assertThat(noRetries.label).isEqualTo("No retries")
         assertThat(
-            noRetries.chain.calls
+            noRetries.points
+                .single()
+                .chain.calls
                 .single()
                 .attempts,
         ).isEqualTo(1)
@@ -94,6 +101,8 @@ class ModelCompilerTest {
                 .experiment!!
                 .variants
                 .first()
+                .points
+                .single()
                 .chain
 
         assertThat(chain.client.origin).isEqualTo(Origin("m.model.json", "/blocks/client"))
@@ -201,15 +210,20 @@ class ModelCompilerTest {
         copy(
             variants =
                 variants.map { variant ->
-                    val chain = variant.chain
                     variant.copy(
-                        chain =
-                            chain.copy(
-                                client = chain.client.copy(origin = Origin.UNSPECIFIED),
-                                services = chain.services.map { it.copy(origin = Origin.UNSPECIFIED) },
-                                calls = chain.calls.map { it.copy(origin = Origin.UNSPECIFIED) },
-                                faults = chain.faults.map { it.copy(origin = Origin.UNSPECIFIED) },
-                            ),
+                        points =
+                            variant.points.map { point ->
+                                val chain = point.chain
+                                point.copy(
+                                    chain =
+                                        chain.copy(
+                                            client = chain.client.copy(origin = Origin.UNSPECIFIED),
+                                            services = chain.services.map { it.copy(origin = Origin.UNSPECIFIED) },
+                                            calls = chain.calls.map { it.copy(origin = Origin.UNSPECIFIED) },
+                                            faults = chain.faults.map { it.copy(origin = Origin.UNSPECIFIED) },
+                                        ),
+                                )
+                            },
                     )
                 },
         )
@@ -288,6 +302,8 @@ class ModelCompilerTest {
                 .experiment!!
                 .variants
                 .last()
+                .points
+                .single()
                 .chain
 
         assertThat(
@@ -304,7 +320,11 @@ class ModelCompilerTest {
 
         val variant = compile(experimentText = nested).experiment!!.variants.last()
 
-        val gateway = variant.chain.services.first { it.path == "gateway" }
+        val gateway =
+            variant.points
+                .single()
+                .chain.services
+                .first { it.path == "gateway" }
         assertThat(gateway.processing.meanMs).isEqualTo(3.0)
     }
 
