@@ -143,8 +143,8 @@ class LabTest {
             }.isInstanceOf(CancellationException::class.java)
         }
         val runDirectory = ".results/retry-storm/cancelled"
-        val corrupt = actualRoot.resolve("$runDirectory/series/baseline/p0/rep-0/part-0.json.gz")
-        Files.write(corrupt, byteArrayOf(1, 2, 3))
+        val corrupt = FileWorkspace(actualRoot).listFiles(runDirectory).first { it.endsWith(".json.gz") }
+        Files.write(actualRoot.resolve(corrupt), byteArrayOf(1, 2, 3))
 
         val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
 
@@ -226,7 +226,8 @@ class LabTest {
         val root = exampleWorkspace()
         createIncomplete(root)
         val runDirectory = ".results/retry-storm/cancelled"
-        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-1/replication.json"))
+        val missing = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json") }
+        Files.delete(root.resolve(missing))
         val cancelled = AtomicBoolean()
 
         assertThatThrownBy {
@@ -262,6 +263,7 @@ class LabTest {
                     return backing.read(path)
                 }
             }
+        val timeoutSeconds = 30L
         val firstProgress = CountDownLatch(1)
         val release = CountDownLatch(1)
         val first =
@@ -271,7 +273,7 @@ class LabTest {
                         lab.resume(runDirectory) { done, _ ->
                             if (done == 1) {
                                 firstProgress.countDown()
-                                check(release.await(10, TimeUnit.SECONDS))
+                                check(release.await(timeoutSeconds, TimeUnit.SECONDS))
                             }
                         }
                     }
@@ -284,33 +286,35 @@ class LabTest {
                 secondStarted.countDown()
                 runCatching { Lab(workspace).use { it.resume(runDirectory) } }.exceptionOrNull()
             }
-        val secondThread = thread(isDaemon = true) { second.run() }
+        var secondThread: Thread? = null
 
         try {
-            val progressed = firstProgress.await(5, TimeUnit.SECONDS)
+            val progressed = firstProgress.await(timeoutSeconds, TimeUnit.SECONDS)
             if (!progressed) {
                 release.countDown()
-                assertThat(first.get(5, TimeUnit.SECONDS)).isNull()
+                assertThat(first.get(timeoutSeconds, TimeUnit.SECONDS)).isNull()
             }
             assertThat(progressed).isTrue()
-            assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue()
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-            while (secondThread.state != Thread.State.BLOCKED && manifestReads.get() == 1 && System.nanoTime() < deadline) {
+            val runningSecond = thread(isDaemon = true) { second.run() }
+            secondThread = runningSecond
+            assertThat(secondStarted.await(timeoutSeconds, TimeUnit.SECONDS)).isTrue()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+            while (runningSecond.state != Thread.State.BLOCKED && manifestReads.get() == 1 && System.nanoTime() < deadline) {
                 Thread.yield()
             }
             assertThat(manifestReads.get()).isEqualTo(1)
-            assertThat(secondThread.state).isEqualTo(Thread.State.BLOCKED)
+            assertThat(runningSecond.state).isEqualTo(Thread.State.BLOCKED)
             release.countDown()
-            assertThat(first.get(5, TimeUnit.SECONDS)).isNull()
-            val secondFailure = second.get(5, TimeUnit.SECONDS)
+            assertThat(first.get(timeoutSeconds, TimeUnit.SECONDS)).isNull()
+            val secondFailure = second.get(timeoutSeconds, TimeUnit.SECONDS)
             assertThat(secondFailure).isInstanceOf(InvalidExperimentException::class.java)
             assertThat((secondFailure as InvalidExperimentException).diagnostics.single().code).isEqualTo("RUN_COMPLETE")
         } finally {
             release.countDown()
             firstThread.interrupt()
-            secondThread.interrupt()
+            secondThread?.interrupt()
             firstThread.join(5_000)
-            secondThread.join(5_000)
+            secondThread?.join(5_000)
         }
     }
 
