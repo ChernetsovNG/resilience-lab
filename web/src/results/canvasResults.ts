@@ -1,4 +1,5 @@
 import type { ModelFile, RunSummary } from "../api/apiTypes";
+import { elementIdentity } from "../workspace/editor";
 import { ownEntry } from "../workspace/params";
 
 export interface ServiceCanvasResults {
@@ -16,7 +17,9 @@ export interface CanvasResults {
 const ratio = (numerator: number, denominator: number) => denominator === 0 ? null : numerator / denominator;
 
 /** Summary metrics for the run's model; an absent variant, point or element never borrows another result. */
-export function canvasResults(summary: RunSummary, model: ModelFile, variantId: string, pointId: string): CanvasResults | null {
+export function canvasResults(
+  summary: RunSummary, model: ModelFile, variantId: string, pointId: string, currentModel: ModelFile = model,
+): CanvasResults | null {
   const variant = summary.variants.find((candidate) => candidate.id === variantId);
   const point = variant?.points.find((candidate) => candidate.id === pointId);
   if (variant === undefined || point === undefined) return null;
@@ -24,7 +27,9 @@ export function canvasResults(summary: RunSummary, model: ModelFile, variantId: 
   const services = new Map<string, ServiceCanvasResults>();
   const metrics = new Map(Object.entries(point.aggregate.services));
   for (const [id, service] of metrics) {
-    if (ownEntry(model.blocks, id)?.type !== "service") continue;
+    const original = ownEntry(model.blocks, id);
+    const current = ownEntry(currentModel.blocks, id);
+    if (original?.type !== "service" || current?.type !== "service" || elementIdentity(original) !== elementIdentity(current)) continue;
     const totals = service.totals;
     services.set(id, {
       utilization: ratio(totals.busyHandlerTimeMs, totals.handlerCapacityTimeMs),
@@ -34,8 +39,10 @@ export function canvasResults(summary: RunSummary, model: ModelFile, variantId: 
     });
   }
   const connections = new Map<string, { from: string; to: string; type: string; amplification: number | null }>();
+  const currentConnections = new Map(currentModel.connections.map((connection) => [connection.id, connection]));
   for (const connection of model.connections) {
-    if (!services.has(connection.to)) continue;
+    const current = currentConnections.get(connection.id);
+    if (!services.has(connection.to) || current === undefined || elementIdentity(current) !== elementIdentity(connection)) continue;
     connections.set(connection.id, {
       from: connection.from, to: connection.to, type: connection.type,
       amplification: metrics.get(connection.to)?.admittedAmplification?.mean ?? null,

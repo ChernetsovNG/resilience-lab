@@ -1065,3 +1065,25 @@ describe("diagram results", () => {
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
   });
 });
+
+it("keeps reused diagram element IDs separate through clipboard replacement and undo", async () => {
+  server();
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Summary" });
+  selectGateway();
+  fireEvent.keyDown(window, { key: "c", ctrlKey: true });
+  fireEvent.keyDown(window, { key: "Delete" });
+  expect(screen.queryByTestId("rf__node-gateway")).toBeNull();
+  fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+  const identifier = screen.getByLabelText("Identifier");
+  fireEvent.change(identifier, { target: { value: "gateway" } });
+  fireEvent.blur(identifier);
+  expect(screen.getByTestId("rf__node-gateway")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+  for (let count = 0; count < 3; count++) fireEvent.click(button("Undo"));
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Utilization 50.0%");
+  for (let count = 0; count < 3; count++) fireEvent.click(button("Redo"));
+  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+});

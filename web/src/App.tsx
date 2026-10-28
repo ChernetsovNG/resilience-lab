@@ -67,7 +67,7 @@ export function App() {
   );
   const selectedPointId = results.selection.pointId;
   const diagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined
-    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId) : null;
+    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId, loaded.model) : null;
   const diagnostics = validation.report?.diagnostics ?? [];
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { model, summary } from "../test/fixtures";
+import { catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
+import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
+import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
 import { canvasResults } from "./canvasResults";
 
 function fixture() {
@@ -87,4 +89,65 @@ describe("canvasResults", () => {
     const snapshot = { ...model, blocks: { ["constructor"]: model.blocks.gateway }, connections: [] };
     expect(canvasResults(summary, snapshot, "baseline", "p0")?.services.size).toBe(0);
   });
+});
+
+function openEditor() {
+  return editorReducer(initialEditorState, { type: "open", loaded: {
+    model, layout, experiment, modelPath, layoutPath, experimentPath,
+    saved: { model, layout, experiment }, versions: { model: "m", layout: "l", experiment: "e" },
+  } });
+}
+
+it("keeps edited elements associated but excludes a replacement with a reused ID across undo and redo", () => {
+  let state = openEditor();
+  const snapshot = state.loaded!.model;
+  state = editorReducer(state, { type: "command", command: setModelParam("gateway", "handlers", 6) });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  state = editorReducer(state, { type: "command", command: deleteElements(["gateway"]) });
+  state = editorReducer(state, { type: "command", command: addBlock(catalog, "service", { x: 260, y: 100 }) });
+  const added = Object.keys(state.loaded!.model.blocks).find((id) => !Object.hasOwn(snapshot.blocks, id))!;
+  state = editorReducer(state, { type: "command", command: renameElement(added, "gateway") });
+  expect(state.loaded!.model.blocks.gateway.params).toEqual({});
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.has("gateway")).toBe(false);
+  for (let count = 0; count < 3; count++) state = editorReducer(state, { type: "undo" });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  for (let count = 0; count < 3; count++) state = editorReducer(state, { type: "redo" });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.has("gateway")).toBe(false);
+});
+
+it("excludes a newly created connection even when the editor reuses its ID and endpoints", () => {
+  let state = openEditor();
+  const snapshot = state.loaded!.model;
+  state = editorReducer(state, { type: "command", command: deleteElements(["client-to-gateway"]) });
+  state = editorReducer(state, { type: "command", command: addConnection(catalog, "client", "gateway", "out", "in") });
+  expect(state.loaded!.model.connections.some((edge) => edge.id === "client-to-gateway")).toBe(true);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.connections.has("client-to-gateway")).toBe(false);
+  state = editorReducer(editorReducer(state, { type: "undo" }), { type: "undo" });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.connections.get("client-to-gateway")?.amplification).toBe(1.2);
+});
+
+it("preserves associations when the same file is reloaded with new object references", () => {
+  let state = openEditor();
+  const snapshot = state.loaded!.model;
+  state = editorReducer(state, { type: "open", loaded: structuredClone(state.loaded!) });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+});
+
+it("restores saved element associations when reload discards a local deletion", () => {
+  let state = openEditor();
+  const snapshot = state.loaded!.model;
+  const saved = structuredClone(state.loaded!);
+  state = editorReducer(state, { type: "command", command: deleteElements(["gateway"]) });
+  state = editorReducer(state, { type: "open", loaded: saved });
+  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+});
+
+it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s is renamed back", (id) => {
+  let state = openEditor();
+  const snapshot = state.loaded!.model;
+  state = editorReducer(state, { type: "command", command: renameElement(id, "temporary") });
+  state = editorReducer(state, { type: "command", command: renameElement("temporary", id) });
+  const result = canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)!;
+  expect(result.services.get("gateway")?.utilization).toBe(0.5);
+  expect(result.connections.get("client-to-gateway")?.amplification).toBe(1.2);
 });
