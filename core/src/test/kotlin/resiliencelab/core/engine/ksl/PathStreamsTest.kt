@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy

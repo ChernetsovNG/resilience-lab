@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import ksl.modeling.entity.KSLProcess
 import ksl.modeling.entity.ProcessModel

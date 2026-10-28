@@ -9,6 +9,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.Tag
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
+import resiliencelab.core.engine.ksl.SeedFactory
 import resiliencelab.core.scenario.DistributionKind
 import resiliencelab.core.scenario.DurationDistribution
 import resiliencelab.core.scenario.Execution
@@ -18,8 +20,6 @@ import resiliencelab.core.scenario.Scenario
 import resiliencelab.core.scenario.ScenarioValidationException
 import resiliencelab.core.scenario.SweepParameter
 import resiliencelab.core.scenario.TestData
-import resiliencelab.core.simulation.ExperimentExecutionException
-import resiliencelab.core.simulation.SeedFactory
 import kotlin.test.Test
 
 class ExperimentRunnerTest {

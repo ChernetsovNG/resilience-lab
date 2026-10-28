@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 /**
  * Describes invocation and caller-side attempt states; timeout and deadline outcomes do not imply cancellation

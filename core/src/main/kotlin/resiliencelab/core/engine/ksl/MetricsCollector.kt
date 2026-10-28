@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics

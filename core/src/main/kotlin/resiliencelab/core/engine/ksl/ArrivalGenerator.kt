@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import ksl.simulation.ModelElement
 import ksl.utilities.random.rng.RNStreamIfc

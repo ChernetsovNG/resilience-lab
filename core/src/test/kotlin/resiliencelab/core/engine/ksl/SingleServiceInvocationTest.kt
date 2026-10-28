@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import kotlinx.serialization.json.Json
 import ksl.modeling.entity.ProcessModel

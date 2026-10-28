@@ -1,6 +1,6 @@
 package resiliencelab.core.experiment
 
-import resiliencelab.core.simulation.ExperimentExecutionException
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import java.util.concurrent.ConcurrentSkipListMap
 
 /**

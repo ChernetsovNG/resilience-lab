@@ -2,14 +2,14 @@ package resiliencelab.core.execution
 
 import ksl.simulation.Model
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.engine.ksl.PathStreamSource
+import resiliencelab.core.engine.ksl.PathStreams
+import resiliencelab.core.engine.ksl.ReliabilityModel
+import resiliencelab.core.engine.ksl.StreamPlan
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
-import resiliencelab.core.simulation.PathStreamSource
-import resiliencelab.core.simulation.PathStreams
-import resiliencelab.core.simulation.ReliabilityModel
-import resiliencelab.core.simulation.StreamPlan
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService

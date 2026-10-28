@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 import ksl.modeling.entity.Allocation
 import ksl.modeling.entity.AllocationListenerIfc

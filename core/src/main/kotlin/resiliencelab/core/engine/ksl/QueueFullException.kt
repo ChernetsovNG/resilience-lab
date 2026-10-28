@@ -1,4 +1,4 @@
-package resiliencelab.core.simulation
+package resiliencelab.core.engine.ksl
 
 /** Signals immediate rejection when an attempt cannot enter a service's bounded waiting queue. */
 class QueueFullException(
