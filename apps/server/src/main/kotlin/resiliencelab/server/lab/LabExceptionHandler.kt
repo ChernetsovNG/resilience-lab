@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.results.InvalidSeriesPathException
+import resiliencelab.core.results.RunIncompleteException
 import resiliencelab.core.results.UnsupportedArtifactVersionException
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentNotFoundException
@@ -54,6 +55,7 @@ class Conflict(
  * Series addresses use `SERIES_PATH` (400) for invalid segments and `SERIES_NOT_FOUND` (404) for missing data.
  * Job cancellation uses `JOB_NOT_FOUND` (404) and `JOB_FINISHED` (409).
  * Workspace deletion uses `VERSION_REQUIRED` (428); malformed change cursors use `CURSOR_INVALID` (400).
+ * Resume uses `RUN_NOT_FOUND` (404), `RUN_INCOMPLETE` (404), `RUN_COMPLETE` (409), and core diagnostics (400).
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
@@ -91,6 +93,10 @@ class LabExceptionHandler {
     @ExceptionHandler(NotFound::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     fun notFound(exception: NotFound): ApiProblem = exception.problem()
+
+    @ExceptionHandler(RunIncompleteException::class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    fun incompleteRun(exception: RunIncompleteException): ApiProblem = ApiProblem("RUN_INCOMPLETE", exception.message!!)
 
     @ExceptionHandler(DocumentNotFoundException::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)

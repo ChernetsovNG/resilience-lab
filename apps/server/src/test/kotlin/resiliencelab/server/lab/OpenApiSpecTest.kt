@@ -141,6 +141,7 @@ class OpenApiSpecTest {
             "/api/v1/jobs/{id}/cancel",
             "/api/v1/runs",
             "/api/v1/runs/{id}/manifest",
+            "/api/v1/runs/{id}/resume",
             "/api/v1/runs/{id}/summary",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}",

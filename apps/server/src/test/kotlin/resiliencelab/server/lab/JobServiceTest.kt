@@ -6,10 +6,14 @@ import org.junit.jupiter.api.Test
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
+import resiliencelab.core.results.RunCatalog
+import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
+import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 
 class JobServiceTest {
     private val experiment = "retry-storm/retry-storm.experiment.json"
@@ -178,4 +182,35 @@ class JobServiceTest {
         assertThat(failed.diagnostics.single().code).isEqualTo("DOCUMENT_CHANGED")
         assertThat(root.resolve(".results")).doesNotExist()
     }
+
+    @Test
+    fun `resume rechecks documents after preflight before queued execution`() {
+        val cancelled = AtomicBoolean()
+        assertThatThrownBy {
+            lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                if (done == 1) cancelled.set(true)
+            }
+        }.isInstanceOf(CancellationException::class.java)
+        val runDirectory = ".results/retry-storm/cancelled"
+        val entry = RunCatalog(FileWorkspace(root)).entry("cancelled")!!
+        val before = artifactHashes(runDirectory)
+        val queued = mutableListOf<Runnable>()
+        val jobs = service(Executor { queued += it })
+        val job = jobs.resume(entry)
+        assertThat(job.status).isEqualTo(JobStatus.QUEUED)
+        val model = root.resolve("retry-storm/retry-storm.model.json")
+        Files.writeString(model, Files.readString(model).replace("\"handlers\": 4", "\"handlers\": 5"))
+
+        queued.single().run()
+
+        val failed = jobs.get(job.id)!!
+        assertThat(failed.status).isEqualTo(JobStatus.FAILED)
+        assertThat(failed.diagnostics.single().code).isEqualTo("RUN_DOCUMENT_CHANGED")
+        assertThat(artifactHashes(runDirectory)).isEqualTo(before)
+    }
+
+    private fun artifactHashes(runDirectory: String): Map<String, String> =
+        FileWorkspace(root).listFiles(runDirectory).associateWith { path ->
+            DocumentVersion.of(Files.readAllBytes(root.resolve(path)))
+        }
 }
