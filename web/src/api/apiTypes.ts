@@ -20,6 +20,7 @@ export type ModelFile = Schemas["ModelFile"];
 export type ParamDescriptor = Schemas["ParamDescriptor"];
 export type RunManifest = Schemas["RunManifest"];
 export type RunSummary = Schemas["RunSummary"];
+export type SaturationSummary = Schemas["SaturationSummary"];
 export type SeriesIndex = Schemas["SeriesIndex"];
 export type SeriesPart = Schemas["SeriesPart"];
 export type TypeDescriptor = Schemas["TypeDescriptor"];

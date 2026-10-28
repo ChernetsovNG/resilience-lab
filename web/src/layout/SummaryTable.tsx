@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
+import { SaturationInsight } from "../results/SaturationInsight";
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const millis = (value: number) => `${value.toFixed(1)} ms`;
@@ -40,6 +41,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
               <th scope="col">{service} handler utilization (busy/capacity)</th>
             </Fragment>
           ))}
+          <th scope="col">Saturation insight</th>
         </tr>
       </thead>
       <tbody>
@@ -70,6 +72,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
                   </Fragment>
                 );
               })}
+              <td><SaturationInsight saturation={point.saturation} replications={variant.replications} /></td>
             </tr>
           );
         })}

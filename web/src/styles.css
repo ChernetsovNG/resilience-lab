@@ -451,6 +451,32 @@ select {
   color: #991b1b;
 }
 
+.saturation-insight {
+  min-width: 24rem;
+  max-width: 34rem;
+  white-space: normal;
+}
+
+.saturation-insight p {
+  margin: 0 0 0.4rem;
+}
+
+.saturation-insight summary {
+  cursor: pointer;
+}
+
+.saturation-insight ul {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+
+.saturation-insight .saturation-rule {
+  margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+  color: #52606d;
+  font-size: 0.75rem;
+}
+
 .diagnostic--error,
 .diagnostic-badge.diagnostic--error {
   color: #b91c1c;
