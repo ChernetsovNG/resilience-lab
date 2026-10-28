@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "resiliencelab.core.document.Position": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/layout.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "positions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/resiliencelab.core.document.Position"
+      },
+      "type": "object"
+    },
+    "schemaVersion": {
+      "anyOf": [
+        {
+          "const": 1,
+          "type": "integer"
+        },
+        {
+          "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion"
+  ],
+  "type": "object"
+}

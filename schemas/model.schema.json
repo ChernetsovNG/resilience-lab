@@ -1,0 +1,657 @@
+{
+  "$defs": {
+    "resiliencelab.core.document.BlockInstance": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Open Poisson stream of original requests with an end-to-end deadline.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "deadline": {
+                  "description": "End-to-end deadline of each original request. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                  "title": "Deadline",
+                  "type": "string",
+                  "x-quantity": {
+                    "dimension": "DURATION",
+                    "exclusiveMinimum": 0.0,
+                    "units": [
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1.0,
+                        "symbol": "ms"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1000.0,
+                        "symbol": "s"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 60000.0,
+                        "symbol": "min"
+                      }
+                    ]
+                  }
+                },
+                "rate": {
+                  "description": "Mean rate of original requests. Units: /ms, /s, /min. Canonical value (requests per millisecond): > 0; numeric bounds are checked by the core.",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                  "title": "Arrival rate",
+                  "type": "string",
+                  "x-quantity": {
+                    "dimension": "RATE",
+                    "exclusiveMinimum": 0.0,
+                    "units": [
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1.0,
+                        "symbol": "/ms"
+                      },
+                      {
+                        "denominator": 1000.0,
+                        "numerator": 1.0,
+                        "symbol": "/s"
+                      },
+                      {
+                        "denominator": 60000.0,
+                        "numerator": 1.0,
+                        "symbol": "/min"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "deadline",
+                "rate"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "client"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ],
+          "title": "Client",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Blocking service: a handler is held through local work, downstream calls and backoff.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "failureRate": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                      "type": "string",
+                      "x-quantity": {
+                        "dimension": "PROBABILITY",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "units": [
+                          {
+                            "denominator": 100.0,
+                            "numerator": 1.0,
+                            "symbol": "%"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": "0%",
+                  "description": "Probability that one local attempt fails. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                  "title": "Failure rate"
+                },
+                "handlers": {
+                  "description": "Concurrent handlers.",
+                  "minimum": 1.0,
+                  "title": "Handlers",
+                  "type": "integer"
+                },
+                "processing": {
+                  "additionalProperties": false,
+                  "description": "Local processing time of one attempt.",
+                  "properties": {
+                    "kind": {
+                      "description": "Distribution of the duration.",
+                      "enum": [
+                        "fixed",
+                        "exponential",
+                        "lognormal"
+                      ],
+                      "title": "Distribution",
+                      "type": "string"
+                    },
+                    "mean": {
+                      "description": "Mean duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                      "title": "Mean",
+                      "type": "string",
+                      "x-quantity": {
+                        "dimension": "DURATION",
+                        "minimum": 0.0,
+                        "units": [
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1.0,
+                            "symbol": "ms"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1000.0,
+                            "symbol": "s"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 60000.0,
+                            "symbol": "min"
+                          }
+                        ]
+                      }
+                    },
+                    "stdDev": {
+                      "anyOf": [
+                        {
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                          "type": "string",
+                          "x-quantity": {
+                            "dimension": "DURATION",
+                            "exclusiveMinimum": 0.0,
+                            "units": [
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1.0,
+                                "symbol": "ms"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1000.0,
+                                "symbol": "s"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 60000.0,
+                                "symbol": "min"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Required for lognormal only. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                      "title": "Standard deviation"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mean"
+                  ],
+                  "title": "Processing time",
+                  "type": "object"
+                },
+                "queue": {
+                  "anyOf": [
+                    {
+                      "minimum": 0.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 0,
+                  "description": "Waiting places in the FIFO queue; zero disables queueing.",
+                  "title": "Queue capacity"
+                }
+              },
+              "required": [
+                "handlers",
+                "processing"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "service"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ],
+          "title": "Service",
+          "type": "object"
+        }
+      ]
+    },
+    "resiliencelab.core.document.ConnectionInstance": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "attempts": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 1,
+                  "description": "Maximum attempts including the first one.",
+                  "title": "Attempts"
+                },
+                "backoff": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "base": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "0ms",
+                          "description": "Delay after the first failed attempt before jitter. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "title": "Base delay"
+                        },
+                        "kind": {
+                          "description": "Backoff policy.",
+                          "enum": [
+                            "none",
+                            "fixed",
+                            "exponential-full-jitter"
+                          ],
+                          "title": "Kind",
+                          "type": "string"
+                        },
+                        "max": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "0ms",
+                          "description": "Upper bound of one backoff delay. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "title": "Maximum delay"
+                        },
+                        "multiplier": {
+                          "anyOf": [
+                            {
+                              "exclusiveMinimum": 0.0,
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 2,
+                          "description": "Growth factor of exponential backoff.",
+                          "title": "Multiplier"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": {
+                    "kind": "none"
+                  },
+                  "description": "Delay between attempts.",
+                  "title": "Backoff"
+                },
+                "network": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "description": "Distribution of the duration.",
+                          "enum": [
+                            "fixed",
+                            "exponential",
+                            "lognormal"
+                          ],
+                          "title": "Distribution",
+                          "type": "string"
+                        },
+                        "mean": {
+                          "description": "Mean duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                          "title": "Mean",
+                          "type": "string",
+                          "x-quantity": {
+                            "dimension": "DURATION",
+                            "minimum": 0.0,
+                            "units": [
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1.0,
+                                "symbol": "ms"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1000.0,
+                                "symbol": "s"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 60000.0,
+                                "symbol": "min"
+                              }
+                            ]
+                          }
+                        },
+                        "stdDev": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Required for lognormal only. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Standard deviation"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mean"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": {
+                    "kind": "fixed",
+                    "mean": "0ms"
+                  },
+                  "description": "One-way network delay, drawn separately for the request and the response.",
+                  "title": "Network delay"
+                },
+                "timeout": {
+                  "description": "Per-attempt timeout, also bounded by the remaining deadline. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                  "title": "Timeout",
+                  "type": "string",
+                  "x-quantity": {
+                    "dimension": "DURATION",
+                    "exclusiveMinimum": 0.0,
+                    "units": [
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1.0,
+                        "symbol": "ms"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1000.0,
+                        "symbol": "s"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 60000.0,
+                        "symbol": "min"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "timeout"
+              ],
+              "type": "object"
+            },
+            "to": {
+              "type": "string"
+            },
+            "type": {
+              "const": "call"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "from",
+            "to",
+            "params"
+          ],
+          "title": "Call",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Delivers original requests from the client to the entry service without delay or retries.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "to": {
+              "type": "string"
+            },
+            "type": {
+              "const": "request"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "from",
+            "to"
+          ],
+          "title": "Request",
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/model.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blocks": {
+      "additionalProperties": {
+        "$ref": "#/$defs/resiliencelab.core.document.BlockInstance"
+      },
+      "type": "object"
+    },
+    "connections": {
+      "items": {
+        "$ref": "#/$defs/resiliencelab.core.document.ConnectionInstance"
+      },
+      "type": "array"
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schemaVersion": {
+      "anyOf": [
+        {
+          "const": 1,
+          "type": "integer"
+        },
+        {
+          "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "blocks"
+  ],
+  "type": "object"
+}

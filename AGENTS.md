@@ -4,7 +4,7 @@
 
 Текущий срез включает модули `core`, `apps:cli`, `apps:server` и `web`:
 
-- `core` — фундамент этапа 1: каталог типов, документы рабочей области, компилятор в IR, KSL-симуляция с потоками по путям блоков, исполнение задач, артефакты прогонов и фасад `Lab`.
+- `core` — фундамент этапа 1: каталог типов, документы рабочей области и их JSON-схемы, компилятор в IR, KSL-симуляция с потоками по путям блоков, исполнение задач, артефакты прогонов и фасад `Lab`.
 - `apps:cli` — команды `validate` и `run [--workers N]` для экспериментов рабочей области, собираемые с помощью Gradle `application`.
 - `apps:server` — Spring Boot API этапа 1 (каталог, документы рабочей области, проверка, задания, прогоны) со спецификацией `apps/server/openapi.json`; задания хранятся process-local.
 - `web` — Vite/React SPA этапа 1: экран без прокрутки, холст React Flow, инспектор параметров из каталога с сохранением модели, страницы вариантов для просмотра, запуск задания и сводка; типы API генерируются из `apps/server/openapi.json`.
@@ -20,6 +20,7 @@ Gradle-команды выполняются из корня репозитор�
 - `./gradlew test` — все JVM-тесты.
 - `./gradlew clean build` — чистая полная сборка и все доступные JVM-проверки.
 - `./gradlew :core:test` — тесты модуля `core`.
+- `UPDATE_SCHEMAS=1 ./gradlew :core:test --tests 'resiliencelab.core.document.DocumentSchemasTest' --rerun` — пересоздать `schemas/*.schema.json` из классов документов и каталога; без переменной тест проверяет актуальность файлов. Схемы проверяют структуру, единицы и диапазоны обычных чисел; границы строковых величин записаны в `x-quantity` в канонических единицах и проверяются ядром. Формат аннотации описан в [schemas/README.md](schemas/README.md).
 - `./gradlew :apps:cli:test` — тесты модуля `apps:cli`, включая проверку установленного launcher.
 - `./gradlew :apps:server:test` — тесты модуля `apps:server`.
 - `UPDATE_OPENAPI=1 ./gradlew :apps:server:test --tests 'resiliencelab.server.lab.OpenApiSpecTest' --rerun` — пересоздать `apps/server/openapi.json` после изменения API; без переменной тест проверяет, что файл совпадает с кодом.

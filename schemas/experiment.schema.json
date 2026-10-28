@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "resiliencelab.core.document.ExecutionSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "maxRealTime": {
+          "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+          "title": "maxRealTime",
+          "type": "string",
+          "x-quantity": {
+            "dimension": "DURATION",
+            "exclusiveMinimum": 0.0,
+            "units": [
+              {
+                "denominator": 1.0,
+                "numerator": 1.0,
+                "symbol": "ms"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 1000.0,
+                "symbol": "s"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 60000.0,
+                "symbol": "min"
+              }
+            ]
+          }
+        },
+        "measurement": {
+          "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+          "title": "measurement",
+          "type": "string",
+          "x-quantity": {
+            "dimension": "DURATION",
+            "exclusiveMinimum": 0.0,
+            "units": [
+              {
+                "denominator": 1.0,
+                "numerator": 1.0,
+                "symbol": "ms"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 1000.0,
+                "symbol": "s"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 60000.0,
+                "symbol": "min"
+              }
+            ]
+          }
+        },
+        "replications": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "warmup": {
+          "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+          "title": "warmup",
+          "type": "string",
+          "x-quantity": {
+            "dimension": "DURATION",
+            "minimum": 0.0,
+            "units": [
+              {
+                "denominator": 1.0,
+                "numerator": 1.0,
+                "symbol": "ms"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 1000.0,
+                "symbol": "s"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 60000.0,
+                "symbol": "min"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "replications",
+        "warmup",
+        "measurement",
+        "seed"
+      ],
+      "type": "object"
+    },
+    "resiliencelab.core.document.Fault": {
+      "additionalProperties": false,
+      "properties": {
+        "failureRate": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+              "type": "string",
+              "x-quantity": {
+                "dimension": "PROBABILITY",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "units": [
+                  {
+                    "denominator": 100.0,
+                    "numerator": 1.0,
+                    "symbol": "%"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Probability of a failed attempt. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+          "title": "Failure rate"
+        },
+        "from": {
+          "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+          "title": "from",
+          "type": "string",
+          "x-quantity": {
+            "dimension": "DURATION",
+            "minimum": 0.0,
+            "units": [
+              {
+                "denominator": 1.0,
+                "numerator": 1.0,
+                "symbol": "ms"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 1000.0,
+                "symbol": "s"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 60000.0,
+                "symbol": "min"
+              }
+            ]
+          }
+        },
+        "processingMultiplier": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "target": {
+          "type": "string"
+        },
+        "to": {
+          "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+          "title": "to",
+          "type": "string",
+          "x-quantity": {
+            "dimension": "DURATION",
+            "exclusiveMinimum": 0.0,
+            "units": [
+              {
+                "denominator": 1.0,
+                "numerator": 1.0,
+                "symbol": "ms"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 1000.0,
+                "symbol": "s"
+              },
+              {
+                "denominator": 1.0,
+                "numerator": 60000.0,
+                "symbol": "min"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "target",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "resiliencelab.core.document.Variant": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "overrides": {
+          "additionalProperties": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/experiment.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "execution": {
+      "$ref": "#/$defs/resiliencelab.core.document.ExecutionSettings"
+    },
+    "faults": {
+      "items": {
+        "$ref": "#/$defs/resiliencelab.core.document.Fault"
+      },
+      "type": "array"
+    },
+    "layoutRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modelRef": {
+      "type": "string"
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schemaVersion": {
+      "anyOf": [
+        {
+          "const": 1,
+          "type": "integer"
+        },
+        {
+          "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+          "type": "string"
+        }
+      ]
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/resiliencelab.core.document.Variant"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "modelRef",
+    "execution",
+    "variants"
+  ],
+  "type": "object"
+}
