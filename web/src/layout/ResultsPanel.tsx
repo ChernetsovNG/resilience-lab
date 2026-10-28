@@ -5,6 +5,8 @@ import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 
+export type ResultsPanelSize = "collapsed" | "normal" | "expanded";
+
 export interface ResultsPanelProps {
   job: JobView | null;
   summary: RunSummary | null;
@@ -16,6 +18,8 @@ export interface ResultsPanelProps {
   activeVariantId?: string | null;
   selectedPointId?: string;
   onPointChange?: (pointId: string) => void;
+  size?: ResultsPanelSize;
+  onSizeChange?: (size: ResultsPanelSize) => void;
   diagnostics?: readonly Diagnostic[];
   validationPending?: boolean;
   validationProblem?: ApiProblem | null;
@@ -23,13 +27,14 @@ export interface ResultsPanelProps {
 }
 
 function progressOf(job: JobView): string {
-  return `${job.status} · ${job.completedTasks}/${job.totalTasks === 0 ? "?" : job.totalTasks} tasks`;
+  const cancelling = job.cancelRequested && (job.status === "QUEUED" || job.status === "RUNNING");
+  return `${job.status} · ${job.completedTasks}/${job.totalTasks === 0 ? "?" : job.totalTasks} tasks${cancelling ? " · cancellation requested" : ""}`;
 }
 
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
 export function ResultsPanel({
   job, summary, problem, catalog = null, model = null, manifest = null, stale = false,
-  activeVariantId = null, selectedPointId = "p0", onPointChange,
+  activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
 }: ResultsPanelProps) {
   const [active, setActive] = useState("summary");
@@ -37,7 +42,7 @@ export function ResultsPanel({
   const points = summary?.variants[0]?.points ?? [];
   const staleNotice = stale ? <p className="banner" role="status">Results belong to a previous document version.</p> : null;
   return (
-    <section className="results-panel" aria-label="Results">
+    <section className={`results-panel results-panel--${size}`} aria-label="Results">
       <div role="tablist" aria-label="Result views">
         <button id={`${id}-summary`} type="button" role="tab" aria-selected={active === "summary"}
           aria-controls={`${id}-panel`} onClick={() => setActive("summary")}>
@@ -51,8 +56,17 @@ export function ResultsPanel({
           aria-controls={`${id}-panel`} onClick={() => setActive("problems")}>
           Problems ({diagnostics.length})
         </button>
+        <span className="results-size-actions">
+          {size === "normal" ? <button type="button" onClick={() => onSizeChange?.("collapsed")}>Collapse results</button> : null}
+          {size !== "normal" ? <button type="button" onClick={() => onSizeChange?.("normal")}>Restore results</button> : null}
+          {size !== "expanded" ? <button type="button" onClick={() => onSizeChange?.("expanded")}>Expand results</button> : null}
+        </span>
+        <span className="results-job-status" data-testid="results-job-status" role="status">
+          {job === null ? "" : progressOf(job)}
+        </span>
       </div>
-      <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}>
+      <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
+        hidden={size === "collapsed"}>
         {active === "problems" ? <>
           {validationPending ? <p role="status">Validating documents…</p> : null}
           {validationProblem === null ? null : <ProblemList problem={validationProblem} />}

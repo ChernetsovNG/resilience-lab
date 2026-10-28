@@ -8,7 +8,7 @@ import { useHealth } from "./components/useHealth";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
-import { ResultsPanel } from "./layout/ResultsPanel";
+import { ResultsPanel, type ResultsPanelSize } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { useRun } from "./run/useRun";
 import { setVariantParam } from "./workspace/experimentCommands";
@@ -29,6 +29,7 @@ export function App() {
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const [pointSelection, setPointSelection] = useState<{ summary: typeof run.summary; id: string }>({ summary: null, id: "p0" });
+  const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -131,7 +132,7 @@ export function App() {
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
   return (
-    <div className="app">
+    <div className={`app app--results-${resultsSize}`}>
       <TopBar
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
@@ -262,6 +263,8 @@ export function App() {
         activeVariantId={variant?.id ?? null}
         selectedPointId={pointSelection.summary === run.summary ? pointSelection.id : "p0"}
         onPointChange={(id) => setPointSelection({ summary: run.summary, id })}
+        size={resultsSize}
+        onSizeChange={setResultsSize}
         diagnostics={diagnostics}
         validationPending={validation.pending}
         validationProblem={validation.problem}

@@ -34,6 +34,23 @@ select {
     "results results results";
 }
 
+.app--results-collapsed {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.app--results-expanded {
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "top top top"
+    "results results results";
+}
+
+.app--results-expanded > .palette,
+.app--results-expanded > .canvas-area,
+.app--results-expanded > .inspector {
+  display: none;
+}
+
 .top-bar {
   grid-area: top;
   display: flex;
@@ -355,9 +372,35 @@ select {
   background: #fff;
 }
 
+.results-size-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-inline-start: auto;
+}
+
+.results-size-actions button {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d5dbe3;
+  border-radius: 0.35rem 0.35rem 0 0;
+  background: #fff;
+}
+
+.results-job-status {
+  align-self: center;
+  padding: 0 0.5rem;
+  color: #52606d;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .results-body {
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 0.75rem;
+}
+
+.results-body[hidden] {
+  display: none;
 }
 
 .summary-toolbar {

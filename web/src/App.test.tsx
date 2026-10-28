@@ -786,3 +786,24 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
   expect(screen.queryByText(stale)).toBeNull();
 });
+
+it("changes results panel grid size without issuing document commands", async () => {
+  const fetchMock = server();
+  await open();
+  const app = document.querySelector(".app")!;
+  expect(app.className).toContain("app--results-normal");
+
+  fireEvent.click(button("Expand results"));
+  expect(app.className).toContain("app--results-expanded");
+  fireEvent.click(button("Restore results"));
+  expect(app.className).toContain("app--results-normal");
+  fireEvent.click(button("Collapse results"));
+  expect(app.className).toContain("app--results-collapsed");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(button("Restore results"));
+  expect(app.className).toContain("app--results-normal");
+
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Save").disabled).toBe(true);
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+});

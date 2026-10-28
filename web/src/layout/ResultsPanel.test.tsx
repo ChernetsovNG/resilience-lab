@@ -49,3 +49,31 @@ it("explains that a cancelled run is incomplete and has no summary", () => {
   expect(screen.queryByRole("table", { name: "Summary" })).toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+it("collapses and expands while preserving tabs and job status", () => {
+  const onSizeChange = vi.fn();
+  const running = {
+    id: "job-1", experiment: "chain.experiment.json", runId: "run-1", status: "RUNNING" as const,
+    completedTasks: 1, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
+  };
+  const panel = (size: "collapsed" | "normal" | "expanded") =>
+    <ResultsPanel job={running} summary={null} problem={null} size={size} onSizeChange={onSizeChange} />;
+  const view = render(panel("normal"));
+
+  fireEvent.click(screen.getByRole("button", { name: "Collapse results" }));
+  expect(onSizeChange).toHaveBeenCalledWith("collapsed");
+  view.rerender(panel("collapsed"));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(screen.getByRole("tab", { name: "Summary" })).toBeTruthy();
+  expect(screen.getByTestId("results-job-status").textContent).toContain("RUNNING");
+
+  fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
+  expect(onSizeChange).toHaveBeenCalledWith("normal");
+  view.rerender(panel("normal"));
+  fireEvent.click(screen.getByRole("button", { name: "Expand results" }));
+  expect(onSizeChange).toHaveBeenCalledWith("expanded");
+  view.rerender(panel("expanded"));
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
+  expect(onSizeChange).toHaveBeenCalledWith("normal");
+});
