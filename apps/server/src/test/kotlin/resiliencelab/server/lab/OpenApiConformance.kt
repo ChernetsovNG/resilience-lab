@@ -46,10 +46,13 @@ class OpenApiConformance(
                 .jsonObject
         val documented = operation.getValue("responses").jsonObject[response.status.toString()]?.jsonObject
         assertThat(documented).describedAs("$method $path ${response.status} is not documented").isNotNull()
+        val content = documented!!["content"]?.jsonObject
+        if (content == null) {
+            assertThat(response.contentAsByteArray).isEmpty()
+            return
+        }
         val schema =
-            documented!!
-                .getValue("content")
-                .jsonObject
+            content
                 .getValue("application/json")
                 .jsonObject
                 .getValue("schema")

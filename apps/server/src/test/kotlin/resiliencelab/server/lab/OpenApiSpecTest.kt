@@ -65,6 +65,38 @@ class OpenApiSpecTest {
     }
 
     @Test
+    fun `delete requires If-Match in the generated contract`() {
+        val parameters =
+            Json
+                .parseToJsonElement(generated())
+                .jsonObject
+                .getValue("paths")
+                .jsonObject
+                .getValue("/api/v1/workspace/document")
+                .jsonObject
+                .getValue("delete")
+                .jsonObject
+                .getValue("parameters")
+                .jsonArray
+        val header =
+            parameters
+                .single {
+                    it
+                        .jsonObject
+                        .getValue("name")
+                        .jsonPrimitive
+                        .content == "If-Match"
+                }.jsonObject
+
+        assertThat(
+            header
+                .getValue("required")
+                .jsonPrimitive
+                .content,
+        ).isEqualTo("true")
+    }
+
+    @Test
     fun `registered API operations match the committed contract`() {
         val methods = RequestMethod.entries.map { it.name.lowercase() }.toSet()
         val documented =
@@ -112,6 +144,7 @@ class OpenApiSpecTest {
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}",
             "/api/v1/validate",
+            "/api/v1/workspace/changes",
             "/api/v1/workspace/document",
             "/api/v1/workspace/documents",
         )

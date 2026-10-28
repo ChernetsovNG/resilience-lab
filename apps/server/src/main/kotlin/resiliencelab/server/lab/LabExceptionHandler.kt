@@ -32,6 +32,11 @@ class BadRequest(
     diagnostics: List<Diagnostic> = emptyList(),
 ) : ApiException(code, message, diagnostics)
 
+class PreconditionRequired(
+    code: String,
+    message: String,
+) : ApiException(code, message)
+
 class NotFound(
     code: String,
     message: String,
@@ -48,6 +53,7 @@ class Conflict(
  * so springdoc documents the error responses.
  * Series addresses use `SERIES_PATH` (400) for invalid segments and `SERIES_NOT_FOUND` (404) for missing data.
  * Job cancellation uses `JOB_NOT_FOUND` (404) and `JOB_FINISHED` (409).
+ * Workspace deletion uses `VERSION_REQUIRED` (428); malformed change cursors use `CURSOR_INVALID` (400).
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
@@ -59,6 +65,10 @@ class LabExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun unsupportedRunVersion(exception: UnsupportedArtifactVersionException): ApiProblem =
         ApiProblem("RUN_VERSION_UNSUPPORTED", exception.message ?: "Unsupported run format; run again")
+
+    @ExceptionHandler(PreconditionRequired::class)
+    @ResponseStatus(HttpStatus.PRECONDITION_REQUIRED)
+    fun preconditionRequired(exception: PreconditionRequired): ApiProblem = exception.problem()
 
     @ExceptionHandler(BadRequest::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

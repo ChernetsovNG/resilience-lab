@@ -26,20 +26,7 @@ data class HealthView(
     val kslVersion: String,
 )
 
-/** Workspace document kinds by file suffix (ADR 0005). */
-@Serializable
-enum class DocumentKind(
-    val suffix: String,
-) {
-    MODEL(".model.json"),
-    LAYOUT(".layout.json"),
-    EXPERIMENT(".experiment.json"),
-    ;
-
-    companion object {
-        fun of(path: String): DocumentKind? = entries.firstOrNull { path.endsWith(it.suffix) }
-    }
-}
+typealias DocumentKind = resiliencelab.core.workspace.DocumentKind
 
 /** A workspace document without its content. */
 @Serializable
@@ -64,6 +51,22 @@ data class DocumentView(
     val kind: DocumentKind,
     val version: String,
     val content: DocumentContent,
+)
+
+/** One workspace document mutation; a null [version] denotes deletion. */
+@Serializable
+data class WorkspaceChangeView(
+    val path: String,
+    val kind: DocumentKind,
+    val version: String?,
+)
+
+/** A bounded change feed response with an opaque process-generation cursor and a reset signal for stale cursors. */
+@Serializable
+data class WorkspaceChangesView(
+    val cursor: String,
+    val reset: Boolean,
+    val changes: List<WorkspaceChangeView>,
 )
 
 /** Names an experiment document of the workspace. */

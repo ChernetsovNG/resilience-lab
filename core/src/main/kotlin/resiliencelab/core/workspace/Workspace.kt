@@ -2,16 +2,20 @@ package resiliencelab.core.workspace
 
 import java.nio.channels.FileChannel
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
+import java.time.Duration
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 
@@ -80,6 +84,12 @@ interface Workspace {
         expectedVersion: String? = null,
     ): String
 
+    /** Deletes [path] only when its current version equals [expectedVersion]. */
+    fun delete(
+        path: String,
+        expectedVersion: String,
+    )
+
     /**
      * Creates a new document without replacing an existing one. Concurrent attempts across workspace instances have
      * exactly one successful creator.
@@ -94,6 +104,9 @@ interface Workspace {
         path: String,
         bytes: ByteArray,
     ): String
+
+    /** Returns changes after [since], or the current cursor and no changes when [since] is null. */
+    fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch
 }
 
 /**
@@ -101,26 +114,38 @@ interface Workspace {
  * listings skip symbolic links. A root alias is pinned to its physical directory when this workspace is opened.
  *
  * All mutations coordinate through a JDK filesystem lock on the stable `.workspace.lock` inside that directory.
- * This workspace owns the lock metadata: public writes/creates cannot replace it, and normal operations never remove it.
+ * This workspace owns the lock metadata: public mutations cannot replace or remove it.
  * Cooperating instances and JVMs serialize version checks with replacement; the filesystem must support file locks.
  * Uncooperative external editors and hostile filesystem replacement are outside this coordination protocol.
  */
 class FileWorkspace(
     root: Path,
-) : Workspace {
+    scanInterval: Duration = Duration.ofSeconds(1),
+    historyLimit: Int = 1000,
+) : Workspace,
+    AutoCloseable {
     private val root: Path = root.toRealPath()
     private val lockFile: Path = this.root.resolve(".workspace.lock")
+    private val journal = WorkspaceChangeJournal(this.root, scanInterval, historyLimit, mutationMonitor)
 
-    override fun list(): List<String> =
-        Files.walk(root).use { paths ->
-            paths
-                .filter { it.isRegularFile(NOFOLLOW_LINKS) && it.fileName.toString().endsWith(".json") }
-                .map { root.relativize(it) }
-                .filter { relative -> relative.none { it.toString().startsWith(".") } }
-                .map { it.joinToString("/") }
-                .sorted()
-                .toList()
-        }
+    override fun list(): List<String> {
+        val result = mutableListOf<String>()
+        walkVisibleWorkspace(
+            root,
+            object : SimpleFileVisitor<Path>() {
+                override fun visitFile(
+                    file: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
+                    if (attrs.isRegularFile && file.fileName.toString().endsWith(".json")) {
+                        result += root.relativize(file).joinToString("/")
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+            },
+        )
+        return result.sorted()
+    }
 
     override fun listFiles(directory: String): List<String> {
         val start = resolve(directory)
@@ -150,7 +175,7 @@ class FileWorkspace(
     override fun exists(path: String): Boolean = resolve(path).isRegularFile()
 
     override fun delete(path: String) =
-        mutate(path) { file ->
+        mutate(path, version = { null }) { file ->
             if (Files.exists(file, NOFOLLOW_LINKS) && !file.isRegularFile(NOFOLLOW_LINKS)) {
                 throw InvalidDocumentPathException(path)
             }
@@ -163,7 +188,7 @@ class FileWorkspace(
         text: String,
         expectedVersion: String?,
     ): String =
-        mutate(path) { file ->
+        mutate(path, version = { it }) { file ->
             if (expectedVersion != null) {
                 val current = if (file.isRegularFile()) DocumentVersion.of(Files.readString(file)) else null
                 if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
@@ -176,11 +201,23 @@ class FileWorkspace(
         text: String,
     ): String = createBytes(path, text.toByteArray(Charsets.UTF_8))
 
+    override fun delete(
+        path: String,
+        expectedVersion: String,
+    ) {
+        mutate(path, version = { null }) { file ->
+            if (!file.isRegularFile()) throw DocumentNotFoundException(path)
+            val current = DocumentVersion.of(Files.readAllBytes(file))
+            if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
+            Files.delete(file)
+        }
+    }
+
     override fun createBytes(
         path: String,
         bytes: ByteArray,
     ): String =
-        mutate(path) { file ->
+        mutate(path, version = { it }) { file ->
             Files.createDirectories(file.parent)
             try {
                 Files.write(file, bytes, CREATE_NEW, WRITE)
@@ -190,8 +227,13 @@ class FileWorkspace(
             DocumentVersion.of(bytes)
         }
 
+    override fun changes(since: WorkspaceCursor?): WorkspaceChangeBatch = journal.changes(since)
+
+    override fun close() = journal.close()
+
     private fun <T> mutate(
         path: String,
+        version: (T) -> String?,
         action: (Path) -> T,
     ): T =
         synchronized(mutationMonitor) {
@@ -201,7 +243,9 @@ class FileWorkspace(
                     if (file.startsWith(lockFile) || (Files.exists(file) && Files.isSameFile(file, lockFile))) {
                         throw InvalidDocumentPathException(path)
                     }
-                    action(file)
+                    val result = action(file)
+                    journal.record(root.relativize(file).joinToString("/"), version(result))
+                    result
                 }
             }
         }
