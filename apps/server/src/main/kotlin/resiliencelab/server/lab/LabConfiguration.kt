@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
@@ -24,6 +23,8 @@ import resiliencelab.core.workspace.FileWorkspace
 import resiliencelab.core.workspace.Workspace
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Beans of the stage 1 API (ADR 0010): the workspace directory, the core [Lab], jobs, and the JSON and OpenAPI
@@ -90,21 +91,13 @@ class LabConfiguration {
     @Bean
     fun runCatalog(workspace: Workspace): RunCatalog = RunCatalog(workspace)
 
-    /** One job at a time; each job spreads its tasks over the core pool (stage 1 slice: no interleaving). */
+    /** One virtual calling thread per job; only the shared core pool owns simulation threads (ADR 0009). */
     @Bean
-    fun labJobExecutor(): ThreadPoolTaskExecutor =
-        ThreadPoolTaskExecutor().apply {
-            setCorePoolSize(1)
-            setMaxPoolSize(1)
-            setQueueCapacity(100)
-            setThreadNamePrefix("lab-job-")
-            setWaitForTasksToCompleteOnShutdown(true)
-            setAwaitTerminationSeconds(30)
-        }
+    fun labJobExecutor(): ExecutorService = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("lab-job-", 0).factory())
 
     @Bean
     fun jobService(
         lab: Lab,
-        @Qualifier("labJobExecutor") executor: ThreadPoolTaskExecutor,
+        @Qualifier("labJobExecutor") executor: ExecutorService,
     ): JobService = JobService(lab, executor) { RunIds.next() }
 }

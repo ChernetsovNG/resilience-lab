@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 
@@ -45,16 +46,44 @@ class JobService(
     /** Jobs, newest first. */
     fun list(): List<JobView> = synchronized(lock) { jobs.values.reversed() }
 
+    /**
+     * Requests cooperative cancellation. Queued jobs stop immediately without creating an artifact; running jobs stay
+     * running until [Lab] has stopped and finished its pending writes. Repeated cancellation is idempotent.
+     * Returns `null` for an unknown job; completed and failed jobs throw [Conflict] with code `JOB_FINISHED`.
+     */
+    fun cancel(id: String): JobView? =
+        synchronized(lock) {
+            val job = jobs[id] ?: return null
+            when (job.status) {
+                JobStatus.CANCELLED -> job
+                JobStatus.COMPLETED, JobStatus.FAILED -> throw Conflict("JOB_FINISHED", "Job '$id' has already finished")
+                JobStatus.QUEUED -> {
+                    val cancelled = job.copy(status = JobStatus.CANCELLED, cancelRequested = true)
+                    finish(id) { cancelled }
+                    cancelled
+                }
+                JobStatus.RUNNING -> job.copy(cancelRequested = true).also { jobs[id] = it }
+            }
+        }
+
     private fun execute(
         id: String,
         expectedVersions: Map<String, String>,
     ) {
-        val job = update(id) { it.copy(status = JobStatus.RUNNING) } ?: return
+        val job =
+            synchronized(lock) {
+                jobs[id]
+                    ?.takeIf { it.status == JobStatus.QUEUED }
+                    ?.copy(status = JobStatus.RUNNING)
+                    ?.also { jobs[id] = it }
+            } ?: return
         try {
-            lab.run(job.experiment, job.runId, expectedVersions) { completed, total ->
+            lab.run(job.experiment, job.runId, expectedVersions, isCancelled = { get(id)?.cancelRequested != false }) { completed, total ->
                 update(id) { it.copy(completedTasks = maxOf(it.completedTasks, completed), totalTasks = total) }
             }
             finish(id) { it.copy(status = JobStatus.COMPLETED) }
+        } catch (exception: CancellationException) {
+            finish(id) { it.copy(status = JobStatus.CANCELLED) }
         } catch (exception: InvalidExperimentException) {
             finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment has errors", diagnostics = exception.diagnostics) }
         } catch (exception: Exception) {
@@ -73,7 +102,9 @@ class JobService(
         change: (JobView) -> JobView,
     ) {
         synchronized(lock) {
-            update(id, change) ?: return
+            val job = jobs[id] ?: return
+            if (job.status == JobStatus.COMPLETED || job.status == JobStatus.FAILED || job.status == JobStatus.CANCELLED) return
+            jobs[id] = change(job)
             terminal.addLast(id)
             while (terminal.size > maxTerminalJobs) jobs.remove(terminal.removeFirst())
         }

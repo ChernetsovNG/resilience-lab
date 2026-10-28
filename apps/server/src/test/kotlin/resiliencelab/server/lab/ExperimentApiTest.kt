@@ -5,7 +5,10 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
 import org.springframework.http.MediaType.APPLICATION_JSON
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -13,6 +16,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import resiliencelab.core.execution.ExperimentExecutor
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit.SECONDS
 
@@ -172,6 +176,95 @@ class ExperimentApiTest {
     }
 
     @Test
+    fun `cancellation rejects completed and unknown jobs`() {
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+        val id = JsonPath.read<String>(submitted.contentAsString, "$.id")
+        awaitJob(id)
+
+        val finished = postJson("/api/v1/jobs/$id/cancel", "")
+        assertThat(finished.status).isEqualTo(409)
+        assertThat(JsonPath.read<String>(finished.contentAsString, "$.code")).isEqualTo("JOB_FINISHED")
+        openApi.assertResponse("post", "/api/v1/jobs/{id}/cancel", finished)
+
+        val unknown = postJson("/api/v1/jobs/unknown/cancel", "")
+        assertThat(unknown.status).isEqualTo(404)
+        assertThat(JsonPath.read<String>(unknown.contentAsString, "$.code")).isEqualTo("JOB_NOT_FOUND")
+        openApi.assertResponse("post", "/api/v1/jobs/{id}/cancel", unknown)
+    }
+
+    @Test
+    fun `a later short job finishes before an earlier long job`() {
+        openApi // Generate the schema before starting the timed scenario.
+        val long = submitLongJob("parallel")
+        try {
+            val submitted = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+            val short = awaitJob(JsonPath.read(submitted.contentAsString, "$.id"))
+
+            assertThat(JsonPath.read<String>(short.contentAsString, "$.status")).isEqualTo("COMPLETED")
+            assertThat(JsonPath.read<String>(getJob(long).contentAsString, "$.status")).isEqualTo("RUNNING")
+        } finally {
+            postJson("/api/v1/jobs/$long/cancel", "")
+            awaitJob(long)
+        }
+    }
+
+    @Test
+    fun `running cancellation retains an incomplete artifact and allows following jobs`() {
+        val id = submitLongJob("cancelled")
+        try {
+            val deadline = System.nanoTime() + SECONDS.toNanos(30)
+            while (JsonPath.read<Int>(getJob(id).contentAsString, "$.completedTasks") == 0) {
+                check(System.nanoTime() < deadline) { "Job $id did not start computing" }
+                Thread.sleep(10)
+            }
+            val requested = postJson("/api/v1/jobs/$id/cancel", "")
+            assertThat(requested.status).isEqualTo(202)
+            assertThat(JsonPath.read<String>(requested.contentAsString, "$.status")).isEqualTo("RUNNING")
+            assertThat(JsonPath.read<Boolean>(requested.contentAsString, "$.cancelRequested")).isTrue()
+            openApi.assertResponse("post", "/api/v1/jobs/{id}/cancel", requested)
+
+            val cancelled = awaitJob(id)
+            assertThat(JsonPath.read<String>(cancelled.contentAsString, "$.status")).isEqualTo("CANCELLED")
+            assertThat(JsonPath.read<Boolean>(cancelled.contentAsString, "$.cancelRequested")).isTrue()
+            openApi.assertResponse("get", "/api/v1/jobs/{id}", cancelled)
+            val runId = JsonPath.read<String>(cancelled.contentAsString, "$.runId")
+            val directory = root.resolve(".results/cancelled/$runId")
+            assertThat(JsonPath.read<Boolean>(Files.readString(directory.resolve("manifest.json")), "$.complete")).isFalse()
+            assertThat(directory.resolve("summary.json")).doesNotExist()
+            assertThat(
+                Files.walk(directory.resolve("series")).use { paths ->
+                    paths.anyMatch { it.fileName.toString() == "replication.json" }
+                },
+            ).isTrue()
+
+            val repeated = postJson("/api/v1/jobs/$id/cancel", "")
+            assertThat(repeated.status).isEqualTo(202)
+            assertThat(repeated.contentAsString).isEqualTo(cancelled.contentAsString)
+            openApi.assertResponse("post", "/api/v1/jobs/{id}/cancel", repeated)
+
+            val next = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+            assertThat(JsonPath.read<String>(awaitJob(JsonPath.read(next.contentAsString, "$.id")).contentAsString, "$.status"))
+                .isEqualTo("COMPLETED")
+        } finally {
+            postJson("/api/v1/jobs/$id/cancel", "")
+            awaitJob(id)
+        }
+    }
+
+    private fun submitLongJob(name: String): String {
+        val path = "retry-storm/$name.experiment.json"
+        Files.writeString(
+            root.resolve(path),
+            Files.readString(root.resolve(experiment)).replace("\"replications\": 2", "\"replications\": 1000"),
+        )
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$path"}""")
+        assertThat(submitted.status).isEqualTo(202)
+        return JsonPath.read(submitted.contentAsString, "$.id")
+    }
+
+    private fun getJob(id: String): MockHttpServletResponse = mockMvc.perform(get("/api/v1/jobs/{id}", id)).andReturn().response
+
+    @Test
     fun `rejects invalid jobs, malformed requests and unknown ids`() {
         val invalid = postJson("/api/v1/jobs", """{"experiment":"missing.experiment.json"}""")
         assertThat(invalid.status).isEqualTo(400)
@@ -194,7 +287,7 @@ class ExperimentApiTest {
         while (true) {
             val response = mockMvc.perform(get("/api/v1/jobs/{id}", id)).andReturn().response
             val status = JsonPath.read<String>(response.contentAsString, "$.status")
-            if (status == "COMPLETED" || status == "FAILED") return response
+            if (status == "COMPLETED" || status == "FAILED" || status == "CANCELLED") return response
             check(System.nanoTime() < deadline) { "Job $id did not finish: ${response.contentAsString}" }
             Thread.sleep(50)
         }
@@ -243,6 +336,13 @@ class ExperimentApiTest {
         path: String,
         body: String,
     ): MockHttpServletResponse = mockMvc.perform(post(path).contentType(APPLICATION_JSON).content(body)).andReturn().response
+
+    @TestConfiguration(proxyBeanMethods = false)
+    class ExecutionConfiguration {
+        @Bean
+        @Primary
+        fun singleWorker(): ExperimentExecutor = ExperimentExecutor(workers = 1)
+    }
 
     companion object {
         private val root = TestWorkspace.copy()

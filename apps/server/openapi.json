@@ -267,6 +267,62 @@
         "tags" : [ "job-controller" ]
       }
     },
+    "/api/v1/jobs/{id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelJob",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          }
+        },
+        "tags" : [ "job-controller" ]
+      }
+    },
     "/api/v1/runs" : {
       "get" : {
         "operationId" : "listRuns",
@@ -1319,6 +1375,9 @@
       "JobView" : {
         "type" : "object",
         "properties" : {
+          "cancelRequested" : {
+            "type" : "boolean"
+          },
           "completedTasks" : {
             "type" : "integer",
             "format" : "int32"
@@ -1343,14 +1402,14 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "QUEUED", "RUNNING", "COMPLETED", "FAILED" ]
+            "enum" : [ "QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED" ]
           },
           "totalTasks" : {
             "type" : "integer",
             "format" : "int32"
           }
         },
-        "required" : [ "completedTasks", "diagnostics", "experiment", "id", "runId", "status", "totalTasks" ]
+        "required" : [ "cancelRequested", "completedTasks", "diagnostics", "experiment", "id", "runId", "status", "totalTasks" ]
       },
       "LatencyDistribution" : {
         "type" : "object",

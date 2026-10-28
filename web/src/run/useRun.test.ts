@@ -17,7 +17,7 @@ function job(status: JobView["status"], extra: Partial<JobView> = {}): JobView {
   return {
     id: "job-1", experiment: experimentPath, runId: "run-1", status,
     completedTasks: status === "COMPLETED" ? 4 : 0, totalTasks: 4,
-    error: null, diagnostics: [], ...extra,
+    cancelRequested: false, error: null, diagnostics: [], ...extra,
   };
 }
 

@@ -22,7 +22,7 @@ class LabConfigurationTest {
 
         assertThat(LabConfiguration().apiJson().encodeToString(JobView.serializer(), job)).isEqualTo(
             """{"id":"j","experiment":"e.experiment.json","runId":"r","status":"QUEUED",""" +
-                """"completedTasks":0,"totalTasks":0,"error":null,"diagnostics":[]}""",
+                """"completedTasks":0,"totalTasks":0,"cancelRequested":false,"error":null,"diagnostics":[]}""",
         )
     }
 

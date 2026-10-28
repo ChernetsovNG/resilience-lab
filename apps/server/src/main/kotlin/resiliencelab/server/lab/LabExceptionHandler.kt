@@ -47,6 +47,7 @@ class Conflict(
  * Maps failures of the stage 1 endpoints to [ApiProblem]. Every handler declares its status with `@ResponseStatus`,
  * so springdoc documents the error responses.
  * Series addresses use `SERIES_PATH` (400) for invalid segments and `SERIES_NOT_FOUND` (404) for missing data.
+ * Job cancellation uses `JOB_NOT_FOUND` (404) and `JOB_FINISHED` (409).
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
