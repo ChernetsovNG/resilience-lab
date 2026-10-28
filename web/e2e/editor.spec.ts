@@ -103,6 +103,34 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
   await expect(timeout).toHaveText("100ms");
 });
 
+test("keeps every canvas value clickable and opens gateway mean with an error-colored message", async ({ page, files }) => {
+  const originalLayout = (await stored(page, files.layout)).content.layout as LayoutFile;
+  expect(originalLayout.positions).toEqual({
+    client: { x: 0, y: 100 }, gateway: { x: 260, y: 100 }, middle: { x: 520, y: 100 }, dependency: { x: 780, y: 100 },
+  });
+  const values = [
+    ...["gateway", "middle", "dependency"].flatMap((id) => ["handlers", "queue", "processing.mean"].map((path) => `canvas-param-${id}-${path}`)),
+    ...["gateway-to-middle", "middle-to-dependency"].flatMap((id) => ["timeout", "attempts"].map((path) => `canvas-param-${id}-${path}`)),
+  ];
+  for (const testId of values) {
+    const value = page.getByTestId(testId);
+    await expect(value).toBeVisible();
+    const hit = await value.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        ?.closest("[data-testid]")?.getAttribute("data-testid") ?? null;
+    });
+    expect(hit, `${testId} must receive pointer events at its center`).toBe(testId);
+  }
+
+  const mean = page.getByTestId("canvas-param-gateway-processing.mean");
+  await mean.dblclick();
+  const input = mean.getByRole("textbox", { name: "Mean", exact: true });
+  await expect(input).toBeVisible();
+  await input.fill("invalid");
+  await expect(mean.locator(".inline-param-error")).toHaveCSS("color", "rgb(220, 38, 38)");
+});
+
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
   expect(response.ok()).toBe(true);

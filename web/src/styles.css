@@ -175,6 +175,10 @@ select {
   background: #fff;
 }
 
+.block-node--service {
+  width: 11rem;
+}
+
 .block-node--client {
   border-color: #0ea5e9;
 }
@@ -442,7 +446,7 @@ select {
   border-radius: 0.2rem;
 }
 
-.inline-param-error {
+.inline-param .inline-param-error {
   position: absolute;
   top: 100%;
   left: 0;
