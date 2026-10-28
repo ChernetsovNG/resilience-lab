@@ -223,7 +223,15 @@ class ModelCompiler(
         val requests = indexed.filter { it.value.type == "request" }
         requests.forEach { (index, connection) ->
             // A request has no parameters; reading them against the catalog reports any that are written.
-            reader("request", connection.params, document, JsonPointer.of("connections", index, "params"), connection.id, sink)
+            reader(
+                "request",
+                TypeCategory.CONNECTION,
+                connection.params,
+                document,
+                JsonPointer.of("connections", index, "params"),
+                connection.id,
+                sink,
+            )
         }
         val calls = indexed.filter { it.value.type == "call" }.sortedBy { it.value.id }
         val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, origins[connection.id], sink) }
@@ -301,7 +309,9 @@ class ModelCompiler(
         overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ClientNode? {
-        val reader = reader("client", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides) ?: return null
+        val reader =
+            reader("client", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+                ?: return null
         val rate = reader.quantity("rate")
         val deadline = reader.quantity("deadline")
         if (rate != null && !(1.0 / rate).isFinite()) {
@@ -318,7 +328,9 @@ class ModelCompiler(
         overrides: OverrideOrigins?,
         sink: Diagnostics,
     ): ServiceNode? {
-        val reader = reader("service", params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides) ?: return null
+        val reader =
+            reader("service", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+                ?: return null
         val handlers = reader.int("handlers")
         val queue = reader.int("queue")
         val processing = reader.obj("processing")?.let(::distribution)
@@ -338,7 +350,8 @@ class ModelCompiler(
         sink: Diagnostics,
     ): CallEdge? {
         val pointer = JsonPointer.of("connections", index, "params")
-        val reader = reader("call", connection.params, document, pointer, connection.id, sink, overrides) ?: return null
+        val reader =
+            reader("call", TypeCategory.CONNECTION, connection.params, document, pointer, connection.id, sink, overrides) ?: return null
         val network = reader.obj("network")?.let(::distribution)
         val timeout = reader.quantity("timeout")
         val attempts = reader.int("attempts")
@@ -394,6 +407,7 @@ class ModelCompiler(
 
     private fun reader(
         type: String,
+        category: TypeCategory,
         params: JsonObject,
         document: String,
         pointer: String,
@@ -401,7 +415,7 @@ class ModelCompiler(
         sink: Diagnostics,
         overrides: OverrideOrigins? = null,
     ): ParamReader? =
-        catalog.type(type)?.let {
+        catalog.type(type)?.takeIf { it.category == category }?.let {
             ParamReader(params, it.params, document, pointer, path, sink.items, overrides ?: OverrideOrigins.NONE)
         }
 

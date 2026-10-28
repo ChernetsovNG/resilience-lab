@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.catalog.Stage1Catalog
+import resiliencelab.core.catalog.TypeCategory
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.ExperimentFile
@@ -557,6 +558,79 @@ class ModelCompilerTest {
     @Test
     fun `an unused missing catalog descriptor does not reject a valid model`() {
         val catalog = Stage1Catalog.catalog.copy(types = Stage1Catalog.catalog.types.filterNot { it.id == "call" })
+        val base = model()
+        val singleService = base.copy(blocks = base.blocks - "dependency", connections = base.connections.take(1))
+        val baseExperiment = experiment()
+        val baseline = baseExperiment.copy(faults = emptyList(), variants = baseExperiment.variants.take(1))
+
+        val result = ModelCompiler(catalog).compile(singleService, "m.model.json", baseline, "e.experiment.json")
+
+        assertThat(result.diagnostics).isEmpty()
+        assertThat(result.experiment).isEqualTo(compile(singleService, baseline).experiment)
+    }
+
+    @Test
+    fun `wrong category client catalog descriptor returns diagnostics`() = assertWrongCatalogCategory("client")
+
+    @Test
+    fun `wrong category service catalog descriptor returns diagnostics`() = assertWrongCatalogCategory("service")
+
+    @Test
+    fun `wrong category request catalog descriptor skips parameter diagnostics`() = assertWrongCatalogCategory("request")
+
+    @Test
+    fun `wrong category call catalog descriptor returns diagnostics`() = assertWrongCatalogCategory("call")
+
+    private fun assertWrongCatalogCategory(type: String) {
+        val catalog =
+            Stage1Catalog.catalog.copy(
+                types =
+                    Stage1Catalog.catalog.types.map {
+                        if (it.id != type) {
+                            it
+                        } else {
+                            it.copy(
+                                category = if (it.category == TypeCategory.BLOCK) TypeCategory.CONNECTION else TypeCategory.BLOCK,
+                                params = emptyList(),
+                            )
+                        }
+                    },
+            )
+        val compiler = ModelCompiler(catalog)
+        val modelText =
+            if (type == "request") {
+                model.replace("\"to\": \"gateway\"}", "\"to\": \"gateway\", \"params\": {\"unexpected\": 0}}")
+            } else {
+                model
+            }
+        val result = compiler.compile(model(modelText), "m.model.json", experiment(), "e.experiment.json")
+
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics.map { it.code }).describedAs(type).contains("TYPE_UNKNOWN").doesNotContain("PARAM_UNKNOWN")
+
+        val (broken, pointer) =
+            if (type == "service") {
+                modelText.replace("\"rate\": \"120/s\"", "\"rate\": \"0/s\"") to "/blocks/client/params/rate"
+            } else {
+                modelText.replace("\"handlers\": 4", "\"handlers\": 0") to "/blocks/gateway/params/handlers"
+            }
+        val independent = compiler.compile(model(broken), "m.model.json", experiment(), "e.experiment.json")
+
+        assertThat(independent.experiment).isNull()
+        assertThat(independent.diagnostics.map { Triple(it.code, it.document, it.pointer) })
+            .describedAs(type)
+            .contains(Triple("PARAM_RANGE", "m.model.json", pointer))
+    }
+
+    @Test
+    fun `an unused wrong category descriptor does not reject a valid model`() {
+        val catalog =
+            Stage1Catalog.catalog.copy(
+                types =
+                    Stage1Catalog.catalog.types.map {
+                        if (it.id == "call") it.copy(category = TypeCategory.BLOCK, params = emptyList()) else it
+                    },
+            )
         val base = model()
         val singleService = base.copy(blocks = base.blocks - "dependency", connections = base.connections.take(1))
         val baseExperiment = experiment()

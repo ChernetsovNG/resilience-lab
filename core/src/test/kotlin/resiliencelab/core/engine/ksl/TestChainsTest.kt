@@ -24,10 +24,10 @@ class TestChainsTest {
 
     @Test
     fun `streams differ by replication and role`() {
-        val first = TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS).randU01()
+        val first = TestChains.stream(42L, "entry", StreamRole.PROCESSING).randU01()
 
-        assertThat(TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS).randU01()).isEqualTo(first)
-        assertThat(TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS, replication = 1).randU01()).isNotEqualTo(first)
+        assertThat(TestChains.stream(42L, "entry", StreamRole.PROCESSING).randU01()).isEqualTo(first)
+        assertThat(TestChains.stream(42L, "entry", StreamRole.PROCESSING, replication = 1).randU01()).isNotEqualTo(first)
         assertThat(TestChains.stream(42L, "entry", StreamRole.OUTCOME).randU01()).isNotEqualTo(first)
     }
 }
