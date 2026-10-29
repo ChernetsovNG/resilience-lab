@@ -59,7 +59,7 @@ async function open() {
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   return view;
 }
-function selectGateway() { fireEvent.click(screen.getByTestId("rf__node-gateway")); }
+async function selectGateway() { fireEvent.click(await screen.findByTestId("rf__node-gateway")); }
 function editHandlers(value: string) {
   fireEvent.change(screen.getByLabelText("Handlers"), { target: { value } });
   fireEvent.blur(screen.getByLabelText("Handlers"));
@@ -79,7 +79,7 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
   expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
   fireEvent.click(button("Collapse results"));
-  selectGateway(); editHandlers("5");
+  await selectGateway(); editHandlers("5");
   await waitFor(() => expect(checks).toBe(2));
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
@@ -97,7 +97,7 @@ it("reveals new errors but preserves dismissal through pending checks of the sam
   });
   render(<App />);
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
-  selectGateway();
+  await selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
   fireEvent.click(button("Collapse results"));
   editHandlers("5");
@@ -187,7 +187,7 @@ it("expires launch findings after document edits and reveals the same error in a
   await open();
   fireEvent.click(button("Run"));
   await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
-  selectGateway(); editHandlers("5");
+  await selectGateway(); editHandlers("5");
   await waitFor(() => expect(checks).toBe(2));
   expect(button("Errors: 0 · Warnings: 0")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).queryByRole("button", { name: /Handler error/ })).toBeNull();
@@ -211,7 +211,7 @@ it("reveals a resume refusal against the edited documents while the original run
   await open();
   fireEvent.click(button("Run"));
   await screen.findByRole("button", { name: "Resume" });
-  selectGateway(); editHandlers("5");
+  await selectGateway(); editHandlers("5");
   fireEvent.click(button("Save"));
   await waitFor(() => expect(button("Resume").disabled).toBe(false));
   fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
@@ -232,7 +232,7 @@ it("validates unsaved values, shows errors in every view and removes them after 
       { code: "PARAM_RANGE", severity: "ERROR", message: "At least one handler", document: modelPath, pointer: "/blocks/gateway/params/handlers", path: "gateway" },
     ] : [] } };
   });
-  await open(); selectGateway(); editHandlers("0");
+  await open(); await selectGateway(); editHandlers("0");
   await screen.findByRole("img", { name: "1 problems: error" });
   expect(within(screen.getByRole("complementary", { name: "Inspector" })).getByText(/At least one handler/).closest(".param-field")?.textContent).toContain("Handlers");
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
@@ -276,7 +276,7 @@ it("shows override diagnostics only at fields on their own variant page and bloc
   render(<App />);
   await screen.findByRole("heading", { name: "Run settings" });
   await waitFor(() => expect(button("Run").title).toContain("validation errors"));
-  selectGateway();
+  await selectGateway();
   const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
   expect(inspector.queryByText("PARAM_RANGE: Baseline mean error")).toBeNull();
   expect(inspector.queryByText("PARAM_RANGE: No retries mean error")).toBeNull();
@@ -301,7 +301,7 @@ it("opens shared settings diagnostics from Problems while an element is selected
   render(<App />);
   await screen.findByRole("heading", { name: "Run settings" });
   await waitFor(() => expect(button("Run").title).toContain("validation errors"));
-  selectGateway();
+  await selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   expect(screen.queryByLabelText("Seed")).toBeNull();
   fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Invalid shared seed/ }));
@@ -500,7 +500,7 @@ it("reads duration and probability units for shared fields from the catalog", as
 it("keeps navigation blocked while either the canvas or Inspector draft is invalid", async () => {
   server();
   await open();
-  selectGateway();
+  await selectGateway();
   const parameter = await screen.findByTestId("canvas-param-gateway-handlers");
   fireEvent.doubleClick(parameter);
   const canvasInput = parameter.querySelector("input")!;
@@ -522,7 +522,7 @@ it.each(["Handlers", "Seed"])("blocks target switches and variant menus while %s
   server();
   await open();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
-  if (field === "Handlers") selectGateway();
+  if (field === "Handlers") await selectGateway();
   editField(field, "invalid");
   expect(button("Experiment").disabled).toBe(true);
   expect(button("Add variant").disabled).toBe(true);
@@ -552,7 +552,7 @@ it("keeps variant identity when undo restores a different deleted variant before
   fireEvent.click(screen.getByRole("tab", { name: "Third" }));
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("tab", { name: "Third" }).getAttribute("aria-selected")).toBe("true");
-  selectGateway();
+  await selectGateway();
   editHandlers("7");
   fireEvent.click(button("Save"));
   await waitFor(() => expect(button("Save").disabled).toBe(true));
@@ -582,7 +582,7 @@ describe("App stage 1 integration", () => {
   it("preserves an invalid draft and blocks element, pane, variant, experiment, Save and Run navigation", async () => {
     const fetchMock = server();
     const { container } = await open();
-    selectGateway();
+    await selectGateway();
     editHandlers("oops");
     expect(screen.getByText(/Fix invalid values before changing/i)).toBeTruthy();
     expect(button("Save").disabled).toBe(true);
@@ -608,7 +608,7 @@ describe("App stage 1 integration", () => {
     server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
       body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id, label: "Variant page", overrides: {} }] } } },
     } : undefined);
-    await open(); selectGateway();
+    await open(); await selectGateway();
     fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "04" } });
     fireEvent.click(screen.getByRole("tab", { name: "Variant page" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
@@ -620,7 +620,7 @@ describe("App stage 1 integration", () => {
   it("requires confirmation to discard edits and clears Inspector selection after a document switch", async () => {
     const fetchMock = server();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await open(); selectGateway(); editHandlers("5");
+    await open(); await selectGateway(); editHandlers("5");
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the documents?");
     expect(experimentSelect().value).toBe(experimentPath);
@@ -631,8 +631,7 @@ describe("App stage 1 integration", () => {
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(experimentSelect().value).toBe(otherPath);
     expect(screen.queryByLabelText("Handlers")).toBeNull();
-    await screen.findByTestId("rf__node-gateway");
-    selectGateway();
+    await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
   });
 
@@ -643,7 +642,7 @@ describe("App stage 1 integration", () => {
       await gate.promise;
       return { body: { path: modelPath, kind: "MODEL", version: "saved" } };
     });
-    await open(); selectGateway(); editHandlers("5");
+    await open(); await selectGateway(); editHandlers("5");
     expect(button("Run").disabled).toBe(true);
     fireEvent.click(button("Save"));
     expect(experimentSelect().disabled).toBe(true);
@@ -666,13 +665,13 @@ describe("App stage 1 integration", () => {
         return { body: { ...documentViews[modelPath], version: "fresh", content: { model: { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 9 } } } } } } };
       }
     });
-    await open(); selectGateway(); editHandlers("5"); fireEvent.click(button("Save"));
+    await open(); await selectGateway(); editHandlers("5"); fireEvent.click(button("Save"));
     await screen.findByText(/The document changed on disk/);
     expect(button("Save").disabled).toBe(true);
     editHandlers("oops");
     fireEvent.click(button("Reload"));
     await screen.findByRole("heading", { name: "Run settings" });
-    selectGateway();
+    await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Save").disabled).toBe(true);
     await waitFor(() => expect(button("Run").disabled).toBe(false));
@@ -689,7 +688,7 @@ describe("App stage 1 integration", () => {
         return { body: { ...documentViews[modelPath], version: "fresh", content: { model: { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 9 } } } } } } };
       }
     });
-    await open(); selectGateway(); editHandlers("5");
+    await open(); await selectGateway(); editHandlers("5");
     await screen.findByText(/The document changed on disk/, undefined, { timeout: 3000 });
     expect(screen.getByText(modelPath)).toBeTruthy();
     expect(screen.getByText(/Reload will discard unsaved changes/)).toBeTruthy();
@@ -704,7 +703,7 @@ describe("App stage 1 integration", () => {
     confirm.mockReturnValue(true);
     fireEvent.click(button("Reload"));
     await screen.findByRole("heading", { name: "Run settings" });
-    selectGateway();
+    await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Undo").disabled).toBe(true);
     expect(button("Redo").disabled).toBe(true);
@@ -718,7 +717,7 @@ describe("App stage 1 integration", () => {
         return { body: { cursor: "test:1", reset: false, changes: [{ path: modelPath, kind: "MODEL", version: null }] } };
       }
     });
-    await open(); selectGateway(); editHandlers("5");
+    await open(); await selectGateway(); editHandlers("5");
 
     await screen.findByText(/The document was deleted on disk/, undefined, { timeout: 3000 });
     expect(screen.getByText(modelPath)).toBeTruthy();
@@ -744,7 +743,7 @@ describe("App stage 1 integration", () => {
     fireEvent.click(button("Reload"));
     await screen.findByRole("heading", { name: "Run settings" });
     expect(confirm).not.toHaveBeenCalled();
-    selectGateway();
+    await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
   });
 
@@ -775,7 +774,7 @@ it("keeps navigation available until invalid stored variant data is edited", asy
   server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
     body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "invalid", label: "Invalid variant", overrides: { "gateway.handlers": 0 } }] } } },
   } : undefined);
-  await open(); selectGateway();
+  await open(); await selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Invalid variant" }));
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("0");
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(false);
@@ -794,7 +793,7 @@ it("exposes undo and redo buttons without putting selection or variant navigatio
   await open();
   expect(button("Undo").disabled).toBe(true);
   expect(button("Redo").disabled).toBe(true);
-  selectGateway(); editHandlers("5");
+  await selectGateway(); editHandlers("5");
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.click(button("Undo"));
   expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
@@ -807,7 +806,7 @@ it("exposes undo and redo buttons without putting selection or variant navigatio
 
 it("supports Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y outside form fields", async () => {
   server();
-  await open(); selectGateway(); editHandlers("5");
+  await open(); await selectGateway(); editHandlers("5");
   const handlers = () => (screen.getByLabelText("Handlers") as HTMLInputElement).value;
   fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
   expect(handlers()).toBe("4");
@@ -824,7 +823,7 @@ it("supports Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl+Y outside form fields", async
 
 it("leaves field undo native and prevents history actions from discarding invalid drafts", async () => {
   server();
-  await open(); selectGateway(); editHandlers("5");
+  await open(); await selectGateway(); editHandlers("5");
   const input = screen.getByLabelText("Handlers") as HTMLInputElement;
   const nativeUndo = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true });
   fireEvent(input, nativeUndo);
@@ -895,7 +894,7 @@ it("deletes a selection with its edges and overrides in one undo step, leaving f
 it("copies multi-selected blocks and internal connections; variant pages reject structural shortcuts", async () => {
   server();
   await open();
-  selectGateway();
+  await selectGateway();
   fireEvent.click(screen.getByTestId("rf__node-middle"), { ctrlKey: true });
   fireEvent.keyDown(document.body, { key: "c", metaKey: true });
   fireEvent.keyDown(document.body, { key: "v", metaKey: true });
@@ -934,7 +933,7 @@ it("creates an empty-parameter block by dropping a catalog type and undoes model
 
 it("persists a keyboard move as a layout command and restores it with undo", async () => {
   server();
-  await open(); selectGateway();
+  await open(); await selectGateway();
   const node = screen.getByTestId("rf__node-gateway");
   fireEvent.keyDown(node, { key: "ArrowRight", code: "ArrowRight" });
   expect(node.style.transform).toBe("translate(280px,100px)");
@@ -947,7 +946,7 @@ it("persists a keyboard move as a layout command and restores it with undo", asy
 
 it("targets the pasted fragment with subsequent arrow and delete actions", async () => {
   server();
-  await open(); selectGateway();
+  await open(); await selectGateway();
   fireEvent.click(screen.getByTestId("rf__node-middle"), { ctrlKey: true });
   fireEvent.keyDown(document.body, { key: "c", ctrlKey: true });
   fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
@@ -971,7 +970,7 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   fireEvent.click(button("Run"));
   await screen.findByRole("table", { name: "Answer" });
   if (kind === "model") {
-    selectGateway();
+    await selectGateway();
     editHandlers("5");
   } else {
     editField("Seed", "43");
@@ -1086,7 +1085,7 @@ it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving
 describe("cost estimate and resume", () => {
   it("estimates unsaved model and experiment drafts without saving or starting a job", async () => {
     const fetchMock = server();
-    await open(); selectGateway(); editHandlers("5");
+    await open(); await selectGateway(); editHandlers("5");
     fireEvent.click(button("Experiment"));
     editField("Seed", "42");
     fireEvent.click(button("Estimate"));
@@ -1106,7 +1105,7 @@ describe("cost estimate and resume", () => {
     expect(body.drafts.find((draft: { path: string }) => draft.path === modelPath).content.model.blocks.gateway.params.handlers).toBe(5);
     expect(body.drafts.find((draft: { path: string }) => draft.path === experimentPath).content.experiment.execution.seed).toBe(42);
     expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
-    selectGateway(); editHandlers("6");
+    await selectGateway(); editHandlers("6");
     expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
   });
 
@@ -1192,7 +1191,7 @@ describe("cost estimate and resume", () => {
       await gate.promise;
       return rejected ? { status: 400, body: { code: "OLD_ESTIMATE", message: "Old estimate error", diagnostics: [] } } : { body: costEstimate };
     });
-    await open(); selectGateway(); fireEvent.click(button("Run"));
+    await open(); await selectGateway(); fireEvent.click(button("Run"));
     expect(button("Run").disabled).toBe(true);
     editHandlers("5");
     await act(async () => { gate.release(); });
@@ -1261,7 +1260,7 @@ it("invalidates a pending Run estimate when a field becomes unparsable, then all
     if (++estimates === 1) await gate.promise;
     return { body: costEstimate };
   });
-  await open(); selectGateway();
+  await open(); await selectGateway();
   fireEvent.click(button("Run"));
   editHandlers("oops");
   expect(button("Run").disabled).toBe(true);
@@ -1341,7 +1340,7 @@ describe("diagram results", () => {
     expect(button("Undo").disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "utilization" } });
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
-    selectGateway();
+    await selectGateway();
     editHandlers("6");
     expect(within(region).getByText("Results belong to a previous document version.")).toBeTruthy();
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
@@ -1447,7 +1446,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
   fireEvent.change(within(row).getByLabelText("Replication"), { target: { value: "1" } });
   await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("80%"));
-  selectGateway();
+  await selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
   const timeline = await screen.findByTestId("timeline-cursor");
   expect(timeline.textContent).toContain("replication 1");
@@ -1596,7 +1595,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
   await screen.findByTestId("canvas-results-gateway");
   expect(color("gateway")).toBe(halfFull);
-  selectGateway();
+  await selectGateway();
   editField("Queue capacity", "128");
   expect(color("gateway")).toBe(halfFull);
   fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p2" } });
@@ -1667,7 +1666,7 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   await open();
   fireEvent.click(button("Run"));
   await screen.findByRole("table", { name: "Answer" });
-  selectGateway();
+  await selectGateway();
   fireEvent.keyDown(window, { key: "c", ctrlKey: true });
   fireEvent.keyDown(window, { key: "Delete" });
   expect(screen.queryByTestId("rf__node-gateway")).toBeNull();
@@ -1751,7 +1750,7 @@ describe("palette insertion", () => {
     fireEvent.click(button("Service"));
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
-    selectGateway();
+    await selectGateway();
     editHandlers("invalid");
     expect(button("Service").disabled).toBe(true);
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
@@ -1793,7 +1792,7 @@ it("cancels a measured palette insertion when switching experiments before its c
 
 it("shows only the current Inspector target and keeps target navigation out of history", async () => {
   server(); await open();
-  selectGateway();
+  await selectGateway();
   expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
   expect(screen.queryByLabelText("Variant ID")).toBeNull();
   fireEvent.click(screen.getByTestId("rf__edge-gateway-to-middle"));
@@ -1804,14 +1803,14 @@ it("shows only the current Inspector target and keeps target navigation out of h
   expect(screen.getByLabelText("Variant ID")).toBeTruthy();
   expect(screen.queryByLabelText("Timeout")).toBeNull();
   expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
-  selectGateway();
+  await selectGateway();
   fireEvent.click(document.querySelector(".react-flow__pane")!);
   expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
   expect(screen.queryByLabelText("Handlers")).toBeNull();
-  selectGateway(); fireEvent.click(button("Experiment"));
+  await selectGateway(); fireEvent.click(button("Experiment"));
   expect(screen.getByLabelText("Replications")).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
-  selectGateway();
+  await selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect(screen.getByLabelText("Replications")).toBeTruthy();
   expect(button("Undo").disabled).toBe(true);
@@ -1819,7 +1818,7 @@ it("shows only the current Inspector target and keeps target navigation out of h
 });
 
 it("follows a selected element through rename, undo and redo, then forgets a deleted target", async () => {
-  server(); await open(); selectGateway();
+  server(); await open(); await selectGateway();
   editField("Identifier", "entry");
   expect(screen.getByRole("heading", { name: "entry" })).toBeTruthy();
   fireEvent.click(button("Undo"));
@@ -1878,7 +1877,7 @@ it("opens and focuses the variant field named by a Problem", async () => {
     { code: "VARIANT_ID", severity: "ERROR", message: "Invalid variant identifier", document: experimentPath,
       pointer: "/variants/1/id", path: null },
   ] } } : undefined);
-  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); selectGateway();
+  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); await selectGateway();
   fireEvent.click(await screen.findByRole("button", { name: /Invalid variant identifier/ }));
   expect(document.activeElement).toBe(screen.getByLabelText("Variant ID"));
   expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("no-retries");
@@ -1896,7 +1895,7 @@ it("selects an Answer service in the Inspector", async () => {
 
 
 it("keeps menu keystrokes from deleting the selected diagram element", async () => {
-  server(); await open(); selectGateway();
+  server(); await open(); await selectGateway();
   fireEvent.contextMenu(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.keyDown(screen.getByRole("menu"), { key: "Delete" });
   expect(screen.getByTestId("rf__node-gateway")).toBeTruthy();
@@ -1909,7 +1908,7 @@ it("falls back to the experiment when the last multi-selected target disappears 
   fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
   await screen.findByRole("heading", { name: "service-1" });
   fireEvent.click(screen.getByTestId("rf__node-gateway"), { ctrlKey: true });
-  const added = screen.getByTestId("rf__node-service-1");
+  const added = await screen.findByTestId("rf__node-service-1");
   fireEvent.click(added, { ctrlKey: true });
   fireEvent.click(added, { ctrlKey: true });
   expect(screen.getByRole("heading", { name: "service-1" })).toBeTruthy();
@@ -1933,7 +1932,7 @@ it("focuses Add value when a grid diagnostic names an empty value list", async (
       pointer: "/grid/0/values", path: "gateway-to-middle",
     }] } };
   });
-  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); selectGateway();
+  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); await selectGateway();
   fireEvent.click(await screen.findByRole("button", { name: /Axis values must not be empty/ }));
   expect(document.activeElement).toBe(screen.getByRole("button", { name: /Add value/ }));
 });
