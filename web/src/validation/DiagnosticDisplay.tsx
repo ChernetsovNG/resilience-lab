@@ -23,3 +23,40 @@ export function DiagnosticMessages({ diagnostics = [], id }: { diagnostics?: rea
     </li>)}
   </ul>;
 }
+
+
+/** Model-page summary of findings that belong to variant pages. */
+export function VariantDiagnosticBadge({ diagnostics = [], onOpen, disabled = false }: {
+  diagnostics?: readonly Diagnostic[]; onOpen?: () => void; disabled?: boolean;
+}) {
+  const summary = summarizeDiagnostics(diagnostics);
+  if (summary === null) return null;
+  const variants = [...new Set(diagnostics.flatMap(item => item.variant == null ? [] : [item.variant]))];
+  const label = t(`editor.diagnostics.variants.${summary.severity}`, { variants: variants.join(", ") });
+  return <button type="button" className={`diagnostic-badge diagnostic-badge--variants diagnostic--${summary.severity.toLowerCase()} nodrag nopan nokey`}
+    title={label} aria-label={label} disabled={disabled} onClick={event => { event.stopPropagation(); onOpen?.(); }}>
+    {t("editor.diagnostics.badge", { symbol: summary.severity === "ERROR" ? t("editor.symbols.error") : t("editor.symbols.warning"), count: formatNumber(summary.count) })}
+  </button>;
+}
+
+/** Short per-variant counts; full messages stay on the variant page. */
+export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = false }: {
+  diagnostics?: readonly Diagnostic[]; onSelect?: (variant: string) => void; disabled?: boolean;
+}) {
+  const variants = new Map<string, Diagnostic[]>();
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.variant != null) variants.set(diagnostic.variant, [...(variants.get(diagnostic.variant) ?? []), diagnostic]);
+  }
+  return <>{[...variants].map(([variant, findings]) => {
+    const counts = (["ERROR", "WARNING"] as const).flatMap(severity => {
+      const count = findings.filter(finding => finding.severity === severity).length;
+      return count === 0 ? [] : [t(`editor.diagnostics.variantCount.${severity}.${count === 1 ? "one" : "other"}`, { count: formatNumber(count) })];
+    });
+    return <p key={variant} className="variant-diagnostic-hint">
+      <a href={`#variant-${encodeURIComponent(variant)}`} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined}
+        onClick={event => { event.preventDefault(); if (!disabled) onSelect?.(variant); }}>
+        {t("editor.diagnostics.inVariants", { variant, counts: counts.join(", ") })}
+      </a>
+    </p>;
+  })}</>;
+}

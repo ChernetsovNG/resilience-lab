@@ -54,6 +54,7 @@ export function App() {
   const [resultsView, setResultsView] = useState<ResultsPanelView>("answer");
   const [analysis, setAnalysis] = useState(false);
   const [problemsRequest, setProblemsRequest] = useState(0);
+  const [problemsElement, setProblemsElement] = useState<string | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
   const [observedErrors, setObservedErrors] = useState<{ path: string | null; validation: string; run: string }>({ path: null, validation: "[]", run: "[]" });
@@ -150,15 +151,27 @@ export function App() {
       JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key));
     setObservedErrors({ path, validation: validationErrors, run: runErrors });
     if (hasNewError) {
+      setProblemsElement(null);
       setProblemsRequest((current) => current + 1);
       if (resultsSize === "collapsed") setResultsSize("normal");
     }
   }
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
+  const variantElementDiagnostics = new Map<string, Diagnostic[]>();
+  const variantFieldDiagnostics = new Map<string, Diagnostic[]>();
   for (const diagnostic of diagnostics) {
     if (loaded === null) break;
     const target = diagnosticTarget(diagnostic, loaded);
+    if (variantId === null && target.variant !== null) {
+      const finding = { ...diagnostic, variant: target.variant };
+      if (target.element !== null) {
+        variantElementDiagnostics.set(target.element, [...(variantElementDiagnostics.get(target.element) ?? []), finding]);
+      }
+      if (target.element === selected && target.field !== null) {
+        variantFieldDiagnostics.set(target.field, [...(variantFieldDiagnostics.get(target.field) ?? []), finding]);
+      }
+    }
     const variantMatches = target.variant === null || target.variant === variant?.id;
     if (!target.field?.startsWith("grid") && !variantMatches) continue;
     if (variantMatches && target.element !== null) {
@@ -255,6 +268,7 @@ export function App() {
           if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           setEstimatePanel(null);
+          setProblemsElement(null);
           setAnalysis(false);
           setSelection([]);
           setInspectorTarget("experiment");
@@ -359,6 +373,12 @@ export function App() {
             onParam={workspace.setParam}
             onValidity={onValidity}
             fieldDiagnostics={fieldDiagnostics}
+            variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined}
+            onVariantDiagnostic={(id, path) => {
+              if (invalid || loading) return;
+              selectVariant(id);
+              setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1 }));
+            }}
           />
         )}>
       <Palette hidden={analysis} catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
@@ -423,6 +443,12 @@ export function App() {
               catalog={catalog}
               selected={selection}
               elementDiagnostics={elementDiagnostics}
+              variantElementDiagnostics={variantElementDiagnostics}
+              onProblems={id => {
+                if (invalid || loading) return;
+                setSelection([id]); setInspectorTarget("element"); setFieldFocus(null);
+                setProblemsElement(id); setProblemsRequest(current => current + 1); setResultsSize("normal");
+              }}
               onZoomChange={setCanvasZoom}
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
@@ -489,6 +515,8 @@ export function App() {
         diagnostics={allDiagnostics}
         diagnosticDocuments={loaded}
         problemsRequest={problemsRequest}
+        problemsElement={problemsElement}
+        onClearProblemsElement={() => setProblemsElement(null)}
         timelineRequest={timelineRequest}
         validationPending={validation.pending}
         validationProblem={validation.problem}
@@ -516,6 +544,7 @@ export function App() {
         diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
         cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}
         onProblems={() => {
+          setProblemsElement(null);
           setProblemsRequest((current) => current + 1);
           if (resultsSize === "collapsed") setResultsSize("normal");
         }} />

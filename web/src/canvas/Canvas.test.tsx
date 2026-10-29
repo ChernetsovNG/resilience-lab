@@ -313,3 +313,16 @@ it("changes connection overlay labels without borrowing target node values", asy
   view.rerender(<Canvas {...props} connectionMetric="meanOrphaned" />);
   expect(badge.textContent).toContain("Orphaned work 0.5");
 });
+
+
+it("does not move selected nodes when arrow keys are used on a variant diagnostic badge", async () => {
+  const onCommand = vi.fn();
+  const warning = { code: "LINT", severity: "WARNING" as const, message: "Budget", variant: "baseline" };
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()}
+    editable onCommand={onCommand} variantElementDiagnostics={new Map([["gateway", [warning]]])} />);
+  const badge = await screen.findByRole("button", { name: "Warnings in variants: baseline" });
+  badge.focus();
+  fireEvent.keyDown(badge, { key: "ArrowRight" });
+  expect(onCommand).not.toHaveBeenCalled();
+  expect(screen.getByTestId("rf__node-gateway").style.transform).toBe("translate(260px,100px)");
+});

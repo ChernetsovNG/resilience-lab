@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
-import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
+import { DiagnosticMessages, VariantDiagnosticLinks } from "../validation/DiagnosticDisplay";
 import { isObject } from "../workspace/params";
 import { parseParam } from "../workspace/paramParsing";
 
@@ -23,6 +23,9 @@ export interface ParamFieldProps {
    * committed document values; only unparseable text needs the loss-prevention guard. */
   onValidity: (path: string, valid: boolean) => void;
   fieldDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  variantFieldDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  onVariantDiagnostic?: (variant: string, field: string) => void;
+  navigationDisabled?: boolean;
 }
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
@@ -30,7 +33,7 @@ export function ParamField(props: ParamFieldProps) {
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
 
-function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics }: ParamFieldProps) {
+function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
   const [resetCount, setResetCount] = useState(0);
@@ -40,6 +43,8 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
       <legend title={descriptor.description}>{descriptor.title}</legend>
       {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
+      <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
+        onSelect={variant => onVariantDiagnostic?.(variant, path)} />
       {isOverridden(path) && onReset !== undefined ? (
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
@@ -56,6 +61,9 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
           onReset={onReset}
           onValidity={onValidity}
           fieldDiagnostics={fieldDiagnostics}
+          variantFieldDiagnostics={variantFieldDiagnostics}
+          onVariantDiagnostic={onVariantDiagnostic}
+          navigationDisabled={navigationDisabled}
           onCommit={(next) => {
             const updated = { ...current };
             if (next === undefined) delete updated[field.name];
@@ -68,7 +76,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
   );
 }
 
-function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics }: ParamFieldProps) {
+function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const shown = value == null ? "" : String(value);
   const [draft, setDraft] = useState(shown);
@@ -154,6 +162,8 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
       {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />
+      <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
+        onSelect={variant => onVariantDiagnostic?.(variant, path)} />
       {overridden && onReset !== undefined ? (
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setDraft(shown); onReset(path); }}>{t("editor.param.useModelValue")}</button>

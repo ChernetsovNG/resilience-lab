@@ -1964,3 +1964,106 @@ it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the re
   expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
   expect(screen.getByLabelText(action === "Variant" || action === "Rename" ? "Variant label" : "Seed")).toBeTruthy();
 });
+
+
+it("shows variant warnings on Model, filters Problems by badge and links fields to their variant", async () => {
+  const warning = { code: "LINT_TIMEOUT_BUDGET", severity: "WARNING", message: "Baseline timeout budget",
+    document: modelPath, pointer: "/connections/1/params/timeout", path: "gateway-to-middle", variant: "baseline" };
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [
+    warning,
+    { ...warning, message: "No retries timeout budget", document: experimentPath,
+      pointer: "/variants/1/overrides/gateway-to-middle.timeout", variant: undefined },
+    { ...warning, message: "Baseline backoff budget", pointer: "/connections/1/params/backoff/base" },
+    { ...warning, code: "LINT_DEADLINE_BUDGET", message: "Client deadline budget", pointer: "/blocks/client/params/deadline", path: "client" },
+    { ...warning, message: "Model handler warning", pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: null },
+  ] } } : undefined);
+  await open();
+  const client = within(screen.getByTestId("rf__node-client"));
+  expect(client.getByRole("button", { name: "Warnings in variants: baseline" }).classList.contains("diagnostic-badge--variants")).toBe(true);
+  const edge = within(screen.getByTestId("canvas-edge-label-gateway-to-middle"));
+  const badge = edge.getByRole("button", { name: "Warnings in variants: baseline, no-retries" });
+  expect(badge.title).toBe("Warnings in variants: baseline, no-retries");
+  expect(badge.textContent).toContain("3");
+  expect(within(screen.getByTestId("rf__node-gateway")).getByRole("img", { name: "1 problems: warning" })
+    .classList.contains("diagnostic-badge--variants")).toBe(false);
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(badge);
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+  const problems = within(screen.getByRole("tabpanel"));
+  expect(problems.getAllByRole("listitem")).toHaveLength(3);
+  expect(problems.queryByText("Client deadline budget")).toBeNull();
+  const timeout = screen.getByLabelText("Timeout").closest(".param-field")!;
+  const links = within(timeout as HTMLElement);
+  expect(links.queryByText("LINT_TIMEOUT_BUDGET: Baseline timeout budget")).toBeNull();
+  const link = links.getByRole("link", { name: "In variants: baseline — 1 warning" });
+  expect(link.getAttribute("href")).toBe("#variant-baseline");
+  expect(links.getByRole("link", { name: "In variants: no-retries — 1 warning" })).toBeTruthy();
+  expect(within(screen.getByLabelText("Base delay").closest(".param-field") as HTMLElement)
+    .getByRole("link", { name: "In variants: baseline — 1 warning" })).toBeTruthy();
+  fireEvent.click(link);
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(screen.getByLabelText("Timeout"));
+  const inspector = within(screen.getByRole("complementary", { name: "Inspector" }));
+  expect(inspector.getByText("LINT_TIMEOUT_BUDGET: Baseline timeout budget")).toBeTruthy();
+  expect(inspector.queryByText("LINT_TIMEOUT_BUDGET: No retries timeout budget")).toBeNull();
+  expect(edge.getByRole("img", { name: "2 problems: warning" }).classList.contains("diagnostic-badge--variants")).toBe(false);
+  expect(edge.queryByRole("button", { name: /in variants/ })).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  expect(edge.getByRole("img", { name: "1 problems: warning" })).toBeTruthy();
+  fireEvent.click(button("Errors: 0 · Warnings: 5"));
+  expect(within(screen.getByRole("tabpanel")).getAllByRole("button")).toHaveLength(5);
+});
+
+it("keeps model diagnostics ordinary beside muted variant errors and counts severities accurately", async () => {
+  const error = { code: "PARAM_RANGE", severity: "ERROR", message: "Baseline handler error", document: modelPath,
+    pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" };
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
+    error, { ...error, severity: "WARNING", message: "Baseline handler warning" },
+    { ...error, message: "No retries handler error", variant: "no-retries" },
+    { ...error, message: "Model handler error", variant: null },
+  ] } } : undefined);
+  render(<App />);
+  const node = within(await screen.findByTestId("rf__node-gateway"));
+  const badge = await node.findByRole("button", { name: "Errors in variants: baseline, no-retries" });
+  expect(badge.classList.contains("diagnostic--error")).toBe(true);
+  expect(badge.classList.contains("diagnostic-badge--variants")).toBe(true);
+  expect(node.getByRole("img", { name: "1 problems: error" }).classList.contains("diagnostic-badge--variants")).toBe(false);
+  await selectGateway();
+  const handlers = within(screen.getByLabelText("Handlers").closest(".param-field") as HTMLElement);
+  expect(handlers.getByText("PARAM_RANGE: Model handler error")).toBeTruthy();
+  expect(handlers.getByRole("link", { name: "In variants: baseline — 1 error, 1 warning" })).toBeTruthy();
+  expect(handlers.getByRole("link", { name: "In variants: no-retries — 1 error" })).toBeTruthy();
+  expect(button("Run").disabled).toBe(true);
+});
+
+it("does not navigate away from an invalid draft through variant diagnostic links or badges", async () => {
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [
+    { code: "LINT", severity: "WARNING", message: "Variant warning", document: modelPath,
+      pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" },
+  ] } } : undefined);
+  await open(); await selectGateway();
+  const handlers = screen.getByLabelText("Handlers") as HTMLInputElement;
+  fireEvent.change(handlers, { target: { value: "unparseable" } });
+  fireEvent.click(screen.getByRole("link", { name: "In variants: baseline — 1 warning" }));
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  expect(handlers.value).toBe("unparseable");
+  expect((within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: baseline" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+
+it("reveals a new error outside the element filter opened by a variant badge", async () => {
+  const warning = { code: "LINT", severity: "WARNING", message: "Gateway budget", document: modelPath,
+    pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" };
+  let findings = [warning];
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath,
+    valid: !findings.some(finding => finding.severity === "ERROR"), diagnostics: findings } } : undefined);
+  await open();
+  fireEvent.click(within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: baseline" }));
+  expect(within(screen.getByRole("tabpanel")).getByText("Problems for gateway")).toBeTruthy();
+  findings = [warning, { ...warning, code: "PARAM_RANGE", severity: "ERROR", message: "Dependency handler error",
+    pointer: "/blocks/dependency/params/handlers", path: "dependency", variant: "baseline" }];
+  editHandlers("5");
+  await waitFor(() => expect(within(screen.getByRole("tabpanel")).getByText("Dependency handler error")).toBeTruthy());
+  expect(within(screen.getByRole("tabpanel")).getAllByRole("listitem")).toHaveLength(2);
+});

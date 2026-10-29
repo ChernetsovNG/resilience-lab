@@ -56,6 +56,7 @@ export function VariantTabs({ variants, active, disabled = false, onSelect, onIn
         {variants.map((variant) => (
           <button
             key={variant.id}
+            id={`variant-${encodeURIComponent(variant.id)}`}
             type="button"
             role="tab"
             disabled={disabled}

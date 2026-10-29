@@ -41,8 +41,10 @@ export interface ResultsPanelProps {
   onElement?: (id: string) => void;
   onDiagnostic?: (diagnostic: Diagnostic) => void;
   diagnosticDocuments?: Pick<LoadedExperiment, "model" | "modelPath" | "experiment" | "experimentPath"> | null;
-  /** Incremented by the status bar or a newly received error; ordinary rerenders preserve the selected tab. */
+  /** Incremented by the status bar, a variant badge or a newly received error; ordinary rerenders preserve the selected tab. */
   problemsRequest?: number;
+  problemsElement?: string | null;
+  onClearProblemsElement?: () => void;
   timelineRequest?: number;
 }
 
@@ -51,7 +53,7 @@ export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange, onViewChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, cursorWindow = null, onCursorChange,
-  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, onElement, diagnosticDocuments = null, problemsRequest = 0, timelineRequest = 0,
+  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, onElement, diagnosticDocuments = null, problemsRequest = 0, problemsElement = null, onClearProblemsElement, timelineRequest = 0,
 }: ResultsPanelProps) {
   const [navigation, setNavigation] = useState({ view: "answer" as ResultsPanelView, running, changedDuringRun: false, completedJob: null as string | null, problemsRequest, timelineRequest: 0 });
   const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
@@ -83,6 +85,8 @@ export function ResultsPanel({
   });
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
+  const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
+    (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   return (
     <section id="results-panel" className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
@@ -104,7 +108,7 @@ export function ResultsPanel({
           {t("results.map.title")}
         </button> : null}
         <button id={`${id}-problems`} type="button" role="tab" aria-label={t("results.problems.title")} aria-selected={active === "problems"}
-          aria-controls={`${id}-panel`} onClick={() => selectView("problems")}>
+          aria-controls={`${id}-panel`} onClick={() => { onClearProblemsElement?.(); selectView("problems"); }}>
           {t("results.problems.count", { count: formatNumber(diagnostics.length) })}
         </button>
         <span className="results-size-actions">
@@ -118,8 +122,12 @@ export function ResultsPanel({
         {active === "problems" ? <>
           {validationPending ? <p role="status">{t("results.problems.validating")}</p> : null}
           {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} />}
+          {problemsElement === null ? null : <p className="problems-filter">
+            {t("results.problems.elementFilter", { element: problemsElement })}
+            <button type="button" onClick={onClearProblemsElement}>{t("results.problems.showAll")}</button>
+          </p>}
           <ul className="validation-problems">
-            {[...diagnostics].sort((left, right) => Number(right.severity === "ERROR") - Number(left.severity === "ERROR"))
+            {[...visibleDiagnostics].sort((left, right) => Number(right.severity === "ERROR") - Number(left.severity === "ERROR"))
               .map((diagnostic, index) => {
                 const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(diagnostic, diagnosticDocuments);
                 return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
@@ -139,7 +147,7 @@ export function ResultsPanel({
                 </li>;
               })}
           </ul>
-          {!validationPending && validationProblem === null && diagnostics.length === 0 ? <p>{t("results.problems.none")}</p> : null}
+          {!validationPending && validationProblem === null && visibleDiagnostics.length === 0 ? <p>{t("results.problems.none")}</p> : null}
         </> : active === "timeline" ? <>
           {staleNotice}
           {summary === null || manifest === null || model === null || experiment === null || catalog === null || runId === null ?
