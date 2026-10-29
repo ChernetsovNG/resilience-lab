@@ -3,7 +3,7 @@ import { formatNumber, formatPercent } from "../i18n/format";
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
-import { utilizationColor, type ServiceCanvasResults } from "../results/canvasResults";
+import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } from "../results/canvasResults";
 import { DiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { InlineParamEditor } from "./InlineParamEditor";
 
@@ -18,6 +18,8 @@ export type BlockNodeType = Node<{
   overridden?: boolean;
   diagnostics?: readonly Diagnostic[];
   result?: ServiceCanvasResults;
+  nodeMetric?: NodeOverlayMetric;
+  nodeMetricMaximum?: number;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "block">;
@@ -30,12 +32,13 @@ function summaryOf(block: BlockInstance): string {
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
+  const colorValue = data.result?.[data.nodeMetric ?? "utilization"];
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   return (
     <div className={`block-node block-node--${data.block.type}`} data-testid="block-node"
-      style={data.result?.utilization == null ? undefined : { backgroundColor: utilizationColor(data.result.utilization) }}>
+      style={colorValue == null ? undefined : { backgroundColor: utilizationColor(colorValue / (data.nodeMetricMaximum ?? 1)) }}>
       {data.ports.map((port) => (
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />

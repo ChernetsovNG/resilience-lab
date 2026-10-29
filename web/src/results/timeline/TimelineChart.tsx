@@ -84,8 +84,7 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
           const next = event.key === "Home" ? 0 : event.key === "End" ? lastWindow
             : event.key === "ArrowRight" ? Math.min(lastWindow, current + 1)
               : event.key === "ArrowLeft" ? Math.max(0, current - 1) : null;
-          if (event.key === "Escape") { event.preventDefault(); onCursor(null); }
-          else if (next !== null) { event.preventDefault(); onCursor(next); }
+          if (next !== null) { event.preventDefault(); onCursor(next); }
         }} />
     </div>
     <p className="timeline-axis">{t("results.timeline.timeAxis")}</p>

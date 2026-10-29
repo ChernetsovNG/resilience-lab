@@ -29,7 +29,6 @@ export interface ResultsPanelProps {
   experiment?: ExperimentFile | null;
   selectedNodes?: readonly string[];
   replication?: number;
-  onReplicationChange?: (replication: number) => void;
   cursorWindow?: number | null;
   onCursorChange?: (window: number | null) => void;
   size?: ResultsPanelSize;
@@ -47,7 +46,7 @@ export interface ResultsPanelProps {
 export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
-  runId = null, experiment = null, selectedNodes = [], replication = 0, onReplicationChange, cursorWindow = null, onCursorChange,
+  runId = null, experiment = null, selectedNodes = [], replication = 0, cursorWindow = null, onCursorChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, diagnosticDocuments = null, problemsRequest = 0,
 }: ResultsPanelProps) {
   const [navigation, setNavigation] = useState({ view: "answer", running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
@@ -78,12 +77,6 @@ export function ResultsPanel({
   });
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
-  const pointIds = new Set<string>();
-  const points = (summary?.variants.flatMap(variant => variant.points) ?? []).filter(point => {
-    if (pointIds.has(point.id)) return false;
-    pointIds.add(point.id);
-    return true;
-  });
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   return (
     <section className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
@@ -117,17 +110,6 @@ export function ResultsPanel({
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
         {problem === null ? null : <ProblemList problem={{ ...problem, diagnostics: [] }} />}
-        {(active === "answer" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
-          <label htmlFor={`${id}-point`}>{t("results.gridPoint")}</label>
-          <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
-            {points.map((point) => <option key={point.id} value={point.id}>
-              {Object.entries(point.coordinates).length === 0 ? point.id : t("results.gridPointCoordinates", {
-                point: point.id, coordinates: Object.entries(point.coordinates).map(([path, value]) =>
-                  t("results.coordinate", { path, value: typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value) })).join(t("results.coordinateSeparator")),
-              })}
-            </option>)}
-          </select>
-        </div> : null}
         {active === "problems" ? <>
           {validationPending ? <p role="status">{t("results.problems.validating")}</p> : null}
           {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} />}
@@ -182,7 +164,7 @@ export function ResultsPanel({
             <Suspense fallback={<p role="status">{t("results.timeline.loading")}</p>}><Timeline runId={runId} summary={summary} manifest={manifest} model={model} experiment={experiment} catalog={catalog}
               enabled={active === "timeline" && size !== "collapsed"} activeVariantId={activeVariantId} pointId={selectedPointId}
               replication={replication} cursorWindow={cursorWindow} selectedNodes={selectedNodes}
-              onReplicationChange={onReplicationChange} onCursorChange={onCursorChange} /></Suspense>
+              onCursorChange={onCursorChange} /></Suspense>
           </div> : null}
       </div>
     </section>

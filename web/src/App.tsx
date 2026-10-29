@@ -1,12 +1,12 @@
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
-import { canvasResults, utilizationColor } from "./results/canvasResults";
-import { PlaybackControls } from "./results/playback/PlaybackControls";
+import { canvasResults, type NodeOverlayMetric } from "./results/canvasResults";
+import { ResultsContextBar } from "./results/ResultsContextBar";
+import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "./i18n";
-import { formatDuration, formatNumber, formatPercent } from "./i18n/format";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
@@ -41,7 +41,8 @@ export function App() {
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.job?.id ?? null);
-  const [showDiagramResults, setShowDiagramResults] = useState(true);
+  const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
+  const showDiagramResults = nodeMetric !== "off";
   const [showEstimate, setShowEstimate] = useState(false);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [problemsRequest, setProblemsRequest] = useState(0);
@@ -90,7 +91,9 @@ export function App() {
     windowCount, nodes: ownRun && run.documents !== null ? Object.keys(run.documents.model.blocks) : [],
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
-  const diagramResults = playback.frame ?? summaryDiagramResults;
+  const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
+  const nodeMetricMaximum = nodeMetric === "meanQueue"
+    ? Array.from(diagramResults?.services.values() ?? []).reduce((maximum, service) => Math.max(maximum, service.meanQueue ?? 0), 1) : 1;
   const diagnostics = validation.report?.diagnostics ?? [];
   const runDiagnostics = ownRun ? mergeDiagnostics(run.job?.diagnostics ?? [], problemDiagnostics(run.problem)) : [];
   const launchIsCurrent = ownRun && launchDocuments !== null && loaded !== null &&
@@ -193,7 +196,6 @@ export function App() {
 
   const requestEstimate = () => {
     setShowEstimate(true);
-    if (resultsSize === "expanded") setResultsSize("normal");
     return estimate.request();
   };
 
@@ -253,17 +255,22 @@ export function App() {
           void run.cancel();
         }}
         job={ownRun ? run.job : null}
+        estimatePanel={showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
+          <EstimatePopover onClose={() => setShowEstimate(false)}>
+            {estimate.pending ? <p className="banner" role="status">{t("app.estimate.pending")}</p> : null}
+            {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
+            {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
+          </EstimatePopover>
+        ) : null}
       />
-      {showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
-        <section className="estimate-area" aria-label={t("app.estimate.label")}>
-          <button type="button" className="estimate-close" onClick={() => setShowEstimate(false)}>{t("app.estimate.close")}</button>
-          {estimate.pending ? <p className="banner" role="status">{t("app.estimate.pending")}</p> : null}
-          {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
-          {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
-        </section>
-      ) : null}
       <Palette catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
-      <main className="canvas-area">
+      <main className="canvas-area" onKeyDown={event => {
+        if (event.key === "Escape" && !event.defaultPrevented && event.target instanceof Element &&
+          !event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) {
+          event.preventDefault();
+          playback.seek(null);
+        }
+      }}>
         <div className="canvas-messages">
           {invalid ? (
             <div className="banner" role="alert">
@@ -295,31 +302,11 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
-          {diagramResults === null ? null : (
-            <div className="canvas-results-toolbar" role="region" aria-label={t("app.canvas.results")}>
-              <label>
-                <input type="checkbox" checked={showDiagramResults} onChange={(event) => setShowDiagramResults(event.target.checked)} />
-                {t("app.canvas.showResults")}
-              </label>
-              {showDiagramResults ? <>
-                <span data-testid="canvas-result-context">{playback.frame?.window === undefined
-                  ? t("app.canvas.summaryContext", { variant: String(variant?.label ?? variant?.id), pointId: selectedPointId })
-                  : t("app.canvas.windowContext", { window: formatNumber(playback.frame.window), start: formatNumber(playback.frame.window * windowMs, 1),
-                    end: formatDuration(Math.min(endMs, (playback.frame.window + 1) * windowMs)), replication: formatNumber(results.selection.replication),
-                    variant: String(variant?.label ?? variant?.id), pointId: selectedPointId })}</span>
-                <span className="utilization-legend" aria-label={t("app.canvas.utilizationScale")}>
-                  {t("app.canvas.utilizationLegend", { mode: playback.frame === null ? t("app.canvas.utilizationPooled") : t("app.canvas.utilizationWindow"), minimum: formatPercent(0) })}
-                  <span className="utilization-scale" aria-hidden="true"
-                    style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
-                  {formatPercent(1)}
-                </span>
-                {windowCount > 0 ? <PlaybackControls playback={playback} window={results.selection.window} windowCount={windowCount}
-                  replication={results.selection.replication} replications={run.manifest?.replications ?? 0}
-                  onReplicationChange={(replication) => results.select({ replication })} /> : null}
-                {staleResults ? <span className="canvas-results-stale" role="status">{t("app.canvas.stale")}</span> : null}
-              </> : null}
-            </div>
-          )}
+          {!ownRun || run.summary === null || variant === undefined ? null : <ResultsContextBar
+            summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
+            replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
+            playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
+            metric={nodeMetric} onMetricChange={setNodeMetric} maximum={nodeMetricMaximum} stale={staleResults} />}
         </div>
         <div className="canvas">
           {model === null || loaded === null || catalog === null ? (
@@ -336,6 +323,8 @@ export function App() {
               onZoomChange={setCanvasZoom}
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
+              nodeMetric={nodeMetric === "off" ? "utilization" : nodeMetric}
+              nodeMetricMaximum={nodeMetricMaximum}
               editable={structureEditable && !invalid}
               parametersEditable={editable}
               disabled={invalid}
@@ -398,7 +387,6 @@ export function App() {
         experiment={ownRun ? run.documents?.experiment ?? null : null}
         selectedNodes={selection.filter((id) => loaded !== null && Object.hasOwn(loaded.model.blocks, id))}
         replication={results.selection.replication}
-        onReplicationChange={(replication) => results.select({ replication })}
         cursorWindow={results.selection.window}
         onCursorChange={playback.seek}
         size={resultsSize}

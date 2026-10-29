@@ -43,7 +43,6 @@ interface TimelineProps {
   replication: number;
   cursorWindow: number | null;
   selectedNodes: readonly string[];
-  onReplicationChange?: (replication: number) => void;
   onCursorChange?: (window: number | null) => void;
 }
 
@@ -53,7 +52,7 @@ export function Timeline(props: TimelineProps) {
 }
 
 function RunTimeline({ enabled = true, runId, summary, manifest, model, experiment, catalog, activeVariantId, pointId,
-  replication, cursorWindow, selectedNodes, onReplicationChange, onCursorChange }: TimelineProps) {
+  replication, cursorWindow, selectedNodes, onCursorChange }: TimelineProps) {
   const canvasKey = JSON.stringify(selectedNodes);
   const availableNodes = Object.keys(model.blocks);
   const selectedFromCanvas = selectedNodes.filter((id) => Object.hasOwn(model.blocks, id));
@@ -65,8 +64,12 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   if (nodeChoice.canvasKey !== canvasKey) setNodeChoice({ canvasKey, ids: nodes });
   const [metricKeys, setMetricKeys] = useState<MetricKey[]>(groups.flatMap((group) => group.metrics.map((metric) => metric.key)));
   const [comparison, setComparison] = useState("");
-  const [hover, setHover] = useState<number | null>(null);
   const variant = activeVariantId === null ? summary.variants[0] : summary.variants.find((candidate) => candidate.id === activeVariantId);
+  const context = JSON.stringify([variant?.id, pointId, replication, cursorWindow]);
+  const [inspection, setInspection] = useState({ context, window: null as number | null });
+  const hover = inspection.context === context ? inspection.window : null;
+  if (inspection.context !== context) setInspection({ context, window: null });
+  const setHover = (window: number | null) => setInspection({ context, window });
   const compared = summary.variants.find((candidate) => candidate.id === comparison && candidate.id !== variant?.id);
   const metadata = manifest.series;
   const endMs = (metadata?.warmupMs ?? 0) + (metadata?.measurementMs ?? 0);
@@ -105,17 +108,12 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   return <div className="timeline">
     <div className="timeline-toolbar">
       <strong>{t("results.timeline.variantLabel", { variant: variant.label ?? variant.id, id: variant.id })}</strong>
-      <label>{t("results.replication")} <select aria-label={t("results.replication")} value={replication}
-        onChange={(event) => { setHover(null); onReplicationChange?.(Number(event.target.value)); }}>
-        {Array.from({ length: manifest.replications }, (_, index) => <option key={index} value={index}>{formatNumber(index)}</option>)}
-      </select></label>
       <label>{t("results.timeline.compare")} <select aria-label={t("results.timeline.compare")} value={compared?.id ?? ""}
         onChange={(event) => setComparison(event.target.value)}>
         <option value="">{t("results.timeline.noComparison")}</option>
         {summary.variants.filter((candidate) => candidate.id !== variant.id).map((candidate) =>
           <option key={candidate.id} value={candidate.id}>{t("results.timeline.variantLabel", { variant: candidate.label ?? candidate.id, id: candidate.id })}</option>)}
       </select></label>
-      <button type="button" onClick={() => onCursor(null)} disabled={cursorWindow === null}>{t("results.timeline.clearCursor")}</button>
     </div>
     <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
       <fieldset><legend>{t("results.timeline.nodes")}</legend>{availableNodes.map((id) => <label key={id}>

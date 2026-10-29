@@ -13,6 +13,9 @@ export interface ServiceCanvasResults {
   firstSaturation: string | null;
 }
 
+/** Service metric controlling node color; values and labels keep their original units. */
+export type NodeOverlayMetric = "utilization" | "meanQueue" | "queueRejectionRate";
+
 export interface CanvasResults {
   window?: number;
   services: ReadonlyMap<string, ServiceCanvasResults>;

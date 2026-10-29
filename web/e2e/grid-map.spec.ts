@@ -68,7 +68,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const series = page.waitForResponse((response) => response.url().includes(`/series/baseline/p3/0`));
     await heatmap.getByRole("button").nth(3).click();
     await expect(heatmap.getByRole("button").nth(3)).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("canvas-result-context")).toContainText("p3");
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /p3/);
     const dependency = point.aggregate.services.dependency.totals;
     await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${formatNumber(dependency.queueLengthIntegralMs / dependency.measurementMs)}`);
     await page.getByRole("combobox", { name: "Map metric", exact: true }).selectOption("handlerUtilization");
@@ -94,7 +94,9 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const slider = page.getByRole("region", { name: "Queue", exact: true }).getByRole("slider");
     await slider.focus();
     await slider.press("Home");
-    await expect(page.getByTestId("canvas-result-context")).toContainText("Window 0");
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Window 0/);
+    expect(await page.getByRole("region", { name: "Results context" }).evaluate(element => element.scrollWidth > element.clientWidth)).toBe(false);
+    await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
     const frame = await page.getByTestId("canvas-results-dependency").locator("span").allTextContents();
     await page.getByRole("button", { name: "Next window", exact: true }).click();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 1");
@@ -106,9 +108,9 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await page.getByRole("button", { name: "Pause run", exact: true }).click();
     await page.getByRole("tab", { name: "Map", exact: true }).click();
     await heatmap.getByRole("button").nth(0).click();
-    await expect(page.getByTestId("canvas-result-context")).toContainText("p0");
-    await page.getByRole("button", { name: "Return to summary", exact: true }).click();
-    await expect(page.getByTestId("canvas-result-context")).toContainText("Summary · Baseline · p0");
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /p0/);
+    await page.getByRole("button", { name: "Summary", exact: true }).click();
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Summary · Baseline · p0/);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     expect(await documents()).toEqual(savedDocuments);
 
@@ -125,7 +127,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const points = page.getByRole("list", { name: "Map points" }).getByRole("button");
     await expect(points).toHaveCount(3);
     await points.nth(2).click();
-    await expect(page.getByTestId("canvas-result-context")).toContainText("p2");
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /p2/);
     await page.getByRole("button", { name: "Expand results", exact: true }).click();
     expect(await page.evaluate(() => ({
       x: document.documentElement.scrollWidth > document.documentElement.clientWidth,

@@ -1,4 +1,5 @@
 import type { JobView } from "../api/apiTypes";
+import type { ReactNode } from "react";
 import { t } from "../i18n";
 
 export interface TopBarProps {
@@ -28,6 +29,7 @@ export interface TopBarProps {
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
   job: JobView | null;
+  estimatePanel?: ReactNode;
 }
 
 /**
@@ -65,6 +67,7 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
         {t("app.topBar.save")}
       </button>
+      <div className="run-actions">
       <button type="button" onClick={props.onEstimate}
         disabled={experiment === null || loading || saving || invalid || running || props.estimating}>
         {t("app.estimate.label")}
@@ -82,6 +85,8 @@ export function TopBar(props: TopBarProps) {
         disabled={loading || saving || dirty || invalid || running || props.estimating}
         title={dirty ? t("app.topBar.saveBeforeResume") : undefined}>{t("app.topBar.resume")}</button> : null}
       {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>{t("app.topBar.cancel")}</button> : null}
+      {props.estimatePanel}
+      </div>
     </header>
   );
 }
