@@ -25,7 +25,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const summary: RunSummary = await (await response).json();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
-    const toolbar = page.getByRole("region", { name: "Canvas results" });
+    const toolbar = page.getByRole("region", { name: "Results context" });
     await expect(toolbar).toHaveCount(0);
     await expect(page.locator(".block-results")).toHaveCount(0);
     const table = page.getByRole("table", { name: "Answer" });
@@ -35,8 +35,8 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
       await page.getByRole("tab", { name: variant.label, exact: true }).click();
       for (const point of variant.points) {
         await page.getByLabel("Grid point").selectOption(point.id);
-        await expect(toolbar).toContainText(`Summary · ${variant.label} · ${point.id} · measurement interval`);
-        await expect(toolbar).toContainText("Utilization (pooled)");
+        await expect(toolbar).toHaveAttribute("title", `Summary · ${variant.label} · ${point.id} · measurement interval`);
+        await expect(toolbar.getByLabel("Node color scale")).toContainText("Utilization: 0%–100%");
         await expect(table).toBeVisible();
         const column = summary.variants.findIndex(candidate => candidate.id === variant.id);
         for (const [id, service] of Object.entries(point.aggregate.services)) {
@@ -73,11 +73,11 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     await page.getByRole("button", { name: "Collapse results", exact: true }).click();
     await expect(page.getByRole("tabpanel")).toBeHidden();
     await expect(page.getByRole("img", { name: "First saturated node" })).toBeVisible();
-    const toggle = page.getByRole("checkbox", { name: "Show results on diagram" });
-    await toggle.uncheck();
+    const overlay = page.getByLabel("Node overlay", { exact: true });
+    await overlay.selectOption("off");
     await expect(page.locator(".block-results")).toHaveCount(0);
     await expect(page.getByRole("img", { name: "First saturated node" })).toHaveCount(0);
-    await toggle.check();
+    await overlay.selectOption("utilization");
     await expect(page.locator(".block-results")).toHaveCount(3);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();

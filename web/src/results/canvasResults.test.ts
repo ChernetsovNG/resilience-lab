@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
 import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
 import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
-import { canvasResults } from "./canvasResults";
+import { canvasQueueCapacities, canvasResults } from "./canvasResults";
 
 function fixture() {
   const run = structuredClone(summary);
@@ -18,6 +18,13 @@ function fixture() {
   };
   return run;
 }
+
+it("uses the catalog's disabled-queue default when run parameters omit capacity", () => {
+  const snapshot = structuredClone(model);
+  delete snapshot.blocks.gateway.params.queue;
+  expect(canvasQueueCapacities(snapshot, experiment, catalog, "baseline", {}).get("gateway")).toBe(0);
+  expect(canvasQueueCapacities(snapshot, experiment, catalog, "missing-variant", {}).size).toBe(0);
+});
 
 describe("canvasResults", () => {
   it("uses pooled time and count totals, with amplification from the called service", () => {

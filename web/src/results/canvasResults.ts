@@ -1,9 +1,9 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import type { ModelFile, RunSummary } from "../api/apiTypes";
+import type { Catalog, ExperimentFile, ModelFile, RunSummary } from "../api/apiTypes";
 import type { NodeSeriesMetrics } from "./series";
 import { elementIdentity } from "../workspace/editor";
-import { ownEntry } from "../workspace/params";
+import { applyOverrides, ownEntry } from "../workspace/params";
 
 export interface ServiceCanvasResults {
   windowed?: boolean;
@@ -13,6 +13,9 @@ export interface ServiceCanvasResults {
   firstSaturation: string | null;
 }
 
+/** Service metric controlling node color; values and labels keep their original units. */
+export type NodeOverlayMetric = "utilization" | "meanQueue" | "queueRejectionRate";
+
 export interface CanvasResults {
   window?: number;
   services: ReadonlyMap<string, ServiceCanvasResults>;
@@ -20,6 +23,21 @@ export interface CanvasResults {
 }
 
 const ratio = (numerator: number, denominator: number) => denominator === 0 ? null : numerator / denominator;
+
+/** Queue capacities from the run snapshot: grid coordinates override the variant; omitted queues use the catalog default. */
+export function canvasQueueCapacities(
+  model: ModelFile, experiment: ExperimentFile, catalog: Catalog, variantId: string, coordinates: Record<string, unknown>,
+): ReadonlyMap<string, number> {
+  const variant = experiment.variants.find(candidate => candidate.id === variantId);
+  if (variant === undefined) return new Map();
+  const effective = applyOverrides(applyOverrides(model, variant.overrides ?? {}, catalog), coordinates, catalog);
+  const fallback = catalog.types.find(type => type.id === "service")?.params.find(param => param.name === "queue")?.default;
+  return new Map(Object.entries(effective.blocks).flatMap(([id, block]) => {
+    const capacity = block.params.queue ?? fallback;
+    return block.type === "service" && typeof capacity === "number" && Number.isInteger(capacity) && capacity >= 0
+      ? [[id, capacity] as const] : [];
+  }));
+}
 
 /** Summary metrics for the run's model; an absent variant, point or element never borrows another result. */
 export function canvasResults(

@@ -5,6 +5,7 @@ import type { DocumentView, JobView } from "./api/apiTypes";
 import { catalog, costEstimate, documentViews, experiment, experimentPath, manifest, model, modelPath, summary } from "./test/fixtures";
 import { mockReactFlowDom } from "./test/reactFlow";
 import { stubFetch, type StubResponse } from "./test/stubFetch";
+import { seriesLoader } from "./results/series";
 
 beforeAll(mockReactFlowDom);
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -1029,8 +1030,10 @@ describe("cost estimate and resume", () => {
     expect(confirm.mock.calls[0][0]).toContain(warning.message);
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
-    expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
-    if (accepted) await screen.findByRole("table", { name: "Answer" });
+    if (accepted) {
+      await screen.findByRole("table", { name: "Answer" });
+      expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+    } else expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
   });
 
   it("fetches a fresh estimate before each Run and treats extrapolation as information", async () => {
@@ -1046,6 +1049,7 @@ describe("cost estimate and resume", () => {
     const requests = fetchMock.mock.calls.map(([url]) => url).filter((url) => url === "/api/v1/estimate" || url === "/api/v1/jobs");
     expect(requests).toEqual(["/api/v1/estimate", "/api/v1/estimate", "/api/v1/jobs"]);
     expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
   });
 
   it.each([false, true])("requires confirmation to run without an estimate: accepted=%s", async (accepted) => {
@@ -1054,13 +1058,16 @@ describe("cost estimate and resume", () => {
       status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
     } : undefined);
     await open(); fireEvent.click(button("Run"));
-    await screen.findByText("Estimation unavailable");
+    if (!accepted) await screen.findByText("Estimation unavailable");
     await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
     expect(confirm.mock.calls[0][0]).toContain("Estimation unavailable");
     expect(confirm.mock.calls[0][0]).toContain("without an estimate");
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
-    if (accepted) await screen.findByRole("table", { name: "Answer" });
+    if (accepted) {
+      await screen.findByRole("table", { name: "Answer" });
+      expect(screen.queryByText("Estimation unavailable")).toBeNull();
+    }
   });
 
   it("shows a manual estimate failure without asking to start a run", async () => {
@@ -1179,13 +1186,18 @@ it("invalidates a pending Run estimate when a field becomes unparsable, then all
 });
 
 
-it.each(["Estimate", "Run"])("makes the estimate visible when %s starts from expanded results", async (action) => {
+it.each(["Estimate", "Run"])("keeps expanded results while %s follows its estimate visibility policy", async (action) => {
   server(); await open();
   fireEvent.click(button("Expand results"));
   expect(button("Restore results")).toBeTruthy();
   fireEvent.click(button(action));
-  await screen.findByRole("region", { name: "Cost estimate" });
-  expect(button("Expand results")).toBeTruthy();
+  if (action === "Estimate") await screen.findByRole("region", { name: "Cost estimate" });
+  else {
+    await screen.findByRole("table", { name: "Answer" });
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+  }
+  expect(button("Restore results")).toBeTruthy();
+  expect(document.querySelector(".app")!.className).toContain("app--results-expanded");
 });
 
 
@@ -1209,13 +1221,15 @@ describe("diagram results", () => {
   it("shows summary metrics only on a variant, while toggling preserves documents and history", async () => {
     const fetchMock = server();
     await open();
+    fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+    expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     fireEvent.click(button("Run"));
     await screen.findByRole("table", { name: "Answer" });
-    expect(screen.queryByRole("region", { name: "Canvas results" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
-    const region = screen.getByRole("region", { name: "Canvas results" });
+    const region = screen.getByRole("region", { name: "Results context" });
     expect(region.textContent).toContain("Summary");
-    expect(region.textContent).toContain("measurement interval");
     const metrics = await screen.findByTestId("canvas-results-gateway");
     expect(metrics.textContent).toContain("Utilization 50%");
     expect(metrics.textContent).toContain("Mean queue 0.1");
@@ -1226,12 +1240,12 @@ describe("diagram results", () => {
 
     const node = screen.getByTestId("rf__node-gateway").querySelector<HTMLElement>(".block-node")!;
     expect(node.style.backgroundColor).not.toBe("");
-    fireEvent.click(screen.getByRole("checkbox", { name: "Show results on diagram" }));
+    fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "off" } });
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
     expect(node.style.backgroundColor).toBe("");
     expect(button("Save").disabled).toBe(true);
     expect(button("Undo").disabled).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Show results on diagram" }));
+    fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "utilization" } });
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
     selectGateway();
     editHandlers("6");
@@ -1242,7 +1256,7 @@ describe("diagram results", () => {
     expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
-    expect(screen.queryByRole("region", { name: "Canvas results" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
   });
 
@@ -1278,6 +1292,274 @@ describe("diagram results", () => {
     fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p0" } });
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
   });
+});
+
+it("colors nodes and labels the scale for the selected overlay metric", async () => {
+  server();
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  const node = screen.getByTestId("rf__node-gateway").querySelector<HTMLElement>(".block-node")!;
+  const utilization = node.style.backgroundColor;
+  const overlay = screen.getByLabelText("Node overlay");
+  fireEvent.change(overlay, { target: { value: "meanQueue" } });
+  expect(node.style.backgroundColor).not.toBe(utilization);
+  expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue fill: 0%–100%");
+  const queue = node.style.backgroundColor;
+  fireEvent.change(overlay, { target: { value: "queueRejectionRate" } });
+  expect(node.style.backgroundColor).not.toBe(queue);
+  expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue rejections: 0%–100%");
+  fireEvent.change(overlay, { target: { value: "off" } });
+  expect(screen.queryByLabelText("Node color scale")).toBeNull();
+  expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
+  expect(node.style.backgroundColor).toBe("");
+});
+
+it("shares point, replication and time between the context row, Answer, Timeline and canvas", async () => {
+  const run = structuredClone(summary);
+  run.grid = [{ path: "gateway.handlers", values: [4, 1000] }];
+  const point = structuredClone(run.variants[0].points[0]);
+  point.id = "p1";
+  point.coordinates = { "gateway.handlers": 1000 };
+  point.aggregate.services.gateway.totals.busyHandlerTimeMs = 1500;
+  run.variants[0].points.push(point);
+  run.variants[1].points.push({ ...point, id: "p2", coordinates: { "gateway.handlers": 6 } });
+  vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, replication, cell }) => nodes.map(id => ({
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => ({
+      startMs: (fromWindow + index) * 10, durationMs: 10,
+      originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 200, admittedAttemptsPerSecond: 150,
+      queueRejectionsPerSecond: 50, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
+      handlerUtilization: cell === "p1" && replication === 1 ? 0.8 : 0.2, meanQueueLength: 3,
+      meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1.5,
+    })),
+  })));
+  server(url => url.endsWith("/summary") ? { body: run } : undefined);
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  expect(screen.queryByLabelText("Grid point")).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  const row = screen.getByRole("region", { name: "Results context" });
+  fireEvent.pointerDown(row);
+  const pointSelect = within(row).getByLabelText("Grid point");
+  expect(within(pointSelect).getByRole("option", { name: /p1.*gateway.handlers = 1,000/ })).toBeTruthy();
+  expect(within(pointSelect).getByRole("option", { name: /p2.*gateway.handlers = 6/ })).toBeTruthy();
+  fireEvent.change(pointSelect, { target: { value: "p1" } });
+  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(true);
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
+  fireEvent.click(within(row).getByRole("button", { name: "Time" }));
+  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
+  fireEvent.change(within(row).getByLabelText("Replication"), { target: { value: "1" } });
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("80%"));
+  selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+  const timeline = await screen.findByTestId("timeline-cursor");
+  expect(timeline.textContent).toContain("replication 1");
+  expect(timeline.textContent).toContain("Window 0");
+  expect(screen.getAllByLabelText("Replication")).toHaveLength(1);
+  expect(screen.getAllByLabelText("Grid point")).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Clear time cursor" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Return to summary" })).toBeNull();
+  const chartCursor = within(await screen.findByRole("region", { name: "Queue" })).getByRole("slider");
+  fireEvent.keyDown(chartCursor, { key: "Escape" });
+  expect(within(row).getByRole("button", { name: "Time" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(within(row).getByRole("button", { name: "Summary" }));
+  expect(timeline.textContent).toContain("Hover to inspect windows");
+  expect(screen.queryByRole("slider", { name: "Playback window" })).toBeNull();
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
+  vi.spyOn(chartCursor, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 100, 100));
+  fireEvent(chartCursor, new MouseEvent("pointermove", { bubbles: true, clientX: 50 }));
+  expect(timeline.textContent).toContain("Window 55");
+  fireEvent.click(within(row).getByRole("button", { name: "Time" }));
+  expect(timeline.textContent).toContain("Window 0");
+  fireEvent.click(within(row).getByRole("button", { name: "Summary" }));
+  expect(timeline.textContent).toContain("Hover to inspect windows");
+  fireEvent.click(within(row).getByRole("button", { name: "Time" }));
+  fireEvent.keyDown(screen.getByTestId("rf__node-gateway"), { key: "Escape" });
+  expect(within(row).getByRole("button", { name: "Summary" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
+});
+
+it.each(["button", "outside", "Escape"])("dismisses the anchored estimate via %s", async way => {
+  server();
+  await open();
+  fireEvent.click(button("Estimate"));
+  await screen.findByRole("region", { name: "Cost estimate" });
+  const panel = within(screen.getByRole("banner")).getByRole("region", { name: "Estimate" });
+  fireEvent.pointerDown(panel);
+  expect(screen.getByRole("region", { name: "Cost estimate" })).toBeTruthy();
+  if (way === "button") fireEvent.click(button("Close estimate"));
+  else if (way === "outside") fireEvent.pointerDown(screen.getByRole("tab", { name: "Model" }));
+  else fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+});
+
+it("keeps an estimate dismissed when its pending request completes", async () => {
+  const gate = deferred();
+  server(async url => {
+    if (url !== "/api/v1/estimate") return undefined;
+    await gate.promise;
+    return { body: costEstimate };
+  });
+  await open();
+  fireEvent.click(button("Estimate"));
+  await screen.findByText("Estimating experiment cost…");
+  fireEvent.keyDown(document, { key: "Escape" });
+  await act(async () => gate.release());
+  await waitFor(() => expect(button("Estimate").disabled).toBe(false));
+  expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+});
+
+it("hides pooled metrics while a Time frame loads or fails", async () => {
+  const gate = deferred();
+  vi.spyOn(seriesLoader, "load").mockImplementation(async () => {
+    await gate.promise;
+    throw new Error("Series unavailable");
+  });
+  server();
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
+  fireEvent.click(button("Time"));
+  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+  expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
+  await act(async () => gate.release());
+  await screen.findByText("Series unavailable");
+  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+  expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
+  fireEvent.click(button("Summary"));
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
+});
+
+it("compares queue fill across nodes and windows using immutable variant and grid capacities", async () => {
+  const runModel = structuredClone(model);
+  runModel.blocks.gateway.params.queue = 64;
+  runModel.blocks.middle.params.queue = 8;
+  const runExperiment = structuredClone(experiment);
+  runExperiment.variants[0].overrides = { "gateway.queue": 32 };
+  const run = structuredClone(summary);
+  run.grid = [{ path: "gateway.queue", values: [16, 8, 0] }];
+  const point = run.variants[0].points[0];
+  point.coordinates = { "gateway.queue": 16 };
+  point.aggregate.services.gateway.totals.queueLengthIntegralMs = 16000;
+  point.aggregate.services.middle = structuredClone(point.aggregate.services.gateway);
+  point.aggregate.services.middle.totals.queueLengthIntegralMs = 8000;
+  run.variants[0].points.push({ ...point, id: "p1", coordinates: { "gateway.queue": 8 } });
+  run.variants[0].points.push({ ...point, id: "p2", coordinates: { "gateway.queue": 0 } });
+  vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, cell }) => nodes.map(id => ({
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => ({
+      startMs: (fromWindow + index) * 10, durationMs: 10,
+      originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 100, admittedAttemptsPerSecond: 100,
+      queueRejectionsPerSecond: 0, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
+      handlerUtilization: 0.5, meanQueueLength: cell === "p2" && id === "gateway" ? 0
+        : (id === "gateway" ? 8 : 4) / ((fromWindow + index) === 0 ? 1 : 2),
+      meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1,
+    })),
+  })));
+  server(url => {
+    if (url.endsWith("/summary")) return { body: run };
+    if (url.startsWith("/api/v1/workspace/document?")) {
+      const path = new URL(url, "http://localhost").searchParams.get("path");
+      if (path === modelPath) return { body: { ...documentViews[modelPath], content: { model: runModel } } };
+      if (path === experimentPath) return { body: { ...documentViews[experimentPath], content: { experiment: runExperiment } } };
+    }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "meanQueue" } });
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  expect(color("gateway")).not.toBe("");
+  expect(color("gateway")).toBe(color("middle"));
+  const halfFull = color("gateway");
+  const legend = screen.getByLabelText("Node color scale");
+  expect(legend.textContent).toBe("Queue fill: 0%–100%");
+  fireEvent.click(button("Time"));
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe(halfFull);
+  fireEvent.click(button("Next window"));
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Mean queue 4"));
+  expect(color("gateway")).not.toBe(halfFull);
+  expect(color("gateway")).toBe(color("middle"));
+  expect(legend.textContent).toBe("Queue fill: 0%–100%");
+  fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe(halfFull);
+  selectGateway();
+  editField("Queue capacity", "128");
+  expect(color("gateway")).toBe(halfFull);
+  fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p2" } });
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe("");
+});
+
+it("keeps ordinary Run estimates hidden during estimation and after completion", async () => {
+  const gate = deferred();
+  server(async url => {
+    if (url !== "/api/v1/estimate") return undefined;
+    await gate.promise;
+    return { body: costEstimate };
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  await act(async () => gate.release());
+  await screen.findByRole("table", { name: "Answer" });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  fireEvent.click(button("Estimate"));
+  await screen.findByRole("region", { name: "Cost estimate" });
+});
+
+it.each(["ESTIMATE_UI_CACHE", "ESTIMATE_EXTRAPOLATION"])("shows %s only until the submitted job starts", async code => {
+  const gate = deferred();
+  let submitted = false;
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  server(async url => {
+    if (url === "/api/v1/estimate") return { body: { ...costEstimate, warnings: [{ code, message: "Run cost warning" }] } };
+    if (url === "/api/v1/jobs") { submitted = true; await gate.promise; return { status: 202, body: completed }; }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(submitted).toBe(true));
+  expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain("Run cost warning");
+  await act(async () => gate.release());
+  await screen.findByRole("table", { name: "Answer" });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+});
+
+it("keeps an automatically closed estimate hidden while another experiment opens", async () => {
+  const gate = deferred();
+  server(async url => {
+    if (url === "/api/v1/estimate") return { body: { ...costEstimate,
+      warnings: [{ code: "ESTIMATE_EXTRAPOLATION", message: "Timing anchors exceeded" }],
+    } };
+    if (url.startsWith("/api/v1/workspace/document?") && new URL(url, "http://localhost").searchParams.get("path") === otherPath) {
+      await gate.promise;
+    }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  fireEvent.change(experimentSelect(), { target: { value: otherPath } });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  await act(async () => gate.release());
+  await waitFor(() => expect(experimentSelect().value).toBe(otherPath));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
 });
 
 it("keeps reused diagram element IDs separate through clipboard replacement and undo", async () => {

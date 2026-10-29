@@ -107,9 +107,9 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await page.getByRole("button", { name: "Expand results", exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight)).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("timeline.png") });
-  await page.getByRole("button", { name: "Clear time cursor", exact: true }).click();
-  await expect(page.getByTestId("timeline-cursor")).toContainText("Hover to inspect");
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Summary", exact: true }).click();
+  await expect(page.getByTestId("timeline-cursor")).toContainText("Hover to inspect");
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
   await expect(page.getByLabel("Compare variant", { exact: true })).toHaveValue("no-retries");
@@ -128,6 +128,7 @@ test("grid point and replication persist across views; warmup and the last short
   try {
     await page.goto("/");
     await page.getByLabel("Experiment", { exact: true }).selectOption(`${folder.split("/").at(-1)}/timeline.experiment.json`);
+    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const runId = await run(page);
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
     await expect(page.getByLabel("Time regions")).toContainText("Warmup: 0–100 ms");

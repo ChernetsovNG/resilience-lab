@@ -4,7 +4,7 @@ import { useEffect, useImperativeHandle, useState, type Dispatch, type MouseEven
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
-import type { CanvasResults } from "../results/canvasResults";
+import type { CanvasResults, NodeOverlayMetric } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import type { EditorCommand } from "../workspace/editor";
@@ -43,6 +43,9 @@ export interface CanvasProps {
   model: ModelFile;
   overrides?: Record<string, unknown>;
   results?: CanvasResults | null;
+  nodeMetric?: NodeOverlayMetric;
+  /** Queue capacities of the immutable run context, including variant and grid overrides. */
+  queueCapacities?: ReadonlyMap<string, number>;
   layout: LayoutFile | null;
   catalog: Catalog;
   selected: string[];
@@ -65,7 +68,8 @@ export function Canvas(props: CanvasProps) {
 }
 
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
-  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null }: CanvasProps) {
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null,
+  nodeMetric = "utilization", queueCapacities }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
@@ -127,6 +131,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     focusable: id === pendingId ? false : undefined,
     data: {
       result: block.type === "service" ? results?.services.get(id) : undefined,
+      nodeMetric, queueCapacity: queueCapacities?.get(id),
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
       editable: id !== pendingId && editable, parametersEditable: id !== pendingId && parametersEditable, disabled: id === pendingId || disabled,

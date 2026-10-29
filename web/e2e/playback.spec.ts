@@ -60,9 +60,10 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const context = page.getByTestId("canvas-result-context");
     const metrics = page.getByTestId("canvas-results-dependency");
     const edge = page.getByTestId("canvas-edge-label-middle-to-dependency").locator(".canvas-edge-results");
-    await expect(context).toContainText("Summary · Baseline");
+    await expect(context).toHaveAttribute("title", /Summary · Baseline/);
+    await page.getByRole("button", { name: "Time", exact: true }).click();
     await seek(slider, before);
-    await expect(context).toContainText(`Window ${formatNumber(before)} ·`);
+    await expect(context).toHaveAttribute("title", new RegExp(`Window ${formatNumber(before)} ·`));
     const status = page.getByRole("region", { name: "Status bar" });
     await expect(status).toContainText(`Cursor ${formatDuration(dependency[before].startMs)}`);
     await page.getByRole("button", { name: /fit view/i }).click();
@@ -91,7 +92,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await timelineSlider.focus();
     await timelineSlider.press("End");
     await expect(slider).toHaveValue(String(dependency.length - 1));
-    await expect(context).toContainText(`Window ${formatNumber(dependency.length - 1)} ·`);
+    await expect(context).toHaveAttribute("title", new RegExp(`Window ${formatNumber(dependency.length - 1)} ·`));
     await expect(status).toContainText(`Cursor ${formatDuration(dependency.at(-1)!.startMs)}`);
 
     await seek(slider, 0);
@@ -100,7 +101,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Pause run", exact: true }).click();
     const paused = await slider.inputValue();
-    await expect(context).toContainText(`Window ${formatNumber(Number(paused))} ·`);
+    await expect(context).toHaveAttribute("title", new RegExp(`Window ${formatNumber(Number(paused))} ·`));
     await expect(timelineCursor).toContainText(`Window ${formatNumber(Number(paused))} ·`);
     await page.waitForTimeout(160);
     await expect(slider).toHaveValue(paused);
@@ -109,11 +110,13 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(edge).toHaveText(frame.edge);
     await page.screenshot({ path: testInfo.outputPath("playback.png") });
 
-    await page.getByLabel("Playback replication", { exact: true }).selectOption("1");
-    await expect(context).toContainText("replication 1");
+    await page.getByLabel("Replication", { exact: true }).selectOption("1");
+    await expect(context).toHaveAttribute("title", /replication 1/);
     await expect(page.getByLabel("Replication", { exact: true })).toHaveValue("1");
-    await page.getByRole("button", { name: "Return to summary", exact: true }).click();
-    await expect(context).toContainText("Summary · Baseline");
+    await expect(page.locator(".timeline-toolbar").getByLabel("Replication", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Clear time cursor", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Summary", exact: true }).click();
+    await expect(context).toHaveAttribute("title", /Summary · Baseline/);
     await expect(timelineCursor).toContainText("Hover to inspect windows");
     await expect(status).not.toContainText("Cursor");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();

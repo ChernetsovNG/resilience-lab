@@ -35,7 +35,7 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await noOverflow(page);
   await expect(table.getByRole("row", { name: /Success rate/ })).toBeInViewport({ ratio: 0.2 });
   await page.screenshot({ path: testInfo.outputPath("after-answer.png") });
-  await page.getByRole("button", { name: "Close estimate", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
   await page.getByRole("button", { name: "Expand results", exact: true }).click();
   for (const disclosure of await page.locator(".summary-services > summary").all()) await disclosure.click();
@@ -56,28 +56,35 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 });
 
-test("estimate stays outside the diagram, closes and reopens", async ({ page }, testInfo) => {
+test("estimate popover preserves diagram height and closes by button, outside click and Escape", async ({ page }, testInfo) => {
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
+  const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
+  const before = await canvas.boundingBox();
   await page.getByRole("button", { name: "Estimate", exact: true }).click();
   const estimate = page.getByRole("region", { name: "Cost estimate", exact: true });
   await expect(estimate).toBeVisible();
   await expect(estimate.getByLabel("Uncompressed size", { exact: true })).toHaveText(/(?:KiB|MiB)$/);
   await expect(estimate.getByLabel("Artifact size", { exact: true })).toHaveText(/(?:KiB|MiB)$/);
-  const strip = await page.getByRole("region", { name: "Estimate", exact: true }).boundingBox();
-  const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
-  const before = await canvas.boundingBox();
-  expect(strip!.y + strip!.height).toBeLessThanOrEqual(before!.y);
+  const popover = page.getByRole("banner").getByRole("region", { name: "Estimate", exact: true });
+  await expect(popover).toBeVisible();
+  expect((await canvas.boundingBox())!.height).toBe(before!.height);
   expect(before!.height).toBeGreaterThan(0);
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("after-estimate.png") });
   await estimate.screenshot({ path: testInfo.outputPath("after-sizes.png") });
   await page.getByRole("button", { name: "Close estimate", exact: true }).click();
   await expect(estimate).toHaveCount(0);
-  expect((await canvas.boundingBox())!.height).toBeGreaterThan(before!.height);
+  expect((await canvas.boundingBox())!.height).toBe(before!.height);
   await page.screenshot({ path: testInfo.outputPath("after-estimate-closed.png") });
   await page.getByRole("button", { name: "Estimate", exact: true }).click();
   await expect(estimate).toBeVisible();
+  await page.getByRole("tab", { name: "Model", exact: true }).click();
+  await expect(estimate).toHaveCount(0);
+  await page.getByRole("button", { name: "Estimate", exact: true }).click();
+  await expect(estimate).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(estimate).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   expect(jobs).toBe(0);
@@ -104,7 +111,7 @@ test("failed estimation starts a real run only after explicit confirmation", asy
   await expect(page.getByTestId("job-status")).toContainText("COMPLETED");
   expect(messages).toHaveLength(2);
   expect(jobs).toBe(1);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("after-estimate-failure.png") });
 });

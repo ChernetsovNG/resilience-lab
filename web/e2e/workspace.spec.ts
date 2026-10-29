@@ -326,6 +326,7 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
     const summary = page.getByRole("table", { name: "Answer" });
+    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const points = page.getByLabel("Grid point", { exact: true });
     await expect(points.getByRole("option")).toHaveCount(6);
     await expect(points.locator('option[value="p0"]')).toContainText("gateway-to-middle.timeout = 40ms");
