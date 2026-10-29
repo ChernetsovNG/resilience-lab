@@ -1,6 +1,7 @@
 package resiliencelab.core.compiler
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Severity of a diagnostic; only errors block a run. */
 @Serializable
@@ -23,7 +24,20 @@ data class Diagnostic(
     val path: String? = null,
     /** Variant ID for a variant-specific finding; null for model-wide or common findings. */
     val variant: String? = null,
-)
+    /** Unformatted string and number values for the message identified by [code]; absent in older artifacts. */
+    val args: Map<String, JsonPrimitive>? = null,
+) {
+    internal constructor(
+        code: CoreMessage,
+        severity: Severity,
+        message: String,
+        document: String? = null,
+        pointer: String? = null,
+        path: String? = null,
+        variant: String? = null,
+        args: Map<String, JsonPrimitive> = emptyMap(),
+    ) : this(code.code, severity, message, document, pointer, path, variant, code.args(args))
+}
 
 /** JSON Pointer construction (RFC 6901). */
 object JsonPointer {
@@ -48,8 +62,21 @@ class Diagnostics {
         pointer: String? = null,
         path: String? = null,
         variant: String? = null,
+        args: Map<String, JsonPrimitive>? = null,
     ) {
-        items += Diagnostic(code, Severity.ERROR, message, document, pointer, path, variant)
+        items += Diagnostic(code, Severity.ERROR, message, document, pointer, path, variant, args)
+    }
+
+    internal fun error(
+        code: CoreMessage,
+        message: String,
+        document: String?,
+        pointer: String? = null,
+        path: String? = null,
+        variant: String? = null,
+        args: Map<String, JsonPrimitive> = emptyMap(),
+    ) {
+        error(code.code, message, document, pointer, path, variant, code.args(args))
     }
 
     fun errorCount(): Int = items.count { it.severity == Severity.ERROR }

@@ -1,5 +1,6 @@
 package resiliencelab.server.lab
 
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 
@@ -35,13 +36,21 @@ internal object Documents {
             drafts.associate { draft ->
                 val kind =
                     DocumentKind.of(draft.path)
-                        ?: throw BadRequest("DOCUMENT_KIND", "'${draft.path}' is not a model, layout or experiment document")
+                        ?: throw BadRequest(
+                            ServerMessage.DOCUMENT_KIND_PATH,
+                            "'${draft.path}' is not a model, layout or experiment document",
+                            args = mapOf("path" to JsonPrimitive(draft.path)),
+                        )
                 val text =
                     encode(kind, draft.content)
-                        ?: throw BadRequest("DOCUMENT_KIND", "Content must hold exactly one document of the kind of '${draft.path}'")
+                        ?: throw BadRequest(
+                            ServerMessage.DOCUMENT_KIND_CONTENT,
+                            "Content must hold exactly one document of the kind of '${draft.path}'",
+                            args = mapOf("path" to JsonPrimitive(draft.path)),
+                        )
                 draft.path to text
             }
-        if (texts.size != drafts.size) throw BadRequest("DRAFT_PATH", "Draft document paths must be unique")
+        if (texts.size != drafts.size) throw BadRequest(ServerMessage.DRAFT_PATH, "Draft document paths must be unique")
         return texts
     }
 

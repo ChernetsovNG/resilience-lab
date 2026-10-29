@@ -2,6 +2,7 @@ package resiliencelab.server.lab
 
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.document.ExperimentFile
 import resiliencelab.core.document.LayoutFile
@@ -10,12 +11,16 @@ import resiliencelab.core.document.ModelFile
 // API types follow the rules of the server plan: plain @Serializable classes, no @SerialName, @Transient, custom
 // serializers or polymorphism, because springdoc derives the schema from Kotlin properties and kotlinx writes the JSON.
 
-/** Error body of the stage 1 API (stage 1 design §4.1). */
+/**
+ * Error body of the stage 1 API (stage 1 design §4.1). [args] carries raw string/number values for localization;
+ * [message] remains the legacy English text.
+ */
 @Serializable
 data class ApiProblem(
     val code: String,
     val message: String,
     val diagnostics: List<Diagnostic> = emptyList(),
+    val args: Map<String, JsonPrimitive>? = null,
 )
 
 /** Server status and versions. */
@@ -111,6 +116,7 @@ enum class JobStatus {
 /**
  * Snapshot of a job: one run of one experiment; [totalTasks] is known after the first task finishes.
  * [cancelRequested] records a cancellation request; a running job only becomes [JobStatus.CANCELLED] after it stops.
+ * [errorCode] and [errorArgs] localize a failure while [error] keeps its legacy text; successful and cancelled jobs have no error.
  */
 @Serializable
 data class JobView(
@@ -123,4 +129,6 @@ data class JobView(
     val cancelRequested: Boolean = false,
     val error: String? = null,
     val diagnostics: List<Diagnostic> = emptyList(),
+    val errorCode: String? = null,
+    val errorArgs: Map<String, JsonPrimitive>? = null,
 )

@@ -1494,6 +1494,12 @@
       "ApiProblem" : {
         "type" : "object",
         "properties" : {
+          "args" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : [ "string", "number" ]
+            }
+          },
           "code" : {
             "type" : "string"
           },
@@ -1707,6 +1713,12 @@
       "Diagnostic" : {
         "type" : "object",
         "properties" : {
+          "args" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : [ "string", "number" ]
+            }
+          },
           "code" : {
             "type" : "string"
           },
@@ -1808,6 +1820,12 @@
       "EstimateWarning" : {
         "type" : "object",
         "properties" : {
+          "args" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : [ "string", "number" ]
+            }
+          },
           "code" : {
             "type" : "string"
           },
@@ -2050,6 +2068,15 @@
             }
           },
           "error" : {
+            "type" : [ "string", "null" ]
+          },
+          "errorArgs" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : [ "string", "number" ]
+            }
+          },
+          "errorCode" : {
             "type" : [ "string", "null" ]
           },
           "experiment" : {

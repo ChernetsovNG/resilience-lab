@@ -3,6 +3,7 @@ package resiliencelab.server.lab
 import com.jayway.jsonpath.JsonPath
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -235,6 +236,65 @@ class WorkspaceApiTest {
     }
 
     @Test
+    fun `structured problem arguments distinguish document kind failures while preserving messages`() {
+        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 1)))
+        val cases =
+            listOf(
+                Triple(
+                    "get",
+                    getDocument("notes.txt"),
+                    Pair(
+                        "'notes.txt' is not a model, layout or experiment document",
+                        """{"reason":"path","path":"notes.txt"}""",
+                    ),
+                ),
+                Triple(
+                    "put",
+                    putDocument("drafts/x.model.json", body, ifMatch = null),
+                    Pair(
+                        "Content must hold exactly one document of the kind of 'drafts/x.model.json'",
+                        """{"reason":"content","path":"drafts/x.model.json"}""",
+                    ),
+                ),
+            )
+        cases.forEach { (method, response, expected) ->
+            assertThat(response.status).isEqualTo(400)
+            assertThat(code(response)).isEqualTo("DOCUMENT_KIND")
+            assertThat(JsonPath.read<String>(response.contentAsString, "$.message")).isEqualTo(expected.first)
+            assertThat(Json.parseToJsonElement(response.contentAsString).jsonObject["args"])
+                .isEqualTo(Json.parseToJsonElement(expected.second))
+            openApi.assertResponse(method, "/api/v1/workspace/document", response)
+        }
+    }
+
+    @Test
+    fun `structured problems carry workspace exception paths and version requirement reasons`() {
+        val missing = getDocument("missing.model.json")
+        assertThat(JsonPath.read<String>(missing.contentAsString, "$.message")).isEqualTo("Document 'missing.model.json' does not exist")
+        assertThat(Json.parseToJsonElement(missing.contentAsString).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"path":"missing.model.json"}"""))
+
+        val outside = getDocument("../outside.model.json")
+        assertThat(JsonPath.read<String>(outside.contentAsString, "$.message"))
+            .isEqualTo("Path '../outside.model.json' is not a relative path inside the workspace")
+        assertThat(Json.parseToJsonElement(outside.contentAsString).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"path":"../outside.model.json"}"""))
+
+        val required = deleteDocument(layout, ifMatch = null)
+        assertThat(JsonPath.read<String>(required.contentAsString, "$.message")).isEqualTo("If-Match is required to delete '$layout'")
+        assertThat(Json.parseToJsonElement(required.contentAsString).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"reason":"delete","path":"$layout"}"""))
+
+        val content = (DocumentCodec.decodeLayout(read(layout), layout) as DecodeResult.Ok).value
+        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = content))
+        val exists = putDocument(layout, body, ifMatch = null)
+        assertThat(JsonPath.read<String>(exists.contentAsString, "$.message"))
+            .isEqualTo("Document '$layout' already exists; send If-Match with its version")
+        assertThat(Json.parseToJsonElement(exists.contentAsString).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"reason":"create","path":"$layout"}"""))
+    }
+
+    @Test
     fun `documents sanitized storage failures in OpenAPI`() {
         Files.write(root.resolve("unreadable.model.json"), byteArrayOf(0xC3.toByte(), 0x28))
         try {
@@ -244,6 +304,8 @@ class WorkspaceApiTest {
             assertThat(code(response)).isEqualTo("STORAGE_ERROR")
             assertThat(JsonPath.read<String>(response.contentAsString, "$.message")).isEqualTo("Workspace storage failed")
             assertThat(response.contentAsString).doesNotContain(root.toString())
+            assertThat(Json.parseToJsonElement(response.contentAsString).jsonObject["args"])
+                .isEqualTo(Json.parseToJsonElement("{}"))
             openApi.assertResponse("get", "/api/v1/workspace/document", response)
         } finally {
             Files.deleteIfExists(root.resolve("unreadable.model.json"))

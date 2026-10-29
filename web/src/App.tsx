@@ -1,3 +1,4 @@
+import { backendMessage } from "./i18n/backendMessage";
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
@@ -328,10 +329,10 @@ export function App() {
               setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
             }
             if (cost.problem !== null) {
-              if (!window.confirm(t("app.confirm.estimateFailed", { message: cost.problem.message }))) return;
+              if (!window.confirm(t("app.confirm.estimateFailed", { message: backendMessage(cost.problem) }))) return;
             } else {
               const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
-              if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => warning.message).join("\n") }))) return;
+              if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => backendMessage(warning)).join("\n") }))) return;
             }
             const documents = { model: loaded.model, experiment: loaded.experiment };
             setLaunchDocuments(documents);

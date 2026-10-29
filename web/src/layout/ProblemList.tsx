@@ -1,3 +1,4 @@
+import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import type { ApiProblem } from "../api/apiTypes";
 import { locationOf } from "../validation/diagnostics";
@@ -6,12 +7,12 @@ import { locationOf } from "../validation/diagnostics";
 export function ProblemList({ problem }: { problem: ApiProblem }) {
   return (
     <div className="problem-list" role="alert">
-      <p>{problem.message}</p>
+      <p>{backendMessage(problem)}</p>
       {problem.diagnostics.length === 0 ? null : (
         <ul>
           {problem.diagnostics.map((diagnostic, index) => (
             <li key={index}>
-              {t("results.problemDiagnostic", { code: diagnostic.code, location: locationOf(diagnostic), message: diagnostic.message })}
+              {t("results.problemDiagnostic", { code: diagnostic.code, location: locationOf(diagnostic), message: backendMessage(diagnostic) })}
             </li>
           ))}
         </ul>

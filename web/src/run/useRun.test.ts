@@ -82,6 +82,14 @@ describe("useRun", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/summary"))).toBe(false);
   });
 
+  it("retains a job failure code and scalar arguments for localization at display time", async () => {
+    stubFetch(url => url === "/api/v1/jobs"
+      ? { status: 202, body: job("FAILED", { error: "Job queue is full", errorCode: "JOB_QUEUE_FULL", errorArgs: {} }) }
+      : { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } });
+    const result = await run();
+    expect(result.current.problem).toMatchObject({ code: "JOB_QUEUE_FULL", args: {}, message: "Job queue is full" });
+  });
+
   it.each(["poll", "summary"])("reports a network error during %s", async (stage) => {
     stubFetch((url) => {
       if (url === "/api/v1/jobs") return { status: 202, body: job(stage === "poll" ? "QUEUED" : "COMPLETED") };

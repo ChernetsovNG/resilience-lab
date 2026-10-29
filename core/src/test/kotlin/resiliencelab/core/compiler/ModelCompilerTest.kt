@@ -126,6 +126,10 @@ class ModelCompilerTest {
         assertThat(diagnostics).allSatisfy {
             assertThat(Json.encodeToJsonElement(it).jsonObject["variant"]).isEqualTo(JsonPrimitive("no-retries"))
         }
+        val range = diagnostics.single { it.code == "PARAM_RANGE" }
+        assertThat(range.message).isEqualTo("Parameter 'attempts' is out of range: >= 1")
+        assertThat(Json.encodeToJsonElement(range).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"reason":"minimum","parameter":"attempts","minimum":1.0}"""))
     }
 
     @Test
@@ -190,6 +194,11 @@ class ModelCompilerTest {
             assertThat(it.path).isEqualTo("client")
             assertThat(it.severity).isEqualTo(Severity.WARNING)
         }
+        assertThat(warnings.map { it.args }).containsExactly(
+            mapOf("deadlineMs" to JsonPrimitive(80.0), "requiredMs" to JsonPrimitive(247.0), "points" to JsonPrimitive("p0")),
+            mapOf("deadlineMs" to JsonPrimitive(81.0), "requiredMs" to JsonPrimitive(247.0), "points" to JsonPrimitive("p1")),
+            mapOf("deadlineMs" to JsonPrimitive(80.0), "requiredMs" to JsonPrimitive(81.0), "points" to JsonPrimitive("p0")),
+        )
     }
 
     @Test

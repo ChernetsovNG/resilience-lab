@@ -1,3 +1,4 @@
+import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import { localizeCatalog } from "../i18n/catalog";
 import type {
@@ -27,6 +28,7 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.problem = problem;
+    Object.defineProperty(this, "message", { get: () => backendMessage(this.problem) });
   }
 }
 

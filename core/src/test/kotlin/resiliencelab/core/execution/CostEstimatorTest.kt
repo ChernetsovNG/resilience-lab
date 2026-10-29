@@ -1,5 +1,8 @@
 package resiliencelab.core.execution
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import resiliencelab.core.compiler.CompiledExperiment
@@ -58,6 +61,11 @@ class CostEstimatorTest {
         assertThat(estimate.estimatedUncompressedBytes).isGreaterThan(64L * 1024 * 1024)
         assertThat(estimate.estimatedParts).isGreaterThan(1)
         assertThat(estimate.warnings.map { it.code }).contains("ESTIMATE_UI_CACHE")
+        val warning = estimate.warnings.single { it.code == "ESTIMATE_UI_CACHE" }
+        assertThat(warning.message)
+            .isEqualTo("Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only")
+        assertThat(Json.encodeToJsonElement(warning).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"cacheMiB":64}"""))
     }
 
     @Test
@@ -96,6 +104,13 @@ class CostEstimatorTest {
         assertThat(estimate.warnings.map { it.code })
             .contains("ESTIMATE_EXTRAPOLATION")
             .doesNotContain("ESTIMATE_WORKER_EXTRAPOLATION")
+        assertThat(estimate.warnings.single { it.code == "ESTIMATE_EXTRAPOLATION" }.args)
+            .containsExactlyInAnyOrderEntriesOf(
+                mapOf(
+                    "minServices" to kotlinx.serialization.json.JsonPrimitive(50),
+                    "maxServices" to kotlinx.serialization.json.JsonPrimitive(5000),
+                ),
+            )
     }
 
     @Test

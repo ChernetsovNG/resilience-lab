@@ -27,21 +27,21 @@ data class VersionedDocument(
 )
 
 class DocumentNotFoundException(
-    path: String,
+    val path: String,
 ) : RuntimeException("Document '$path' does not exist")
 
 class VersionConflictException(
-    path: String,
-    expected: String,
-    actual: String?,
+    val path: String,
+    val expected: String,
+    val actual: String?,
 ) : RuntimeException("Document '$path' has version ${actual ?: "none"}, not the expected $expected")
 
 class InvalidDocumentPathException(
-    path: String,
+    val path: String,
 ) : IllegalArgumentException("Path '$path' is not a relative path inside the workspace")
 
 class DocumentExistsException(
-    path: String,
+    val path: String,
 ) : RuntimeException("Document '$path' already exists")
 
 /** Versions of document text. */

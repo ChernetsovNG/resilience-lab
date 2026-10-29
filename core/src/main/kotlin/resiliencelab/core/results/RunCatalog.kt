@@ -30,7 +30,7 @@ class InvalidSeriesPathException : IllegalArgumentException("Invalid run series 
 
 /** A summary cannot be read before the run has been completed and its summary published. */
 class RunIncompleteException(
-    id: String,
+    val id: String,
 ) : RuntimeException("Run '$id' is incomplete")
 
 /** Finds complete and incomplete runs under `.results/<experiment>/<run>/`. */

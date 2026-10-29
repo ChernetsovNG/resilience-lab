@@ -18,7 +18,7 @@ export function mergeDiagnostics(...groups: (readonly Diagnostic[])[]): Diagnost
 export function problemDiagnostics(problem: ApiProblem | null): readonly Diagnostic[] {
   if (problem === null) return [];
   return problem.diagnostics.length > 0 ? problem.diagnostics : [{
-    code: problem.code, message: problem.message, severity: "ERROR", document: null, pointer: null, path: null,
+    code: problem.code, message: problem.message, ...(problem.args === undefined ? {} : { args: problem.args }), severity: "ERROR", document: null, pointer: null, path: null,
   }];
 }
 

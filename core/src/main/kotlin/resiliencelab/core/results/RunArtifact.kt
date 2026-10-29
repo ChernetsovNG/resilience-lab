@@ -48,8 +48,8 @@ object Versions {
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
 class UnsupportedArtifactVersionException(
-    kind: String,
-    actual: Int?,
+    val kind: String,
+    val actual: Int?,
 ) : IllegalArgumentException("Unsupported $kind schemaVersion ${actual ?: "missing"}; expected ${Versions.ARTIFACT_SCHEMA}; run again")
 
 /**

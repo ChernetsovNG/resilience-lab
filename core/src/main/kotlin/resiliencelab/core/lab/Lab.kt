@@ -2,7 +2,9 @@ package resiliencelab.core.lab
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.compiler.ModelLinter
@@ -149,7 +151,7 @@ class Lab(
             throw InvalidExperimentException(
                 listOf(
                     Diagnostic(
-                        "DOCUMENT_CHANGED",
+                        CoreMessage.DOCUMENT_CHANGED,
                         Severity.ERROR,
                         "Experiment documents changed after validation; submit the experiment again",
                         experimentPath,
@@ -280,23 +282,23 @@ class Lab(
         if (manifest.schemaVersion != Versions.ARTIFACT_SCHEMA) {
             throw UnsupportedArtifactVersionException("manifest", manifest.schemaVersion)
         }
-        if (manifest.complete) throw resumeFailure("RUN_COMPLETE", "Run is already complete", manifestPath)
+        if (manifest.complete) throw resumeFailure(CoreMessage.RUN_COMPLETE, "Run is already complete", manifestPath)
         if (
             manifest.applicationVersion != Versions.APPLICATION ||
             manifest.kslVersion != Versions.KSL ||
             manifest.streamAssignment != PathStreams.ASSIGNMENT_VERSION
         ) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run versions changed; run again", manifestPath)
+            throw resumeFailure(CoreMessage.RUN_VERSIONS, "Run versions changed; run again", manifestPath)
         }
         val canonical =
             runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
         if (canonical != runDirectory) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run directory does not match its manifest; run again", manifestPath)
+            throw resumeFailure(CoreMessage.RUN_DIRECTORY, "Run directory does not match its manifest; run again", manifestPath)
         }
         val loaded = load(manifest.experiment)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
         if (loaded.artifactVersions != manifest.documents) {
-            throw resumeFailure("RUN_DOCUMENT_CHANGED", "Run documents changed; run again", manifest.experiment)
+            throw resumeFailure(CoreMessage.RUN_DOCUMENT_CHANGED, "Run documents changed; run again", manifest.experiment)
         }
         val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
         if (
@@ -306,13 +308,13 @@ class Lab(
             manifest.grid != expected.grid ||
             manifest.series != expected.series
         ) {
-            throw resumeFailure("RUN_INCOMPATIBLE", "Run metadata changed; run again", manifestPath)
+            throw resumeFailure(CoreMessage.RUN_METADATA, "Run metadata changed; run again", manifestPath)
         }
         return PreparedResume(manifest, compiled)
     }
 
     private fun resumeFailure(
-        code: String,
+        code: CoreMessage,
         message: String,
         document: String,
     ) = InvalidExperimentException(listOf(Diagnostic(code, Severity.ERROR, message, document)))
@@ -395,7 +397,13 @@ class Lab(
         val experimentDocument =
             read(experimentPath, drafts)
                 ?: return failed(
-                    Diagnostic("DOCUMENT_MISSING", Severity.ERROR, "Document '$experimentPath' does not exist", experimentPath),
+                    Diagnostic(
+                        CoreMessage.DOCUMENT_MISSING,
+                        Severity.ERROR,
+                        "Document '$experimentPath' does not exist",
+                        experimentPath,
+                        args = mapOf("path" to JsonPrimitive(experimentPath)),
+                    ),
                 )
         val experiment =
             when (val decoded = DocumentCodec.decodeExperiment(experimentDocument.text, experimentPath)) {
@@ -407,11 +415,12 @@ class Lab(
             modelPath?.let { read(it, drafts) }
                 ?: return failed(
                     Diagnostic(
-                        "MODEL_REF",
+                        CoreMessage.MODEL_REF,
                         Severity.ERROR,
                         "modelRef '${experiment.modelRef}' does not name a model in the workspace",
                         experimentPath,
                         "/modelRef",
+                        args = mapOf("reference" to JsonPrimitive(experiment.modelRef)),
                     ),
                 )
         val model =
@@ -440,11 +449,12 @@ class Lab(
             resolveRef(experimentPath, layoutRef)?.let { read(it, drafts) }
                 ?: return listOf(
                     Diagnostic(
-                        "LAYOUT_REF",
+                        CoreMessage.LAYOUT_REF,
                         Severity.ERROR,
                         "layoutRef '$layoutRef' does not name a layout in the workspace",
                         experimentPath,
                         "/layoutRef",
+                        args = mapOf("reference" to JsonPrimitive(layoutRef)),
                     ),
                 )
         return when (val decoded = DocumentCodec.decodeLayout(layoutDocument.text, layoutDocument.path)) {
@@ -472,7 +482,14 @@ class Lab(
             null
         } catch (exception: IOException) {
             val reason = exception.message ?: exception.javaClass.simpleName
-            val diagnostic = Diagnostic("DOCUMENT_UNREADABLE", Severity.ERROR, "Document '$path' cannot be read: $reason", path)
+            val diagnostic =
+                Diagnostic(
+                    CoreMessage.DOCUMENT_UNREADABLE,
+                    Severity.ERROR,
+                    "Document '$path' cannot be read: $reason",
+                    path,
+                    args = mapOf("path" to JsonPrimitive(path), "detail" to JsonPrimitive(reason)),
+                )
             throw UnreadableDocumentException(diagnostic)
         }
 

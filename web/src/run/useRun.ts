@@ -9,6 +9,8 @@ export interface RunDocuments {
   experiment: ExperimentFile;
 }
 
+type RunProblem = ApiProblem & { requiresNewRun?: boolean };
+
 export interface Run {
   /** The experiment the state below belongs to. */
   experiment: string | null;
@@ -16,7 +18,7 @@ export interface Run {
   summary: RunSummary | null;
   manifest: RunManifest | null;
   documents: RunDocuments | null;
-  problem: ApiProblem | null;
+  problem: RunProblem | null;
   running: boolean;
   run: (experimentPath: string, documents: RunDocuments) => Promise<void>;
   resume: () => Promise<void>;
@@ -33,7 +35,7 @@ export function useRun(pollMs = 500): Run {
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [manifest, setManifest] = useState<RunManifest | null>(null);
   const [documents, setDocuments] = useState<RunDocuments | null>(null);
-  const [problem, setProblem] = useState<ApiProblem | null>(null);
+  const [problem, setProblem] = useState<RunProblem | null>(null);
   const [running, setRunning] = useState(false);
   const generation = useRef(0);
   const terminalGeneration = useRef<number | null>(null);
@@ -83,9 +85,9 @@ export function useRun(pollMs = 500): Run {
         }
       } else {
         if (next.status === "FAILED") {
-          setProblem({ code: "JOB_FAILED", message: resuming
-            ? t("app.run.restart", { message: next.error ?? t("app.run.failed") })
-            : next.error ?? t("app.run.failed"), diagnostics: next.diagnostics });
+          setProblem({ code: next.errorCode ?? "JOB_FAILED", message: next.error ?? t("app.run.failed"),
+            ...(next.errorArgs == null ? {} : { args: next.errorArgs }),
+            ...(resuming ? { requiresNewRun: true } : {}), diagnostics: next.diagnostics });
         }
         try {
           const loadedManifest = await api.runManifest(next.runId);
@@ -101,7 +103,7 @@ export function useRun(pollMs = 500): Run {
       if (live()) {
         const failure = problemOf(error);
         const restart = resuming && error instanceof ApiError && (error.status === 400 || failure.code === "RUN_COMPLETE");
-        setProblem({ ...failure, message: restart ? t("app.run.restart", { message: failure.message }) : failure.message });
+        setProblem({ ...failure, ...(restart ? { requiresNewRun: true } : {}) });
       }
     } finally {
       if (live()) setRunning(false);

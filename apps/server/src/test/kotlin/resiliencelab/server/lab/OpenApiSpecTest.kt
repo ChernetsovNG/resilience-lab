@@ -1,6 +1,7 @@
 package resiliencelab.server.lab
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -46,6 +47,51 @@ class OpenApiSpecTest {
 
         assertThat(file).exists()
         assertThat(Files.readString(file)).describedAs("apps/server/openapi.json is stale; regenerate it").isEqualTo(generated)
+    }
+
+    @Test
+    fun `message argument maps document JSON strings and numbers`() {
+        val schemas =
+            Json
+                .parseToJsonElement(generated())
+                .jsonObject
+                .getValue("components")
+                .jsonObject
+                .getValue("schemas")
+                .jsonObject
+        listOf("ApiProblem" to "args", "JobView" to "errorArgs").forEach { (name, field) ->
+            val properties =
+                schemas
+                    .getValue(name)
+                    .jsonObject
+                    .getValue("properties")
+                    .jsonObject
+            assertThat(properties.keys).contains(field)
+            val values =
+                properties
+                    .getValue(field)
+                    .jsonObject
+                    .getValue("additionalProperties")
+                    .jsonObject
+            assertThat(values.getValue("type").jsonArray.map { it.jsonPrimitive.content })
+                .containsExactlyInAnyOrder("string", "number")
+        }
+    }
+
+    @Test
+    fun `older problem and job payloads decode without structured message fields`() {
+        val json = Json { encodeDefaults = true }
+        val oldProblem = """{"code":"LEGACY","message":"Legacy failure"}"""
+        val problem = json.decodeFromString(ApiProblem.serializer(), oldProblem)
+        val encodedProblem = Json.parseToJsonElement(json.encodeToString(ApiProblem.serializer(), problem)).jsonObject
+        assertThat(encodedProblem["args"]).isEqualTo(JsonNull)
+
+        val oldJob = """{"id":"job","experiment":"experiment","runId":"run","status":"FAILED",
+            "completedTasks":0,"totalTasks":0,"error":"Legacy failure"}"""
+        val job = json.decodeFromString(JobView.serializer(), oldJob)
+        val encodedJob = Json.parseToJsonElement(json.encodeToString(JobView.serializer(), job)).jsonObject
+        assertThat(encodedJob["errorCode"]).isEqualTo(JsonNull)
+        assertThat(encodedJob["errorArgs"]).isEqualTo(JsonNull)
     }
 
     @Test

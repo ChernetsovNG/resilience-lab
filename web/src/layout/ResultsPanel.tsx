@@ -1,3 +1,4 @@
+import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
@@ -131,7 +132,7 @@ export function ResultsPanel({
                   <button type="button" title={locationOf(diagnostic)} onClick={() => onDiagnostic?.(diagnostic)}>
                     <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}>{t(`results.problems.icon.${diagnostic.severity}`)}</span>
                     <span>
-                      <span className="diagnostic-message">{diagnostic.message}</span>
+                      <span className="diagnostic-message">{backendMessage(diagnostic)}</span>
                       <span className="diagnostic-context">{t("results.problems.context", {
                         element: target.element ?? t("common.experiment"),
                         variant: target.variant == null ? "" : t("results.problems.variant", { variant: target.variant }),
