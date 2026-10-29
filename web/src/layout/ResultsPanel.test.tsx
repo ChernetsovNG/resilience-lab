@@ -9,6 +9,18 @@ it("offers Timeline and explains that it needs a run", () => {
   expect(screen.getByRole("tabpanel").textContent).toContain("Run the experiment to see the timeline.");
 });
 
+it("offers Map only for the summary grid and returns to Summary after a run without a grid", async () => {
+  const grid = structuredClone(summary);
+  grid.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
+  const view = render(<ResultsPanel job={null} summary={grid} problem={null} activeVariantId="baseline" />);
+  fireEvent.click(screen.getByRole("tab", { name: "Map" }));
+  expect(await screen.findByRole("list", { name: "Map points" })).toBeTruthy();
+  view.rerender(<ResultsPanel job={null} summary={summary} problem={null} activeVariantId="baseline" />);
+  expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Summary" }).id);
+  expect(screen.getByRole("table", { name: "Summary" })).toBeTruthy();
+});
+
 it("lists all diagnostics in Problems and navigates from a finding", () => {
   const finding = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "At least one handler", document: "chain.model.json", pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" };
   const onDiagnostic = vi.fn();

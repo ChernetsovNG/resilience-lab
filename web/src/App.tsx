@@ -87,11 +87,12 @@ export function App() {
   for (const diagnostic of diagnostics) {
     if (loaded === null) break;
     const target = diagnosticTarget(diagnostic, loaded);
-    if (target.variant !== null && target.variant !== variant?.id) continue;
-    if (target.element !== null) {
+    const variantMatches = target.variant === null || target.variant === variant?.id;
+    if (!target.field?.startsWith("grid") && !variantMatches) continue;
+    if (variantMatches && target.element !== null) {
       elementDiagnostics.set(target.element, [...(elementDiagnostics.get(target.element) ?? []), diagnostic]);
     }
-    const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
+    const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults") || target.field?.startsWith("grid");
     if (target.field !== null && (setting || target.element === selected)) {
       fieldDiagnostics.set(target.field, [...(fieldDiagnostics.get(target.field) ?? []), diagnostic]);
     }
@@ -347,7 +348,7 @@ export function App() {
           if (loaded === null || invalid || loading) return;
           const target = diagnosticTarget(diagnostic, loaded);
           selectVariant(target.variant);
-          const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults");
+          const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults") || target.field?.startsWith("grid");
           setSelection(setting || target.element === null ? [] : [target.element]);
         }}
       />

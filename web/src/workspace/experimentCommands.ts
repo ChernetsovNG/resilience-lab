@@ -26,6 +26,12 @@ function editExperiment(change: (experiment: ExperimentFile) => ExperimentFile):
   };
 }
 
+/** Replace the shared grid in one history entry, preserving axis/value order and duplicates.
+ * An imported oversized grid may be edited or reduced, but cannot grow. */
+export function setGridAxes(grid: NonNullable<ExperimentFile["grid"]>): EditorCommand {
+  return editExperiment((experiment) => grid.length > Math.max(2, experiment.grid?.length ?? 0) ? experiment : { ...experiment, grid });
+}
+
 function parameter(model: ModelFile, catalog: Catalog, id: string, path: string) {
   const element = elementOf(model, id);
   const [name, ...fields] = path.split(".");
