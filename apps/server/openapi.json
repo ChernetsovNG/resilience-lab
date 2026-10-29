@@ -1396,9 +1396,45 @@
   },
   "components" : {
     "schemas" : {
+      "AggregateConnectionMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "meanInFlight" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "pooledLatency" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "timeoutRate" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/ConnectionTotals"
+          }
+        },
+        "required" : [ "totals" ]
+      },
       "AggregateMetrics" : {
         "type" : "object",
         "properties" : {
+          "connections" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateConnectionMetrics"
+            }
+          },
           "p95LatencyMs" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/MetricSummary"
@@ -1430,7 +1466,7 @@
             } ]
           }
         },
-        "required" : [ "pooledLatency", "services" ]
+        "required" : [ "connections", "pooledLatency", "services" ]
       },
       "AggregateServiceMetrics" : {
         "type" : "object",
@@ -1553,6 +1589,120 @@
           }
         },
         "required" : [ "fromType", "toType" ]
+      },
+      "ConnectionSeries" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "windows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectionWindowMetrics"
+            }
+          }
+        },
+        "required" : [ "id", "windows" ]
+      },
+      "ConnectionTotals" : {
+        "type" : "object",
+        "properties" : {
+          "backoffIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "inFlightIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "measurementMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "orphaned" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "orphanedIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "retries" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sentAttempts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "succeeded" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "timeouts" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "succeeded", "timeouts" ]
+      },
+      "ConnectionWindowMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "backoffIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "durationMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "failed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "inFlightIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "latency" : {
+            "$ref" : "#/components/schemas/LatencyStatistics"
+          },
+          "orphaned" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "orphanedIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "retries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sentAttempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "succeeded" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "timeouts" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "startMs", "succeeded", "timeouts" ]
       },
       "Diagnostic" : {
         "type" : "object",
@@ -2457,6 +2607,12 @@
       "SeriesPart" : {
         "type" : "object",
         "properties" : {
+          "connections" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConnectionSeries"
+            }
+          },
           "fromWindow" : {
             "type" : "integer",
             "format" : "int32"
@@ -2479,11 +2635,17 @@
             "format" : "int32"
           }
         },
-        "required" : [ "fromWindow", "nodes", "profile", "schemaVersion", "untilWindow" ]
+        "required" : [ "connections", "fromWindow", "nodes", "profile", "schemaVersion", "untilWindow" ]
       },
       "SeriesPartReference" : {
         "type" : "object",
         "properties" : {
+          "connections" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
           "file" : {
             "type" : "string"
           },
@@ -2509,7 +2671,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "file", "fromWindow", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
+        "required" : [ "connections", "file", "fromWindow", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
       },
       "ServiceTotals" : {
         "type" : "object",

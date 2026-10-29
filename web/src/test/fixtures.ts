@@ -195,7 +195,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -205,6 +205,7 @@ export const summary: RunSummary = {
       replications: 2,
       points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: {
         pooledLatency: {},
+        connections: {},
         successRate: { mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
         p95LatencyMs: { mean: 41.25, min: 40, max: 42.5 },
         p99LatencyMs: { mean: 80, min: 79, max: 81 },
@@ -225,13 +226,13 @@ export const summary: RunSummary = {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { pooledLatency: {}, services: {} } }],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { pooledLatency: {}, services: {}, connections: {} } }],
     },
   ],
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 4,
+  schemaVersion: 7,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",

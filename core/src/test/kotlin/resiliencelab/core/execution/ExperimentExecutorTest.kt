@@ -322,7 +322,7 @@ class ExperimentExecutorTest {
                 executor
                     .run(
                         experimentOf(settings, "mm1" to chain),
-                        onWindow = { _, _, _, _, rows -> windows += rows.single { it.id == "entry" }.metrics },
+                        onWindow = { _, _, _, _, rows, _ -> windows += rows.single { it.id == "entry" }.metrics },
                     ).variants
                     .single()
             }

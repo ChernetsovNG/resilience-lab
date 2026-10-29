@@ -264,7 +264,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AggregateConnectionMetrics: {
+            meanInFlight?: components["schemas"]["MetricSummary"] | null;
+            pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
+            timeoutRate?: components["schemas"]["MetricSummary"] | null;
+            totals: components["schemas"]["ConnectionTotals"];
+        };
         AggregateMetrics: {
+            connections: {
+                [key: string]: components["schemas"]["AggregateConnectionMetrics"];
+            };
             p95LatencyMs?: components["schemas"]["MetricSummary"] | null;
             p99LatencyMs?: components["schemas"]["MetricSummary"] | null;
             pooledLatency: components["schemas"]["LatencySummary"];
@@ -311,6 +320,57 @@ export interface components {
         ConnectionRule: {
             fromType: string;
             toType: string;
+        };
+        ConnectionSeries: {
+            id: string;
+            windows: components["schemas"]["ConnectionWindowMetrics"][];
+        };
+        ConnectionTotals: {
+            /** Format: double */
+            backoffIntegralMs: number;
+            /** Format: int64 */
+            failed: number;
+            /** Format: double */
+            inFlightIntegralMs: number;
+            /** Format: double */
+            measurementMs: number;
+            /** Format: int64 */
+            orphaned: number;
+            /** Format: double */
+            orphanedIntegralMs: number;
+            /** Format: int64 */
+            retries: number;
+            /** Format: int64 */
+            sentAttempts: number;
+            /** Format: int64 */
+            succeeded: number;
+            /** Format: int64 */
+            timeouts: number;
+        };
+        ConnectionWindowMetrics: {
+            /** Format: double */
+            backoffIntegralMs: number;
+            /** Format: double */
+            durationMs: number;
+            /** Format: int32 */
+            failed: number;
+            /** Format: double */
+            inFlightIntegralMs: number;
+            latency: components["schemas"]["LatencyStatistics"];
+            /** Format: int32 */
+            orphaned: number;
+            /** Format: double */
+            orphanedIntegralMs: number;
+            /** Format: int32 */
+            retries: number;
+            /** Format: int32 */
+            sentAttempts: number;
+            /** Format: double */
+            startMs: number;
+            /** Format: int32 */
+            succeeded: number;
+            /** Format: int32 */
+            timeouts: number;
         };
         Diagnostic: {
             code: string;
@@ -637,6 +697,7 @@ export interface components {
             windowMs: number;
         };
         SeriesPart: {
+            connections: components["schemas"]["ConnectionSeries"][];
             /** Format: int32 */
             fromWindow: number;
             nodes: components["schemas"]["NodeSeries"][];
@@ -647,6 +708,7 @@ export interface components {
             untilWindow: number;
         };
         SeriesPartReference: {
+            connections: string[];
             file: string;
             /** Format: int32 */
             fromWindow: number;

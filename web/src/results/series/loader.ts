@@ -98,6 +98,9 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
+    if (index.schemaVersion !== 2) {
+      throw new SeriesLoadError("INVALID_SERIES", `Unsupported series index schema version: ${index.schemaVersion}`);
+    }
     const selected = selectSeriesParts(index, request.nodes, request.fromWindow, request.untilWindow);
     const parts = await this.loadReferences(request, selected, getDecoder);
     await this.ensureClients(index, parts, request, getDecoder);
@@ -193,7 +196,7 @@ function partNumberOf(reference: SeriesPartReference): number {
 }
 
 function estimatedBytes(reference: SeriesPartReference, part: DecodedSeriesPart): number {
-  const decodedEstimate = part.nodes.reduce(
+  const decodedEstimate = [...part.nodes, ...part.connections].reduce(
     (total, node) => total + 64 + node.id.length * 2 + node.windows.length * 512,
     64,
   );

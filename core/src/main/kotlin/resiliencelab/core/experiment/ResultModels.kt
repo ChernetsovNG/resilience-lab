@@ -17,6 +17,7 @@ data class ReplicationResult(
     val successes: Int,
     val failures: Int,
     val services: Map<String, ServiceMetrics>,
+    val connections: Map<String, ConnectionMetrics> = emptyMap(),
 )
 
 /**
@@ -60,6 +61,7 @@ data class AggregateMetrics(
     val p95LatencyMs: MetricSummary?,
     val p99LatencyMs: MetricSummary?,
     val services: Map<String, AggregateServiceMetrics>,
+    val connections: Map<String, AggregateConnectionMetrics> = emptyMap(),
 )
 
 /** Pooled client-latency distributions partitioned by final client outcome. */
@@ -70,7 +72,7 @@ data class LatencySummary(
     val failed: LatencyDistribution?,
 )
 
-/** Descriptive statistics for a non-empty set of pooled client latencies. */
+/** Descriptive statistics for a non-empty set of pooled client or call-response latencies. */
 @Serializable
 data class LatencyDistribution(
     val meanMs: Double,
@@ -116,5 +118,49 @@ data class ServiceTotals(
     val busyHandlerTimeMs: Double,
     val handlerCapacityTimeMs: Double,
     val queueLengthIntegralMs: Double,
+    val measurementMs: Double,
+)
+
+/**
+ * Call-attempt counters and response-only latency for the measured arrival cohort, including run-out.
+ * Occupancy integrals cover the fixed measurement interval and include all work present, including warm-up.
+ * Timeout durations never enter [latency]; orphaned work lasts through the child's response network delay.
+ */
+@Serializable
+data class ConnectionMetrics(
+    val sentAttempts: Int,
+    val retries: Int,
+    val succeeded: Int,
+    val failed: Int,
+    val timeouts: Int,
+    val orphaned: Int,
+    val inFlightIntegralMs: Double,
+    val orphanedIntegralMs: Double,
+    val backoffIntegralMs: Double,
+    val measurementMs: Double,
+    val latency: LatencyStatistics,
+)
+
+/** Replication-level timeout fraction and mean in-flight occupancy, plus pooled response latency and totals. */
+@Serializable
+data class AggregateConnectionMetrics(
+    val timeoutRate: MetricSummary?,
+    val meanInFlight: MetricSummary?,
+    val pooledLatency: LatencyDistribution?,
+    val totals: ConnectionTotals,
+)
+
+/** Pooled call counters and occupancy integrals; [measurementMs] is summed across contributing replications. */
+@Serializable
+data class ConnectionTotals(
+    val sentAttempts: Long,
+    val retries: Long,
+    val succeeded: Long,
+    val failed: Long,
+    val timeouts: Long,
+    val orphaned: Long,
+    val inFlightIntegralMs: Double,
+    val orphanedIntegralMs: Double,
+    val backoffIntegralMs: Double,
     val measurementMs: Double,
 )

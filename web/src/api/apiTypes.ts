@@ -6,6 +6,7 @@ export type ApiProblem = Schemas["ApiProblem"];
 export type BlockInstance = Schemas["BlockInstance"];
 export type Catalog = Schemas["Catalog"];
 export type ConnectionInstance = Schemas["ConnectionInstance"];
+export type ConnectionWindowMetrics = Schemas["ConnectionWindowMetrics"];
 export type Diagnostic = Schemas["Diagnostic"];
 export type DocumentContent = Schemas["DocumentContent"];
 export type DocumentDraft = Schemas["DocumentDraft"];

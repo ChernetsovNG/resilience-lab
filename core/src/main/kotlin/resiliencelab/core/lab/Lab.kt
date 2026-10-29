@@ -165,8 +165,8 @@ class Lab(
             executor.run(
                 compiled,
                 isCancelled = isCancelled,
-                onWindow = { variant, point, replication, window, rows ->
-                    series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows)
+                onWindow = { variant, point, replication, window, rows, connections ->
+                    series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows, connections)
                 },
                 onReplication = { variant, point, replication, result ->
                     writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
@@ -236,8 +236,8 @@ class Lab(
                     compiled,
                     invalid,
                     isCancelled = isCancelled,
-                    onWindow = { variant, point, replication, window, rows ->
-                        series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows)
+                    onWindow = { variant, point, replication, window, rows, connections ->
+                        series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows, connections)
                     },
                     onReplication = { variant, point, replication, result ->
                         writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
