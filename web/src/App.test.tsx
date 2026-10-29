@@ -1045,8 +1045,8 @@ it("remembers separate heights for all five result tabs across remounts", async 
   const sizes = new Map<string, number>();
   for (const [index, tab] of ["Answer", "Timeline", "Assumptions", "Map", "Problems"].entries()) {
     fireEvent.click(screen.getByRole("tab", { name: tab }));
-    fireEvent.keyDown(screen.getByRole("separator"), { key: "Home" });
-    for (let step = 0; step <= index; step++) fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowUp" });
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize results panel" }), { key: "Home" });
+    for (let step = 0; step <= index; step++) fireEvent.keyDown(screen.getByRole("separator", { name: "Resize results panel" }), { key: "ArrowUp" });
     sizes.set(tab, height());
   }
   view.unmount();

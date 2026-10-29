@@ -3,12 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ResultsWorkspace } from "./ResultsWorkspace";
 
 let resizeWindow: (height: number) => void;
+let resizeWorkspace: (width: number, height: number) => void;
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1440, 800));
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: ResizeObserverCallback) {
       resizeWindow = height => callback([{ contentRect: new DOMRect(0, 0, 1440, height) } as ResizeObserverEntry], this);
+      resizeWorkspace = (width, height) => callback([{ contentRect: new DOMRect(0, 0, width, height) } as ResizeObserverEntry], this);
     }
     observe() {}
     unobserve() {}
@@ -63,4 +65,80 @@ it("keeps resizing when browser storage cannot be read or written", () => {
   const initial = height();
   fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowUp" });
   expect(height()).toBe(initial + 16);
+});
+
+const withInspector = (selected: string | null = null) => <ResultsWorkspace view="answer" collapsed={false} analysis={false}
+  inspector={<input aria-label="Draft" defaultValue="draft" />} inspectorSelection={selected}><section /></ResultsWorkspace>;
+const inspectorDivider = () => screen.getByRole("separator", { name: "Resize inspector" });
+const inspectorWidth = () => Number(inspectorDivider().getAttribute("aria-valuenow"));
+
+it("resizes the inspector with arrows, clamps its bounds and resets on double-click", () => {
+  render(withInspector());
+  expect(inspectorWidth()).toBe(317);
+  fireEvent.keyDown(inspectorDivider(), { key: "ArrowLeft" });
+  expect(inspectorWidth()).toBe(333);
+  fireEvent.keyDown(inspectorDivider(), { key: "Home" });
+  fireEvent.keyDown(inspectorDivider(), { key: "ArrowRight" });
+  expect(inspectorWidth()).toBe(280);
+  fireEvent.keyDown(inspectorDivider(), { key: "End" });
+  fireEvent.keyDown(inspectorDivider(), { key: "ArrowLeft" });
+  expect(inspectorWidth()).toBe(480);
+  fireEvent.doubleClick(inspectorDivider());
+  expect(inspectorWidth()).toBe(317);
+  act(() => resizeWorkspace(1920, 800));
+  expect(inspectorWidth()).toBe(422);
+});
+
+it("resizes the inspector by pointer and stops after pointer cancellation", () => {
+  vi.stubGlobal("PointerEvent", MouseEvent);
+  const divider = render(withInspector());
+  Object.defineProperty(inspectorDivider(), "setPointerCapture", { value: vi.fn() });
+  fireEvent.pointerDown(inspectorDivider(), { button: 0, clientX: 1000 });
+  fireEvent.pointerMove(inspectorDivider(), { clientX: 900 });
+  expect(inspectorWidth()).toBe(417);
+  fireEvent.pointerMove(inspectorDivider(), { clientX: 0 });
+  expect(inspectorWidth()).toBe(480);
+  fireEvent.pointerCancel(inspectorDivider());
+  fireEvent.pointerMove(inspectorDivider(), { clientX: 1100 });
+  expect(inspectorWidth()).toBe(480);
+  divider.unmount();
+});
+
+it("persists inspector collapse and selection without losing a field draft", () => {
+  const view = render(withInspector());
+  fireEvent.change(screen.getByLabelText("Draft"), { target: { value: "unfinished" } });
+  fireEvent.click(screen.getByRole("button", { name: "Collapse inspector" }));
+  view.rerender(withInspector("dependency"));
+  expect(screen.queryByRole("textbox", { name: "Draft" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Expand inspector: dependency selected" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Expand inspector: dependency selected" }));
+  expect((screen.getByLabelText("Draft") as HTMLInputElement).value).toBe("unfinished");
+  fireEvent.click(screen.getByRole("button", { name: "Collapse inspector" }));
+  view.unmount();
+  render(withInspector());
+  expect(screen.getByRole("button", { name: "Expand inspector" })).toBeTruthy();
+});
+
+it("constrains a saved inspector width in a smaller window and restores it on growth", () => {
+  const view = render(withInspector());
+  fireEvent.keyDown(inspectorDivider(), { key: "End" });
+  view.unmount();
+  render(withInspector());
+  expect(inspectorWidth()).toBe(480);
+  act(() => resizeWorkspace(900, 800));
+  expect(inspectorWidth()).toBe(364);
+  act(() => resizeWorkspace(1440, 800));
+  expect(inspectorWidth()).toBe(480);
+});
+
+it("resets only the current results height to its relative default", () => {
+  const view = render(workspace());
+  const divider = () => screen.getByRole("separator", { name: "Resize results panel" });
+  fireEvent.keyDown(divider(), { key: "End" });
+  view.rerender(workspace(true));
+  fireEvent.keyDown(divider(), { key: "Home" });
+  fireEvent.doubleClick(divider());
+  expect(height()).toBe(491);
+  view.rerender(workspace());
+  expect(height()).toBe(572);
 });

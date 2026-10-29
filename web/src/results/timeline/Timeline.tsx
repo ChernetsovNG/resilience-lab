@@ -1,4 +1,5 @@
 import { t } from "../../i18n";
+import { TimelineGrid } from "./TimelineGrid";
 import { formatDuration, formatNumber } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../../api/apiTypes";
@@ -143,8 +144,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     {overlay.problem === null ? null : <p role="status">{t("results.timeline.comparisonProblem", { problem: overlay.problem })}</p>}
     {nodes.length === 0 ? <p>{t("results.timeline.selectNodes")}</p> : null}
     {!primary.loading && primary.problem === null && nodes.length > 0 && charts.length === 0 ? <p>{t("results.timeline.selectMetrics")}</p> : null}
-    <div className="timeline-charts">{charts.map((group) => <TimelineChart key={group.title} title={group.title} unit={group.unit}
+    <TimelineGrid>{charts.map((group) => <TimelineChart key={group.title} title={group.title} unit={group.unit}
       lines={group.lines} regions={regions} endMs={endMs} windowMs={windowMs} hoverWindow={hover} cursorWindow={cursorWindow}
-      onHover={setHover} onCursor={onCursor} />)}</div>
+      onHover={setHover} onCursor={onCursor} />)}</TimelineGrid>
   </div>;
 }
