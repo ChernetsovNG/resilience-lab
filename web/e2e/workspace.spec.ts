@@ -38,7 +38,8 @@ test("validates zero handlers without saving and clears diagnostics after correc
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
   await expect(problems.getByRole("button", { name: /PARAM_RANGE/ }).first()).toBeVisible();
-  await expect(problems).toContainText("/blocks/gateway/params/handlers");
+  await expect(problems.getByRole("button", { name: /PARAM_RANGE/ }).first()).toHaveAttribute("title", /\/blocks\/gateway\/params\/handlers/);
+  await expect(problems).not.toContainText("/blocks/gateway/params/handlers");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
@@ -165,7 +166,9 @@ test("validates variant drafts on their own page and blocks Run until errors are
       await expect(run).toHaveAttribute("title", "Fix validation errors before running");
     }
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
-    await page.getByRole("tabpanel").getByRole("button", { name: /\/variants\/1\/overrides\/gateway\.handlers/ }).click();
+    const diagnostic = page.getByRole("tabpanel").getByRole("button", { name: /PARAM_RANGE/ });
+    await expect(diagnostic).toHaveAttribute("title", /\/variants\/1\/overrides\/gateway\.handlers/);
+    await diagnostic.click();
     await expect(page.getByRole("tab", { name: "No retries", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(handlers).toHaveValue("0");
     await expect(fieldMessages).toContainText("PARAM_RANGE");
@@ -402,7 +405,7 @@ test("shows summary, assumptions and every results panel size without page scrol
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await expect(panel).toBeHidden();
   await expect(page.getByRole("tab", { name: "Answer", exact: true })).toBeVisible();
-  await expect(page.getByTestId("results-job-status")).toContainText("COMPLETED");
+  await expect(page.getByRole("region", { name: "Status bar" }).getByTestId("job-status")).toHaveText("COMPLETED");
   await expectNoPageScroll(page);
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
   await expect(panel).toBeVisible();
@@ -416,7 +419,9 @@ test("shows summary, assumptions and every results panel size without page scrol
   const topBar = await page.locator(".top-bar").boundingBox();
   const expanded = await page.locator(".results-panel").boundingBox();
   expect(expanded!.y).toBe(topBar!.y + topBar!.height);
-  expect(expanded!.height).toBe(720 - topBar!.y - topBar!.height);
+  const statusBar = await page.getByRole("region", { name: "Status bar" }).boundingBox();
+  expect(expanded!.height).toBe(statusBar!.y - topBar!.y - topBar!.height);
+  expect(statusBar!.y + statusBar!.height).toBe(720);
   await expectNoPageScroll(page);
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
   await expect(page.locator(".palette")).toBeVisible();
@@ -651,7 +656,7 @@ test("refuses resume after the model changes and suggests a new run", async ({ p
     await page.getByRole("button", { name: "Collapse results", exact: true }).click();
     await resume.click();
     const problem = page.getByRole("alert");
-    await expect(problem).toContainText("RUN_DOCUMENT_CHANGED");
+    await expect(page.getByRole("tabpanel")).toContainText("RUN_DOCUMENT_CHANGED");
     await expect(problem).toContainText("Start a new run");
     await expect(run).toBeEnabled();
     await expect(page.getByRole("table", { name: "Answer" })).toHaveCount(0);

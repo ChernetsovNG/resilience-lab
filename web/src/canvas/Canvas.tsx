@@ -49,6 +49,8 @@ export interface CanvasProps {
   onParam?: (id: string, path: string, value: unknown) => void;
   onValidity?: (key: string, valid: boolean) => void;
   elementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  /** Reports viewport zoom after node initialization; an empty model reports immediately. */
+  onZoomChange?: (zoom: number) => void;
 }
 
 /** The model on a React Flow canvas (ADR 0004); documents and one-command gestures own all edits. */
@@ -57,12 +59,17 @@ export function Canvas(props: CanvasProps) {
 }
 
 function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
-  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, overrides = {}, results = null }: CanvasProps) {
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView } = useReactFlow();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
+  const zoom = useStore((state) => state.transform[2]);
   const initialized = useNodesInitialized();
+  const hasNodes = Object.keys(model.blocks).length > 0;
+  useEffect(() => {
+    if (initialized || !hasNodes) onZoomChange?.(zoom);
+  }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   useEffect(() => {
     if (initialized && width > 0 && height > 0) void fitView({ padding: 0.15, minZoom: 0.05 });

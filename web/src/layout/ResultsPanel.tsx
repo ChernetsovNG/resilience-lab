@@ -2,7 +2,8 @@ import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
-import { locationOf } from "../validation/diagnostics";
+import { diagnosticTarget, locationOf } from "../validation/diagnostics";
+import type { LoadedExperiment } from "../workspace/editor";
 import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
@@ -37,15 +38,9 @@ export interface ResultsPanelProps {
   validationPending?: boolean;
   validationProblem?: ApiProblem | null;
   onDiagnostic?: (diagnostic: Diagnostic) => void;
-}
-
-function progressOf(job: JobView): string {
-  const cancelling = job.cancelRequested && (job.status === "QUEUED" || job.status === "RUNNING");
-  return t("results.progress", {
-    status: t(`results.jobStatus.${job.status}`), completed: formatNumber(job.completedTasks),
-    total: job.totalTasks === 0 ? t("results.unknownTotal") : formatNumber(job.totalTasks),
-    cancelling: cancelling ? t("results.cancellationRequested") : "",
-  });
+  diagnosticDocuments?: Pick<LoadedExperiment, "model" | "modelPath" | "experiment" | "experimentPath"> | null;
+  /** Incremented by the status bar or a newly received error; ordinary rerenders preserve the selected tab. */
+  problemsRequest?: number;
 }
 
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
@@ -53,19 +48,21 @@ export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, onReplicationChange, cursorWindow = null, onCursorChange,
-  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
+  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, diagnosticDocuments = null, problemsRequest = 0,
 }: ResultsPanelProps) {
-  const [navigation, setNavigation] = useState({ view: "answer", running, changedDuringRun: false, completedJob: null as string | null });
+  const [navigation, setNavigation] = useState({ view: "answer", running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
   const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
+  const revealProblems = problemsRequest !== navigation.problemsRequest;
   // Adjust navigation once per run; a choice made while submission is pending also counts.
-  if (running !== navigation.running || (completedJob !== null && completedJob !== navigation.completedJob)) {
+  if (revealProblems || running !== navigation.running || (completedJob !== null && completedJob !== navigation.completedJob)) {
     const starting = running && !navigation.running;
     const finished = completedJob !== null && completedJob !== navigation.completedJob;
     setNavigation({
-      view: finished && !(navigation.running && navigation.changedDuringRun) ? "answer" : navigation.view,
+      view: revealProblems ? "problems" : finished && !(navigation.running && navigation.changedDuringRun) ? "answer" : navigation.view,
       running,
-      changedDuringRun: starting ? false : navigation.changedDuringRun,
+      changedDuringRun: (starting ? false : navigation.changedDuringRun) || (revealProblems && running),
       completedJob: completedJob ?? navigation.completedJob,
+      problemsRequest,
     });
   }
   const restoredJob = useRef<string | null>(null);
@@ -116,13 +113,10 @@ export function ResultsPanel({
           {size !== "normal" ? <button type="button" onClick={() => onSizeChange?.("normal")}>{t("results.restore")}</button> : null}
           {size !== "expanded" ? <button type="button" onClick={() => onSizeChange?.("expanded")}>{t("results.expand")}</button> : null}
         </span>
-        <span className="results-job-status" data-testid="results-job-status" role="status">
-          {job === null ? "" : progressOf(job)}
-        </span>
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
-        {problem === null ? null : <ProblemList problem={problem} />}
+        {problem === null ? null : <ProblemList problem={{ ...problem, diagnostics: [] }} />}
         {(active === "answer" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
           <label htmlFor={`${id}-point`}>{t("results.gridPoint")}</label>
           <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
@@ -136,13 +130,27 @@ export function ResultsPanel({
         </div> : null}
         {active === "problems" ? <>
           {validationPending ? <p role="status">{t("results.problems.validating")}</p> : null}
-          {validationProblem === null ? null : <ProblemList problem={validationProblem} />}
+          {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} />}
           <ul className="validation-problems">
-            {diagnostics.map((diagnostic, index) => <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
-              <button type="button" onClick={() => onDiagnostic?.(diagnostic)}>
-                {t("results.problems.diagnostic", { severity: diagnostic.severity, code: diagnostic.code, message: diagnostic.message, location: locationOf(diagnostic) })}
-              </button>
-            </li>)}
+            {[...diagnostics].sort((left, right) => Number(right.severity === "ERROR") - Number(left.severity === "ERROR"))
+              .map((diagnostic, index) => {
+                const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(diagnostic, diagnosticDocuments);
+                return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
+                  <button type="button" title={locationOf(diagnostic)} onClick={() => onDiagnostic?.(diagnostic)}>
+                    <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}>{t(`results.problems.icon.${diagnostic.severity}`)}</span>
+                    <span>
+                      <span className="diagnostic-message">{diagnostic.message}</span>
+                      <span className="diagnostic-context">{t("results.problems.context", {
+                        element: target.element ?? t("common.experiment"),
+                        variant: target.variant == null ? "" : t("results.problems.variant", { variant: target.variant }),
+                      })}</span>
+                      <span className="diagnostic-details">{t("results.problems.details", {
+                        code: diagnostic.code, document: diagnostic.document ?? t("common.experiment"),
+                      })}</span>
+                    </span>
+                  </button>
+                </li>;
+              })}
           </ul>
           {!validationPending && validationProblem === null && diagnostics.length === 0 ? <p>{t("results.problems.none")}</p> : null}
         </> : active === "timeline" ? <>
@@ -166,7 +174,7 @@ export function ResultsPanel({
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} />
             </>
           ) : (
-            <p className="results-empty">{job === null ? t("results.empty") : progressOf(job)}</p>
+            <p className="results-empty">{job === null ? t("results.empty") : t("results.awaitingSummary")}</p>
           )}
         </>}
         {timelineOpened && summary !== null && manifest !== null && model !== null && experiment !== null && catalog !== null && runId !== null ?

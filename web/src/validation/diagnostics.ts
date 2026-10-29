@@ -1,7 +1,26 @@
 import { t } from "../i18n";
-import type { Diagnostic } from "../api/apiTypes";
+import type { ApiProblem, Diagnostic } from "../api/apiTypes";
 import type { LoadedExperiment } from "../workspace/editor";
 import { elementOf } from "../workspace/params";
+
+/** Stable identity across validation and launch responses, including variant and document origin. */
+export function diagnosticKey(diagnostic: Diagnostic): string {
+  return JSON.stringify([diagnostic.severity, diagnostic.code, diagnostic.message, diagnostic.document ?? null,
+    diagnostic.pointer ?? null, diagnostic.path ?? null, diagnostic.variant ?? null]);
+}
+
+/** Preserve response order and count findings repeated by validation and launch only once. */
+export function mergeDiagnostics(...groups: (readonly Diagnostic[])[]): Diagnostic[] {
+  return [...new Map(groups.flat().map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values()];
+}
+
+/** A transport or launch failure without compiler diagnostics still counts as one visible error. */
+export function problemDiagnostics(problem: ApiProblem | null): readonly Diagnostic[] {
+  if (problem === null) return [];
+  return problem.diagnostics.length > 0 ? problem.diagnostics : [{
+    code: problem.code, message: problem.message, severity: "ERROR", document: null, pointer: null, path: null,
+  }];
+}
 
 /** Human-readable document location shared by API and validation problem lists. */
 export function locationOf(diagnostic: Diagnostic): string {
