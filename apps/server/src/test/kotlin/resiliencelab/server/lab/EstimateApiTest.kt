@@ -46,7 +46,7 @@ class EstimateApiTest {
         assertThat(response.status).isEqualTo(200)
         val expected = json.encodeToString(ExperimentEstimate.serializer(), lab.estimate(experiment))
         assertThat(Json.parseToJsonElement(response.contentAsString)).isEqualTo(Json.parseToJsonElement(expected))
-        assertThat(JsonPath.read<Int>(response.contentAsString, "$.tasks")).isEqualTo(4)
+        assertThat(JsonPath.read<Int>(response.contentAsString, "$.tasks")).isEqualTo(20)
         assertThat(root.resolve(".results")).doesNotExist()
         openApi.assertResponse("post", "/api/v1/estimate", response)
     }

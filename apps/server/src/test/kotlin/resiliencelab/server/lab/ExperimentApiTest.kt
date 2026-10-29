@@ -38,6 +38,47 @@ class ExperimentApiTest {
     }
 
     @Test
+    fun `few replications warning locates the draft experiment without blocking jobs`() {
+        val original = Files.readString(root.resolve(experiment))
+        val draft = original.replace(Regex("\"replications\": \\d+"), "\"replications\": 4")
+        val response =
+            postJson(
+                "/api/v1/validate",
+                """{"experiment":"$experiment","drafts":[{"path":"$experiment","content":{"experiment":$draft}}]}""",
+            )
+
+        assertThat(response.status).isEqualTo(200)
+        assertThat(JsonPath.read<Boolean>(response.contentAsString, "$.valid")).isTrue()
+        val warnings =
+            JsonPath.read<List<Map<String, Any?>>>(
+                response.contentAsString,
+                "$.diagnostics[?(@.code == 'LINT_FEW_REPLICATIONS')]",
+            )
+        assertThat(warnings).hasSize(1)
+        val warning = warnings.single()
+        assertThat(warning["severity"]).isEqualTo("WARNING")
+        assertThat(warning["document"]).isEqualTo(experiment)
+        assertThat(warning["pointer"]).isEqualTo("/execution/replications")
+        assertThat(warning["variant"]).isNull()
+        assertThat(warning["path"]).isNull()
+        assertThat(warning["message"] as String).contains("4", "95%", "unreliable", "at least 5")
+        assertThat(Files.readString(root.resolve(experiment))).isEqualTo(original)
+        openApi.assertResponse("post", "/api/v1/validate", response)
+
+        val path = "few.experiment.json"
+        Files.writeString(
+            root.resolve(path),
+            draft
+                .replace("retry-storm.model.json", "retry-storm/retry-storm.model.json")
+                .replace("retry-storm.layout.json", "retry-storm/retry-storm.layout.json"),
+        )
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$path"}""")
+        assertThat(submitted.status).isEqualTo(202)
+        val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
+        assertThat(JsonPath.read<String>(finished.contentAsString, "$.status")).isEqualTo("COMPLETED")
+    }
+
+    @Test
     fun `validates experiments by workspace path`() {
         val valid = postJson("/api/v1/validate", """{"experiment":"$experiment"}""")
 
@@ -125,8 +166,8 @@ class ExperimentApiTest {
         val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
 
         assertThat(JsonPath.read<String>(finished.contentAsString, "$.status")).isEqualTo("COMPLETED")
-        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.completedTasks")).isEqualTo(4)
-        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.totalTasks")).isEqualTo(4)
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.completedTasks")).isEqualTo(20)
+        assertThat(JsonPath.read<Int>(finished.contentAsString, "$.totalTasks")).isEqualTo(20)
         openApi.assertResponse("get", "/api/v1/jobs/{id}", finished)
 
         val jobs = mockMvc.perform(get("/api/v1/jobs")).andReturn().response
@@ -255,7 +296,7 @@ class ExperimentApiTest {
         val path = "retry-storm/$name.experiment.json"
         Files.writeString(
             root.resolve(path),
-            Files.readString(root.resolve(experiment)).replace("\"replications\": 2", "\"replications\": 1000"),
+            Files.readString(root.resolve(experiment)).replace("\"replications\": 10", "\"replications\": 1000"),
         )
         val submitted = postJson("/api/v1/jobs", """{"experiment":"$path"}""")
         assertThat(submitted.status).isEqualTo(202)

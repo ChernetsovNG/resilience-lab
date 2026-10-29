@@ -404,7 +404,7 @@ class LabTest {
         val cancelledRoot = exampleWorkspace()
         val cancelledFile = cancelledRoot.resolve(experiment)
         val original = Files.readString(cancelledFile)
-        val shortened = original.replace("\"replications\": 2", "\"replications\": 1")
+        val shortened = original.replace("\"replications\": 10", "\"replications\": 1")
         assertThat(shortened).isNotEqualTo(original)
         Files.writeString(cancelledFile, shortened)
         ExperimentExecutor(workers = 1).use { executor ->
@@ -495,8 +495,10 @@ class LabTest {
             assertThat(it.variant).isEqualTo("baseline")
             assertThat(it.message).doesNotContain("variants:")
         }
-        assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("80", "189")
-        assertThat(report.diagnostics.single { it.code == "LINT_DEADLINE_BUDGET" }.message).contains("250", "420")
+        assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message)
+            .isEqualTo("Timeout 80 ms is below the downstream budget 189 ms")
+        assertThat(report.diagnostics.single { it.code == "LINT_DEADLINE_BUDGET" }.message)
+            .isEqualTo("Deadline 250 ms is below the timeout sum 420 ms")
         assertThat(report.valid).isTrue()
     }
 
@@ -514,10 +516,10 @@ class LabTest {
         executor.close()
 
         assertThat(calls.get()).isZero()
-        assertThat(estimate.tasks).isEqualTo(4)
+        assertThat(estimate.tasks).isEqualTo(20)
         assertThat(estimate.expectedEvents).isPositive()
-        assertThat(estimate.expectedRows).isEqualTo(1_600)
-        assertThat(estimate.estimatedParts).isEqualTo(4)
+        assertThat(estimate.expectedRows).isEqualTo(8_000)
+        assertThat(estimate.estimatedParts).isEqualTo(20)
         assertThat(estimate.estimatedSeconds).isPositive()
         assertThat(estimate.estimatedArtifactBytes).isPositive()
         assertThat(root.resolve(".results")).doesNotExist()

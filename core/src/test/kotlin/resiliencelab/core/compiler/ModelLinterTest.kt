@@ -1,7 +1,10 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
+import resiliencelab.core.document.GridAxis
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -31,8 +34,49 @@ class ModelLinterTest {
             listOf(service("a", 1.0), service("b", 2.0), service("c", 8.0)),
             listOf(call("a-b", "a", "b", 100.0, 1, 1), call("b-c", "b", "c", 20.0, 1, 2)),
             emptyList(),
-            RunSettings(1, 0.0, 1.0, 1L, 30L),
+            RunSettings(5, 0.0, 1.0, 1L, 30L),
         )
+
+    @Test
+    fun `few replications warns below five once across variants and grid points`() {
+        listOf(4, 5).forEach { replications ->
+            val run = chain.run.copy(replications = replications)
+            val points =
+                listOf(100, 101).mapIndexed { index, handlers ->
+                    CompiledPoint("p$index", mapOf("a.handlers" to JsonPrimitive(handlers)), chain.copy(run = run))
+                }
+            val experiment =
+                CompiledExperiment(
+                    listOf(CompiledVariant("one", "One", points), CompiledVariant("two", "Two", points)),
+                    run,
+                    listOf(GridAxis("a.handlers", listOf(JsonPrimitive(100), JsonPrimitive(101)))),
+                )
+
+            val warnings = linter.lint(experiment).filter { it.code == "LINT_FEW_REPLICATIONS" }
+
+            if (replications == 4) {
+                assertThat(warnings).hasSize(1)
+                val warning = warnings.single()
+                assertThat(warning.severity).isEqualTo(Severity.WARNING)
+                assertThat(warning.pointer).isEqualTo("/execution/replications")
+                assertThat(warning.path).isNull()
+                assertThat(warning.variant).isNull()
+                assertThat(warning.message).contains("4", "95%", "unreliable", "at least 5")
+            } else {
+                assertThat(warnings).isEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun `minimum replications is a positive rule parameter`() {
+        val experiment = experiment(chain.copy(run = chain.run.copy(replications = 4)))
+
+        assertThat(ModelLinter(minimumReplications = 4).lint(experiment).map { it.code }).doesNotContain("LINT_FEW_REPLICATIONS")
+        assertThat(ModelLinter(minimumReplications = 5).lint(experiment).single { it.code == "LINT_FEW_REPLICATIONS" }.message)
+            .contains("at least 5")
+        assertThatThrownBy { ModelLinter(minimumReplications = 0) }.isInstanceOf(IllegalArgumentException::class.java)
+    }
 
     @Test
     fun `timeout includes target processing and request and response network delays`() {
@@ -51,7 +95,7 @@ class ModelLinterTest {
         assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.pointer).isEqualTo("/connections/1/params/timeout")
         assertThat(warning.path).isEqualTo("a-b")
-        assertThat(warning.message).contains("44", "46")
+        assertThat(warning.message).isEqualTo("Timeout 44 ms is below the downstream budget 46 ms")
         assertThat(
             warnings(
                 changed.copy(
@@ -69,6 +113,21 @@ class ModelLinterTest {
                 "LINT_TIMEOUT_BUDGET",
             ),
         ).isEmpty()
+    }
+
+    @Test
+    fun `fractional timeout budgets retain their precision`() {
+        val changed =
+            chain.copy(
+                calls =
+                    listOf(
+                        chain.calls[0].copy(timeoutMs = 44.25, network = fixed(2.0625)),
+                        chain.calls[1].copy(attempts = 2),
+                    ),
+            )
+
+        assertThat(warnings(changed, "LINT_TIMEOUT_BUDGET").single().message)
+            .isEqualTo("Timeout 44.25 ms is below the downstream budget 46.125 ms")
     }
 
     @Test
@@ -122,7 +181,14 @@ class ModelLinterTest {
         val result = assertTimeoutPreemptively<List<Diagnostic>>(Duration.ofSeconds(2)) { linter.lint(experiment(changed)) }
 
         assertThat(result.single { it.code == "LINT_RETRY_AMPLIFICATION" }.message).contains("4611686014132420609")
-        assertThat(result.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("5.3687091168E10")
+        assertThat(result.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("53687091168")
+    }
+
+    @Test
+    fun `overflowing computed budgets remain advisory`() {
+        val changed = chain.copy(calls = chain.calls.map { it.copy(attempts = 2, timeoutMs = Double.MAX_VALUE) })
+
+        assertThat(warnings(changed, "LINT_DEADLINE_BUDGET").single().message).contains("Infinity")
     }
 
     @Test
@@ -138,7 +204,7 @@ class ModelLinterTest {
 
         assertThat(warning.path).isEqualTo("a")
         assertThat(warning.pointer).isEqualTo("/blocks/a/params/handlers")
-        assertThat(warning.message).contains("1", "2", "16", "125")
+        assertThat(warning.message).isEqualTo("Handlers 1 are below λ·W = 2 (λ = 125 requests/s, W = 16 ms)")
         assertThat(
             warnings(
                 changed.copy(
@@ -170,7 +236,7 @@ class ModelLinterTest {
 
         assertThat(warning.path).isEqualTo("client")
         assertThat(warning.pointer).isEqualTo("/blocks/client/params/deadline")
-        assertThat(warning.message).contains("239", "240")
+        assertThat(warning.message).isEqualTo("Deadline 239 ms is below the timeout sum 240 ms")
         assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = 240.0)), "LINT_DEADLINE_BUDGET")).isEmpty()
     }
 

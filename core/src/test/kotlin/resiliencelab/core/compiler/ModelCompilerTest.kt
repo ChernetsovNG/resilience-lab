@@ -155,7 +155,7 @@ class ModelCompilerTest {
         val solo = source.variants.last().copy(id = "solo", overrides = mapOf("gateway.handlers" to JsonPrimitive(1)))
         val compiled = compiler.compile(model(), "m.model.json", source.copy(variants = listOf(solo)), "e.experiment.json")
 
-        val warning = ModelLinter().lint(compiled.experiment!!).single()
+        val warning = ModelLinter().lint(compiled.experiment!!).single { it.code == "LINT_HANDLERS_LITTLE" }
 
         assertThat(warning.code).isEqualTo("LINT_HANDLERS_LITTLE")
         assertThat(warning.variant).isEqualTo("solo")
