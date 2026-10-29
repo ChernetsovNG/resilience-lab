@@ -37,6 +37,7 @@ export function App() {
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.job?.id ?? null);
   const [showDiagramResults, setShowDiagramResults] = useState(true);
+  const [showEstimate, setShowEstimate] = useState(false);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
@@ -156,6 +157,7 @@ export function App() {
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
   const requestEstimate = () => {
+    setShowEstimate(true);
     if (resultsSize === "expanded") setResultsSize("normal");
     return estimate.request();
   };
@@ -197,8 +199,12 @@ export function App() {
           if (loaded === null) return;
           void requestEstimate().then((cost) => {
             if (cost === null) return;
-            const budgets = cost.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
-            if (budgets.length > 0 && !window.confirm(`${budgets.map((warning) => warning.message).join("\n")}\nStart this run?`)) return;
+            if (cost.problem !== null) {
+              if (!window.confirm(`Cost estimate failed: ${cost.problem.message}\nTime and size budgets could not be checked.\nStart this run without an estimate?`)) return;
+            } else {
+              const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
+              if (budgets.length > 0 && !window.confirm(`${budgets.map((warning) => warning.message).join("\n")}\nStart this run?`)) return;
+            }
             void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
           });
         }}
@@ -207,12 +213,17 @@ export function App() {
         health={health.health}
         healthError={health.error}
       />
-      <Palette catalog={catalog} editable={structureEditable && !invalid} />
-      <main className="canvas-area">
-        <div className="canvas-messages">
+      {showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
+        <section className="estimate-area" aria-label="Estimate">
+          <button type="button" className="estimate-close" onClick={() => setShowEstimate(false)}>Close estimate</button>
           {estimate.pending ? <p className="banner" role="status">Estimating experiment cost…</p> : null}
           {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
           {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
+        </section>
+      ) : null}
+      <Palette catalog={catalog} editable={structureEditable && !invalid} />
+      <main className="canvas-area">
+        <div className="canvas-messages">
           {invalid ? (
             <div className="banner" role="alert">
               Fix invalid values before changing the selected element, page or experiment.

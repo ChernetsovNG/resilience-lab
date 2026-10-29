@@ -262,7 +262,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
     const summary = page.getByRole("table", { name: "Summary" });
-    await expect(summary.locator("tbody tr")).toHaveCount(3);
+    await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(3);
     await expect(summary.getByRole("row", { name: /Alternative/ })).toContainText("%");
     await expectNoPageScroll(page);
   });
@@ -322,7 +322,7 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
     const summary = page.getByRole("table", { name: "Summary" });
-    await expect(summary.locator("tbody tr")).toHaveCount(12);
+    await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(12);
     await expect(summary.getByRole("row", { name: /Baseline p0 / })).toContainText("gateway-to-middle.timeout = 40ms");
     await expect(summary.getByRole("row", { name: /Baseline p5 / })).toContainText("gateway-to-middle.attempts = 3");
     await expect(summary.getByRole("row", { name: /No retries p5 / })).toContainText("%");
@@ -370,7 +370,7 @@ test("shows summary, assumptions and every results panel size without page scrol
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
   const summary = page.getByRole("table", { name: "Summary" });
-  await expect(summary.locator("tbody tr")).toHaveCount(2);
+  await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(2);
   await expect(summary.getByRole("row", { name: /Baseline/ })).toContainText("%");
   await expect(summary.getByRole("row", { name: /No retries/ })).toContainText("%");
 
@@ -560,12 +560,13 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
     const panel = page.getByRole("region", { name: "Cost estimate" });
     await expect(panel).toBeVisible();
     const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 3 });
+    const size = (bytes: number) => bytes < 1048576 ? `${number(bytes / 1024)} KiB` : `${number(bytes / 1048576)} MiB`;
     for (const [label, expected] of [
       ["Tasks", number(estimate.tasks)], ["Workers", number(estimate.workers)],
       ["Expected events", number(estimate.expectedEvents)], ["Expected rows", number(estimate.expectedRows)],
       ["Estimated time", `${number(estimate.estimatedSeconds)} s`],
-      ["Uncompressed size", `${number(estimate.estimatedUncompressedBytes)} B`],
-      ["Artifact size", `${number(estimate.estimatedArtifactBytes)} B`], ["Parts", number(estimate.estimatedParts)],
+      ["Uncompressed size", size(estimate.estimatedUncompressedBytes)],
+      ["Artifact size", size(estimate.estimatedArtifactBytes)], ["Parts", number(estimate.estimatedParts)],
     ]) await expect(panel.getByLabel(label, { exact: true })).toHaveText(expected);
     for (const warning of estimate.warnings) await expect(panel).toContainText(warning.message);
   };

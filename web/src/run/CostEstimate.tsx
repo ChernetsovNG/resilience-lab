@@ -1,13 +1,16 @@
 import type { ExperimentEstimate } from "../api/apiTypes";
 
+const size = (bytes: number): [number, string] => bytes < 1024 ** 2
+  ? [bytes / 1024, "KiB"] : [bytes / 1024 ** 2, "MiB"];
+
 /** API estimates, including uncertainty warnings; no local cost calculation. */
 export function CostEstimate({ estimate }: { estimate: ExperimentEstimate }) {
   const values: [string, number, string?][] = [
     ["Tasks", estimate.tasks], ["Workers", estimate.workers],
     ["Expected events", estimate.expectedEvents], ["Expected rows", estimate.expectedRows],
     ["Estimated time", estimate.estimatedSeconds, "s"],
-    ["Uncompressed size", estimate.estimatedUncompressedBytes, "B"],
-    ["Artifact size", estimate.estimatedArtifactBytes, "B"], ["Parts", estimate.estimatedParts],
+    ["Uncompressed size", ...size(estimate.estimatedUncompressedBytes)],
+    ["Artifact size", ...size(estimate.estimatedArtifactBytes)], ["Parts", estimate.estimatedParts],
   ];
   return <section className="cost-estimate" aria-label="Cost estimate">
     <strong>Cost estimate</strong>

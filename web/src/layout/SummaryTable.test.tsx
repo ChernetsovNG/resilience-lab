@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { noSaturation, summary } from "../test/fixtures";
 import { ProblemList } from "./ProblemList";
@@ -6,25 +6,33 @@ import { SummaryTable } from "./SummaryTable";
 
 describe("SummaryTable", () => {
   it("shows confidence intervals, service amplification and pooled handler utilization", () => {
-    render(<SummaryTable summary={summary} />);
+    const run = structuredClone(summary);
+    run.variants[0].points[0].aggregate.services.gateway.admittedAmplification = {
+      mean: 1.2, min: 1.1, max: 1.3, ci95Low: 1, ci95High: 1.4,
+    };
+    render(<SummaryTable summary={run} />);
     const table = screen.getByRole("table", { name: "Summary" });
     const baseline = within(table).getByRole("row", { name: /Baseline/ });
     expect(baseline.textContent).toContain("97.5% (95% CI 95.0%–100.0%)");
     expect(baseline.textContent).toContain("41.3 ms");
-    expect(baseline.textContent).toContain("1.20×");
-    expect(baseline.textContent).toContain("50.0%");
-    expect(within(table).getByRole("columnheader", { name: "gateway admitted ×" })).toBeTruthy();
-    expect(within(table).getByRole("columnheader", { name: "gateway handler utilization (busy/capacity)" })).toBeTruthy();
-    const noRetriesCells = within(table).getByRole("row", { name: /No retries/ }).querySelectorAll("td");
-    expect(noRetriesCells[noRetriesCells.length - 3].textContent).toBe("n/a");
-    expect(noRetriesCells[noRetriesCells.length - 2].textContent).toBe("n/a");
+    for (const disclosure of screen.getAllByText("Service metrics (1)")) fireEvent.click(disclosure);
+    const services = screen.getByRole("table", { name: "Services for Baseline p0" });
+    const gateway = within(services).getByRole("row", { name: /gateway/ });
+    expect(gateway.textContent).toContain("1.20×");
+    expect(gateway.textContent).toContain("95% CI 1.00×–1.40×");
+    expect(gateway.textContent).toContain("50.0%");
+    expect(within(services).getByRole("columnheader", { name: "Handler utilization (pooled busy/capacity)" })).toBeTruthy();
+    const missing = within(screen.getByRole("table", { name: "Services for No retries p0" })).getByRole("row", { name: /gateway/ });
+    expect(missing.textContent.match(/n\/a/g)).toHaveLength(2);
   });
 
   it("renders unavailable utilization instead of dividing by zero capacity", () => {
     const zero = structuredClone(summary);
     zero.variants[0].points[0].aggregate.services.gateway.totals.handlerCapacityTimeMs = 0;
     render(<SummaryTable summary={zero} />);
-    expect(screen.getByRole("row", { name: /Baseline/ }).textContent.match(/n\/a/g)).toHaveLength(1);
+    fireEvent.click(screen.getAllByText("Service metrics (1)")[0]);
+    const services = screen.getByRole("table", { name: "Services for Baseline p0" });
+    expect(within(services).getByRole("row", { name: /gateway/ }).textContent.match(/n\/a/g)).toHaveLength(1);
   });
 
   it("preserves Student confidence limits outside the physical success-rate range", () => {
