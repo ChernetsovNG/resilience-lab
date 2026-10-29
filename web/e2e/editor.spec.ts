@@ -210,6 +210,117 @@ async function connect(page: Page, from: string, to: string, targetPort = "in") 
   await source.dragTo(target);
 }
 
+test("adds a block with Tab and Enter at the panned viewport center, with undo and persistence", async ({ page, files }) => {
+  await page.addInitScript(() => {
+    const target = window as Window & { paletteErrors: string[] };
+    target.paletteErrors = [];
+    target.addEventListener("error", (error) => target.paletteErrors.push(error.message));
+  });
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const palette = page.getByRole("complementary", { name: "Palette" });
+  const service = palette.getByRole("button", { name: "Service", exact: true });
+  const canvas = page.getByLabel("Model canvas", { exact: true });
+  await expect(palette).toHaveCSS("width", "48px");
+  await expect(palette.getByText("Connections", { exact: true })).toHaveCount(0);
+  await service.hover();
+  await expect(palette.getByRole("tooltip").filter({ hasText: "Blocking service" })).toBeVisible();
+  await page.locator(".react-flow__controls-zoomout").click();
+  const bounds = (await canvas.boundingBox())!;
+  // Move the existing chain above the visible center, leaving a free insertion point after zooming.
+  await page.mouse.move(bounds.x + 80, bounds.y + bounds.height - 40);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x - 70, bounds.y + bounds.height - 280, { steps: 12 });
+  await page.mouse.up();
+  const expected = await canvas.evaluate((element) => {
+    const viewport = element.querySelector(".react-flow__viewport")!;
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
+    const box = element.getBoundingClientRect();
+    return { x: Math.round((box.width / 2 - matrix.e) / matrix.a / 20) * 20,
+      y: Math.round((box.height / 2 - matrix.f) / matrix.d / 20) * 20 };
+  });
+  const run = page.getByRole("button", { name: "Run", exact: true });
+  await expect(run).toBeEnabled();
+  await run.focus();
+  await page.keyboard.press("Tab");
+  await expect(palette.getByRole("button", { name: "Client", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(service).toBeFocused();
+  await expect(palette.getByRole("tooltip").filter({ hasText: "Blocking service" })).toBeVisible();
+  await page.keyboard.press("Enter");
+  const node = page.getByTestId("rf__node-service-1");
+  await expect(node).toHaveClass(/selected/);
+  await expect(node).toHaveCSS("transform", `matrix(1, 0, 0, 1, ${expected.x}, ${expected.y})`);
+  await expect(page.getByRole("heading", { name: "service-1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(node).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(node).toHaveClass(/selected/);
+  await page.getByLabel("Handlers", { exact: true }).fill("2");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await page.getByLabel("Distribution", { exact: true }).selectOption("fixed");
+  await page.getByLabel("Mean", { exact: true }).fill("2ms");
+  await page.getByLabel("Mean", { exact: true }).press("Enter");
+  await save(page);
+  expect((await stored(page, files.layout)).content.layout.positions["service-1"]).toEqual(expected);
+  await page.reload();
+  await expect(node).toBeVisible();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await expect(service).toBeDisabled();
+  await page.getByRole("tab", { name: "Model", exact: true }).click();
+  await service.click();
+  const second = page.getByTestId("rf__node-service-2");
+  await expect(second).toHaveClass(/selected/);
+  const boxes = await page.locator(".react-flow__node").evaluateAll((nodes) => nodes.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { id: element.getAttribute("data-id"), x: box.x, y: box.y, right: box.right, bottom: box.bottom };
+  }));
+  const added = boxes.find((box) => box.id === "service-2")!;
+  for (const box of boxes.filter((box) => box.id !== "service-2")) {
+    expect(added.x < box.right && added.right > box.x && added.y < box.bottom && added.bottom > box.y).toBe(false);
+  }
+  // ResizeObserver reports loop errors after delivery; let both rendering frames complete.
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await page.evaluate(() => (window as Window & { paletteErrors: string[] }).paletteErrors)).toEqual([]);
+});
+
+test("measures a new Client before collision checks when required-field hints make it wider", async ({ page, files }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const source = (await stored(page, files.model)).content.model as ModelFile;
+  const sourceLayout = (await stored(page, files.layout)).content.layout as LayoutFile;
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model),
+    JSON.stringify({ ...source, blocks: { client: source.blocks.client }, connections: [] }));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout),
+    JSON.stringify({ ...sourceLayout, positions: { client: { x: 0, y: 200 } } }));
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(1);
+  const canvas = page.getByLabel("Model canvas", { exact: true });
+  const bounds = (await canvas.boundingBox())!;
+  const delta = await canvas.evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
+    const box = element.getBoundingClientRect();
+    return { x: box.width / 2 + 180 * matrix.a - matrix.e, y: box.height / 2 - 200 * matrix.d - matrix.f };
+  });
+  await page.mouse.move(bounds.x + 20, bounds.y + bounds.height - 40);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 20 + delta.x, bounds.y + bounds.height - 40 + delta.y, { steps: 12 });
+  await page.mouse.up();
+  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Client", exact: true }).click();
+  const incoming = page.getByTestId("rf__node-client-1");
+  await expect(incoming).toHaveClass(/selected/);
+  await expect(incoming).toHaveCSS("transform", "matrix(1, 0, 0, 1, -100, 280)");
+  const oldBox = (await page.getByTestId("rf__node-client").boundingBox())!;
+  const newBox = (await incoming.boundingBox())!;
+  expect(newBox.width).toBeGreaterThan(oldBox.width);
+  expect(newBox.x < oldBox.x + oldBox.width && newBox.x + newBox.width > oldBox.x &&
+    newBox.y < oldBox.y + oldBox.height && newBox.y + newBox.height > oldBox.y).toBe(false);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(incoming).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+});
+
 test("extends the chain through real drag and ports, persists positions and commits a move as one layout-only command", async ({ page, files }) => {
   const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = await canvas.boundingBox();
@@ -217,7 +328,7 @@ test("extends the chain through real drag and ports, persists positions and comm
     .dragTo(canvas, { targetPosition: { x: bounds!.width * 0.55, y: bounds!.height * 0.7 } });
   const node = page.getByTestId("rf__node-service-1");
   await expect(node).toBeVisible();
-  await node.click();
+  await expect(node).toHaveClass(/selected/);
   await page.getByLabel("Handlers", { exact: true }).fill("2");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
   await expect(page.getByLabel("Distribution", { exact: true })).toHaveValue("");

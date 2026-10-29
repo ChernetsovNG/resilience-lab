@@ -26,7 +26,7 @@ select {
   display: grid;
   height: 100vh;
   overflow: hidden;
-  grid-template-columns: 13rem minmax(0, 1fr) 20rem;
+  grid-template-columns: 48px minmax(0, 1fr) 20rem;
   grid-template-rows: auto auto minmax(0, 1fr) 16rem auto;
   grid-template-areas:
     "top top top"
@@ -131,31 +131,89 @@ select {
 
 .palette {
   grid-area: palette;
-  overflow: auto;
-  padding: 0.75rem;
+  position: relative;
+  z-index: 2;
+  padding: 0.5rem 5px;
   border-right: 1px solid #d5dbe3;
   background: #fff;
 }
 
-.palette h2 {
-  margin: 0.5rem 0;
-  color: #52606d;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-}
-
 .palette ul {
-  margin: 0 0 1rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .palette li {
+  position: relative;
   margin-bottom: 0.35rem;
-  padding: 0.4rem 0.5rem;
+}
+
+.palette button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
   border: 1px solid #d5dbe3;
   border-radius: 0.35rem;
   background: #f8fafc;
+  color: #334e68;
+  cursor: grab;
+}
+
+.palette button:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.palette button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.palette button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.palette-icon {
+  width: 20px;
+  height: 20px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.palette-tooltip {
+  visibility: hidden;
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 0;
+  display: grid;
+  gap: 0.25rem;
+  width: max-content;
+  max-width: 18rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.35rem;
+  background: #fff;
+  box-shadow: 0 3px 10px #1f293326;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.palette li:hover > .palette-tooltip,
+.palette li:focus-within > .palette-tooltip {
+  visibility: visible;
+}
+
+.palette-help {
+  margin-top: 0.75rem;
+}
+
+.palette-help button {
+  cursor: help;
 }
 
 .canvas-area {
@@ -776,24 +834,6 @@ select {
   border-color: #2563eb;
 }
 
-
-.palette li:has(button) {
-  padding: 0;
-}
-
-.palette button {
-  width: 100%;
-  padding: 0.4rem 0.5rem;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: grab;
-}
-
-.palette button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
 
 .canvas-notice {
   position: absolute;

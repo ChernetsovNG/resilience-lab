@@ -10,7 +10,7 @@ import { formatDuration, formatNumber, formatPercent } from "./i18n/format";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
-import { Canvas } from "./canvas/Canvas";
+import { Canvas, type CanvasHandle } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
 import { Inspector } from "./inspector/Inspector";
@@ -34,6 +34,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
  */
 export function App() {
   const workspace = useWorkspace();
+  const canvas = useRef<CanvasHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
   const health = useHealth();
@@ -261,7 +262,7 @@ export function App() {
           {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
         </section>
       ) : null}
-      <Palette catalog={catalog} editable={structureEditable && !invalid} />
+      <Palette catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
       <main className="canvas-area">
         <div className="canvas-messages">
           {invalid ? (
@@ -325,6 +326,7 @@ export function App() {
             <p className="canvas-empty">{t("app.canvas.loading")}</p>
           ) : (
             <Canvas
+              ref={canvas}
               model={model}
               layout={loaded.layout}
               key={loaded.experimentPath}
@@ -337,7 +339,12 @@ export function App() {
               editable={structureEditable && !invalid}
               parametersEditable={editable}
               disabled={invalid}
-              onCommand={workspace.execute}
+              onCommand={(command) => {
+                const next = command(loaded);
+                workspace.execute(command);
+                const added = Object.keys(next.model.blocks).filter((id) => !Object.hasOwn(loaded.model.blocks, id));
+                if (added.length > 0) setSelection(added);
+              }}
               onParam={(id, path, value) => {
                 if (variant === undefined) workspace.setParam(id, path, value);
                 else workspace.execute(setVariantParam(variant.id, id, path, value ?? null, catalog));

@@ -30,11 +30,28 @@ export function positionOf(model: ModelFile, layout: LayoutFile | null, id: stri
     ?? { x: Object.keys(model.blocks).indexOf(id) * 260, y: 100 };
 }
 
+/** Snaps the viewport center to the 20-unit grid and offsets by 40 until measured block footprints are clear. */
+export function insertionPosition(center: Position, occupied: readonly (Position & { width: number; height: number })[],
+  { width, height }: { width: number; height: number }): Position {
+  const position = { x: Math.round(center.x / 20) * 20, y: Math.round(center.y / 20) * 20 };
+  while (occupied.some((node) => position.x < node.x + (node.width || width) && position.x + width > node.x &&
+    position.y < node.y + (node.height || height) && position.y + height > node.y)) {
+    position.x += 40;
+    position.y += 40;
+  }
+  return position;
+}
+
+/** Chooses a numbered block id in the shared block/connection namespace, including for measurement previews. */
+export function nextBlockId(model: ModelFile, type: string): string {
+  return freeId(type, usedIds(model), true);
+}
+
 /** Creates only explicitly entered data; catalog defaults are displayed, never materialized. */
 export function addBlock(catalog: Catalog, type: string, position: Position): EditorCommand {
   return (documents) => {
     if (!catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) return documents;
-    const id = freeId(type, usedIds(documents.model), true);
+    const id = nextBlockId(documents.model, type);
     return {
       ...documents,
       model: { ...documents.model, blocks: { ...documents.model.blocks, [id]: { type, params: {} } } },
