@@ -3,7 +3,7 @@ import { catalog, experiment, layout, model } from "../test/fixtures";
 import { editorReducer, initialEditorState, type EditorCommand, type EditorDocuments } from "./editor";
 import {
   addBlock, addConnection, connectionRule, copySelection, deleteElements, identifierError,
-  moveBlocks, pasteSelection, renameElement,
+  insertionPosition, moveBlocks, pasteSelection, renameElement,
 } from "./structure";
 
 const documents = (): EditorDocuments => structuredClone({ model, layout, experiment });
@@ -162,4 +162,34 @@ describe("structure commands", () => {
     expect(second.model.blocks["service-2"]).toBeDefined();
     expect(copySelection(before, ["gateway-to-middle"]).blocks).toEqual({});
   });
+});
+
+
+describe("block insertion position", () => {
+  it.each([
+    [{ x: 91, y: 49 }, { x: 100, y: 40 }],
+    [{ x: -91, y: -49 }, { x: -100, y: -40 }],
+  ])("snaps an unoccupied viewport center %j to the grid", (center, expected) => {
+    expect(insertionPosition(center, [], { width: 180, height: 80 })).toEqual(expected);
+  });
+
+  it("offsets until the whole new block clears occupied rectangles", () => {
+    const occupied = [
+      { x: 100, y: 40, width: 180, height: 80 },
+      { x: 180, y: 120, width: 180, height: 80 },
+    ];
+    expect(insertionPosition({ x: 91, y: 49 }, occupied, { width: 180, height: 80 })).toEqual({ x: 260, y: 200 });
+    expect(occupied[0]).toEqual({ x: 100, y: 40, width: 180, height: 80 });
+  });
+
+  it("avoids a node ahead of the insertion point even when the point itself is free", () => {
+    expect(insertionPosition({ x: 100, y: 40 }, [{ x: 240, y: 40, width: 180, height: 80 }], { width: 180, height: 80 }))
+      .toEqual({ x: 180, y: 120 });
+  });
+});
+
+
+it("reserves the incoming client footprint when it is wider than every existing node", () => {
+  expect(insertionPosition({ x: -180, y: 200 }, [{ x: 0, y: 200, width: 176, height: 57.375 }],
+    { width: 222.984, height: 57.375 })).toEqual({ x: -100, y: 280 });
 });

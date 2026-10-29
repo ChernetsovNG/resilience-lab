@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import { useEffect, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import { useEffect, useImperativeHandle, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
@@ -8,7 +8,7 @@ import type { CanvasResults } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import type { EditorCommand } from "../workspace/editor";
-import { addBlock, addConnection, connectionRule, moveBlocks, positionOf } from "../workspace/structure";
+import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf } from "../workspace/structure";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import { CallEdge } from "./CallEdge";
@@ -32,7 +32,13 @@ const ariaLabelConfig: AriaLabelConfig = {
   "handle.ariaLabel": t("editor.canvas.handle"),
 };
 
+/** Palette activation places a block using the canvas viewport at the moment of activation. */
+export interface CanvasHandle {
+  addBlock: (type: string) => void;
+}
+
 export interface CanvasProps {
+  ref?: Ref<CanvasHandle>;
   /** The model as the active variant page sees it. */
   model: ModelFile;
   overrides?: Record<string, unknown>;
@@ -58,13 +64,30 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
-function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
+function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
   const zoom = useStore((state) => state.transform[2]);
+  const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } }[]>([]);
+  const [measurement, setMeasurement] = useState<{
+    request: (typeof insertions)[number]; size: { width: number; height: number };
+  } | null>(null);
+  const pending = insertions[0];
+  const pendingId = pending === undefined ? null : nextBlockId(model, pending.type);
+  const pendingSize = measurement !== null && measurement.request === pending ? measurement.size : undefined;
+  useImperativeHandle(ref, () => ({
+    addBlock: (type) => {
+      if (!editable || disabled || width <= 0 || height <= 0) return;
+      const viewport = getViewport();
+      const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
+      if (catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) {
+        setInsertions((current) => [...current, { type, center }]);
+      }
+    },
+  }));
   const initialized = useNodesInitialized();
   const hasNodes = Object.keys(model.blocks).length > 0;
   useEffect(() => {
@@ -72,25 +95,47 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
   }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   useEffect(() => {
-    if (initialized && width > 0 && height > 0) void fitView({ padding: 0.15, minZoom: 0.05 });
-  }, [fitView, initialized, width, height, sizes]);
+    if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView({ padding: 0.15, minZoom: 0.05 });
+  }, [fitView, initialized, width, height, sizes, insertions.length]);
+  useEffect(() => {
+    if (pending === undefined || measurement?.request !== pending) return;
+    // Commit outside ResizeObserver delivery and cancel if the canvas or active document changes first.
+    const frame = requestAnimationFrame(() => {
+      setInsertions((current) => current.slice(1));
+      if (editable && !disabled) {
+        const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ ...node.position,
+          width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }));
+        onCommand(addBlock(catalog, pending.type, insertionPosition(pending.center, occupied, measurement.size)));
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const nodes: BlockNodeType[] = Object.entries(model.blocks).map(([id, block]) => ({
+  const blocks = Object.entries(model.blocks);
+  // Measure the actual new node before issuing its single document command; previews never enter history.
+  if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: {} }]);
+  const nodes: BlockNodeType[] = blocks.map(([id, block]) => ({
     id,
     type: "block",
-    position: ownEntry(moving, id) ?? positionOf(model, layout, id),
-    measured: ownEntry(sizes, id),
+    position: id === pendingId && pending !== undefined ? pending.center : ownEntry(moving, id) ?? positionOf(model, layout, id),
+    measured: id === pendingId ? pendingSize : ownEntry(sizes, id),
+    style: id === pendingId ? { visibility: "hidden" } : undefined,
+    selectable: id === pendingId ? false : undefined,
+    draggable: id === pendingId ? false : undefined,
+    connectable: id === pendingId ? false : undefined,
+    focusable: id === pendingId ? false : undefined,
     data: {
       result: block.type === "service" ? results?.services.get(id) : undefined,
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
-      ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [], editable, parametersEditable, disabled,
+      ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
+      editable: id !== pendingId && editable, parametersEditable: id !== pendingId && parametersEditable, disabled: id === pendingId || disabled,
       onParam: (elementId, path, value) => onParam?.(elementId, path, value),
       onValidity: (key, valid) => onValidity?.(key, valid),
     },
-    selected: selected.includes(id),
+    selected: id !== pendingId && selected.includes(id),
     ariaLabel: id,
-    domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole") },
+    domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
@@ -142,6 +187,10 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       const changed = measurements.filter(([id, size]) => ownEntry(current, id)?.width !== size.width || ownEntry(current, id)?.height !== size.height);
       return changed.length === 0 ? current : { ...current, ...Object.fromEntries(changed) };
     });
+    const incoming = measurements.find(([id]) => id === pendingId)?.[1];
+    if (pending !== undefined && incoming !== undefined && incoming.width > 0 && incoming.height > 0) {
+      setMeasurement({ request: pending, size: incoming });
+    }
     if (!editable) return;
     const positions = changes.flatMap((change) => change.type === "position" && change.position !== undefined
       ? [{ id: change.id, position: change.position, dragging: change.dragging }] : []);
