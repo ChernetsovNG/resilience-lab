@@ -1,0 +1,50 @@
+{
+  "description": "Сравнение четырёх настроек одного пути оформления заказа при замедлении PSP. Что меняют отказ от повторов order-service, согласование таймаутов и увеличение пула payment-service?",
+  "execution": {
+    "measurement": "60s",
+    "replications": 10,
+    "seed": 20261029,
+    "warmup": "10s"
+  },
+  "faults": [
+    {
+      "from": "20s",
+      "processingMultiplier": 8.0,
+      "target": "psp",
+      "to": "40s"
+    }
+  ],
+  "layoutRef": "checkout.layout.json",
+  "modelRef": "checkout.model.json",
+  "notes": "Условия эксперимента — выбранные синтетические параметры: разогрев 10 s, измерение 60 s, 10 независимых повторений и постоянный seed 20261029. Окно PSP [20 s,40 s) отсчитывается от начала симуляции, включая разогрев. processingMultiplier=8 увеличивает среднюю обработку с 300 ms до 2.4 s; это больше исходного timeout 2 s. baseline использует модель без переопределений; no-order-retries оставляет одну попытку order-service-to-payment-service; bigger-payment-pool увеличивает только payment-service.handlers с 50 до 200. Расчёт aligned-timeouts: api-gateway-to-order-service.timeout=4500ms, order-service-to-payment-service.timeout=1100ms, payment-service-to-psp.timeout=500ms; число попыток остаётся 1,3,2. Сумма attempts×timeout: 4500+3×1100+2×500=8800 ms. Два фиксированных backoff по 500 ms и максимум единственной jitter-паузы 25 ms дают 9825 ms, меньше deadline 10000 ms на 175 ms. Вложенные бюджеты: 2×500+25=1025 ms; вместе с обработкой payment-service 10 ms и внутренней сетью 2×0.5 ms — 1036 ms, меньше 1100 ms. Затем 3×1100+2×500=4300 ms; с обработкой order-service 20 ms и сетью 2×0.5 ms — 4321 ms, меньше 4500 ms. Таймауты сокращены ради бюджета, поэтому часть длинных успешных ответов PSP может стать таймаутами. Сумма бюджетов консервативна: вложенные ожидания перекрываются. Lognormal не имеет конечной верхней границы, поэтому расчёт не гарантирует завершения каждого запроса до deadline. Перебор baseline вынесен в checkout-grid.experiment.json: общая сетка иначе перезаписала бы overrides сравниваемых вариантов.",
+  "schemaVersion": 1,
+  "variants": [
+    {
+      "id": "baseline",
+      "label": "Baseline"
+    },
+    {
+      "id": "no-order-retries",
+      "label": "No order retries",
+      "overrides": {
+        "order-service-to-payment-service.attempts": 1
+      }
+    },
+    {
+      "id": "aligned-timeouts",
+      "label": "Aligned timeouts",
+      "overrides": {
+        "api-gateway-to-order-service.timeout": "4500ms",
+        "order-service-to-payment-service.timeout": "1100ms",
+        "payment-service-to-psp.timeout": "500ms"
+      }
+    },
+    {
+      "id": "bigger-payment-pool",
+      "label": "Bigger payment pool",
+      "overrides": {
+        "payment-service.handlers": 200
+      }
+    }
+  ]
+}

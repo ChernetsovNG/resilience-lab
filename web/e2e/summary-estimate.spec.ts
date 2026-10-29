@@ -6,6 +6,7 @@ const experiment = "retry-storm/retry-storm.experiment.json";
 test.use({ viewport: { width: 1440, height: 900 } });
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
   await expect(page.getByLabel("Experiment")).toHaveValue(experiment);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();

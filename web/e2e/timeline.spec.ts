@@ -44,6 +44,7 @@ async function value(chart: Locator, metric: string, variant = "baseline") {
 
 test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinned cursor", async ({ page, request }, testInfo) => {
   await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
   await expect(page.getByTestId("rf__node-dependency")).toBeVisible();
   await page.getByTestId("rf__node-dependency").click();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();

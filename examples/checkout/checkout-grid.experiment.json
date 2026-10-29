@@ -1,0 +1,45 @@
+{
+  "description": "Baseline оформления заказа с перебором timeout 1/3/5 s и attempts 1/2/3 на order-service-to-payment-service для Map. Это перебор baseline на той же модели и раскладке, а не отдельный сценарий.",
+  "execution": {
+    "measurement": "60s",
+    "replications": 10,
+    "seed": 20261029,
+    "warmup": "10s"
+  },
+  "faults": [
+    {
+      "from": "20s",
+      "processingMultiplier": 8.0,
+      "target": "psp",
+      "to": "40s"
+    }
+  ],
+  "grid": [
+    {
+      "path": "order-service-to-payment-service.timeout",
+      "values": [
+        "1s",
+        "3s",
+        "5s"
+      ]
+    },
+    {
+      "path": "order-service-to-payment-service.attempts",
+      "values": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "layoutRef": "checkout.layout.json",
+  "modelRef": "checkout.model.json",
+  "notes": "Нагрузка, отказы, разогрев 10 s, измерение 60 s, 10 повторений и seed 20261029 совпадают с checkout.experiment.json. Сетка 3×3 — выбранный диапазон чувствительности: timeout 1 s,3 s,5 s и общее число попыток 1,2,3. Базовые значения модели — 3 s и 3 попытки (точка p5); остальные точки меняют только эти два параметра. Сетка применяется только к единственному варианту baseline; отдельный эксперимент сохраняет смысл четырёх вариантов сравнения.",
+  "schemaVersion": 1,
+  "variants": [
+    {
+      "id": "baseline",
+      "label": "Baseline"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("keeps status in one place and reveals warnings and new errors without page scrolling", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
   const run = page.getByRole("button", { name: "Run", exact: true });
   await expect(run).toBeEnabled();
