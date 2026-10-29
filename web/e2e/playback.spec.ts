@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { formatMultiplier, formatNumber } from "../src/i18n/format";
+import { formatDuration, formatMultiplier, formatNumber } from "../src/i18n/format";
 import type { components } from "../src/api/schema";
 
 type Window = components["schemas"]["WindowMetrics"];
@@ -63,6 +63,8 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(context).toContainText("Summary · Baseline");
     await seek(slider, before);
     await expect(context).toContainText(`Window ${formatNumber(before)} ·`);
+    const status = page.getByRole("region", { name: "Status bar" });
+    await expect(status).toContainText(`Cursor ${formatDuration(dependency[before].startMs)}`);
     await page.getByRole("button", { name: /fit view/i }).click();
     await expect(metrics).toContainText(`Mean queue ${formatNumber(queue(before))}`);
     await expect(edge).toHaveText(`Amplification ${formatMultiplier(amplification(before))}`);
@@ -90,6 +92,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await timelineSlider.press("End");
     await expect(slider).toHaveValue(String(dependency.length - 1));
     await expect(context).toContainText(`Window ${formatNumber(dependency.length - 1)} ·`);
+    await expect(status).toContainText(`Cursor ${formatDuration(dependency.at(-1)!.startMs)}`);
 
     await seek(slider, 0);
     await page.getByLabel("Playback speed", { exact: true }).selectOption("0.25");
@@ -112,6 +115,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await page.getByRole("button", { name: "Return to summary", exact: true }).click();
     await expect(context).toContainText("Summary · Baseline");
     await expect(timelineCursor).toContainText("Hover to inspect windows");
+    await expect(status).not.toContainText("Cursor");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
     expect(await documents()).toEqual(beforeDocuments);

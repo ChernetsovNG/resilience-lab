@@ -1,15 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { messages, t } from "./index";
 import { catalogText, localizeCatalog } from "./catalog";
 import { catalog } from "../test/fixtures";
 
 describe("messages", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("uses API values or keys as safe production fallbacks", () => {
+    vi.stubEnv("DEV", false);
+    vi.stubEnv("MODE", "production");
+    expect(t("app.job.status.PAUSED")).toBe("PAUSED");
+    expect(t("results.jobStatus.PAUSED")).toBe("PAUSED");
+    expect(t("missing.message")).toBe("missing.message");
+    expect(t("common.interval", { low: "0" })).toBe("common.interval");
+  });
+
   it("substitutes named parameters independently of their order", () => {
     expect(t("common.interval", { high: "8", low: "-2" })).toBe("95% CI -2–8");
     expect(t("common.interval", { high: "$& {low}", low: "-2" })).toBe("95% CI -2–$& {low}");
   });
   it("fails visibly on unknown keys and missing parameters", () => {
     expect(() => t("missing.message")).toThrow("missing.message");
+    expect(() => t("common.interval", { low: "0" })).toThrow("high");
+  });
+  it.each(["test", "development"])("keeps %s mode strict", (mode) => {
+    vi.stubEnv("DEV", mode === "development");
+    vi.stubEnv("MODE", mode);
+    expect(() => t("app.job.status.PAUSED")).toThrow("PAUSED");
     expect(() => t("common.interval", { low: "0" })).toThrow("high");
   });
   it("uses stable type and nested parameter identifiers before API text", () => {

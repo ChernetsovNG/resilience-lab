@@ -66,6 +66,162 @@ function editHandlers(value: string) {
 const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
 const experimentSelect = () => screen.getByRole("combobox", { name: "Experiment" }) as HTMLSelectElement;
 
+it("opens counted warnings on demand and leaves new warnings collapsed", async () => {
+  let checks = 0;
+  server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [
+    { code: "LINT", severity: "WARNING", message: `Budget warning ${++checks}`, document: modelPath, pointer: null, path: "gateway" },
+  ] } } : undefined);
+  await open();
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(button("Errors: 0 · Warnings: 1"));
+  expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(button("Collapse results"));
+  selectGateway(); editHandlers("5");
+  await waitFor(() => expect(checks).toBe(2));
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+
+it("reveals new errors but preserves dismissal through pending checks of the same error", async () => {
+  const first = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "Handler error", document: modelPath,
+    pointer: "/blocks/gateway/params/handlers", path: "gateway" };
+  let findings = [first];
+  let checks = 0;
+  server((url) => {
+    if (url !== "/api/v1/validate") return undefined;
+    checks++;
+    return { body: { experiment: experimentPath, valid: findings.length === 0, diagnostics: findings } };
+  });
+  render(<App />);
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(button("Collapse results"));
+  editHandlers("5");
+  await waitFor(() => expect(checks).toBe(2));
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+
+  findings = [first, { ...first, message: "Another handler error" }];
+  editHandlers("6");
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  expect(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Another handler error/ })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(button("Collapse results"));
+  findings = [];
+  editHandlers("7");
+  await waitFor(() => expect(checks).toBe(4));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  findings = [first];
+  editHandlers("8");
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+});
+
+it("reveals launch diagnostics and navigates to their element", async () => {
+  server((url) => url === "/api/v1/jobs" ? { status: 400, body: { code: "INVALID_MODEL", message: "Run rejected", diagnostics: [
+    { code: "PARAM_RANGE", severity: "ERROR", message: "Launch handler error", document: modelPath,
+      pointer: "/blocks/gateway/params/handlers", path: "gateway" },
+  ] } } : undefined);
+  await open();
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  const row = within(screen.getByRole("tabpanel")).getByRole("button", { name: /Launch handler error/ });
+  fireEvent.click(row);
+  expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+  expect(button("Errors: 1 · Warnings: 0")).toBeTruthy();
+});
+
+it("counts the same validation and job warning once", async () => {
+  const warning = { code: "LINT", severity: "WARNING", message: "Budget warning", document: modelPath, pointer: null, path: "gateway" };
+  server((url) => {
+    if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: true, diagnostics: [warning] } };
+    if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, diagnostics: [warning] } };
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByText("COMPLETED", { exact: true });
+  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+});
+
+it("does not reopen dismissed Problems when a repeated launch returns the same error", async () => {
+  const gate = deferred();
+  let submissions = 0;
+  server(async (url) => {
+    if (url !== "/api/v1/jobs") return undefined;
+    if (++submissions === 2) await gate.promise;
+    return { status: 400, body: { code: "SUBMIT_FAILED", message: "Try again", diagnostics: [] } };
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(submissions).toBe(2));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  await act(async () => gate.release());
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+
+it("expires launch findings after document edits and reveals the same error in a new validation response", async () => {
+  const finding = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "Handler error", document: modelPath,
+    pointer: "/blocks/gateway/params/handlers", path: "gateway" };
+  let findings: typeof finding[] = [];
+  let checks = 0;
+  server((url) => {
+    if (url === "/api/v1/jobs") return { status: 400, body: { code: "INVALID_MODEL", message: "Run rejected", diagnostics: [finding] } };
+    if (url === "/api/v1/validate") {
+      checks++;
+      return { body: { experiment: experimentPath, valid: findings.length === 0, diagnostics: findings } };
+    }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  selectGateway(); editHandlers("5");
+  await waitFor(() => expect(checks).toBe(2));
+  expect(button("Errors: 0 · Warnings: 0")).toBeTruthy();
+  expect(within(screen.getByRole("tabpanel")).queryByRole("button", { name: /Handler error/ })).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(button("Collapse results"));
+  findings = [finding];
+  editHandlers("6");
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+});
+
+it("reveals a resume refusal against the edited documents while the original run remains stale", async () => {
+  server((url) => {
+    if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+    if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
+    if (url === "/api/v1/runs/run-1/resume") return { status: 400, body: { code: "EXPERIMENT_INVALID", message: "Experiment has errors", diagnostics: [
+      { code: "RUN_DOCUMENT_CHANGED", severity: "ERROR", message: "Model changed", document: modelPath, pointer: null, path: null },
+    ] } };
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("button", { name: "Resume" });
+  selectGateway(); editHandlers("5");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Resume").disabled).toBe(false));
+  fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(button("Resume"));
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  expect(screen.getByRole("tabpanel").textContent).toContain("RUN_DOCUMENT_CHANGED");
+  expect(button("Errors: 1 · Warnings: 0")).toBeTruthy();
+  expect(screen.getByText("Results outdated")).toBeTruthy();
+});
+
 it("validates unsaved values, shows errors in every view and removes them after correction", async () => {
   server((url, init) => {
     if (url !== "/api/v1/validate") return undefined;
@@ -77,7 +233,7 @@ it("validates unsaved values, shows errors in every view and removes them after 
   });
   await open(); selectGateway(); editHandlers("0");
   await screen.findByRole("img", { name: "1 problems: error" });
-  expect(screen.getByText(/At least one handler/).closest(".param-field")?.textContent).toContain("Handlers");
+  expect(within(screen.getByRole("complementary", { name: "Inspector" })).getByText(/At least one handler/).closest(".param-field")?.textContent).toContain("Handlers");
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   expect(within(screen.getByRole("tabpanel")).getByText(/PARAM_RANGE/)).toBeTruthy();
   expect(button("Run").disabled).toBe(true);
@@ -591,7 +747,7 @@ describe("App stage 1 integration", () => {
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getByTestId("job-status").textContent).toBe("");
+    expect(screen.getByTestId("job-status").textContent).toBe("Ready");
     fireEvent.change(experimentSelect(), { target: { value: experimentPath } });
     await waitFor(() => expect(experimentSelect().value).toBe(experimentPath));
     expect(screen.queryByRole("table")).toBeNull();
@@ -949,7 +1105,7 @@ describe("cost estimate and resume", () => {
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
   });
 
-  it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and displays Summary", async (status) => {
+  it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and makes Answer available", async (status) => {
     let resumed = false;
     server((url) => {
       if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status, error: status === "FAILED" ? "Execution stopped" : null } };
@@ -982,7 +1138,7 @@ describe("cost estimate and resume", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Cannot resume this run");
     expect(alert.textContent).toContain("Start a new run");
-    if (status === 400) expect(alert.textContent).toContain("RUN_DOCUMENT_CHANGED");
+    if (status === 400) expect(screen.getByRole("tabpanel").textContent).toContain("RUN_DOCUMENT_CHANGED");
     expect(button("Run").disabled).toBe(false);
     expect(screen.queryByRole("table", { name: "Answer" })).toBeNull();
   });

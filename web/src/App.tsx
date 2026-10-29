@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "./i18n";
 import { formatDuration, formatNumber, formatPercent } from "./i18n/format";
 import type { Diagnostic, Variant } from "./api/apiTypes";
-import { diagnosticTarget } from "./validation/diagnostics";
+import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
 import { Canvas } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
@@ -18,7 +18,8 @@ import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
 import { ResultsPanel, type ResultsPanelSize } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
-import { useRun } from "./run/useRun";
+import { StatusBar } from "./layout/StatusBar";
+import { useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
 import { documentValuesEqual } from "./workspace/editor";
@@ -42,6 +43,10 @@ export function App() {
   const [showDiagramResults, setShowDiagramResults] = useState(true);
   const [showEstimate, setShowEstimate] = useState(false);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
+  const [problemsRequest, setProblemsRequest] = useState(0);
+  const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
+  const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
+  const [observedErrors, setObservedErrors] = useState<{ path: string | null; validation: string; run: string }>({ path: null, validation: "[]", run: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
   const selected = selection.at(-1) ?? null;
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -86,6 +91,32 @@ export function App() {
   });
   const diagramResults = playback.frame ?? summaryDiagramResults;
   const diagnostics = validation.report?.diagnostics ?? [];
+  const runDiagnostics = ownRun ? mergeDiagnostics(run.job?.diagnostics ?? [], problemDiagnostics(run.problem)) : [];
+  const launchIsCurrent = ownRun && launchDocuments !== null && loaded !== null &&
+    documentValuesEqual(loaded.model, launchDocuments.model) && documentValuesEqual(loaded.experiment, launchDocuments.experiment);
+  const currentRunDiagnostics = mergeDiagnostics(ownRun && !staleResults ? run.job?.diagnostics ?? [] : [],
+    launchIsCurrent ? problemDiagnostics(run.problem) : []);
+  const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics);
+  const path = loaded?.experimentPath ?? null;
+  const previousErrors = observedErrors.path === path ? observedErrors : { validation: "[]", run: "[]" };
+  const validationResponse = validation.report?.diagnostics ?? (validation.problem === null ? null : problemDiagnostics(validation.problem));
+  const validationErrors = validationResponse === null ? previousErrors.validation : JSON.stringify(validationResponse.filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
+  const waitingForSubmission = ownRun && run.running && run.problem === null &&
+    (run.job === null || (run.job.status !== "QUEUED" && run.job.status !== "RUNNING"));
+  const runErrors = waitingForSubmission ? previousErrors.run
+    : JSON.stringify(runDiagnostics.filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
+  if (observedErrors.path !== path || observedErrors.validation !== validationErrors || observedErrors.run !== runErrors) {
+    const previousValidation = new Set<string>(JSON.parse(previousErrors.validation));
+    const previousRun = new Set<string>(JSON.parse(previousErrors.run));
+    const currentRun = new Set(currentRunDiagnostics.map(diagnosticKey));
+    const hasNewError = JSON.parse(validationErrors).some((key: string) => !previousValidation.has(key)) ||
+      JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key));
+    setObservedErrors({ path, validation: validationErrors, run: runErrors });
+    if (hasNewError) {
+      setProblemsRequest((current) => current + 1);
+      if (resultsSize === "collapsed") setResultsSize("normal");
+    }
+  }
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
   for (const diagnostic of diagnostics) {
@@ -195,6 +226,8 @@ export function App() {
         onEstimate={() => void requestEstimate()}
         canResume={ownRun && run.manifest?.complete === false && (run.job?.status === "CANCELLED" || run.job?.status === "FAILED")}
         onResume={() => {
+          if (loaded === null) return;
+          setLaunchDocuments({ model: loaded.model, experiment: loaded.experiment });
           if (resultsSize === "collapsed") setResultsSize("normal");
           void run.resume();
         }}
@@ -209,13 +242,16 @@ export function App() {
               const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
               if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => warning.message).join("\n") }))) return;
             }
-            await run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
+            const documents = { model: loaded.model, experiment: loaded.experiment };
+            setLaunchDocuments(documents);
+            await run.run(loaded.experimentPath, documents);
           }).finally(() => setRunPending(false));
         }}
-        onCancel={() => void run.cancel()}
+        onCancel={() => {
+          if (loaded !== null) setLaunchDocuments({ model: loaded.model, experiment: loaded.experiment });
+          void run.cancel();
+        }}
         job={ownRun ? run.job : null}
-        health={health.health}
-        healthError={health.error}
       />
       {showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
         <section className="estimate-area" aria-label={t("app.estimate.label")}>
@@ -295,6 +331,7 @@ export function App() {
               catalog={catalog}
               selected={selection}
               elementDiagnostics={elementDiagnostics}
+              onZoomChange={setCanvasZoom}
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
               editable={structureEditable && !invalid}
@@ -342,7 +379,7 @@ export function App() {
         running={runPending || (ownRun && run.running)}
         job={ownRun ? run.job : null}
         summary={ownRun ? run.summary : null}
-        problem={ownRun ? run.problem : null}
+        problem={launchIsCurrent ? run.problem : null}
         catalog={catalog}
         model={ownRun ? run.documents?.model ?? null : null}
         manifest={ownRun ? run.manifest : null}
@@ -359,7 +396,9 @@ export function App() {
         onCursorChange={playback.seek}
         size={resultsSize}
         onSizeChange={setResultsSize}
-        diagnostics={diagnostics}
+        diagnostics={allDiagnostics}
+        diagnosticDocuments={loaded}
+        problemsRequest={problemsRequest}
         validationPending={validation.pending}
         validationProblem={validation.problem}
         onDiagnostic={(diagnostic) => {
@@ -370,6 +409,13 @@ export function App() {
           setSelection(setting || target.element === null ? [] : [target.element]);
         }}
       />
+      <StatusBar job={ownRun ? run.job : null} health={health.health} healthError={health.error}
+        diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
+        cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}
+        onProblems={() => {
+          setProblemsRequest((current) => current + 1);
+          if (resultsSize === "collapsed") setResultsSize("normal");
+        }} />
     </div>
   );
 }

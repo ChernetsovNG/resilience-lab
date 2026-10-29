@@ -5,7 +5,7 @@ import { TopBar, type TopBarProps } from "./TopBar";
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
   return { experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
-    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), estimating: false, onEstimate: vi.fn(), canResume: false, onResume: vi.fn(), onCancel: vi.fn(), job: null, health: null, healthError: null, ...overrides };
+    canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), estimating: false, onEstimate: vi.fn(), canResume: false, onResume: vi.fn(), onCancel: vi.fn(), job: null, ...overrides };
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
@@ -82,7 +82,7 @@ describe("TopBar", () => {
       completedTasks: 1, totalTasks: 4, cancelRequested: true, error: null, diagnostics: [],
     } })} />);
     expect(button("Cancel").disabled).toBe(true);
-    expect(screen.getByTestId("job-status").textContent).toBe("RUNNING · cancellation requested");
+    expect(screen.queryByTestId("job-status")).toBeNull();
   });
 
   it("does not offer cancellation for a terminal job", () => {
@@ -101,11 +101,12 @@ it.each(["invalid", "loading"] as const)("blocks undo and redo while %s", (flag)
   expect(button("Redo").disabled).toBe(true);
 });
 
-it.each(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"] as const)("renders the catalog label for %s", (status) => {
+it.each(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"] as const)("keeps %s status out of the top bar", (status) => {
   render(<TopBar {...props({ job: {
     id: "job-1", experiment: "first.experiment.json", runId: "run-1", status,
     completedTasks: 0, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
   } })} />);
 
-  expect(screen.getByTestId("job-status").textContent).toBe(status);
+  expect(screen.queryByTestId("job-status")).toBeNull();
+  expect(screen.queryByText(/Checking backend/)).toBeNull();
 });

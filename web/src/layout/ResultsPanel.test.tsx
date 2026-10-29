@@ -29,7 +29,11 @@ it("lists all diagnostics in Problems and navigates from a finding", () => {
   ]} onDiagnostic={onDiagnostic} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   const panel = screen.getByRole("tabpanel");
-  expect(within(panel).getByText(/chain.model.json#\/blocks\/gateway\/params\/handlers/)).toBeTruthy();
+  const row = within(panel).getByRole("button", { name: /At least one handler/ });
+  expect(row.title).toContain("/blocks/gateway/params/handlers");
+  expect(row.textContent).not.toContain("/blocks/gateway/params/handlers");
+  expect(row.textContent).toContain("chain.model.json");
+  expect(row.textContent).toContain("gateway");
   expect(within(panel).getByText(/No element location/)).toBeTruthy();
   expect(within(panel).getByRole("button", { name: /At least one handler/ }).textContent).toContain("baseline");
   fireEvent.click(within(panel).getByRole("button", { name: /At least one handler/ }));
@@ -68,7 +72,7 @@ it("explains that a cancelled run is incomplete and has no summary", () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("collapses and expands while preserving tabs and job status", () => {
+it("collapses and expands while preserving tabs", () => {
   const onSizeChange = vi.fn();
   const running = {
     id: "job-1", experiment: "chain.experiment.json", runId: "run-1", status: "RUNNING" as const,
@@ -83,7 +87,7 @@ it("collapses and expands while preserving tabs and job status", () => {
   view.rerender(panel("collapsed"));
   expect(screen.queryByRole("tabpanel")).toBeNull();
   expect(screen.getByRole("tab", { name: "Answer" })).toBeTruthy();
-  expect(screen.getByTestId("results-job-status").textContent).toContain("RUNNING");
+  expect(screen.queryByText(/RUNNING/)).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
   expect(onSizeChange).toHaveBeenCalledWith("normal");
@@ -94,6 +98,34 @@ it("collapses and expands while preserving tabs and job status", () => {
   expect(screen.getByRole("tabpanel")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
   expect(onSizeChange).toHaveBeenCalledWith("normal");
+});
+
+it("orders errors before warnings while preserving response order within each severity", () => {
+  const diagnostic = { code: "TEST", document: null, pointer: null, path: null };
+  render(<ResultsPanel job={null} summary={null} problem={null} diagnostics={[
+    { ...diagnostic, severity: "WARNING", message: "First warning" },
+    { ...diagnostic, severity: "ERROR", message: "First error" },
+    { ...diagnostic, severity: "WARNING", message: "Second warning" },
+    { ...diagnostic, severity: "ERROR", message: "Second error" },
+  ]} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  const rows = within(screen.getByRole("tabpanel")).getAllByRole("listitem");
+  expect(rows.map((row) => row.querySelector(".diagnostic-message")?.textContent))
+    .toEqual(["First error", "Second error", "First warning", "Second warning"]);
+  expect(within(rows[0]).getByRole("img", { name: "Error" })).toBeTruthy();
+  expect(within(rows[2]).getByRole("img", { name: "Warning" })).toBeTruthy();
+});
+
+it("keeps diagnostic pointers out of API error banners on every tab", () => {
+  const finding = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "At least one handler", document: "chain.model.json",
+    pointer: "/blocks/gateway/params/handlers", path: "gateway" };
+  render(<ResultsPanel job={null} summary={null} problem={{ code: "INVALID_MODEL", message: "Run rejected", diagnostics: [finding] }}
+    diagnostics={[finding]} />);
+  expect(screen.getByRole("alert").textContent).not.toContain(finding.pointer);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  const row = screen.getByRole("button", { name: /At least one handler/ });
+  expect(row.title).toContain(finding.pointer);
+  expect(row.textContent).not.toContain(finding.pointer);
 });
 
 it("formats numeric coordinates in the point selector without changing its values", () => {
@@ -168,4 +200,14 @@ it("offers selected points present only in a later variant", () => {
   run.variants[1].points.push({ ...run.variants[1].points[0], id: "p1", coordinates: { "gateway.handlers": 6 } });
   render(<ResultsPanel job={null} summary={run} problem={null} selectedPointId="p1" />);
   expect(within(screen.getByRole("combobox", { name: "Grid point" })).getByRole("option", { name: /p1.*gateway.handlers = 6/ })).toBeTruthy();
+});
+
+it.each([false, true])("keeps a Problems request ahead of completion navigation: requested during run=%s", duringRun => {
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} running />);
+  if (duringRun) view.rerender(<ResultsPanel job={null} summary={null} problem={null} running problemsRequest={1} />);
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} problemsRequest={1} />);
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} problemsRequest={1} />);
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
 });

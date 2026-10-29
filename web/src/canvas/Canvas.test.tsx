@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
@@ -10,6 +10,35 @@ import { summary } from "../test/fixtures";
 beforeAll(mockReactFlowDom);
 
 describe("Canvas", () => {
+  it("publishes zoom after connected nodes have been measured", async () => {
+    const observer = globalThis.ResizeObserver;
+    const measurements: (() => void)[] = [];
+    globalThis.ResizeObserver = class extends observer {
+      observe(target: Element) {
+        if (target.classList.contains("react-flow__node")) measurements.push(() => super.observe(target));
+        else super.observe(target);
+      }
+    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const onZoomChange = vi.fn();
+      render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+        onZoomChange={onZoomChange} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+      expect(measurements.length).toBeGreaterThan(0);
+      expect(onZoomChange).not.toHaveBeenCalled();
+      await act(async () => {
+        measurements.forEach(measure => measure());
+        await vi.advanceTimersByTimeAsync(20);
+      });
+      expect(onZoomChange).toHaveBeenCalled();
+      expect(screen.getByTestId("rf__edge-gateway-to-middle")).toBeTruthy();
+    } finally {
+      globalThis.ResizeObserver = observer;
+      vi.useRealTimers();
+    }
+  });
+
   function renderEditable(onParam = vi.fn(), onValidity = vi.fn()) {
     render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
       parametersEditable onParam={onParam} onValidity={onValidity} />);

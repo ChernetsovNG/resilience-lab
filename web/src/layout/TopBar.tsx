@@ -1,6 +1,5 @@
-import type { HealthView, JobView } from "../api/apiTypes";
+import type { JobView } from "../api/apiTypes";
 import { t } from "../i18n";
-import { HealthBadge } from "../components/HealthBadge";
 
 export interface TopBarProps {
   experiments: string[];
@@ -29,16 +28,14 @@ export interface TopBarProps {
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
   job: JobView | null;
-  health: HealthView | null;
-  healthError: string | null;
 }
 
 /**
- * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, estimate, run/resume/cancel, job status, backend health. Switching waits
+ * Top bar (stage 1 design §6.1): experiment, unsaved changes, save, estimate, run/resume/cancel; job status and backend health belong to the status bar. Switching waits
  * for opening, saving, running and invalid drafts; saving and running wait for valid drafts and saved changes.
  */
 export function TopBar(props: TopBarProps) {
-  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, onCancel, job, health, healthError, canUndo, canRedo, onUndo, onRedo } =
+  const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, onCancel, job, canUndo, canRedo, onUndo, onRedo } =
     props;
   const active = job !== null && (job.status === "QUEUED" || job.status === "RUNNING");
   return (
@@ -85,13 +82,6 @@ export function TopBar(props: TopBarProps) {
         disabled={loading || saving || dirty || invalid || running || props.estimating}
         title={dirty ? t("app.topBar.saveBeforeResume") : undefined}>{t("app.topBar.resume")}</button> : null}
       {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>{t("app.topBar.cancel")}</button> : null}
-      <span className="job-status" data-testid="job-status">
-        {job === null ? "" : active && job.cancelRequested
-          ? t("app.job.cancellationRequested", { status: t(`app.job.status.${job.status}`) })
-          : t(`app.job.status.${job.status}`)}
-      </span>
-      <span className="spacer" />
-      <HealthBadge health={health} error={healthError} />
     </header>
   );
 }
