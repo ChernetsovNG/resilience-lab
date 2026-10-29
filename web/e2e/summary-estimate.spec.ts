@@ -37,7 +37,8 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await page.screenshot({ path: testInfo.outputPath("after-answer.png") });
   await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   for (const disclosure of await page.locator(".summary-services > summary").all()) await disclosure.click();
   for (const service of ["dependency", "gateway", "middle"]) {
     const metrics = page.getByRole("table", { name: `Service metrics: ${service}`, exact: true });

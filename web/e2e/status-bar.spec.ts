@@ -46,7 +46,8 @@ test("keeps status in one place and reveals warnings and new errors without page
   await expect(page.locator(".top-bar")).not.toContainText("Backend");
   await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("status-completed.png") });
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await expect(status).toBeVisible();
   expect(await page.evaluate(() => ({
     x: document.documentElement.scrollWidth > document.documentElement.clientWidth,

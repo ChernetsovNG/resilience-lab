@@ -11,7 +11,8 @@ import { SummaryTable } from "./SummaryTable";
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
 const GridMap = lazy(() => import("../results/GridMap").then((module) => ({ default: module.GridMap })));
 
-export type ResultsPanelSize = "collapsed" | "normal" | "expanded";
+export type ResultsPanelSize = "collapsed" | "normal";
+export type ResultsPanelView = "answer" | "timeline" | "assumptions" | "map" | "problems";
 
 export interface ResultsPanelProps {
   job: JobView | null;
@@ -33,6 +34,7 @@ export interface ResultsPanelProps {
   onCursorChange?: (window: number | null) => void;
   size?: ResultsPanelSize;
   onSizeChange?: (size: ResultsPanelSize) => void;
+  onViewChange?: (view: ResultsPanelView) => void;
   diagnostics?: readonly Diagnostic[];
   validationPending?: boolean;
   validationProblem?: ApiProblem | null;
@@ -45,11 +47,11 @@ export interface ResultsPanelProps {
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
 export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
-  activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
+  activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange, onViewChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, cursorWindow = null, onCursorChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, diagnosticDocuments = null, problemsRequest = 0,
 }: ResultsPanelProps) {
-  const [navigation, setNavigation] = useState({ view: "answer", running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
+  const [navigation, setNavigation] = useState({ view: "answer" as ResultsPanelView, running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
   const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
   const revealProblems = problemsRequest !== navigation.problemsRequest;
   // Adjust navigation once per run; a choice made while submission is pending also counts.
@@ -72,14 +74,15 @@ export function ResultsPanel({
   }, [completedJob, size, onSizeChange]);
   const hasGrid = summary !== null && summary.grid.length > 0;
   const active = navigation.view === "map" && !hasGrid ? "answer" : navigation.view;
-  const selectView = (view: string) => setNavigation({
+  useEffect(() => { onViewChange?.(active); }, [active, onViewChange]);
+  const selectView = (view: ResultsPanelView) => setNavigation({
     ...navigation, view, changedDuringRun: navigation.changedDuringRun || (running && view !== active),
   });
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   return (
-    <section className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
+    <section id="results-panel" className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
       <div role="tablist" aria-label={t("results.views")}>
         <button id={`${id}-answer`} type="button" role="tab" aria-selected={active === "answer"}
           aria-controls={`${id}-panel`} onClick={() => selectView("answer")}>
@@ -104,7 +107,6 @@ export function ResultsPanel({
         <span className="results-size-actions">
           {size === "normal" ? <button type="button" onClick={() => onSizeChange?.("collapsed")}>{t("results.collapse")}</button> : null}
           {size !== "normal" ? <button type="button" onClick={() => onSizeChange?.("normal")}>{t("results.restore")}</button> : null}
-          {size !== "expanded" ? <button type="button" onClick={() => onSizeChange?.("expanded")}>{t("results.expand")}</button> : null}
         </span>
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}

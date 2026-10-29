@@ -16,7 +16,8 @@ import { useHealth } from "./components/useHealth";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
-import { ResultsPanel, type ResultsPanelSize } from "./layout/ResultsPanel";
+import { ResultsWorkspace } from "./layout/ResultsWorkspace";
+import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { StatusBar } from "./layout/StatusBar";
 import { useRun, type RunDocuments } from "./run/useRun";
@@ -47,6 +48,8 @@ export function App() {
   const showEstimate = estimatePanel !== null && (estimatePanel.source === "manual" || run.job === null ||
     estimatePanel.previousJobId === run.job.id);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
+  const [resultsView, setResultsView] = useState<ResultsPanelView>("answer");
+  const [analysis, setAnalysis] = useState(false);
   const [problemsRequest, setProblemsRequest] = useState(0);
   const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
@@ -197,7 +200,20 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
+  useEffect(() => {
+    if (!analysis) return;
+    const exit = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        setAnalysis(false);
+      }
+    };
+    window.addEventListener("keydown", exit);
+    return () => window.removeEventListener("keydown", exit);
+  }, [analysis]);
+
   const requestEstimate = () => {
+    if (resultsSize === "collapsed") setResultsSize("normal");
     setEstimatePanel({ source: "manual" });
     return estimate.request();
   };
@@ -211,6 +227,7 @@ export function App() {
           if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           setEstimatePanel(null);
+          setAnalysis(false);
           setSelection([]);
           clipboard.current = null;
           selectVariant(null);
@@ -240,6 +257,7 @@ export function App() {
         }}
         onRun={() => {
           if (loaded === null) return;
+          if (resultsSize === "collapsed") setResultsSize("normal");
           setRunPending(true);
           setEstimatePanel(null);
           void estimate.request().then(async (cost) => {
@@ -272,12 +290,14 @@ export function App() {
           </EstimatePopover>
         ) : null}
       />
-      <Palette catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
+      <ResultsWorkspace view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}>
+      <Palette hidden={analysis} catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
       <main className="canvas-area" onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented && event.target instanceof Element &&
           !event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) {
           event.preventDefault();
-          playback.seek(null);
+          if (analysis) setAnalysis(false);
+          else playback.seek(null);
         }
       }}>
         <div className="canvas-messages">
@@ -315,7 +335,8 @@ export function App() {
             summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
-            metric={nodeMetric} onMetricChange={setNodeMetric} stale={staleResults} />}
+            metric={nodeMetric} onMetricChange={setNodeMetric} stale={staleResults}
+            analysis={analysis} onAnalysisChange={() => { setAnalysis(current => !current); setResultsSize("normal"); }} />}
         </div>
         <div className="canvas">
           {model === null || loaded === null || catalog === null ? (
@@ -357,9 +378,10 @@ export function App() {
         <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid} onSelect={selectVariant} />
       </main>
       {model === null || loaded === null || catalog === null ? (
-        <aside className="inspector" aria-label={t("app.canvas.inspector")} />
+        <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
       ) : (
         <Inspector
+          hidden={analysis}
           key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
           catalog={catalog}
           model={model}
@@ -400,6 +422,7 @@ export function App() {
         onCursorChange={playback.seek}
         size={resultsSize}
         onSizeChange={setResultsSize}
+        onViewChange={setResultsView}
         diagnostics={allDiagnostics}
         diagnosticDocuments={loaded}
         problemsRequest={problemsRequest}
@@ -413,6 +436,7 @@ export function App() {
           setSelection(setting || target.element === null ? [] : [target.element]);
         }}
       />
+      </ResultsWorkspace>
       <StatusBar job={ownRun ? run.job : null} health={health.health} healthError={health.error}
         diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
         cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}

@@ -26,31 +26,49 @@ select {
   display: grid;
   height: 100vh;
   overflow: hidden;
-  grid-template-columns: 48px minmax(0, 1fr) 20rem;
-  grid-template-rows: auto minmax(0, 1fr) 16rem auto;
-  grid-template-areas:
-    "top top top"
-    "palette canvas inspector"
-    "results results results"
-    "status status status";
-}
-
-.app--results-collapsed {
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-}
-
-.app--results-expanded {
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "top top top"
-    "results results results"
-    "status status status";
+  grid-template-areas: "top" "workspace" "status";
 }
 
-.app--results-expanded > .palette,
-.app--results-expanded > .canvas-area,
-.app--results-expanded > .inspector {
+.workspace-panels {
+  grid-area: workspace;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: 48px minmax(0, 1fr) 20rem;
+  grid-template-rows: minmax(0, 1fr) 8px var(--results-height);
+  grid-template-areas:
+    "palette canvas inspector"
+    "divider divider divider"
+    "results results results";
+}
+
+.workspace-panels--collapsed {
+  grid-template-rows: minmax(0, 1fr) 0 auto;
+}
+
+.workspace-panels--analysis {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "canvas" "divider" "results";
+}
+
+.workspace-panels > [hidden] {
   display: none;
+}
+
+.results-divider {
+  grid-area: divider;
+  cursor: row-resize;
+  touch-action: none;
+  background: #e4e7eb;
+}
+
+.results-divider:hover,
+.results-divider:focus-visible {
+  background: #93c5fd;
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .top-bar {

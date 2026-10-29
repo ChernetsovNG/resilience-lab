@@ -8,7 +8,7 @@ import { stubFetch, type StubResponse } from "./test/stubFetch";
 import { seriesLoader } from "./results/series";
 
 beforeAll(mockReactFlowDom);
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
 
 const otherPath = "retry-storm/second.experiment.json";
 const health = { status: "UP", applicationVersion: "test", kslVersion: "test" };
@@ -149,7 +149,7 @@ it("counts the same validation and job warning once", async () => {
   expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
 });
 
-it("does not reopen dismissed Problems when a repeated launch returns the same error", async () => {
+it("preserves the chosen tab when a repeated launch reveals the panel and returns the same error", async () => {
   const gate = deferred();
   let submissions = 0;
   server(async (url) => {
@@ -164,11 +164,11 @@ it("does not reopen dismissed Problems when a repeated launch returns the same e
   fireEvent.click(button("Collapse results"));
   fireEvent.click(button("Run"));
   await waitFor(() => expect(submissions).toBe(2));
-  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
   await act(async () => gate.release());
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
-  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
 it("expires launch findings after document edits and reveals the same error in a new validation response", async () => {
@@ -972,25 +972,98 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   expect(screen.queryByText(stale)).toBeNull();
 });
 
-it("changes results panel grid size without issuing document commands", async () => {
+it("resizes the results with keys and dragging within bounds without editing documents", async () => {
+  measuredWorkspace();
   const fetchMock = server();
   await open();
-  const app = document.querySelector(".app")!;
-  expect(app.className).toContain("app--results-normal");
-
-  fireEvent.click(button("Expand results"));
-  expect(app.className).toContain("app--results-expanded");
-  fireEvent.click(button("Restore results"));
-  expect(app.className).toContain("app--results-normal");
+  const divider = screen.getByRole("separator", { name: "Resize results panel" });
+  const height = () => Number(divider.getAttribute("aria-valuenow"));
+  const initial = height();
+  fireEvent.keyDown(divider, { key: "ArrowUp" });
+  expect(height()).toBe(initial + 16);
+  fireEvent.keyDown(divider, { key: "ArrowDown" });
+  expect(height()).toBe(initial);
+  Object.assign(divider, { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() });
+  fireEvent(divider, new MouseEvent("pointerdown", { bubbles: true, button: 0, clientY: 500 }));
+  fireEvent(divider, new MouseEvent("pointermove", { bubbles: true, clientY: 400 }));
+  expect(height()).toBe(initial + 100);
+  fireEvent(divider, new MouseEvent("pointermove", { bubbles: true, clientY: -10000 }));
+  expect(height()).toBe(572);
+  fireEvent(divider, new MouseEvent("pointerup", { bubbles: true }));
+  fireEvent.keyDown(divider, { key: "Home" });
+  expect(height()).toBe(160);
+  fireEvent.keyDown(divider, { key: "ArrowDown" });
+  expect(height()).toBe(160);
+  fireEvent.keyDown(divider, { key: "End" });
+  expect(height()).toBe(572);
+  fireEvent.keyDown(divider, { key: "ArrowUp" });
+  expect(height()).toBe(572);
   fireEvent.click(button("Collapse results"));
-  expect(app.className).toContain("app--results-collapsed");
+  expect(screen.queryByRole("separator", { name: "Resize results panel" })).toBeNull();
   expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(button("Restore results"));
-  expect(app.className).toContain("app--results-normal");
-
+  expect(height()).toBe(572);
+  expect(screen.queryByRole("button", { name: "Expand results" })).toBeNull();
   expect(button("Undo").disabled).toBe(true);
   expect(button("Save").disabled).toBe(true);
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+});
+
+function measuredWorkspace() {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains("workspace-panels") ? new DOMRect(0, 0, 1440, 800) : new DOMRect(0, 0, 180, 80);
+  });
+}
+
+it("remembers separate heights for all five result tabs across remounts", async () => {
+  measuredWorkspace();
+  const grid = { ...summary, grid: [{ path: "gateway.handlers", values: [4] }] };
+  server(url => url.endsWith("/summary") ? { body: grid } : undefined);
+  let view = await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  const height = () => Number(screen.getByRole("separator", { name: "Resize results panel" }).getAttribute("aria-valuenow"));
+  const answer = height();
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+  await waitFor(() => expect(height()).toBeGreaterThan(answer));
+  const sizes = new Map<string, number>();
+  for (const [index, tab] of ["Answer", "Timeline", "Assumptions", "Map", "Problems"].entries()) {
+    fireEvent.click(screen.getByRole("tab", { name: tab }));
+    fireEvent.keyDown(screen.getByRole("separator"), { key: "Home" });
+    for (let step = 0; step <= index; step++) fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowUp" });
+    sizes.set(tab, height());
+  }
+  view.unmount();
+  view = await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  for (const [tab, size] of sizes) {
+    fireEvent.click(screen.getByRole("tab", { name: tab }));
+    await waitFor(() => expect(height()).toBe(size));
+  }
+  view.unmount();
+});
+
+it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving the selection", async way => {
+  server();
+  await open();
+  expect(screen.queryByRole("button", { name: "Analysis" })).toBeNull();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(button("Analysis"));
+  expect(button("Analysis").getAttribute("aria-pressed")).toBe("true");
+  expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(true);
+  expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(true);
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
+  if (way === "button") fireEvent.click(button("Analysis"));
+  else fireEvent.keyDown(screen.getByRole("separator"), { key: "Escape" });
+  expect(button("Analysis").getAttribute("aria-pressed")).toBe("false");
+  expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(false);
+  expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(false);
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
 });
 
 
@@ -1186,18 +1259,22 @@ it("invalidates a pending Run estimate when a field becomes unparsable, then all
 });
 
 
-it.each(["Estimate", "Run"])("keeps expanded results while %s follows its estimate visibility policy", async (action) => {
+it.each(["Estimate", "Run"])("keeps Analysis while %s follows its estimate visibility policy", async action => {
   server(); await open();
-  fireEvent.click(button("Expand results"));
-  expect(button("Restore results")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  fireEvent.click(button("Analysis"));
+  fireEvent.click(button("Collapse results"));
   fireEvent.click(button(action));
   if (action === "Estimate") await screen.findByRole("region", { name: "Cost estimate" });
   else {
-    await screen.findByRole("table", { name: "Answer" });
+    await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
   }
-  expect(button("Restore results")).toBeTruthy();
-  expect(document.querySelector(".app")!.className).toContain("app--results-expanded");
+  expect(document.querySelector(".workspace-panels")!.className).toContain("workspace-panels--analysis");
+  expect(document.querySelector(".app")!.className).toContain("app--results-normal");
 });
 
 
@@ -1330,7 +1407,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
       startMs: (fromWindow + index) * 10, durationMs: 10,
       originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 200, admittedAttemptsPerSecond: 150,
       queueRejectionsPerSecond: 50, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
-      handlerUtilization: cell === "p1" && replication === 1 ? 0.8 : 0.2, meanQueueLength: 3,
+      handlerUtilization: cell === "p1" && replication === 1 ? 0.8 : 0.2, meanQueueLength: replication === 1 ? 3 : 7,
       meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1.5,
     })),
   })));
@@ -1346,7 +1423,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect(within(pointSelect).getByRole("option", { name: /p1.*gateway.handlers = 1,000/ })).toBeTruthy();
   expect(within(pointSelect).getByRole("option", { name: /p2.*gateway.handlers = 6/ })).toBeTruthy();
   fireEvent.change(pointSelect, { target: { value: "p1" } });
-  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(true);
+  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
   expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
   fireEvent.click(within(row).getByRole("button", { name: "Time" }));
@@ -1369,9 +1446,15 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect(timeline.textContent).toContain("Hover to inspect windows");
   expect(screen.queryByRole("slider", { name: "Playback window" })).toBeNull();
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
-  vi.spyOn(chartCursor, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 100, 100));
-  fireEvent(chartCursor, new MouseEvent("pointermove", { bubbles: true, clientX: 50 }));
+  fireEvent.change(within(row).getByLabelText("Replication"), { target: { value: "0" } });
+  expect(within(row).getByRole("button", { name: "Summary" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
+  const summaryChartCursor = within(await screen.findByRole("region", { name: "Queue" })).getByRole("slider");
+  vi.spyOn(summaryChartCursor, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 100, 100));
+  fireEvent(summaryChartCursor, new MouseEvent("pointermove", { bubbles: true, clientX: 50 }));
   expect(timeline.textContent).toContain("Window 55");
+  expect(timeline.textContent).toContain("replication 0");
+  await waitFor(() => expect(screen.getByRole("region", { name: "Queue" }).querySelector("dd")!.textContent!.trim()).toBe("7 requests"));
   fireEvent.click(within(row).getByRole("button", { name: "Time" }));
   expect(timeline.textContent).toContain("Window 0");
   fireEvent.click(within(row).getByRole("button", { name: "Summary" }));
@@ -1601,7 +1684,7 @@ it.each(["Timeline", "Problems"])("preserves a tab selected during Run estimatio
   expect(screen.getByRole("tab", { name: tab }).getAttribute("aria-selected")).toBe("true");
 });
 
-it.each(["Estimate", "Run"])("keeps the prior tab and collapsed size when %s never submits a new job", async action => {
+it.each(["Estimate", "Run"])("reveals the prior tab when %s never submits a new job", async action => {
   const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(true).mockReturnValue(false);
   const fetchMock = server(url => url === "/api/v1/estimate" ? { body: { ...costEstimate,
     warnings: [{ code: "ESTIMATE_UI_CACHE", message: "Cache budget exceeded" }],
@@ -1618,7 +1701,7 @@ it.each(["Estimate", "Run"])("keeps the prior tab and collapsed size when %s nev
   expect(confirm).toHaveBeenCalledTimes(action === "Run" ? 2 : 1);
   expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(1);
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
-  expect(document.querySelector(".app")!.className).toContain("app--results-collapsed");
+  expect(document.querySelector(".app")!.className).toContain("app--results-normal");
 });
 
 
