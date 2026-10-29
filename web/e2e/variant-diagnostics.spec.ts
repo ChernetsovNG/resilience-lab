@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("reveals variant warnings on Model and navigates from a field hint to its variant", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const model = page.getByRole("tab", { name: "Model", exact: true });
   await expect(model).toHaveAttribute("aria-selected", "true");

@@ -34,7 +34,8 @@ docker compose up --build -d
 curl --fail http://127.0.0.1:8080/api/v1/health
 ```
 
-Откроется эксперимент retry storm. Выберите блок или связь на схеме, измените
+В списке `Experiment` выберите `retry-storm/retry-storm.experiment.json`.
+Выберите блок или связь на схеме, измените
 параметр в инспекторе справа, нажмите `Save`, затем `Run` и дождитесь
 `COMPLETED`: сводка по вариантам появится в панели внизу. Модель правится на
 первой вкладке под схемой, `Model`. На вкладке варианта правка создаёт
@@ -118,6 +119,24 @@ Vite передаёт запросы `/api` локальному backend на `1
 Проверка готовности и запуск эксперимента такие же, как для Compose.
 Для остановки нажмите `Ctrl+C` в обоих терминалах.
 
+## Примеры
+
+Рабочая область `examples/` содержит:
+
+- [retry-storm](examples/retry-storm/) — короткое сравнение повторов и одной
+  попытки при замедлении конечного сервиса; на нём работают основные E2E.
+- [checkout](examples/checkout/) — оформление заказа через шлюз, сервис заказа,
+  платёжный сервис и внешний PSP. Источники чисел и типичные допущения записаны
+  в `notes`. `checkout.experiment.json` сравнивает четыре настройки, включая
+  согласованные таймауты и увеличенный платёжный пул.
+  `checkout-grid.experiment.json` перебирает timeout × attempts у baseline
+  той же модели: отдельный эксперимент сохраняет настройки остальных вариантов.
+
+В web выберите нужный путь `*.experiment.json` в списке `Experiment`, затем
+нажмите `Run`. Для сетки выберите вкладку `Baseline` под схемой и `Map` в панели
+результатов. Отдельной команды открытия примера нет. Числа checkout синтетические;
+результаты показывают поведение этих допущений и требуют калибровки для реальной системы.
+
 ## Пример CLI
 
 Для расчёта без браузера нужен только JDK 25. Из корня репозитория:
@@ -126,6 +145,9 @@ Vite передаёт запросы `/api` локальному backend на `1
 ./gradlew :apps:cli:installDist
 apps/cli/build/install/cli/bin/cli validate examples/retry-storm/retry-storm.experiment.json
 apps/cli/build/install/cli/bin/cli run examples/retry-storm/retry-storm.experiment.json
+apps/cli/build/install/cli/bin/cli validate examples/checkout/checkout.experiment.json
+apps/cli/build/install/cli/bin/cli run examples/checkout/checkout.experiment.json
+apps/cli/build/install/cli/bin/cli run examples/checkout/checkout-grid.experiment.json
 apps/cli/build/install/cli/bin/cli catalog
 apps/cli/build/install/cli/bin/cli schema model
 ```

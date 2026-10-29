@@ -18,6 +18,7 @@ async function expectNoPageScroll(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
   await expect(page.getByLabel("Experiment")).toHaveValue(experiment);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
@@ -374,6 +375,7 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   expect(stored.content.model.blocks.gateway.params.handlers).toBe(6);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.reload();
+  await page.getByLabel("Experiment", { exact: true }).selectOption(experiment);
   await page.getByTestId("rf__node-gateway").click();
   await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("6");
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();

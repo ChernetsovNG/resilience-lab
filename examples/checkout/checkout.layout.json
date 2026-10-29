@@ -1,0 +1,25 @@
+{
+  "positions": {
+    "api-gateway": {
+      "x": 260.0,
+      "y": 100.0
+    },
+    "mobile-app": {
+      "x": 0.0,
+      "y": 100.0
+    },
+    "order-service": {
+      "x": 520.0,
+      "y": 100.0
+    },
+    "payment-service": {
+      "x": 780.0,
+      "y": 100.0
+    },
+    "psp": {
+      "x": 1040.0,
+      "y": 100.0
+    }
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,134 @@
+{
+  "blocks": {
+    "api-gateway": {
+      "notes": "200 обработчиков и очередь 100 взяты как масштабы из Tomcat 10.1: maxThreads=200, acceptCount=100. acceptCount ограничивает очередь соединений ОС после достижения maxConnections; FIFO-очередь запросов этой модели — упрощение, не точное воспроизведение Tomcat. Источник: https://tomcat.apache.org/tomcat-10.1-doc/config/http.html. Собственная обработка lognormal со средним 2 ms и стандартным отклонением 1 ms — типичное допущение.",
+      "params": {
+        "handlers": 200,
+        "processing": {
+          "kind": "lognormal",
+          "mean": "2ms",
+          "stdDev": "1ms"
+        },
+        "queue": 100
+      },
+      "type": "service"
+    },
+    "mobile-app": {
+      "notes": "30 запросов/с — типичная выбранная нагрузка одного пути оформления заказа, без калибровки. Deadline 10 s — типичный бюджет ожидания пользователя. Ориентир: connect/read/write timeout OkHttp равны 10 s по умолчанию; общий callTimeout по умолчанию не ограничен, поэтому deadline здесь задан явно. Источник: https://github.com/square/okhttp/blob/master/okhttp/src/commonJvmAndroid/kotlin/okhttp3/OkHttpClient.kt",
+      "params": {
+        "deadline": "10s",
+        "rate": "30/s"
+      },
+      "type": "client"
+    },
+    "order-service": {
+      "notes": "200 обработчиков и очередь 100 ориентируются на умолчания Tomcat 10.1 maxThreads=200 и acceptCount=100. Очередь запросов модели упрощает очередь соединений ОС Tomcat. Источник: https://tomcat.apache.org/tomcat-10.1-doc/config/http.html. Собственная обработка lognormal, среднее 20 ms и стандартное отклонение 10 ms, условно включает запись заказа в БД; это типичное допущение, отдельной БД в модели нет.",
+      "params": {
+        "handlers": 200,
+        "processing": {
+          "kind": "lognormal",
+          "mean": "20ms",
+          "stdDev": "10ms"
+        },
+        "queue": 100
+      },
+      "type": "service"
+    },
+    "payment-service": {
+      "notes": "50 обработчиков — типичный выделенный ограниченный пул платёжного сервиса; очередь 100 — типичный выбранный предел. Собственная обработка lognormal со средним 10 ms и стандартным отклонением 5 ms — типичное допущение. Эти значения не являются умолчаниями конкретного стека.",
+      "params": {
+        "handlers": 50,
+        "processing": {
+          "kind": "lognormal",
+          "mean": "10ms",
+          "stdDev": "5ms"
+        },
+        "queue": 100
+      },
+      "type": "service"
+    },
+    "psp": {
+      "notes": "Внешний платёжный провайдер (PSP). 100 одновременных обработчиков, отсутствие очереди (0), lognormal со средним 300 ms и стандартным отклонением 150 ms, локальный отказ 1% — типичные синтетические допущения. Это не лимиты и не измерения конкретного провайдера.",
+      "params": {
+        "failureRate": "1%",
+        "handlers": 100,
+        "processing": {
+          "kind": "lognormal",
+          "mean": "300ms",
+          "stdDev": "150ms"
+        },
+        "queue": 0
+      },
+      "type": "service"
+    }
+  },
+  "connections": [
+    {
+      "from": "mobile-app",
+      "id": "mobile-app-to-api-gateway",
+      "notes": "Входной request этапа 1 не добавляет сеть, таймаут и повторы. Бюджет клиента задан явно в mobile-app.deadline.",
+      "to": "api-gateway",
+      "type": "request"
+    },
+    {
+      "from": "api-gateway",
+      "id": "api-gateway-to-order-service",
+      "notes": "Timeout 5 s — типичное допущение. Одна попытка: шлюз не повторяет неидемпотентный POST оформления заказа (типичная политика). Сеть fixed 0.5 ms на запрос и отдельно на ответ — типичная внутренняя задержка.",
+      "params": {
+        "attempts": 1,
+        "network": {
+          "kind": "fixed",
+          "mean": "0.5ms"
+        },
+        "timeout": "5s"
+      },
+      "to": "order-service",
+      "type": "call"
+    },
+    {
+      "from": "order-service",
+      "id": "order-service-to-payment-service",
+      "notes": "Три попытки, включая первую, и фиксированная пауза 500 ms взяты из умолчаний Resilience4j Retry maxAttempts=3 и waitDuration=500 ms: https://resilience4j.readme.io/docs/retry. Для fixed модель берёт min(base,max), поэтому оба значения равны 500 ms. Timeout 3 s и сеть fixed 0.5 ms в каждом направлении — типичные допущения. Модель считает попытки; повторное списание и идемпотентность платежей остаются за её границами.",
+      "params": {
+        "attempts": 3,
+        "backoff": {
+          "base": "500ms",
+          "kind": "fixed",
+          "max": "500ms"
+        },
+        "network": {
+          "kind": "fixed",
+          "mean": "0.5ms"
+        },
+        "timeout": "3s"
+      },
+      "to": "payment-service",
+      "type": "call"
+    },
+    {
+      "from": "payment-service",
+      "id": "payment-service-to-psp",
+      "notes": "По таблице issue #19 сохранены две попытки всего, timeout 2 s и exponential-full-jitter с base 25 ms, multiplier 2, max 1 s. Источник ориентира: Istio описывает два повтора после первой попытки и переменные паузы от 25 ms: https://istio.io/latest/docs/concepts/traffic-management/. Это разные соглашения: attempts=2 здесь означает один повтор, а full jitter может дать паузу меньше 25 ms. Множитель 2, предел 1 s и timeout 2 s — выбранные параметры примера, не точная копия умолчаний Istio. Внешняя сеть lognormal со средним 20 ms и стандартным отклонением 5 ms на каждое направление — типичное допущение.",
+      "params": {
+        "attempts": 2,
+        "backoff": {
+          "base": "25ms",
+          "kind": "exponential-full-jitter",
+          "max": "1s",
+          "multiplier": 2
+        },
+        "network": {
+          "kind": "lognormal",
+          "mean": "20ms",
+          "stdDev": "5ms"
+        },
+        "timeout": "2s"
+      },
+      "to": "psp",
+      "type": "call"
+    }
+  ],
+  "description": "Оформление заказа: mobile-app → api-gateway → order-service → payment-service → psp. Как таймауты, повторы и размер платёжного пула влияют на успех и задержку, когда внешний платёжный провайдер замедляется?",
+  "notes": "Синтетический срез интернет-магазина вдоль одного синхронного пути. Один блокирующий пул обработчиков на сервис; пулы соединений, реплики, база данных, fan-out и побочные эффекты платежей не моделируются. Числа из документированных умолчаний и типичные допущения указаны отдельно у элементов. Модель не откалибрована по наблюдениям реальной системы.",
+  "schemaVersion": 1
+}
