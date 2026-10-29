@@ -1,15 +1,36 @@
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent } from "../i18n/format";
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 import { SaturationInsight } from "../results/SaturationInsight";
 
-/** Mean over replications with the Student 95% interval when there are at least two replications. */
-function metric(summary: MetricSummary | null | undefined, format: (value: number) => string): ReactNode {
-  if (summary == null) return formatNumber(null);
-  const interval = summary.ci95Low == null || summary.ci95High == null ? null
-    : <span className="summary-interval">{t("results.intervalInParens", { interval: formatInterval(summary.ci95Low, summary.ci95High, format) })}</span>;
-  return <>{format(summary.mean)}{interval}</>;
+const MIN_RELIABLE_REPLICATIONS = 5;
+type Metric = Pick<MetricSummary, "mean" | "ci95Low" | "ci95High">;
+type Point = RunSummary["variants"][number]["points"][number];
+type Format = (value: number) => string;
+
+const percentagePoints: Format = value => t("results.answer.percentagePoints", { value: formatNumber(value * 100, 1) });
+
+/** Mean and unmodified Student bounds; interval overlap is descriptive, not a significance test. */
+function metric(value: Metric | null | undefined, baseline: Metric | null | undefined, replications: number, format: Format, formatDifference: Format): ReactNode {
+  if (value == null) return formatNumber(null);
+  const separate = baseline != null && value.ci95Low != null && value.ci95High != null
+    && baseline.ci95Low != null && baseline.ci95High != null
+    && (value.ci95High < baseline.ci95Low || baseline.ci95High < value.ci95Low);
+  const difference = baseline == null ? null : value.mean - baseline.mean;
+  const formattedDifference = difference === null ? null : formatDifference(difference);
+  return <>
+    {format(value.mean)}
+    {difference === null ? null : <span className="summary-difference">
+      {difference > 0 && formattedDifference !== formatDifference(0)
+        ? t("results.answer.positiveDifference", { value: formattedDifference! }) : formattedDifference}
+    </span>}
+    {value.ci95Low == null || value.ci95High == null ? null :
+      <span className={`summary-interval${replications < MIN_RELIABLE_REPLICATIONS ? " summary-interval--unreliable" : ""}`}>
+        {t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) })}
+      </span>}
+    {separate ? <span className="summary-intervals-separate">{t("results.answer.intervalsSeparate")}</span> : null}
+  </>;
 }
 
 interface SummaryTableProps {
@@ -18,80 +39,66 @@ interface SummaryTableProps {
   selectedPointId?: string;
 }
 
-/** Metrics by variant and grid point (stage 1 design §6.3, Summary tab). */
+/** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
 export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0" }: SummaryTableProps) {
-  const rows = summary.variants.flatMap((variant) => variant.points.map((point) => ({ variant, point })));
-  const services = [...new Set(rows.flatMap(({ point }) => Object.keys(point.aggregate.services)))].sort();
-  return (
-    <table className="summary-table" aria-label={t("results.summary.title")}>
-      <colgroup>
-        <col style={{ width: "9%" }} />
-        <col style={{ width: "5%" }} />
-        <col style={{ width: "12%" }} />
-        <col style={{ width: "8%" }} />
-        <col span={3} style={{ width: "12%" }} />
-        <col style={{ width: "30%" }} />
-      </colgroup>
-      <thead>
-        <tr>
-          <th scope="col">{t("results.variant")}</th>
-          <th scope="col">{t("results.point")}</th>
-          <th scope="col">{t("results.coordinates")}</th>
-          <th scope="col">{t("results.replications")}</th>
-          <th scope="col">{t("results.metrics.successRate")}</th>
-          <th scope="col">{t("results.metrics.p95LatencyMs")}</th>
-          <th scope="col">{t("results.metrics.p99LatencyMs")}</th>
-          <th scope="col">{t("results.saturation.title")}</th>
-        </tr>
-      </thead>
+  const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
+  const ordered = baseline === undefined ? [] : [baseline, ...summary.variants.filter(variant => variant !== baseline)];
+  const columns = ordered.flatMap(variant => {
+    const point = variant.points.find(point => point.id === selectedPointId);
+    return point === undefined ? [] : [{ variant, point }];
+  });
+  const reference = baseline?.points.find(point => point.id === selectedPointId);
+  const activeVariant = activeVariantId === null ? summary.variants[0] : summary.variants.find(variant => variant.id === activeVariantId);
+  const activePoint = activeVariant?.points.find(point => point.id === selectedPointId);
+  const services = [...new Set(columns.flatMap(({ point }) => Object.keys(point.aggregate.services)))].sort();
+  const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
+  const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (
+    <tr>
+      <th scope="row">{label}</th>
+      {columns.map(({ variant, point }) => <td key={variant.id} className={columnClass(variant.id)}>
+        {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference), variant.replications, format, difference)}
+      </td>)}
+    </tr>
+  );
+  return <div className="answer">
+    <section className="answer-insight" aria-label={t("results.saturation.title")}>
+      <h3>{t("results.answer.forVariant", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</h3>
+      {activePoint === undefined || activeVariant === undefined ?
+        <p>{t("results.answer.noPoint", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</p> :
+        <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} />}
+    </section>
+    {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: baseline.label, point: selectedPointId })}</p> : null}
+    <table className="summary-table" aria-label={t("results.answer.title")}>
+      <caption>{t("results.answer.comparison", { variant: baseline?.label ?? t("results.variant") })}</caption>
+      <thead><tr>
+        <th scope="col">{t("results.answer.metric")}</th>
+        {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>
+          {variant.label}
+          <span className="summary-replications">{t("results.answer.replications", { count: formatNumber(variant.replications) })}</span>
+          {variant.replications < MIN_RELIABLE_REPLICATIONS ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
+        </th>)}
+      </tr></thead>
       <tbody>
-        {rows.map(({ variant, point }) => {
-          const className = [
-            variant.id === activeVariantId ? "summary-row--active-variant" : null,
-            point.id === selectedPointId ? "summary-row--selected-point" : null,
-          ].filter(Boolean).join(" ");
-          return (
-            <Fragment key={`${variant.id}/${point.id}`}>
-              <tr className={className}>
-                <th scope="row">{variant.label}</th>
-                <td>{point.id}</td>
-                <td>{Object.entries(point.coordinates).map(([path, value]) => (
-                  <div key={path}>{t("results.coordinate", { path, value: typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value) })}</div>
-                ))}</td>
-                <td>{formatNumber(variant.replications)}</td>
-                <td>{metric(point.aggregate.successRate, formatPercent)}</td>
-                <td>{metric(point.aggregate.p95LatencyMs, formatDuration)}</td>
-                <td>{metric(point.aggregate.p99LatencyMs, formatDuration)}</td>
-                <td><SaturationInsight saturation={point.saturation} replications={variant.replications} /></td>
-              </tr>
-              {services.length === 0 ? null : <tr className="summary-services-row" aria-label={t("results.summary.serviceMetricsLabel", { variant: variant.id, point: point.id })}>
-                <td colSpan={8}>
-                  <details className="summary-services">
-                    <summary>{t("results.summary.serviceMetrics", { count: formatNumber(services.length) })}</summary>
-                    <table aria-label={t("results.summary.servicesFor", { variant: variant.label, point: point.id })}>
-                      <thead><tr>
-                        <th scope="col">{t("results.service")}</th>
-                        <th scope="col">{t("results.metrics.admittedAmplification")}</th>
-                        <th scope="col">{t("results.metrics.pooledUtilization")}</th>
-                      </tr></thead>
-                      <tbody>{services.map((service) => {
-                        const metrics = point.aggregate.services[service];
-                        const totals = metrics?.totals;
-                        return <tr key={service}>
-                          <th scope="row">{service}</th>
-                          <td>{metric(metrics?.admittedAmplification, formatMultiplier)}</td>
-                          <td>{totals == null || totals.handlerCapacityTimeMs === 0
-                            ? formatNumber(null) : formatPercent(totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs)}</td>
-                        </tr>;
-                      })}</tbody>
-                    </table>
-                  </details>
-                </td>
-              </tr>}
-            </Fragment>
-          );
-        })}
+        {row(t("results.metrics.successRate"), point => point.aggregate.successRate, formatPercent, percentagePoints)}
+        {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.p95LatencyMs, formatDuration)}
+        {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.p99LatencyMs, formatDuration)}
       </tbody>
     </table>
-  );
+    {services.map(service => <details key={service} className="summary-services">
+      <summary>{t("results.answer.serviceMetrics", { service })}</summary>
+      <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
+        <thead><tr>
+          <th scope="col">{t("results.answer.metric")}</th>
+          {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variant.label}</th>)}
+        </tr></thead>
+        <tbody>
+          {row(t("results.metrics.admittedAmplification"), point => point.aggregate.services[service]?.admittedAmplification, formatMultiplier)}
+          {row(t("results.metrics.pooledUtilization"), point => {
+            const totals = point.aggregate.services[service]?.totals;
+            return totals == null || totals.handlerCapacityTimeMs === 0 ? undefined : { mean: totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs };
+          }, formatPercent, percentagePoints)}
+        </tbody>
+      </table>
+    </details>)}
+  </div>;
 }

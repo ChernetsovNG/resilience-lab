@@ -261,9 +261,10 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     expect(saved.content.experiment.faults[0]).toEqual({ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 2, failureRate: "5%" });
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
-    const summary = page.getByRole("table", { name: "Summary" });
-    await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(3);
-    await expect(summary.getByRole("row", { name: /Alternative/ })).toContainText("%");
+    const summary = page.getByRole("table", { name: "Answer" });
+    await expect(summary.getByRole("columnheader")).toHaveCount(4);
+    await expect(summary.getByRole("columnheader", { name: /Alternative/ })).toBeVisible();
+    await expect(summary.getByRole("row", { name: /Success rate/ }).locator("td").nth(2)).toContainText("%");
     await expectNoPageScroll(page);
   });
 });
@@ -321,11 +322,18 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
-    const summary = page.getByRole("table", { name: "Summary" });
-    await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(12);
-    await expect(summary.getByRole("row", { name: /Baseline p0 / })).toContainText("gateway-to-middle.timeout = 40ms");
-    await expect(summary.getByRole("row", { name: /Baseline p5 / })).toContainText("gateway-to-middle.attempts = 3");
-    await expect(summary.getByRole("row", { name: /No retries p5 / })).toContainText("%");
+    const summary = page.getByRole("table", { name: "Answer" });
+    const points = page.getByLabel("Grid point", { exact: true });
+    await expect(points.getByRole("option")).toHaveCount(6);
+    await expect(points.locator('option[value="p0"]')).toContainText("gateway-to-middle.timeout = 40ms");
+    await expect(points.locator('option[value="p5"]')).toContainText("gateway-to-middle.attempts = 3");
+    for (let point = 0; point < 6; point += 1) {
+      await points.selectOption(`p${point}`);
+      await expect(page.getByRole("region", { name: "Saturation insight" }).getByRole("heading")).toContainText(`p${point}`);
+      const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
+      await expect(values).toHaveCount(2);
+      for (const value of await values.all()) await expect(value).toContainText("%");
+    }
     await expectNoPageScroll(page);
   });
 });
@@ -360,19 +368,21 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
 
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
-  const summary = page.getByRole("table", { name: "Summary" });
-  await expect(summary.getByRole("row", { name: /Baseline/ })).toContainText("%");
-  await expect(summary.getByRole("row", { name: /No retries/ })).toContainText("%");
+  const summary = page.getByRole("table", { name: "Answer" });
+  const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
+  await expect(values).toHaveCount(2);
+  for (const value of await values.all()) await expect(value).toContainText("%");
   await expectNoPageScroll(page);
 });
 
 test("shows summary, assumptions and every results panel size without page scroll", async ({ page }) => {
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
-  const summary = page.getByRole("table", { name: "Summary" });
-  await expect(summary.locator(":scope > tbody > tr:not(.summary-services-row)")).toHaveCount(2);
-  await expect(summary.getByRole("row", { name: /Baseline/ })).toContainText("%");
-  await expect(summary.getByRole("row", { name: /No retries/ })).toContainText("%");
+  const summary = page.getByRole("table", { name: "Answer" });
+  await expect(summary.getByRole("columnheader")).toHaveCount(3);
+  const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
+  await expect(values).toHaveCount(2);
+  for (const value of await values.all()) await expect(value).toContainText("%");
 
   await page.getByRole("tab", { name: "Assumptions", exact: true }).click();
   const panel = page.getByRole("tabpanel");
@@ -391,7 +401,7 @@ test("shows summary, assumptions and every results panel size without page scrol
 
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await expect(panel).toBeHidden();
-  await expect(page.getByRole("tab", { name: "Summary", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Answer", exact: true })).toBeVisible();
   await expect(page.getByTestId("results-job-status")).toContainText("COMPLETED");
   await expectNoPageScroll(page);
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
@@ -438,12 +448,12 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
     await expect(page.getByTestId("job-status")).toHaveText("CANCELLED", { timeout: 60_000 });
     await expect(run).toBeEnabled();
     await expect(page.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeVisible();
-    await expect(page.getByRole("table", { name: "Summary" })).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Answer" })).toHaveCount(0);
     await expect(cancel).toHaveCount(0);
     const resume = page.getByRole("button", { name: "Resume", exact: true });
     await expect(resume).toBeEnabled();
     await resume.click();
-    await expect(page.getByRole("table", { name: "Summary" })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("table", { name: "Answer" })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     await expect(resume).toHaveCount(0);
     const result = await (await request.get(`/api/v1/runs/${job.runId}/manifest`)).json();
@@ -644,7 +654,7 @@ test("refuses resume after the model changes and suggests a new run", async ({ p
     await expect(problem).toContainText("RUN_DOCUMENT_CHANGED");
     await expect(problem).toContainText("Start a new run");
     await expect(run).toBeEnabled();
-    await expect(page.getByRole("table", { name: "Summary" })).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Answer" })).toHaveCount(0);
     await expectNoPageScroll(page);
   });
 });

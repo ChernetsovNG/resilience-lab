@@ -531,18 +531,76 @@ select {
   margin-top: 0.5rem;
 }
 
-.summary-table .saturation-insight {
+.answer-insight .saturation-insight {
   min-width: 0;
   max-width: none;
 }
 
-.summary-table tr.summary-row--active-variant > th {
+.summary-table .summary-column--active-variant {
   color: #1d4ed8;
+  background: #eff6ff;
 }
 
-.summary-table tr.summary-row--selected-point > th,
-.summary-table tr.summary-row--selected-point > td {
-  background: #eff6ff;
+.answer-insight {
+  border-inline-start: 3px solid #3b82f6;
+  padding: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.answer-insight h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.875rem;
+  color: #334e68;
+}
+
+.answer-insight .saturation-insight > p:first-child {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.summary-table caption {
+  text-align: left;
+  margin-bottom: 0.5rem;
+  color: #52606d;
+  font-size: 0.8rem;
+}
+
+.summary-interval--unreliable {
+  color: #6b7280;
+}
+
+.summary-replications,
+.summary-reliability-warning,
+.summary-difference,
+.summary-intervals-separate {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: #52606d;
+}
+
+.summary-replications,
+.summary-difference {
+  display: inline-block;
+  margin-inline-start: 0.5rem;
+  margin-top: 0;
+}
+
+.answer-insight .saturation-insight p {
+  margin-bottom: 0.2rem;
+}
+
+.answer-insight .saturation-rule {
+  margin-top: 0.2rem;
+}
+
+.summary-reliability-warning {
+  color: #8a4b08;
+}
+
+.summary-services {
+  margin-top: 0.6rem;
 }
 
 .problem-list {

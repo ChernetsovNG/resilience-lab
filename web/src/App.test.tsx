@@ -586,7 +586,7 @@ describe("App stage 1 integration", () => {
     expect(experimentSelect().disabled).toBe(true);
     expect(button("Run").disabled).toBe(true);
     await act(async () => { gate.release(); });
-    await screen.findByRole("table", { name: "Summary" });
+    await screen.findByRole("table", { name: "Answer" });
     expect(within(screen.getByRole("region", { name: "Results" })).getByText(/97\.5%/)).toBeTruthy();
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
@@ -796,7 +796,7 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Summary" });
+  await screen.findByRole("table", { name: "Answer" });
   if (kind === "model") {
     selectGateway();
     editHandlers("5");
@@ -811,7 +811,7 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   expect(screen.getByText("Student 95% confidence intervals are not clipped.")).toBeTruthy();
   fireEvent.click(button("Undo"));
   expect(screen.queryByText(stale)).toBeNull();
-  fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
   expect(screen.queryByText(stale)).toBeNull();
 });
 
@@ -874,7 +874,7 @@ describe("cost estimate and resume", () => {
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
     expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
-    if (accepted) await screen.findByRole("table", { name: "Summary" });
+    if (accepted) await screen.findByRole("table", { name: "Answer" });
   });
 
   it("fetches a fresh estimate before each Run and treats extrapolation as information", async () => {
@@ -886,7 +886,7 @@ describe("cost estimate and resume", () => {
     fireEvent.click(button("Estimate"));
     await screen.findByRole("region", { name: "Cost estimate" });
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Summary" });
+    await screen.findByRole("table", { name: "Answer" });
     const requests = fetchMock.mock.calls.map(([url]) => url).filter((url) => url === "/api/v1/estimate" || url === "/api/v1/jobs");
     expect(requests).toEqual(["/api/v1/estimate", "/api/v1/estimate", "/api/v1/jobs"]);
     expect(confirm).not.toHaveBeenCalled();
@@ -904,7 +904,7 @@ describe("cost estimate and resume", () => {
     expect(confirm.mock.calls[0][0]).toContain("without an estimate");
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
-    if (accepted) await screen.findByRole("table", { name: "Summary" });
+    if (accepted) await screen.findByRole("table", { name: "Answer" });
   });
 
   it("shows a manual estimate failure without asking to start a run", async () => {
@@ -963,7 +963,7 @@ describe("cost estimate and resume", () => {
     await open(); fireEvent.click(button("Run"));
     const resume = await screen.findByRole("button", { name: "Resume" });
     fireEvent.click(resume);
-    await screen.findByRole("table", { name: "Summary" });
+    await screen.findByRole("table", { name: "Answer" });
     expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
     expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
   });
@@ -984,7 +984,7 @@ describe("cost estimate and resume", () => {
     expect(alert.textContent).toContain("Start a new run");
     if (status === 400) expect(alert.textContent).toContain("RUN_DOCUMENT_CHANGED");
     expect(button("Run").disabled).toBe(false);
-    expect(screen.queryByRole("table", { name: "Summary" })).toBeNull();
+    expect(screen.queryByRole("table", { name: "Answer" })).toBeNull();
   });
 
   it("does not offer Resume when cancellation created no artifact", async () => {
@@ -1054,7 +1054,7 @@ describe("diagram results", () => {
     const fetchMock = server();
     await open();
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Summary" });
+    await screen.findByRole("table", { name: "Answer" });
     expect(screen.queryByRole("region", { name: "Canvas results" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     const region = screen.getByRole("region", { name: "Canvas results" });
@@ -1108,14 +1108,14 @@ describe("diagram results", () => {
     server((url) => url.endsWith("/summary") ? { body: run } : undefined);
     await open();
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Summary" });
+    await screen.findByRole("table", { name: "Answer" });
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
     expect(screen.getByRole("img", { name: "First saturated node" }).title).toBe("1 of 2 replications");
-    const row = screen.getByRole("row", { name: /Baseline p1/ });
-    expect(row.className).toContain("summary-row--selected-point");
-    expect(row.textContent).toContain("gateway first in 1 of 2 replications");
+    const insight = screen.getByRole("region", { name: "Saturation insight" });
+    expect(within(insight).getByRole("heading").textContent).toContain("Baseline · p1");
+    expect(insight.textContent).toContain("gateway first in 1 of 2 replications");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("25%");
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
@@ -1128,7 +1128,7 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Summary" });
+  await screen.findByRole("table", { name: "Answer" });
   selectGateway();
   fireEvent.keyDown(window, { key: "c", ctrlKey: true });
   fireEvent.keyDown(window, { key: "Delete" });
@@ -1144,4 +1144,41 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Utilization 50%");
   for (let count = 0; count < 3; count++) fireEvent.click(button("Redo"));
   expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+});
+
+it.each(["Timeline", "Problems"])("preserves a tab selected during Run estimation: %s", async tab => {
+  const pending = deferred();
+  const fetchMock = server(async url => {
+    if (url !== "/api/v1/estimate") return undefined;
+    await pending.promise;
+    return { body: costEstimate };
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/estimate")).toBe(true));
+  fireEvent.click(screen.getByRole("tab", { name: tab }));
+  await act(async () => pending.release());
+  await waitFor(() => expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED"));
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(screen.getByRole("tab", { name: tab }).getAttribute("aria-selected")).toBe("true");
+});
+
+it.each(["Estimate", "Run"])("keeps the prior tab and collapsed size when %s never submits a new job", async action => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(true).mockReturnValue(false);
+  const fetchMock = server(url => url === "/api/v1/estimate" ? { body: { ...costEstimate,
+    warnings: [{ code: "ESTIMATE_UI_CACHE", message: "Cache budget exceeded" }],
+  } } : undefined);
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  fireEvent.click(button("Collapse results"));
+  fireEvent.click(button(action));
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/estimate")).toHaveLength(2));
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(confirm).toHaveBeenCalledTimes(action === "Run" ? 2 : 1);
+  expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(1);
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+  expect(document.querySelector(".app")!.className).toContain("app--results-collapsed");
 });

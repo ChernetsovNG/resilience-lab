@@ -34,6 +34,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
 export function App() {
   const workspace = useWorkspace();
   const run = useRun();
+  const [runPending, setRunPending] = useState(false);
   const health = useHealth();
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
@@ -199,7 +200,8 @@ export function App() {
         }}
         onRun={() => {
           if (loaded === null) return;
-          void requestEstimate().then((cost) => {
+          setRunPending(true);
+          void requestEstimate().then(async (cost) => {
             if (cost === null) return;
             if (cost.problem !== null) {
               if (!window.confirm(t("app.confirm.estimateFailed", { message: cost.problem.message }))) return;
@@ -207,8 +209,8 @@ export function App() {
               const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
               if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => warning.message).join("\n") }))) return;
             }
-            void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
-          });
+            await run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
+          }).finally(() => setRunPending(false));
         }}
         onCancel={() => void run.cancel()}
         job={ownRun ? run.job : null}
@@ -337,6 +339,7 @@ export function App() {
         />
       )}
       <ResultsPanel
+        running={runPending || (ownRun && run.running)}
         job={ownRun ? run.job : null}
         summary={ownRun ? run.summary : null}
         problem={ownRun ? run.problem : null}

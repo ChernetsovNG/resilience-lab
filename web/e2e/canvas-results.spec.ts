@@ -28,7 +28,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     const toolbar = page.getByRole("region", { name: "Canvas results" });
     await expect(toolbar).toHaveCount(0);
     await expect(page.locator(".block-results")).toHaveCount(0);
-    const table = page.getByRole("table", { name: "Summary" });
+    const table = page.getByRole("table", { name: "Answer" });
     expect(summary.variants[0].points[0].saturation.firstNodes[0]).toBeDefined();
 
     for (const variant of summary.variants) {
@@ -37,10 +37,8 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         await page.getByLabel("Grid point").selectOption(point.id);
         await expect(toolbar).toContainText(`Summary · ${variant.label} · ${point.id} · measurement interval`);
         await expect(toolbar).toContainText("Utilization (pooled)");
-        const row = table.getByRole("row", { name: new RegExp(`${variant.label} ${point.id} `) });
-        const serviceDetails = table.getByRole("row", { name: `${variant.id}/${point.id} service metrics`, exact: true });
-        await serviceDetails.locator(".summary-services > summary").click();
-        const services = page.getByRole("table", { name: `Services for ${variant.label} ${point.id}`, exact: true });
+        await expect(table).toBeVisible();
+        const column = summary.variants.findIndex(candidate => candidate.id === variant.id);
         for (const [id, service] of Object.entries(point.aggregate.services)) {
           const totals = service.totals;
           const utilization = formatPercent(totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs);
@@ -48,12 +46,14 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           await expect(metrics).toContainText(`Utilization ${utilization}`);
           await expect(metrics).toContainText(`Mean queue ${formatNumber(totals.queueLengthIntegralMs / totals.measurementMs)}`);
           await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.queueRejections / totals.offeredAttempts)}`);
-          const serviceRow = services.getByRole("row").filter({ has: page.getByRole("rowheader", { name: id, exact: true }) });
-          await expect(serviceRow.locator("td").nth(1)).toHaveText(utilization);
+          const disclosure = page.locator("details.summary-services").filter({ has: page.getByText(`${id} metrics`, { exact: true }) });
+          if (await disclosure.getAttribute("open") === null) await disclosure.locator("summary").click();
+          const services = page.getByRole("table", { name: `Service metrics: ${id}`, exact: true });
+          await expect(services.getByRole("row", { name: /Handler utilization/ }).locator("td").nth(column)).toContainText(utilization);
           const amplification = formatMultiplier(service.admittedAmplification!.mean);
           const connection = id === "gateway" ? "client-to-gateway" : id === "middle" ? "gateway-to-middle" : "middle-to-dependency";
           await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Amplification ${amplification}`);
-          await expect(serviceRow.locator("td").nth(0)).toContainText(amplification);
+          await expect(services.getByRole("row", { name: /Admitted amplification/ }).locator("td").nth(column)).toContainText(amplification);
           expect(await page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate((node) =>
             (node as HTMLElement).style.backgroundColor)).not.toBe("");
         }
@@ -63,7 +63,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         if (first !== undefined) {
           await expect(page.getByTestId(`rf__node-${first.node}`).getByRole("img", { name: "First saturated node" })).toBeVisible();
           await expect(badge).toHaveAttribute("title", `${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
-          await expect(row).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
+          await expect(page.getByRole("region", { name: "Saturation insight" })).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
         }
       }
     }

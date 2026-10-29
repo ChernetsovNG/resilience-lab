@@ -17,13 +17,14 @@ test("shows the retry-storm saturation conclusion from the real summary for each
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const summary: RunSummary = await (await response).json();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
-    const table = page.getByRole("table", { name: "Summary" });
     for (const variant of summary.variants) {
+      await page.getByRole("tab", { name: variant.label, exact: true }).click();
       for (const point of variant.points) {
         const first = point.saturation.firstNodes[0];
         expect(first).toBeDefined();
-        const row = table.getByRole("row", { name: new RegExp(`${variant.label} ${point.id} `) });
-        const insight = row.locator(".saturation-insight");
+        if (summary.grid.length > 0) await page.getByLabel("Grid point", { exact: true }).selectOption(point.id);
+        const insight = page.getByRole("region", { name: "Saturation insight" });
+        await expect(insight.getByRole("heading")).toHaveText(`${variant.label} · ${point.id}`);
         await insight.scrollIntoViewIfNeeded();
         await expect(insight).toBeInViewport();
         await expect(insight).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);

@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import { lazy, Suspense, useId, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { locationOf } from "../validation/diagnostics";
 import { Assumptions } from "./Assumptions";
@@ -16,6 +16,7 @@ export interface ResultsPanelProps {
   job: JobView | null;
   summary: RunSummary | null;
   problem: ApiProblem | null;
+  running?: boolean;
   catalog?: Catalog | null;
   model?: ModelFile | null;
   manifest?: RunManifest | null;
@@ -49,39 +50,65 @@ function progressOf(job: JobView): string {
 
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
 export function ResultsPanel({
-  job, summary, problem, catalog = null, model = null, manifest = null, stale = false,
+  job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, onReplicationChange, cursorWindow = null, onCursorChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
 }: ResultsPanelProps) {
-  const [selectedView, setActive] = useState("summary");
+  const [navigation, setNavigation] = useState({ view: "answer", running, changedDuringRun: false, completedJob: null as string | null });
+  const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
+  // Adjust navigation once per run; a choice made while submission is pending also counts.
+  if (running !== navigation.running || (completedJob !== null && completedJob !== navigation.completedJob)) {
+    const starting = running && !navigation.running;
+    const finished = completedJob !== null && completedJob !== navigation.completedJob;
+    setNavigation({
+      view: finished && !(navigation.running && navigation.changedDuringRun) ? "answer" : navigation.view,
+      running,
+      changedDuringRun: starting ? false : navigation.changedDuringRun,
+      completedJob: completedJob ?? navigation.completedJob,
+    });
+  }
+  const restoredJob = useRef<string | null>(null);
+  useEffect(() => {
+    if (completedJob === null || restoredJob.current === completedJob) return;
+    restoredJob.current = completedJob;
+    if (size === "collapsed") onSizeChange?.("normal");
+  }, [completedJob, size, onSizeChange]);
   const hasGrid = summary !== null && summary.grid.length > 0;
-  const active = selectedView === "map" && !hasGrid ? "summary" : selectedView;
+  const active = navigation.view === "map" && !hasGrid ? "answer" : navigation.view;
+  const selectView = (view: string) => setNavigation({
+    ...navigation, view, changedDuringRun: navigation.changedDuringRun || (running && view !== active),
+  });
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
-  const points = summary?.variants[0]?.points ?? [];
+  const pointIds = new Set<string>();
+  const points = (summary?.variants.flatMap(variant => variant.points) ?? []).filter(point => {
+    if (pointIds.has(point.id)) return false;
+    pointIds.add(point.id);
+    return true;
+  });
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   return (
     <section className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
       <div role="tablist" aria-label={t("results.views")}>
-        <button id={`${id}-summary`} type="button" role="tab" aria-selected={active === "summary"}
-          aria-controls={`${id}-panel`} onClick={() => setActive("summary")}>
-          {t("results.summary.title")}
+        <button id={`${id}-answer`} type="button" role="tab" aria-selected={active === "answer"}
+          aria-controls={`${id}-panel`} onClick={() => selectView("answer")}>
+          {t("results.answer.title")}
         </button>
         <button id={`${id}-timeline`} type="button" role="tab" aria-selected={active === "timeline"}
-          aria-controls={`${id}-panel`} onClick={() => { setTimelineOpened(true); setActive("timeline"); }}>
+          aria-controls={`${id}-panel`} onClick={() => { setTimelineOpened(true); selectView("timeline"); }}>
           {t("results.timeline.title")}
         </button>
         <button id={`${id}-assumptions`} type="button" role="tab" aria-selected={active === "assumptions"}
-          aria-controls={`${id}-panel`} onClick={() => setActive("assumptions")}>
+          aria-controls={`${id}-panel`} onClick={() => selectView("assumptions")}>
           {t("results.assumptions.title")}
         </button>
         {hasGrid ? <button id={`${id}-map`} type="button" role="tab" aria-selected={active === "map"}
-          aria-controls={`${id}-panel`} onClick={() => setActive("map")}>
+          aria-controls={`${id}-panel`} onClick={() => selectView("map")}>
           {t("results.map.title")}
         </button> : null}
         <button id={`${id}-problems`} type="button" role="tab" aria-label={t("results.problems.title")} aria-selected={active === "problems"}
-          aria-controls={`${id}-panel`} onClick={() => setActive("problems")}>
+          aria-controls={`${id}-panel`} onClick={() => selectView("problems")}>
           {t("results.problems.count", { count: formatNumber(diagnostics.length) })}
         </button>
         <span className="results-size-actions">
@@ -96,7 +123,7 @@ export function ResultsPanel({
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
         {problem === null ? null : <ProblemList problem={problem} />}
-        {(active === "summary" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
+        {(active === "answer" || active === "timeline") && summary !== null && summary.grid.length > 0 ? <div className="summary-toolbar">
           <label htmlFor={`${id}-point`}>{t("results.gridPoint")}</label>
           <select id={`${id}-point`} value={selectedPointId} onChange={(event) => onPointChange?.(event.target.value)}>
             {points.map((point) => <option key={point.id} value={point.id}>
