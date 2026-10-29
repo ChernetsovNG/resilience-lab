@@ -35,7 +35,7 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await noOverflow(page);
   await expect(table.getByRole("row", { name: /Success rate/ })).toBeInViewport({ ratio: 0.2 });
   await page.screenshot({ path: testInfo.outputPath("after-answer.png") });
-  await page.getByRole("button", { name: "Close estimate", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
   await page.getByRole("button", { name: "Expand results", exact: true }).click();
   for (const disclosure of await page.locator(".summary-services > summary").all()) await disclosure.click();
@@ -111,7 +111,7 @@ test("failed estimation starts a real run only after explicit confirmation", asy
   await expect(page.getByTestId("job-status")).toContainText("COMPLETED");
   expect(messages).toHaveLength(2);
   expect(jobs).toBe(1);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("after-estimate-failure.png") });
 });

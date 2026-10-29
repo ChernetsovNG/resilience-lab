@@ -1,7 +1,7 @@
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
-import { canvasResults, type NodeOverlayMetric } from "./results/canvasResults";
+import { canvasQueueCapacities, canvasResults, type NodeOverlayMetric } from "./results/canvasResults";
 import { ResultsContextBar } from "./results/ResultsContextBar";
 import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
@@ -43,7 +43,9 @@ export function App() {
   const results = useResultsSelection(run.job?.id ?? null);
   const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
   const showDiagramResults = nodeMetric !== "off";
-  const [showEstimate, setShowEstimate] = useState(false);
+  const [estimatePanel, setEstimatePanel] = useState<{ source: "manual" } | { source: "run"; previousJobId: string | null } | null>(null);
+  const showEstimate = estimatePanel !== null && (estimatePanel.source === "manual" || run.job === null ||
+    estimatePanel.previousJobId === run.job.id);
   const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
   const [problemsRequest, setProblemsRequest] = useState(0);
   const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
@@ -92,8 +94,9 @@ export function App() {
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
   const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
-  const nodeMetricMaximum = nodeMetric === "meanQueue"
-    ? Array.from(diagramResults?.services.values() ?? []).reduce((maximum, service) => Math.max(maximum, service.meanQueue ?? 0), 1) : 1;
+  const runPoint = run.summary?.variants.find(candidate => candidate.id === variant?.id)?.points.find(point => point.id === selectedPointId);
+  const queueCapacities = ownRun && run.documents !== null && catalog !== null && variant !== undefined && runPoint !== undefined
+    ? canvasQueueCapacities(run.documents.model, run.documents.experiment, catalog, variant.id, runPoint.coordinates) : undefined;
   const diagnostics = validation.report?.diagnostics ?? [];
   const runDiagnostics = ownRun ? mergeDiagnostics(run.job?.diagnostics ?? [], problemDiagnostics(run.problem)) : [];
   const launchIsCurrent = ownRun && launchDocuments !== null && loaded !== null &&
@@ -195,7 +198,7 @@ export function App() {
   }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
 
   const requestEstimate = () => {
-    setShowEstimate(true);
+    setEstimatePanel({ source: "manual" });
     return estimate.request();
   };
 
@@ -207,6 +210,7 @@ export function App() {
         onExperiment={(path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+          setEstimatePanel(null);
           setSelection([]);
           clipboard.current = null;
           selectVariant(null);
@@ -237,8 +241,13 @@ export function App() {
         onRun={() => {
           if (loaded === null) return;
           setRunPending(true);
-          void requestEstimate().then(async (cost) => {
+          setEstimatePanel(null);
+          void estimate.request().then(async (cost) => {
             if (cost === null) return;
+            if (cost.problem !== null || cost.value.warnings.some(warning =>
+              warning.code === "ESTIMATE_UI_CACHE" || warning.code === "ESTIMATE_EXTRAPOLATION")) {
+              setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
+            }
             if (cost.problem !== null) {
               if (!window.confirm(t("app.confirm.estimateFailed", { message: cost.problem.message }))) return;
             } else {
@@ -256,7 +265,7 @@ export function App() {
         }}
         job={ownRun ? run.job : null}
         estimatePanel={showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
-          <EstimatePopover onClose={() => setShowEstimate(false)}>
+          <EstimatePopover onClose={() => setEstimatePanel(null)}>
             {estimate.pending ? <p className="banner" role="status">{t("app.estimate.pending")}</p> : null}
             {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
             {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
@@ -306,7 +315,7 @@ export function App() {
             summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
-            metric={nodeMetric} onMetricChange={setNodeMetric} maximum={nodeMetricMaximum} stale={staleResults} />}
+            metric={nodeMetric} onMetricChange={setNodeMetric} stale={staleResults} />}
         </div>
         <div className="canvas">
           {model === null || loaded === null || catalog === null ? (
@@ -324,7 +333,7 @@ export function App() {
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
               nodeMetric={nodeMetric === "off" ? "utilization" : nodeMetric}
-              nodeMetricMaximum={nodeMetricMaximum}
+              queueCapacities={queueCapacities}
               editable={structureEditable && !invalid}
               parametersEditable={editable}
               disabled={invalid}

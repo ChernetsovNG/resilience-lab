@@ -18,13 +18,12 @@ interface ResultsContextBarProps {
   endMs: number;
   metric: NodeOverlayMetric | "off";
   onMetricChange: (metric: NodeOverlayMetric | "off") => void;
-  maximum: number;
   stale: boolean;
 }
 
 /** Controls the shared result context without changing documents or editor history. */
 export function ResultsContextBar({ summary, variant, selection, onSelect, replications, playback,
-  windowCount, windowMs, endMs, metric, onMetricChange, maximum, stale }: ResultsContextBarProps) {
+  windowCount, windowMs, endMs, metric, onMetricChange, stale }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const time = selection.window !== null;
   const context = time ? t("app.canvas.windowContext", {
@@ -32,9 +31,9 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
     end: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)), replication: formatNumber(selection.replication),
     variant: variant.label ?? variant.id, pointId: selection.pointId,
   }) : t("app.canvas.summaryContext", { variant: variant.label ?? variant.id, pointId: selection.pointId });
-  const metricLabel = metric === "off" ? "" : t(`results.context.metric.${metric}`);
-  const limit = metric === "meanQueue" ? formatNumber(maximum) : formatPercent(1);
-  const minimum = metric === "meanQueue" ? formatNumber(0) : formatPercent(0);
+  const metricLabel = metric === "off" ? "" : metric === "meanQueue" ? t("results.context.queueFill") : t(`results.context.metric.${metric}`);
+  const limit = formatPercent(1);
+  const minimum = formatPercent(0);
   return <div className="results-context-bar" role="region" aria-label={t("app.canvas.results")}
     data-testid="canvas-result-context" title={context}>
     <strong className="results-context-variant" title={variant.label ?? variant.id}>{variant.label ?? variant.id}</strong>
@@ -48,7 +47,7 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
         })}
       </option>)}
     </select>}
-    <label>{t("results.replication")} <select aria-label={t("results.replication")} value={selection.replication}
+    <label>{t("results.replication")} <select aria-label={t("results.replication")} value={selection.replication} disabled={!time}
       onChange={event => onSelect({ replication: Number(event.target.value) })}>
       {Array.from({ length: replications }, (_, index) => <option key={index} value={index}>{formatNumber(index)}</option>)}
     </select></label>
@@ -70,11 +69,11 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
     </select>
     {metric === "off" ? null : <>
       <span className="overlay-legend" aria-label={t("results.context.scale")} title={metricLabel}>
-        <span className="sr-only">{metricLabel}{t("results.context.legendSeparator")}</span>{minimum}{t("results.context.rangeSeparator")}{limit}
+        <span className={metric === "meanQueue" ? undefined : "sr-only"}>{metricLabel}{t("results.context.legendSeparator")}</span>{minimum}{t("results.context.rangeSeparator")}{limit}
         <span className="overlay-scale" aria-hidden="true"
           style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
       </span>
-      <span className="results-context-edges" title={t("results.context.edges")}>{t("results.context.amplification")}</span>
+      <span className="sr-only">{t("results.context.edges")}</span>
     </>}
     {stale ? <span className="canvas-results-stale" role="status" title={t("app.canvas.stale")}>{t("app.canvas.stale")}</span> : null}
     <span className="results-context-actions" />

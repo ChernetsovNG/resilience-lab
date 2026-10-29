@@ -44,7 +44,6 @@ test("keeps status in one place and reveals warnings and new errors without page
   await expect(status.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
   await expect(page.getByText("COMPLETED", { exact: true })).toHaveCount(1);
   await expect(page.locator(".top-bar")).not.toContainText("Backend");
-  await page.getByRole("button", { name: "Close estimate", exact: true }).click();
   await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("status-completed.png") });
   await page.getByRole("button", { name: "Expand results", exact: true }).click();

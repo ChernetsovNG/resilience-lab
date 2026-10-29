@@ -100,6 +100,7 @@
   "results.context.overlay": "Node overlay",
   "results.context.pauseSymbol": "Ⅱ",
   "results.context.playSymbol": "▶",
+  "results.context.queueFill": "Queue fill",
   "results.context.rangeSeparator": "–",
   "results.context.scale": "Node color scale",
   "results.context.summary": "Summary",

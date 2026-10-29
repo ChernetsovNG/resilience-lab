@@ -19,7 +19,7 @@ export type BlockNodeType = Node<{
   diagnostics?: readonly Diagnostic[];
   result?: ServiceCanvasResults;
   nodeMetric?: NodeOverlayMetric;
-  nodeMetricMaximum?: number;
+  queueCapacity?: number;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "block">;
@@ -33,12 +33,13 @@ function summaryOf(block: BlockInstance): string {
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const colorValue = data.result?.[data.nodeMetric ?? "utilization"];
+  const maximum = data.nodeMetric === "meanQueue" ? data.queueCapacity : 1;
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   return (
     <div className={`block-node block-node--${data.block.type}`} data-testid="block-node"
-      style={colorValue == null ? undefined : { backgroundColor: utilizationColor(colorValue / (data.nodeMetricMaximum ?? 1)) }}>
+      style={colorValue == null || maximum === undefined || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
       {data.ports.map((port) => (
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />

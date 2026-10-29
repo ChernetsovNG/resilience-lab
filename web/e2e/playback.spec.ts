@@ -41,7 +41,6 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const runId = /\/runs\/([^/]+)\/summary$/.exec((await response).url())![1];
-    await page.getByRole("button", { name: "Close estimate", exact: true }).click();
     const nodes = await windows(request, runId);
     const dependency = nodes.get("dependency")!;
     const client = nodes.get("client")!;

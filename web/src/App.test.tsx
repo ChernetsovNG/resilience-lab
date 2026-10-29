@@ -1030,8 +1030,10 @@ describe("cost estimate and resume", () => {
     expect(confirm.mock.calls[0][0]).toContain(warning.message);
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
-    expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
-    if (accepted) await screen.findByRole("table", { name: "Answer" });
+    if (accepted) {
+      await screen.findByRole("table", { name: "Answer" });
+      expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+    } else expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
   });
 
   it("fetches a fresh estimate before each Run and treats extrapolation as information", async () => {
@@ -1047,6 +1049,7 @@ describe("cost estimate and resume", () => {
     const requests = fetchMock.mock.calls.map(([url]) => url).filter((url) => url === "/api/v1/estimate" || url === "/api/v1/jobs");
     expect(requests).toEqual(["/api/v1/estimate", "/api/v1/estimate", "/api/v1/jobs"]);
     expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
   });
 
   it.each([false, true])("requires confirmation to run without an estimate: accepted=%s", async (accepted) => {
@@ -1055,13 +1058,16 @@ describe("cost estimate and resume", () => {
       status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
     } : undefined);
     await open(); fireEvent.click(button("Run"));
-    await screen.findByText("Estimation unavailable");
+    if (!accepted) await screen.findByText("Estimation unavailable");
     await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
     expect(confirm.mock.calls[0][0]).toContain("Estimation unavailable");
     expect(confirm.mock.calls[0][0]).toContain("without an estimate");
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
-    if (accepted) await screen.findByRole("table", { name: "Answer" });
+    if (accepted) {
+      await screen.findByRole("table", { name: "Answer" });
+      expect(screen.queryByText("Estimation unavailable")).toBeNull();
+    }
   });
 
   it("shows a manual estimate failure without asking to start a run", async () => {
@@ -1180,12 +1186,16 @@ it("invalidates a pending Run estimate when a field becomes unparsable, then all
 });
 
 
-it.each(["Estimate", "Run"])("makes the estimate visible when %s starts from expanded results", async (action) => {
+it.each(["Estimate", "Run"])("keeps expanded results while %s follows its estimate visibility policy", async (action) => {
   server(); await open();
   fireEvent.click(button("Expand results"));
   expect(button("Restore results")).toBeTruthy();
   fireEvent.click(button(action));
-  await screen.findByRole("region", { name: "Cost estimate" });
+  if (action === "Estimate") await screen.findByRole("region", { name: "Cost estimate" });
+  else {
+    await screen.findByRole("table", { name: "Answer" });
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+  }
   expect(button("Restore results")).toBeTruthy();
   expect(document.querySelector(".app")!.className).toContain("app--results-expanded");
 });
@@ -1295,7 +1305,7 @@ it("colors nodes and labels the scale for the selected overlay metric", async ()
   const overlay = screen.getByLabelText("Node overlay");
   fireEvent.change(overlay, { target: { value: "meanQueue" } });
   expect(node.style.backgroundColor).not.toBe(utilization);
-  expect(screen.getByLabelText("Node color scale").textContent).toContain("Mean queue: 0–1");
+  expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue fill: 0%–100%");
   const queue = node.style.backgroundColor;
   fireEvent.change(overlay, { target: { value: "queueRejectionRate" } });
   expect(node.style.backgroundColor).not.toBe(queue);
@@ -1336,10 +1346,12 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect(within(pointSelect).getByRole("option", { name: /p1.*gateway.handlers = 1,000/ })).toBeTruthy();
   expect(within(pointSelect).getByRole("option", { name: /p2.*gateway.handlers = 6/ })).toBeTruthy();
   fireEvent.change(pointSelect, { target: { value: "p1" } });
-  fireEvent.change(within(row).getByLabelText("Replication"), { target: { value: "1" } });
+  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(true);
   expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
   fireEvent.click(within(row).getByRole("button", { name: "Time" }));
+  expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
+  fireEvent.change(within(row).getByLabelText("Replication"), { target: { value: "1" } });
   await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("80%"));
   selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
@@ -1426,6 +1438,128 @@ it("hides pooled metrics while a Time frame loads or fails", async () => {
   expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
   fireEvent.click(button("Summary"));
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
+});
+
+it("compares queue fill across nodes and windows using immutable variant and grid capacities", async () => {
+  const runModel = structuredClone(model);
+  runModel.blocks.gateway.params.queue = 64;
+  runModel.blocks.middle.params.queue = 8;
+  const runExperiment = structuredClone(experiment);
+  runExperiment.variants[0].overrides = { "gateway.queue": 32 };
+  const run = structuredClone(summary);
+  run.grid = [{ path: "gateway.queue", values: [16, 8, 0] }];
+  const point = run.variants[0].points[0];
+  point.coordinates = { "gateway.queue": 16 };
+  point.aggregate.services.gateway.totals.queueLengthIntegralMs = 16000;
+  point.aggregate.services.middle = structuredClone(point.aggregate.services.gateway);
+  point.aggregate.services.middle.totals.queueLengthIntegralMs = 8000;
+  run.variants[0].points.push({ ...point, id: "p1", coordinates: { "gateway.queue": 8 } });
+  run.variants[0].points.push({ ...point, id: "p2", coordinates: { "gateway.queue": 0 } });
+  vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, cell }) => nodes.map(id => ({
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => ({
+      startMs: (fromWindow + index) * 10, durationMs: 10,
+      originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 100, admittedAttemptsPerSecond: 100,
+      queueRejectionsPerSecond: 0, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
+      handlerUtilization: 0.5, meanQueueLength: cell === "p2" && id === "gateway" ? 0
+        : (id === "gateway" ? 8 : 4) / ((fromWindow + index) === 0 ? 1 : 2),
+      meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1,
+    })),
+  })));
+  server(url => {
+    if (url.endsWith("/summary")) return { body: run };
+    if (url.startsWith("/api/v1/workspace/document?")) {
+      const path = new URL(url, "http://localhost").searchParams.get("path");
+      if (path === modelPath) return { body: { ...documentViews[modelPath], content: { model: runModel } } };
+      if (path === experimentPath) return { body: { ...documentViews[experimentPath], content: { experiment: runExperiment } } };
+    }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "meanQueue" } });
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  expect(color("gateway")).not.toBe("");
+  expect(color("gateway")).toBe(color("middle"));
+  const halfFull = color("gateway");
+  const legend = screen.getByLabelText("Node color scale");
+  expect(legend.textContent).toBe("Queue fill: 0%–100%");
+  fireEvent.click(button("Time"));
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe(halfFull);
+  fireEvent.click(button("Next window"));
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Mean queue 4"));
+  expect(color("gateway")).not.toBe(halfFull);
+  expect(color("gateway")).toBe(color("middle"));
+  expect(legend.textContent).toBe("Queue fill: 0%–100%");
+  fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe(halfFull);
+  selectGateway();
+  editField("Queue capacity", "128");
+  expect(color("gateway")).toBe(halfFull);
+  fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p2" } });
+  await screen.findByTestId("canvas-results-gateway");
+  expect(color("gateway")).toBe("");
+});
+
+it("keeps ordinary Run estimates hidden during estimation and after completion", async () => {
+  const gate = deferred();
+  server(async url => {
+    if (url !== "/api/v1/estimate") return undefined;
+    await gate.promise;
+    return { body: costEstimate };
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  await act(async () => gate.release());
+  await screen.findByRole("table", { name: "Answer" });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  fireEvent.click(button("Estimate"));
+  await screen.findByRole("region", { name: "Cost estimate" });
+});
+
+it.each(["ESTIMATE_UI_CACHE", "ESTIMATE_EXTRAPOLATION"])("shows %s only until the submitted job starts", async code => {
+  const gate = deferred();
+  let submitted = false;
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  server(async url => {
+    if (url === "/api/v1/estimate") return { body: { ...costEstimate, warnings: [{ code, message: "Run cost warning" }] } };
+    if (url === "/api/v1/jobs") { submitted = true; await gate.promise; return { status: 202, body: completed }; }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await waitFor(() => expect(submitted).toBe(true));
+  expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain("Run cost warning");
+  await act(async () => gate.release());
+  await screen.findByRole("table", { name: "Answer" });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+});
+
+it("keeps an automatically closed estimate hidden while another experiment opens", async () => {
+  const gate = deferred();
+  server(async url => {
+    if (url === "/api/v1/estimate") return { body: { ...costEstimate,
+      warnings: [{ code: "ESTIMATE_EXTRAPOLATION", message: "Timing anchors exceeded" }],
+    } };
+    if (url.startsWith("/api/v1/workspace/document?") && new URL(url, "http://localhost").searchParams.get("path") === otherPath) {
+      await gate.promise;
+    }
+    return undefined;
+  });
+  await open();
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  fireEvent.change(experimentSelect(), { target: { value: otherPath } });
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  await act(async () => gate.release());
+  await waitFor(() => expect(experimentSelect().value).toBe(otherPath));
+  expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
 });
 
 it("keeps reused diagram element IDs separate through clipboard replacement and undo", async () => {

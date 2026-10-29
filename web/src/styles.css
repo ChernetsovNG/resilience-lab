@@ -929,7 +929,6 @@ select {
 .results-context-point { width: 3.5rem; }
 .results-context-variant { max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
 .results-context-time { font-variant-numeric: tabular-nums; }
-.results-context-edges { color: #52606d; }
 .results-context-actions { margin-inline-start: auto; min-width: 1rem; }
 
 .sr-only {
