@@ -53,6 +53,7 @@ export function diagnosticTarget(
   } else if (diagnostic.document === documents.experimentPath) {
     if (tokens[0] === "variants") {
       if (diagnostic.variant === undefined) target.variant = documents.experiment.variants[Number(tokens[1])]?.id ?? null;
+      if (tokens[2] === "id" || tokens[2] === "label") target.field = `variant.${tokens[2]}`;
       if (tokens[2] === "overrides" && tokens[3] !== undefined) {
         const [element, ...parameter] = tokens[3].split(".");
         target.element ??= existingElement(element);

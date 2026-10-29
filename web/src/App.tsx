@@ -7,7 +7,7 @@ import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "./i18n";
-import type { Diagnostic, Variant } from "./api/apiTypes";
+import type { Diagnostic, ModelFile, Variant } from "./api/apiTypes";
 import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
 import { Canvas, type CanvasHandle } from "./canvas/Canvas";
@@ -23,8 +23,8 @@ import { StatusBar } from "./layout/StatusBar";
 import { useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
-import { documentValuesEqual } from "./workspace/editor";
-import { applyOverrides } from "./workspace/params";
+import { documentValuesEqual, elementIdentity } from "./workspace/editor";
+import { applyOverrides, elementOf } from "./workspace/params";
 import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
 
@@ -55,10 +55,29 @@ export function App() {
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
   const [observedErrors, setObservedErrors] = useState<{ path: string | null; validation: string; run: string }>({ path: null, validation: "[]", run: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
-  const selected = selection.at(-1) ?? null;
+  const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
+  const [inspectorTarget, setInspectorTarget] = useState<"element" | "variant" | "experiment">("experiment");
+  const [fieldFocus, setFieldFocus] = useState<{ path: string; request: number } | null>(null);
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog, loading, undo, redo, execute } = workspace;
+  let currentSelection = selection;
+  if (loaded !== null && loaded.model !== selectionModel) {
+    if (selectionModel !== null && selection.length > 0) {
+      const elements = [...Object.entries(loaded.model.blocks), ...loaded.model.connections.map(edge => [edge.id, edge] as const)];
+      const reconciled = selection.map(id => {
+        const previous = elementOf(selectionModel, id);
+        if (previous === null) return elementOf(loaded.model, id) === null ? null : id;
+        const current = elements.find(([, element]) => elementIdentity(element) === elementIdentity(previous));
+        return current?.[0] ?? null;
+      });
+      currentSelection = reconciled.filter(id => id !== null);
+      if (inspectorTarget === "element" && reconciled.at(-1) === null) setInspectorTarget("experiment");
+      if (currentSelection.length !== selection.length || currentSelection.some((id, index) => id !== selection[index])) setSelection(currentSelection);
+    }
+    setSelectionModel(loaded.model);
+  }
+  const selected = currentSelection.at(-1) ?? null;
   const validation = useValidation(loaded);
   const estimate = useEstimate(loaded, invalidFields);
   const variants = loaded?.experiment.variants ?? [];
@@ -73,6 +92,11 @@ export function App() {
     setVariantPage({ id: variantId, variants });
   }
   const selectVariant = (id: string | null) => setVariantPage({ id, variants });
+  let target = inspectorTarget;
+  if ((target === "element" && selected === null) || (target === "variant" && variantId === null)) {
+    target = "experiment";
+    setInspectorTarget(target);
+  }
   const variant = variants.find((candidate) => candidate.id === variantId);
   const overrides = variant?.overrides ?? {};
   const editable = !workspace.loading;
@@ -182,6 +206,7 @@ export function App() {
           const pasted = command(loaded);
           const before = new Set([...Object.keys(loaded.model.blocks), ...loaded.model.connections.map((edge) => edge.id)]);
           execute(command);
+          setInspectorTarget("element");
           setSelection([...Object.keys(pasted.model.blocks), ...pasted.model.connections.map((edge) => edge.id)]
             .filter((id) => !before.has(id)));
         }
@@ -229,10 +254,16 @@ export function App() {
           setEstimatePanel(null);
           setAnalysis(false);
           setSelection([]);
+          setInspectorTarget("experiment");
+          setFieldFocus(null);
           clipboard.current = null;
           selectVariant(null);
           run.reset();
           void workspace.open(path, true);
+        }}
+        onInspectExperiment={() => {
+          if (invalid || loading) return;
+          setSelection([]); setInspectorTarget("experiment"); setFieldFocus(null);
         }}
         loading={workspace.loading}
         dirty={workspace.dirty}
@@ -320,6 +351,8 @@ export function App() {
                       if (workspace.externalChange !== null && workspace.dirty &&
                         !window.confirm(t("app.confirm.reloadChanges"))) return;
                       setSelection([]);
+                      setInspectorTarget("experiment");
+                      setFieldFocus(null);
                       clipboard.current = null;
                       void workspace.reload();
                     }}
@@ -362,7 +395,7 @@ export function App() {
                 const next = command(loaded);
                 workspace.execute(command);
                 const added = Object.keys(next.model.blocks).filter((id) => !Object.hasOwn(loaded.model.blocks, id));
-                if (added.length > 0) setSelection(added);
+                if (added.length > 0) { setSelection(added); setInspectorTarget("element"); setFieldFocus(null); }
               }}
               onParam={(id, path, value) => {
                 if (variant === undefined) workspace.setParam(id, path, value);
@@ -370,12 +403,24 @@ export function App() {
               }}
               onValidity={(key, valid) => onValidity(`canvas:${key}`, valid)}
               onSelect={(next) => {
-                if (!invalid) setSelection(next);
+                if (!invalid) { setSelection(next); setInspectorTarget("element"); setFieldFocus(null); }
               }}
             />
           )}
         </div>
-        <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid} onSelect={selectVariant} />
+        <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid || !editable} onCommand={workspace.execute}
+          onSelect={id => {
+            if (id === variantId) {
+              setSelection([]);
+              setInspectorTarget(id === null ? "experiment" : "variant");
+            }
+            setFieldFocus(null);
+            selectVariant(id);
+          }}
+          onInspect={(id, focusLabel) => {
+            selectVariant(id); setSelection([]); setInspectorTarget("variant");
+            setFieldFocus(previous => focusLabel ? { path: "variant.label", request: (previous?.request ?? 0) + 1 } : null);
+          }} />
       </main>
       {model === null || loaded === null || catalog === null ? (
         <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
@@ -387,15 +432,15 @@ export function App() {
           model={model}
           experiment={loaded.experiment}
           selected={selected}
+          target={target}
+          focusField={fieldFocus}
           editable={editable}
           variantId={variant?.id ?? null}
           invalid={invalid}
           onCommand={workspace.execute}
-          onVariantSelect={selectVariant}
           overrides={overrides}
           onRename={(id, next) => {
             workspace.execute(renameElement(id, next));
-            setSelection((current) => current.map((value) => value === id ? next : value));
           }}
           onParam={workspace.setParam}
           onValidity={onValidity}
@@ -428,12 +473,22 @@ export function App() {
         problemsRequest={problemsRequest}
         validationPending={validation.pending}
         validationProblem={validation.problem}
+        onElement={id => {
+          if (loaded === null || run.documents === null || invalid || loading) return;
+          const previous = elementOf(run.documents.model, id);
+          if (previous === null) return;
+          const elements = [...Object.entries(loaded.model.blocks), ...loaded.model.connections.map(edge => [edge.id, edge] as const)];
+          const current = elements.find(([, element]) => elementIdentity(element) === elementIdentity(previous));
+          if (current !== undefined) { setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null); }
+        }}
         onDiagnostic={(diagnostic) => {
           if (loaded === null || invalid || loading) return;
           const target = diagnosticTarget(diagnostic, loaded);
           selectVariant(target.variant);
           const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults") || target.field?.startsWith("grid");
           setSelection(setting || target.element === null ? [] : [target.element]);
+          setInspectorTarget(setting ? "experiment" : target.element !== null ? "element" : target.variant !== null ? "variant" : "experiment");
+          setFieldFocus(previous => target.field === null ? null : { path: target.field, request: (previous?.request ?? 0) + 1 });
         }}
       />
       </ResultsWorkspace>

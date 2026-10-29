@@ -11,9 +11,7 @@ async function commit(page: Page, label: string, value: string) {
 }
 
 async function settings(page: Page) {
-  if (await page.locator("details.experiment-settings").getAttribute("open") === null) {
-    await page.getByText("Experiment settings (shared)", { exact: true }).click();
-  }
+  await page.getByRole("button", { name: "Experiment", exact: true }).click();
 }
 
 async function saveAndRun(page: Page) {

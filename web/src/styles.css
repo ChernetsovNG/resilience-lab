@@ -328,6 +328,22 @@ select {
   color: #1d4ed8;
 }
 
+.variant-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 0.2rem;
+  width: 12rem;
+  padding: 0.4rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.3rem;
+  background: #fff;
+  box-shadow: 0 4px 16px #102a4326;
+}
+
+.variant-menu button { text-align: left; }
+.param-description { margin: 0; color: #52606d; font-size: 0.75rem; }
+
 .inspector {
   grid-area: inspector;
   overflow: auto;

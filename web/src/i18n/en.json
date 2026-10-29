@@ -221,9 +221,9 @@
   "editor.symbols.separator": " · ",
   "editor.symbols.warning": "⚠",
   "editor.variant.add": "Add variant",
-  "editor.variant.copy": "Copy variant",
+  "editor.variant.copy": "Duplicate",
   "editor.variant.copyLabel": "{label} copy",
-  "editor.variant.delete": "Delete variant",
+  "editor.variant.delete": "Delete",
   "editor.variant.deleteConfirm": "Delete variant \"{label}\"?",
   "editor.variant.id": "Variant ID",
   "editor.variant.label": "Variants",
@@ -427,5 +427,10 @@
   "status.ready": "Ready",
   "status.stale": "Results outdated",
   "status.title": "Status bar",
-  "status.zoom": "Zoom {zoom}"
+  "status.zoom": "Zoom {zoom}",
+  "editor.variant.rename": "Rename",
+  "editor.variant.properties": "Variant properties",
+  "editor.variant.lastVariant": "The last variant cannot be deleted.",
+  "editor.variant.menu": "Variant actions",
+  "editor.pages.add": "+"
 }

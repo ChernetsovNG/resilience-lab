@@ -31,11 +31,14 @@ export function ParamField(props: ParamFieldProps) {
 }
 
 function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics }: ParamFieldProps) {
+  const id = useId();
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
   const [resetCount, setResetCount] = useState(0);
   return (
-    <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}>
+    <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}
+      data-inspector-field={path} aria-describedby={descriptor.description ? `${id}-description` : undefined}>
       <legend title={descriptor.description}>{descriptor.title}</legend>
+      {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
       {isOverridden(path) && onReset !== undefined ? (
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
@@ -98,6 +101,8 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
   const fallback = descriptor.default == null ? "" : String(descriptor.default);
   const commitValue = (next: unknown) => onFieldCommit === undefined ? onCommit(next) : onFieldCommit(path, next);
   const diagnostics = fieldDiagnostics?.get(path) ?? [];
+  const describedBy = [descriptor.description ? `${id}-description` : null, diagnostics.length > 0 ? `${id}-diagnostics` : null]
+    .filter(Boolean).join(" ") || undefined;
   const hasError = !parsed.ok || diagnostics.some((diagnostic) => diagnostic.severity === "ERROR");
   const commit = () => {
     // Keep malformed text in the field; parseable values, including range errors, must reach core draft validation.
@@ -105,7 +110,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
   };
 
   return (
-    <div className={overridden ? "param-field param-field--overridden" : "param-field"}>
+    <div className={overridden ? "param-field param-field--overridden" : "param-field"} data-inspector-field={path}>
       <label htmlFor={id} title={descriptor.description}>
         {descriptor.title}
       </label>
@@ -115,7 +120,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
           value={draft}
           disabled={!editable}
           aria-invalid={hasError || undefined}
-          aria-describedby={diagnostics.length === 0 ? undefined : `${id}-diagnostics`}
+          aria-describedby={describedBy}
           onChange={(event) => {
             if (!editable) return;
             setDraft(event.target.value);
@@ -138,7 +143,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
           placeholder={fallback}
           readOnly={!editable}
           aria-invalid={hasError || undefined}
-          aria-describedby={diagnostics.length === 0 ? undefined : `${id}-diagnostics`}
+          aria-describedby={describedBy}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
@@ -146,6 +151,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
           }}
         />
       )}
+      {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />
       {overridden && onReset !== undefined ? (
