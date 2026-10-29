@@ -2,7 +2,7 @@
   "description": "Compares retries with no retries while the dependency is six times slower.",
   "execution": {
     "measurement": "1s",
-    "replications": 2,
+    "replications": 10,
     "seed": 20261025,
     "warmup": "0ms"
   },

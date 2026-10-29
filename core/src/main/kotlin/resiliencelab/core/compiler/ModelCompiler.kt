@@ -48,6 +48,8 @@ data class CompiledExperiment(
     val variants: List<CompiledVariant>,
     val run: RunSettings,
     val grid: List<GridAxis> = emptyList(),
+    /** Source document for experiment-wide diagnostics; unspecified for experiments built in code. */
+    val origin: Origin = Origin.UNSPECIFIED,
 )
 
 /** Compiler output: an experiment when there are no errors, and all diagnostics. */
@@ -106,7 +108,10 @@ class ModelCompiler(
             }
         val diagnostics = sink.items.distinct()
         val failed = diagnostics.any { it.severity == Severity.ERROR } || run == null
-        return CompileResult(if (failed) null else CompiledExperiment(variants, run, experiment.grid), diagnostics)
+        return CompileResult(
+            if (failed) null else CompiledExperiment(variants, run, experiment.grid, Origin(experimentDocument, "")),
+            diagnostics,
+        )
     }
 
     /** A variant's model and, per element, where its overridden values come from. */

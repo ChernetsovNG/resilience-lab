@@ -116,7 +116,7 @@ class ResumeApiTest {
         val path = "retry-storm/$name.experiment.json"
         Files.writeString(
             root.resolve(path),
-            Files.readString(root.resolve(experiment)).replace("\"replications\": 2", "\"replications\": 200"),
+            Files.readString(root.resolve(experiment)).replace("\"replications\": 10", "\"replications\": 200"),
         )
         return path
     }

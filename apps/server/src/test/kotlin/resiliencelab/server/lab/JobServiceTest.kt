@@ -32,8 +32,8 @@ class JobServiceTest {
 
         assertThat(job.status).isEqualTo(JobStatus.COMPLETED)
         assertThat(job.runId).isEqualTo("run-1")
-        assertThat(job.completedTasks).isEqualTo(4)
-        assertThat(job.totalTasks).isEqualTo(4)
+        assertThat(job.completedTasks).isEqualTo(20)
+        assertThat(job.totalTasks).isEqualTo(20)
         assertThat(root.resolve(".results/retry-storm/run-1/manifest.json")).exists()
     }
 

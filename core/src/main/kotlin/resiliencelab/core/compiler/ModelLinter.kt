@@ -1,5 +1,6 @@
 package resiliencelab.core.compiler
 
+import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -13,17 +14,21 @@ import kotlin.math.pow
  * Advisory checks on valid, compiled linear chains (stage-1 design §3.4).
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
+ * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  */
 class ModelLinter(
     private val retryAmplificationThreshold: Int = 10,
+    private val minimumReplications: Int = 5,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
+        require(minimumReplications >= 1) { "minimumReplications must be at least 1" }
     }
 
     /**
      * Returns advisory diagnostics; callers must continue to accept warning-only models. Grid findings retain
      * their variant and name the affected points unless the same finding occurs at every point of that variant.
+     * The replication warning occurs once per experiment, with no variant or grid-point scope.
      */
     fun lint(experiment: CompiledExperiment): List<Diagnostic> =
         experiment.variants
@@ -64,6 +69,20 @@ class ModelLinter(
                 } else {
                     variants.map { diagnostic.copy(variant = it) }
                 }
+            }.let { diagnostics ->
+                if (experiment.run.replications < minimumReplications) {
+                    diagnostics +
+                        Diagnostic(
+                            "LINT_FEW_REPLICATIONS",
+                            Severity.WARNING,
+                            "Only ${experiment.run.replications} replications: 95% confidence intervals are unreliable; " +
+                                "use at least $minimumReplications replications",
+                            experiment.origin.document,
+                            experiment.origin.pointer + "/execution/replications",
+                        )
+                } else {
+                    diagnostics
+                }
             }
 
     private fun lintChain(chain: ChainIr): List<Diagnostic> {
@@ -96,7 +115,7 @@ class ModelLinter(
         return if (call.timeoutMs < required) {
             warning(
                 "LINT_TIMEOUT_BUDGET",
-                "Timeout ${call.timeoutMs} ms is below the downstream budget $required ms",
+                "Timeout ${number(call.timeoutMs)} ms is below the downstream budget ${number(required)} ms",
                 call.origin,
                 call.path,
                 "/params/timeout",
@@ -145,8 +164,8 @@ class ModelLinter(
                     add(
                         warning(
                             "LINT_HANDLERS_LITTLE",
-                            "Handlers ${service.handlers} are below λ·W = $demand " +
-                                "(λ = ${chain.client.arrivalRatePerMs * 1_000.0} requests/s, W = $holdingMs ms)",
+                            "Handlers ${service.handlers} are below λ·W = ${number(demand)} " +
+                                "(λ = ${number(chain.client.arrivalRatePerMs * 1_000.0)} requests/s, W = ${number(holdingMs)} ms)",
                             service.origin,
                             service.path,
                             "/params/handlers",
@@ -167,7 +186,7 @@ class ModelLinter(
         return if (chain.client.deadlineMs < required) {
             warning(
                 "LINT_DEADLINE_BUDGET",
-                "Deadline ${chain.client.deadlineMs} ms is below the timeout sum $required ms",
+                "Deadline ${number(chain.client.deadlineMs)} ms is below the timeout sum ${number(required)} ms",
                 chain.client.origin,
                 chain.client.path,
                 "/params/deadline",
@@ -237,6 +256,8 @@ class ModelLinter(
         }
         return first * sum
     }
+
+    private fun number(value: Double): String = if (value.isFinite()) Quantities.plain(value) else value.toString()
 
     private fun warning(
         code: String,

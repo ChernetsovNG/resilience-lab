@@ -25,7 +25,7 @@ class LabConfigurationTest {
         val root = TestWorkspace.copy()
         val experiment = "retry-storm/retry-storm.experiment.json"
         val document = root.resolve(experiment)
-        Files.writeString(document, Files.readString(document).replace("\"replications\": 2", "\"replications\": 1000"))
+        Files.writeString(document, Files.readString(document).replace("\"replications\": 10", "\"replications\": 1000"))
         val context = AnnotationConfigApplicationContext()
         context.environment.propertySources.addFirst(MapPropertySource("workspace", mapOf("resilience-lab.workspace" to root.toString())))
         context.register(LabConfiguration::class.java, SingleWorkerConfiguration::class.java)

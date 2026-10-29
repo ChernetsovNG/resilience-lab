@@ -116,7 +116,7 @@ class ArtifactPipelineTest {
         val files = workspace.listFiles(first.runDirectory)
         assertThat(files).anyMatch { it.endsWith("/replication.json") }.anyMatch { it.endsWith("/index.json") }
         val indexes = files.filter { it.endsWith("/index.json") }
-        assertThat(indexes).hasSize(4)
+        assertThat(indexes).hasSize(20)
         indexes.forEach { path ->
             val index = Json.decodeFromString(SeriesIndex.serializer(), workspace.read(path).text)
             assertThat(index.parts).hasSize(1)
@@ -152,11 +152,11 @@ class ArtifactPipelineTest {
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.saturation.rule).isEqualTo(SaturationRule())
-                assertThat(point.saturation.replications).hasSize(2)
+                assertThat(point.saturation.replications).hasSize(10)
                 assertThat(
                     point.saturation.withoutSaturation +
                         point.saturation.replications.count { it.degradationPath.isNotEmpty() },
-                ).isEqualTo(2)
+                ).isEqualTo(10)
             }
         }
         assertThat(first.manifest.parts.keys).hasSize(files.size - 1)

@@ -102,11 +102,26 @@ class CliTest {
         assertThat(result.stdout).isEmpty()
         assertThat(result.stderr).contains("Valid experiment: $experiment", "WARNING", "LINT_TIMEOUT_BUDGET", "LINT_DEADLINE_BUDGET")
         assertThat(result.stderr).contains("baseline · $model#/connections/1/params/timeout").doesNotContain("variants:", "no-retries")
+        assertThat(result.stderr).doesNotContain("LINT_FEW_REPLICATIONS").contains("Timeout 80 ms is below the downstream budget 189 ms")
     }
 
     @Test
     fun `validate accepts an absolute path inside the workspace`() {
         assertThat(execute(listOf("validate", workspace.resolve(experiment).toString())).exitCode).isZero()
+    }
+
+    @Test
+    fun `validate warns about few replications without blocking run`() {
+        val file = workspace.resolve(experiment)
+        file.writeText(file.readText().replace(Regex("\"replications\": \\d+"), "\"replications\": 4"))
+
+        val result = execute(listOf("validate", experiment))
+
+        assertThat(result.exitCode).isZero()
+        assertThat(result.stdout).isEmpty()
+        assertThat(result.stderr).contains("$experiment#/execution/replications: WARNING: LINT_FEW_REPLICATIONS:")
+        assertThat(Regex("LINT_FEW_REPLICATIONS").findAll(result.stderr).count()).isEqualTo(1)
+        assertThat(execute(listOf("run", experiment)).exitCode).isZero()
     }
 
     @Test
@@ -146,7 +161,7 @@ class CliTest {
         assertThat(lines[1]).startsWith("baseline/p0: success ").contains("p95 ", "p99 ")
         assertThat(lines[2]).startsWith("no-retries/p0: success ")
         assertThat(workspace.resolve(".results/retry-storm/run-1/manifest.json")).exists()
-        assertThat(result.stderr).contains("Tasks 4/4")
+        assertThat(result.stderr).contains("Tasks 20/20").doesNotContain("LINT_FEW_REPLICATIONS")
     }
 
     @Test
@@ -174,7 +189,7 @@ class CliTest {
         assertThat(lines[2]).startsWith("baseline/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
         assertThat(lines[3]).startsWith("no-retries/p0 [gateway-to-middle.timeout=\"40ms\"]: success ")
         assertThat(lines[4]).startsWith("no-retries/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
-        assertThat(result.stderr).contains("Tasks 8/8")
+        assertThat(result.stderr).contains("Tasks 40/40")
     }
 
     @Test
@@ -261,7 +276,7 @@ class CliTest {
         val estimate = launch(listOf("estimate", experiment))
         assertThat(estimate.exitCode).describedAs(estimate.stderr).isZero()
         assertThat(estimate.stderr).isEmpty()
-        assertThat(Json.decodeFromString(ExperimentEstimate.serializer(), estimate.stdout).tasks).isEqualTo(4)
+        assertThat(Json.decodeFromString(ExperimentEstimate.serializer(), estimate.stdout).tasks).isEqualTo(20)
 
         createIncomplete("installed-resume")
         val resumed = launch(listOf("resume", "installed-resume"))
@@ -334,7 +349,7 @@ class CliTest {
     fun `installed launcher handles SIGINT and SIGTERM with an incomplete artifact and code 130`() {
         assumeFalse(System.getProperty("os.name").startsWith("Windows", ignoreCase = true))
         val file = workspace.resolve(experiment)
-        file.writeText(file.readText().replace("\"replications\": 2", "\"replications\": 1000"))
+        file.writeText(file.readText().replace("\"replications\": 10", "\"replications\": 1000"))
         val launcher = Path.of("apps/cli/build/install/cli/bin/cli").toAbsolutePath()
         listOf("INT", "TERM").forEach { signal ->
             val output = workspace.resolve("stdout-$signal.log")
