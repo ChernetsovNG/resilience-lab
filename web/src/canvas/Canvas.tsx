@@ -137,6 +137,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     focusable: id === pendingId ? false : undefined,
     data: {
       result: block.type === "service" ? results?.services.get(id) : undefined,
+      resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
       nodeMetric, queueCapacity: queueCapacities?.get(id),
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
@@ -165,6 +166,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
         labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
+        resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         amplification, result: amplification === undefined ? undefined : result, connectionMetric,
         onSelect: (multiple: boolean) => {
           if (!disabled) onSelect(multiple ? selected.includes(connection.id) ? selected.filter(id => id !== connection.id) : [...selected, connection.id] : [connection.id]);

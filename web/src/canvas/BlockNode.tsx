@@ -20,6 +20,8 @@ export type BlockNodeType = Node<{
   variantDiagnostics?: readonly Diagnostic[];
   onProblems?: () => void;
   result?: ServiceCanvasResults;
+  resultsPending?: string;
+  resultsEmpty?: boolean;
   nodeMetric?: NodeOverlayMetric;
   queueCapacity?: number;
   onParam: (id: string, path: string, value: unknown) => void;
@@ -37,6 +39,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const colorValue = data.result?.[data.nodeMetric ?? "utilization"];
   const maximum = data.nodeMetric === "meanQueue" ? data.queueCapacity : 1;
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
+  const tooltip = (title: string) => data.resultsPending === undefined ? title : `${title} ${t("editor.symbols.separator")} ${data.resultsPending}`;
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   return (
@@ -60,14 +63,16 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
           <InlineParamEditor {...editorProps} path="processing.mean" onCommit={(value) => data.onParam(data.id, "processing.mean", value)} />
         </span>
       ) : <span>{summaryOf(data.block)}</span>}
-      {data.result === undefined ? null : <div className="block-results" data-testid={`canvas-results-${data.id}`}>
-        <span title={t("editor.canvas.utilizationTitle", { interval })}>
+      {data.result === undefined ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
+        aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.resultsEmpty || undefined}
+        data-testid={`canvas-results-${data.id}`}>
+        <span title={tooltip(t("editor.canvas.utilizationTitle", { interval }))}>
           {t("editor.canvas.utilization", { value: formatPercent(data.result.utilization) })}
         </span>
-        <span title={t("editor.canvas.meanQueueTitle", { interval })}>
+        <span title={tooltip(t("editor.canvas.meanQueueTitle", { interval }))}>
           {t("editor.canvas.meanQueue", { value: formatNumber(data.result.meanQueue) })}
         </span>
-        <span title={t("editor.canvas.queueRejectionsTitle", { interval })}>
+        <span title={tooltip(t("editor.canvas.queueRejectionsTitle", { interval }))}>
           {t("editor.canvas.queueRejections", { value: formatPercent(data.result.queueRejectionRate) })}
         </span>
       </div>}

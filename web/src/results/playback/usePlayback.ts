@@ -39,12 +39,52 @@ export function usePlayback({
   const connectionSeries = useConnectionSeries(connectionLoader, runId, enabled && window !== null && !series.loading ? variant : null,
     pointId, replication, connections, untilWindow, fromWindow);
   const loading = series.loading || connectionSeries.loading;
-  const frame = enabled && window !== null && !loading && series.problem === null && connectionSeries.problem === null
+  const currentFrame = enabled && window !== null && !loading && series.problem === null && connectionSeries.problem === null
     ? windowCanvasResults(results!, series.nodes, window, fromWindow, connectionSeries.connections) : null;
-  const problem = series.problem ?? connectionSeries.problem ?? (enabled && window !== null && !loading && frame === null
+  const problem = series.problem ?? connectionSeries.problem ?? (enabled && window !== null && !loading && currentFrame === null
     ? t("results.playback.missingWindow") : null);
   const playing = enabled && state.key === key && state.playing && problem === null;
-  const ready = frame !== null;
+  const ready = currentFrame !== null;
+  const active = enabled && window !== null;
+  const frameKey = JSON.stringify([key, [...(results?.services.keys() ?? [])],
+    [...(results?.connections ?? [])].map(([id, connection]) => [id, connection.from, connection.to, connection.type])]);
+  const [retained, setRetained] = useState<{ key: string; frame: CanvasResults | null }>({ key: frameKey, frame: null });
+  if (!active || retained.key !== frameKey) {
+    if (retained.key !== frameKey || retained.frame !== null) setRetained({ key: frameKey, frame: null });
+  } else if (currentFrame !== null && retained.frame?.window !== window) {
+    setRetained({ key: frameKey, frame: currentFrame });
+  }
+  const previous = retained.key === frameKey ? retained.frame : null;
+  const frame: CanvasResults | null = !active ? null : currentFrame ?? {
+    ...(previous ?? {
+      services: new Map([...results.services].map(([id, service]) => [id, {
+        ...service, windowed: true, utilization: null, meanQueue: null, queueRejectionRate: null,
+      }])),
+      connections: new Map([...results.connections].map(([id, connection]) => [id, {
+        ...connection, amplification: null, sentAttemptsPerSecond: null, timeoutRate: null, meanOrphaned: null,
+      }])),
+    }),
+    pending: problem ?? t("results.playback.loading"),
+  };
+
+  const nodesKey = JSON.stringify(nodes);
+  const connectionsKey = JSON.stringify(connections);
+  const prefetchFrom = active && ready && window >= untilWindow - Math.min(8, rangeSize) && untilWindow < windowCount
+    ? untilWindow : null;
+  const prefetchUntil = prefetchFrom === null ? 0 : Math.min(windowCount, prefetchFrom + rangeSize);
+  useEffect(() => {
+    if (prefetchFrom === null || variant === null) return;
+    const controller = new AbortController();
+    const request = { runId, variant, cell: pointId, replication, fromWindow: prefetchFrom,
+      untilWindow: prefetchUntil, signal: controller.signal };
+    // Warm the existing bounded LRU; derived prefetch metrics are not retained.
+    void Promise.all([
+      loader.load({ ...request, nodes: JSON.parse(nodesKey) }),
+      connectionsKey === "[]" ? Promise.resolve([])
+        : connectionLoader.loadConnections({ ...request, connections: JSON.parse(connectionsKey) }),
+    ]).catch(() => { /* The foreground load retries and reports speculative failures. */ });
+    return () => controller.abort();
+  }, [loader, connectionLoader, runId, variant, pointId, replication, nodesKey, connectionsKey, prefetchFrom, prefetchUntil]);
   const currentWindow = useEffectEvent(() => window ?? 0);
   const advance = useEffectEvent((next: number) => onWindowChange(next));
 

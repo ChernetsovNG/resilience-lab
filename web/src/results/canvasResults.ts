@@ -30,6 +30,8 @@ export interface ConnectionCanvasResults {
 }
 
 export interface CanvasResults {
+  /** Loading/error tooltip; without a recorded window, metric rows reserve empty space. */
+  pending?: string;
   window?: number;
   services: ReadonlyMap<string, ServiceCanvasResults>;
   connections: ReadonlyMap<string, ConnectionCanvasResults>;
