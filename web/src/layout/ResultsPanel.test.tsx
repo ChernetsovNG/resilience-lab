@@ -186,3 +186,16 @@ it.each([false, true])("keeps a Problems request ahead of completion navigation:
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} problemsRequest={1} />);
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
 });
+
+
+it("opens Timeline from the inspector request and preserves later tab choices", () => {
+  const props = { job: null, summary: null, problem: null };
+  const view = render(<ResultsPanel {...props} timelineRequest={0} />);
+  view.rerender(<ResultsPanel {...props} timelineRequest={1} />);
+  expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  view.rerender(<ResultsPanel {...props} timelineRequest={1} />);
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  view.rerender(<ResultsPanel {...props} timelineRequest={2} />);
+  expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
+});

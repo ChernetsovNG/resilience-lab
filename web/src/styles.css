@@ -49,8 +49,8 @@ select {
 }
 
 .workspace-panels--analysis {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "canvas" "divider" "results";
+  grid-template-columns: minmax(0, 1fr) var(--inspector-divider-width) var(--inspector-width);
+  grid-template-areas: "canvas inspector-divider inspector" "divider divider divider" "results results results";
 }
 
 .workspace-panels > [hidden] {
@@ -1087,3 +1087,26 @@ select {
   min-width: 1rem;
   width: 4rem;
 }
+
+
+.canvas-node--connected .block-node { outline: 2px solid #2563eb; outline-offset: 2px; }
+.canvas-edge-label { border: 1px solid #cbd5e1; box-shadow: 0 1px 3px #0f172a12; cursor: pointer; }
+.canvas-edge-label--selected { border-color: #2563eb; background: #eff6ff; }
+.canvas-edge-label:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.element-results { min-width: 0; border-top: 1px solid var(--border, #d8dfe7); padding-top: .65rem; }
+.element-results h3 { margin: 0 0 .5rem; }
+.element-results-context, .element-results-note { color: var(--muted, #637285); font-size: .8rem; overflow-wrap: anywhere; }
+.element-results table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.element-results th, .element-results td { padding: .35rem .15rem; border-bottom: 1px solid var(--border, #e5eaf0); vertical-align: top; }
+.element-results th { text-align: left; font-weight: 500; width: 51%; }
+.element-results td { text-align: right; overflow-wrap: anywhere; }
+.element-results td small { display: block; color: var(--muted, #637285); font-size: .7rem; }
+.element-results-charts { display: grid; gap: .4rem; margin: .75rem 0; }
+.element-results-chart { margin: 0; min-width: 0; }
+.element-results-chart figcaption { font-size: .8rem; font-weight: 600; }
+.element-results-chart svg { display: block; width: 100%; height: auto; }
+.element-results-chart text { font-size: 10px; fill: currentColor; }
+.element-results > details { margin-top: .75rem; }
+
+.react-flow__edge-interaction { stroke: transparent; pointer-events: stroke; vector-effect: non-scaling-stroke; }

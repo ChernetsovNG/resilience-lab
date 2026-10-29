@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { windowCanvasResults, type CanvasResults } from "../canvasResults";
 import type { NodeSeriesMetrics, SeriesLoadRequest, WindowMetricValues } from "../series";
@@ -201,4 +201,22 @@ it.each([10, 36_000])("paces playback in windows per second for %d ms windows", 
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(5);
   expect(result.current.playing).toBe(false);
+});
+
+
+it("uses the connection's own windows while playing a frame", async () => {
+  const ownSummary: CanvasResults = { ...summary, connections: new Map([["call", {
+    ...summary.connections.get("call")!, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5,
+  }]]) };
+  const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
+    startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
+    orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
+    latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
+  }] }] };
+  const hook = renderHook(() => usePlayback({ runId: "run-1", variant: "baseline", pointId: "p0", replication: 0,
+    window: 0, windowCount: 1, nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
+  }, loader));
+  await waitFor(() => expect(hook.result.current.frame?.connections.get("call")).toMatchObject({
+    sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5,
+  }));
 });

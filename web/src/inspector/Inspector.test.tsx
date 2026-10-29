@@ -271,3 +271,17 @@ it("describes shared run settings once at the section heading", () => {
   renderInspector({ selected: null, onCommand: vi.fn() });
   expect(screen.getAllByText("Shared by all variants")).toHaveLength(1);
 });
+
+
+it("shows results below parameters on a variant and only results in Analysis", () => {
+  const props = { catalog, model, experiment, selected: "gateway", editable: true, overrides: {},
+    onParam: vi.fn(), onValidity: vi.fn(), variantId: "baseline", results: <section aria-label="Element results">Recorded values</section> };
+  const view = render(<Inspector {...props} />);
+  expect(screen.getByLabelText("Handlers")).toBeTruthy();
+  expect(screen.getByRole("region", { name: "Element results" })).toBeTruthy();
+  view.rerender(<Inspector {...props} resultsOnly />);
+  expect(screen.queryByRole("textbox", { name: "Handlers" })).toBeNull();
+  expect(screen.getByRole("region", { name: "Element results" })).toBeTruthy();
+  view.rerender(<Inspector {...props} variantId={null} />);
+  expect(screen.queryByRole("region", { name: "Element results" })).toBeNull();
+});

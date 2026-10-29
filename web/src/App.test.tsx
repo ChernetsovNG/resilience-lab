@@ -1069,11 +1069,12 @@ it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving
   fireEvent.click(button("Analysis"));
   expect(button("Analysis").getAttribute("aria-pressed")).toBe("true");
   expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(true);
-  expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(true);
+  expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(false);
+  expect(screen.queryByRole("textbox", { name: "Seed" })).toBeNull();
   expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
   if (way === "button") fireEvent.click(button("Analysis"));
-  else fireEvent.keyDown(screen.getByRole("separator"), { key: "Escape" });
+  else fireEvent.keyDown(screen.getByRole("separator", { name: "Resize results panel" }), { key: "Escape" });
   expect(button("Analysis").getAttribute("aria-pressed")).toBe("false");
   expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(false);
   expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(false);
@@ -1947,7 +1948,8 @@ it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the re
   await screen.findByRole("table", { name: "Answer" });
   const baseline = screen.getByRole("tab", { name: "Baseline" });
   fireEvent.click(baseline); fireEvent.click(button("Analysis"));
-  expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
+  expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
+  expect(screen.queryByRole("textbox", { name: "Seed" })).toBeNull();
   if (action === "Experiment") fireEvent.click(button("Experiment"));
   else if (action === "Variant") fireEvent.click(baseline);
   else if (action === "Rename") {

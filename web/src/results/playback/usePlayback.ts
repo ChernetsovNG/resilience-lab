@@ -2,6 +2,7 @@ import { t } from "../../i18n";
 import { useEffect, useEffectEvent, useState } from "react";
 import { windowCanvasResults, type CanvasResults } from "../canvasResults";
 import { seriesLoader, type SeriesLoader } from "../series";
+import { useConnectionSeries } from "../timeline/useConnectionSeries";
 import { useTimelineSeries } from "../timeline/useTimelineSeries";
 
 export const PLAYBACK_WINDOWS_PER_SECOND = 10;
@@ -21,7 +22,7 @@ interface PlaybackOptions {
 /** Browser time only advances the shared window; series alone determine every frame. */
 export function usePlayback({
   runId, variant, pointId, replication, window, windowCount, nodes, results, onWindowChange,
-}: PlaybackOptions, loader: Pick<SeriesLoader, "load"> = seriesLoader) {
+}: PlaybackOptions, loader: Pick<SeriesLoader, "load"> & Partial<Pick<SeriesLoader, "loadConnections">> = seriesLoader) {
   const key = JSON.stringify([runId, variant, pointId, replication]);
   const [state, setState] = useState({ key, playing: false });
   const [speed, setSpeed] = useState(1);
@@ -33,9 +34,14 @@ export function usePlayback({
   const untilWindow = Math.min(windowCount, fromWindow + rangeSize);
   const series = useTimelineSeries(loader, runId, enabled && window !== null ? variant : null,
     pointId, replication, nodes, untilWindow, fromWindow);
-  const frame = enabled && window !== null && !series.loading && series.problem === null
-    ? windowCanvasResults(results!, series.nodes, window, fromWindow) : null;
-  const problem = series.problem ?? (enabled && window !== null && !series.loading && frame === null
+  const connections = [...(results?.connections ?? [])].filter(([, connection]) => connection.sentAttemptsPerSecond !== undefined).map(([id]) => id);
+  const connectionLoader = loader.loadConnections === undefined ? seriesLoader : loader as Pick<SeriesLoader, "loadConnections">;
+  const connectionSeries = useConnectionSeries(connectionLoader, runId, enabled && window !== null && !series.loading ? variant : null,
+    pointId, replication, connections, untilWindow, fromWindow);
+  const loading = series.loading || connectionSeries.loading;
+  const frame = enabled && window !== null && !loading && series.problem === null && connectionSeries.problem === null
+    ? windowCanvasResults(results!, series.nodes, window, fromWindow, connectionSeries.connections) : null;
+  const problem = series.problem ?? connectionSeries.problem ?? (enabled && window !== null && !loading && frame === null
     ? t("results.playback.missingWindow") : null);
   const playing = enabled && state.key === key && state.playing && problem === null;
   const ready = frame !== null;
@@ -69,5 +75,5 @@ export function usePlayback({
     if (window === null || window >= windowCount - 1) onWindowChange(0);
     setState({ key, playing: true });
   };
-  return { frame, loading: series.loading, problem, playing, speed, setSpeed, play, pause, seek };
+  return { frame, loading, problem, playing, speed, setSpeed, play, pause, seek };
 }

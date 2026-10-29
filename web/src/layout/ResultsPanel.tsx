@@ -43,6 +43,7 @@ export interface ResultsPanelProps {
   diagnosticDocuments?: Pick<LoadedExperiment, "model" | "modelPath" | "experiment" | "experimentPath"> | null;
   /** Incremented by the status bar or a newly received error; ordinary rerenders preserve the selected tab. */
   problemsRequest?: number;
+  timelineRequest?: number;
 }
 
 /** Results and validation diagnostics below the canvas (product vision §5.5). */
@@ -50,21 +51,22 @@ export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange, onViewChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, cursorWindow = null, onCursorChange,
-  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, onElement, diagnosticDocuments = null, problemsRequest = 0,
+  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, onElement, diagnosticDocuments = null, problemsRequest = 0, timelineRequest = 0,
 }: ResultsPanelProps) {
-  const [navigation, setNavigation] = useState({ view: "answer" as ResultsPanelView, running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
+  const [navigation, setNavigation] = useState({ view: "answer" as ResultsPanelView, running, changedDuringRun: false, completedJob: null as string | null, problemsRequest, timelineRequest: 0 });
   const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
+  const revealTimeline = timelineRequest !== navigation.timelineRequest;
   const revealProblems = problemsRequest !== navigation.problemsRequest;
   // Adjust navigation once per run; a choice made while submission is pending also counts.
-  if (revealProblems || running !== navigation.running || (completedJob !== null && completedJob !== navigation.completedJob)) {
+  if (revealTimeline || revealProblems || running !== navigation.running || (completedJob !== null && completedJob !== navigation.completedJob)) {
     const starting = running && !navigation.running;
     const finished = completedJob !== null && completedJob !== navigation.completedJob;
     setNavigation({
-      view: revealProblems ? "problems" : finished && !(navigation.running && navigation.changedDuringRun) ? "answer" : navigation.view,
+      view: revealProblems ? "problems" : revealTimeline ? "timeline" : finished && !(navigation.running && navigation.changedDuringRun) ? "answer" : navigation.view,
       running,
       changedDuringRun: (starting ? false : navigation.changedDuringRun) || (revealProblems && running),
       completedJob: completedJob ?? navigation.completedJob,
-      problemsRequest,
+      problemsRequest, timelineRequest,
     });
   }
   const restoredJob = useRef<string | null>(null);
@@ -162,11 +164,11 @@ export function ResultsPanel({
             <p className="results-empty">{job === null ? t("results.empty") : t("results.awaitingSummary")}</p>
           )}
         </>}
-        {timelineOpened && summary !== null && manifest !== null && model !== null && experiment !== null && catalog !== null && runId !== null ?
+        {(timelineOpened || timelineRequest > 0) && summary !== null && manifest !== null && model !== null && experiment !== null && catalog !== null && runId !== null ?
           <div hidden={active !== "timeline"}>
             <Suspense fallback={<p role="status">{t("results.timeline.loading")}</p>}><Timeline runId={runId} summary={summary} manifest={manifest} model={model} experiment={experiment} catalog={catalog}
               enabled={active === "timeline" && size !== "collapsed"} activeVariantId={activeVariantId} pointId={selectedPointId}
-              replication={replication} cursorWindow={cursorWindow} selectedNodes={selectedNodes}
+              replication={replication} cursorWindow={cursorWindow} selectedNodes={selectedNodes} selectionRequest={timelineRequest}
               onCursorChange={onCursorChange} /></Suspense>
           </div> : null}
       </div>

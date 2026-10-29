@@ -1,7 +1,7 @@
 import type { RunSummary, Variant } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
-import { utilizationColor, type NodeOverlayMetric } from "./canvasResults";
+import { utilizationColor, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./canvasResults";
 import { PlaybackControls } from "./playback/PlaybackControls";
 import type { usePlayback } from "./playback/usePlayback";
 import type { ResultsSelection } from "./selection";
@@ -18,6 +18,8 @@ interface ResultsContextBarProps {
   endMs: number;
   metric: NodeOverlayMetric | "off";
   onMetricChange: (metric: NodeOverlayMetric | "off") => void;
+  connectionMetric?: ConnectionOverlayMetric;
+  onConnectionMetricChange?: (metric: ConnectionOverlayMetric) => void;
   stale: boolean;
   analysis: boolean;
   onAnalysisChange: () => void;
@@ -25,7 +27,7 @@ interface ResultsContextBarProps {
 
 /** Controls the shared result context without changing documents or editor history. */
 export function ResultsContextBar({ summary, variant, selection, onSelect, replications, playback,
-  windowCount, windowMs, endMs, metric, onMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
+  windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "amplification", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const pointLabels = new Map(points.map(point => [point.id, Object.keys(point.coordinates).length === 0 ? point.id : t("results.gridPointCoordinates", {
     point: point.id, coordinates: Object.entries(point.coordinates).map(([path, value]) => t("results.coordinate", {
@@ -70,13 +72,18 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
       {(["utilization", "meanQueue", "queueRejectionRate", "off"] as const).map(value =>
         <option key={value} value={value}>{t(`results.context.metric.${value}`)}</option>)}
     </select>
+    <select aria-label={t("results.context.connection.overlay")} title={t("results.context.connection.overlay")}
+      value={connectionMetric} disabled={metric === "off"} onChange={event => onConnectionMetricChange?.(event.target.value as ConnectionOverlayMetric)}>
+      {(["amplification", "sentAttemptsPerSecond", "timeoutRate", "meanOrphaned"] as const).map(value =>
+        <option key={value} value={value}>{t(`results.context.connection.metric.${value}`)}</option>)}
+    </select>
     {metric === "off" ? null : <>
       <span className="overlay-legend" aria-label={t("results.context.scale")} title={metricLabel}>
         <span className={metric === "meanQueue" ? undefined : "sr-only"}>{metricLabel}{t("results.context.legendSeparator")}</span>{minimum}{t("results.context.rangeSeparator")}{limit}
         <span className="overlay-scale" aria-hidden="true"
           style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
       </span>
-      <span className="sr-only">{t("results.context.edges")}</span>
+      <span className="sr-only">{t("results.context.connection.legend", { metric: t(`results.context.connection.metric.${connectionMetric}`) })}</span>
     </>}
     {stale ? <span className="canvas-results-stale" role="status" title={t("app.canvas.stale")}>{t("app.canvas.stale")}</span> : null}
     <span className="results-context-actions">

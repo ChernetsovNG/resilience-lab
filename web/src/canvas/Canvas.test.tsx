@@ -281,3 +281,35 @@ it("does not give old results to new nodes, new edges or retargeted edges", asyn
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").textContent).not.toContain("Amplification");
   expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.2×");
 });
+
+
+it("highlights a selected connection's endpoints and provides a wide line hit target", async () => {
+  const onSelect = vi.fn();
+  render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout}
+    selected={["gateway-to-middle"]} onSelect={onSelect} />);
+  const edge = await screen.findByTestId("rf__edge-gateway-to-middle");
+  expect(edge.querySelector(".react-flow__edge-interaction")?.getAttribute("stroke-width")).toBe("28");
+  expect(screen.getByTestId("rf__node-gateway").classList.contains("canvas-node--connected")).toBe(true);
+  expect(screen.getByTestId("rf__node-middle").classList.contains("canvas-node--connected")).toBe(true);
+  expect(screen.getByTestId("rf__node-dependency").classList.contains("canvas-node--connected")).toBe(false);
+  const badge = screen.getByTestId("canvas-edge-label-gateway-to-middle");
+  fireEvent.keyDown(badge, { key: "Enter" });
+  expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
+});
+
+
+it("changes connection overlay labels without borrowing target node values", async () => {
+  const props = { catalog, model, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [], results: {
+    services: new Map(), connections: new Map([["gateway-to-middle", {
+      from: "gateway", to: "middle", type: "call", amplification: 2.5,
+      sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5,
+    }]]),
+  } };
+  const view = render(<Canvas {...props} connectionMetric="sentAttemptsPerSecond" />);
+  const badge = await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+  expect(badge.textContent).toContain("Sent attempts 40");
+  view.rerender(<Canvas {...props} connectionMetric="timeoutRate" />);
+  expect(badge.textContent).toContain("Timeout share 25%");
+  view.rerender(<Canvas {...props} connectionMetric="meanOrphaned" />);
+  expect(badge.textContent).toContain("Orphaned work 0.5");
+});
