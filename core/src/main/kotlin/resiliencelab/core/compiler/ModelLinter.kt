@@ -177,16 +177,18 @@ class ModelLinter(
     }
 
     /**
-     * Compare the client deadline with Σ(attempts × timeout) across all calls, as specified in T1.2.
-     * Each timeout already includes request and response network delays. This conservative comparison can overlap
-     * nested timeout budgets; local processing and backoffs are outside this particular timeout-sum rule.
+     * Compare the client deadline with entry processing mean + outgoing attempts × timeout + maximum backoffs.
+     * The outgoing timeout already covers its network and nested calls; their budgets are not added again.
+     * An entry without an outgoing call needs only its own processing. The client's request edge adds no budget.
      */
     private fun deadlineBudget(chain: ChainIr): Diagnostic? {
-        val required = chain.calls.sumOf { it.attempts * it.timeoutMs }
+        val entry = chain.services.first { it.path == chain.entry }
+        val call = chain.calls.firstOrNull { it.from == chain.entry }
+        val required = entry.processing.meanMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (chain.client.deadlineMs < required) {
             warning(
                 "LINT_DEADLINE_BUDGET",
-                "Deadline ${number(chain.client.deadlineMs)} ms is below the timeout sum ${number(required)} ms",
+                "Deadline ${number(chain.client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
                 chain.client.origin,
                 chain.client.path,
                 "/params/deadline",

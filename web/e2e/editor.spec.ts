@@ -221,7 +221,7 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   const run = page.getByRole("button", { name: "Run", exact: true });
   await expect(run).toBeEnabled();
-  await expect(page.locator(".diagnostic-badge--variants")).toHaveCount(2);
+  await expect(page.locator(".diagnostic-badge--variants")).toHaveCount(1);
   await page.setViewportSize({ width: 1440, height: 900 });
   const palette = page.getByRole("complementary", { name: "Palette" });
   const service = palette.getByRole("button", { name: "Service", exact: true });

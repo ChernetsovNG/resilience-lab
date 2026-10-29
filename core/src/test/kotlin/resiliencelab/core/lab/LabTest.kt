@@ -488,7 +488,7 @@ class LabTest {
     fun `validates the example with advisory warnings for baseline only`() {
         val report = Lab(FileWorkspace(exampleWorkspace())).validate(experiment)
 
-        assertThat(report.diagnostics.map { it.code }).containsExactlyInAnyOrder("LINT_TIMEOUT_BUDGET", "LINT_DEADLINE_BUDGET")
+        assertThat(report.diagnostics.map { it.code }).containsExactly("LINT_TIMEOUT_BUDGET")
         assertThat(report.diagnostics).allSatisfy {
             assertThat(it.severity).isEqualTo(resiliencelab.core.compiler.Severity.WARNING)
             assertThat(it.document).isEqualTo(model)
@@ -497,8 +497,6 @@ class LabTest {
         }
         assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message)
             .isEqualTo("Timeout 80 ms is below the downstream budget 189 ms")
-        assertThat(report.diagnostics.single { it.code == "LINT_DEADLINE_BUDGET" }.message)
-            .isEqualTo("Deadline 250 ms is below the timeout sum 420 ms")
         assertThat(report.valid).isTrue()
     }
 

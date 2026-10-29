@@ -8,6 +8,13 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   const model = page.getByRole("tab", { name: "Model", exact: true });
   await expect(model).toHaveAttribute("aria-selected", "true");
   const client = page.getByTestId("rf__node-client");
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await client.click();
+  const deadline = page.getByLabel("Deadline", { exact: true });
+  await deadline.fill("100ms");
+  await deadline.press("Enter");
+  await expect(client.getByRole("img", { name: "1 problems: warning", exact: true })).toBeVisible();
+  await model.click();
   const edge = page.getByTestId("canvas-edge-label-gateway-to-middle");
   const clientBadge = client.getByRole("button", { name: "Warnings in variants: baseline", exact: true });
   const edgeBadge = edge.getByRole("button", { name: "Warnings in variants: baseline", exact: true });
@@ -53,6 +60,10 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await page.screenshot({ path: testInfo.outputPath("model-client-warning.png") });
   await problems.getByRole("button", { name: "Show all problems", exact: true }).click();
   await expect(problems.locator(".validation-problems > li")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(problems.locator(".validation-problems > li")).toHaveCount(1);
+  await expect(problems).not.toContainText("LINT_DEADLINE_BUDGET");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
 });

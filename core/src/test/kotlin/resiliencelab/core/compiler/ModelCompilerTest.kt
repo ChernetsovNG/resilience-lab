@@ -11,6 +11,7 @@ import resiliencelab.core.catalog.TypeCategory
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.ExperimentFile
+import resiliencelab.core.document.GridAxis
 import resiliencelab.core.document.ModelFile
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.DistributionShape
@@ -161,6 +162,34 @@ class ModelCompilerTest {
         assertThat(warning.variant).isEqualTo("solo")
         assertThat(warning.document).isEqualTo("e.experiment.json")
         assertThat(warning.pointer).isEqualTo("/variants/0/overrides/gateway.handlers")
+    }
+
+    @Test
+    fun `deadline warnings retain grid value origins and variant budgets`() {
+        val source =
+            experiment().copy(
+                grid = listOf(GridAxis("client.deadline", listOf(JsonPrimitive("80ms"), JsonPrimitive("81ms"), JsonPrimitive("247ms")))),
+            )
+        val compiled = compiler.compile(model(), "m.model.json", source, "e.experiment.json")
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(compiled.experiment!!).filter { it.code == "LINT_DEADLINE_BUDGET" }
+
+        assertThat(warnings.map { it.variant to it.pointer }).containsExactly(
+            "baseline" to "/grid/0/values/0",
+            "baseline" to "/grid/0/values/1",
+            "no-retries" to "/grid/0/values/0",
+        )
+        assertThat(warnings.map { it.message }).containsExactly(
+            "Deadline 80 ms is below the entry call budget 247 ms (points: p0)",
+            "Deadline 81 ms is below the entry call budget 247 ms (points: p1)",
+            "Deadline 80 ms is below the entry call budget 81 ms (points: p0)",
+        )
+        assertThat(warnings).allSatisfy {
+            assertThat(it.document).isEqualTo("e.experiment.json")
+            assertThat(it.path).isEqualTo("client")
+            assertThat(it.severity).isEqualTo(Severity.WARNING)
+        }
     }
 
     @Test

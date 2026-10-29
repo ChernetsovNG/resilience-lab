@@ -225,19 +225,82 @@ class ModelLinterTest {
     }
 
     @Test
-    fun `deadline compares the sum of per attempt timeouts without counting network twice`() {
+    fun `deadline includes entry processing and outgoing attempts without counting nested timeouts or network twice`() {
         val changed =
             chain.copy(
-                client = chain.client.copy(deadlineMs = 239.0),
-                calls = chain.calls.map { it.copy(attempts = 2, network = fixed(1.0)) },
+                client = chain.client.copy(deadlineMs = 201.0),
+                services = chain.services.reversed(),
+                calls = chain.calls.map { it.copy(attempts = 2, timeoutMs = it.timeoutMs + 0.125, network = fixed(1.0)) }.reversed(),
             )
 
         val warning = warnings(changed, "LINT_DEADLINE_BUDGET").single()
 
+        assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.path).isEqualTo("client")
         assertThat(warning.pointer).isEqualTo("/blocks/client/params/deadline")
-        assertThat(warning.message).isEqualTo("Deadline 239 ms is below the timeout sum 240 ms")
-        assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = 240.0)), "LINT_DEADLINE_BUDGET")).isEmpty()
+        assertThat(warning.message).isEqualTo("Deadline 201 ms is below the entry call budget 201.25 ms")
+        assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = 201.25)), "LINT_DEADLINE_BUDGET")).isEmpty()
+    }
+
+    @Test
+    fun `deadline includes maximum capped backoffs between entry call attempts`() {
+        listOf(
+            Backoff(BackoffKind.NONE, 9.0, 5.0, 2.0) to 301.0,
+            Backoff(BackoffKind.FIXED, 9.0, 5.0, 2.0) to 311.0,
+            Backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 4.0, 5.0, 2.0) to 310.0,
+            Backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 4.0, 5.0, 0.5) to 307.0,
+        ).forEach { (backoff, budget) ->
+            val changed =
+                chain.copy(
+                    client = chain.client.copy(deadlineMs = budget),
+                    calls = listOf(chain.calls[0].copy(attempts = 3, backoff = backoff), chain.calls[1]),
+                )
+
+            assertThat(warnings(changed, "LINT_DEADLINE_BUDGET")).describedAs(backoff.toString()).isEmpty()
+            assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = budget - 0.5)), "LINT_DEADLINE_BUDGET"))
+                .describedAs(backoff.toString())
+                .hasSize(1)
+        }
+    }
+
+    @Test
+    fun `deadline for an entry without outgoing calls covers only its processing`() {
+        val single =
+            chain.copy(
+                services = listOf(service("a", 2.5)),
+                calls = emptyList(),
+                client = chain.client.copy(deadlineMs = 2.25),
+            )
+
+        assertThat(warnings(single, "LINT_DEADLINE_BUDGET").single().message)
+            .isEqualTo("Deadline 2.25 ms is below the entry call budget 2.5 ms")
+        assertThat(warnings(single.copy(client = single.client.copy(deadlineMs = 2.5)), "LINT_DEADLINE_BUDGET")).isEmpty()
+    }
+
+    @Test
+    fun `nested checkout timeouts fit within the entry budget and client deadline`() {
+        val checkout =
+            chain.copy(
+                client = chain.client.copy(deadlineMs = 10_000.0),
+                entry = "gateway",
+                services = listOf(service("gateway", 2.0), service("order", 20.0), service("payment", 10.0), service("psp", 300.0)),
+                calls =
+                    listOf(
+                        call("gateway-order", "gateway", "order", 8_000.0, 1, 1).copy(network = fixed(0.5)),
+                        call("order-payment", "order", "payment", 2_200.0, 3, 2).copy(
+                            network = fixed(0.5),
+                            backoff = Backoff(BackoffKind.FIXED, 500.0, 500.0, 2.0),
+                        ),
+                        call("payment-psp", "payment", "psp", 1_000.0, 2, 3).copy(
+                            network = fixed(20.0),
+                            backoff = Backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 25.0, 1_000.0, 2.0),
+                        ),
+                    ),
+            )
+
+        assertThat(linter.lint(experiment(checkout))).isEmpty()
+        assertThat(warnings(checkout.copy(client = checkout.client.copy(deadlineMs = 8_001.0)), "LINT_DEADLINE_BUDGET").single().message)
+            .isEqualTo("Deadline 8001 ms is below the entry call budget 8002 ms")
     }
 
     @Test
@@ -255,8 +318,8 @@ class ModelLinterTest {
         val deadlines = result.filter { it.code == "LINT_DEADLINE_BUDGET" }
         assertThat(deadlines).hasSize(3)
         assertThat(deadlines.map { it.variant }).containsExactly("one", "two", "three")
-        assertThat(deadlines.count { "120" in it.message }).isEqualTo(2)
-        assertThat(deadlines.count { "220" in it.message }).isEqualTo(1)
+        assertThat(deadlines.count { "101" in it.message }).isEqualTo(2)
+        assertThat(deadlines.count { "201" in it.message }).isEqualTo(1)
         assertThat(deadlines).allSatisfy { assertThat(it.message).doesNotContain("variants:") }
         val common = linter.lint(CompiledExperiment(listOf(variant("one", "One", a), variant("two", "Two", a)), chain.run))
         assertThat(common.filter { it.code == "LINT_DEADLINE_BUDGET" }).hasSize(1)
