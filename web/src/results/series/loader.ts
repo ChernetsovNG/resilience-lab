@@ -313,7 +313,7 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       const metrics = { ...window.metrics };
       if (window.handlers > 0) {
         const denominator = arrivals.get(index) ?? 0;
-        metrics.amplification = denominator === 0 ? null : window.admittedAttempts / denominator;
+        metrics.client = { originalArrivals: denominator };
       }
       return metrics;
     });

@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
+import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 import type { Edge, EdgeProps } from "@xyflow/react";
 import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
@@ -17,7 +17,6 @@ export type CallEdgeType = Edge<{
   onProblems?: () => void;
   parametersEditable: boolean;
   disabled: boolean;
-  amplification?: number | null;
   result?: ConnectionCanvasResults;
   resultsPending?: string;
   resultsEmpty?: boolean;
@@ -32,22 +31,20 @@ export type CallEdgeType = Edge<{
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, selected, data }: EdgeProps<CallEdgeType>) {
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, amplification, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
+  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     editable: parametersEditable, disabled, onValidity };
-  const metricValue = result?.[connectionMetric] ?? null;
-  const metricText = connectionMetric === "sentAttemptsPerSecond" ? formatRate(metricValue)
-    : connectionMetric === "timeoutRate" ? formatPercent(metricValue)
-      : connectionMetric === "meanOrphaned" ? formatNumber(metricValue) : formatMultiplier(amplification ?? null);
-  const metricTitle = connectionMetric === "amplification" ? windowed ? t("editor.canvas.amplificationWindowTitle")
-    : t("editor.canvas.amplificationPooledTitle") : t(`results.context.connection.metric.${connectionMetric}`);
+  const output = selectedOverlayOutput(overlayOutputs(catalog, "CONNECTION"), connectionMetric);
+  const metricValue = output?.types.includes(connection.type) ? result?.values[output.id] ?? null : null;
+  const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
+  const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
         style={selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : undefined} />
-      {connection.type === "call" || amplification !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
+      {connection.type === "call" || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
         <div
           className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
           data-testid={`canvas-edge-label-${connection.id}`}
@@ -69,11 +66,10 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           </div> : null}
           <DiagnosticBadge diagnostics={diagnostics} />
           <VariantDiagnosticBadge diagnostics={variantDiagnostics} onOpen={onProblems} disabled={disabled} />
-          {amplification === undefined ? null : <span className={`canvas-edge-results${resultsPending === undefined ? "" : " canvas-metrics--pending"}${resultsEmpty ? " canvas-metrics--empty" : ""}`}
+          {result === undefined ? null : <span className={`canvas-edge-results${resultsPending === undefined ? "" : " canvas-metrics--pending"}${resultsEmpty ? " canvas-metrics--empty" : ""}`}
             aria-busy={resultsPending === undefined ? undefined : true} aria-hidden={resultsEmpty || undefined}
             title={tooltip}>
-            {connectionMetric === "amplification" ? t("editor.canvas.amplification", { value: metricText })
-              : t("editor.canvas.connectionMetric", { metric: t(`results.context.connection.metric.${connectionMetric}`), value: metricText })}
+            {metricText}
           </span>}
         </div>
       </EdgeLabelRenderer> : null}

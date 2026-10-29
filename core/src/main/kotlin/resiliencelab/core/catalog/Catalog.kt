@@ -76,6 +76,7 @@ data class TypeDescriptor(
     val ports: List<PortDescriptor> = emptyList(),
     val connects: ConnectionRule? = null,
     val params: List<ParamDescriptor> = emptyList(),
+    val outputs: List<OutputDescriptor> = emptyList(),
 )
 
 /** Versioned set of computable types and shared model and measurement assumptions. */

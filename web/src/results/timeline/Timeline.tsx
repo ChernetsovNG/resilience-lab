@@ -1,48 +1,17 @@
-import { t, type Language } from "../../i18n";
-import { useLanguage } from "../../i18n/useLanguage";
+import { t } from "../../i18n";
 import { TimelineGrid } from "./TimelineGrid";
 import { formatDuration, formatNumber } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../../api/apiTypes";
-import { seriesLoader } from "../series";
-import { connectionTimelineWindow, timelineRegions, type TimelineMetricValues } from "./data";
+import { seriesLoader, type NodeSeriesMetrics, type DecodedConnectionWindow } from "../series";
+import { timelineRegions } from "./data";
+import { outputsOf, outputsUseTarget, outputWindow, timelineGroups } from "../outputs";
 import { TimelineChart, type TimelineLine, type TimelineThreshold } from "./TimelineChart";
 import { useTimelineSeries } from "./useTimelineSeries";
 import { useConnectionSeries } from "./useConnectionSeries";
 import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
 
-type MetricKey = Exclude<keyof TimelineMetricValues, "startMs" | "durationMs" | "amplification">;
-interface Metric { key: MetricKey; label: string; nodes?: readonly ("client" | "service" | "call")[] }
-const timelineGroups = (language: Language): { title: string; unit: string; scale: number; metrics: Metric[] }[] => {
-  const text = (key: string) => t(key, {}, language);
-  return [
-  { title: text("results.timeline.rates"), unit: "RPS", scale: 1, metrics: [
-    { key: "sentAttemptsPerSecond", label: text("results.timeline.sentAttempts"), nodes: ["call"] },
-    { key: "originalArrivalsPerSecond", label: text("results.metrics.originalRequests"), nodes: ["client"] },
-    { key: "offeredAttemptsPerSecond", label: text("results.metrics.offeredAttempts"), nodes: ["service"] },
-    { key: "admittedAttemptsPerSecond", label: text("results.metrics.admittedAttempts"), nodes: ["service"] },
-    { key: "successesPerSecond", label: text("results.metrics.successes") },
-    { key: "retriesPerSecond", label: text("results.metrics.retries"), nodes: ["service", "call"] },
-  ] },
-  { title: text("results.timeline.latency"), unit: "ms", scale: 1, metrics: [
-    { key: "meanLatencyMs", label: text("results.metrics.meanLatencyMs") }, { key: "p50LatencyMs", label: text("results.metrics.p50LatencyMs") },
-    { key: "p95LatencyMs", label: text("results.metrics.p95LatencyMs") }, { key: "p99LatencyMs", label: text("results.metrics.p99LatencyMs") },
-  ] },
-  { title: text("results.timeline.errors"), unit: "RPS", scale: 1, metrics: [
-    { key: "failuresPerSecond", label: text("results.metrics.failures") }, { key: "timeoutsPerSecond", label: text("results.metrics.timeouts"), nodes: ["service", "call"] },
-    { key: "orphanedPerSecond", label: text("results.timeline.orphanedAttempts"), nodes: ["call"] },
-    { key: "queueRejectionsPerSecond", label: text("results.metrics.queueRejections"), nodes: ["service"] },
-  ] },
-  { title: text("results.timeline.utilization"), unit: "%", scale: 100, metrics: [{ key: "handlerUtilization", label: text("results.metrics.handlerUtilization"), nodes: ["service"] }] },
-  { title: text("results.timeline.callState"), unit: "requests", scale: 1, metrics: [
-    { key: "meanInFlight", label: text("results.timeline.meanInFlight"), nodes: ["call"] },
-    { key: "meanOrphaned", label: text("results.timeline.meanOrphaned"), nodes: ["call"] },
-    { key: "meanBackoff", label: text("results.timeline.meanBackoff"), nodes: ["call"] },
-  ] },
-  { title: text("results.timeline.queue"), unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: text("results.metrics.meanQueue"), nodes: ["service"] }] },
-  ];
-};
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 
 interface TimelineProps {
@@ -69,11 +38,10 @@ export function Timeline(props: TimelineProps) {
 
 function RunTimeline({ enabled = true, runId, summary, manifest, model, experiment, catalog, activeVariantId, pointId,
   replication, cursorWindow, selectedNodes, onCursorChange }: TimelineProps) {
-  const language = useLanguage();
-  const groups = useMemo(() => timelineGroups(language), [language]);
+  const groups = useMemo(() => timelineGroups(catalog), [catalog]);
   const canvasKey = JSON.stringify(selectedNodes);
-  const availableConnections = model.connections.filter((connection) => connection.type === "call").map((connection) => connection.id);
-  const availableNodes = [...Object.keys(model.blocks), ...availableConnections];
+  const availableConnections = model.connections.filter((connection) => outputsOf(catalog, connection.type).some(output => output.timeline != null)).map((connection) => connection.id);
+  const availableNodes = [...Object.keys(model.blocks).filter(id => outputsOf(catalog, model.blocks[id].type).some(output => output.timeline != null)), ...availableConnections];
   const selectedFromCanvas = selectedNodes.filter((id) => availableNodes.includes(id));
   const initialNodes = selectedNodes.length > 0 ? selectedFromCanvas
     : [availableNodes.find((id) => model.blocks[id]?.type === "service") ?? availableNodes[0]].filter((id) => id !== undefined);
@@ -81,7 +49,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const nodes = nodeChoice.canvasKey === canvasKey ? nodeChoice.ids
     : selectedNodes.length > 0 ? selectedFromCanvas : nodeChoice.ids;
   if (nodeChoice.canvasKey !== canvasKey) setNodeChoice({ canvasKey, ids: nodes });
-  const [metricKeys, setMetricKeys] = useState<MetricKey[]>(groups.flatMap((group) => group.metrics.map((metric) => metric.key)));
+  const [metricKeys, setMetricKeys] = useState<string[]>(groups.flatMap((group) => group.metrics.map((metric) => metric.key)));
   const [comparison, setComparison] = useState("");
   const variant = activeVariantId === null ? summary.variants[0] : summary.variants.find((candidate) => candidate.id === activeVariantId);
   const context = JSON.stringify([variant?.id, pointId, replication, cursorWindow]);
@@ -96,43 +64,69 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const count = Math.ceil(endMs / windowMs);
   const nodeIds = nodes.filter((id) => Object.hasOwn(model.blocks, id));
   const connectionIds = nodes.filter((id) => availableConnections.includes(id));
+  const targetIds = model.connections.filter(connection => connectionIds.includes(connection.id)
+    && outputsUseTarget(outputsOf(catalog, connection.type).filter(output => output.timeline != null))).map(connection => connection.to);
+  const targetNodeIds = [...new Set(targetIds)].filter(id => !nodeIds.includes(id));
   const primary = useTimelineSeries(seriesLoader, runId, enabled && metadata ? variant?.id ?? null : null, pointId, replication, nodeIds, count);
   const overlay = useTimelineSeries(seriesLoader, runId, enabled && metadata ? compared?.id ?? null : null, pointId, replication, nodeIds, count);
+  const primaryTargets = useTimelineSeries(seriesLoader, runId, enabled && metadata ? variant?.id ?? null : null, pointId, replication, targetNodeIds, count);
+  const overlayTargets = useTimelineSeries(seriesLoader, runId, enabled && metadata ? compared?.id ?? null : null, pointId, replication, targetNodeIds, count);
   // Node loads may decode mixed parts that the connection load can then reuse.
   const primaryConnections = useConnectionSeries(seriesLoader, runId,
-    enabled && metadata && !primary.loading ? variant?.id ?? null : null, pointId, replication, connectionIds, count);
+    enabled && metadata && !primary.loading && !primaryTargets.loading ? variant?.id ?? null : null, pointId, replication, connectionIds, count);
   const overlayConnections = useConnectionSeries(seriesLoader, runId,
-    enabled && metadata && !overlay.loading ? compared?.id ?? null : null, pointId, replication, connectionIds, count);
+    enabled && metadata && !overlay.loading && !overlayTargets.loading ? compared?.id ?? null : null, pointId, replication, connectionIds, count);
   if (!enabled && hover !== null) setHover(null);
   const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog),
     [metadata, experiment, catalog]);
   const charts = useMemo(() => {
+    const effectiveModel = (source: RunSummary["variants"][number] | undefined) => applyOverrides(applyOverrides(model,
+      experiment.variants.find(variant => variant.id === source?.id)?.overrides ?? {}, catalog),
+      source?.points.find(point => point.id === pointId)?.coordinates ?? {}, catalog);
+    const paramsOf = (type: string, params: Record<string, unknown> = {}) => ({
+      ...Object.fromEntries((catalog.types.find(candidate => candidate.id === type)?.params ?? []).map(param => [param.name, param.default])), ...params,
+    });
+    const primaryModel = effectiveModel(variant), comparedModel = effectiveModel(compared);
+    const nodeSeries = (series: readonly NodeSeriesMetrics[], effective: ModelFile) => series.map(node => ({ ...node,
+      windows: node.windows.map(window => outputWindow(outputsOf(catalog, model.blocks[node.id]?.type), {
+        ...window, params: paramsOf(model.blocks[node.id]?.type, effective.blocks[node.id]?.params),
+      })),
+    }));
+    const primaryNodes = nodeSeries(primary.nodes, primaryModel), overlayNodes = nodeSeries(overlay.nodes, comparedModel);
+    const connectionType = (id: string) => model.connections.find(connection => connection.id === id)?.type ?? "";
+    const connectionWindow = (id: string, window: DecodedConnectionWindow, index: number, effective: ModelFile, source: readonly NodeSeriesMetrics[]) => {
+      const connection = effective.connections.find(connection => connection.id === id);
+      const target = source.find(node => node.id === connection?.to)?.windows[index];
+      return outputWindow(outputsOf(catalog, connectionType(id)), {
+        ...window, params: paramsOf(connectionType(id), connection?.params), target, client: target?.client,
+      });
+    };
     const connectionSeries = primaryConnections.connections.map((connection) => ({
-      id: connection.id, windows: connection.windows.map(connectionTimelineWindow),
+      id: connection.id, windows: connection.windows.map((window, index) => connectionWindow(connection.id, window, index, primaryModel, [...primary.nodes, ...primaryTargets.nodes])),
     }));
     const comparedConnectionSeries = overlayConnections.connections.map((connection) => ({
-      id: connection.id, windows: connection.windows.map(connectionTimelineWindow),
+      id: connection.id, windows: connection.windows.map((window, index) => connectionWindow(connection.id, window, index, comparedModel, [...overlay.nodes, ...overlayTargets.nodes])),
     }));
     return groups.map((group) => {
       const lines: TimelineLine[] = [];
       for (const metric of group.metrics) {
         if (!metricKeys.includes(metric.key)) continue;
-        for (const [nodeIndex, node] of primary.nodes.entries()) {
-          if (metric.nodes !== undefined && !metric.nodes.some((type) => type === model.blocks[node.id]?.type)) continue;
+        for (const [nodeIndex, node] of primaryNodes.entries()) {
+          if (!metric.types.includes(model.blocks[node.id]?.type)) continue;
           const color = colors[(nodeIndex * 3 + group.metrics.indexOf(metric)) % colors.length];
           for (const source of [{ variant, data: node, comparison: false }, {
-            variant: compared, data: overlay.nodes.find((candidate) => candidate.id === node.id), comparison: true,
+            variant: compared, data: overlayNodes.find((candidate) => candidate.id === node.id), comparison: true,
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
             lines.push({
               id: `${source.variant.id}:${node.id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: node.id, metric: metric.label, variant: source.variant.label ?? source.variant.id, id: source.variant.id }),
-              metric: metric.key, scale: group.scale, color, comparison: source.comparison, windows: source.data.windows,
+              metric: metric.id, scale: group.scale, color, comparison: source.comparison, windows: source.data.windows,
             });
           }
         }
-        if (metric.nodes !== undefined && !metric.nodes.includes("call")) continue;
         for (const [connectionIndex, connection] of connectionSeries.entries()) {
-          const color = colors[((primary.nodes.length + connectionIndex) * 3 + group.metrics.indexOf(metric)) % colors.length];
+          if (!metric.types.includes(connectionType(connection.id))) continue;
+          const color = colors[((primaryNodes.length + connectionIndex) * 3 + group.metrics.indexOf(metric)) % colors.length];
           for (const source of [{ variant, data: connection, comparison: false }, {
             variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true,
           }]) {
@@ -141,7 +135,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
               ? t("results.timeline.connectionComparisonLabel", { connection: connection.id, metric: metric.label, variant: source.variant.id })
               : t("results.timeline.connectionLineLabel", { connection: connection.id, metric: metric.label });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
-              metric: metric.key, scale: group.scale, color, comparison: source.comparison,
+              metric: metric.id, scale: group.scale, color, comparison: source.comparison,
               windows: source.data.windows });
           }
         }
@@ -149,7 +143,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       return { ...group, lines };
     }).filter((group) => group.lines.length > 0);
   }, [primary.nodes, overlay.nodes, primaryConnections.connections,
-    overlayConnections.connections, model, metricKeys, variant, compared, groups]);
+    overlayConnections.connections, model, metricKeys, variant, compared, groups, catalog, experiment, pointId, primaryTargets.nodes, overlayTargets.nodes]);
   const thresholds: TimelineThreshold[] = [variant, compared].flatMap((source, index) => {
     if (source === undefined) return [];
     const point = source.points.find((candidate) => candidate.id === pointId);
@@ -185,7 +179,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
         <input type="checkbox" checked={nodes.includes(id)} onChange={(event) => setNodeChoice({ canvasKey,
           ids: event.target.checked ? [...nodes, id] : nodes.filter((node) => node !== id) })} />{id}
       </label>)}</fieldset>
-      {groups.map((group) => <fieldset key={group.title}><legend>{group.title}</legend>{group.metrics.map((metric) =>
+      {groups.map((group) => <fieldset key={group.id}><legend>{group.title}</legend>{group.metrics.map((metric) =>
         <label key={metric.key}><input type="checkbox" checked={metricKeys.includes(metric.key)} onChange={(event) =>
           setMetricKeys(event.target.checked ? [...metricKeys, metric.key] : metricKeys.filter((key) => key !== metric.key))} />{metric.label}</label>)}</fieldset>)}
     </details>
@@ -203,15 +197,17 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
           pinned: hover === null && cursorWindow !== null ? t("results.timeline.pinned") : "",
         })}
     </p>
-    {primary.loading || overlay.loading || primaryConnections.loading || overlayConnections.loading ? <p role="status">{t("results.timeline.loadingSeries")}</p> : null}
+    {primary.loading || overlay.loading || primaryTargets.loading || overlayTargets.loading || primaryConnections.loading || overlayConnections.loading ? <p role="status">{t("results.timeline.loadingSeries")}</p> : null}
     {primary.problem === null ? null : <p role="status">{primary.problem}</p>}
+    {primaryTargets.problem === null ? null : <p role="status">{primaryTargets.problem}</p>}
+    {overlayTargets.problem === null ? null : <p role="status">{t("results.timeline.comparisonProblem", { problem: overlayTargets.problem })}</p>}
     {overlay.problem === null ? null : <p role="status">{t("results.timeline.comparisonProblem", { problem: overlay.problem })}</p>}
     {primaryConnections.problem === null ? null : <p role="status">{primaryConnections.problem}</p>}
     {overlayConnections.problem === null ? null : <p role="status">{t("results.timeline.comparisonProblem", { problem: overlayConnections.problem })}</p>}
     {connectionIds.length > 0 ? <p className="timeline-latency-note">{t("results.timeline.connectionLegend")}</p> : null}
     {nodes.length === 0 ? <p>{t("results.timeline.selectNodes")}</p> : null}
     {!primary.loading && !primaryConnections.loading && primary.problem === null && primaryConnections.problem === null && nodes.length > 0 && charts.length === 0 ? <p>{t("results.timeline.selectMetrics")}</p> : null}
-    <TimelineGrid>{charts.map((group) => <TimelineChart key={group.title} title={group.title} unit={group.unit}
+    <TimelineGrid>{charts.map((group) => <TimelineChart key={group.id} title={group.title} unit={group.unit}
       lines={group.lines} regions={regions} thresholds={group.unit === "ms" ? thresholds : undefined} endMs={endMs} windowMs={windowMs} hoverWindow={hover} cursorWindow={cursorWindow}
       onHover={setHover} onCursor={onCursor} />)}</TimelineGrid>
   </div>;

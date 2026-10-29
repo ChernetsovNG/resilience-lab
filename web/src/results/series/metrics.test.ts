@@ -1,3 +1,5 @@
+import { calculateOutput, outputWindow, outputsOf } from "../outputs";
+import { catalog } from "../../test/fixtures";
 import { describe, expect, it } from "vitest";
 import type { components } from "../../api/schema";
 import { decodeSeriesPart } from "./decode";
@@ -54,30 +56,15 @@ describe("window metrics", () => {
       ] },
     ])));
 
-    const client = decoded.nodes[0].windows[0].metrics;
-    expect(client).toEqual({
+    const client = outputWindow(outputsOf(catalog, "client"), decoded.nodes[0].windows[0].metrics);
+    expect(client).toEqual({ startMs: 0, durationMs: 10, originalArrivalsPerSecond: 2000,
+      successesPerSecond: 1500, failuresPerSecond: 500, meanLatencyMs: 5,
+      p50LatencyMs: 1.0078125, p95LatencyMs: 1.0078125, p99LatencyMs: 1.0078125 });
+    const frame = decoded.nodes[1].windows[0].metrics;
+    expect(calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: frame, client: frame.client })).toBe(1.2);
+    expect(outputWindow(outputsOf(catalog, "service"), frame)).toMatchObject({
       startMs: 0,
       durationMs: 10,
-      originalArrivalsPerSecond: 2000,
-      offeredAttemptsPerSecond: 0,
-      admittedAttemptsPerSecond: 0,
-      queueRejectionsPerSecond: 0,
-      successesPerSecond: 1500,
-      failuresPerSecond: 500,
-      timeoutsPerSecond: 0,
-      retriesPerSecond: 0,
-      handlerUtilization: null,
-      meanQueueLength: null,
-      meanLatencyMs: 5,
-      p50LatencyMs: 1.0078125,
-      p95LatencyMs: 1.0078125,
-      p99LatencyMs: 1.0078125,
-      amplification: null,
-    });
-    expect(decoded.nodes[1].windows[0].metrics).toEqual({
-      startMs: 0,
-      durationMs: 10,
-      originalArrivalsPerSecond: 0,
       offeredAttemptsPerSecond: 3000,
       admittedAttemptsPerSecond: 2400,
       queueRejectionsPerSecond: 600,
@@ -85,13 +72,12 @@ describe("window metrics", () => {
       failuresPerSecond: 600,
       timeoutsPerSecond: 400,
       retriesPerSecond: 800,
-      handlerUtilization: 1,
-      meanQueueLength: 5,
+      utilization: 1,
+      meanQueue: 5,
       meanLatencyMs: 10,
       p50LatencyMs: 2.015625,
       p95LatencyMs: 2.015625,
       p99LatencyMs: 2.015625,
-      amplification: 1.2,
     });
   });
 
@@ -101,10 +87,9 @@ describe("window metrics", () => {
       { id: "service", windows: [window({ handlers: 4 }), window({ startMs: 10, durationMs: 5, handlers: 4 })] },
     ])));
 
-    expect(decoded.nodes[1].windows[1].metrics).toEqual({
+    expect(outputWindow(outputsOf(catalog, "service"), decoded.nodes[1].windows[1].metrics)).toMatchObject({
       startMs: 10,
       durationMs: 5,
-      originalArrivalsPerSecond: 0,
       offeredAttemptsPerSecond: 0,
       admittedAttemptsPerSecond: 0,
       queueRejectionsPerSecond: 0,
@@ -112,13 +97,12 @@ describe("window metrics", () => {
       failuresPerSecond: 0,
       timeoutsPerSecond: 0,
       retriesPerSecond: 0,
-      handlerUtilization: 0,
-      meanQueueLength: 0,
+      utilization: 0,
+      meanQueue: 0,
       meanLatencyMs: null,
       p50LatencyMs: null,
       p95LatencyMs: null,
       p99LatencyMs: null,
-      amplification: null,
     });
   });
 

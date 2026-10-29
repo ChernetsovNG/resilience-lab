@@ -1,33 +1,7 @@
 import { t } from "../../i18n";
 import type { Catalog, ExperimentFile } from "../../api/apiTypes";
 import { canonicalOf } from "../../workspace/quantities";
-import type { DecodedConnectionWindow, WindowMetricValues } from "../series";
-
-export type TimelineMetricValues = Pick<WindowMetricValues, "startMs" | "durationMs"> & Partial<
-  Omit<WindowMetricValues, "startMs" | "durationMs"> & {
-    sentAttemptsPerSecond: number;
-    orphanedPerSecond: number;
-    meanInFlight: number;
-    meanOrphaned: number;
-    meanBackoff: number;
-  }
->;
-
-/** All call values come from its own window, including responses that exclude timed out attempts. */
-export function connectionTimelineWindow(window: DecodedConnectionWindow): TimelineMetricValues {
-  const rate = (count: number) => count * 1000 / window.durationMs;
-  return {
-    startMs: window.startMs, durationMs: window.durationMs,
-    sentAttemptsPerSecond: rate(window.sentAttempts), retriesPerSecond: rate(window.retries),
-    successesPerSecond: rate(window.succeeded), failuresPerSecond: rate(window.failed),
-    timeoutsPerSecond: rate(window.timeouts), orphanedPerSecond: rate(window.orphaned),
-    meanInFlight: window.inFlightIntegralMs / window.durationMs,
-    meanOrphaned: window.orphanedIntegralMs / window.durationMs,
-    meanBackoff: window.backoffIntegralMs / window.durationMs,
-    meanLatencyMs: window.latency.meanMs, p50LatencyMs: window.latency.p50Ms,
-    p95LatencyMs: window.latency.p95Ms, p99LatencyMs: window.latency.p99Ms,
-  };
-}
+export type TimelineMetricValues = { startMs: number; durationMs: number } & Record<string, number | null>;
 
 export interface TimelinePoint { window: number; startMs: number; value: number | null }
 export interface TimelineRegion { fromMs: number; toMs: number; label: string; kind: "warmup" | "fault" }

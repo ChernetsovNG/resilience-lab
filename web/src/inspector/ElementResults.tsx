@@ -1,6 +1,7 @@
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { t } from "../i18n";
-import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
+import { formatDuration, formatInterval, formatNumber } from "../i18n/format";
+import { formatOutput, inspectorOutputs, outputsOf, outputsUseTarget } from "../results/outputs";
 import { seriesLoader } from "../results/series";
 import { downsample, timelineRegions, type TimelinePoint, type TimelineRegion } from "../results/timeline/data";
 import { useConnectionSeries } from "../results/timeline/useConnectionSeries";
@@ -24,26 +25,6 @@ export interface ElementResultsProps {
 }
 
 type Format = (value: number | null | undefined) => string;
-const serviceMetrics: [string, string, Format][] = [
-  ["utilization", "results.metrics.handlerUtilization", formatPercent],
-  ["meanQueue", "results.metrics.meanQueue", formatNumber],
-  ["queueFill", "inspector.results.queueFill", formatPercent],
-  ["queueRejectionRate", "inspector.results.rejectionShare", formatPercent],
-  ["admittedAttemptsPerSecond", "results.metrics.admittedAttempts", formatRate],
-  ["meanLatencyMs", "results.metrics.meanLatencyMs", formatDuration],
-];
-const callMetrics: [string, string, Format][] = [
-  ["sentAttemptsPerSecond", "inspector.results.sentAttempts", formatRate],
-  ["retriesPerSecond", "results.metrics.retries", formatRate],
-  ["timeoutRate", "inspector.results.timeoutShare", formatPercent],
-  ["orphaned", "inspector.results.orphaned", formatNumber],
-  ["meanOrphaned", "inspector.results.meanOrphaned", formatNumber],
-  ["meanInFlight", "inspector.results.meanInFlight", formatNumber],
-  ["meanBackoff", "inspector.results.meanBackoff", formatNumber],
-  ["meanLatencyMs", "inspector.results.callLatency", formatDuration],
-  ["amplification", "results.metrics.admittedAmplification", formatMultiplier],
-];
-
 function MiniChart({ element, title, points, format, replication, regions, endMs, cursorWindow, windowMs, thresholdMs = null }: {
   element: string; title: string; points: TimelinePoint[]; format: Format; replication: number;
   regions: TimelineRegion[]; endMs: number; cursorWindow: number | null; windowMs: number; thresholdMs?: number | null;
@@ -95,32 +76,24 @@ export function ElementResults(props: ElementResultsProps) {
   const windowMs = metadata?.windowMs ?? 1;
   const count = Math.ceil(endMs / windowMs);
   const enabled = initial !== null && manifest.complete && metadata != null;
-  const nodeIds = selection?.kind === "service" ? [selection.id] : selection?.kind === "call" && window !== null ? [selection.target] : [];
+  const needsTarget = selection?.category === "CONNECTION" && (window !== null
+    || outputsUseTarget(inspectorOutputs(outputsOf(catalog, selection.kind), true)));
+  const nodeIds = selection?.category === "BLOCK" ? [selection.id] : needsTarget ? [selection.target!] : [];
   const primary = useTimelineSeries(seriesLoader, runId, enabled ? variantId : null, pointId, replication, nodeIds, count);
-  const calls = useConnectionSeries(seriesLoader, runId, enabled && selection?.kind === "call" ? variantId : null,
-    pointId, replication, selection?.kind === "call" ? [selection.id] : [], count);
+  const calls = useConnectionSeries(seriesLoader, runId, enabled && selection?.category === "CONNECTION" ? variantId : null,
+    pointId, replication, selection?.category === "CONNECTION" ? [selection.id] : [], count);
   const result = projectElementResults({ ...props, nodes: primary.nodes, connections: calls.connections });
   const regions = timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog);
   const variant = summary.variants.find(variant => variant.id === variantId);
   const sourceLabel = (metric: ElementMetric) => metric.source === "window"
     ? t("inspector.results.window", { window: formatNumber(window) }) : metric.source === "replication"
       ? t("inspector.results.replication", { replication: formatNumber(replication) }) : t(`inspector.results.${metric.source}`);
-  const charts = [];
-  if (selection?.kind === "service") {
-    const windows = primary.nodes.find(node => node.id === selection.id)?.windows ?? [];
-    for (const [key, label, format] of [["handlerUtilization", "results.metrics.handlerUtilization", formatPercent],
-      ["meanQueueLength", "results.metrics.meanQueue", formatNumber]] as const) {
-      charts.push({ title: t(label), format, points: windows.map((frame, index) => ({ window: index, startMs: frame.startMs, value: frame[key] })) });
-    }
-  } else if (selection?.kind === "call") {
-    const windows = calls.connections.find(connection => connection.id === selection.id)?.windows ?? [];
-    for (const [key, label] of [["sentAttempts", "inspector.results.sentAttempts"], ["timeouts", "results.metrics.timeouts"]] as const) {
-      charts.push({ title: t(label), format: formatRate, points: windows.map((frame, index) => ({ window: index, startMs: frame.startMs,
-        value: frame.durationMs > 0 ? frame[key] * 1000 / frame.durationMs : null })) });
-    }
-    charts.push({ title: t("inspector.results.callLatency"), format: formatDuration, thresholdMs: result?.timeoutMs,
-      points: windows.map((frame, index) => ({ window: index, startMs: frame.startMs, value: frame.latency.meanMs })) });
-  }
+  const charts = inspectorOutputs(result?.outputs ?? [], true).map(output => ({
+    id: output.id,
+    title: output.inspector!.title, format: (value: number | null | undefined) => formatOutput(output, value),
+    thresholdMs: output.inspector!.thresholdParameter == null ? null : result?.timeoutMs,
+    points: (result?.windows ?? []).map((frame, index) => ({ window: index, startMs: frame.startMs, value: frame[output.id] })),
+  }));
   return <section className="element-results" aria-label={t("inspector.results.title")}>
     <h3>{t("inspector.results.title")}</h3>
     {selected === null ? <p>{t("inspector.results.select")}</p> : result === null || !manifest.complete
@@ -128,9 +101,11 @@ export function ElementResults(props: ElementResultsProps) {
         <p className="element-results-context">{t("inspector.results.context", { variant: variant?.label ?? variantId, point: pointId,
           replication: formatNumber(replication), mode: t(window === null ? "inspector.results.summaryMode" : "inspector.results.timeMode") })}</p>
         <table aria-label={t("inspector.results.title")}><tbody>
-          {(result.kind === "service" ? serviceMetrics : callMetrics).map(([key, label, format]) => {
+          {inspectorOutputs(result.outputs).map(output => {
+            const key = output.id, label = output.inspector!.title;
+            const format = (value: number | null | undefined) => formatOutput(output, value);
             const value = result.values[key];
-            return <tr key={key}><th scope="row">{t(label)}</th><td>{format(value.value)}
+            return <tr key={key}><th scope="row">{label}</th><td>{format(value.value)}
               {value.ci95Low == null || value.ci95High == null ? null : <span className={`summary-interval${(variant?.replications ?? 0) < 5 ? " summary-interval--unreliable" : ""}`}>
                 {t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) })}
               </span>}
@@ -138,19 +113,19 @@ export function ElementResults(props: ElementResultsProps) {
               {value.approximate ? <small title={t("editor.canvas.amplificationWindowTitle")}>{t("inspector.results.approximate")}</small> : null}
             </td></tr>;
           })}
-          {result.kind === "call" ? <tr><th scope="row">{t("inspector.results.timeout")}</th><td>{formatDuration(result.timeoutMs)}</td></tr> : null}
+          {result.timeoutMs !== null ? <tr><th scope="row">{t("inspector.results.timeout")}</th><td>{formatDuration(result.timeoutMs)}</td></tr> : null}
         </tbody></table>
         {window === null && (variant?.replications ?? 0) < 5 && Object.values(result.values).some(value => value.ci95Low != null && value.ci95High != null)
           ? <p className="summary-reliability-warning">{t("results.answer.lowReplications")}</p> : null}
         {window === null && result.latencyCoverage !== undefined ? <p className="element-results-note">{t("inspector.results.coveredLatency", {
           from: formatDuration(result.latencyCoverage.fromMs), to: formatDuration(result.latencyCoverage.toMs),
         })}</p> : null}
-        {result.kind === "call" ? <p className="element-results-note">{t("inspector.results.latencyNote")}</p> : null}
+        {result.outputs.some(output => output.inspector?.thresholdParameter != null) ? <p className="element-results-note">{t("inspector.results.latencyNote")}</p> : null}
         {primary.loading || calls.loading ? <p role="status">{t("inspector.results.loading")}</p> : null}
         {primary.problem === null ? null : <p role="status">{primary.problem}</p>}
         {calls.problem === null ? null : <p role="status">{calls.problem}</p>}
         {metadata == null ? <p>{t("results.timeline.metadataUnavailable")}</p> : <div className="element-results-charts">
-          {charts.map(chart => <MiniChart key={chart.title} {...chart} element={result.id} replication={replication} regions={regions}
+          {charts.map(chart => <MiniChart key={chart.id} {...chart} element={result.id} replication={replication} regions={regions}
             endMs={endMs} windowMs={windowMs} cursorWindow={window} />)}
         </div>}
         <button type="button" onClick={onShowTimeline}>{t("inspector.results.showTimeline")}</button>

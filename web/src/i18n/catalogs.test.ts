@@ -24,6 +24,17 @@ const catalogEntries: [string, string][] = [
     [`catalog.types.${type.id}.description`, type.description],
     ...type.assumptions.map((text, index): [string, string] => [`catalog.types.${type.id}.assumptions.${index}`, text]),
     ...type.params.flatMap((descriptor) => parameterEntries(type.id, descriptor)),
+    ...type.outputs.flatMap(output => {
+      const prefix = `catalog.types.${type.id}.outputs.${output.id}`;
+      return [
+        [`${prefix}.title`, output.title], [`${prefix}.description`, output.description],
+        ...(output.timeline == null ? [] : [[`${prefix}.timeline.groupTitle`, output.timeline.groupTitle]]),
+        ...(output.inspector == null ? [] : [[`${prefix}.inspector.title`, output.inspector.title]]),
+        ...(output.overlay == null ? [] : Object.entries(output.overlay)
+          .filter(([key, value]) => typeof value === "string" && key !== "scaleParameter")
+          .map(([key, value]) => [`${prefix}.overlay.${key}`, value])),
+      ] as [string, string][];
+    }),
   ]),
 ];
 

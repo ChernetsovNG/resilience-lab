@@ -1,5 +1,5 @@
 import { t } from "../../i18n";
-import { formatDuration, formatNumber, formatPercent, formatRate } from "../../i18n/format";
+import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { downsample, windowAt, type TimelinePoint, type TimelineRegion, type TimelineMetricValues } from "./data";
@@ -39,7 +39,7 @@ interface TimelineChartProps {
 export function TimelineChart({ title, unit, lines, regions, thresholds = [], endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
   const [width, setWidth] = useState(640);
   const format = (value: number) => unit === "ms" ? formatDuration(value) : unit === "RPS" ? formatRate(value)
-    : unit === "%" ? formatPercent(value / 100)
+    : unit === "%" ? formatPercent(value / 100) : unit === "×" ? formatMultiplier(value)
       : t("results.timeline.valueWithUnit", { value: formatNumber(value), unit: t(`results.units.${unit}`) });
   const sampled = useMemo(() => lines.map((line) => {
     const points: TimelinePoint[] = [];

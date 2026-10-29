@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { formatNumber, formatPercent } from "../i18n/format";
+import { formatOutput, outputField, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
@@ -23,7 +23,6 @@ export type BlockNodeType = Node<{
   resultsPending?: string;
   resultsEmpty?: boolean;
   nodeMetric?: NodeOverlayMetric;
-  queueCapacity?: number;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "block">;
@@ -36,15 +35,17 @@ function summaryOf(block: BlockInstance): string {
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
-  const colorValue = data.result?.[data.nodeMetric ?? "utilization"];
-  const maximum = data.nodeMetric === "meanQueue" ? data.queueCapacity : 1;
+  const choice = selectedOverlayOutput(overlayOutputs(data.catalog, "BLOCK"), data.nodeMetric);
+  const output = choice?.types.includes(data.block.type) ? data.result?.outputs.find(output => output.id === choice.id) : undefined;
+  const colorValue = output === undefined ? null : data.result?.values[output.id];
+  const maximum = output?.overlay?.scaleParameter == null ? 1 : outputField(data.result?.params, output.overlay.scaleParameter);
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
   const tooltip = (title: string) => data.resultsPending === undefined ? title : `${title} ${t("editor.symbols.separator")} ${data.resultsPending}`;
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   return (
     <div className={`block-node block-node--${data.block.type}`} data-testid="block-node"
-      style={colorValue == null || maximum === undefined || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
+      style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
       {data.ports.map((port) => (
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
@@ -67,15 +68,10 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
       {data.result === undefined ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
         aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.resultsEmpty || undefined}
         data-testid={`canvas-results-${data.id}`}>
-        <span title={tooltip(t("editor.canvas.utilizationTitle", { interval }))}>
-          {t("editor.canvas.utilization", { value: formatPercent(data.result.utilization) })}
-        </span>
-        <span title={tooltip(t("editor.canvas.meanQueueTitle", { interval }))}>
-          {t("editor.canvas.meanQueue", { value: formatNumber(data.result.meanQueue) })}
-        </span>
-        <span title={tooltip(t("editor.canvas.queueRejectionsTitle", { interval }))}>
-          {t("editor.canvas.queueRejections", { value: formatPercent(data.result.queueRejectionRate) })}
-        </span>
+        {data.result.outputs.map(output => <span key={output.id}
+          title={tooltip(outputText(output.overlay!.description, { interval }))}>
+          {outputText(output.overlay!.label, { value: formatOutput(output, data.result!.values[output.id]) })}
+        </span>)}
       </div>}
     </div>
   );

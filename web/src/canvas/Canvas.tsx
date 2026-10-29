@@ -46,8 +46,6 @@ export interface CanvasProps {
   results?: CanvasResults | null;
   nodeMetric?: NodeOverlayMetric;
   connectionMetric?: ConnectionOverlayMetric;
-  /** Queue capacities of the immutable run context, including variant and grid overrides. */
-  queueCapacities?: ReadonlyMap<string, number>;
   layout: LayoutFile | null;
   catalog: Catalog;
   selected: string[];
@@ -73,7 +71,7 @@ export function Canvas(props: CanvasProps) {
 
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = {}, results = null,
-  nodeMetric = "utilization", connectionMetric = "amplification", queueCapacities }: CanvasProps) {
+  nodeMetric = "utilization", connectionMetric = "amplification" }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
@@ -136,9 +134,9 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     connectable: id === pendingId ? false : undefined,
     focusable: id === pendingId ? false : undefined,
     data: {
-      result: block.type === "service" ? results?.services.get(id) : undefined,
+      result: results?.services.get(id),
       resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
-      nodeMetric, queueCapacity: queueCapacities?.get(id),
+      nodeMetric,
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
@@ -153,13 +151,13 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   }));
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
-    const amplification = result?.from === connection.from && result.to === connection.to && result.type === connection.type
-      ? result.amplification : undefined;
+    const matched = result?.from === connection.from && result.to === connection.to && result.type === connection.type
+      ? result : undefined;
     const diagnostics = elementDiagnostics?.get(connection.id) ?? [];
     const summary = summarizeDiagnostics(diagnostics);
     return {
       id: connection.id,
-      type: connection.type === "call" || connection.type === "request" ? "call" : undefined,
+      type: "call",
       source: connection.from,
       target: connection.to,
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
@@ -167,7 +165,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       data: {
         labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
-        amplification, result: amplification === undefined ? undefined : result, connectionMetric,
+        result: matched, connectionMetric,
         onSelect: (multiple: boolean) => {
           if (!disabled) onSelect(multiple ? selected.includes(connection.id) ? selected.filter(id => id !== connection.id) : [...selected, connection.id] : [connection.id]);
         },

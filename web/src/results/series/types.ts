@@ -1,25 +1,10 @@
-import type { ConnectionWindowMetrics } from "../../api/apiTypes";
+import type { ConnectionWindowMetrics, WindowMetrics } from "../../api/apiTypes";
 
-export interface WindowMetricValues {
-  startMs: number;
-  durationMs: number;
-  originalArrivalsPerSecond: number;
-  offeredAttemptsPerSecond: number;
-  admittedAttemptsPerSecond: number;
-  queueRejectionsPerSecond: number;
-  successesPerSecond: number;
-  failuresPerSecond: number;
-  timeoutsPerSecond: number;
-  retriesPerSecond: number;
-  handlerUtilization: number | null;
-  meanQueueLength: number | null;
-  meanLatencyMs: number | null;
-  p50LatencyMs: number | null;
-  p95LatencyMs: number | null;
-  p99LatencyMs: number | null;
+export type WindowMetricValues = Omit<WindowMetrics, "latency"> & {
+  latency: DecodedConnectionLatency;
   /** Window approximation: admitted attempts may belong to client requests that arrived in earlier windows. */
-  amplification: number | null;
-}
+  client?: { originalArrivals: number };
+};
 
 export interface DecodedWindow {
   originalArrivals: number;

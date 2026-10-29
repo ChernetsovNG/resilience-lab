@@ -2,7 +2,7 @@ import { backendMessage } from "./i18n/backendMessage";
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
-import { canvasQueueCapacities, canvasResults, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./results/canvasResults";
+import { canvasResults, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./results/canvasResults";
 import { ResultsContextBar } from "./results/ResultsContextBar";
 import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
@@ -114,8 +114,8 @@ export function App() {
     !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
   );
   const selectedPointId = results.selection.pointId;
-  const summaryDiagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined
-    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId, loaded.model) : null;
+  const summaryDiagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined && catalog !== null
+    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId, catalog, loaded.model, run.documents.experiment) : null;
   const seriesMetadata = ownRun ? run.manifest?.series : null;
   const endMs = (seriesMetadata?.warmupMs ?? 0) + (seriesMetadata?.measurementMs ?? 0);
   const windowMs = seriesMetadata?.windowMs ?? 1;
@@ -127,9 +127,6 @@ export function App() {
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
   const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
-  const runPoint = run.summary?.variants.find(candidate => candidate.id === variant?.id)?.points.find(point => point.id === selectedPointId);
-  const queueCapacities = ownRun && run.documents !== null && catalog !== null && variant !== undefined && runPoint !== undefined
-    ? canvasQueueCapacities(run.documents.model, run.documents.experiment, catalog, variant.id, runPoint.coordinates) : undefined;
   const elementResults: ElementResultsProps | null = selected === null || !ownRun || run.job?.status !== "COMPLETED" || run.summary === null || run.manifest === null || run.documents === null || variant === undefined || catalog === null ? null : {
     runId: run.job.runId!, summary: run.summary, manifest: run.manifest,
     runModel: run.documents.model, currentModel: loaded.model, experiment: run.documents.experiment,
@@ -429,8 +426,8 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
-          {!ownRun || run.summary === null || variant === undefined ? null : <ResultsContextBar
-            summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
+          {!ownRun || run.summary === null || variant === undefined || catalog === null ? null : <ResultsContextBar
+            catalog={catalog} summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
             metric={nodeMetric} onMetricChange={setNodeMetric} connectionMetric={connectionMetric}
@@ -466,7 +463,6 @@ export function App() {
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
               nodeMetric={nodeMetric === "off" ? "utilization" : nodeMetric}
-              queueCapacities={queueCapacities}
               connectionMetric={connectionMetric}
               editable={structureEditable && !invalid}
               parametersEditable={editable}

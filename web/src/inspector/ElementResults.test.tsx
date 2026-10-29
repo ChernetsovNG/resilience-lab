@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SeriesPart } from "../api/apiTypes";
+import type { SeriesPart, TypeDescriptor } from "../api/apiTypes";
 import { seriesLoader } from "../results/series";
 import { decodeSeriesPart } from "../results/series/decode";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
@@ -21,7 +21,7 @@ const raw: SeriesPart = {
 };
 const decoded = decodeSeriesPart(JSON.stringify(raw));
 const decodedNodes = decoded.nodes.map(node => ({ id: node.id,
-  windows: node.windows.map(frame => ({ ...frame.metrics, amplification: 2.5 })), latency: node.windows.map(frame => frame.latency),
+  windows: node.windows.map(frame => ({ ...frame.metrics, client: { originalArrivals: frame.admittedAttempts / 2.5 } })), latency: node.windows.map(frame => frame.latency),
 }));
 function props(): ElementResultsProps {
   const run = structuredClone(summary);
@@ -48,6 +48,27 @@ const row = (name: string) => within(screen.getByRole("table", { name: "Results"
 afterEach(() => vi.restoreAllMocks());
 
 describe("ElementResults", () => {
+  it("renders an additional catalog output for an otherwise unknown block type", async () => {
+    loadSeries();
+    const options = props();
+    const service = options.catalog.types.find(type => type.id === "service")!;
+    const extended: TypeDescriptor = { ...service, id: "test-pool", outputs: [{
+      ...service.outputs?.find(output => output.id === "admittedAttemptsPerSecond"),
+      id: "testThroughput", title: "Test throughput", description: "Test output over existing data.",
+      unit: "PER_SECOND", kind: "RATE",
+      calculation: { kind: "RATE", field: "admittedAttempts", divisor: "durationMs", capacity: null, percentile: null },
+      summary: { calculation: { kind: "RATE", field: "totals.admittedAttempts", divisor: "totals.measurementMs", capacity: null, percentile: null }, source: "POOLED", intervalField: null },
+      inspector: { title: "Test throughput", order: 0, showValue: true, chartOrder: 0, thresholdParameter: null },
+      timeline: null, overlay: null, approximateWindow: false,
+    }] };
+    const runModel = { ...options.runModel, blocks: { ...options.runModel.blocks,
+      gateway: { ...options.runModel.blocks.gateway, type: extended.id },
+    } };
+    render(<ElementResults {...options} catalog={{ ...options.catalog, types: [...options.catalog.types, extended] }}
+      runModel={runModel} currentModel={runModel} />);
+    await waitFor(() => expect(row("Test throughput").textContent).toContain("120 RPSPooled"));
+    expect(screen.getByRole("img", { name: /gateway: Test throughput/ })).toBeTruthy();
+  });
   it("labels pooled and selected-replication values, and shows run markers and catalog assumptions", async () => {
     loadSeries();
     render(<ElementResults {...props()} />);

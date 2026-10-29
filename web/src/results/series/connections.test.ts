@@ -92,7 +92,7 @@ describe("connection window decoding", () => {
 
     const decoded = decodeSeriesPart(JSON.stringify(raw));
 
-    expect(decoded.nodes[0].windows[0].metrics.originalArrivalsPerSecond).toBe(200);
+    expect(decoded.nodes[0].windows[0].metrics.originalArrivals).toBe(2);
     expect(decoded.connections[0].id).toBe("client-to-service");
   });
 

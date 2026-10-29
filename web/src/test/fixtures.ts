@@ -1,3 +1,4 @@
+import outputCatalog from "./catalog.json";
 import type { components } from "../api/schema";
 import type {
   Catalog,
@@ -47,6 +48,7 @@ export const catalog: Catalog = {
   types: [
     {
       id: "client",
+      outputs: (outputCatalog as Catalog).types.find(type => type.id === "client")!.outputs,
       version: 1,
       category: "BLOCK",
       title: "Client",
@@ -60,6 +62,7 @@ export const catalog: Catalog = {
     },
     {
       id: "service",
+      outputs: (outputCatalog as Catalog).types.find(type => type.id === "service")!.outputs,
       version: 1,
       category: "BLOCK",
       title: "Service",
@@ -78,6 +81,7 @@ export const catalog: Catalog = {
     },
     {
       id: "request",
+      outputs: (outputCatalog as Catalog).types.find(type => type.id === "request")!.outputs,
       version: 1,
       category: "CONNECTION",
       title: "Request",
@@ -89,6 +93,7 @@ export const catalog: Catalog = {
     },
     {
       id: "call",
+      outputs: (outputCatalog as Catalog).types.find(type => type.id === "call")!.outputs,
       version: 1,
       category: "CONNECTION",
       title: "Call",

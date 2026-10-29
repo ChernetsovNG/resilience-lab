@@ -1,3 +1,6 @@
+import { catalog } from "../../test/fixtures";
+import { recordedWindow } from "../../test/series";
+import { outputsOf } from "../outputs";
 import { useState } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,18 +9,19 @@ import type { ConnectionSeriesLoadRequest, NodeSeriesMetrics, SeriesLoadRequest,
 import { usePlayback } from "./usePlayback";
 
 const summary: CanvasResults = {
-  services: new Map([["dependency", { utilization: 0.5, meanQueue: 0.1, queueRejectionRate: 0.02, firstSaturation: "1 of 2 replications" }]]),
-  connections: new Map([["call", { from: "gateway", to: "dependency", type: "call", amplification: 1.2 }]]),
+  services: new Map([["dependency", { values: { utilization: 0.5, meanQueue: 0.1, queueRejectionRate: 0.02 },
+    outputs: outputsOf(catalog, "service").filter(output => output.overlay != null), params: { queue: 16 }, firstSaturation: "1 of 2 replications" }]]),
+  connections: new Map([["call", { from: "gateway", to: "dependency", type: "call", values: { amplification: 1.2 },
+    outputs: outputsOf(catalog, "call").filter(output => output.overlay != null), params: {}, hasOwnSeries: false }]]),
 };
 
 function metric(index: number, meanQueueLength: number, amplification: number | null): WindowMetricValues {
-  return {
-    startMs: index * 100, durationMs: index === 5 ? 50 : 100,
-    originalArrivalsPerSecond: 0, offeredAttemptsPerSecond: 200, admittedAttemptsPerSecond: 150,
-    queueRejectionsPerSecond: 50, successesPerSecond: 0, failuresPerSecond: 0, timeoutsPerSecond: 0,
-    retriesPerSecond: 0, handlerUtilization: 0.8, meanQueueLength, meanLatencyMs: null,
-    p50LatencyMs: null, p95LatencyMs: null, p99LatencyMs: null, amplification,
-  };
+  const durationMs = index === 5 ? 50 : 100;
+  return recordedWindow({
+    startMs: index * 100, durationMs, offeredAttempts: durationMs / 5, admittedAttempts: durationMs * 0.15,
+    queueRejections: durationMs / 20, busyHandlerTimeMs: durationMs * 0.8, queueLengthIntegralMs: meanQueueLength * durationMs,
+    client: { originalArrivals: amplification == null ? 0 : durationMs * 0.15 / amplification },
+  });
 }
 const series: NodeSeriesMetrics[] = [
   { id: "dependency", windows: [metric(0, 0, 1), metric(1, 1, 1.5), metric(2, 3, 2), metric(3, 9, 3), metric(4, 4, 2), metric(5, 1, 1)] },
@@ -30,14 +34,14 @@ afterEach(() => vi.useRealTimers());
 describe("windowCanvasResults", () => {
   it("derives the same frame after skips, reverse seeks and replay, using the called service's window", () => {
     const frame = windowCanvasResults(summary, series, 3)!;
-    expect(frame.services.get("dependency")).toMatchObject({ utilization: 0.8, meanQueue: 9, queueRejectionRate: 0.25 });
-    expect(frame.connections.get("call")?.amplification).toBe(3);
+    expect(frame.services.get("dependency")?.values).toMatchObject({ utilization: 0.8, meanQueue: 9, queueRejectionRate: 0.25 });
+    expect(frame.connections.get("call")?.values.amplification).toBe(3);
     expect(frame.services.has("new-service")).toBe(false);
     windowCanvasResults(summary, series, 5);
     windowCanvasResults(summary, series, 0);
     expect(windowCanvasResults(summary, series, 3)).toEqual(frame);
-    expect(summary.services.get("dependency")?.meanQueue).toBe(0.1);
-    expect(summary.connections.get("call")?.amplification).toBe(1.2);
+    expect(summary.services.get("dependency")?.values.meanQueue).toBe(0.1);
+    expect(summary.connections.get("call")?.values.amplification).toBe(1.2);
   });
 
   it("waits for every displayed service and preserves unavailable values instead of borrowing the summary", () => {
@@ -45,11 +49,11 @@ describe("windowCanvasResults", () => {
     expect(windowCanvasResults(summary, series, 6)).toBeNull();
     expect(windowCanvasResults(summary, series, -1)).toBeNull();
     const zero = metric(0, 0, null);
-    zero.offeredAttemptsPerSecond = 0;
-    zero.handlerUtilization = null;
+    zero.offeredAttempts = 0;
+    zero.handlers = 0;
     const frame = windowCanvasResults(summary, [{ id: "dependency", windows: [zero] }], 0)!;
-    expect(frame.services.get("dependency")).toMatchObject({ utilization: null, meanQueue: 0, queueRejectionRate: null });
-    expect(frame.connections.get("call")?.amplification).toBeNull();
+    expect(frame.services.get("dependency")?.values).toMatchObject({ utilization: null, meanQueue: 0, queueRejectionRate: null });
+    expect(frame.connections.get("call")?.values.amplification).toBeNull();
   });
 });
 
@@ -75,20 +79,20 @@ it("waits for loading, advances the shared cursor, and freezes the frame on paus
   act(() => vi.advanceTimersByTime(5000));
   expect(result.current.window).toBe(0);
   await act(async () => resolve(series));
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(0);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(0);
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(1);
   act(() => result.current.pause());
   act(() => vi.advanceTimersByTime(1000));
   expect(result.current.window).toBe(1);
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(1);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(1);
 });
 
 it("seeks deterministically, skips at higher speeds, stops at the final window and clears to summary", async () => {
   vi.useFakeTimers();
   const { result } = setup();
   await act(async () => result.current.seek(3));
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(9);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(9);
   await act(async () => result.current.seek(0));
   act(() => { result.current.setSpeed(4); result.current.play(); });
   act(() => vi.advanceTimersByTime(120));
@@ -96,12 +100,12 @@ it("seeks deterministically, skips at higher speeds, stops at the final window a
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(5);
   expect(result.current.playing).toBe(false);
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(1);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(1);
   await act(async () => result.current.play());
   expect(result.current.window).toBe(0);
   act(() => result.current.seek(3));
   expect(result.current.playing).toBe(false);
-  expect(result.current.frame?.connections.get("call")?.amplification).toBe(3);
+  expect(result.current.frame?.connections.get("call")?.values.amplification).toBe(3);
   act(() => result.current.seek(null));
   expect(result.current.window).toBeNull();
   expect(result.current.frame).toBeNull();
@@ -118,10 +122,10 @@ it("stops on context changes and ignores obsolete replies", async () => {
   expect(pending[0].request.signal?.aborted).toBe(true);
   await act(async () => pending[0].resolve(series));
   expect(result.current.frame?.window).toBeUndefined();
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBeNull();
   expect(pending[1].request).toMatchObject({ variant: "no-retries", cell: "p1", replication: 1 });
   await act(async () => pending[1].resolve(series));
-  expect(result.current.frame?.connections.get("call")?.amplification).toBe(1);
+  expect(result.current.frame?.connections.get("call")?.values.amplification).toBe(1);
   rerender({ variant: null, pointId: "p1", replication: 1 });
   expect(result.current.frame).toBeNull();
   expect(result.current.playing).toBe(false);
@@ -135,13 +139,13 @@ it("reports failed series without advancing a phantom frame", async () => {
   act(() => vi.advanceTimersByTime(5000));
   expect(result.current.window).toBe(0);
   expect(result.current.frame?.window).toBeUndefined();
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBeNull();
 });
 
 it("preserves absolute window numbers when only a later range is loaded", () => {
   const frame = windowCanvasResults(summary, [{ id: "dependency", windows: [metric(67, 9, 3)] }], 67, 67)!;
-  expect(frame?.services.get("dependency")?.meanQueue).toBe(9);
-  expect(frame.connections.get("call")?.amplification).toBe(3);
+  expect(frame?.services.get("dependency")?.values.meanQueue).toBe(9);
+  expect(frame.connections.get("call")?.values.amplification).toBe(3);
 });
 
 function range(request: SeriesLoadRequest): NodeSeriesMetrics[] {
@@ -159,11 +163,11 @@ it.each([{ nodes: ["dependency"], until: 32 }, { nodes: Array.from({ length: 500
     const { result } = setup(loader, 100_000, nodes);
     await act(async () => result.current.play());
     expect(requests[0]).toMatchObject({ fromWindow: 0, untilWindow: until });
-    expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(0);
+    expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(0);
     await act(async () => result.current.seek(67));
     expect(requests[1].fromWindow).toBeGreaterThan(0);
     expect(requests[1].untilWindow - requests[1].fromWindow).toBe(until);
-    expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(67);
+    expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(67);
   },
 );
 
@@ -180,14 +184,14 @@ it("waits at a range boundary and resumes from the selected absolute window afte
   expect(result.current.loading).toBe(true);
   expect(result.current.frame?.window).toBe(31);
   expect(result.current.frame?.pending).toMatch(/Loading/);
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(31);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(31);
   expect(pending[1].request).toMatchObject({ fromWindow: 32, untilWindow: 64 });
   act(() => vi.advanceTimersByTime(5000));
   expect(result.current.window).toBe(32);
   const current = pending.find(item => item.request.fromWindow === 32 && !item.request.signal?.aborted)!;
   await act(async () => current.resolve(range(current.request)));
   expect(result.current.frame?.pending).toBeUndefined();
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(32);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(32);
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(33);
 });
@@ -213,7 +217,7 @@ it.each([10, 36_000])("paces playback in windows per second for %d ms windows", 
 
 it("uses the connection's own windows while playing a frame", async () => {
   const ownSummary: CanvasResults = { ...summary, connections: new Map([["call", {
-    ...summary.connections.get("call")!, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5,
+    ...summary.connections.get("call")!, hasOwnSeries: true, values: { amplification: 1.2, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5 },
   }]]) };
   const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
     startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
@@ -223,7 +227,7 @@ it("uses the connection's own windows while playing a frame", async () => {
   const hook = renderHook(() => usePlayback({ runId: "run-1", variant: "baseline", pointId: "p0", replication: 0,
     window: 0, windowCount: 1, nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
   }, loader));
-  await waitFor(() => expect(hook.result.current.frame?.connections.get("call")).toMatchObject({
+  await waitFor(() => expect(hook.result.current.frame?.connections.get("call")?.values).toMatchObject({
     sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5,
   }));
 });
@@ -234,10 +238,10 @@ it("reserves empty metrics before the first recorded window arrives", async () =
   await act(async () => result.current.seek(0));
   expect(result.current.frame?.window).toBeUndefined();
   expect(result.current.frame?.pending).toMatch(/Loading/);
-  expect(result.current.frame?.services.get("dependency")).toMatchObject({
-    utilization: null, meanQueue: null, queueRejectionRate: null, windowed: true,
+  expect(result.current.frame?.services.get("dependency")?.values).toMatchObject({
+    utilization: null, meanQueue: null, queueRejectionRate: null,
   });
-  expect(result.current.frame?.connections.get("call")?.amplification).toBeNull();
+  expect(result.current.frame?.connections.get("call")?.values.amplification).toBeNull();
 });
 
 it.each([
@@ -255,15 +259,15 @@ it.each([
   await waitFor(() => expect(result.current.frame?.window).toBe(5));
   rerender({ ...initialProps, ...change });
   expect(result.current.frame?.window).toBeUndefined();
-  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
-  expect(result.current.frame?.connections.get("call")?.amplification).toBeNull();
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBeNull();
+  expect(result.current.frame?.connections.get("call")?.values.amplification).toBeNull();
 });
 
 it("prefetches the next node and connection ranges before the cursor reaches their boundary", async () => {
   const requests: SeriesLoadRequest[] = [];
   const connectionRequests: ConnectionSeriesLoadRequest[] = [];
   const ownSummary = { ...summary, connections: new Map([["call", {
-    ...summary.connections.get("call")!, sentAttemptsPerSecond: 999,
+    ...summary.connections.get("call")!, hasOwnSeries: true, values: { amplification: 1.2, sentAttemptsPerSecond: 999 },
   }]]) };
   const loader = {
     load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); },
