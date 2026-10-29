@@ -60,6 +60,8 @@ export interface CanvasProps {
   onParam?: (id: string, path: string, value: unknown) => void;
   onValidity?: (key: string, valid: boolean) => void;
   elementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  variantElementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  onProblems?: (id: string) => void;
   /** Reports viewport zoom after node initialization; an empty model reports immediately. */
   onZoomChange?: (zoom: number) => void;
 }
@@ -70,7 +72,7 @@ export function Canvas(props: CanvasProps) {
 }
 
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
-  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null,
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = {}, results = null,
   nodeMetric = "utilization", connectionMetric = "amplification", queueCapacities }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
@@ -137,6 +139,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       result: block.type === "service" ? results?.services.get(id) : undefined,
       nodeMetric, queueCapacity: queueCapacities?.get(id),
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
+      variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
       editable: id !== pendingId && editable, parametersEditable: id !== pendingId && parametersEditable, disabled: id === pendingId || disabled,
       onParam: (elementId, path, value) => onParam?.(elementId, path, value),
@@ -166,6 +169,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         onSelect: (multiple: boolean) => {
           if (!disabled) onSelect(multiple ? selected.includes(connection.id) ? selected.filter(id => id !== connection.id) : [...selected, connection.id] : [connection.id]);
         },
+        variantDiagnostics: variantElementDiagnostics?.get(connection.id), onProblems: () => onProblems?.(connection.id),
         windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),

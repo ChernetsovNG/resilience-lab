@@ -4,7 +4,7 @@ import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
 import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } from "../results/canvasResults";
-import { DiagnosticBadge } from "../validation/DiagnosticDisplay";
+import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { InlineParamEditor } from "./InlineParamEditor";
 
 export type BlockNodeType = Node<{
@@ -17,6 +17,8 @@ export type BlockNodeType = Node<{
   disabled: boolean;
   overridden?: boolean;
   diagnostics?: readonly Diagnostic[];
+  variantDiagnostics?: readonly Diagnostic[];
+  onProblems?: () => void;
   result?: ServiceCanvasResults;
   nodeMetric?: NodeOverlayMetric;
   queueCapacity?: number;
@@ -46,6 +48,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
       ))}
       <strong>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</strong>
       <DiagnosticBadge diagnostics={data.diagnostics ?? []} />
+      <VariantDiagnosticBadge diagnostics={data.variantDiagnostics} onOpen={data.onProblems} disabled={data.disabled} />
       {data.result?.firstSaturation == null ? null : <span className="saturation-badge" role="img" aria-label={t("editor.canvas.firstSaturatedNode")}
         title={data.result.firstSaturation}>{t("editor.symbols.saturation")}</span>}
       {data.block.type === "service" ? (

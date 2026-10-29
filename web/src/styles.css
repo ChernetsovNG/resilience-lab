@@ -1110,3 +1110,18 @@ select {
 .element-results > details { margin-top: .75rem; }
 
 .react-flow__edge-interaction { stroke: transparent; pointer-events: stroke; vector-effect: non-scaling-stroke; }
+
+
+.diagnostic-badge--variants {
+  border: 1px dashed currentColor;
+  background: transparent;
+  font-weight: normal;
+  cursor: pointer;
+}
+.diagnostic-badge--variants.diagnostic--warning { color: #92734a; background: #faf8f3; }
+.diagnostic-badge--variants.diagnostic--error { color: #a65e62; background: #fcf6f6; }
+.diagnostic-badge--variants:disabled { cursor: default; }
+.variant-diagnostic-hint { margin: 0.15rem 0 0.35rem; font-size: 0.75rem; }
+.variant-diagnostic-hint a { color: #52606d; }
+.variant-diagnostic-hint a[aria-disabled="true"] { cursor: default; }
+.problems-filter { display: flex; align-items: center; gap: 0.75rem; font-size: 0.8rem; }

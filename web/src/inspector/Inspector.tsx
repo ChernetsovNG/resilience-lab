@@ -32,11 +32,13 @@ export interface InspectorProps {
   /** Validity of a field draft by `elementId.path`; a field that unmounts reports itself valid. */
   onValidity: (key: string, valid: boolean) => void;
   fieldDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  variantFieldDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
+  onVariantDiagnostic?: (variant: string, field: string) => void;
 }
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity,
-  hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics,
+  hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
   target = selected === null ? "experiment" : "element", focusField, results, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -84,6 +86,9 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
               onReset={variantId === null ? undefined : (path) => onCommand?.(resetVariantParam(variantId, selected, path, catalog))}
               onValidity={(path, valid) => onValidity(`${selected}.${path}`, valid)}
               fieldDiagnostics={fieldDiagnostics}
+              variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined}
+              onVariantDiagnostic={onVariantDiagnostic}
+              navigationDisabled={invalid}
             />
           ))}
         </>

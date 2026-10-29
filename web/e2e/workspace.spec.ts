@@ -59,7 +59,7 @@ test("validates zero handlers without saving and clears diagnostics after correc
   expect(await (await request.get(url)).json()).toEqual(original);
 });
 
-test("keeps baseline lint warnings on their variant page and navigates there from Problems", async ({ page }) => {
+test("summarizes baseline lint warnings on Model and navigates to their full messages from Problems", async ({ page }) => {
   const callLabel = page.getByTestId("canvas-edge-label-gateway-to-middle");
   await callLabel.click();
   const timeout = page.getByLabel("Timeout", { exact: true });
@@ -67,7 +67,8 @@ test("keeps baseline lint warnings on their variant page and navigates there fro
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
-  await expect(callLabel).not.toContainText("⚠");
+  await expect(callLabel.getByRole("button", { name: "Warnings in variants: baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
+  await expect(timeout.locator("..").getByRole("link", { name: "In variants: baseline — 1 warning", exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await expect(timeout).toHaveValue("80ms");
@@ -94,7 +95,7 @@ test("keeps baseline lint warnings on their variant page and navigates there fro
   await expectNoPageScroll(page);
 });
 
-test("keeps a warning from the only variant override off Model and opens its variant", async ({ page }) => {
+test("summarizes a warning from the only variant override on Model and opens its variant", async ({ page }) => {
   const path = "variant-warning/single.experiment.json";
   await withExperimentFixture(path, (document) => {
     document.variants = [{ id: "solo", label: "Solo", overrides: { "gateway.handlers": 1 } }];
@@ -108,6 +109,8 @@ test("keeps a warning from the only variant override off Model and opens its var
     await expect(handlers).toHaveValue("4");
     await expect(fieldMessages).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
+    await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: solo", exact: true })).toBeVisible();
+    await expect(handlers.locator("..").getByRole("link", { name: "In variants: solo — 1 warning", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
     const warning = page.getByRole("tabpanel").getByRole("button", { name: /LINT_HANDLERS_LITTLE/ });
     await expect(warning).toContainText("solo");
