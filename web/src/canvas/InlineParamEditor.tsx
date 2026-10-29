@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { formatNumber } from "../i18n/format";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Catalog } from "../api/apiTypes";
 import { isObject, type Params } from "../workspace/params";
@@ -31,7 +33,8 @@ function catalogParameter(catalog: Catalog, type: string, params: Params, path: 
 export function InlineParamEditor({ catalog, elementId, elementType, params, path, editable, disabled = false, onCommit, onValidity }: InlineParamEditorProps) {
   const id = useId();
   const { descriptor, value } = catalogParameter(catalog, elementType, params, path)!;
-  const shown = value == null ? descriptor.required ? "Required" : "" : String(value);
+  const shown = value == null ? descriptor.required ? t("editor.param.required") : "" : String(value);
+  const displayed = typeof value === "number" ? formatNumber(value) : shown;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(shown);
   const [previous, setPrevious] = useState(shown);
@@ -87,19 +90,19 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, pat
               setEditing(false);
             }}
           />
-          <button className="visually-hidden" type="submit">Apply {descriptor.title}</button>
+          <button className="visually-hidden" type="submit">{t("editor.param.apply", { title: descriptor.title })}</button>
           {parsed.ok ? null : <span className="inline-param-error" id={`${id}-error`} role="alert">{parsed.message}</span>}
         </form>
       ) : editable ? (
         <button
           type="button"
           className="inline-param-value nodrag nopan"
-          aria-label={`${descriptor.title}: ${shown}`}
+          aria-label={t("editor.param.valueLabel", { title: descriptor.title, value: displayed })}
           aria-disabled={disabled || undefined}
-          title="Double-click to edit"
+          title={t("editor.param.editHint")}
           onClick={(event) => { if (event.detail === 0) begin(); }}
-        >{shown}</button>
-      ) : shown}
+        >{displayed}</button>
+      ) : displayed}
     </span>
   );
 }

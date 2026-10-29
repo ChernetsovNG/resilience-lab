@@ -1,4 +1,5 @@
 import type { HealthView, JobView } from "../api/apiTypes";
+import { t } from "../i18n";
 import { HealthBadge } from "../components/HealthBadge";
 
 export interface TopBarProps {
@@ -42,50 +43,52 @@ export function TopBar(props: TopBarProps) {
   const active = job !== null && (job.status === "QUEUED" || job.status === "RUNNING");
   return (
     <header className="top-bar">
-      <h1>Resilience Lab</h1>
-      <span className="top-bar-label">Experiment</span>
+      <h1>{t("app.name")}</h1>
+      <span className="top-bar-label">{t("app.topBar.experiment")}</span>
       <select
-        aria-label="Experiment"
+        aria-label={t("app.topBar.experiment")}
         value={experiment ?? ""}
         disabled={loading || saving || running || props.estimating || invalid}
         onChange={(event) => onExperiment(event.target.value)}
       >
-        {experiment === null ? <option value="">No experiment</option> : null}
+        {experiment === null ? <option value="">{t("app.topBar.noExperiment")}</option> : null}
         {experiments.map((path) => (
           <option key={path} value={path}>
             {path}
           </option>
         ))}
       </select>
-      <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title="Undo (Ctrl/Cmd+Z)">
-        Undo
+      <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title={t("app.topBar.undoTitle")}>
+        {t("app.topBar.undo")}
       </button>
-      <button type="button" onClick={onRedo} disabled={!canRedo || invalid || loading} title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">
-        Redo
+      <button type="button" onClick={onRedo} disabled={!canRedo || invalid || loading} title={t("app.topBar.redoTitle")}>
+        {t("app.topBar.redo")}
       </button>
-      {dirty ? <span className="dirty-mark">Unsaved changes</span> : null}
+      {dirty ? <span className="dirty-mark">{t("app.topBar.unsavedChanges")}</span> : null}
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
-        Save
+        {t("app.topBar.save")}
       </button>
       <button type="button" onClick={props.onEstimate}
         disabled={experiment === null || loading || saving || invalid || running || props.estimating}>
-        Estimate
+        {t("app.estimate.label")}
       </button>
       <button
         type="button"
         className="primary"
         onClick={onRun}
         disabled={experiment === null || loading || saving || dirty || invalid || running || props.estimating || props.runBlockedReason !== undefined}
-        title={props.runBlockedReason ?? (invalid ? "Fix invalid values first" : dirty ? "Save changes before running" : undefined)}
+        title={props.runBlockedReason ?? (invalid ? t("app.topBar.fixInvalid") : dirty ? t("app.topBar.saveBeforeRun") : undefined)}
       >
-        Run
+        {t("app.topBar.run")}
       </button>
       {props.canResume ? <button type="button" onClick={props.onResume}
         disabled={loading || saving || dirty || invalid || running || props.estimating}
-        title={dirty ? "Save changes before resuming" : undefined}>Resume</button> : null}
-      {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>Cancel</button> : null}
+        title={dirty ? t("app.topBar.saveBeforeResume") : undefined}>{t("app.topBar.resume")}</button> : null}
+      {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>{t("app.topBar.cancel")}</button> : null}
       <span className="job-status" data-testid="job-status">
-        {job === null ? "" : `${job.status}${active && job.cancelRequested ? " · cancellation requested" : ""}`}
+        {job === null ? "" : active && job.cancelRequested
+          ? t("app.job.cancellationRequested", { status: t(`app.job.status.${job.status}`) })
+          : t(`app.job.status.${job.status}`)}
       </span>
       <span className="spacer" />
       <HealthBadge health={health} error={healthError} />

@@ -1,3 +1,4 @@
+import { formatDuration, formatMultiplier, formatPercent } from "../i18n/format";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 
 type Point = RunSummary["variants"][number]["points"][number];
@@ -25,6 +26,6 @@ export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, serv
 }
 
 export function formatMapValue(value: number, metric: MapMetric): string {
-  if (metric === "successRate" || metric === "handlerUtilization") return `${(value * 100).toFixed(1)}%`;
-  return metric === "admittedAmplification" ? `${value.toFixed(2)}×` : `${value.toFixed(1)} ms`;
+  if (metric === "successRate" || metric === "handlerUtilization") return formatPercent(value);
+  return metric === "admittedAmplification" ? formatMultiplier(value) : formatDuration(value);
 }

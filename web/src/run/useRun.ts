@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import { ApiError, api } from "../api/apiClient";
 import type { ApiProblem, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { problemOf } from "../workspace/useWorkspace";
@@ -82,7 +83,9 @@ export function useRun(pollMs = 500): Run {
         }
       } else {
         if (next.status === "FAILED") {
-          setProblem({ code: "JOB_FAILED", message: `${next.error ?? "Job failed"}${resuming ? " Start a new run with Run." : ""}`, diagnostics: next.diagnostics });
+          setProblem({ code: "JOB_FAILED", message: resuming
+            ? t("app.run.restart", { message: next.error ?? t("app.run.failed") })
+            : next.error ?? t("app.run.failed"), diagnostics: next.diagnostics });
         }
         try {
           const loadedManifest = await api.runManifest(next.runId);
@@ -98,7 +101,7 @@ export function useRun(pollMs = 500): Run {
       if (live()) {
         const failure = problemOf(error);
         const restart = resuming && error instanceof ApiError && (error.status === 400 || failure.code === "RUN_COMPLETE");
-        setProblem({ ...failure, message: `${failure.message}${restart ? " Start a new run with Run." : ""}` });
+        setProblem({ ...failure, message: restart ? t("app.run.restart", { message: failure.message }) : failure.message });
       }
     } finally {
       if (live()) setRunning(false);

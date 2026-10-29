@@ -57,12 +57,12 @@ it("renders the heatmap in grid order, selects points and reads service metrics 
   const heatmap = screen.getByRole("table", { name: "Parameter heatmap" });
   expect(within(heatmap).getAllByRole("rowheader").map((node) => node.textContent)).toEqual(["80ms", "40ms", "80ms"]);
   const cells = within(heatmap).getAllByRole("button");
-  expect(cells.map((node) => node.textContent)).toEqual(["p00.0%", "p110.0%", "p220.0%", "p330.0%", "p440.0%", "p550.0%"]);
+  expect(cells.map((node) => node.textContent)).toEqual(["p00%", "p110%", "p220%", "p330%", "p440%", "p550%"]);
   fireEvent.click(cells[5]);
   expect(onPointChange).toHaveBeenCalledWith("p5");
-  expect(screen.getByLabelText("Map color scale").textContent).toContain("50.0%");
+  expect(screen.getByLabelText("Map color scale").textContent).toContain("50%");
   fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
-  expect(cells[0].textContent).toContain("50.0%");
+  expect(cells[0].textContent).toContain("50%");
   expect(screen.getByText(/pooled busy\/capacity/)).toBeTruthy();
 });
 
@@ -73,7 +73,7 @@ it("shows every one-axis value with the unmodified confidence interval and point
   const points = screen.getByRole("list", { name: "Map points" });
   const buttons = within(points).getAllByRole("button");
   expect(buttons).toHaveLength(3);
-  expect(buttons[0].textContent).toContain("95% CI -20.0%–20.0%");
+  expect(buttons[0].textContent).toContain("95% CI -20%–20%");
   fireEvent.click(buttons[2]);
   expect(onPointChange).toHaveBeenCalledWith("p2");
 });
@@ -83,4 +83,14 @@ it("requires a variant page and never substitutes the first variant", () => {
   expect(screen.getByText("Select a variant page to view Map.")).toBeTruthy();
   view.rerender(<GridMap summary={gridSummary()} activeVariantId="no-retries" pointId="p0" />);
   expect(screen.getByRole("button", { name: /p1/ }).textContent).toContain("n/a");
+});
+
+it("formats numeric grid axis values while preserving document quantities", () => {
+  const run = gridSummary();
+  run.grid[1].values = [1000, 2000];
+  render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
+  const table = screen.getByRole("table", { name: "Parameter heatmap" });
+  expect(within(table).getByRole("columnheader", { name: "1,000" })).toBeTruthy();
+  expect(within(table).getAllByRole("rowheader")[0].textContent).toBe("80ms");
+  expect(run.grid[1].values[0]).toBe(1000);
 });

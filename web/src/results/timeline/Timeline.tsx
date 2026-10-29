@@ -1,3 +1,5 @@
+import { t } from "../../i18n";
+import { formatDuration, formatNumber } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../../api/apiTypes";
 import { seriesLoader, type WindowMetricValues } from "../series";
@@ -8,23 +10,23 @@ import { useTimelineSeries } from "./useTimelineSeries";
 type MetricKey = Exclude<keyof WindowMetricValues, "startMs" | "durationMs" | "amplification">;
 interface Metric { key: MetricKey; label: string; node?: "client" | "service" }
 const groups: { title: string; unit: string; scale: number; metrics: Metric[] }[] = [
-  { title: "Rates", unit: "RPS", scale: 1, metrics: [
-    { key: "originalArrivalsPerSecond", label: "Original requests", node: "client" },
-    { key: "offeredAttemptsPerSecond", label: "Offered attempts", node: "service" },
-    { key: "admittedAttemptsPerSecond", label: "Admitted attempts", node: "service" },
-    { key: "successesPerSecond", label: "Successes" },
-    { key: "retriesPerSecond", label: "Retries", node: "service" },
+  { title: t("results.timeline.rates"), unit: "RPS", scale: 1, metrics: [
+    { key: "originalArrivalsPerSecond", label: t("results.metrics.originalRequests"), node: "client" },
+    { key: "offeredAttemptsPerSecond", label: t("results.metrics.offeredAttempts"), node: "service" },
+    { key: "admittedAttemptsPerSecond", label: t("results.metrics.admittedAttempts"), node: "service" },
+    { key: "successesPerSecond", label: t("results.metrics.successes") },
+    { key: "retriesPerSecond", label: t("results.metrics.retries"), node: "service" },
   ] },
-  { title: "Latency", unit: "ms", scale: 1, metrics: [
-    { key: "meanLatencyMs", label: "Mean latency" }, { key: "p50LatencyMs", label: "p50 latency" },
-    { key: "p95LatencyMs", label: "p95 latency" }, { key: "p99LatencyMs", label: "p99 latency" },
+  { title: t("results.timeline.latency"), unit: "ms", scale: 1, metrics: [
+    { key: "meanLatencyMs", label: t("results.metrics.meanLatencyMs") }, { key: "p50LatencyMs", label: t("results.metrics.p50LatencyMs") },
+    { key: "p95LatencyMs", label: t("results.metrics.p95LatencyMs") }, { key: "p99LatencyMs", label: t("results.metrics.p99LatencyMs") },
   ] },
-  { title: "Errors and rejections", unit: "RPS", scale: 1, metrics: [
-    { key: "failuresPerSecond", label: "Failures" }, { key: "timeoutsPerSecond", label: "Timeouts", node: "service" },
-    { key: "queueRejectionsPerSecond", label: "Queue rejections", node: "service" },
+  { title: t("results.timeline.errors"), unit: "RPS", scale: 1, metrics: [
+    { key: "failuresPerSecond", label: t("results.metrics.failures") }, { key: "timeoutsPerSecond", label: t("results.metrics.timeouts"), node: "service" },
+    { key: "queueRejectionsPerSecond", label: t("results.metrics.queueRejections"), node: "service" },
   ] },
-  { title: "Utilization", unit: "%", scale: 100, metrics: [{ key: "handlerUtilization", label: "Handler utilization", node: "service" }] },
-  { title: "Queue", unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: "Mean queue", node: "service" }] },
+  { title: t("results.timeline.utilization"), unit: "%", scale: 100, metrics: [{ key: "handlerUtilization", label: t("results.metrics.handlerUtilization"), node: "service" }] },
+  { title: t("results.timeline.queue"), unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: t("results.metrics.meanQueue"), node: "service" }] },
 ];
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 
@@ -87,7 +89,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
         }]) {
           if (source.variant === undefined || source.data === undefined) continue;
           lines.push({
-            id: `${source.variant.id}:${node.id}:${metric.key}`, label: `${node.id} · ${metric.label} · ${source.variant.label ?? source.variant.id} (${source.variant.id})`,
+            id: `${source.variant.id}:${node.id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: node.id, metric: metric.label, variant: source.variant.label ?? source.variant.id, id: source.variant.id }),
             metric: metric.key, scale: group.scale, color, comparison: source.comparison, windows: source.data.windows,
           });
         }
@@ -96,27 +98,27 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     return { ...group, lines };
   }).filter((group) => group.lines.length > 0), [primary.nodes, overlay.nodes, model, metricKeys, variant, compared]);
   if (!enabled) return null;
-  if (variant === undefined) return <p>The selected variant is not available in this run.</p>;
-  if (metadata == null) return <p>Series metadata are unavailable for this run.</p>;
+  if (variant === undefined) return <p>{t("results.timeline.variantUnavailable")}</p>;
+  if (metadata == null) return <p>{t("results.timeline.metadataUnavailable")}</p>;
   const activeWindow = hover ?? cursorWindow;
   const onCursor = (window: number | null) => { setHover(null); onCursorChange?.(window); };
   return <div className="timeline">
     <div className="timeline-toolbar">
-      <strong>{variant.label ?? variant.id} ({variant.id})</strong>
-      <label>Replication <select aria-label="Replication" value={replication}
+      <strong>{t("results.timeline.variantLabel", { variant: variant.label ?? variant.id, id: variant.id })}</strong>
+      <label>{t("results.replication")} <select aria-label={t("results.replication")} value={replication}
         onChange={(event) => { setHover(null); onReplicationChange?.(Number(event.target.value)); }}>
-        {Array.from({ length: manifest.replications }, (_, index) => <option key={index} value={index}>{index}</option>)}
+        {Array.from({ length: manifest.replications }, (_, index) => <option key={index} value={index}>{formatNumber(index)}</option>)}
       </select></label>
-      <label>Compare variant <select aria-label="Compare variant" value={compared?.id ?? ""}
+      <label>{t("results.timeline.compare")} <select aria-label={t("results.timeline.compare")} value={compared?.id ?? ""}
         onChange={(event) => setComparison(event.target.value)}>
-        <option value="">None</option>
+        <option value="">{t("results.timeline.noComparison")}</option>
         {summary.variants.filter((candidate) => candidate.id !== variant.id).map((candidate) =>
-          <option key={candidate.id} value={candidate.id}>{candidate.label ?? candidate.id} ({candidate.id})</option>)}
+          <option key={candidate.id} value={candidate.id}>{t("results.timeline.variantLabel", { variant: candidate.label ?? candidate.id, id: candidate.id })}</option>)}
       </select></label>
-      <button type="button" onClick={() => onCursor(null)} disabled={cursorWindow === null}>Clear time cursor</button>
+      <button type="button" onClick={() => onCursor(null)} disabled={cursorWindow === null}>{t("results.timeline.clearCursor")}</button>
     </div>
-    <details className="timeline-choices"><summary>Nodes and metrics</summary>
-      <fieldset><legend>Nodes</legend>{availableNodes.map((id) => <label key={id}>
+    <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
+      <fieldset><legend>{t("results.timeline.nodes")}</legend>{availableNodes.map((id) => <label key={id}>
         <input type="checkbox" checked={nodes.includes(id)} onChange={(event) => setNodeChoice({ canvasKey,
           ids: event.target.checked ? [...nodes, id] : nodes.filter((node) => node !== id) })} />{id}
       </label>)}</fieldset>
@@ -124,21 +126,25 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
         <label key={metric.key}><input type="checkbox" checked={metricKeys.includes(metric.key)} onChange={(event) =>
           setMetricKeys(event.target.checked ? [...metricKeys, metric.key] : metricKeys.filter((key) => key !== metric.key))} />{metric.label}</label>)}</fieldset>)}
     </details>
-    <div className="timeline-regions" aria-label="Time regions">
+    <div className="timeline-regions" aria-label={t("results.timeline.regions")}>
       {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}>
-        {region.label}: {region.fromMs}–{region.toMs} ms
+        {t("results.timeline.region", { label: region.label, from: formatNumber(region.fromMs, 1), to: formatDuration(region.toMs) })}
       </span>)}
-      <span>Solid: {variant.id}{compared === undefined ? "" : ` · dashed: ${compared.id}`}</span>
+      <span>{t("results.timeline.solid", { variant: variant.id, comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: compared.id }) })}</span>
     </div>
     <p className="timeline-cursor" role="status" data-testid="timeline-cursor">
-      {activeWindow === null ? "Hover to inspect windows; click to pin the time cursor."
-        : `Window ${activeWindow} · ${activeWindow * windowMs}–${Math.min(endMs, (activeWindow + 1) * windowMs)} ms · replication ${replication}${hover === null && cursorWindow !== null ? " · pinned" : ""}`}
+      {activeWindow === null ? t("results.timeline.inspect")
+        : t("results.timeline.window", {
+          window: formatNumber(activeWindow), from: formatNumber(activeWindow * windowMs, 1),
+          to: formatDuration(Math.min(endMs, (activeWindow + 1) * windowMs)), replication: formatNumber(replication),
+          pinned: hover === null && cursorWindow !== null ? t("results.timeline.pinned") : "",
+        })}
     </p>
-    {primary.loading || overlay.loading ? <p role="status">Loading series…</p> : null}
+    {primary.loading || overlay.loading ? <p role="status">{t("results.timeline.loadingSeries")}</p> : null}
     {primary.problem === null ? null : <p role="status">{primary.problem}</p>}
-    {overlay.problem === null ? null : <p role="status">Comparison: {overlay.problem}</p>}
-    {nodes.length === 0 ? <p>Select nodes from this run to see their series.</p> : null}
-    {!primary.loading && primary.problem === null && nodes.length > 0 && charts.length === 0 ? <p>Select metrics to see their charts.</p> : null}
+    {overlay.problem === null ? null : <p role="status">{t("results.timeline.comparisonProblem", { problem: overlay.problem })}</p>}
+    {nodes.length === 0 ? <p>{t("results.timeline.selectNodes")}</p> : null}
+    {!primary.loading && primary.problem === null && nodes.length > 0 && charts.length === 0 ? <p>{t("results.timeline.selectMetrics")}</p> : null}
     <div className="timeline-charts">{charts.map((group) => <TimelineChart key={group.title} title={group.title} unit={group.unit}
       lines={group.lines} regions={regions} endMs={endMs} windowMs={windowMs} hoverWindow={hover} cursorWindow={cursorWindow}
       onHover={setHover} onCursor={onCursor} />)}</div>

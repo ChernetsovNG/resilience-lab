@@ -100,3 +100,12 @@ it.each(["invalid", "loading"] as const)("blocks undo and redo while %s", (flag)
   expect(button("Undo").disabled).toBe(true);
   expect(button("Redo").disabled).toBe(true);
 });
+
+it.each(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"] as const)("renders the catalog label for %s", (status) => {
+  render(<TopBar {...props({ job: {
+    id: "job-1", experiment: "first.experiment.json", runId: "run-1", status,
+    completedTasks: 0, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
+  } })} />);
+
+  expect(screen.getByTestId("job-status").textContent).toBe(status);
+});

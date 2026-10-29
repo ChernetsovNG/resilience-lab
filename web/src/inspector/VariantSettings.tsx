@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { Variant } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
@@ -18,28 +19,28 @@ export function VariantSettings({ variants, active, disabled, editable, onComman
   const variant = variants.find((candidate) => candidate.id === active);
   const add = (copy: boolean) => {
     const id = nextVariantId(variants);
-    onCommand(addVariant(id, copy && variant !== undefined ? `${variant.label ?? variant.id} copy` : `Variant ${id.slice(8)}`, copy ? variant?.id : undefined));
+    onCommand(addVariant(id, copy && variant !== undefined ? t("editor.variant.copyLabel", { label: variant.label ?? variant.id }) : t("editor.variant.newLabel", { number: id.slice(8) }), copy ? variant?.id : undefined));
     onSelect(id);
   };
   return (
-    <section className="variant-settings" aria-label="Variants">
+    <section className="variant-settings" aria-label={t("editor.variant.label")}>
       <div className="inspector-actions">
-        <button type="button" disabled={disabled} onClick={() => add(false)}>Add variant</button>
-        <button type="button" disabled={disabled || variant === undefined} onClick={() => add(true)}>Copy variant</button>
+        <button type="button" disabled={disabled} onClick={() => add(false)}>{t("editor.variant.add")}</button>
+        <button type="button" disabled={disabled || variant === undefined} onClick={() => add(true)}>{t("editor.variant.copy")}</button>
       </div>
       {variant === undefined ? null : (
         <>
-          <VariantText key={`${variant.id}-id`} label="Variant ID" value={variant.id} editable={editable}
+          <VariantText key={`${variant.id}-id`} label={t("editor.variant.id")} value={variant.id} editable={editable}
             error={(id) => variantIdError(variants, id, variant.id)} onValidity={onValidity}
             onCommit={(id) => { if (!disabled) onCommand(updateVariant(variant.id, { id })); }} />
-          <VariantText key={`${variant.id}-label`} label="Variant label" value={variant.label ?? ""} editable={editable}
+          <VariantText key={`${variant.id}-label`} label={t("editor.variant.name")} value={variant.label ?? ""} editable={editable}
             onValidity={onValidity} onCommit={(label) => onCommand(updateVariant(variant.id, { label }))} />
           <button type="button" disabled={disabled || variants.length <= 1} onClick={() => {
-            if (window.confirm(`Delete variant "${variant.label ?? variant.id}"?`)) {
+            if (window.confirm(t("editor.variant.deleteConfirm", { label: variant.label ?? variant.id }))) {
               onCommand(removeVariant(variant.id));
               onSelect(null);
             }
-          }}>Delete variant</button>
+          }}>{t("editor.variant.delete")}</button>
         </>
       )}
     </section>

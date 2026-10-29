@@ -14,11 +14,11 @@ describe("formatSaturation", () => {
       ],
     }, 2);
     expect(text.firstNodes).toEqual([
-      "dependency first in 2 of 2 replications; median start 225.0 ms, range 210.0–240.0 ms.",
+      "dependency first in 2 of 2 replications; median start 225 ms, range 210–240 ms.",
     ]);
     expect(text.degradationPaths).toEqual([
-      "Replication 0: dependency at 210.0 ms → middle at 260.0 ms",
-      "Replication 1: dependency at 240.0 ms → gateway at 300.0 ms",
+      "Replication 0: dependency at 210 ms → middle at 260 ms",
+      "Replication 1: dependency at 240 ms → gateway at 300 ms",
     ]);
   });
 
@@ -36,8 +36,8 @@ describe("formatSaturation", () => {
       ],
     }, 2);
     expect(text.firstNodes).toEqual([
-      "middle first in 1 of 2 replications; median start 70.0 ms, range 70.0–70.0 ms.",
-      "dependency first in 1 of 2 replications; median start 80.0 ms, range 80.0–80.0 ms.",
+      "middle first in 1 of 2 replications; median start 70 ms, range 70–70 ms.",
+      "dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.",
     ]);
   });
 
@@ -51,7 +51,7 @@ describe("formatSaturation", () => {
         { replication: 1, degradationPath: [] },
       ],
     }, 2);
-    expect(text.firstNodes[0]).toBe("dependency first in 1 of 2 replications; median start 80.0 ms, range 80.0–80.0 ms.");
+    expect(text.firstNodes[0]).toBe("dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.");
     expect(text.withoutSaturation).toBe("1 of 2 replications without saturation.");
     expect(text.degradationPaths[1]).toBe("Replication 1: no saturation.");
   });

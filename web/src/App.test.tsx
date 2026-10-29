@@ -1061,10 +1061,10 @@ describe("diagram results", () => {
     expect(region.textContent).toContain("Summary");
     expect(region.textContent).toContain("measurement interval");
     const metrics = await screen.findByTestId("canvas-results-gateway");
-    expect(metrics.textContent).toContain("Utilization 50.0%");
-    expect(metrics.textContent).toContain("Mean queue 0.10");
+    expect(metrics.textContent).toContain("Utilization 50%");
+    expect(metrics.textContent).toContain("Mean queue 0.1");
     expect(metrics.textContent).toContain("Queue rejections 7.7%");
-    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.20×");
+    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.2×");
     expect(screen.queryByTestId("canvas-results-middle")).toBeNull();
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
 
@@ -1076,11 +1076,11 @@ describe("diagram results", () => {
     expect(button("Save").disabled).toBe(true);
     expect(button("Undo").disabled).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Show results on diagram" }));
-    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50.0%");
+    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
     selectGateway();
     editHandlers("6");
     expect(within(region).getByText("Results belong to a previous document version.")).toBeTruthy();
-    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50.0%");
+    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
     fireEvent.click(button("Undo"));
     expect(within(region).queryByText("Results belong to a previous document version.")).toBeNull();
     expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
@@ -1111,13 +1111,13 @@ describe("diagram results", () => {
     await screen.findByRole("table", { name: "Summary" });
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
-    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75.0%");
+    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
     expect(screen.getByRole("img", { name: "First saturated node" }).title).toBe("1 of 2 replications");
     const row = screen.getByRole("row", { name: /Baseline p1/ });
     expect(row.className).toContain("summary-row--selected-point");
     expect(row.textContent).toContain("gateway first in 1 of 2 replications");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
-    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("25.0%");
+    expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("25%");
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p0" } });
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
@@ -1141,7 +1141,7 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
   for (let count = 0; count < 3; count++) fireEvent.click(button("Undo"));
-  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Utilization 50.0%");
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Utilization 50%");
   for (let count = 0; count < 3; count++) fireEvent.click(button("Redo"));
   expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
 });

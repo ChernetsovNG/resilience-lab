@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
+import { formatNumber, formatPercent } from "../src/i18n/format";
 
 async function commit(page: Page, label: string, value: string) {
   const input = page.getByLabel(label, { exact: true });
@@ -63,16 +64,16 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const heatmap = page.getByRole("table", { name: "Parameter heatmap" });
     await expect(heatmap.getByRole("button")).toHaveCount(4);
     const point = result.summary.variants.find((variant) => variant.id === "baseline")!.points.find((point) => point.id === "p3")!;
-    await expect(heatmap.getByRole("button").nth(3)).toContainText(`${(point.aggregate.successRate!.mean * 100).toFixed(1)}%`);
+    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(point.aggregate.successRate!.mean));
     const series = page.waitForResponse((response) => response.url().includes(`/series/baseline/p3/0`));
     await heatmap.getByRole("button").nth(3).click();
     await expect(heatmap.getByRole("button").nth(3)).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("canvas-result-context")).toContainText("p3");
     const dependency = point.aggregate.services.dependency.totals;
-    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${(dependency.queueLengthIntegralMs / dependency.measurementMs).toFixed(2)}`);
+    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${formatNumber(dependency.queueLengthIntegralMs / dependency.measurementMs)}`);
     await page.getByRole("combobox", { name: "Map metric", exact: true }).selectOption("handlerUtilization");
     await page.getByRole("combobox", { name: "Map service", exact: true }).selectOption("dependency");
-    await expect(heatmap.getByRole("button").nth(3)).toContainText(`${(dependency.busyHandlerTimeMs / dependency.handlerCapacityTimeMs * 100).toFixed(1)}%`);
+    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(dependency.busyHandlerTimeMs / dependency.handlerCapacityTimeMs));
     await page.getByRole("button", { name: "Expand results", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("heatmap.png") });
     await page.getByRole("button", { name: "Restore results", exact: true }).click();

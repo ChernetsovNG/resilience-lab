@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Catalog, TypeDescriptor } from "../api/apiTypes";
 
 function TypeList({ title, types, editable }: { title: string; types: TypeDescriptor[]; editable: boolean }) {
@@ -27,9 +28,9 @@ function TypeList({ title, types, editable }: { title: string; types: TypeDescri
 export function Palette({ catalog, editable = false }: { catalog: Catalog | null; editable?: boolean }) {
   const types = catalog?.types ?? [];
   return (
-    <aside className="palette" aria-label="Palette">
-      <TypeList title="Blocks" types={types.filter((type) => type.category === "BLOCK")} editable={editable} />
-      <TypeList title="Connections" types={types.filter((type) => type.category === "CONNECTION")} editable={false} />
+    <aside className="palette" aria-label={t("editor.palette.label")}>
+      <TypeList title={t("editor.palette.blocks")} types={types.filter((type) => type.category === "BLOCK")} editable={editable} />
+      <TypeList title={t("editor.palette.connections")} types={types.filter((type) => type.category === "CONNECTION")} editable={false} />
     </aside>
   );
 }

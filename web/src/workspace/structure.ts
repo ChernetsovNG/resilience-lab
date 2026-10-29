@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Catalog, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand, EditorDocuments } from "./editor";
 import { elementOf, ownEntry } from "./params";
@@ -18,9 +19,9 @@ function freeId(prefix: string, used: Set<string>, numbered = false): string {
 /** Same path-segment syntax and shared block/connection namespace as ModelCompiler.ID. */
 export function identifierError(model: ModelFile, id: string, current?: string): string | null {
   if (id !== id.trim() || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id)) {
-    return "Use letters, digits, _ or -; start with a letter or digit.";
+    return t("app.structure.invalidId");
   }
-  return id !== current && usedIds(model).has(id) ? "This identifier is already used." : null;
+  return id !== current && usedIds(model).has(id) ? t("app.structure.idUsed") : null;
 }
 
 /** Position in the layout, or the deterministic automatic position used by the canvas. */
@@ -51,11 +52,11 @@ export function connectionRule(catalog: Catalog, model: ModelFile, from: string,
     .some((port) => port.id === sourcePort && port.direction === "OUT");
   const input = catalog.types.find((type) => type.id === target?.type)?.ports
     .some((port) => port.id === targetPort && port.direction === "IN");
-  if (!output || !input) return { type: null, error: "Connect an output port to an input port." };
+  if (!output || !input) return { type: null, error: t("app.structure.connectPorts") };
   const type = catalog.types.find((type) => type.category === "CONNECTION"
     && type.connects?.fromType === source?.type && type.connects?.toType === target?.type);
   return type === undefined
-    ? { type: null, error: `The catalog does not allow a connection from ${source?.type} to ${target?.type}.` }
+    ? { type: null, error: t("app.structure.connectionNotAllowed", { from: String(source?.type), to: String(target?.type) }) }
     : { type: type.id, error: null };
 }
 

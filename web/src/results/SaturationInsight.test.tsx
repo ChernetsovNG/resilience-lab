@@ -16,14 +16,14 @@ describe("SaturationInsight", () => {
       ],
     };
     render(<SaturationInsight saturation={saturation} replications={2} />);
-    expect(screen.getByText("dependency first in 1 of 2 replications; median start 80.0 ms, range 80.0–80.0 ms.")).toBeTruthy();
+    expect(screen.getByText("dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.")).toBeTruthy();
     expect(screen.getByText("1 of 2 replications without saturation.")).toBeTruthy();
     expect(screen.getByText(/futureDurationMs = 125/)).toBeTruthy();
     const details = screen.getByText("Degradation paths").closest("details")!;
     expect(details.open).toBe(false);
     fireEvent.click(screen.getByText("Degradation paths"));
     expect(details.open).toBe(true);
-    expect(screen.getByText("Replication 0: dependency at 80.0 ms → middle at 100.0 ms")).toBeTruthy();
+    expect(screen.getByText("Replication 0: dependency at 80 ms → middle at 100 ms")).toBeTruthy();
     expect(screen.getByText("Replication 1: no saturation.")).toBeTruthy();
   });
 

@@ -107,6 +107,22 @@ describe("Canvas", () => {
     expect((await screen.findByTestId("canvas-param-gateway-to-middle-attempts")).textContent).toBe("1");
   });
 
+  it("formats numeric values on the canvas while keeping their editable document text", async () => {
+    const onParam = vi.fn();
+    const formattedModel = { ...model, blocks: {
+      ...model.blocks, gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers: 1234 } },
+    } };
+    render(<Canvas catalog={catalog} onCommand={vi.fn()} model={formattedModel} layout={layout} selected={[]} onSelect={vi.fn()}
+      parametersEditable onParam={onParam} />);
+    const parameter = await screen.findByTestId("canvas-param-gateway-handlers");
+    expect(parameter.textContent).toBe("1,234");
+    expect(screen.getByRole("button", { name: "Handlers: 1,234" })).toBeTruthy();
+    const input = openParam("gateway-handlers");
+    expect(input.value).toBe("1234");
+    submit(input);
+    expect(onParam).not.toHaveBeenCalled();
+  });
+
   it("edits service handlers, queue and processing mean from the node", async () => {
     const { onParam } = renderEditable();
     await screen.findAllByTestId("block-node");
@@ -234,5 +250,5 @@ it("does not give old results to new nodes, new edges or retargeted edges", asyn
   expect(screen.queryByTestId("canvas-results-added")).toBeNull();
   expect(screen.getByTestId("canvas-edge-label-new-call").textContent).not.toContain("Amplification");
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").textContent).not.toContain("Amplification");
-  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.20×");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.2×");
 });

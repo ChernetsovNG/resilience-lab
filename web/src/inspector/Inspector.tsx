@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
 import { resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
@@ -34,7 +35,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
   return (
-    <aside className="inspector" aria-label="Inspector">
+    <aside className="inspector" aria-label={t("editor.inspector.label")}>
       {onCommand === undefined || onVariantSelect === undefined ? null : (
         <VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onSelect={onVariantSelect} onValidity={onValidity} />
@@ -44,13 +45,13 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
           <h2>{selected}</h2>
           <p className="inspector-type">
             {type.title}
-            {variantId === null ? "" : " · variant overrides"}
+            {variantId === null ? "" : t("editor.inspector.variantOverrides")}
           </p>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
           )}
-          {type.params.length === 0 ? <p>No parameters.</p> : null}
+          {type.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : null}
           {type.params.map((descriptor) => (
             <ParamField
               key={`${selected}.${descriptor.name}`}
@@ -69,7 +70,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
         </>
       ) : null}
       <details className="experiment-settings" open={selected === null}>
-        <summary>Experiment settings (shared)</summary>
+        <summary>{t("editor.inspector.experimentSettings")}</summary>
         <RunSettings catalog={catalog} model={model} experiment={experiment} editable={editable && onCommand !== undefined}
           invalid={invalid} fieldDiagnostics={fieldDiagnostics} onCommand={(command) => onCommand?.(command)} onValidity={onValidity} />
       </details>

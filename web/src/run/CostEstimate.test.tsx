@@ -11,3 +11,12 @@ it.each([
   expect(screen.getByLabelText("Uncompressed size").textContent).toBe(expected);
   expect(screen.getByLabelText("Artifact size").textContent).toBe(expected);
 });
+
+it("uses shared precision for counts, seconds and artifact sizes", () => {
+  render(<CostEstimate estimate={{ ...costEstimate, expectedEvents: 1234567.891,
+    estimatedSeconds: 1.23456, estimatedArtifactBytes: 1280 }} />);
+
+  expect(screen.getByLabelText("Expected events").textContent).toBe("1,234,567.89");
+  expect(screen.getByLabelText("Estimated time").textContent).toBe("1.235 s");
+  expect(screen.getByLabelText("Artifact size").textContent).toBe("1.25 KiB");
+});

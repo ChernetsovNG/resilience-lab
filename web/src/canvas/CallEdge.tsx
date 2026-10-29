@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { formatMultiplier, formatNumber } from "../i18n/format";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 import type { Edge, EdgeProps } from "@xyflow/react";
 import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
@@ -35,16 +37,16 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
         >
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" onCommit={(value) => onParam(connection.id, "timeout", value)} />
-            <span> · </span>
+            <span>{t("editor.symbols.separator")}</span>
             <InlineParamEditor {...editorProps} path="attempts" onCommit={(value) => onParam(connection.id, "attempts", value)} />
-            <span>×</span>
-            {summary === null ? null : <span>{summary.severity === "ERROR" ? "!" : "⚠"} {summary.count}</span>}
-            {overridden ? <span role="img" aria-label="Overridden parameters">◆</span> : null}
+            <span>{t("editor.symbols.multiplier")}</span>
+            {summary === null ? null : <span>{t("editor.diagnostics.badge", { symbol: summary.severity === "ERROR" ? t("editor.symbols.error") : t("editor.symbols.warning"), count: formatNumber(summary.count) })}</span>}
+            {overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}
           </div> : null}
           {amplification === undefined ? null : <span className="canvas-edge-results"
-            title={windowed ? "Window approximation: admitted attempts / original client arrivals; attempts may belong to earlier requests."
-              : "Called service admitted amplification: mean across replications, as in Summary."}>
-            Amplification {amplification === null ? "n/a" : `${amplification.toFixed(2)}×`}
+            title={windowed ? t("editor.canvas.amplificationWindowTitle")
+              : t("editor.canvas.amplificationPooledTitle")}>
+            {t("editor.canvas.amplification", { value: formatMultiplier(amplification) })}
           </span>}
         </div>
       </EdgeLabelRenderer> : null}

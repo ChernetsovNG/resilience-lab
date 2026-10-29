@@ -13,14 +13,14 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={run} />);
     const table = screen.getByRole("table", { name: "Summary" });
     const baseline = within(table).getByRole("row", { name: /Baseline/ });
-    expect(baseline.textContent).toContain("97.5% (95% CI 95.0%–100.0%)");
+    expect(baseline.textContent).toContain("97.5% (95% CI 95%–100%)");
     expect(baseline.textContent).toContain("41.3 ms");
     for (const disclosure of screen.getAllByText("Service metrics (1)")) fireEvent.click(disclosure);
     const services = screen.getByRole("table", { name: "Services for Baseline p0" });
     const gateway = within(services).getByRole("row", { name: /gateway/ });
-    expect(gateway.textContent).toContain("1.20×");
-    expect(gateway.textContent).toContain("95% CI 1.00×–1.40×");
-    expect(gateway.textContent).toContain("50.0%");
+    expect(gateway.textContent).toContain("1.2×");
+    expect(gateway.textContent).toContain("95% CI 1×–1.4×");
+    expect(gateway.textContent).toContain("50%");
     expect(within(services).getByRole("columnheader", { name: "Handler utilization (pooled busy/capacity)" })).toBeTruthy();
     const missing = within(screen.getByRole("table", { name: "Services for No retries p0" })).getByRole("row", { name: /gateway/ });
     expect(missing.textContent.match(/n\/a/g)).toHaveLength(2);
@@ -39,7 +39,7 @@ describe("SummaryTable", () => {
     const wide = structuredClone(summary);
     wide.variants[0].points[0].aggregate.successRate = { mean: 0.5, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
     render(<SummaryTable summary={wide} />);
-    expect(screen.getByRole("row", { name: /Baseline/ }).textContent).toContain("50.0% (95% CI -20.0%–120.0%)");
+    expect(screen.getByRole("row", { name: /Baseline/ }).textContent).toContain("50% (95% CI -20%–120%)");
   });
 
   it("shows an insight in every variant and point row", () => {
@@ -61,7 +61,7 @@ describe("SummaryTable", () => {
       expect(row.getByText("2 of 2 replications without saturation.")).toBeTruthy();
     }
     const saturated = within(screen.getByRole("row", { name: /Baseline p1/ }));
-    expect(saturated.getByText("dependency first in 1 of 2 replications; median start 80.0 ms, range 80.0–80.0 ms.")).toBeTruthy();
+    expect(saturated.getByText("dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.")).toBeTruthy();
   });
 });
 
@@ -115,12 +115,21 @@ it("shows every grid point and highlights the active variant and selected point"
   expect(within(rows[1]).getByText("p0")).toBeDefined();
   expect(within(rows[1]).getByText(/call.timeout.*40ms/)).toBeDefined();
   expect(within(rows[1]).getByText(/service.handlers.*1/)).toBeDefined();
-  expect(within(rows[1]).getByText("50.0%")).toBeDefined();
+  expect(within(rows[1]).getByText("50%")).toBeDefined();
   expect(rows[1].className).toContain("summary-row--active-variant");
   expect(rows[1].className).not.toContain("summary-row--selected-point");
   expect(within(rows[2]).getByText("p1")).toBeDefined();
   expect(within(rows[2]).getByText(/call.timeout.*80ms/)).toBeDefined();
-  expect(within(rows[2]).getByText("100.0%")).toBeDefined();
+  expect(within(rows[2]).getByText("100%")).toBeDefined();
   expect(rows[2].className).toContain("summary-row--active-variant");
   expect(rows[2].className).toContain("summary-row--selected-point");
+});
+
+it("formats numeric coordinates without rewriting quantity strings or the summary", () => {
+  const run = structuredClone(summary);
+  run.variants[0].points[0].coordinates = { "gateway.handlers": 1000, "call.timeout": "40ms" };
+  render(<SummaryTable summary={run} />);
+  expect(screen.getByText("gateway.handlers = 1,000")).toBeTruthy();
+  expect(screen.getByText("call.timeout = 40ms")).toBeTruthy();
+  expect(run.variants[0].points[0].coordinates["gateway.handlers"]).toBe(1000);
 });

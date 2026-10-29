@@ -1,6 +1,8 @@
+import { t } from "../i18n";
+import { formatNumber } from "../i18n/format";
 import { useEffect, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
-import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
-import type { Edge, NodeChange } from "@xyflow/react";
+import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
+import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
 import type { CanvasResults } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
@@ -14,6 +16,21 @@ import "@xyflow/react/dist/style.css";
 
 const nodeTypes = { block: BlockNode };
 const edgeTypes = { call: CallEdge };
+const ariaLabelConfig: AriaLabelConfig = {
+  "node.a11yDescription.default": t("editor.canvas.nodeDescription"),
+  "node.a11yDescription.keyboardDisabled": t("editor.canvas.nodeKeyboardDescription"),
+  "node.a11yDescription.ariaLiveMessage": ({ direction, x, y }) => t("editor.canvas.nodeMoved", {
+    direction: t(`editor.canvas.direction.${direction}`), x: formatNumber(x), y: formatNumber(y),
+  }),
+  "edge.a11yDescription.default": t("editor.canvas.edgeDescription"),
+  "controls.ariaLabel": t("editor.canvas.controls"),
+  "controls.zoomIn.ariaLabel": t("editor.canvas.zoomIn"),
+  "controls.zoomOut.ariaLabel": t("editor.canvas.zoomOut"),
+  "controls.fitView.ariaLabel": t("editor.canvas.fitView"),
+  "controls.interactive.ariaLabel": t("editor.canvas.toggleInteractivity"),
+  "minimap.ariaLabel": t("editor.canvas.miniMap"),
+  "handle.ariaLabel": t("editor.canvas.handle"),
+};
 
 export interface CanvasProps {
   /** The model as the active variant page sees it. */
@@ -66,6 +83,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
     },
     selected: selected.includes(id),
     ariaLabel: id,
+    domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole") },
   }));
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
@@ -88,6 +106,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       className: summary === null ? undefined : `diagnostic--${summary.severity.toLowerCase()}`,
       selected: selected.includes(connection.id),
       ariaLabel: connection.id,
+      domAttributes: { "aria-roledescription": t("editor.canvas.edgeRole") },
     };
   });
 
@@ -136,7 +155,9 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
   return (
     <>
     <ReactFlow
-      aria-label="Model canvas"
+      aria-label={t("editor.canvas.label")}
+      ariaLabelConfig={ariaLabelConfig}
+      proOptions={{ hideAttribution: true }}
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
@@ -174,13 +195,17 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
         if (rule.type !== null) onCommand(addConnection(catalog, source, target, sourceHandle, targetHandle));
       }}
       onConnectEnd={(_, connection) => {
-        if (connection.fromNode !== null && connection.isValid !== true) setNotice("Connect an output port to an input port allowed by the catalog.");
+        if (connection.fromNode !== null && connection.isValid !== true) setNotice(t("editor.canvas.connectionHint"));
       }}
     >
       <Background gap={20} />
+      <Panel position="bottom-right" className="react-flow__attribution">
+        <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"
+          aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>
+      </Panel>
       {notice === null ? null : <div className="canvas-notice" role="alert">{notice}</div>}
     </ReactFlow>
-    <div className="canvas-navigation react-flow" role="group" aria-label="Canvas navigation">
+    <div className="canvas-navigation react-flow" role="group" aria-label={t("editor.canvas.navigation")}>
       <Controls showInteractive={false} orientation="horizontal" />
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </div>

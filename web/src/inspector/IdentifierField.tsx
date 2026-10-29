@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ModelFile } from "../api/apiTypes";
 import { identifierError } from "../workspace/structure";
@@ -24,7 +25,7 @@ export function IdentifierField({ model, identifier, editable, onRename, onValid
   };
   return (
     <div className="param-field">
-      <label htmlFor={inputId}>Identifier</label>
+      <label htmlFor={inputId}>{t("editor.identifier")}</label>
       <input id={inputId} value={draft} readOnly={!editable} aria-invalid={error !== null}
         aria-describedby={error === null ? undefined : `${inputId}-error`}
         onChange={(event) => setDraft(event.target.value)} onBlur={commit}

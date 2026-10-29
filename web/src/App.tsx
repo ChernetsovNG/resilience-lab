@@ -5,6 +5,8 @@ import { canvasResults, utilizationColor } from "./results/canvasResults";
 import { PlaybackControls } from "./results/playback/PlaybackControls";
 import { usePlayback } from "./results/playback/usePlayback";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "./i18n";
+import { formatDuration, formatNumber, formatPercent } from "./i18n/format";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
@@ -98,9 +100,9 @@ export function App() {
       fieldDiagnostics.set(target.field, [...(fieldDiagnostics.get(target.field) ?? []), diagnostic]);
     }
   }
-  const runBlockedReason = validation.pending ? "Wait for validation to finish"
-    : validation.problem !== null ? "Validation failed; edit or reload the documents to retry"
-      : validation.report?.valid === false ? "Fix validation errors before running" : undefined;
+  const runBlockedReason = validation.pending ? t("app.validation.pending")
+    : validation.problem !== null ? t("app.validation.failed")
+      : validation.report?.valid === false ? t("app.validation.invalid") : undefined;
 
   const onValidity = useCallback((key: string, valid: boolean) => {
     setInvalidFields((current) => {
@@ -169,7 +171,7 @@ export function App() {
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
-          if (workspace.dirty && !window.confirm("Discard unsaved changes to the documents?")) return;
+          if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           setSelection([]);
           clipboard.current = null;
           selectVariant(null);
@@ -200,10 +202,10 @@ export function App() {
           void requestEstimate().then((cost) => {
             if (cost === null) return;
             if (cost.problem !== null) {
-              if (!window.confirm(`Cost estimate failed: ${cost.problem.message}\nTime and size budgets could not be checked.\nStart this run without an estimate?`)) return;
+              if (!window.confirm(t("app.confirm.estimateFailed", { message: cost.problem.message }))) return;
             } else {
               const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
-              if (budgets.length > 0 && !window.confirm(`${budgets.map((warning) => warning.message).join("\n")}\nStart this run?`)) return;
+              if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => warning.message).join("\n") }))) return;
             }
             void run.run(loaded.experimentPath, { model: loaded.model, experiment: loaded.experiment });
           });
@@ -214,9 +216,9 @@ export function App() {
         healthError={health.error}
       />
       {showEstimate && (estimate.pending || estimate.estimate !== null || estimate.problem !== null) ? (
-        <section className="estimate-area" aria-label="Estimate">
-          <button type="button" className="estimate-close" onClick={() => setShowEstimate(false)}>Close estimate</button>
-          {estimate.pending ? <p className="banner" role="status">Estimating experiment cost…</p> : null}
+        <section className="estimate-area" aria-label={t("app.estimate.label")}>
+          <button type="button" className="estimate-close" onClick={() => setShowEstimate(false)}>{t("app.estimate.close")}</button>
+          {estimate.pending ? <p className="banner" role="status">{t("app.estimate.pending")}</p> : null}
           {estimate.estimate === null ? null : <CostEstimate estimate={estimate.estimate} />}
           {estimate.problem === null ? null : <ProblemList problem={estimate.problem} />}
         </section>
@@ -226,28 +228,28 @@ export function App() {
         <div className="canvas-messages">
           {invalid ? (
             <div className="banner" role="alert">
-              Fix invalid values before changing the selected element, page or experiment.
+              {t("app.fields.invalid")}
             </div>
           ) : null}
           {workspace.externalChange !== null || workspace.conflict ? (
             <div className="banner" role="alert">
               {workspace.externalChange?.deleted ? (
-                <>The document was deleted on disk: <code>{workspace.externalChange.path}</code>.</>
+                <>{t("app.documents.deletedBeforePath")}<code>{workspace.externalChange.path}</code>{t("app.documents.afterPath")}</>
               ) : (
                 <>
-                  The document changed on disk: <code>{workspace.externalChange?.path ?? workspace.conflictPath}</code>.{" "}
-                  {workspace.externalChange !== null && workspace.dirty ? "Reload will discard unsaved changes. " : null}
+                  {t("app.documents.changedBeforePath")}<code>{workspace.externalChange?.path ?? workspace.conflictPath}</code>{t("app.documents.changedAfterPath")}
+                  {workspace.externalChange !== null && workspace.dirty ? t("app.documents.discardWarning") : null}
                   <button
                     type="button"
                     onClick={() => {
                       if (workspace.externalChange !== null && workspace.dirty &&
-                        !window.confirm("Reload and discard unsaved changes to the documents?")) return;
+                        !window.confirm(t("app.confirm.reloadChanges"))) return;
                       setSelection([]);
                       clipboard.current = null;
                       void workspace.reload();
                     }}
                   >
-                    Reload
+                    {t("app.documents.reload")}
                   </button>
                 </>
               )}
@@ -255,32 +257,34 @@ export function App() {
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
           {diagramResults === null ? null : (
-            <div className="canvas-results-toolbar" role="region" aria-label="Canvas results">
+            <div className="canvas-results-toolbar" role="region" aria-label={t("app.canvas.results")}>
               <label>
                 <input type="checkbox" checked={showDiagramResults} onChange={(event) => setShowDiagramResults(event.target.checked)} />
-                Show results on diagram
+                {t("app.canvas.showResults")}
               </label>
               {showDiagramResults ? <>
                 <span data-testid="canvas-result-context">{playback.frame?.window === undefined
-                  ? `Summary · ${variant?.label ?? variant?.id} · ${selectedPointId} · measurement interval`
-                  : `Window ${playback.frame.window} · ${playback.frame.window * windowMs}–${Math.min(endMs, (playback.frame.window + 1) * windowMs)} ms · replication ${results.selection.replication} · ${variant?.label ?? variant?.id} · ${selectedPointId}`}</span>
-                <span className="utilization-legend" aria-label="Handler utilization scale">
-                  Utilization ({playback.frame === null ? "pooled" : "window"}): 0%
+                  ? t("app.canvas.summaryContext", { variant: String(variant?.label ?? variant?.id), pointId: selectedPointId })
+                  : t("app.canvas.windowContext", { window: formatNumber(playback.frame.window), start: formatNumber(playback.frame.window * windowMs, 1),
+                    end: formatDuration(Math.min(endMs, (playback.frame.window + 1) * windowMs)), replication: formatNumber(results.selection.replication),
+                    variant: String(variant?.label ?? variant?.id), pointId: selectedPointId })}</span>
+                <span className="utilization-legend" aria-label={t("app.canvas.utilizationScale")}>
+                  {t("app.canvas.utilizationLegend", { mode: playback.frame === null ? t("app.canvas.utilizationPooled") : t("app.canvas.utilizationWindow"), minimum: formatPercent(0) })}
                   <span className="utilization-scale" aria-hidden="true"
                     style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
-                  100%
+                  {formatPercent(1)}
                 </span>
                 {windowCount > 0 ? <PlaybackControls playback={playback} window={results.selection.window} windowCount={windowCount}
                   replication={results.selection.replication} replications={run.manifest?.replications ?? 0}
                   onReplicationChange={(replication) => results.select({ replication })} /> : null}
-                {staleResults ? <span className="canvas-results-stale" role="status">Results belong to a previous document version.</span> : null}
+                {staleResults ? <span className="canvas-results-stale" role="status">{t("app.canvas.stale")}</span> : null}
               </> : null}
             </div>
           )}
         </div>
         <div className="canvas">
           {model === null || loaded === null || catalog === null ? (
-            <p className="canvas-empty">Loading workspace…</p>
+            <p className="canvas-empty">{t("app.canvas.loading")}</p>
           ) : (
             <Canvas
               model={model}
@@ -309,7 +313,7 @@ export function App() {
         <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid} onSelect={selectVariant} />
       </main>
       {model === null || loaded === null || catalog === null ? (
-        <aside className="inspector" aria-label="Inspector" />
+        <aside className="inspector" aria-label={t("app.canvas.inspector")} />
       ) : (
         <Inspector
           key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}

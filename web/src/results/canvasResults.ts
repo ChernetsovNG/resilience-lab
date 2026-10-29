@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { formatNumber } from "../i18n/format";
 import type { ModelFile, RunSummary } from "../api/apiTypes";
 import type { NodeSeriesMetrics } from "./series";
 import { elementIdentity } from "../workspace/editor";
@@ -38,7 +40,7 @@ export function canvasResults(
       utilization: ratio(totals.busyHandlerTimeMs, totals.handlerCapacityTimeMs),
       meanQueue: ratio(totals.queueLengthIntegralMs, totals.measurementMs),
       queueRejectionRate: ratio(totals.queueRejections, totals.offeredAttempts),
-      firstSaturation: first?.node === id ? `${first.replicationCount} of ${variant.replications} replications` : null,
+      firstSaturation: first?.node === id ? t("results.canvas.firstSaturation", { count: formatNumber(first.replicationCount), replications: formatNumber(variant.replications) }) : null,
     });
   }
   const connections = new Map<string, { from: string; to: string; type: string; amplification: number | null }>();

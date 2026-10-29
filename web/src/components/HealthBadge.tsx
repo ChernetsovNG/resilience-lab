@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { HealthView } from "../api/apiTypes";
 
 interface HealthBadgeProps {
@@ -9,7 +10,7 @@ export function HealthBadge({ health, error }: HealthBadgeProps) {
   if (error !== null) {
     return (
       <div className="health-badge health-badge--error" role="alert">
-        Backend unavailable: {error}
+        {t("app.health.unavailable", { error })}
       </div>
     );
   }
@@ -17,14 +18,14 @@ export function HealthBadge({ health, error }: HealthBadgeProps) {
   if (health === null) {
     return (
       <div className="health-badge" role="status">
-        Checking backend health…
+        {t("app.health.checking")}
       </div>
     );
   }
 
   return (
     <div className="health-badge health-badge--healthy" role="status">
-      Backend healthy · v{health.applicationVersion} · KSL {health.kslVersion}
+      {t("app.health.healthy", { applicationVersion: health.applicationVersion, kslVersion: health.kslVersion })}
     </div>
   );
 }

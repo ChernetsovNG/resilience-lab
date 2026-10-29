@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
+import { formatDuration, formatNumber } from "../src/i18n/format";
 
 test("shows the retry-storm saturation conclusion from the real summary for each variant", async ({ page }, testInfo) => {
   const directory = resolve("../apps/server/build/e2e-workspace/saturation-insight");
@@ -25,10 +26,10 @@ test("shows the retry-storm saturation conclusion from the real summary for each
         const insight = row.locator(".saturation-insight");
         await insight.scrollIntoViewIfNeeded();
         await expect(insight).toBeInViewport();
-        await expect(insight).toContainText(`${first.node} first in ${first.replicationCount} of ${variant.replications} replications`);
-        await expect(insight).toContainText(`median start ${first.medianStartMs.toFixed(1)} ms`);
-        await expect(insight).toContainText(`range ${first.minStartMs.toFixed(1)}–${first.maxStartMs.toFixed(1)} ms`);
-        await expect(insight).toContainText(`${point.saturation.withoutSaturation} of ${variant.replications} replications without saturation.`);
+        await expect(insight).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
+        await expect(insight).toContainText(`median start ${formatDuration(first.medianStartMs)}`);
+        await expect(insight).toContainText(`range ${formatNumber(first.minStartMs, 1)}–${formatDuration(first.maxStartMs)}`);
+        await expect(insight).toContainText(`${formatNumber(point.saturation.withoutSaturation)} of ${formatNumber(variant.replications)} replications without saturation.`);
       }
     }
     const overflow = await page.evaluate(() => ({

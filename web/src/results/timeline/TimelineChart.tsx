@@ -1,3 +1,5 @@
+import { t } from "../../i18n";
+import { formatDuration, formatNumber, formatPercent, formatRate } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import type { WindowMetricValues } from "../series";
@@ -26,12 +28,12 @@ interface TimelineChartProps {
   onCursor: (window: number | null) => void;
 }
 
-const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
-const tick = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
-
 /** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
 export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
   const [width, setWidth] = useState(640);
+  const format = (value: number) => unit === "ms" ? formatDuration(value) : unit === "RPS" ? formatRate(value)
+    : unit === "%" ? formatPercent(value / 100)
+      : t("results.timeline.valueWithUnit", { value: formatNumber(value), unit: t(`results.units.${unit}`) });
   const sampled = useMemo(() => lines.map((line) => {
     const points: TimelinePoint[] = [];
     for (const [window, metrics] of line.windows.entries()) {
@@ -52,14 +54,14 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
     return windowAt((event.clientX - bounds.left) / bounds.width * endMs, windowMs, endMs);
   };
   return <section className="timeline-chart" aria-label={title}>
-    <h3>{title} <span>({unit})</span></h3>
+    <h3>{title} <span>{t("results.unitInParens", { unit: t(`results.units.${unit}`) })}</span></h3>
     <div className="timeline-plot">
       <ResponsiveContainer width="100%" height={176} minWidth={0} onResize={(next) => setWidth(next)}>
         <LineChart margin={{ left: 0, right: 12, top: 12, bottom: 0 }} accessibilityLayer={false}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e7eb" />
           <XAxis type="number" dataKey="startMs" domain={[0, endMs]} allowDataOverflow height={32} tickCount={6}
-            tickFormatter={(value: number) => tick.format(value)} />
-          <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => tick.format(value)} />
+            tickFormatter={(value: number) => formatNumber(value)} />
+          <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => formatNumber(value)} />
           {regions.map((region, index) => <ReferenceArea key={index} x1={region.fromMs} x2={region.toMs}
             fill={region.kind === "warmup" ? "#94a3b8" : "#f59e0b"} fillOpacity={0.14} />)}
           {sampled.map((line) => <Line key={line.id} data={line.points} dataKey="value" type="stepAfter"
@@ -72,9 +74,9 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
           {hoverWindow === null ? null : <ReferenceLine x={hoverWindow * windowMs} stroke="#475569" strokeDasharray="3 3" />}
         </LineChart>
       </ResponsiveContainer>
-      <div className="timeline-interaction" role="slider" tabIndex={0} aria-label={`${title} time cursor`}
+      <div className="timeline-interaction" role="slider" tabIndex={0} aria-label={t("results.timeline.timeCursor", { title })}
         aria-valuemin={0} aria-valuemax={lastWindow} aria-valuenow={cursorWindow ?? 0}
-        aria-valuetext={cursorWindow === null ? "No pinned window" : `Window ${cursorWindow}, ${cursorWindow * windowMs} ms`}
+        aria-valuetext={cursorWindow === null ? t("results.timeline.noPinnedWindow") : t("results.timeline.pinnedWindow", { window: formatNumber(cursorWindow), time: formatDuration(cursorWindow * windowMs) })}
         onPointerMove={(event) => onHover(pointerWindow(event))} onPointerLeave={() => onHover(null)}
         onClick={(event) => onCursor(pointerWindow(event))}
         onKeyDown={(event) => {
@@ -86,15 +88,15 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
           else if (next !== null) { event.preventDefault(); onCursor(next); }
         }} />
     </div>
-    <p className="timeline-axis">Simulation time (ms)</p>
-    {unit === "ms" ? <p className="timeline-latency-note">Markers show recorded window values. Empty windows have no latency value and remain gaps.</p> : null}
+    <p className="timeline-axis">{t("results.timeline.timeAxis")}</p>
+    {unit === "ms" ? <p className="timeline-latency-note">{t("results.timeline.latencyNote")}</p> : null}
     <dl className="timeline-readout">
       {lines.map((line) => {
         const raw = active === null ? null : line.windows[active]?.[line.metric] ?? null;
         return <div key={line.id}>
           <dt><span className={`timeline-line-key${line.comparison ? " timeline-line-key--comparison" : ""}`}
             style={{ borderColor: line.color }} />{line.label}</dt>
-          <dd>{raw === null ? "—" : `${number.format(raw * line.scale)} ${unit}`}</dd>
+          <dd>{raw === null ? t("results.timeline.noValue") : format(raw * line.scale)}</dd>
         </div>;
       })}
     </dl>
