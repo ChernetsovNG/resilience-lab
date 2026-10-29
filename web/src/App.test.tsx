@@ -586,7 +586,7 @@ describe("App stage 1 integration", () => {
     expect(experimentSelect().disabled).toBe(true);
     expect(button("Run").disabled).toBe(true);
     await act(async () => { gate.release(); });
-    await screen.findByRole("table");
+    await screen.findByRole("table", { name: "Summary" });
     expect(within(screen.getByRole("region", { name: "Results" })).getByText(/97\.5%/)).toBeTruthy();
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
@@ -849,8 +849,8 @@ describe("cost estimate and resume", () => {
     expect(within(estimate).getByLabelText("Expected events").textContent).toBe("12,345");
     expect(within(estimate).getByLabelText("Expected rows").textContent).toBe("400");
     expect(within(estimate).getByLabelText("Estimated time").textContent).toBe("1.25 s");
-    expect(within(estimate).getByLabelText("Uncompressed size").textContent).toBe("204,800 B");
-    expect(within(estimate).getByLabelText("Artifact size").textContent).toBe("51,200 B");
+    expect(within(estimate).getByLabelText("Uncompressed size").textContent).toBe("200 KiB");
+    expect(within(estimate).getByLabelText("Artifact size").textContent).toBe("50 KiB");
     expect(within(estimate).getByLabelText("Parts").textContent).toBe("4");
     const call = fetchMock.mock.calls.find(([url]) => url === "/api/v1/estimate")!;
     const body = JSON.parse(String(call[1]?.body));
@@ -892,18 +892,48 @@ describe("cost estimate and resume", () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("does not start a run when estimation fails", async () => {
+  it.each([false, true])("requires confirmation to run without an estimate: accepted=%s", async (accepted) => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(accepted);
     const fetchMock = server((url) => url === "/api/v1/estimate" ? {
       status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
     } : undefined);
     await open(); fireEvent.click(button("Run"));
     await screen.findByText("Estimation unavailable");
+    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    expect(confirm.mock.calls[0][0]).toContain("Estimation unavailable");
+    expect(confirm.mock.calls[0][0]).toContain("without an estimate");
+    await waitFor(() => expect(button("Run").disabled).toBe(false));
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
+    if (accepted) await screen.findByRole("table", { name: "Summary" });
+  });
+
+  it("shows a manual estimate failure without asking to start a run", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const fetchMock = server((url) => url === "/api/v1/estimate" ? {
+      status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
+    } : undefined);
+    await open(); fireEvent.click(button("Estimate"));
+    await screen.findByText("Estimation unavailable");
+    expect(confirm).not.toHaveBeenCalled();
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
-    expect(button("Run").disabled).toBe(false);
+  });
+
+  it("closes and reopens the estimate without editing documents or starting a run", async () => {
+    const fetchMock = server();
+    await open(); fireEvent.click(button("Estimate"));
+    await screen.findByRole("region", { name: "Cost estimate" });
+    fireEvent.click(button("Close estimate"));
+    expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
+    expect(button("Undo").disabled).toBe(true);
+    expect(button("Save").disabled).toBe(true);
+    fireEvent.click(button("Estimate"));
+    await screen.findByRole("region", { name: "Cost estimate" });
+    expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
   });
 
   it.each([false, true])("discards a late estimate after an edit: rejected=%s", async (rejected) => {
     const gate = deferred();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const fetchMock = server(async (url) => {
       if (url !== "/api/v1/estimate") return undefined;
       await gate.promise;
@@ -915,6 +945,7 @@ describe("cost estimate and resume", () => {
     await act(async () => { gate.release(); });
     expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
     expect(screen.queryByText("Old estimate error")).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
   });
 

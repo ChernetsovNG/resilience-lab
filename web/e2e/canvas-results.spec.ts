@@ -28,7 +28,6 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     await expect(toolbar).toHaveCount(0);
     await expect(page.locator(".block-results")).toHaveCount(0);
     const table = page.getByRole("table", { name: "Summary" });
-    const headers = await table.locator("thead th").allTextContents();
     expect(summary.variants[0].points[0].saturation.firstNodes[0]).toBeDefined();
 
     for (const variant of summary.variants) {
@@ -38,6 +37,9 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         await expect(toolbar).toContainText(`Summary · ${variant.label} · ${point.id} · measurement interval`);
         await expect(toolbar).toContainText("Utilization (pooled)");
         const row = table.getByRole("row", { name: new RegExp(`${variant.label} ${point.id} `) });
+        const serviceDetails = table.getByRole("row", { name: `${variant.id}/${point.id} service metrics`, exact: true });
+        await serviceDetails.locator(".summary-services > summary").click();
+        const services = page.getByRole("table", { name: `Services for ${variant.label} ${point.id}`, exact: true });
         for (const [id, service] of Object.entries(point.aggregate.services)) {
           const totals = service.totals;
           const utilization = `${(100 * totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs).toFixed(1)}%`;
@@ -45,11 +47,12 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           await expect(metrics).toContainText(`Utilization ${utilization}`);
           await expect(metrics).toContainText(`Mean queue ${(totals.queueLengthIntegralMs / totals.measurementMs).toFixed(2)}`);
           await expect(metrics).toContainText(`Queue rejections ${(100 * totals.queueRejections / totals.offeredAttempts).toFixed(1)}%`);
-          await expect(row.locator("th,td").nth(headers.indexOf(`${id} handler utilization (busy/capacity)`))).toHaveText(utilization);
+          const serviceRow = services.getByRole("row").filter({ has: page.getByRole("rowheader", { name: id, exact: true }) });
+          await expect(serviceRow.locator("td").nth(1)).toHaveText(utilization);
           const amplification = `${service.admittedAmplification!.mean.toFixed(2)}×`;
           const connection = id === "gateway" ? "client-to-gateway" : id === "middle" ? "gateway-to-middle" : "middle-to-dependency";
           await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Amplification ${amplification}`);
-          await expect(row.locator("th,td").nth(headers.indexOf(`${id} admitted ×`))).toContainText(amplification);
+          await expect(serviceRow.locator("td").nth(0)).toContainText(amplification);
           expect(await page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate((node) =>
             (node as HTMLElement).style.backgroundColor)).not.toBe("");
         }
