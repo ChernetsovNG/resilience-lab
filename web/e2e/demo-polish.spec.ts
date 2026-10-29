@@ -37,9 +37,9 @@ test("canvas fits without navigation overlap after panel changes and viewport re
   await expectFitted(page);
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
   await expectFitted(page);
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
-  await expect(page.getByLabel("Model canvas", { exact: true })).toBeHidden();
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
+  await expectFitted(page);
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await expectFitted(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await expectFitted(page);
@@ -70,7 +70,7 @@ test("latency markers show recorded windows and leave empty-window readouts unav
   expect(observed.length).toBeGreaterThan(0);
   await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   const latency = page.getByRole("region", { name: "Latency", exact: true });
   await expect(latency.locator(".recharts-line-dots").first()).toBeVisible();
   const dots = latency.locator(".recharts-line-dots").first().locator("circle");

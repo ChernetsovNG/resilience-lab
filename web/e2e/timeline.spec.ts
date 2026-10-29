@@ -104,10 +104,10 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
 
   await page.getByTestId("rf__node-gateway").click();
   await expect(queue.locator("dt").first()).toContainText("gateway · Mean queue");
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight)).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("timeline.png") });
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await page.getByRole("button", { name: "Summary", exact: true }).click();
   await expect(page.getByTestId("timeline-cursor")).toContainText("Hover to inspect");
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();

@@ -74,9 +74,9 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await page.getByRole("combobox", { name: "Map metric", exact: true }).selectOption("handlerUtilization");
     await page.getByRole("combobox", { name: "Map service", exact: true }).selectOption("dependency");
     await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(dependency.busyHandlerTimeMs / dependency.handlerCapacityTimeMs));
-    await page.getByRole("button", { name: "Expand results", exact: true }).click();
+    await page.getByRole("button", { name: "Analysis", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("heatmap.png") });
-    await page.getByRole("button", { name: "Restore results", exact: true }).click();
+    await page.getByRole("button", { name: "Analysis", exact: true }).click();
 
     await page.getByRole("tab", { name: "Answer", exact: true }).click();
     const insight = page.getByRole("region", { name: "Saturation insight" });
@@ -128,7 +128,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await expect(points).toHaveCount(3);
     await points.nth(2).click();
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /p2/);
-    await page.getByRole("button", { name: "Expand results", exact: true }).click();
+    await page.getByRole("button", { name: "Analysis", exact: true }).click();
     expect(await page.evaluate(() => ({
       x: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       y: document.documentElement.scrollHeight > document.documentElement.clientHeight,

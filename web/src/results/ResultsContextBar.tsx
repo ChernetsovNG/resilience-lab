@@ -19,11 +19,13 @@ interface ResultsContextBarProps {
   metric: NodeOverlayMetric | "off";
   onMetricChange: (metric: NodeOverlayMetric | "off") => void;
   stale: boolean;
+  analysis: boolean;
+  onAnalysisChange: () => void;
 }
 
 /** Controls the shared result context without changing documents or editor history. */
 export function ResultsContextBar({ summary, variant, selection, onSelect, replications, playback,
-  windowCount, windowMs, endMs, metric, onMetricChange, stale }: ResultsContextBarProps) {
+  windowCount, windowMs, endMs, metric, onMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const time = selection.window !== null;
   const context = time ? t("app.canvas.windowContext", {
@@ -47,7 +49,7 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
         })}
       </option>)}
     </select>}
-    <label>{t("results.replication")} <select aria-label={t("results.replication")} value={selection.replication} disabled={!time}
+    <label>{t("results.replication")} <select aria-label={t("results.replication")} value={selection.replication}
       onChange={event => onSelect({ replication: Number(event.target.value) })}>
       {Array.from({ length: replications }, (_, index) => <option key={index} value={index}>{formatNumber(index)}</option>)}
     </select></label>
@@ -76,6 +78,8 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
       <span className="sr-only">{t("results.context.edges")}</span>
     </>}
     {stale ? <span className="canvas-results-stale" role="status" title={t("app.canvas.stale")}>{t("app.canvas.stale")}</span> : null}
-    <span className="results-context-actions" />
+    <span className="results-context-actions">
+      <button type="button" aria-pressed={analysis} onClick={onAnalysisChange}>{t("results.analysis")}</button>
+    </span>
   </div>;
 }

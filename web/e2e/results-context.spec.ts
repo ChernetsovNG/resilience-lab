@@ -22,7 +22,7 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     await expect(row).toBeVisible();
     await expect(row.getByRole("button", { name: "Summary", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(row.getByLabel("Replication", { exact: true })).toBeDisabled();
+    await expect(row.getByLabel("Replication", { exact: true })).toBeEnabled();
     await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
     const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
     const box = (await canvas.boundingBox())!;
@@ -49,6 +49,40 @@ test("one context row gives the diagram more height and shares time with Timelin
     await page.getByTestId("rf__node-dependency").click();
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 1");
+    await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
+    await page.screenshot({ path: testInfo.outputPath("normal-layout.png") });
+    await row.getByRole("button", { name: "Analysis", exact: true }).click();
+    await expect(page.locator(".palette")).toBeHidden();
+    await expect(page.locator(".inspector")).toBeHidden();
+    await expect(canvas).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeInViewport({ ratio: 0.5 });
+    await window.focus();
+    await window.press("Home");
+    for (let index = 0; index < 19; index++) await window.press("ArrowRight");
+    await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
+    const beforePlayback = await page.getByTestId("canvas-results-dependency").textContent();
+    await row.getByRole("button", { name: "Play run", exact: true }).click();
+    await expect.poll(async () => Number(await window.inputValue())).toBeGreaterThanOrEqual(25);
+    await row.getByRole("button", { name: "Pause run", exact: true }).click();
+    const playedWindow = await window.inputValue();
+    await expect(page.getByTestId("timeline-cursor")).toContainText("Window " + playedWindow + " ·");
+    await expect(page.getByTestId("canvas-results-dependency")).not.toHaveText(beforePlayback!);
+    await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("analysis-layout.png") });
+    const divider = page.getByRole("separator", { name: "Resize results panel" });
+    for (const key of ["Home", "End"]) {
+      await divider.focus();
+      await divider.press(key);
+      expect(await page.evaluate(() => ({
+        x: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        y: document.documentElement.scrollHeight > document.documentElement.clientHeight,
+      }))).toEqual({ x: false, y: false });
+      await expect(canvas).toBeInViewport({ ratio: 1 });
+    }
+    await divider.press("Escape");
+    await expect(row.getByRole("button", { name: "Analysis", exact: true })).toHaveAttribute("aria-pressed", "false");
+    await expect(window).toHaveValue(playedWindow);
+
     await expect(page.locator(".timeline-toolbar").getByLabel("Replication", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Clear time cursor", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Return to summary", exact: true })).toHaveCount(0);
@@ -63,6 +97,9 @@ test("one context row gives the diagram more height and shares time with Timelin
     await row.getByRole("button", { name: "Summary", exact: true }).click();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Hover to inspect windows");
     await expect(window).toHaveCount(0);
+    await row.getByLabel("Replication", { exact: true }).selectOption("0");
+    await expect(row.getByRole("button", { name: "Summary", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(row.getByLabel("Replication", { exact: true })).toHaveValue("0");
     await row.getByLabel("Node overlay", { exact: true }).selectOption("off");
     await expect(page.locator(".block-results")).toHaveCount(0);
     await page.getByRole("tab", { name: "Model", exact: true }).click();

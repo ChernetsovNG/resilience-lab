@@ -379,7 +379,7 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await expectNoPageScroll(page);
 });
 
-test("shows summary, assumptions and every results panel size without page scroll", async ({ page }) => {
+test("shows summary and assumptions in resizable and Analysis layouts without page scroll", async ({ page }) => {
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
   const summary = page.getByRole("table", { name: "Answer" });
@@ -412,19 +412,21 @@ test("shows summary, assumptions and every results panel size without page scrol
   await expect(panel).toBeVisible();
   await expectNoPageScroll(page);
 
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await expect(panel).toBeVisible();
   await expect(page.locator(".palette")).toBeHidden();
-  await expect(page.locator(".canvas-area")).toBeHidden();
+  await expect(page.locator(".canvas-area")).toBeVisible();
   await expect(page.locator(".inspector")).toBeHidden();
-  const topBar = await page.locator(".top-bar").boundingBox();
-  const expanded = await page.locator(".results-panel").boundingBox();
-  expect(expanded!.y).toBe(topBar!.y + topBar!.height);
-  const statusBar = await page.getByRole("region", { name: "Status bar" }).boundingBox();
-  expect(expanded!.height).toBe(statusBar!.y - topBar!.y - topBar!.height);
-  expect(statusBar!.y + statusBar!.height).toBe(720);
+  const canvas = (await page.locator(".canvas-area").boundingBox())!;
+  const results = (await page.locator(".results-panel").boundingBox())!;
+  expect(results.y).toBeGreaterThanOrEqual(canvas.y + canvas.height);
+  expect(results.width).toBe(1280);
+  const statusBar = (await page.getByRole("region", { name: "Status bar" }).boundingBox())!;
+  expect(results.y + results.height).toBeCloseTo(statusBar.y, 1);
+  expect(statusBar.y + statusBar.height).toBe(720);
   await expectNoPageScroll(page);
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await expect(page.locator(".palette")).toBeVisible();
   await expect(page.locator(".canvas-area")).toBeVisible();
   await expect(page.locator(".inspector")).toBeVisible();
@@ -593,7 +595,8 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   };
   let jobs = 0;
   page.on("request", (request) => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
-  await page.getByRole("button", { name: "Expand results", exact: true }).click();
+  await page.getByRole("separator", { name: "Resize results panel" }).focus();
+  await page.getByRole("separator", { name: "Resize results panel" }).press("End");
   const saved = await estimate();
   const savedBody: ExperimentEstimate = await saved.json();
   const fromApi = await request.post("/api/v1/estimate", { data: { experiment, drafts: [] } });

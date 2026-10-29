@@ -10,6 +10,7 @@ import { VariantSettings } from "./VariantSettings";
 
 export interface InspectorProps {
   catalog: Catalog;
+  hidden?: boolean;
   /** The model as the active variant page sees it. */
   model: ModelFile;
   experiment: ExperimentFile;
@@ -30,12 +31,12 @@ export interface InspectorProps {
 
 /** Context inspector (product vision §5.5): catalog fields, variant controls and shared experiment settings. */
 export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity,
-  variantId = null, invalid = false, onCommand, onVariantSelect, fieldDiagnostics }: InspectorProps) {
+  hidden = false, variantId = null, invalid = false, onCommand, onVariantSelect, fieldDiagnostics }: InspectorProps) {
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
   return (
-    <aside className="inspector" aria-label={t("editor.inspector.label")}>
+    <aside hidden={hidden} className="inspector" aria-label={t("editor.inspector.label")}>
       {onCommand === undefined || onVariantSelect === undefined ? null : (
         <VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onSelect={onVariantSelect} onValidity={onValidity} />

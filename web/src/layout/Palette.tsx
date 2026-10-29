@@ -19,15 +19,16 @@ function BlockIcon({ type }: { type: TypeDescriptor }) {
 }
 
 /** Catalog block icons support native button activation as well as dragging onto the model page. */
-export function Palette({ catalog, editable = false, onAdd }: {
+export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
   catalog: Catalog | null;
   editable?: boolean;
+  hidden?: boolean;
   onAdd: (type: string) => void;
 }) {
   const tooltipId = useId();
   const types = catalog?.types.filter((type) => type.category === "BLOCK") ?? [];
   return (
-    <aside className="palette" aria-label={t("editor.palette.label")}>
+    <aside hidden={hidden} className="palette" aria-label={t("editor.palette.label")}>
       <ul>
         {types.map((type) => (
           <li key={type.id}>
