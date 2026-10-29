@@ -25,7 +25,7 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   const modelUrl = "/api/v1/workspace/document?path=retry-storm/retry-storm.model.json";
   const original = await (await request.get(modelUrl)).json();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
-  await expect(page.getByRole("tabpanel")).toBeHidden();
+  await expect(page.getByRole("tabpanel")).toBeVisible();
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
   const table = page.getByRole("table", { name: "Answer", exact: true });

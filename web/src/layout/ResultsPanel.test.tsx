@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { summary } from "../test/fixtures";
-import { ResultsPanel } from "./ResultsPanel";
+import { ResultsPanel, type ResultsPanelSize } from "./ResultsPanel";
 
 it("offers Timeline and explains that it needs a run", () => {
   render(<ResultsPanel job={null} summary={null} problem={null} />);
@@ -93,6 +94,29 @@ it("collapses and restores while preserving tabs", () => {
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
+it.each(["Answer", "Timeline", "Assumptions", "Map", "Problems"])("opens collapsed %s and keeps it open on repeated selection", async name => {
+  const grid = structuredClone(summary);
+  grid.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
+  function Panel() {
+    const [size, setSize] = useState<ResultsPanelSize>("collapsed");
+    return <ResultsPanel job={null} summary={grid} problem={null} activeVariantId="baseline" size={size} onSizeChange={setSize} />;
+  }
+  render(<Panel />);
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.click(tab);
+  expect(tab.getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tab.id);
+  if (name === "Map") expect(await screen.findByRole("list", { name: "Map points" })).toBeTruthy();
+
+  fireEvent.click(tab);
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Collapse results" }));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(tab);
+  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tab.id);
+});
+
 it("orders errors before warnings while preserving response order within each severity", () => {
   const diagnostic = { code: "TEST", document: null, pointer: null, path: null };
   render(<ResultsPanel job={null} summary={null} problem={null} diagnostics={[
@@ -159,8 +183,10 @@ it.each(["submission", "execution"])("keeps the tab selected during %s and reset
 
 it("preserves a manually collapsed panel after success and keeps the chosen tab", () => {
   const onSizeChange = vi.fn();
-  const view = render(<ResultsPanel job={null} summary={null} problem={null} running size="collapsed" onSizeChange={onSizeChange} />);
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} running size="normal" onSizeChange={onSizeChange} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  fireEvent.click(screen.getByRole("button", { name: "Collapse results" }));
+  onSizeChange.mockClear();
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
   expect(onSizeChange).not.toHaveBeenCalled();
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
@@ -170,8 +196,10 @@ it("preserves a manually collapsed panel after success and keeps the chosen tab"
 
 it.each(["CANCELLED", "FAILED"] as const)("keeps the tab and collapsed size after %s", status => {
   const onSizeChange = vi.fn();
-  const view = render(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running size="collapsed" onSizeChange={onSizeChange} />);
+  const view = render(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running size="normal" onSizeChange={onSizeChange} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  fireEvent.click(screen.getByRole("button", { name: "Collapse results" }));
+  onSizeChange.mockClear();
   view.rerender(<ResultsPanel job={runJob(status)} summary={null} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
   expect(onSizeChange).not.toHaveBeenCalled();
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
