@@ -16,7 +16,7 @@
   ],
   "layoutRef": "checkout.layout.json",
   "modelRef": "checkout.model.json",
-  "notes": "Условия эксперимента — выбранные синтетические параметры: разогрев 10 s, измерение 60 s, 10 независимых повторений и постоянный seed 20261029. Окно PSP [20 s,40 s) отсчитывается от начала симуляции, включая разогрев. processingMultiplier=8 увеличивает среднюю обработку с 300 ms до 2.4 s; это больше исходного timeout 2 s. baseline использует модель без переопределений; no-order-retries оставляет одну попытку order-service-to-payment-service; bigger-payment-pool увеличивает только payment-service.handlers с 50 до 200. Расчёт aligned-timeouts: api-gateway-to-order-service.timeout=4500ms, order-service-to-payment-service.timeout=1100ms, payment-service-to-psp.timeout=500ms; число попыток остаётся 1,3,2. Сумма attempts×timeout: 4500+3×1100+2×500=8800 ms. Два фиксированных backoff по 500 ms и максимум единственной jitter-паузы 25 ms дают 9825 ms, меньше deadline 10000 ms на 175 ms. Вложенные бюджеты: 2×500+25=1025 ms; вместе с обработкой payment-service 10 ms и внутренней сетью 2×0.5 ms — 1036 ms, меньше 1100 ms. Затем 3×1100+2×500=4300 ms; с обработкой order-service 20 ms и сетью 2×0.5 ms — 4321 ms, меньше 4500 ms. Таймауты сокращены ради бюджета, поэтому часть длинных успешных ответов PSP может стать таймаутами. Сумма бюджетов консервативна: вложенные ожидания перекрываются. Lognormal не имеет конечной верхней границы, поэтому расчёт не гарантирует завершения каждого запроса до deadline. Перебор baseline вынесен в checkout-grid.experiment.json: общая сетка иначе перезаписала бы overrides сравниваемых вариантов.",
+  "notes": "Условия эксперимента — выбранные синтетические параметры: разогрев 10 s, измерение 60 s, 10 независимых повторений и постоянный seed 20261029. Окно PSP [20 s,40 s) отсчитывается от начала симуляции, включая разогрев. processingMultiplier=8 увеличивает среднюю обработку с 300 ms до 2.4 s; это больше исходного timeout 2 s. baseline использует модель без переопределений; no-order-retries оставляет одну попытку order-service-to-payment-service; bigger-payment-pool увеличивает только payment-service.handlers с 50 до 200. Расчёт aligned-timeouts снизу вверх при прежних 1,3,2 попытках: payment-service-to-psp.timeout=1s, order-service-to-payment-service.timeout=2200ms, api-gateway-to-order-service.timeout=8s. У нормальной обработки PSP lognormal со средним 300 ms и стандартным отклонением 150 ms теоретический p99 около 805 ms; timeout 1 s оставляет запас на сеть в обоих направлениях (в среднем 2×20 ms). Оценка листового вызова для LINT_TIMEOUT_BUDGET: 300+2×20=340 ms, меньше 1000 ms. Бюджет payment-service: 2×1000+25 ms максимальной jitter-паузы+10 ms собственной обработки+2×0.5 ms внутренней сети=2036 ms, меньше 2200 ms. Бюджет order-service: 3×2200+2×500 ms фиксированного backoff+20 ms собственной обработки+2×0.5 ms сети=7621 ms, меньше 8000 ms. Поэтому LINT_TIMEOUT_BUDGET соблюдается на каждом уровне; deadline 10 s покрывает внешний вызов 8 s с запасом на собственную обработку api-gateway. LINT_DEADLINE_BUDGET ожидаем как ложное срабатывание: сумма 8000+3×2200+2×1000=16600 ms повторно учитывает вложенные ожидания и превышает 10000 ms; пересмотр правила относится к отдельной задаче. Lognormal не имеет конечной верхней границы, поэтому расчёт не гарантирует завершения каждого запроса до deadline. Перебор baseline вынесен в checkout-grid.experiment.json: общая сетка иначе перезаписала бы overrides сравниваемых вариантов.",
   "schemaVersion": 1,
   "variants": [
     {
@@ -34,9 +34,9 @@
       "id": "aligned-timeouts",
       "label": "Aligned timeouts",
       "overrides": {
-        "api-gateway-to-order-service.timeout": "4500ms",
-        "order-service-to-payment-service.timeout": "1100ms",
-        "payment-service-to-psp.timeout": "500ms"
+        "api-gateway-to-order-service.timeout": "8s",
+        "order-service-to-payment-service.timeout": "2200ms",
+        "payment-service-to-psp.timeout": "1s"
       }
     },
     {
