@@ -63,6 +63,19 @@ describe("formatSaturation", () => {
     expect(text.degradationPaths).toEqual(["Replication 0: no saturation.", "Replication 1: no saturation."]);
   });
 
+  it.each([
+    [100, 0.95, 0.5, 0, "95%", "0.5", "100 ms", "0"],
+    [275, 0.82, 1.75, 3, "82%", "1.75", "275 ms", "3"],
+  ])("explains all recorded rule thresholds (%s ms, %s, %s, %s)",
+    (minimumDurationMs, handlerUtilizationThreshold, meanQueueLengthThreshold, queueRejectionsThreshold, utilization, queue, duration, rejections) => {
+      const saturation = { ...noSaturation, rule: { minimumDurationMs: Number(minimumDurationMs),
+        handlerUtilizationThreshold: Number(handlerUtilizationThreshold), meanQueueLengthThreshold: Number(meanQueueLengthThreshold),
+        queueRejectionsThreshold: Number(queueRejectionsThreshold) } };
+      const text = formatSaturation(saturation, 2);
+      expect(text.rule).toBe(`A service counts as saturated when handler utilization stays at or above ${utilization} and the mean queue stays above ${queue} for at least ${duration}. It also counts as saturated when each consecutive window has more than ${rejections} queue rejections and the window starts span at least ${duration}.`);
+      expect(text.rule).not.toMatch(/minimumDurationMs|handlerUtilizationThreshold|meanQueueLengthThreshold|queueRejectionsThreshold/);
+    });
+
   it("includes additional rule parameters from the API without rounding or a field allowlist", () => {
     const saturation = { ...noSaturation, rule: { ...noSaturation.rule, futureDurationMs: 125, futureThreshold: 0.12345 } };
     const original = structuredClone(saturation);

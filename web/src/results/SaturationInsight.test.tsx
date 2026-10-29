@@ -19,6 +19,13 @@ describe("SaturationInsight", () => {
     expect(screen.getByText("dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.")).toBeTruthy();
     expect(screen.getByText("1 of 2 replications without saturation.")).toBeTruthy();
     expect(screen.getByText(/futureDurationMs = 125/)).toBeTruthy();
+    const rule = screen.getByText("How saturation is detected").closest("details")!;
+    expect(rule.open).toBe(false);
+    fireEvent.click(screen.getByText("How saturation is detected"));
+    expect(rule.open).toBe(true);
+    expect(rule.textContent).toContain("at or above 95%");
+    expect(rule.textContent).toContain("mean queue stays above 0.5 for at least 100 ms");
+    expect(rule.textContent).toContain("more than 0 queue rejections");
     const details = screen.getByText("Degradation paths").closest("details")!;
     expect(details.open).toBe(false);
     fireEvent.click(screen.getByText("Degradation paths"));

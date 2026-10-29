@@ -78,10 +78,13 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
 
     await page.getByRole("tab", { name: "Answer", exact: true }).click();
     const insight = page.getByRole("region", { name: "Saturation insight" });
-    await expect(insight.getByRole("heading")).toHaveText("Baseline · p3");
+    await expect(insight.getByRole("heading")).toContainText("Baseline · ");
+    await expect(insight.getByRole("heading")).toContainText("gateway-to-middle.timeout = 80ms");
+    await expect(insight.getByRole("heading")).toContainText("gateway-to-middle.attempts = 3");
+    await expect(insight.getByRole("heading")).not.toContainText("p3");
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p3");
     await expect(page.getByLabel("Grid point", { exact: true }).locator("option:checked")).toContainText("gateway-to-middle.timeout = 80ms");
-    await expect(insight).toContainText("Saturation rule:");
+    await expect(insight).toContainText("How saturation is detected");
     await expect(page.getByRole("table", { name: "Answer", exact: true }).getByRole("row", { name: /Success rate/ }).locator("td").first()).toContainText(formatPercent(point.aggregate.successRate!.mean));
     await page.getByRole("button", { name: /fit view/i }).click();
     await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();

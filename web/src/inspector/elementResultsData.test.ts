@@ -66,12 +66,20 @@ describe("element results sources", () => {
     expect(result.retriesPerSecond.value).toBe(5);
     expect(result.timeoutRate).toMatchObject({ value: 0.25, source: "replications", ci95Low: -0.1, ci95High: 0.7 });
     expect(result.meanInFlight).toMatchObject({ value: 3, source: "replications", ci95Low: 1, ci95High: 5 });
-    expect(result.orphaned.value).toBe(4);
+    expect(result.orphaned).toEqual({ value: 2, source: "perReplication" });
     expect(result.meanOrphaned.value).toBe(0.15);
     expect(result.meanBackoff.value).toBe(0.05);
     expect(result.meanLatencyMs).toEqual({ value: 22, source: "pooled" });
     expect(result.amplification).toMatchObject({ value: 2, ci95Low: 1.5, ci95High: 2.5 });
     expect(projectElementResults(context)!.timeoutMs).toBe(150);
+  });
+  it.each([[1, 11], [3, 3.6666666667], [10, 1.1]])("normalizes orphaned attempts by all %s replications", (replications, expected) => {
+    const context = { ...fixture(), selected: "gateway-to-middle" };
+    context.summary.variants[0].replications = replications;
+    context.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].totals.orphaned = 11;
+    const orphaned = values(context).orphaned;
+    expect(orphaned.value).toBeCloseTo(expected);
+    expect(orphaned.source).toBe("perReplication");
   });
   it("uses call event counts and partial-window duration, with only target amplification from the node", () => {
     const result = values({ ...fixture(), selected: "gateway-to-middle", window: 3 });

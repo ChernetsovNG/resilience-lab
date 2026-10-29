@@ -1378,7 +1378,7 @@ describe("diagram results", () => {
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
     expect(screen.getByRole("img", { name: "First saturated node" }).title).toBe("1 of 2 replications");
     const insight = screen.getByRole("region", { name: "Saturation insight" });
-    expect(within(insight).getByRole("heading").textContent).toContain("Baseline · p1");
+    expect(within(insight).getByRole("heading").textContent).toContain("Baseline · gateway.handlers = 6");
     expect(insight.textContent).toContain("gateway first in 1 of 2 replications");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("25%");
@@ -1441,7 +1441,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect(within(pointSelect).getByRole("option", { name: /p2.*gateway.handlers = 6/ })).toBeTruthy();
   fireEvent.change(pointSelect, { target: { value: "p1" } });
   expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · gateway.handlers = 1,000");
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
   fireEvent.click(within(row).getByRole("button", { name: "Time" }));
   expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
@@ -1482,7 +1482,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · p1");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · gateway.handlers = 1,000");
   expect(button("Save").disabled).toBe(true);
   expect(button("Undo").disabled).toBe(true);
 });

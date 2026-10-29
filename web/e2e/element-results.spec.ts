@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { RunSummary } from "../src/api/apiTypes";
-import { formatPercent, formatRate } from "../src/i18n/format";
+import { formatNumber, formatPercent, formatRate } from "../src/i18n/format";
 
 test("service and call inspectors share Summary, Time and Timeline, including Analysis", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -28,6 +28,10 @@ test("service and call inspectors share Summary, Time and Timeline, including An
   await expect(results).toContainText("Mean call duration");
   await expect(results).toContainText("Mean orphaned work");
   const connection = summary.variants.find(variant => variant.id === "baseline")!.points[0].aggregate.connections["gateway-to-middle"];
+  const orphaned = results.getByRole("row", { name: /^Orphaned attempts/ });
+  const replications = summary.variants.find(variant => variant.id === "baseline")!.replications;
+  await expect(orphaned).toContainText(formatNumber(connection.totals.orphaned / replications));
+  await expect(orphaned).toContainText("per replication");
   const overlay = page.getByLabel("Connection overlay", { exact: true });
   await overlay.selectOption("sentAttemptsPerSecond");
   await expect(badge).toContainText(formatRate(connection.totals.sentAttempts * 1000 / connection.totals.measurementMs));

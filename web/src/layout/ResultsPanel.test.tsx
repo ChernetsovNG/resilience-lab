@@ -52,7 +52,7 @@ it("uses the shared point without offering another context selector in Answer or
   const view = render(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p0" onPointChange={onPointChange} />);
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   view.rerender(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p1" onPointChange={onPointChange} />);
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("p1");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("gateway-to-middle.timeout = 80ms");
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   expect(screen.queryByRole("combobox", { name: "Replication" })).toBeNull();

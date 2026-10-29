@@ -109,10 +109,59 @@ describe("SummaryTable", () => {
     expect(within(insight).getByRole("heading").textContent).toContain("No retries");
     expect(insight.textContent).toContain("dependency first in 1 of 2 replications; median start 80 ms, range 70–90 ms.");
     expect(insight.textContent).toContain("1 of 2 replications without saturation.");
-    expect(insight.textContent).toContain("Saturation rule:");
+    expect(insight.textContent).toContain("How saturation is detected");
     fireEvent.click(within(insight).getByText("Degradation paths"));
     expect(within(insight).getByText("Replication 0: dependency at 80 ms")).toBeTruthy();
     expect(insight.compareDocumentPosition(comparison()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows only the variant label in the heading without a grid", () => {
+    render(<SummaryTable summary={summary} activeVariantId="baseline" />);
+    expect(within(screen.getByRole("region", { name: "Saturation insight" })).getByRole("heading").textContent).toBe("Baseline");
+  });
+
+  it("shows coordinates instead of point IDs in the heading with a grid", () => {
+    const run = structuredClone(summary);
+    run.grid = [{ path: "gateway.handlers", values: [4, 6] }, { path: "dependency.processing.mean", values: ["8ms", "12ms"] }];
+    run.variants[0].points.push({ ...run.variants[0].points[0], id: "p3",
+      coordinates: { "gateway.handlers": 6, "dependency.processing.mean": "12ms" } });
+    render(<SummaryTable summary={run} activeVariantId="baseline" selectedPointId="p3" />);
+    expect(within(screen.getByRole("region", { name: "Saturation insight" })).getByRole("heading").textContent)
+      .toBe("Baseline · gateway.handlers = 6, dependency.processing.mean = 12ms");
+  });
+
+  it("shows pooled capacity headroom with independently selected service maxima and entry p99", () => {
+    const run = structuredClone(summary);
+    const point = run.variants[0].points[0];
+    point.aggregate.services.middle = structuredClone(point.aggregate.services.gateway);
+    Object.assign(point.aggregate.services.middle.totals, { busyHandlerTimeMs: 1800, handlerCapacityTimeMs: 6000,
+      queueLengthIntegralMs: 750, measurementMs: 1000 });
+    point.aggregate.services.dependency = structuredClone(point.aggregate.services.gateway);
+    Object.assign(point.aggregate.services.dependency.totals, { busyHandlerTimeMs: 900, handlerCapacityTimeMs: 1000,
+      queueLengthIntegralMs: 160, measurementMs: 2000 });
+    point.aggregate.pooledLatency.all = { meanMs: 22, p95Ms: 30, p99Ms: 123.4,
+      statistics: { count: 24, sumMs: 528, sketch: [24] } };
+    const view = render(<SummaryTable summary={run} activeVariantId="baseline" />);
+    const headroom = screen.getByText(/^Capacity headroom:/);
+    expect(headroom.textContent).toBe("Capacity headroom: highest handler utilization (pooled) 90% at dependency; largest mean queue (pooled) 0.75 requests at middle; entry p99 (pooled) 123.4 ms.");
+    expect(headroom.textContent).not.toContain("80 ms");
+    view.rerender(<SummaryTable summary={run} activeVariantId="no-retries" />);
+    expect(screen.getByText(/^Capacity headroom:/).textContent).toBe("Capacity headroom: highest handler utilization (pooled) n/a; largest mean queue (pooled) n/a; entry p99 (pooled) n/a.");
+  });
+
+  it.each([[2, 1], [0, 0]])("hides headroom when any replication saturated or none ran (%s, %s)", (replications, withoutSaturation) => {
+    const run = structuredClone(summary);
+    run.variants[0].replications = replications;
+    run.variants[0].points[0].saturation.withoutSaturation = withoutSaturation;
+    render(<SummaryTable summary={run} activeVariantId="baseline" />);
+    expect(screen.queryByText(/^Capacity headroom:/)).toBeNull();
+  });
+
+  it("does not infer headroom from zero denominators or replication-mean p99", () => {
+    const run = structuredClone(summary);
+    Object.assign(run.variants[0].points[0].aggregate.services.gateway.totals, { handlerCapacityTimeMs: 0, measurementMs: 0 });
+    render(<SummaryTable summary={run} activeVariantId="baseline" />);
+    expect(screen.getByText(/^Capacity headroom:/).textContent).toBe("Capacity headroom: highest handler utilization (pooled) n/a; largest mean queue (pooled) n/a; entry p99 (pooled) n/a.");
   });
 
   it("uses the first document variant for the model-page insight, regardless of baseline column order", () => {
