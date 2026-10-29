@@ -2,6 +2,8 @@ import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
 import { canvasResults, utilizationColor } from "./results/canvasResults";
+import { PlaybackControls } from "./results/playback/PlaybackControls";
+import { usePlayback } from "./results/playback/usePlayback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Diagnostic, Variant } from "./api/apiTypes";
 import { diagnosticTarget } from "./validation/diagnostics";
@@ -66,8 +68,19 @@ export function App() {
     !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
   );
   const selectedPointId = results.selection.pointId;
-  const diagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined
+  const summaryDiagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined
     ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId, loaded.model) : null;
+  const seriesMetadata = ownRun ? run.manifest?.series : null;
+  const endMs = (seriesMetadata?.warmupMs ?? 0) + (seriesMetadata?.measurementMs ?? 0);
+  const windowMs = seriesMetadata?.windowMs ?? 1;
+  const windowCount = Math.ceil(endMs / windowMs);
+  const playback = usePlayback({
+    runId: run.job?.runId ?? "", variant: showDiagramResults ? variant?.id ?? null : null,
+    pointId: selectedPointId, replication: results.selection.replication, window: results.selection.window,
+    windowMs, windowCount, nodes: ownRun && run.documents !== null ? Object.keys(run.documents.model.blocks) : [],
+    results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
+  });
+  const diagramResults = playback.frame ?? summaryDiagramResults;
   const diagnostics = validation.report?.diagnostics ?? [];
   const elementDiagnostics = new Map<string, Diagnostic[]>();
   const fieldDiagnostics = new Map<string, Diagnostic[]>();
@@ -236,13 +249,18 @@ export function App() {
                 Show results on diagram
               </label>
               {showDiagramResults ? <>
-                <span>Summary · {variant?.label ?? variant?.id} · {selectedPointId} · measurement interval</span>
+                <span data-testid="canvas-result-context">{playback.frame?.window === undefined
+                  ? `Summary · ${variant?.label ?? variant?.id} · ${selectedPointId} · measurement interval`
+                  : `Window ${playback.frame.window} · ${playback.frame.window * windowMs}–${Math.min(endMs, (playback.frame.window + 1) * windowMs)} ms · replication ${results.selection.replication} · ${variant?.label ?? variant?.id} · ${selectedPointId}`}</span>
                 <span className="utilization-legend" aria-label="Handler utilization scale">
-                  Utilization (pooled): 0%
+                  Utilization ({playback.frame === null ? "pooled" : "window"}): 0%
                   <span className="utilization-scale" aria-hidden="true"
                     style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
                   100%
                 </span>
+                {windowCount > 0 ? <PlaybackControls playback={playback} window={results.selection.window} windowCount={windowCount}
+                  replication={results.selection.replication} replications={run.manifest?.replications ?? 0}
+                  onReplicationChange={(replication) => results.select({ replication })} /> : null}
                 {staleResults ? <span className="canvas-results-stale" role="status">Results belong to a previous document version.</span> : null}
               </> : null}
             </div>
@@ -319,7 +337,7 @@ export function App() {
         replication={results.selection.replication}
         onReplicationChange={(replication) => results.select({ replication })}
         cursorWindow={results.selection.window}
-        onCursorChange={(window) => results.select({ window })}
+        onCursorChange={playback.seek}
         size={resultsSize}
         onSizeChange={setResultsSize}
         diagnostics={diagnostics}

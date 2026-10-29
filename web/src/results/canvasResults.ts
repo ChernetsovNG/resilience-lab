@@ -1,8 +1,10 @@
 import type { ModelFile, RunSummary } from "../api/apiTypes";
+import type { NodeSeriesMetrics } from "./series";
 import { elementIdentity } from "../workspace/editor";
 import { ownEntry } from "../workspace/params";
 
 export interface ServiceCanvasResults {
+  windowed?: boolean;
   utilization: number | null;
   meanQueue: number | null;
   queueRejectionRate: number | null;
@@ -10,6 +12,7 @@ export interface ServiceCanvasResults {
 }
 
 export interface CanvasResults {
+  window?: number;
   services: ReadonlyMap<string, ServiceCanvasResults>;
   connections: ReadonlyMap<string, { from: string; to: string; type: string; amplification: number | null }>;
 }
@@ -49,6 +52,25 @@ export function canvasResults(
     });
   }
   return { services, connections };
+}
+
+/** Project one recorded window onto the elements already matched to this run's model. */
+export function windowCanvasResults(summary: CanvasResults, nodes: readonly NodeSeriesMetrics[], window: number, fromWindow = 0): CanvasResults | null {
+  if (!Number.isInteger(window) || window < fromWindow) return null;
+  const metrics = new Map(nodes.map((node) => [node.id, node.windows[window - fromWindow]]));
+  const services = new Map<string, ServiceCanvasResults>();
+  for (const [id, service] of summary.services) {
+    const metric = metrics.get(id);
+    if (metric === undefined) return null;
+    services.set(id, {
+      ...service, windowed: true, utilization: metric.handlerUtilization, meanQueue: metric.meanQueueLength,
+      queueRejectionRate: ratio(metric.queueRejectionsPerSecond, metric.offeredAttemptsPerSecond),
+    });
+  }
+  const connections = new Map([...summary.connections].map(([id, connection]) => [
+    id, { ...connection, amplification: metrics.get(connection.to)?.amplification ?? null },
+  ]));
+  return { services, connections, window };
 }
 
 /** Clamp only the color scale; labels retain the summary's actual value. */

@@ -28,6 +28,7 @@ function summaryOf(block: BlockInstance): string {
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
+  const interval = data.result?.windowed ? "in this window" : "pooled across replications";
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   return (
@@ -51,13 +52,13 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         </span>
       ) : <span>{summaryOf(data.block)}</span>}
       {data.result === undefined ? null : <div className="block-results" data-testid={`canvas-results-${data.id}`}>
-        <span title="Busy handler time / handler capacity time, pooled across replications.">
+        <span title={`Busy handler time / handler capacity time, ${interval}.`}>
           Utilization {data.result.utilization === null ? "n/a" : `${(data.result.utilization * 100).toFixed(1)}%`}
         </span>
-        <span title="Queue length integral / measurement time, pooled across replications.">
+        <span title={`Queue length integral / interval duration, ${interval}.`}>
           Mean queue {data.result.meanQueue === null ? "n/a" : data.result.meanQueue.toFixed(2)}
         </span>
-        <span title="Queue rejections / offered attempts, pooled across replications.">
+        <span title={`Queue rejections / offered attempts, ${interval}.`}>
           Queue rejections {data.result.queueRejectionRate === null ? "n/a" : `${(data.result.queueRejectionRate * 100).toFixed(1)}%`}
         </span>
       </div>}

@@ -75,7 +75,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
-        amplification, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
+        amplification, windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
       },

@@ -747,3 +747,17 @@ select {
   white-space: nowrap;
   color: #334e68;
 }
+
+.playback-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  flex-basis: 100%;
+}
+
+.playback-controls input[type="range"] {
+  flex: 1;
+  min-width: 5rem;
+  max-width: 16rem;
+}
