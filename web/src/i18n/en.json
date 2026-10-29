@@ -131,7 +131,7 @@
   "editor.canvas.firstSaturatedNode": "First saturated node",
   "editor.canvas.fitView": "Fit View",
   "editor.canvas.handle": "Handle",
-  "editor.canvas.handlersQueue": " handlers · queue ",
+  "editor.canvas.handlersQueue": " · queue: ",
   "editor.canvas.intervalPooled": "pooled across replications",
   "editor.canvas.intervalWindow": "in this window",
   "editor.canvas.label": "Model canvas",
@@ -144,7 +144,7 @@
   "editor.canvas.nodeMoved": "Moved selected node {direction}. New position, x: {x}, y: {y}",
   "editor.canvas.nodeRole": "node",
   "editor.canvas.overriddenParameters": "Overridden parameters",
-  "editor.canvas.processingMean": " · mean ",
+  "editor.canvas.processingMean": " · mean: ",
   "editor.canvas.queueRejections": "Queue rejections {value}",
   "editor.canvas.queueRejectionsTitle": "Queue rejections / offered attempts, {interval}.",
   "editor.canvas.rateRequired": "Rate required",
@@ -688,5 +688,6 @@
   "messages.EXPERIMENT_EXECUTION_FAILED": "Experiment execution failed",
   "messages.unit.ms": "ms",
   "messages.unit.%": "%",
-  "messages.unit./s": "requests/s"
+  "messages.unit./s": "requests/s",
+  "editor.canvas.handlers": "handlers: "
 }

@@ -196,7 +196,7 @@ async function save(page: Page) {
   await expect(page.getByText("Unsaved changes")).toBeHidden();
 }
 async function move(page: Page, locator: Locator, dx: number, dy: number) {
-  const box = await locator.boundingBox();
+  const box = await locator.locator(".block-node > strong").boundingBox();
   expect(box).not.toBeNull();
   const x = box!.x + box!.width / 2;
   const y = box!.y + box!.height / 2;

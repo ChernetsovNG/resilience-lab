@@ -11,7 +11,7 @@ for (const locale of locales) {
     const catalog = JSON.parse(readFileSync(resolve(`src/i18n/${locale.startsWith("ru") ? "ru" : "en"}.json`), "utf8")) as Record<string, string>;
     const label = (key: string) => catalog[key];
 
-    test("localizes linter, inspector validation and estimate warnings from the real API", async ({ page }) => {
+    test("localizes linter, inspector validation and estimate warnings from the real API", async ({ page }, testInfo) => {
       await page.goto("/");
       await page.getByLabel(label("app.topBar.experiment"), { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
       await page.getByRole("button", { name: label("results.restore"), exact: true }).click();
@@ -29,6 +29,7 @@ for (const locale of locales) {
       const validation = handlers.locator("..").locator(".field-diagnostics");
       await expect(validation).toContainText("PARAM_RANGE");
       await expect(validation).toContainText(locale.startsWith("ru") ? /[Пп]араметра? [«']handlers/ : "Parameter 'handlers'");
+      if (locale.startsWith("ru")) await page.screenshot({ path: testInfo.outputPath("russian-backend-validation.png") });
       await handlers.fill(original);
       await handlers.press("Enter");
       await expect(validation).toBeHidden();
