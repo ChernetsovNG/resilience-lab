@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import kotlinx.serialization.json.JsonPrimitive
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -92,9 +93,12 @@ class RunController(
 
     private fun seriesNumber(value: String): Int =
         value.takeIf { Regex("0|[1-9][0-9]*").matches(it) }?.toIntOrNull()
-            ?: throw BadRequest("SERIES_PATH", "Replication and part must be nonnegative int32 numbers without leading zeros")
+            ?: throw BadRequest(
+                ServerMessage.SERIES_PATH_NUMBER,
+                "Replication and part must be nonnegative int32 numbers without leading zeros",
+            )
 
-    private fun seriesNotFound() = NotFound("SERIES_NOT_FOUND", "Run series does not exist")
+    private fun seriesNotFound() = NotFound(ServerMessage.SERIES_NOT_FOUND, "Run series does not exist")
 
-    private fun notFound(id: String) = NotFound("RUN_NOT_FOUND", "Run '$id' does not exist")
+    private fun notFound(id: String) = NotFound(ServerMessage.RUN_NOT_FOUND, "Run '$id' does not exist", mapOf("id" to JsonPrimitive(id)))
 }

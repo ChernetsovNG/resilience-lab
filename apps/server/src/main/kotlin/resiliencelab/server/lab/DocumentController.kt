@@ -1,6 +1,7 @@
 package resiliencelab.server.lab
 
 import io.swagger.v3.oas.annotations.Parameter
+import kotlinx.serialization.json.JsonPrimitive
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -46,7 +47,12 @@ class DocumentController(
         val content =
             when (val decoded = Documents.decode(kind, document.text, path)) {
                 is DecodeResult.Ok -> decoded.value
-                is DecodeResult.Failed -> throw Conflict("DOCUMENT_INVALID", "Stored document '$path' is invalid", decoded.diagnostics)
+                is DecodeResult.Failed -> throw Conflict(
+                    ServerMessage.DOCUMENT_INVALID_STORED,
+                    "Stored document '$path' is invalid",
+                    decoded.diagnostics,
+                    mapOf("path" to JsonPrimitive(path)),
+                )
             }
         return ResponseEntity.ok().eTag(document.version).body(DocumentView(path, kind, document.version, content))
     }
@@ -61,9 +67,20 @@ class DocumentController(
         val kind = kindOf(path)
         val text =
             Documents.encode(kind, content)
-                ?: throw BadRequest("DOCUMENT_KIND", "Content must hold exactly one document of the kind of '$path'")
+                ?: throw BadRequest(
+                    ServerMessage.DOCUMENT_KIND_CONTENT,
+                    "Content must hold exactly one document of the kind of '$path'",
+                    args = mapOf("path" to JsonPrimitive(path)),
+                )
         val checked = Documents.decode(kind, text, path)
-        if (checked is DecodeResult.Failed) throw BadRequest("DOCUMENT_INVALID", "Document '$path' is invalid", checked.diagnostics)
+        if (checked is DecodeResult.Failed) {
+            throw BadRequest(
+                ServerMessage.DOCUMENT_INVALID_INPUT,
+                "Document '$path' is invalid",
+                checked.diagnostics,
+                mapOf("path" to JsonPrimitive(path)),
+            )
+        }
         val version = if (ifMatch == null) workspace.create(path, text) else replace(path, text, ifMatch)
         return ResponseEntity.ok().eTag(version).body(DocumentEntry(path, kind, version))
     }
@@ -77,10 +94,20 @@ class DocumentController(
         @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
     ): ResponseEntity<Void> {
         kindOf(path)
-        if (ifMatch == null) throw PreconditionRequired("VERSION_REQUIRED", "If-Match is required to delete '$path'")
+        if (ifMatch == null) {
+            throw PreconditionRequired(
+                ServerMessage.VERSION_REQUIRED_DELETE,
+                "If-Match is required to delete '$path'",
+                mapOf("path" to JsonPrimitive(path)),
+            )
+        }
         val current = workspace.read(path).version
         if (!IfMatch.accepts(ifMatch, current)) {
-            throw Conflict("VERSION_CONFLICT", "Document '$path' is not at a version that If-Match accepts")
+            throw Conflict(
+                ServerMessage.VERSION_CONFLICT_MATCH,
+                "Document '$path' is not at a version that If-Match accepts",
+                args = mapOf("path" to JsonPrimitive(path)),
+            )
         }
         workspace.delete(path, expectedVersion = current)
         return ResponseEntity.noContent().build()
@@ -94,7 +121,7 @@ class DocumentController(
             try {
                 since?.let(WorkspaceCursor::parse)
             } catch (_: IllegalArgumentException) {
-                throw BadRequest("CURSOR_INVALID", "Change cursor must have a valid generation and non-negative sequence")
+                throw BadRequest(ServerMessage.CURSOR_INVALID, "Change cursor must have a valid generation and non-negative sequence")
             }
         val batch = workspace.changes(cursor)
         return WorkspaceChangesView(
@@ -112,11 +139,19 @@ class DocumentController(
     ): String {
         val current = if (workspace.exists(path)) workspace.read(path).version else null
         if (current == null || !IfMatch.accepts(ifMatch, current)) {
-            throw Conflict("VERSION_CONFLICT", "Document '$path' is not at a version that If-Match accepts")
+            throw Conflict(
+                ServerMessage.VERSION_CONFLICT_MATCH,
+                "Document '$path' is not at a version that If-Match accepts",
+                args = mapOf("path" to JsonPrimitive(path)),
+            )
         }
         return workspace.write(path, text, expectedVersion = current)
     }
 
     private fun kindOf(path: String): DocumentKind =
-        DocumentKind.of(path) ?: throw BadRequest("DOCUMENT_KIND", "'$path' is not a model, layout or experiment document")
+        DocumentKind.of(path) ?: throw BadRequest(
+            ServerMessage.DOCUMENT_KIND_PATH,
+            "'$path' is not a model, layout or experiment document",
+            args = mapOf("path" to JsonPrimitive(path)),
+        )
 }

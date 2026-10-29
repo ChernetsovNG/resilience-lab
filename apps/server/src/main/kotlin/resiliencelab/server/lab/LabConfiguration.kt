@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.servers.Server
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springdoc.core.utils.SpringDocUtils
 import org.springframework.beans.factory.annotation.Qualifier
@@ -39,6 +40,7 @@ class LabConfiguration {
             .getConfig()
             .replaceWithSchema(JsonObject::class.java, JsonSchema().types(setOf("object")).additionalProperties(true))
             .replaceWithSchema(JsonElement::class.java, anyJson.additionalProperties(true))
+            .replaceWithSchema(JsonPrimitive::class.java, JsonSchema().types(setOf("string", "number")))
     }
 
     /** Adds `null` to the `enum` of nullable enum properties: springdoc lists only the constants (JSON Schema 2020-12). */

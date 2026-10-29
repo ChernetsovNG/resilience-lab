@@ -1,5 +1,6 @@
 package resiliencelab.server.lab
 
+import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -12,6 +13,7 @@ import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.results.InvalidSeriesPathException
 import resiliencelab.core.results.RunIncompleteException
 import resiliencelab.core.results.UnsupportedArtifactVersionException
+import resiliencelab.core.results.Versions
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.InvalidDocumentPathException
@@ -20,34 +22,41 @@ import java.io.IOException
 
 /** Failures of the stage 1 API; each subclass maps to one documented status. */
 sealed class ApiException(
-    val code: String,
+    private val definition: ServerMessage,
     override val message: String,
     val diagnostics: List<Diagnostic> = emptyList(),
+    val args: Map<String, JsonPrimitive> = emptyMap(),
 ) : RuntimeException(message) {
-    fun problem(): ApiProblem = ApiProblem(code, message, diagnostics)
+    val code: String = definition.code
+
+    fun problem(): ApiProblem = definition.problem(message, diagnostics, args)
 }
 
 class BadRequest(
-    code: String,
+    definition: ServerMessage,
     message: String,
     diagnostics: List<Diagnostic> = emptyList(),
-) : ApiException(code, message, diagnostics)
+    args: Map<String, JsonPrimitive> = emptyMap(),
+) : ApiException(definition, message, diagnostics, args)
 
 class PreconditionRequired(
-    code: String,
+    definition: ServerMessage,
     message: String,
-) : ApiException(code, message)
+    args: Map<String, JsonPrimitive> = emptyMap(),
+) : ApiException(definition, message, args = args)
 
 class NotFound(
-    code: String,
+    definition: ServerMessage,
     message: String,
-) : ApiException(code, message)
+    args: Map<String, JsonPrimitive> = emptyMap(),
+) : ApiException(definition, message, args = args)
 
 class Conflict(
-    code: String,
+    definition: ServerMessage,
     message: String,
     diagnostics: List<Diagnostic> = emptyList(),
-) : ApiException(code, message, diagnostics)
+    args: Map<String, JsonPrimitive> = emptyMap(),
+) : ApiException(definition, message, diagnostics, args)
 
 /**
  * Maps failures of the stage 1 endpoints to [ApiProblem]. Every handler declares its status with `@ResponseStatus`,
@@ -56,17 +65,27 @@ class Conflict(
  * Job cancellation uses `JOB_NOT_FOUND` (404) and `JOB_FINISHED` (409).
  * Workspace deletion uses `VERSION_REQUIRED` (428); malformed change cursors use `CURSOR_INVALID` (400).
  * Resume uses `RUN_NOT_FOUND` (404), `RUN_INCOMPLETE` (404), `RUN_COMPLETE` (409), and core diagnostics (400).
+ * Job failures use `JOB_QUEUE_FULL`, `EXPERIMENT_INVALID`, and `EXPERIMENT_EXECUTION_FAILED` in [JobView.errorCode].
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
     @ExceptionHandler(InvalidSeriesPathException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun invalidSeriesPath(exception: InvalidSeriesPathException): ApiProblem = ApiProblem("SERIES_PATH", exception.message!!)
+    fun invalidSeriesPath(exception: InvalidSeriesPathException): ApiProblem =
+        ServerMessage.SERIES_PATH_ADDRESS.problem(exception.message!!)
 
     @ExceptionHandler(UnsupportedArtifactVersionException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun unsupportedRunVersion(exception: UnsupportedArtifactVersionException): ApiProblem =
-        ApiProblem("RUN_VERSION_UNSUPPORTED", exception.message ?: "Unsupported run format; run again")
+    fun unsupportedRunVersion(exception: UnsupportedArtifactVersionException): ApiProblem {
+        val definition = if (exception.actual == null) ServerMessage.RUN_VERSION_MISSING else ServerMessage.RUN_VERSION_VERSION
+        val args =
+            buildMap {
+                put("kind", JsonPrimitive(exception.kind))
+                put("expectedSchema", JsonPrimitive(Versions.ARTIFACT_SCHEMA))
+                exception.actual?.let { put("actual", JsonPrimitive(it)) }
+            }
+        return definition.problem(exception.message ?: "Unsupported run format; run again", args = args)
+    }
 
     @ExceptionHandler(PreconditionRequired::class)
     @ResponseStatus(HttpStatus.PRECONDITION_REQUIRED)
@@ -79,16 +98,19 @@ class LabExceptionHandler {
     @ExceptionHandler(InvalidExperimentException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun invalidExperiment(exception: InvalidExperimentException): ApiProblem =
-        ApiProblem("EXPERIMENT_INVALID", "Experiment has errors", exception.diagnostics)
+        ServerMessage.EXPERIMENT_INVALID.problem("Experiment has errors", exception.diagnostics)
 
     @ExceptionHandler(InvalidDocumentPathException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun invalidPath(exception: InvalidDocumentPathException): ApiProblem =
-        ApiProblem("DOCUMENT_PATH", exception.message ?: "Invalid document path")
+        ServerMessage.DOCUMENT_PATH.problem(
+            exception.message ?: "Invalid document path",
+            args = mapOf("path" to JsonPrimitive(exception.path)),
+        )
 
     @ExceptionHandler(HttpMessageNotReadableException::class, MissingServletRequestParameterException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun unreadable(): ApiProblem = ApiProblem("REQUEST_INVALID", "Request body or parameters are invalid")
+    fun unreadable(): ApiProblem = ServerMessage.REQUEST_INVALID.problem("Request body or parameters are invalid")
 
     @ExceptionHandler(NotFound::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
@@ -96,12 +118,16 @@ class LabExceptionHandler {
 
     @ExceptionHandler(RunIncompleteException::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    fun incompleteRun(exception: RunIncompleteException): ApiProblem = ApiProblem("RUN_INCOMPLETE", exception.message!!)
+    fun incompleteRun(exception: RunIncompleteException): ApiProblem =
+        ServerMessage.RUN_INCOMPLETE.problem(exception.message!!, args = mapOf("id" to JsonPrimitive(exception.id)))
 
     @ExceptionHandler(DocumentNotFoundException::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     fun documentNotFound(exception: DocumentNotFoundException): ApiProblem =
-        ApiProblem("DOCUMENT_NOT_FOUND", exception.message ?: "Document not found")
+        ServerMessage.DOCUMENT_NOT_FOUND.problem(
+            exception.message ?: "Document not found",
+            args = mapOf("path" to JsonPrimitive(exception.path)),
+        )
 
     @ExceptionHandler(Conflict::class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -109,19 +135,30 @@ class LabExceptionHandler {
 
     @ExceptionHandler(VersionConflictException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    fun versionConflict(exception: VersionConflictException): ApiProblem =
-        ApiProblem("VERSION_CONFLICT", exception.message ?: "Document version conflict")
+    fun versionConflict(exception: VersionConflictException): ApiProblem {
+        val definition = if (exception.actual == null) ServerMessage.VERSION_CONFLICT_MISSING else ServerMessage.VERSION_CONFLICT_VERSION
+        val args =
+            buildMap {
+                put("path", JsonPrimitive(exception.path))
+                put("expected", JsonPrimitive(exception.expected))
+                exception.actual?.let { put("actual", JsonPrimitive(it)) }
+            }
+        return definition.problem(exception.message ?: "Document version conflict", args = args)
+    }
 
     @ExceptionHandler(DocumentExistsException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun documentExists(exception: DocumentExistsException): ApiProblem =
-        ApiProblem("VERSION_REQUIRED", "${exception.message}; send If-Match with its version")
+        ServerMessage.VERSION_REQUIRED_CREATE.problem(
+            "${exception.message}; send If-Match with its version",
+            args = mapOf("path" to JsonPrimitive(exception.path)),
+        )
 
     @ExceptionHandler(IOException::class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     fun storageFailure(exception: IOException): ApiProblem {
         logger.error("Workspace storage failed", exception)
-        return ApiProblem("STORAGE_ERROR", "Workspace storage failed")
+        return ServerMessage.STORAGE_ERROR.problem("Workspace storage failed")
     }
 
     private companion object {

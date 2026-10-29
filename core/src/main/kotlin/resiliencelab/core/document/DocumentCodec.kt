@@ -7,6 +7,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.Severity
 
@@ -94,11 +96,12 @@ object DocumentCodec {
             return DecodeResult.Failed(
                 listOf(
                     Diagnostic(
-                        code = "SCHEMA_VERSION",
+                        code = CoreMessage.SCHEMA_VERSION,
                         severity = Severity.ERROR,
                         message = "Unsupported schemaVersion ${version(value)}; expected $SCHEMA_VERSION",
                         document = document,
                         pointer = "/schemaVersion",
+                        args = mapOf("actual" to JsonPrimitive(version(value)), "expected" to JsonPrimitive(SCHEMA_VERSION)),
                     ),
                 ),
             )
@@ -110,9 +113,10 @@ object DocumentCodec {
         exception: Exception,
         document: String,
     ) = Diagnostic(
-        code = "DOCUMENT_SHAPE",
+        code = if (exception.message == null) CoreMessage.DOCUMENT_SHAPE else CoreMessage.DOCUMENT_SHAPE_DETAIL,
         severity = Severity.ERROR,
         message = exception.message ?: "Document does not match its schema",
         document = document,
+        args = exception.message?.let { mapOf("detail" to JsonPrimitive(it)) }.orEmpty(),
     )
 }

@@ -288,6 +288,9 @@ export interface components {
             totals: components["schemas"]["ServiceTotals"];
         };
         ApiProblem: {
+            args?: {
+                [key: string]: string | number;
+            } | null;
             code: string;
             diagnostics: components["schemas"]["Diagnostic"][];
             message: string;
@@ -373,6 +376,9 @@ export interface components {
             timeouts: number;
         };
         Diagnostic: {
+            args?: {
+                [key: string]: string | number;
+            } | null;
             code: string;
             document?: string | null;
             message: string;
@@ -405,6 +411,9 @@ export interface components {
             version: string;
         };
         EstimateWarning: {
+            args?: {
+                [key: string]: string | number;
+            } | null;
             code: string;
             message: string;
         };
@@ -496,6 +505,10 @@ export interface components {
             completedTasks: number;
             diagnostics: components["schemas"]["Diagnostic"][];
             error?: string | null;
+            errorArgs?: {
+                [key: string]: string | number;
+            } | null;
+            errorCode?: string | null;
             experiment: string;
             id: string;
             runId: string;

@@ -1,3 +1,4 @@
+import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatSize } from "../i18n/format";
 import type { ExperimentEstimate } from "../api/apiTypes";
@@ -18,6 +19,6 @@ export function CostEstimate({ estimate }: { estimate: ExperimentEstimate }) {
       <dd><output aria-label={label}>{value}</output></dd>
     </div>)}</dl>
     {estimate.warnings.length === 0 ? null : <ul>{estimate.warnings.map((warning) =>
-      <li key={warning.code}>{warning.message}</li>)}</ul>}
+      <li key={warning.code}>{backendMessage(warning)}</li>)}</ul>}
   </section>;
 }

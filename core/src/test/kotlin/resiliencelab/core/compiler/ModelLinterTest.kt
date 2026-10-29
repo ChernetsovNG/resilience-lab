@@ -1,6 +1,9 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
@@ -96,6 +99,8 @@ class ModelLinterTest {
         assertThat(warning.pointer).isEqualTo("/connections/1/params/timeout")
         assertThat(warning.path).isEqualTo("a-b")
         assertThat(warning.message).isEqualTo("Timeout 44 ms is below the downstream budget 46 ms")
+        assertThat(Json.encodeToJsonElement(warning).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"timeoutMs":44.0,"requiredMs":46.0}"""))
         assertThat(
             warnings(
                 changed.copy(
@@ -180,15 +185,62 @@ class ModelLinterTest {
 
         val result = assertTimeoutPreemptively<List<Diagnostic>>(Duration.ofSeconds(2)) { linter.lint(experiment(changed)) }
 
-        assertThat(result.single { it.code == "LINT_RETRY_AMPLIFICATION" }.message).contains("4611686014132420609")
+        val amplification = result.single { it.code == "LINT_RETRY_AMPLIFICATION" }
+        assertThat(amplification.message).isEqualTo("Retry amplification 4611686014132420609 exceeds threshold 10")
+        assertThat(
+            Json
+                .parseToJsonElement(Json.encodeToJsonElement(amplification).toString())
+                .jsonObject["args"]
+                ?.jsonObject
+                ?.get("amplification"),
+        ).isEqualTo(JsonPrimitive("4611686014132420609"))
         assertThat(result.single { it.code == "LINT_TIMEOUT_BUDGET" }.message).contains("53687091168")
+    }
+
+    @Test
+    fun `serialized amplification keeps safe products numeric and unsafe products exact`() {
+        listOf(
+            Triple(2, 6, JsonPrimitive(12)),
+            Triple(441_650_591, 20_394_401, JsonPrimitive(9_007_199_254_740_991L)),
+            Triple(67_108_864, 134_217_728, JsonPrimitive("9007199254740992")),
+        ).forEach { (first, second, expected) ->
+            val changed = chain.copy(calls = listOf(chain.calls[0].copy(attempts = first), chain.calls[1].copy(attempts = second)))
+            val warning = warnings(changed, "LINT_RETRY_AMPLIFICATION").single()
+
+            val serialized = Json.parseToJsonElement(Json.encodeToJsonElement(warning).toString()).jsonObject
+
+            assertThat(serialized["args"]?.jsonObject?.get("amplification")).isEqualTo(expected)
+        }
+    }
+
+    @Test
+    fun `amplification beyond double range serializes as exact digits`() {
+        val changed =
+            chain.copy(
+                entry = "service-0",
+                services = (0..34).map { service("service-$it", 1.0) },
+                calls = (0 until 34).map { call("call-$it", "service-$it", "service-${it + 1}", 100.0, Int.MAX_VALUE, it) },
+            )
+        val expected =
+            "1930258275058558013781174127771222627704323231879312339777084929311244263673575522266933054910778922248747" +
+                "5683500375425476373412922702694666347347519505694262586290862257808029652511048552481182305723744158551788" +
+                "3535138768407979524425801700647735284803347209286676101282529538189531254171895621795751336395553288224769"
+
+        val warning = warnings(changed, "LINT_RETRY_AMPLIFICATION").single()
+        val serialized = Json.parseToJsonElement(Json.encodeToJsonElement(warning).toString()).jsonObject
+
+        assertThat(warning.message).isEqualTo("Retry amplification $expected exceeds threshold 10")
+        assertThat(serialized["args"]?.jsonObject?.get("amplification")).isEqualTo(JsonPrimitive(expected))
     }
 
     @Test
     fun `overflowing computed budgets remain advisory`() {
         val changed = chain.copy(calls = chain.calls.map { it.copy(attempts = 2, timeoutMs = Double.MAX_VALUE) })
 
-        assertThat(warnings(changed, "LINT_DEADLINE_BUDGET").single().message).contains("Infinity")
+        val diagnostic = warnings(changed, "LINT_DEADLINE_BUDGET").single()
+        assertThat(diagnostic.message).contains("Infinity")
+        assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"deadlineMs":1000.0,"requiredMs":"Infinity"}"""))
     }
 
     @Test

@@ -49,8 +49,9 @@ interface PartDownload {
 export type SeriesLoadErrorCode = "SERIES_NOT_FOUND" | "ETAG_MISMATCH" | "INVALID_SERIES" | "WORKER_ERROR";
 
 export class SeriesLoadError extends Error {
-  constructor(readonly code: SeriesLoadErrorCode, message: string) {
-    super(message);
+  constructor(readonly code: SeriesLoadErrorCode, message: string | (() => string)) {
+    super(typeof message === "function" ? message() : message);
+    if (typeof message === "function") Object.defineProperty(this, "message", { get: message });
     this.name = "SeriesLoadError";
   }
 }
@@ -95,9 +96,9 @@ export class SeriesLoader {
     } catch (error) {
       if (error instanceof SeriesLoadError || isAbort(error)) throw error;
       if (error instanceof ApiError && error.status === 404 && error.problem.code === "SERIES_NOT_FOUND") {
-        throw new SeriesLoadError("SERIES_NOT_FOUND", t("results.series.unavailable"));
+        throw new SeriesLoadError("SERIES_NOT_FOUND", () => t("results.series.unavailable"));
       }
-      throw new SeriesLoadError("WORKER_ERROR", t("results.series.couldNotLoad", { message: messageOf(error) }));
+      throw new SeriesLoadError("WORKER_ERROR", () => t("results.series.couldNotLoad", { message: messageOf(error) }));
     } finally {
       decoder?.close();
     }

@@ -1,5 +1,6 @@
 package resiliencelab.server.lab
 
+import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.LoggerFactory
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
@@ -41,7 +42,14 @@ class JobService(
         try {
             executor.execute { execute(job.id, report.documentVersions) }
         } catch (exception: RejectedExecutionException) {
-            finish(job.id) { it.copy(status = JobStatus.FAILED, error = "Job queue is full") }
+            finish(job.id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Job queue is full",
+                    errorCode = ServerMessage.JOB_QUEUE_FULL.code,
+                    errorArgs = ServerMessage.JOB_QUEUE_FULL.args(),
+                )
+            }
         }
         return get(job.id) ?: job
     }
@@ -52,7 +60,12 @@ class JobService(
             lab.validateResume(run.directory)
         } catch (exception: InvalidExperimentException) {
             if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
-                throw Conflict("RUN_COMPLETE", "Run '${run.id}' is already complete", exception.diagnostics)
+                throw Conflict(
+                    ServerMessage.RUN_COMPLETE,
+                    "Run '${run.id}' is already complete",
+                    exception.diagnostics,
+                    mapOf("id" to JsonPrimitive(run.id)),
+                )
             }
             throw exception
         }
@@ -64,7 +77,14 @@ class JobService(
         try {
             executor.execute { executeResume(job.id, run.directory) }
         } catch (exception: RejectedExecutionException) {
-            finish(job.id) { it.copy(status = JobStatus.FAILED, error = "Job queue is full") }
+            finish(job.id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Job queue is full",
+                    errorCode = ServerMessage.JOB_QUEUE_FULL.code,
+                    errorArgs = ServerMessage.JOB_QUEUE_FULL.args(),
+                )
+            }
         }
         return get(job.id) ?: job
     }
@@ -87,10 +107,25 @@ class JobService(
         } catch (exception: CancellationException) {
             finish(id) { it.copy(status = JobStatus.CANCELLED) }
         } catch (exception: InvalidExperimentException) {
-            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment has errors", diagnostics = exception.diagnostics) }
+            finish(id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Experiment has errors",
+                    diagnostics = exception.diagnostics,
+                    errorCode = ServerMessage.EXPERIMENT_INVALID.code,
+                    errorArgs = ServerMessage.EXPERIMENT_INVALID.args(),
+                )
+            }
         } catch (exception: Exception) {
             logger.error("Resume job {} failed", id, exception)
-            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment execution failed") }
+            finish(id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Experiment execution failed",
+                    errorCode = ServerMessage.EXPERIMENT_EXECUTION_FAILED.code,
+                    errorArgs = ServerMessage.EXPERIMENT_EXECUTION_FAILED.args(),
+                )
+            }
         }
     }
 
@@ -123,7 +158,11 @@ class JobService(
             val job = jobs[id] ?: return null
             when (job.status) {
                 JobStatus.CANCELLED -> job
-                JobStatus.COMPLETED, JobStatus.FAILED -> throw Conflict("JOB_FINISHED", "Job '$id' has already finished")
+                JobStatus.COMPLETED, JobStatus.FAILED -> throw Conflict(
+                    ServerMessage.JOB_FINISHED,
+                    "Job '$id' has already finished",
+                    args = mapOf("id" to JsonPrimitive(id)),
+                )
                 JobStatus.QUEUED -> {
                     val cancelled = job.copy(status = JobStatus.CANCELLED, cancelRequested = true)
                     finish(id) { cancelled }
@@ -152,10 +191,25 @@ class JobService(
         } catch (exception: CancellationException) {
             finish(id) { it.copy(status = JobStatus.CANCELLED) }
         } catch (exception: InvalidExperimentException) {
-            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment has errors", diagnostics = exception.diagnostics) }
+            finish(id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Experiment has errors",
+                    diagnostics = exception.diagnostics,
+                    errorCode = ServerMessage.EXPERIMENT_INVALID.code,
+                    errorArgs = ServerMessage.EXPERIMENT_INVALID.args(),
+                )
+            }
         } catch (exception: Exception) {
             logger.error("Job {} failed", id, exception)
-            finish(id) { it.copy(status = JobStatus.FAILED, error = "Experiment execution failed") }
+            finish(id) {
+                it.copy(
+                    status = JobStatus.FAILED,
+                    error = "Experiment execution failed",
+                    errorCode = ServerMessage.EXPERIMENT_EXECUTION_FAILED.code,
+                    errorArgs = ServerMessage.EXPERIMENT_EXECUTION_FAILED.args(),
+                )
+            }
         }
     }
 

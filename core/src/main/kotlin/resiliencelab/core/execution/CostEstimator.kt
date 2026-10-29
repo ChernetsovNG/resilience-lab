@@ -1,7 +1,9 @@
 package resiliencelab.core.execution
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.results.SeriesWriter
@@ -31,7 +33,15 @@ data class ExperimentEstimate(
 data class EstimateWarning(
     val code: String,
     val message: String,
-)
+    /** Unformatted scalar values used to translate the warning; absent in older artifacts. */
+    val args: Map<String, JsonPrimitive>? = null,
+) {
+    internal constructor(
+        code: CoreMessage,
+        message: String,
+        args: Map<String, JsonPrimitive> = emptyMap(),
+    ) : this(code.code, message, code.args(args))
+}
 
 /** Applies S1 timing and S3/S5 storage anchors without constructing a KSL model. */
 internal object CostEstimator {
@@ -63,7 +73,7 @@ internal object CostEstimator {
         workers: Int,
     ): ExperimentEstimate {
         require(workers >= 1) { "workers must be at least 1" }
-        val warnings = linkedMapOf<String, String>()
+        val warnings = linkedMapOf<CoreMessage, EstimateWarning>()
         var taskCount = 0
         var totalWork = 0.0
         var longestTask = 0.0
@@ -76,13 +86,21 @@ internal object CostEstimator {
             variant.points.forEach { point ->
                 val chain = point.chain
                 if (chain.services.size > 5000) {
-                    warnings["ESTIMATE_EXTRAPOLATION"] =
-                        "S1 timing anchors cover 50–5000 services; actual time may differ substantially"
+                    warnings[CoreMessage.ESTIMATE_EXTRAPOLATION] =
+                        EstimateWarning(
+                            CoreMessage.ESTIMATE_EXTRAPOLATION,
+                            "S1 timing anchors cover 50–5000 services; actual time may differ substantially",
+                            mapOf("minServices" to JsonPrimitive(50), "maxServices" to JsonPrimitive(5000)),
+                        )
                 }
                 val perReplication = estimateTask(chain)
                 if (perReplication.rawBytes > UI_CACHE_BYTES) {
-                    warnings["ESTIMATE_UI_CACHE"] =
-                        "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only"
+                    warnings[CoreMessage.ESTIMATE_UI_CACHE] =
+                        EstimateWarning(
+                            CoreMessage.ESTIMATE_UI_CACHE,
+                            "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only",
+                            mapOf("cacheMiB" to JsonPrimitive(UI_CACHE_BYTES / (1024 * 1024))),
+                        )
                 }
                 val count = experiment.run.replications
                 taskCount = Math.addExact(taskCount, count)
@@ -107,7 +125,7 @@ internal object CostEstimator {
             estimatedUncompressedBytes = rawBytes,
             estimatedArtifactBytes = artifactBytes,
             estimatedParts = parts,
-            warnings = warnings.map { (code, message) -> EstimateWarning(code, message) },
+            warnings = warnings.values.toList(),
         )
     }
 

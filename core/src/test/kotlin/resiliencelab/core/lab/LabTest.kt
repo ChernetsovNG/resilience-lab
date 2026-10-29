@@ -1,5 +1,8 @@
 package resiliencelab.core.lab
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
@@ -40,6 +43,17 @@ class LabTest {
             }
         }
         return target
+    }
+
+    @Test
+    fun `missing document diagnostics preserve legacy text and expose its path`() {
+        Lab(FileWorkspace(temp)).use { lab ->
+            val diagnostic = lab.validate("missing.experiment.json").diagnostics.single()
+
+            assertThat(diagnostic.message).isEqualTo("Document 'missing.experiment.json' does not exist")
+            assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
+                .isEqualTo(Json.parseToJsonElement("""{"path":"missing.experiment.json"}"""))
+        }
     }
 
     @Test

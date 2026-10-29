@@ -1,6 +1,11 @@
 package resiliencelab.core.document
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
@@ -8,7 +13,11 @@ import kotlin.test.Test
 class DocumentCodecTest {
     @Test
     fun `rejects duplicate keys, non-finite numbers and syntax errors`() {
-        assertThat(StrictJson.check("""{"a": 1, "a": 2}""", "x.json")!!.code).isEqualTo("JSON_DUPLICATE_KEY")
+        val duplicate = StrictJson.check("""{"a": 1, "a": 2}""", "x.json")!!
+        assertThat(duplicate.code).isEqualTo("JSON_DUPLICATE_KEY")
+        assertThat(duplicate.args?.get("key")).isEqualTo(JsonPrimitive("a"))
+        assertThat(duplicate.args?.get("line")?.intOrNull).isEqualTo(1)
+        assertThat(duplicate.args?.get("column")?.intOrNull).isPositive()
         assertThat(StrictJson.check("""{"a": 1e400}""", "x.json")!!.code).isEqualTo("JSON_NON_FINITE")
         assertThat(StrictJson.check("""{"a": NaN}""", "x.json")!!.code).isEqualTo("JSON_SYNTAX")
         assertThat(StrictJson.check("""{"a": [1, 2.5, "x"]}""", "x.json")).isNull()
@@ -35,6 +44,9 @@ class DocumentCodecTest {
         val diagnostic = (wrongVersion as DecodeResult.Failed).diagnostics.single()
         assertThat(diagnostic.code).isEqualTo("SCHEMA_VERSION")
         assertThat(diagnostic.pointer).isEqualTo("/schemaVersion")
+        assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion 2; expected 1")
+        assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
+            .isEqualTo(Json.parseToJsonElement("""{"actual":2,"expected":1}"""))
     }
 
     @Test

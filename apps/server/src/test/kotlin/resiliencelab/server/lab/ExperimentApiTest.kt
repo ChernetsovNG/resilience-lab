@@ -1,6 +1,8 @@
 package resiliencelab.server.lab
 
 import com.jayway.jsonpath.JsonPath
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -362,14 +364,28 @@ class ExperimentApiTest {
 
     @Test
     fun `old result versions return a clear diagnostic instead of a decode failure`() {
-        val directory = root.resolve(".results/old/unsupported")
-        Files.createDirectories(directory)
-        Files.writeString(directory.resolve("manifest.json"), "{\"schemaVersion\":1}")
-        listOf("manifest", "summary").forEach { part ->
-            val response = mockMvc.perform(get("/api/v1/runs/{id}/$part", "unsupported")).andReturn().response
-            assertThat(response.status).isEqualTo(400)
-            assertThat(JsonPath.read<String>(response.contentAsString, "$.code")).isEqualTo("RUN_VERSION_UNSUPPORTED")
-            openApi.assertResponse("get", "/api/v1/runs/{id}/$part", response)
+        listOf("0", "1", "2147483647", "missing").forEach { actual ->
+            val id = "unsupported-$actual"
+            val directory = root.resolve(".results/old/$id")
+            Files.createDirectories(directory)
+            val content = if (actual == "missing") "{}" else """{"schemaVersion":$actual}"""
+            Files.writeString(directory.resolve("manifest.json"), content)
+            val args =
+                if (actual == "missing") {
+                    """{"reason":"missing","kind":"manifest","expectedSchema":7}"""
+                } else {
+                    """{"reason":"version","kind":"manifest","actual":$actual,"expectedSchema":7}"""
+                }
+            listOf("manifest", "summary").forEach { part ->
+                val response = mockMvc.perform(get("/api/v1/runs/{id}/$part", id)).andReturn().response
+                assertThat(response.status).isEqualTo(400)
+                assertThat(JsonPath.read<String>(response.contentAsString, "$.code")).isEqualTo("RUN_VERSION_UNSUPPORTED")
+                assertThat(JsonPath.read<String>(response.contentAsString, "$.message"))
+                    .isEqualTo("Unsupported manifest schemaVersion $actual; expected 7; run again")
+                assertThat(Json.parseToJsonElement(response.contentAsString).jsonObject["args"])
+                    .isEqualTo(Json.parseToJsonElement(args))
+                openApi.assertResponse("get", "/api/v1/runs/{id}/$part", response)
+            }
         }
     }
 

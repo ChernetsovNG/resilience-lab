@@ -10,7 +10,7 @@ export function useTimelineSeries(
 ) {
   const nodesKey = JSON.stringify(nodes);
   const key = JSON.stringify([runId, variant, cell, replication, nodesKey, fromWindow, untilWindow]);
-  const [state, setState] = useState<{ key: string; nodes: NodeSeriesMetrics[]; problem: string | null }>({
+  const [state, setState] = useState<{ key: string; nodes: NodeSeriesMetrics[]; problem: { error: unknown } | null }>({
     key: "", nodes: [], problem: null,
   });
   const enabled = variant !== null && nodes.length > 0;
@@ -21,13 +21,14 @@ export function useTimelineSeries(
       .then((loaded) => {
         if (!controller.signal.aborted) setState({ key, nodes: loaded, problem: null });
       }, (error: unknown) => {
-        if (!controller.signal.aborted) setState({ key, nodes: [], problem: error instanceof Error ? error.message : String(error) });
+        if (!controller.signal.aborted) setState({ key, nodes: [], problem: { error } });
       });
     return () => controller.abort();
   }, [loader, runId, variant, cell, replication, nodesKey, fromWindow, untilWindow, key]);
+  const problem = enabled && state.key === key ? state.problem : null;
   return {
     nodes: enabled && state.key === key ? state.nodes : emptyNodes,
-    problem: enabled && state.key === key ? state.problem : null,
+    problem: problem == null ? null : problem.error instanceof Error ? problem.error.message : String(problem.error),
     loading: enabled && state.key !== key,
   };
 }

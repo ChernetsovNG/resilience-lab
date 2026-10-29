@@ -6,7 +6,7 @@ import type { HealthView } from "../api/apiTypes";
 /** Backend health, read once on start. */
 export function useHealth(): { health: HealthView | null; error: string | null } {
   const [health, setHealth] = useState<HealthView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ error: unknown } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -16,12 +16,12 @@ export function useHealth(): { health: HealthView | null; error: string | null }
         if (active) setHealth(value);
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : t("app.health.failed"));
+        if (active) setError({ error: reason });
       });
     return () => {
       active = false;
     };
   }, []);
 
-  return { health, error };
+  return { health, error: error === null ? null : error.error instanceof Error ? error.error.message : t("app.health.failed") };
 }

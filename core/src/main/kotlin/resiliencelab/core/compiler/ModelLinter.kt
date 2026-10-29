@@ -1,5 +1,6 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
@@ -60,6 +61,12 @@ class ModelLinter(
                                     "${diagnostic.message} (points: ${points.joinToString(", ")})"
                                 },
                             variant = if (experiment.grid.isNotEmpty()) variant.id else diagnostic.variant,
+                            args =
+                                if (points.size == variant.points.size) {
+                                    diagnostic.args
+                                } else {
+                                    diagnostic.args.orEmpty() + ("points" to JsonPrimitive(points.joinToString(", ")))
+                                },
                         ) to variant.id
                     }
             }.groupBy({ it.first }, { it.second })
@@ -73,12 +80,17 @@ class ModelLinter(
                 if (experiment.run.replications < minimumReplications) {
                     diagnostics +
                         Diagnostic(
-                            "LINT_FEW_REPLICATIONS",
+                            CoreMessage.LINT_FEW_REPLICATIONS,
                             Severity.WARNING,
                             "Only ${experiment.run.replications} replications: 95% confidence intervals are unreliable; " +
                                 "use at least $minimumReplications replications",
                             experiment.origin.document,
                             experiment.origin.pointer + "/execution/replications",
+                            args =
+                                mapOf(
+                                    "replications" to JsonPrimitive(experiment.run.replications),
+                                    "minimum" to JsonPrimitive(minimumReplications),
+                                ),
                         )
                 } else {
                     diagnostics
@@ -114,30 +126,36 @@ class ModelLinter(
             2.0 * call.network.meanMs + target.processing.meanMs + (next?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (call.timeoutMs < required) {
             warning(
-                "LINT_TIMEOUT_BUDGET",
+                CoreMessage.LINT_TIMEOUT_BUDGET,
                 "Timeout ${number(call.timeoutMs)} ms is below the downstream budget ${number(required)} ms",
                 call.origin,
                 call.path,
                 "/params/timeout",
+                mapOf("timeoutMs" to messageNumber(call.timeoutMs), "requiredMs" to messageNumber(required)),
             )
         } else {
             null
         }
     }
 
-    /** Attempts include the first attempt. Multiplication is exact, including chains whose product exceeds Long. */
+    /**
+     * Attempts include the first attempt. Multiplication is exact, including chains whose product exceeds Long.
+     * Products beyond JavaScript's 53-bit exact integer range travel as digit strings.
+     */
     private fun retryAmplification(
         chain: ChainIr,
         firstCall: CallEdge?,
     ): Diagnostic? {
         val product = chain.calls.fold(BigInteger.ONE) { total, call -> total * BigInteger.valueOf(call.attempts.toLong()) }
         return if (product > BigInteger.valueOf(retryAmplificationThreshold.toLong()) && firstCall != null) {
+            val amplification = if (product.bitLength() <= 53) JsonPrimitive(product) else JsonPrimitive(product.toString())
             warning(
-                "LINT_RETRY_AMPLIFICATION",
+                CoreMessage.LINT_RETRY_AMPLIFICATION,
                 "Retry amplification $product exceeds threshold $retryAmplificationThreshold",
                 firstCall.origin,
                 firstCall.path,
                 "/params/attempts",
+                mapOf("amplification" to amplification, "threshold" to JsonPrimitive(retryAmplificationThreshold)),
             )
         } else {
             null
@@ -163,12 +181,18 @@ class ModelLinter(
                 if (service.handlers < demand) {
                     add(
                         warning(
-                            "LINT_HANDLERS_LITTLE",
+                            CoreMessage.LINT_HANDLERS_LITTLE,
                             "Handlers ${service.handlers} are below λ·W = ${number(demand)} " +
                                 "(λ = ${number(chain.client.arrivalRatePerMs * 1_000.0)} requests/s, W = ${number(holdingMs)} ms)",
                             service.origin,
                             service.path,
                             "/params/handlers",
+                            mapOf(
+                                "handlers" to JsonPrimitive(service.handlers),
+                                "demand" to messageNumber(demand),
+                                "ratePerSecond" to messageNumber(chain.client.arrivalRatePerMs * 1_000.0),
+                                "holdingMs" to messageNumber(holdingMs),
+                            ),
                         ),
                     )
                 }
@@ -187,11 +211,12 @@ class ModelLinter(
         val required = entry.processing.meanMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (chain.client.deadlineMs < required) {
             warning(
-                "LINT_DEADLINE_BUDGET",
+                CoreMessage.LINT_DEADLINE_BUDGET,
                 "Deadline ${number(chain.client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
                 chain.client.origin,
                 chain.client.path,
                 "/params/deadline",
+                mapOf("deadlineMs" to messageNumber(chain.client.deadlineMs), "requiredMs" to messageNumber(required)),
             )
         } else {
             null
@@ -262,10 +287,11 @@ class ModelLinter(
     private fun number(value: Double): String = if (value.isFinite()) Quantities.plain(value) else value.toString()
 
     private fun warning(
-        code: String,
+        code: CoreMessage,
         message: String,
         origin: Origin,
         path: String,
         suffix: String,
-    ) = Diagnostic(code, Severity.WARNING, message, origin.document, origin.pointer + suffix, path)
+        args: Map<String, JsonPrimitive>,
+    ) = Diagnostic(code, Severity.WARNING, message, origin.document, origin.pointer + suffix, path, args = args)
 }

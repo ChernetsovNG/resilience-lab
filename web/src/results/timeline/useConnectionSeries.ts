@@ -10,7 +10,7 @@ export function useConnectionSeries(
 ) {
   const connectionsKey = JSON.stringify(connections);
   const key = JSON.stringify([runId, variant, cell, replication, connectionsKey, fromWindow, untilWindow]);
-  const [state, setState] = useState<{ key: string; connections: DecodedConnection[]; problem: string | null }>({
+  const [state, setState] = useState<{ key: string; connections: DecodedConnection[]; problem: { error: unknown } | null }>({
     key: "", connections: [], problem: null,
   });
   const enabled = variant !== null && connections.length > 0;
@@ -21,13 +21,14 @@ export function useConnectionSeries(
       .then((loaded) => {
         if (!controller.signal.aborted) setState({ key, connections: loaded, problem: null });
       }, (error: unknown) => {
-        if (!controller.signal.aborted) setState({ key, connections: [], problem: error instanceof Error ? error.message : String(error) });
+        if (!controller.signal.aborted) setState({ key, connections: [], problem: { error } });
       });
     return () => controller.abort();
   }, [loader, runId, variant, cell, replication, connectionsKey, fromWindow, untilWindow, key]);
+  const problem = enabled && state.key === key ? state.problem : null;
   return {
     connections: enabled && state.key === key ? state.connections : emptyConnections,
-    problem: enabled && state.key === key ? state.problem : null,
+    problem: problem == null ? null : problem.error instanceof Error ? problem.error.message : String(problem.error),
     loading: enabled && state.key !== key,
   };
 }

@@ -4,8 +4,8 @@ type Value = number | null | undefined;
 const missing = (value: Value): value is null | undefined => value == null || !Number.isFinite(value);
 
 /** Display precision is shared by quantity kind, without insignificant trailing zeroes. */
-export function formatNumber(value: Value, maximumFractionDigits = 2): string {
-  if (missing(value)) return t("common.na");
+export function formatNumber(value: Value | bigint, maximumFractionDigits = 2): string {
+  if (value == null || (typeof value === "number" && !Number.isFinite(value))) return t("common.na");
   const number = new Intl.NumberFormat(language, { maximumFractionDigits });
   const rounded = number.format(value);
   return rounded === number.format(-0) ? number.format(0) : rounded;

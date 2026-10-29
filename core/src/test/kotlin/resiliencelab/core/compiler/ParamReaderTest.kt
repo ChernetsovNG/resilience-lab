@@ -1,6 +1,7 @@
 package resiliencelab.core.compiler
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.catalog.ParamDescriptor
@@ -58,6 +59,12 @@ class ParamReaderTest {
             "PARAM_MISSING" to "/blocks/svc/params/processing",
         )
         assertThat(diagnostics).allMatch { it.path == "svc" && it.severity == Severity.ERROR }
+        val range = diagnostics.single { it.pointer == "/blocks/svc/params/failureRate" }
+        assertThat(range.message).isEqualTo("Parameter 'failureRate' is out of range: >= 0% and <= 100%")
+        assertThat(Json.encodeToJsonElement(range).jsonObject["args"])
+            .isEqualTo(
+                Json.parseToJsonElement("""{"reason":"betweenUnit","parameter":"failureRate","minimum":0.0,"maximum":100.0,"unit":"%"}"""),
+            )
     }
 
     @Test

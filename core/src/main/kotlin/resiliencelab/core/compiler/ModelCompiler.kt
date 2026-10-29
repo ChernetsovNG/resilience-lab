@@ -2,6 +2,7 @@ package resiliencelab.core.compiler
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Dimension
 import resiliencelab.core.catalog.ParamDescriptor
@@ -24,6 +25,8 @@ import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.WindowCountException
+import resiliencelab.core.ir.WindowGridFailure
 import resiliencelab.core.ir.windowCount
 import kotlin.math.ceil
 
@@ -133,16 +136,16 @@ class ModelCompiler(
         sink: Diagnostics,
     ): List<List<ParameterPatch>> {
         if (experiment.grid.size > 2) {
-            sink.error("GRID_AXES", "A grid must contain one or two axes", document, "/grid")
+            sink.error(CoreMessage.GRID_AXES, "A grid must contain one or two axes", document, "/grid")
             return emptyList()
         }
         val paths = mutableListOf<String>()
         experiment.grid.forEachIndexed { index, axis ->
             if (axis.values.isEmpty()) {
-                sink.error("GRID_VALUES", "A grid axis must contain at least one value", document, "/grid/$index/values")
+                sink.error(CoreMessage.GRID_VALUES, "A grid axis must contain at least one value", document, "/grid/$index/values")
             }
             if (paths.any { it == axis.path || it.startsWith("${axis.path}.") || axis.path.startsWith("$it.") }) {
-                sink.error("GRID_PATH", "Grid axis paths must not overlap", document, "/grid/$index/path")
+                sink.error(CoreMessage.GRID_PATH_OVERLAP, "Grid axis paths must not overlap", document, "/grid/$index/path")
             }
             paths += axis.path
         }
@@ -171,10 +174,33 @@ class ModelCompiler(
         val before = sink.errorCount()
         model.blocks.forEach { (id, block) ->
             val pointer = JsonPointer.of("blocks", id)
-            if (!ID.matches(id)) sink.error("ID_INVALID", "Block id '$id' must match ${ID.pattern}", document, pointer, id)
+            if (!ID.matches(id)) {
+                sink.error(
+                    CoreMessage.ID_BLOCK,
+                    "Block id '$id' must match ${ID.pattern}",
+                    document,
+                    pointer,
+                    id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(id),
+                            "pattern" to JsonPrimitive(ID.pattern),
+                        ),
+                )
+            }
             val type = catalog.type(block.type)
             if (type == null || type.category != TypeCategory.BLOCK) {
-                sink.error("TYPE_UNKNOWN", "Unknown block type '${block.type}'", document, JsonPointer.child(pointer, "type"), id)
+                sink.error(
+                    CoreMessage.TYPE_BLOCK,
+                    "Unknown block type '${block.type}'",
+                    document,
+                    JsonPointer.child(pointer, "type"),
+                    id,
+                    args =
+                        mapOf(
+                            "type" to JsonPrimitive(block.type),
+                        ),
+                )
             }
         }
         val used = model.blocks.keys.toMutableSet()
@@ -182,32 +208,89 @@ class ModelCompiler(
             val pointer = JsonPointer.of("connections", index)
             if (!ID.matches(connection.id)) {
                 val message = "Connection id '${connection.id}' must match ${ID.pattern}"
-                sink.error("ID_INVALID", message, document, "$pointer/id", connection.id)
+                sink.error(
+                    CoreMessage.ID_CONNECTION,
+                    message,
+                    document,
+                    "$pointer/id",
+                    connection.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(connection.id),
+                            "pattern" to JsonPrimitive(ID.pattern),
+                        ),
+                )
             }
             if (!used.add(connection.id)) {
-                sink.error("ID_DUPLICATE", "Id '${connection.id}' is already used", document, "$pointer/id", connection.id)
+                sink.error(
+                    CoreMessage.ID_DUPLICATE,
+                    "Id '${connection.id}' is already used",
+                    document,
+                    "$pointer/id",
+                    connection.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(connection.id),
+                        ),
+                )
             }
             val type = catalog.type(connection.type)
             if (type == null || type.category != TypeCategory.CONNECTION) {
-                sink.error("TYPE_UNKNOWN", "Unknown connection type '${connection.type}'", document, "$pointer/type", connection.id)
+                sink.error(
+                    CoreMessage.TYPE_CONNECTION,
+                    "Unknown connection type '${connection.type}'",
+                    document,
+                    "$pointer/type",
+                    connection.id,
+                    args =
+                        mapOf(
+                            "type" to JsonPrimitive(connection.type),
+                        ),
+                )
                 return@forEachIndexed
             }
             val from = model.blocks[connection.from]
             val to = model.blocks[connection.to]
             if (from == null) {
-                sink.error("CONNECTION_ENDPOINT", "Unknown source block '${connection.from}'", document, "$pointer/from", connection.id)
+                sink.error(
+                    CoreMessage.CONNECTION_SOURCE,
+                    "Unknown source block '${connection.from}'",
+                    document,
+                    "$pointer/from",
+                    connection.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(connection.from),
+                        ),
+                )
             }
             if (to == null) {
-                sink.error("CONNECTION_ENDPOINT", "Unknown target block '${connection.to}'", document, "$pointer/to", connection.id)
+                sink.error(
+                    CoreMessage.CONNECTION_TARGET,
+                    "Unknown target block '${connection.to}'",
+                    document,
+                    "$pointer/to",
+                    connection.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(connection.to),
+                        ),
+                )
             }
             val rule = type.connects
             if (from != null && to != null && rule != null && (from.type != rule.fromType || to.type != rule.toType)) {
                 sink.error(
-                    "CONNECTION_TYPE",
+                    CoreMessage.CONNECTION_TYPE,
                     "Connection type '${type.id}' must connect ${rule.fromType} to ${rule.toType}",
                     document,
                     "$pointer/type",
                     connection.id,
+                    args =
+                        mapOf(
+                            "type" to JsonPrimitive(type.id),
+                            "fromType" to JsonPrimitive(rule.fromType),
+                            "toType" to JsonPrimitive(rule.toType),
+                        ),
                 )
             }
         }
@@ -236,12 +319,13 @@ class ModelCompiler(
             val descriptors = typeId?.let { catalog.type(it)?.params }
             if (descriptors == null || paramPath.isEmpty() || !resolves(descriptors, paramPath)) {
                 sink.error(
-                    if (patch.pathPointer.startsWith("/grid/")) "GRID_PATH" else "OVERRIDE_PATH",
+                    if (patch.pathPointer.startsWith("/grid/")) CoreMessage.GRID_PATH_PARAMETER else CoreMessage.OVERRIDE_PATH,
                     "Override '$path' does not name a parameter of a block or connection",
                     document,
                     patch.pathPointer,
                     target,
                     variantId,
+                    args = mapOf("path" to JsonPrimitive(path)),
                 )
                 return@forEach
             }
@@ -312,10 +396,19 @@ class ModelCompiler(
         val calls = indexed.filter { it.value.type == "call" }.sortedBy { it.value.id }
         val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, origins[connection.id], sink) }
         if (clients.size != 1) {
-            sink.error("TOPOLOGY_CLIENT", "The model must contain exactly one client block; found ${clients.size}", document, "/blocks")
+            sink.error(
+                CoreMessage.TOPOLOGY_CLIENT,
+                "The model must contain exactly one client block; found ${clients.size}",
+                document,
+                "/blocks",
+                args =
+                    mapOf(
+                        "found" to JsonPrimitive(clients.size),
+                    ),
+            )
         }
         if (requests.size != 1 || requests.single().value.from !in clients) {
-            sink.error("TOPOLOGY_CHAIN", "Exactly one request connection must start at the client", document, "/connections")
+            sink.error(CoreMessage.CHAIN_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
         }
         val entry = requests.singleOrNull()?.value?.to
         checkChain(entry?.takeIf { it in services }, services.keys, calls.map { it.value }, document, sink)
@@ -334,13 +427,43 @@ class ModelCompiler(
         val incoming = calls.filter { it.to in services }.groupBy { it.to }
         val validOutgoing = calls.filter { it.from in services && it.to in services }.groupBy { it.from }
         outgoing.filterValues { it.size > 1 }.keys.sorted().forEach {
-            sink.error("TOPOLOGY_CHAIN", "Service '$it' has more than one outgoing call", document, JsonPointer.of("blocks", it), it)
+            sink.error(
+                CoreMessage.CHAIN_OUTGOING,
+                "Service '$it' has more than one outgoing call",
+                document,
+                JsonPointer.of("blocks", it),
+                it,
+                args =
+                    mapOf(
+                        "service" to JsonPrimitive(it),
+                    ),
+            )
         }
         incoming.filterValues { it.size > 1 }.keys.sorted().forEach {
-            sink.error("TOPOLOGY_CHAIN", "Service '$it' has more than one incoming call", document, JsonPointer.of("blocks", it), it)
+            sink.error(
+                CoreMessage.CHAIN_INCOMING,
+                "Service '$it' has more than one incoming call",
+                document,
+                JsonPointer.of("blocks", it),
+                it,
+                args =
+                    mapOf(
+                        "service" to JsonPrimitive(it),
+                    ),
+            )
         }
         if (entry != null && entry in incoming) {
-            sink.error("TOPOLOGY_CHAIN", "Entry service '$entry' must not receive calls", document, JsonPointer.of("blocks", entry), entry)
+            sink.error(
+                CoreMessage.CHAIN_ENTRY,
+                "Entry service '$entry' must not receive calls",
+                document,
+                JsonPointer.of("blocks", entry),
+                entry,
+                args =
+                    mapOf(
+                        "service" to JsonPrimitive(entry),
+                    ),
+            )
         }
         val visited = mutableSetOf<String>()
         val active = mutableSetOf<String>()
@@ -358,7 +481,17 @@ class ModelCompiler(
                 }
                 val next = edges.next().to
                 if (next in active) {
-                    sink.error("TOPOLOGY_CHAIN", "Calls form a cycle through '$next'", document, JsonPointer.of("blocks", next), next)
+                    sink.error(
+                        CoreMessage.CHAIN_CYCLE,
+                        "Calls form a cycle through '$next'",
+                        document,
+                        JsonPointer.of("blocks", next),
+                        next,
+                        args =
+                            mapOf(
+                                "service" to JsonPrimitive(next),
+                            ),
+                    )
                 } else if (visited.add(next)) {
                     active.add(next)
                     pending.addLast(next to validOutgoing[next].orEmpty().iterator())
@@ -374,7 +507,17 @@ class ModelCompiler(
             if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.to) }
         }
         (services - reachable).sorted().forEach {
-            sink.error("TOPOLOGY_CHAIN", "Service '$it' is not reachable from the client", document, JsonPointer.of("blocks", it), it)
+            sink.error(
+                CoreMessage.CHAIN_UNREACHABLE,
+                "Service '$it' is not reachable from the client",
+                document,
+                JsonPointer.of("blocks", it),
+                it,
+                args =
+                    mapOf(
+                        "service" to JsonPrimitive(it),
+                    ),
+            )
         }
     }
 
@@ -391,7 +534,11 @@ class ModelCompiler(
         val rate = reader.quantity("rate")
         val deadline = reader.quantity("deadline")
         if (rate != null && !(1.0 / rate).isFinite()) {
-            return reader.fail("PARAM_RANGE", "rate", "Arrival rate is too small: the mean interval between requests is not finite")
+            return reader.fail(
+                CoreMessage.PARAM_RATE_INTERVAL,
+                "rate",
+                "Arrival rate is too small: the mean interval between requests is not finite",
+            )
         }
         if (rate == null || deadline == null) return null
         return ClientNode(id, rate, deadline, Origin(document, JsonPointer.of("blocks", id)))
@@ -445,14 +592,23 @@ class ModelCompiler(
         val mean = reader.quantity("mean")
         val stdDev = reader.quantity("stdDev")
         if (kind == "lognormal" && !reader.has("stdDev")) {
-            reader.fail<Unit>("PARAM_MISSING", "stdDev", "lognormal requires stdDev", dependsOn = "kind")
+            reader.fail<Unit>(CoreMessage.PARAM_LOGNORMAL, "stdDev", "lognormal requires stdDev", dependsOn = "kind")
         }
         if (kind == null || mean == null) return null
         if (kind != "lognormal" && reader.has("stdDev")) {
-            return reader.fail("DISTRIBUTION_RULE", "stdDev", "stdDev applies only to lognormal", dependsOn = "kind")
+            return reader.fail(CoreMessage.DISTRIBUTION_RULE, "stdDev", "stdDev applies only to lognormal", dependsOn = "kind")
         }
         if (kind != "fixed" && mean <= 0.0) {
-            return reader.fail("PARAM_RANGE", "mean", "mean must be greater than zero for $kind", dependsOn = "kind")
+            return reader.fail(
+                CoreMessage.PARAM_POSITIVE_MEAN,
+                "mean",
+                "mean must be greater than zero for $kind",
+                dependsOn = "kind",
+                args =
+                    mapOf(
+                        "kind" to JsonPrimitive(kind),
+                    ),
+            )
         }
         return when (kind) {
             "fixed" -> Distribution(DistributionShape.FIXED, mean)
@@ -503,7 +659,16 @@ class ModelCompiler(
         val execution = experiment.execution
         val before = sink.errorCount()
         if (execution.replications < 1) {
-            sink.error("EXECUTION_RANGE", "replications must be at least 1", document, "/execution/replications")
+            sink.error(
+                CoreMessage.EXECUTION_REPLICATIONS,
+                "replications must be at least 1",
+                document,
+                "/execution/replications",
+                args =
+                    mapOf(
+                        "minimum" to JsonPrimitive(1),
+                    ),
+            )
         }
         val warmup = duration(execution.warmup, "/execution/warmup", document, sink, allowZero = true)
         val measurement = duration(execution.measurement, "/execution/measurement", document, sink, allowZero = false)
@@ -512,10 +677,20 @@ class ModelCompiler(
             execution.window?.let { duration(it, "/execution/window", document, sink, allowZero = false) }
                 ?: measurement?.div(100.0)
         if (execution.seed !in 0L..MAX_SEED) {
-            sink.error("SEED_RANGE", "seed must be an integer from 0 to $MAX_SEED", document, "/execution/seed")
+            sink.error(
+                CoreMessage.SEED_RANGE,
+                "seed must be an integer from 0 to $MAX_SEED",
+                document,
+                "/execution/seed",
+                args =
+                    mapOf(
+                        "minimum" to JsonPrimitive(0),
+                        "maximum" to JsonPrimitive(MAX_SEED),
+                    ),
+            )
         }
         if (warmup != null && measurement != null && !(warmup + measurement).isFinite()) {
-            sink.error("EXECUTION_RANGE", "warmup plus measurement must be finite", document, "/execution/measurement")
+            sink.error(CoreMessage.EXECUTION_TOTAL_DURATION, "warmup plus measurement must be finite", document, "/execution/measurement")
         }
         if (warmup != null &&
             measurement != null &&
@@ -524,8 +699,23 @@ class ModelCompiler(
         ) {
             try {
                 windowCount(warmup + measurement, window)
-            } catch (failure: IllegalArgumentException) {
-                sink.error("EXECUTION_RANGE", requireNotNull(failure.message), document, "/execution/window")
+            } catch (failure: WindowCountException) {
+                sink.error(
+                    if (failure.reason ==
+                        WindowGridFailure.DURATION
+                    ) {
+                        CoreMessage.EXECUTION_WINDOW_DURATION
+                    } else {
+                        CoreMessage.EXECUTION_WINDOW_COUNT
+                    },
+                    requireNotNull(failure.message),
+                    document,
+                    "/execution/window",
+                    args =
+                        mapOf(
+                            "maximum" to JsonPrimitive(Int.MAX_VALUE),
+                        ),
+                )
             }
         }
         if (sink.errorCount() > before || warmup == null || measurement == null || maxRealTime == null) return null
@@ -550,17 +740,27 @@ class ModelCompiler(
                 val pointer = JsonPointer.of("faults", index)
                 val before = sink.errorCount()
                 if (model.blocks[fault.target]?.type != "service") {
-                    sink.error("FAULT_TARGET", "Fault target '${fault.target}' is not a service", document, "$pointer/target", fault.target)
+                    sink.error(
+                        CoreMessage.FAULT_TARGET,
+                        "Fault target '${fault.target}' is not a service",
+                        document,
+                        "$pointer/target",
+                        fault.target,
+                        args =
+                            mapOf(
+                                "target" to JsonPrimitive(fault.target),
+                            ),
+                    )
                 }
                 val from = duration(fault.from, "$pointer/from", document, sink, allowZero = true)
                 val to = duration(fault.to, "$pointer/to", document, sink, allowZero = false)
                 if (from != null && to != null && to <= from) {
-                    sink.error("FAULT_INTERVAL", "Fault must end after it starts", document, "$pointer/to", fault.target)
+                    sink.error(CoreMessage.FAULT_INTERVAL, "Fault must end after it starts", document, "$pointer/to", fault.target)
                 }
                 val multiplier = fault.processingMultiplier
                 if (multiplier != null && !(multiplier > 0.0 && multiplier.isFinite())) {
                     sink.error(
-                        "PARAM_RANGE",
+                        CoreMessage.PARAM_PROCESSING_MULTIPLIER,
                         "processingMultiplier must be greater than zero",
                         document,
                         "$pointer/processingMultiplier",
@@ -572,17 +772,24 @@ class ModelCompiler(
                         Quantities.parse(text, Dimension.PROBABILITY)?.takeIf { it <= 1.0 }.also {
                             if (it == null) {
                                 sink.error(
-                                    "QUANTITY_INVALID",
+                                    CoreMessage.QUANTITY_FAILURE_RATE,
                                     "failureRate must be a percentage from 0% to 100%",
                                     document,
                                     "$pointer/failureRate",
                                     fault.target,
+                                    args = mapOf("minimum" to JsonPrimitive(0), "maximum" to JsonPrimitive(100)),
                                 )
                             }
                         }
                     }
                 if (multiplier == null && fault.failureRate == null) {
-                    sink.error("FAULT_EMPTY", "Fault must set processingMultiplier or failureRate", document, pointer, fault.target)
+                    sink.error(
+                        CoreMessage.FAULT_EMPTY,
+                        "Fault must set processingMultiplier or failureRate",
+                        document,
+                        pointer,
+                        fault.target,
+                    )
                 }
                 if (sink.errorCount() > before) {
                     null
@@ -592,7 +799,19 @@ class ModelCompiler(
             }
         spans.groupBy { it.target }.forEach { (target, list) ->
             val overlap = list.sortedBy { it.fromMs }.zipWithNext().any { (first, second) -> second.fromMs < first.toMs }
-            if (overlap) sink.error("FAULT_OVERLAP", "Faults on '$target' overlap in time", document, "/faults", target)
+            if (overlap) {
+                sink.error(
+                    CoreMessage.FAULT_OVERLAP,
+                    "Faults on '$target' overlap in time",
+                    document,
+                    "/faults",
+                    target,
+                    args =
+                        mapOf(
+                            "target" to JsonPrimitive(target),
+                        ),
+                )
+            }
         }
         return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
     }
@@ -603,16 +822,37 @@ class ModelCompiler(
         sink: Diagnostics,
     ) {
         if (experiment.variants.isEmpty()) {
-            sink.error("VARIANT_EMPTY", "The experiment must define at least one variant", document, "/variants")
+            sink.error(CoreMessage.VARIANT_EMPTY, "The experiment must define at least one variant", document, "/variants")
         }
         val seen = mutableSetOf<String>()
         experiment.variants.forEachIndexed { index, variant ->
             val pointer = JsonPointer.of("variants", index, "id")
             if (!ID.matches(variant.id)) {
-                sink.error("ID_INVALID", "Variant id '${variant.id}' must match ${ID.pattern}", document, pointer, variant = variant.id)
+                sink.error(
+                    CoreMessage.ID_VARIANT,
+                    "Variant id '${variant.id}' must match ${ID.pattern}",
+                    document,
+                    pointer,
+                    variant = variant.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(variant.id),
+                            "pattern" to JsonPrimitive(ID.pattern),
+                        ),
+                )
             }
             if (!seen.add(variant.id)) {
-                sink.error("VARIANT_DUPLICATE", "Variant id '${variant.id}' is repeated", document, pointer, variant = variant.id)
+                sink.error(
+                    CoreMessage.VARIANT_DUPLICATE,
+                    "Variant id '${variant.id}' is repeated",
+                    document,
+                    pointer,
+                    variant = variant.id,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(variant.id),
+                        ),
+                )
             }
         }
     }
@@ -626,11 +866,20 @@ class ModelCompiler(
     ): Double? {
         val value = Quantities.parse(text, Dimension.DURATION)
         if (value == null) {
-            sink.error("QUANTITY_INVALID", "'$text' is not a duration such as 250ms or 2s", document, pointer)
+            sink.error(
+                CoreMessage.QUANTITY_DURATION,
+                "'$text' is not a duration such as 250ms or 2s",
+                document,
+                pointer,
+                args =
+                    mapOf(
+                        "value" to JsonPrimitive(text),
+                    ),
+            )
             return null
         }
         if (!allowZero && value <= 0.0) {
-            sink.error("EXECUTION_RANGE", "Duration must be greater than zero", document, pointer)
+            sink.error(CoreMessage.EXECUTION_DURATION, "Duration must be greater than zero", document, pointer)
             return null
         }
         return value

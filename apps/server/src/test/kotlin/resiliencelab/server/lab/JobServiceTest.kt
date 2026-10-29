@@ -1,5 +1,8 @@
 package resiliencelab.server.lab
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -56,6 +59,9 @@ class JobServiceTest {
         val failed = jobs.get(job.id)!!
         assertThat(failed.status).isEqualTo(JobStatus.FAILED)
         assertThat(failed.error).isEqualTo("Experiment has errors")
+        val body = Json.parseToJsonElement(Json.encodeToString(JobView.serializer(), failed)).jsonObject
+        assertThat(body["errorCode"]).isEqualTo(JsonPrimitive("EXPERIMENT_INVALID"))
+        assertThat(body["errorArgs"]).isEqualTo(Json.parseToJsonElement("{}"))
         assertThat(failed.diagnostics.single().code).isEqualTo("JSON_SYNTAX")
     }
 
@@ -67,6 +73,9 @@ class JobServiceTest {
 
         assertThat(job.status).isEqualTo(JobStatus.FAILED)
         assertThat(job.error).isEqualTo("Experiment execution failed")
+        val body = Json.parseToJsonElement(Json.encodeToString(JobView.serializer(), job)).jsonObject
+        assertThat(body["errorCode"]).isEqualTo(JsonPrimitive("EXPERIMENT_EXECUTION_FAILED"))
+        assertThat(body["errorArgs"]).isEqualTo(Json.parseToJsonElement("{}"))
         assertThat(job.diagnostics).isEmpty()
     }
 
@@ -76,6 +85,9 @@ class JobServiceTest {
 
         assertThat(job.status).isEqualTo(JobStatus.FAILED)
         assertThat(job.error).isEqualTo("Job queue is full")
+        val body = Json.parseToJsonElement(Json.encodeToString(JobView.serializer(), job)).jsonObject
+        assertThat(body["errorCode"]).isEqualTo(JsonPrimitive("JOB_QUEUE_FULL"))
+        assertThat(body["errorArgs"]).isEqualTo(Json.parseToJsonElement("{}"))
     }
 
     @Test
@@ -114,6 +126,8 @@ class JobServiceTest {
         val cancelled = jobs.cancel(job.id)!!
         assertThat(cancelled.status).isEqualTo(JobStatus.CANCELLED)
         assertThat(cancelled.cancelRequested).isTrue()
+        assertThat(cancelled.errorCode).isNull()
+        assertThat(cancelled.errorArgs).isNull()
         assertThat(jobs.cancel(job.id)).isEqualTo(cancelled)
         queued.single().run()
 

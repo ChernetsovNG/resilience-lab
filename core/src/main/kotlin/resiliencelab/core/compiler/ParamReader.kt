@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import resiliencelab.core.catalog.Dimension
 import resiliencelab.core.catalog.ParamDescriptor
 import resiliencelab.core.catalog.Quantities
 
@@ -47,7 +48,7 @@ internal class ParamReader(
         params.keys
             .filter { key -> descriptors.none { it.name == key } }
             .sorted()
-            .forEach { key -> report("PARAM_UNKNOWN", "Unknown parameter '$key'", key) }
+            .forEach { key -> report(CoreMessage.PARAM_UNKNOWN, "Unknown parameter '$key'", key) }
     }
 
     fun has(name: String): Boolean = params[name].let { it != null && it !is JsonNull }
@@ -57,7 +58,7 @@ internal class ParamReader(
         val element = valueOf(descriptor) ?: return null
         val value =
             (element as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
-                ?: return fail("PARAM_TYPE", name, "Parameter '$name' must be an integer")
+                ?: return fail(CoreMessage.PARAM_INTEGER, name, "Parameter '$name' must be an integer")
         return value.takeIf { inRange(descriptor, value.toDouble()) }
     }
 
@@ -66,7 +67,7 @@ internal class ParamReader(
         val element = valueOf(descriptor) ?: return null
         val value =
             (element as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull?.takeIf { it.isFinite() }
-                ?: return fail("PARAM_TYPE", name, "Parameter '$name' must be a number")
+                ?: return fail(CoreMessage.PARAM_NUMBER, name, "Parameter '$name' must be a number")
         return value.takeIf { inRange(descriptor, value) }
     }
 
@@ -78,10 +79,11 @@ internal class ParamReader(
         val value =
             text?.let { Quantities.parse(it, dimension) }
                 ?: return fail(
-                    "QUANTITY_INVALID",
+                    CoreMessage.QUANTITY_INVALID,
                     name,
                     "Parameter '$name' must be a quantity with one of the units " +
                         Quantities.unitsOf(dimension).joinToString { it.symbol },
+                    args = mapOf("units" to JsonPrimitive(Quantities.unitsOf(dimension).joinToString { it.symbol })),
                 )
         return value.takeIf { inRange(descriptor, value) }
     }
@@ -91,13 +93,18 @@ internal class ParamReader(
         val element = valueOf(descriptor) ?: return null
         val text = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
         return text?.takeIf { it in descriptor.options }
-            ?: fail("PARAM_TYPE", name, "Parameter '$name' must be one of ${descriptor.options.joinToString()}")
+            ?: fail(
+                CoreMessage.PARAM_CHOICE,
+                name,
+                "Parameter '$name' must be one of ${descriptor.options.joinToString()}",
+                args = mapOf("options" to JsonPrimitive(descriptor.options.joinToString())),
+            )
     }
 
     fun obj(name: String): ParamReader? {
         val descriptor = descriptor(name)
         val element = valueOf(descriptor) ?: return null
-        val value = element as? JsonObject ?: return fail("PARAM_TYPE", name, "Parameter '$name' must be an object")
+        val value = element as? JsonObject ?: return fail(CoreMessage.PARAM_OBJECT, name, "Parameter '$name' must be an object")
         val childPointer = JsonPointer.child(pointer, name)
         return ParamReader(value, descriptor.fields, document, childPointer, path, diagnostics, overrides, "$prefix$name.")
     }
@@ -107,12 +114,13 @@ internal class ParamReader(
      * other parameter controlling it; a grid origin takes precedence over a model or variant origin.
      */
     fun <T> fail(
-        code: String,
+        code: CoreMessage,
         name: String,
         message: String,
         dependsOn: String? = null,
+        args: Map<String, JsonPrimitive> = emptyMap(),
     ): T? {
-        report(code, message, name, dependsOn)
+        report(code, message, name, dependsOn, args)
         return null
     }
 
@@ -121,7 +129,7 @@ internal class ParamReader(
     private fun valueOf(descriptor: ParamDescriptor): JsonElement? {
         val explicit = params[descriptor.name]?.takeUnless { it is JsonNull }
         if (explicit != null) return explicit
-        if (descriptor.required) report("PARAM_MISSING", "Required parameter '${descriptor.name}' is missing", descriptor.name)
+        if (descriptor.required) report(CoreMessage.PARAM_MISSING, "Required parameter '${descriptor.name}' is missing", descriptor.name)
         return descriptor.default
     }
 
@@ -134,10 +142,35 @@ internal class ParamReader(
                 descriptor.exclusiveMinimum?.let { value <= it } == true
         val above = descriptor.maximum?.let { value > it } == true
         if (below || above) {
-            report("PARAM_RANGE", "Parameter '${descriptor.name}' is out of range: ${rangeText(descriptor)}", descriptor.name)
+            val unit = descriptor.dimension?.let { Quantities.unitsOf(it).first { unit -> unit.symbol == baseUnit(it) } }
+            val minimum = descriptor.minimum ?: descriptor.exclusiveMinimum
+            val reason =
+                when {
+                    minimum == null -> if (unit == null) CoreMessage.PARAM_MAXIMUM else CoreMessage.PARAM_MAXIMUM_UNIT
+                    descriptor.maximum == null && descriptor.exclusiveMinimum != null ->
+                        if (unit == null) CoreMessage.PARAM_EXCLUSIVE_MINIMUM else CoreMessage.PARAM_EXCLUSIVE_MINIMUM_UNIT
+                    descriptor.maximum == null -> if (unit == null) CoreMessage.PARAM_MINIMUM else CoreMessage.PARAM_MINIMUM_UNIT
+                    descriptor.exclusiveMinimum != null ->
+                        if (unit == null) CoreMessage.PARAM_EXCLUSIVE_BETWEEN else CoreMessage.PARAM_EXCLUSIVE_BETWEEN_UNIT
+                    else -> if (unit == null) CoreMessage.PARAM_BETWEEN else CoreMessage.PARAM_BETWEEN_UNIT
+                }
+            val args =
+                buildMap {
+                    minimum?.let { put("minimum", messageNumber(it * (unit?.denominator ?: 1.0) / (unit?.numerator ?: 1.0))) }
+                    descriptor.maximum?.let { put("maximum", messageNumber(it * (unit?.denominator ?: 1.0) / (unit?.numerator ?: 1.0))) }
+                    unit?.let { put("unit", JsonPrimitive(it.symbol)) }
+                }
+            report(reason, "Parameter '${descriptor.name}' is out of range: ${rangeText(descriptor)}", descriptor.name, args = args)
         }
         return !(below || above)
     }
+
+    private fun baseUnit(dimension: Dimension): String =
+        when (dimension) {
+            Dimension.DURATION -> "ms"
+            Dimension.RATE -> "/s"
+            Dimension.PROBABILITY -> "%"
+        }
 
     private fun rangeText(descriptor: ParamDescriptor): String =
         listOfNotNull(
@@ -152,18 +185,20 @@ internal class ParamReader(
     ): String = descriptor.dimension?.let { Quantities.format(value, it) } ?: Quantities.plain(value)
 
     private fun report(
-        code: String,
+        code: CoreMessage,
         message: String,
         name: String,
         dependsOn: String? = null,
+        args: Map<String, JsonPrimitive> = emptyMap(),
     ) {
+        val messageArgs = mapOf("parameter" to JsonPrimitive(name)) + args
         val origins = listOfNotNull(overrides.pointerOf(prefix + name), dependsOn?.let { overrides.pointerOf(prefix + it) })
         val override = origins.firstOrNull { it.startsWith("/grid/") } ?: origins.firstOrNull()
         diagnostics +=
             if (override == null) {
-                Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path)
+                Diagnostic(code, Severity.ERROR, message, document, JsonPointer.child(pointer, name), path, args = messageArgs)
             } else {
-                Diagnostic(code, Severity.ERROR, message, overrides.document, override, path, overrides.variant)
+                Diagnostic(code, Severity.ERROR, message, overrides.document, override, path, overrides.variant, messageArgs)
             }
     }
 }
