@@ -20,20 +20,24 @@ export function StatusBar({ job, health, healthError, diagnostics, stale, cursor
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "ERROR").length;
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "WARNING").length;
   const status = job === null ? t("status.ready") : t(`app.job.status.${job.status}`);
+  const progress = active && job !== null ? t("status.progress", {
+    status, completed: formatNumber(job.completedTasks), total: job.totalTasks === 0 ? t("results.unknownTotal") : formatNumber(job.totalTasks),
+    cancelling: job.cancelRequested ? t("results.cancellationRequested") : "",
+  }) : status;
+  const problems = t("status.problems", { errors: formatNumber(errors), warnings: formatNumber(warnings) });
+  const cursor = cursorMs === null ? null : t("status.cursor", { time: formatDuration(cursorMs) });
+  const scale = zoom === null ? null : t("status.zoom", { zoom: formatPercent(zoom) });
   return (
     <footer className="status-bar" role="region" aria-label={t("status.title")}>
-      <span data-testid="job-status" role="status">{active && job !== null ? t("status.progress", {
-        status, completed: formatNumber(job.completedTasks), total: job.totalTasks === 0 ? t("results.unknownTotal") : formatNumber(job.totalTasks),
-        cancelling: job.cancelRequested ? t("results.cancellationRequested") : "",
-      }) : status}</span>
-      <button type="button" className={errors > 0 ? "diagnostic--error" : warnings > 0 ? "diagnostic--warning" : undefined} onClick={onProblems}>
-        {t("status.problems", { errors: formatNumber(errors), warnings: formatNumber(warnings) })}
+      <span data-testid="job-status" role="status" title={progress}>{progress}</span>
+      <button type="button" title={problems} className={errors > 0 ? "diagnostic--error" : warnings > 0 ? "diagnostic--warning" : undefined} onClick={onProblems}>
+        {problems}
       </button>
-      {stale ? <span className="canvas-results-stale">{t("status.stale")}</span> : null}
-      {cursorMs === null ? null : <span>{t("status.cursor", { time: formatDuration(cursorMs) })}</span>}
+      {stale ? <span className="canvas-results-stale" title={t("status.stale")}>{t("status.stale")}</span> : null}
+      {cursor === null ? null : <span title={cursor}>{cursor}</span>}
       <span className="spacer" />
       <div className="status-backend" title={healthError ?? undefined}><HealthBadge health={health} error={healthError} /></div>
-      {zoom === null ? null : <span>{t("status.zoom", { zoom: formatPercent(zoom) })}</span>}
+      {scale === null ? null : <span title={scale}>{scale}</span>}
     </footer>
   );
 }

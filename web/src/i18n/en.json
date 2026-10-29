@@ -1,6 +1,13 @@
 {
   "app.api.requestFailedWithStatus": "Request failed with status {status}",
   "app.canvas.inspector": "Inspector",
+  "editor.inspector.collapse": "Collapse inspector",
+  "editor.inspector.collapseSymbol": "›",
+  "editor.inspector.expand": "Expand inspector",
+  "editor.inspector.expandSymbol": "‹",
+  "editor.inspector.expandSelected": "Expand inspector: {selection} selected",
+  "editor.inspector.resize": "Resize inspector",
+  "editor.inspector.width": "Inspector width: {width} pixels",
   "app.canvas.loading": "Loading workspace…",
   "app.canvas.results": "Results context",
   "app.canvas.showResults": "Show results on diagram",

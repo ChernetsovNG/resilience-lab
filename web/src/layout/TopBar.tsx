@@ -43,11 +43,12 @@ export function TopBar(props: TopBarProps) {
   const active = job !== null && (job.status === "QUEUED" || job.status === "RUNNING");
   return (
     <header className="top-bar">
-      <h1>{t("app.name")}</h1>
+      <h1 title={t("app.name")}>{t("app.name")}</h1>
       <span className="top-bar-label">{t("app.topBar.experiment")}</span>
       <select
         aria-label={t("app.topBar.experiment")}
         value={experiment ?? ""}
+        title={experiment ?? t("app.topBar.noExperiment")}
         disabled={loading || saving || running || props.estimating || invalid}
         onChange={(event) => onExperiment(event.target.value)}
       >
@@ -67,7 +68,7 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={onRedo} disabled={!canRedo || invalid || loading} title={t("app.topBar.redoTitle")}>
         {t("app.topBar.redo")}
       </button>
-      {dirty ? <span className="dirty-mark">{t("app.topBar.unsavedChanges")}</span> : null}
+      {dirty ? <span className="dirty-mark" title={t("app.topBar.unsavedChanges")}>{t("app.topBar.unsavedChanges")}</span> : null}
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
         {t("app.topBar.save")}
       </button>

@@ -9,7 +9,7 @@ interface HealthBadgeProps {
 export function HealthBadge({ health, error }: HealthBadgeProps) {
   if (error !== null) {
     return (
-      <div className="health-badge health-badge--error" role="alert">
+      <div className="health-badge health-badge--error" role="alert" title={t("app.health.unavailable", { error })}>
         {t("app.health.unavailable", { error })}
       </div>
     );
@@ -17,14 +17,15 @@ export function HealthBadge({ health, error }: HealthBadgeProps) {
 
   if (health === null) {
     return (
-      <div className="health-badge" role="status">
+      <div className="health-badge" role="status" title={t("app.health.checking")}>
         {t("app.health.checking")}
       </div>
     );
   }
 
   return (
-    <div className="health-badge health-badge--healthy" role="status">
+    <div className="health-badge health-badge--healthy" role="status"
+      title={t("app.health.healthy", { applicationVersion: health.applicationVersion, kslVersion: health.kslVersion })}>
       {t("app.health.healthy", { applicationVersion: health.applicationVersion, kslVersion: health.kslVersion })}
     </div>
   );

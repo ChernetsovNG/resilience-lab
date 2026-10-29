@@ -322,7 +322,33 @@ export function App() {
           </EstimatePopover>
         ) : null}
       />
-      <ResultsWorkspace view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}>
+      <ResultsWorkspace view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
+        inspectorSelection={target === "element" ? selected : null}
+        inspector={model === null || loaded === null || catalog === null ? (
+          <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
+        ) : (
+          <Inspector
+            hidden={analysis}
+            key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
+            catalog={catalog}
+            model={model}
+            experiment={loaded.experiment}
+            selected={selected}
+            target={target}
+            focusField={fieldFocus}
+            editable={editable}
+            variantId={variant?.id ?? null}
+            invalid={invalid}
+            onCommand={workspace.execute}
+            overrides={overrides}
+            onRename={(id, next) => {
+              workspace.execute(renameElement(id, next));
+            }}
+            onParam={workspace.setParam}
+            onValidity={onValidity}
+            fieldDiagnostics={fieldDiagnostics}
+          />
+        )}>
       <Palette hidden={analysis} catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
       <main className="canvas-area" onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented && event.target instanceof Element &&
@@ -425,31 +451,6 @@ export function App() {
             setFieldFocus(previous => focusLabel ? { path: "variant.label", request: (previous?.request ?? 0) + 1 } : null);
           }} />
       </main>
-      {model === null || loaded === null || catalog === null ? (
-        <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
-      ) : (
-        <Inspector
-          hidden={analysis}
-          key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
-          catalog={catalog}
-          model={model}
-          experiment={loaded.experiment}
-          selected={selected}
-          target={target}
-          focusField={fieldFocus}
-          editable={editable}
-          variantId={variant?.id ?? null}
-          invalid={invalid}
-          onCommand={workspace.execute}
-          overrides={overrides}
-          onRename={(id, next) => {
-            workspace.execute(renameElement(id, next));
-          }}
-          onParam={workspace.setParam}
-          onValidity={onValidity}
-          fieldDiagnostics={fieldDiagnostics}
-        />
-      )}
       <ResultsPanel
         running={runPending || (ownRun && run.running)}
         job={ownRun ? run.job : null}
