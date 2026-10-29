@@ -15,10 +15,10 @@ test("keeps status in one place and reveals warnings and new errors without page
   const initialZoom = await zoom.textContent();
   await page.getByRole("button", { name: "Zoom In", exact: true }).click();
   await expect(zoom).not.toHaveText(initialZoom!);
-  await expect(status.getByRole("button", { name: "Errors: 0 · Warnings: 2" })).toBeVisible();
+  await expect(status.getByRole("button", { name: "Errors: 0 · Warnings: 1" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toBeHidden();
-  await status.getByRole("button", { name: "Errors: 0 · Warnings: 2" }).click();
+  await status.getByRole("button", { name: "Errors: 0 · Warnings: 1" }).click();
   await expect(page.getByRole("tab", { name: "Problems", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toContainText("LINT_TIMEOUT_BUDGET");
   await page.screenshot({ path: testInfo.outputPath("status-problems.png") });

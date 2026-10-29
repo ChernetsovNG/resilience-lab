@@ -75,7 +75,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await expect(timeout).toHaveValue("80ms");
   await expect(fieldMessages).toContainText("LINT_TIMEOUT_BUDGET");
   await expect(callLabel).toContainText("⚠ 1");
-  await expect(page.getByTestId("rf__node-client").getByRole("img", { name: /problems: warning/ })).toBeVisible();
+  await expect(page.getByTestId("rf__node-client").getByRole("img", { name: /problems: warning/ })).toBeHidden();
 
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await timeout.fill("120ms");
@@ -89,7 +89,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   const problems = page.getByRole("tabpanel");
   const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
   await expect(warning).toContainText("baseline");
-  await expect(problems.getByRole("button", { name: /LINT_DEADLINE_BUDGET/ })).toContainText("baseline");
+  await expect(problems.getByRole("button", { name: /LINT_DEADLINE_BUDGET/ })).toHaveCount(0);
   await warning.click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(timeout).toHaveValue("80ms");

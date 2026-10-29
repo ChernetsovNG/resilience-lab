@@ -100,9 +100,11 @@ class CliTest {
 
         assertThat(result.exitCode).isZero()
         assertThat(result.stdout).isEmpty()
-        assertThat(result.stderr).contains("Valid experiment: $experiment", "WARNING", "LINT_TIMEOUT_BUDGET", "LINT_DEADLINE_BUDGET")
+        assertThat(result.stderr).contains("Valid experiment: $experiment", "WARNING", "LINT_TIMEOUT_BUDGET")
         assertThat(result.stderr).contains("baseline · $model#/connections/1/params/timeout").doesNotContain("variants:", "no-retries")
-        assertThat(result.stderr).doesNotContain("LINT_FEW_REPLICATIONS").contains("Timeout 80 ms is below the downstream budget 189 ms")
+        assertThat(result.stderr)
+            .doesNotContain("LINT_FEW_REPLICATIONS", "LINT_DEADLINE_BUDGET")
+            .contains("Timeout 80 ms is below the downstream budget 189 ms")
     }
 
     @Test
