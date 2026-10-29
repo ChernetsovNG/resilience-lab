@@ -4,7 +4,7 @@ import { useEffect, useImperativeHandle, useState, type Dispatch, type MouseEven
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
-import type { CanvasResults, NodeOverlayMetric } from "../results/canvasResults";
+import type { CanvasResults, ConnectionOverlayMetric, NodeOverlayMetric } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import type { EditorCommand } from "../workspace/editor";
@@ -14,6 +14,7 @@ import type { BlockNodeType } from "./BlockNode";
 import { CallEdge } from "./CallEdge";
 import "@xyflow/react/dist/style.css";
 
+const fitViewOptions = { padding: { top: "64px" as const, bottom: 0.15, left: 0.15, right: 0.15 }, minZoom: 0.05 };
 const nodeTypes = { block: BlockNode };
 const edgeTypes = { call: CallEdge };
 const ariaLabelConfig: AriaLabelConfig = {
@@ -44,6 +45,7 @@ export interface CanvasProps {
   overrides?: Record<string, unknown>;
   results?: CanvasResults | null;
   nodeMetric?: NodeOverlayMetric;
+  connectionMetric?: ConnectionOverlayMetric;
   /** Queue capacities of the immutable run context, including variant and grid overrides. */
   queueCapacities?: ReadonlyMap<string, number>;
   layout: LayoutFile | null;
@@ -69,7 +71,7 @@ export function Canvas(props: CanvasProps) {
 
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, onZoomChange, overrides = {}, results = null,
-  nodeMetric = "utilization", queueCapacities }: CanvasProps) {
+  nodeMetric = "utilization", connectionMetric = "amplification", queueCapacities }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
@@ -99,7 +101,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   useEffect(() => {
-    if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView({ padding: 0.15, minZoom: 0.05 });
+    if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
   }, [fitView, initialized, width, height, sizes, insertions.length]);
   useEffect(() => {
     if (pending === undefined || measurement?.request !== pending) return;
@@ -119,6 +121,8 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
   if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: {} }]);
+  const connected = new Set(model.connections.filter(connection => selected.includes(connection.id))
+    .flatMap(connection => [connection.from, connection.to]));
   const nodes: BlockNodeType[] = blocks.map(([id, block]) => ({
     id,
     type: "block",
@@ -139,6 +143,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       onValidity: (key, valid) => onValidity?.(key, valid),
     },
     selected: id !== pendingId && selected.includes(id),
+    className: connected.has(id) ? "canvas-node--connected" : undefined,
     ariaLabel: id,
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
@@ -156,7 +161,12 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
-        amplification, windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
+        labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
+        amplification, result: amplification === undefined ? undefined : result, connectionMetric,
+        onSelect: (multiple: boolean) => {
+          if (!disabled) onSelect(multiple ? selected.includes(connection.id) ? selected.filter(id => id !== connection.id) : [...selected, connection.id] : [connection.id]);
+        },
+        windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
       },
@@ -224,7 +234,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
-      fitViewOptions={{ padding: 0.15, minZoom: 0.05 }}
+      fitViewOptions={fitViewOptions}
       minZoom={0.05}
       snapToGrid
       snapGrid={[20, 20]}
@@ -267,7 +277,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       {notice === null ? null : <div className="canvas-notice" role="alert">{notice}</div>}
     </ReactFlow>
     <div className="canvas-navigation react-flow" role="group" aria-label={t("editor.canvas.navigation")}>
-      <Controls showInteractive={false} orientation="horizontal" />
+      <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions} />
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </div>
     </>

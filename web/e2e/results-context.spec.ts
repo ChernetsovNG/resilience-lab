@@ -53,7 +53,8 @@ test("one context row gives the diagram more height and shares time with Timelin
     await page.screenshot({ path: testInfo.outputPath("normal-layout.png") });
     await row.getByRole("button", { name: "Analysis", exact: true }).click();
     await expect(page.locator(".palette")).toBeHidden();
-    await expect(page.locator(".inspector")).toBeHidden();
+    await expect(page.locator(".inspector")).toBeVisible();
+    await expect(page.locator(".inspector").getByRole("textbox")).toHaveCount(0);
     await expect(canvas).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeInViewport({ ratio: 0.5 });
     await window.focus();

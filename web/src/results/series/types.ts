@@ -26,6 +26,7 @@ export interface DecodedWindow {
   admittedAttempts: number;
   handlers: number;
   metrics: WindowMetricValues;
+  latency: { count: number; sumMs: number };
 }
 
 export interface DecodedNode {
@@ -62,4 +63,6 @@ export interface DecodedSeriesPart {
 export interface NodeSeriesMetrics {
   id: string;
   windows: WindowMetricValues[];
+  /** Raw sample weights, aligned with windows, for pooled latency within a replication. */
+  latency?: { count: number; sumMs: number }[];
 }

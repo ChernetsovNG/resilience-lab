@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
 import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
 import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
-import { canvasQueueCapacities, canvasResults } from "./canvasResults";
+import { canvasQueueCapacities, canvasResults, windowCanvasResults } from "./canvasResults";
 
 function fixture() {
   const run = structuredClone(summary);
@@ -157,4 +157,38 @@ it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s
   const result = canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)!;
   expect(result.services.get("gateway")?.utilization).toBe(0.5);
   expect(result.connections.get("client-to-gateway")?.amplification).toBe(1.2);
+});
+
+
+it("projects connection totals independently of the target service", () => {
+  const run = fixture();
+  run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
+    totals: { sentAttempts: 40, retries: 10, succeeded: 20, failed: 10, timeouts: 10, orphaned: 8,
+      inFlightIntegralMs: 600, orphanedIntegralMs: 250, backoffIntegralMs: 100, measurementMs: 2000 },
+    timeoutRate: { mean: 0.3, min: 0.2, max: 0.4 },
+  };
+  const result = canvasResults(run, model, "baseline", "p0")!;
+  expect(result.connections.get("gateway-to-middle")).toMatchObject({
+    sentAttemptsPerSecond: 20, timeoutRate: 0.3, meanOrphaned: 0.125, amplification: 2.5,
+  });
+  // A connection has its own result even if the target has no service totals.
+  delete run.variants[0].points[0].aggregate.services.middle;
+  expect(canvasResults(run, model, "baseline", "p0")?.connections.get("gateway-to-middle")?.sentAttemptsPerSecond).toBe(20);
+  const frame = windowCanvasResults(result, [
+    { id: "gateway", windows: [{ startMs: 0, durationMs: 100, handlerUtilization: 0.5, meanQueueLength: 0,
+      originalArrivalsPerSecond: 0, admittedAttemptsPerSecond: 0, successesPerSecond: 0, failuresPerSecond: 0,
+      timeoutsPerSecond: 0, retriesPerSecond: 0, meanLatencyMs: null, p50LatencyMs: null, p95LatencyMs: null, p99LatencyMs: null,
+      queueRejectionsPerSecond: 0, offeredAttemptsPerSecond: 9999, amplification: 99 }] },
+    { id: "middle", windows: [{ startMs: 0, durationMs: 100, handlerUtilization: 0.5, meanQueueLength: 0,
+      originalArrivalsPerSecond: 0, admittedAttemptsPerSecond: 0, successesPerSecond: 0, failuresPerSecond: 0,
+      timeoutsPerSecond: 0, retriesPerSecond: 0, meanLatencyMs: null, p50LatencyMs: null, p95LatencyMs: null, p99LatencyMs: null,
+      queueRejectionsPerSecond: 0, offeredAttemptsPerSecond: 9999, amplification: 77 }] },
+  ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
+    startMs: 0, durationMs: 100, sentAttempts: 2, retries: 1, succeeded: 0, failed: 0, timeouts: 1,
+    orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 0,
+    latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
+  }] }])!;
+  expect(frame.connections.get("gateway-to-middle")).toMatchObject({
+    sentAttemptsPerSecond: 20, timeoutRate: 0.5, meanOrphaned: 0.5, amplification: 77,
+  });
 });

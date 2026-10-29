@@ -418,7 +418,9 @@ test("shows summary and assumptions in resizable and Analysis layouts without pa
   await expect(panel).toBeVisible();
   await expect(page.locator(".palette")).toBeHidden();
   await expect(page.locator(".canvas-area")).toBeVisible();
-  await expect(page.locator(".inspector")).toBeHidden();
+  await expect(page.locator(".inspector")).toBeVisible();
+  await expect(page.locator(".inspector")).toContainText("Select a node or connection on the diagram to see its results.");
+  await expect(page.locator(".inspector").getByRole("textbox")).toHaveCount(0);
   const canvas = (await page.locator(".canvas-area").boundingBox())!;
   const results = (await page.locator(".results-panel").boundingBox())!;
   expect(results.y).toBeGreaterThanOrEqual(canvas.y + canvas.height);

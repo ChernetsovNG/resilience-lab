@@ -142,3 +142,14 @@ it("resets only the current results height to its relative default", () => {
   view.rerender(workspace());
   expect(height()).toBe(572);
 });
+
+
+it("opens Analysis at the selected element's results after scrolling through parameters", () => {
+  const panel = (analysis: boolean) => <ResultsWorkspace view="answer" collapsed={false} analysis={analysis}
+    inspector={<section>Selected output</section>} inspectorSelection="gateway"><section /></ResultsWorkspace>;
+  const view = render(panel(false));
+  const content = document.querySelector<HTMLElement>(".inspector-content")!;
+  content.scrollTop = 500;
+  view.rerender(panel(true));
+  expect(content.scrollTop).toBe(0);
+});

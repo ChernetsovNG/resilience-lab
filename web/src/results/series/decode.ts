@@ -63,6 +63,7 @@ function decodeWindow(window: RawWindow, originalArrivals: number, profile: stri
     originalArrivals: window.originalArrivals,
     admittedAttempts: window.admittedAttempts,
     handlers: window.handlers,
+    latency: { count: window.latency.count, sumMs: window.latency.sumMs },
     metrics,
   };
 }

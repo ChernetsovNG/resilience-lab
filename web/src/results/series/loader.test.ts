@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/apiClient";
-import type { SeriesIndex, SeriesPart, WindowMetrics } from "../../api/apiTypes";
+import type { ConnectionWindowMetrics, SeriesIndex, SeriesPart, WindowMetrics } from "../../api/apiTypes";
 import { SeriesPartCache } from "./cache";
 import { decodeSeriesPart } from "./decode";
 import { SeriesLoadError, SeriesLoader, type SeriesApi, type SeriesDecoderFactory } from "./loader";
@@ -76,6 +76,150 @@ function request(nodes: string[], signal?: AbortSignal) {
 }
 
 describe("series loader", () => {
+  it("returns each connection's own windows from connection-only and mixed parts", async () => {
+    const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({
+      startMs, durationMs: startMs === 20 ? 5 : 10, sentAttempts, retries: 1, succeeded: 1, failed: 0,
+      timeouts: 2, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+      latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
+    });
+    const mixed = part([{ id: "client", windows: [window({ originalArrivals: 999 }), window({ startMs: 10 })] }]);
+    mixed.connections = [{ id: "first-call", windows: [callWindow(0, 11), callWindow(10, 12)] }];
+    const connectionOnly = part([]);
+    connectionOnly.connections = [{ id: "second-call", windows: [callWindow(0, 21), callWindow(10, 22)] }];
+    const last = part([], 2, 3);
+    last.connections = [{ id: "first-call", windows: [callWindow(20, 13)] }];
+    const unrelated = part([]);
+    unrelated.connections = [{ id: "unselected-call", windows: [callWindow(0, 31), callWindow(10, 32)] }];
+    const parts = [mixed, connectionOnly, last, unrelated];
+    const texts = parts.map((value) => JSON.stringify(value));
+    const index: SeriesIndex = { schemaVersion: 2, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
+      file: `part-${index}.json.gz`, nodes: value.nodes.map((node) => node.id),
+      connections: value.connections.map((connection) => connection.id), fromWindow: value.fromWindow,
+      untilWindow: value.untilWindow, uncompressedBytes: texts[index].length, sha256: String(index).repeat(64),
+    })) };
+    const api = apiFor(index, texts);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
+
+    const result = await loader.loadConnections({ ...request([]), connections: ["first-call", "second-call"], fromWindow: 1, untilWindow: 3 });
+
+    expect(result.map((connection) => [connection.id, connection.windows.map((value) => value.sentAttempts)])).toEqual([
+      ["first-call", [12, 13]], ["second-call", [22]],
+    ]);
+    expect(result[0].windows[1]).toMatchObject({ startMs: 20, durationMs: 5, timeouts: 2, latency: { count: 1, sumMs: 2, meanMs: 2 } });
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1, 2]);
+  });
+
+  it("does not download a part for an empty connection window range", async () => {
+    const { index, texts } = fixture();
+    const withConnection = { ...index, parts: index.parts.map((value) => ({ ...value, connections: ["call"] })) };
+    const api = apiFor(withConnection, texts);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
+
+    expect(await loader.loadConnections({ ...request([]), connections: ["call"], fromWindow: 1, untilWindow: 1 })).toEqual([]);
+    expect(api.seriesPart).not.toHaveBeenCalled();
+  });
+
+  it("reuses a mixed decoded part between node and connection selections", async () => {
+    const { index } = fixture();
+    const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
+      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+      latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
+    })) }];
+    const text = JSON.stringify(mixed);
+    const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
+
+    const nodes = await loader.load(request(["client"]));
+    const connections = await loader.loadConnections({ ...request([]), connections: ["call"] });
+
+    expect(nodes[0].windows[0].originalArrivalsPerSecond).toBe(700);
+    expect(connections[0].windows[0].sentAttempts).toBe(3);
+    expect(api.seriesPart).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares a concurrent mixed-part download while allowing either consumer to abort", async () => {
+    const { index } = fixture();
+    const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
+      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+      latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
+    })) }];
+    const text = JSON.stringify(mixed);
+    const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
+    let resolvePart: ((value: { text: string; etag: string }) => void) | undefined;
+    let sharedSignal: AbortSignal | undefined;
+    api.seriesPart = vi.fn((_run, _variant, _cell, _replication, _part, signal?: AbortSignal) => new Promise((resolve) => {
+      resolvePart = resolve;
+      sharedSignal = signal;
+    }));
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
+    const controller = new AbortController();
+    const nodes = loader.load(request(["client"], controller.signal));
+    const connections = loader.loadConnections({ ...request([]), connections: ["call"] });
+    await vi.waitFor(() => expect(resolvePart).toBeDefined());
+    const aborted = nodes.catch((error: unknown) => error);
+
+    expect(api.seriesPart).toHaveBeenCalledTimes(1);
+    controller.abort();
+    expect(sharedSignal?.aborted).toBe(false);
+    resolvePart!({ text, etag: `"${CLIENT_SHA}"` });
+
+    await expect(aborted).resolves.toMatchObject({ name: "AbortError" });
+    expect((await connections)[0].windows[0].sentAttempts).toBe(3);
+    expect(api.seriesPart).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a completed download while another view is still decoding that part", async () => {
+    const { index } = fixture();
+    const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
+      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+      latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
+    })) }];
+    const text = JSON.stringify(mixed);
+    const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
+    const pending: (() => void)[] = [];
+    const loader = new SeriesLoader({ api, decoderFactory: () => ({
+      decode: (texts) => new Promise((resolve) => pending.push(() => resolve(texts.map(decodeSeriesPart)))), close: () => {},
+    }) });
+    const nodes = loader.load(request(["client"]));
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    const connections = loader.loadConnections({ ...request([]), connections: ["call"] });
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+
+    expect(api.seriesPart).toHaveBeenCalledTimes(1);
+    for (const resolve of pending) resolve();
+
+    expect((await nodes)[0].windows[0].originalArrivalsPerSecond).toBe(700);
+    expect((await connections)[0].windows[0].sentAttempts).toBe(3);
+  });
+
+  it("keeps service latency sample counts and sums aligned with the exact selected windows", async () => {
+    const measured = part([
+      { id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 }), window({ startMs: 20, durationMs: 5 })] },
+      { id: "service", windows: [
+        window({ handlers: 1, latency: { count: 100, sumMs: 10000, sketch: [0, 64, 100] } }),
+        window({ startMs: 10, handlers: 1, latency: { count: 1, sumMs: 10, sketch: [0, 64, 1] } }),
+        window({ startMs: 20, durationMs: 5, handlers: 1, latency: { count: 2, sumMs: 80, sketch: [0, 64, 2] } }),
+      ] },
+    ], 0, 3);
+    const text = JSON.stringify(measured);
+    const index: SeriesIndex = { schemaVersion: 2, endMs: 25, windowMs: 10, parts: [{
+      file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 3,
+      uncompressedBytes: text.length, sha256: CLIENT_SHA,
+    }] };
+    const loader = new SeriesLoader({ api: apiFor(index, [text]), decoderFactory: decoderFactory() });
+
+    const result = await loader.load({ ...request(["service"]), fromWindow: 1, untilWindow: 3 });
+
+    expect(result[0].latency).toEqual([{ count: 1, sumMs: 10 }, { count: 2, sumMs: 80 }]);
+    expect(result[0].windows.map((value) => [value.startMs, value.durationMs])).toEqual([[10, 10], [20, 5]]);
+  });
+
   it.each([1, 3])("rejects unsupported index schema version %s", async (schemaVersion) => {
     const { index, texts } = fixture();
     const api = apiFor({ ...index, schemaVersion }, texts);
@@ -142,7 +286,7 @@ describe("series loader", () => {
     expect(first[0].windows[1].originalArrivalsPerSecond).toBe(2000);
     expect(second).toEqual(first);
     expect(api.seriesPart).toHaveBeenCalledTimes(1);
-    expect(api.seriesPart).toHaveBeenCalledWith("run", "baseline", "p0", 0, 0, undefined);
+    expect(api.seriesPart).toHaveBeenCalledWith("run", "baseline", "p0", 0, 0, expect.any(AbortSignal));
     expect(factory).toHaveBeenCalledTimes(1);
   });
 

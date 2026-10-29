@@ -1,7 +1,7 @@
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
 
-import { canvasQueueCapacities, canvasResults, type NodeOverlayMetric } from "./results/canvasResults";
+import { canvasQueueCapacities, canvasResults, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./results/canvasResults";
 import { ResultsContextBar } from "./results/ResultsContextBar";
 import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
@@ -13,6 +13,7 @@ import { useValidation } from "./validation/useValidation";
 import { Canvas, type CanvasHandle } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
+import { ElementResults } from "./inspector/ElementResults";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
@@ -43,6 +44,8 @@ export function App() {
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.job?.id ?? null);
   const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
+  const [connectionMetric, setConnectionMetric] = useState<ConnectionOverlayMetric>("amplification");
+  const [timelineRequest, setTimelineRequest] = useState(0);
   const showDiagramResults = nodeMetric !== "off";
   const [estimatePanel, setEstimatePanel] = useState<{ source: "manual" } | { source: "run"; previousJobId: string | null } | null>(null);
   const showEstimate = estimatePanel !== null && (estimatePanel.source === "manual" || run.job === null ||
@@ -328,7 +331,16 @@ export function App() {
           <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
         ) : (
           <Inspector
-            hidden={analysis}
+            resultsOnly={analysis}
+            results={selected === null || !ownRun || run.job?.status !== "COMPLETED" || run.summary === null || run.manifest === null || run.documents === null || variant === undefined ? null : <ElementResults
+              runId={run.job.runId!} summary={run.summary} manifest={run.manifest}
+              runModel={run.documents.model} currentModel={loaded.model} experiment={run.documents.experiment}
+              catalog={catalog} variantId={variant.id} pointId={selectedPointId} replication={results.selection.replication}
+              window={results.selection.window} selected={selected}
+              onShowTimeline={() => {
+                if (selected !== null) setSelection([selected]);
+                setResultsSize("normal"); setTimelineRequest(current => current + 1);
+              }} />}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
             model={model}
@@ -395,7 +407,8 @@ export function App() {
             summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
-            metric={nodeMetric} onMetricChange={setNodeMetric} stale={staleResults}
+            metric={nodeMetric} onMetricChange={setNodeMetric} connectionMetric={connectionMetric}
+            onConnectionMetricChange={setConnectionMetric} stale={staleResults}
             analysis={analysis} onAnalysisChange={() => { setAnalysis(current => !current); setResultsSize("normal"); }} />}
         </div>
         <div className="canvas">
@@ -415,6 +428,7 @@ export function App() {
               results={showDiagramResults ? diagramResults : null}
               nodeMetric={nodeMetric === "off" ? "utilization" : nodeMetric}
               queueCapacities={queueCapacities}
+              connectionMetric={connectionMetric}
               editable={structureEditable && !invalid}
               parametersEditable={editable}
               disabled={invalid}
@@ -465,7 +479,7 @@ export function App() {
         onPointChange={(pointId) => results.select({ pointId })}
         runId={ownRun ? run.job?.runId ?? null : null}
         experiment={ownRun ? run.documents?.experiment ?? null : null}
-        selectedNodes={selection.filter((id) => loaded !== null && Object.hasOwn(loaded.model.blocks, id))}
+        selectedNodes={selection}
         replication={results.selection.replication}
         cursorWindow={results.selection.window}
         onCursorChange={playback.seek}
@@ -475,6 +489,7 @@ export function App() {
         diagnostics={allDiagnostics}
         diagnosticDocuments={loaded}
         problemsRequest={problemsRequest}
+        timelineRequest={timelineRequest}
         validationPending={validation.pending}
         validationProblem={validation.problem}
         onElement={id => {

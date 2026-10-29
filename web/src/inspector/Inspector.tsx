@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
@@ -11,6 +11,8 @@ import { VariantSettings } from "./VariantSettings";
 
 export interface InspectorProps {
   catalog: Catalog;
+  results?: ReactNode;
+  resultsOnly?: boolean;
   hidden?: boolean;
   /** The model as the active variant page sees it. */
   model: ModelFile;
@@ -35,7 +37,7 @@ export interface InspectorProps {
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics,
-  target = selected === null ? "experiment" : "element", focusField }: InspectorProps) {
+  target = selected === null ? "experiment" : "element", focusField, results, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (hidden || focusField == null) return;
@@ -48,6 +50,10 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
 
   return (
     <aside ref={panel} hidden={hidden} className="inspector" aria-label={t("editor.inspector.label")}>
+      {resultsOnly ? <>
+        {selected === null ? <p>{t("results.element.select")}</p> : <h2>{selected}</h2>}
+      </> : null}
+      <div hidden={resultsOnly}>
       {target === "variant" && onCommand !== undefined ? (
         <VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
@@ -59,6 +65,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
             {type.title}
             {variantId === null ? "" : t("editor.inspector.variantOverrides")}
           </p>
+          <h3>{t("editor.inspector.parameters")}</h3>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
@@ -85,6 +92,8 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
         <RunSettings catalog={catalog} model={model} experiment={experiment} editable={editable && onCommand !== undefined}
           invalid={invalid} fieldDiagnostics={fieldDiagnostics} onCommand={(command) => onCommand?.(command)} onValidity={onValidity} />
       </section> : null}
+      </div>
+      {variantId !== null && (resultsOnly || target === "element") ? results : null}
     </aside>
   );
 }

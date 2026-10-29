@@ -3,7 +3,7 @@ import { ApiError, api } from "../../api/apiClient";
 import type { SeriesIndex } from "../../api/apiTypes";
 import { DEFAULT_SERIES_CACHE_BYTES, SeriesPartCache, type SeriesPartKey } from "./cache";
 import { selectSeriesParts } from "./selection";
-import type { DecodedSeriesPart, DecodedWindow, NodeSeriesMetrics } from "./types";
+import type { DecodedConnection, DecodedConnectionWindow, DecodedSeriesPart, DecodedWindow, NodeSeriesMetrics } from "./types";
 import { WorkerSeriesDecoder } from "./workerClient";
 
 type SeriesPartReference = SeriesIndex["parts"][number];
@@ -38,6 +38,14 @@ export interface SeriesLoadRequest {
   signal?: AbortSignal;
 }
 
+export type ConnectionSeriesLoadRequest = Omit<SeriesLoadRequest, "nodes"> & { connections: readonly string[] };
+type SeriesSelectionRequest = SeriesLoadRequest | ConnectionSeriesLoadRequest;
+interface PartDownload {
+  controller: AbortController;
+  consumers: Set<symbol>;
+  promise: ReturnType<SeriesApi["seriesPart"]>;
+}
+
 export type SeriesLoadErrorCode = "SERIES_NOT_FOUND" | "ETAG_MISMATCH" | "INVALID_SERIES" | "WORKER_ERROR";
 
 export class SeriesLoadError extends Error {
@@ -53,11 +61,12 @@ export interface SeriesLoaderOptions {
   cache?: SeriesPartCache;
 }
 
-/** Loads selected immutable parts, decodes them off-thread and returns only requested node × window metrics. */
+/** Loads selected immutable parts, decodes them off-thread and returns only requested element × window metrics. */
 export class SeriesLoader {
   private readonly api: SeriesApi;
   private readonly decoderFactory: SeriesDecoderFactory;
   private readonly cache: SeriesPartCache;
+  private readonly downloads = new Map<string, PartDownload>();
 
   constructor(options: SeriesLoaderOptions = {}) {
     this.api = options.api ?? api;
@@ -66,6 +75,14 @@ export class SeriesLoader {
   }
 
   async load(request: SeriesLoadRequest): Promise<NodeSeriesMetrics[]> {
+    return assemble(await this.loadRequest(request), request);
+  }
+
+  async loadConnections(request: ConnectionSeriesLoadRequest): Promise<DecodedConnection[]> {
+    return assembleConnections(await this.loadRequest(request), request);
+  }
+
+  private async loadRequest(request: SeriesSelectionRequest): Promise<Map<string, DecodedSeriesPart>> {
     throwIfAborted(request.signal);
     let decoder: SeriesDecoder | undefined;
     const getDecoder = () => {
@@ -87,9 +104,9 @@ export class SeriesLoader {
   }
 
   private async loadInternal(
-    request: SeriesLoadRequest,
+    request: SeriesSelectionRequest,
     getDecoder: () => SeriesDecoder,
-  ): Promise<NodeSeriesMetrics[]> {
+  ): Promise<Map<string, DecodedSeriesPart>> {
     const index = await this.api.seriesIndex(
       request.runId,
       request.variant,
@@ -101,10 +118,12 @@ export class SeriesLoader {
     if (index.schemaVersion !== 2) {
       throw new SeriesLoadError("INVALID_SERIES", `Unsupported series index schema version: ${index.schemaVersion}`);
     }
-    const selected = selectSeriesParts(index, request.nodes, request.fromWindow, request.untilWindow);
+    const connectionRequest = "connections" in request;
+    const selected = selectSeriesParts(index, connectionRequest ? [] : request.nodes,
+      request.fromWindow, request.untilWindow, connectionRequest ? request.connections : []);
     const parts = await this.loadReferences(request, selected, getDecoder);
-    await this.ensureClients(index, parts, request, getDecoder);
-    return assemble(parts, request);
+    if (!connectionRequest) await this.ensureClients(index, parts, request, getDecoder);
+    return parts;
   }
 
   private async ensureClients(
@@ -131,8 +150,35 @@ export class SeriesLoader {
     }
   }
 
+  /** A cancelled view releases only its own interest in a part another view still needs. */
+  private downloadPart(request: SeriesSelectionRequest, reference: SeriesPartReference) {
+    throwIfAborted(request.signal);
+    const key = JSON.stringify(cacheKey(request, reference));
+    let download = this.downloads.get(key);
+    if (download === undefined) {
+      const controller = new AbortController();
+      download = { controller, consumers: new Set(), promise: this.api.seriesPart(
+        request.runId, request.variant, request.cell, request.replication, partNumberOf(reference), controller.signal,
+      ) };
+      this.downloads.set(key, download);
+      const completed = download;
+      const clear = () => { if (this.downloads.get(key) === completed) this.downloads.delete(key); };
+      void download.promise.then(() => {}, clear);
+    }
+    const shared = download;
+    const consumer = Symbol();
+    shared.consumers.add(consumer);
+    const release = () => {
+      if (shared.consumers.delete(consumer) && shared.consumers.size === 0) {
+        shared.controller.abort();
+        if (this.downloads.get(key) === shared) this.downloads.delete(key);
+      }
+    };
+    return { promise: withAbort(shared.promise, request.signal, release), release };
+  }
+
   private async loadReferences(
-    request: SeriesLoadRequest,
+    request: SeriesSelectionRequest,
     references: readonly SeriesPartReference[],
     getDecoder: () => SeriesDecoder,
   ): Promise<Map<string, DecodedSeriesPart>> {
@@ -145,41 +191,39 @@ export class SeriesLoader {
     }
     if (missing.length === 0) return result;
 
-    const fetched = await Promise.all(missing.map(async (reference) => {
-      const partNumber = partNumberOf(reference);
-      const raw = await this.api.seriesPart(
-        request.runId,
-        request.variant,
-        request.cell,
-        request.replication,
-        partNumber,
-        request.signal,
-      );
+    const downloads = missing.map((reference) => ({ reference, ...this.downloadPart(request, reference) }));
+    try {
+      const fetched = await Promise.all(downloads.map(async ({ reference, promise }) => {
+        const partNumber = partNumberOf(reference);
+        const raw = await promise;
+        throwIfAborted(request.signal);
+        const expected = `"${reference.sha256}"`;
+        if (raw.etag !== expected) {
+          throw new SeriesLoadError(
+            "ETAG_MISMATCH",
+            t("results.series.etagMismatch", { file: reference.file, etag: raw.etag ?? t("results.series.missingEtag"), expected }),
+          );
+        }
+        return { reference, partNumber, text: raw.text };
+      }));
+      const decoded = await getDecoder().decode(fetched.map((part) => part.text));
       throwIfAborted(request.signal);
-      const expected = `"${reference.sha256}"`;
-      if (raw.etag !== expected) {
-        throw new SeriesLoadError(
-          "ETAG_MISMATCH",
-          t("results.series.etagMismatch", { file: reference.file, etag: raw.etag ?? t("results.series.missingEtag"), expected }),
-        );
+      if (decoded.length !== fetched.length) {
+        throw new SeriesLoadError("INVALID_SERIES", t("results.series.partCountMismatch"));
       }
-      return { reference, partNumber, text: raw.text };
-    }));
-    const decoded = await getDecoder().decode(fetched.map((part) => part.text));
-    throwIfAborted(request.signal);
-    if (decoded.length !== fetched.length) {
-      throw new SeriesLoadError("INVALID_SERIES", t("results.series.partCountMismatch"));
+      for (const [offset, part] of decoded.entries()) {
+        const source = fetched[offset];
+        this.cache.put(cacheKey(request, source.reference), part, estimatedBytes(source.reference, part));
+        result.set(source.reference.file, part);
+      }
+      return result;
+    } finally {
+      for (const download of downloads) download.release();
     }
-    for (const [offset, part] of decoded.entries()) {
-      const source = fetched[offset];
-      this.cache.put(cacheKey(request, source.reference), part, estimatedBytes(source.reference, part));
-      result.set(source.reference.file, part);
-    }
-    return result;
   }
 }
 
-function cacheKey(request: SeriesLoadRequest, reference: SeriesPartReference): SeriesPartKey {
+function cacheKey(request: SeriesSelectionRequest, reference: SeriesPartReference): SeriesPartKey {
   return {
     runId: request.runId,
     variant: request.variant,
@@ -261,7 +305,8 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
   return [...requested].flatMap((id) => {
     const selectedWindows = selected.get(id);
     if (selectedWindows === undefined) return [];
-    const windows = [...selectedWindows.entries()].sort(([a], [b]) => a - b).map(([index, window]) => {
+    const ordered = [...selectedWindows.entries()].sort(([a], [b]) => a - b);
+    const windows = ordered.map(([index, window]) => {
       const metrics = { ...window.metrics };
       if (window.handlers > 0) {
         const denominator = arrivals.get(index) ?? 0;
@@ -269,7 +314,33 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       }
       return metrics;
     });
-    return [{ id, windows }];
+    return [{ id, windows, latency: ordered.map(([, window]) => window.latency) }];
+  });
+}
+
+function assembleConnections(
+  parts: ReadonlyMap<string, DecodedSeriesPart>, request: ConnectionSeriesLoadRequest,
+): DecodedConnection[] {
+  const selected = new Map<string, Map<number, DecodedConnectionWindow>>();
+  const requested = new Set(request.connections);
+  for (const part of parts.values()) {
+    for (const connection of part.connections) {
+      if (!requested.has(connection.id)) continue;
+      for (const [offset, window] of connection.windows.entries()) {
+        const index = part.fromWindow + offset;
+        if (index < request.fromWindow || index >= request.untilWindow) continue;
+        let windows = selected.get(connection.id);
+        if (windows === undefined) {
+          windows = new Map();
+          selected.set(connection.id, windows);
+        }
+        windows.set(index, window);
+      }
+    }
+  }
+  return [...requested].flatMap((id) => {
+    const windows = selected.get(id);
+    return windows === undefined ? [] : [{ id, windows: [...windows.entries()].sort(([a], [b]) => a - b).map(([, window]) => window) }];
   });
 }
 

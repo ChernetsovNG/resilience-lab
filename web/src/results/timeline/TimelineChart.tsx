@@ -2,17 +2,23 @@ import { t } from "../../i18n";
 import { formatDuration, formatNumber, formatPercent, formatRate } from "../../i18n/format";
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import type { WindowMetricValues } from "../series";
-import { downsample, windowAt, type TimelinePoint, type TimelineRegion } from "./data";
+import { downsample, windowAt, type TimelinePoint, type TimelineRegion, type TimelineMetricValues } from "./data";
 
 export interface TimelineLine {
   id: string;
   label: string;
-  metric: keyof WindowMetricValues;
+  metric: keyof TimelineMetricValues;
   scale: number;
   color: string;
   comparison: boolean;
-  windows: readonly WindowMetricValues[];
+  windows: readonly TimelineMetricValues[];
+}
+
+export interface TimelineThreshold {
+  id: string;
+  label: string;
+  value: number;
+  comparison: boolean;
 }
 
 interface TimelineChartProps {
@@ -20,6 +26,7 @@ interface TimelineChartProps {
   unit: string;
   lines: TimelineLine[];
   regions: TimelineRegion[];
+  thresholds?: TimelineThreshold[];
   endMs: number;
   windowMs: number;
   hoverWindow: number | null;
@@ -29,7 +36,7 @@ interface TimelineChartProps {
 }
 
 /** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
-export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
+export function TimelineChart({ title, unit, lines, regions, thresholds = [], endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
   const [width, setWidth] = useState(640);
   const format = (value: number) => unit === "ms" ? formatDuration(value) : unit === "RPS" ? formatRate(value)
     : unit === "%" ? formatPercent(value / 100)
@@ -37,11 +44,11 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
   const sampled = useMemo(() => lines.map((line) => {
     const points: TimelinePoint[] = [];
     for (const [window, metrics] of line.windows.entries()) {
-      const raw = metrics[line.metric];
+      const raw = metrics[line.metric] ?? null;
       const value = raw === null ? null : raw * line.scale;
       points.push({ window, startMs: metrics.startMs, value });
       // Close each defined segment at the end of its last window, including isolated values before a gap.
-      if (window === line.windows.length - 1 || (value !== null && line.windows[window + 1][line.metric] === null)) {
+      if (window === line.windows.length - 1 || (value !== null && (line.windows[window + 1][line.metric] ?? null) === null)) {
         points.push({ window, startMs: metrics.startMs + metrics.durationMs, value });
       }
     }
@@ -70,6 +77,8 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
               payload.value !== null && payload.startMs === line.windows[payload.window].startMs
                 ? <circle key={index} className="timeline-latency-marker" cx={cx} cy={cy} r={2} fill="#fff" stroke={line.color} />
                 : <g key={index} /> : false} activeDot={false} connectNulls={false} isAnimationActive={false} />)}
+          {thresholds.map((threshold) => <ReferenceLine key={threshold.id} y={threshold.value}
+            stroke="#b91c1c" strokeDasharray={threshold.comparison ? "7 3" : "3 3"} ifOverflow="extendDomain" />)}
           {cursorWindow === null ? null : <ReferenceLine x={cursorWindow * windowMs} stroke="#111827" strokeWidth={2} />}
           {hoverWindow === null ? null : <ReferenceLine x={hoverWindow * windowMs} stroke="#475569" strokeDasharray="3 3" />}
         </LineChart>
@@ -90,6 +99,10 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
     <p className="timeline-axis">{t("results.timeline.timeAxis")}</p>
     {unit === "ms" ? <p className="timeline-latency-note">{t("results.timeline.latencyNote")}</p> : null}
     <dl className="timeline-readout">
+      {thresholds.map((threshold) => <div key={threshold.id}>
+        <dt><span className="timeline-line-key timeline-line-key--comparison" style={{ borderColor: "#b91c1c" }} />{threshold.label}</dt>
+        <dd>{formatDuration(threshold.value)}</dd>
+      </div>)}
       {lines.map((line) => {
         const raw = active === null ? null : line.windows[active]?.[line.metric] ?? null;
         return <div key={line.id}>

@@ -41,6 +41,10 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   inspectorSelection?: string | null;
 }) {
   const workspace = useRef<HTMLDivElement>(null);
+  const inspectorContent = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (analysis && inspectorContent.current !== null) inspectorContent.current.scrollTop = 0;
+  }, [analysis, inspectorSelection]);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [heights, setHeights] = useState(storedHeights);
   const [inspectorSize, setInspectorSize] = useState(storedInspector);
@@ -88,18 +92,18 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
       "--inspector-divider-width": inspectorSize.collapsed ? "0px" : "0.5rem" } as CSSProperties}>
     {children}
     {inspector === undefined ? null : <>
-      <PanelSeparator orientation="vertical" className="inspector-divider" hidden={analysis || inspectorSize.collapsed}
+      <PanelSeparator orientation="vertical" className="inspector-divider" hidden={inspectorSize.collapsed}
         label={t("editor.inspector.resize")} controls="inspector-panel" value={width} minimum={minimumWidth} maximum={maximumWidth}
         valueText={t("editor.inspector.width", { width })} onChange={width => setInspectorSize(current => ({ ...current, width }))}
         onReset={() => setInspectorSize(current => ({ ...current, width: undefined }))} />
-      <div id="inspector-panel" className={"inspector-panel" + (inspectorSize.collapsed ? " inspector-panel--collapsed" : "")} hidden={analysis}>
+      <div id="inspector-panel" className={"inspector-panel" + (inspectorSize.collapsed ? " inspector-panel--collapsed" : "")}>
         <button type="button" className="inspector-toggle" aria-label={toggleLabel} title={toggleLabel}
           aria-expanded={!inspectorSize.collapsed} aria-controls="inspector-content"
           onClick={() => setInspectorSize(current => ({ ...current, collapsed: !current.collapsed }))}>
           <span aria-hidden="true">{t(inspectorSize.collapsed ? "editor.inspector.expandSymbol" : "editor.inspector.collapseSymbol")}</span>
         </button>
         {inspectorSize.collapsed && inspectorSelection !== null ? <span className="inspector-selection" title={inspectorSelection}>{inspectorSelection}</span> : null}
-        <div id="inspector-content" className="inspector-content" hidden={inspectorSize.collapsed}>{inspector}</div>
+        <div ref={inspectorContent} id="inspector-content" className="inspector-content" hidden={inspectorSize.collapsed}>{inspector}</div>
       </div>
     </>}
     <PanelSeparator orientation="horizontal" className="results-divider" hidden={collapsed}
