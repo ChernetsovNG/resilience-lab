@@ -6,6 +6,7 @@ export interface TopBarProps {
   experiments: string[];
   experiment: string | null;
   onExperiment: (path: string) => void;
+  onInspectExperiment: () => void;
   /** An experiment is being opened. */
   loading: boolean;
   dirty: boolean;
@@ -57,6 +58,9 @@ export function TopBar(props: TopBarProps) {
           </option>
         ))}
       </select>
+      <button type="button" onClick={props.onInspectExperiment} disabled={experiment === null || loading || invalid}>
+        {t("app.topBar.experiment")}
+      </button>
       <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title={t("app.topBar.undoTitle")}>
         {t("app.topBar.undo")}
       </button>

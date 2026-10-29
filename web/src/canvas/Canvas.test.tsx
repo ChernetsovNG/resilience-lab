@@ -236,7 +236,7 @@ describe("Canvas", () => {
 describe("VariantTabs", () => {
   it("puts Model first and switches to every variant, including empty overrides", () => {
     const onSelect = vi.fn();
-    render(<VariantTabs variants={experiment.variants} active={null} onSelect={onSelect} />);
+    render(<VariantTabs variants={experiment.variants} active={null} onSelect={onSelect} onInspect={vi.fn()} onCommand={vi.fn()} />);
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Model", "Baseline", "No retries"]);
     expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
@@ -248,14 +248,14 @@ describe("VariantTabs", () => {
   });
 
   it("marks the controlled active variant and falls back to its id without a label", () => {
-    render(<VariantTabs variants={[{ id: "plain", overrides: {} }]} active="plain" onSelect={vi.fn()} />);
+    render(<VariantTabs variants={[{ id: "plain", overrides: {} }]} active="plain" onSelect={vi.fn()} onInspect={vi.fn()} onCommand={vi.fn()} />);
     expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("tab", { name: "plain" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("keeps page navigation disabled while an editable draft is invalid", () => {
     const onSelect = vi.fn();
-    render(<VariantTabs variants={experiment.variants} active={null} disabled onSelect={onSelect} />);
+    render(<VariantTabs variants={experiment.variants} active={null} disabled onSelect={onSelect} onInspect={vi.fn()} onCommand={vi.fn()} />);
     for (const tab of screen.getAllByRole("tab")) {
       expect((tab as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(tab);

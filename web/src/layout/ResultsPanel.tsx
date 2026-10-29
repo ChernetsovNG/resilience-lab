@@ -38,6 +38,7 @@ export interface ResultsPanelProps {
   diagnostics?: readonly Diagnostic[];
   validationPending?: boolean;
   validationProblem?: ApiProblem | null;
+  onElement?: (id: string) => void;
   onDiagnostic?: (diagnostic: Diagnostic) => void;
   diagnosticDocuments?: Pick<LoadedExperiment, "model" | "modelPath" | "experiment" | "experimentPath"> | null;
   /** Incremented by the status bar or a newly received error; ordinary rerenders preserve the selected tab. */
@@ -49,7 +50,7 @@ export function ResultsPanel({
   job, summary, problem, running = job?.status === "RUNNING" || job?.status === "QUEUED", catalog = null, model = null, manifest = null, stale = false,
   activeVariantId = null, selectedPointId = "p0", onPointChange, size = "normal", onSizeChange, onViewChange,
   runId = null, experiment = null, selectedNodes = [], replication = 0, cursorWindow = null, onCursorChange,
-  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, diagnosticDocuments = null, problemsRequest = 0,
+  diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic, onElement, diagnosticDocuments = null, problemsRequest = 0,
 }: ResultsPanelProps) {
   const [navigation, setNavigation] = useState({ view: "answer" as ResultsPanelView, running, changedDuringRun: false, completedJob: null as string | null, problemsRequest });
   const completedJob = !running && job?.status === "COMPLETED" && summary !== null && problem === null ? job.id : null;
@@ -155,7 +156,7 @@ export function ResultsPanel({
             <p className="results-empty">{t("results.cancelled")}</p>
           ) : summary !== null ? (
             <>
-              <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} />
+              <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement} />
             </>
           ) : (
             <p className="results-empty">{job === null ? t("results.empty") : t("results.awaitingSummary")}</p>

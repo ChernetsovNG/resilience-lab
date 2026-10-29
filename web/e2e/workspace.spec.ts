@@ -247,6 +247,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     const id = page.getByLabel("Variant ID", { exact: true });
     await id.fill("alternative");
     await id.press("Enter");
+    await page.getByRole("button", { name: "Experiment", exact: true }).click();
     for (const [name, value] of [["Replications", "2"], ["Seed", "42"], ["Real-time limit", "10s"],
       ["Fault start", "100ms"], ["Fault end", "500ms"], ["Processing multiplier", "2"], ["Fault failure rate", "5%"]]) {
       const field = page.getByLabel(name, { exact: true });
@@ -612,7 +613,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
     await page.getByTestId("rf__node-gateway").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
     await handlers.fill("5"); await handlers.press("Enter");
-    await page.getByText("Experiment settings (shared)", { exact: true }).click();
+    await page.getByRole("button", { name: "Experiment", exact: true }).click();
     const seed = page.getByLabel("Seed", { exact: true });
     await seed.fill("42"); await seed.press("Enter");
     const draft = await estimate();

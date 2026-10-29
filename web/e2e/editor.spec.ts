@@ -31,6 +31,7 @@ test("edits and clears the shared series window with validation, persistence and
   await expect(windowField).toHaveValue("");
   await expect(windowField).toHaveAttribute("placeholder", "10ms");
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
+  await page.getByRole("button", { name: "Experiment", exact: true }).click();
   await page.getByLabel("Measurement", { exact: true }).fill("2s");
   await page.getByLabel("Measurement", { exact: true }).press("Enter");
   await expect(windowField).toHaveAttribute("placeholder", "20ms");
@@ -257,7 +258,9 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(node).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await expect(node).toHaveClass(/selected/);
+  await expect(node).not.toHaveClass(/selected/);
+  await expect(page.getByRole("heading", { name: "Run settings", exact: true })).toBeVisible();
+  await node.click();
   await page.getByLabel("Handlers", { exact: true }).fill("2");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
   await page.getByLabel("Distribution", { exact: true }).selectOption("fixed");
@@ -436,4 +439,66 @@ test("moves a multi-selection once, copies its internal connection, and keeps va
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await expect(gateway).not.toHaveClass(/draggable/);
   expect(uninitialized).toEqual([]);
+});
+
+
+test("keeps the Inspector on one target and manages variant pages through their menus", async ({ page, files }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const inspector = page.getByRole("complementary", { name: "Inspector" });
+  const gateway = page.getByTestId("rf__node-gateway");
+  await gateway.click();
+  await expect(inspector.getByLabel("Handlers", { exact: true })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Run settings" })).toHaveCount(0);
+  await expect(inspector.getByLabel("Variant ID", { exact: true })).toHaveCount(0);
+  await expect(inspector.locator(".param-description").first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("after-element.png") });
+
+  await page.locator(".react-flow__pane").click({ position: { x: 15, y: 15 } });
+  await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Parameter grid" })).toBeVisible();
+  await gateway.click();
+  await page.getByRole("button", { name: "Experiment", exact: true }).click();
+  await expect(inspector.getByLabel("Replications", { exact: true })).toBeVisible();
+  await expect(inspector.getByLabel("Handlers", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("after-experiment.png") });
+
+  const source = page.getByRole("tab", { name: "No retries", exact: true });
+  await source.click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("after-variant-menu.png") });
+  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
+  const copy = page.getByRole("tab", { name: "No retries copy", exact: true });
+  await expect(copy).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByLabel("Variant ID", { exact: true })).toHaveValue("variant-1");
+  await expect(inspector.getByRole("heading", { name: "Run settings" })).toHaveCount(0);
+  await expect(inspector.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(copy).toHaveCount(0);
+  await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(copy).toBeVisible();
+
+  await copy.focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(page.getByRole("menuitem", { name: "Duplicate", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(inspector.getByLabel("Variant label", { exact: true })).toBeFocused();
+  await expect(copy).toHaveAttribute("aria-selected", "true");
+  await page.screenshot({ path: testInfo.outputPath("after-variant.png") });
+  await copy.focus();
+  await page.keyboard.press("Shift+F10");
+  await page.keyboard.press("End");
+  page.once("dialog", dialog => dialog.accept());
+  await page.keyboard.press("Enter");
+  await expect(copy).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(copy).toBeVisible();
+  await page.getByRole("button", { name: "Add variant", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("tab", { name: "Variant 2", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
+  const original = JSON.parse(await readFile(resolve("../apps/server/build/e2e-workspace", files.experiment), "utf8"));
+  expect(original.variants).toHaveLength(2);
 });

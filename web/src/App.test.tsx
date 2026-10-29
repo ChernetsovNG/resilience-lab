@@ -293,7 +293,7 @@ it("shows override diagnostics only at fields on their own variant page and bloc
   expect(screen.getByLabelText("Mean").closest(".param-field")?.textContent).toContain("Baseline mean error");
 });
 
-it("keeps shared settings diagnostics beside editable fields while an element is selected", async () => {
+it("opens shared settings diagnostics from Problems while an element is selected", async () => {
   server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
     { code: "SEED_RANGE", severity: "ERROR", message: "Invalid shared seed", document: experimentPath, pointer: "/execution/seed", path: null },
     { code: "FAULT_INTERVAL", severity: "ERROR", message: "Invalid fault end", document: experimentPath, pointer: "/faults/0/to", path: "dependency" },
@@ -303,8 +303,14 @@ it("keeps shared settings diagnostics beside editable fields while an element is
   await waitFor(() => expect(button("Run").title).toContain("validation errors"));
   selectGateway();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  expect(screen.queryByLabelText("Seed")).toBeNull();
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Invalid shared seed/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Seed"));
+  expect(screen.queryByLabelText("Handlers")).toBeNull();
   expect(screen.getByLabelText("Seed").closest(".param-field")?.textContent).toContain("Invalid shared seed");
   expect(screen.getByLabelText("Fault end").closest(".param-field")?.textContent).toContain("Invalid fault end");
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Invalid fault end/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Fault end"));
   expect(button("Run").disabled).toBe(true);
 });
 
@@ -338,6 +344,8 @@ it("shares grid field diagnostics across pages while scoping canvas badges to th
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("diagnostic--error")).toBe(false);
   expect(screen.getByLabelText("Axis 1 value 1").getAttribute("aria-invalid")).toBe("true");
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Grid timeout must be positive/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Axis 1 value 1"));
   expect(button("Run").disabled).toBe(true);
 });
 
@@ -416,13 +424,16 @@ it("adds, copies, renames and confirms deletion of a variant while keeping its p
   expect(button("Save").disabled).toBe(true);
   expect(button("Add variant").disabled).toBe(true);
   editField("Variant ID", "my-variant");
-  fireEvent.click(button("Copy variant"));
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
   expect(screen.getByRole("tab", { name: "My variant copy" }).getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(button("Delete variant"));
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   expect(confirm).toHaveBeenCalled();
   expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
   confirm.mockReturnValue(true);
-  fireEvent.click(button("Delete variant"));
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   expect(screen.queryByRole("tab", { name: "My variant copy" })).toBeNull();
   expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(button("Undo"));
@@ -507,21 +518,25 @@ it("keeps navigation blocked while either the canvas or Inspector draft is inval
   expect((screen.getByRole("tab", { name: "Baseline" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-it.each(["Handlers", "Seed"])("preserves an invalid %s draft when a variant ID rename is attempted", async (field) => {
+it.each(["Handlers", "Seed"])("blocks target switches and variant menus while %s is unparseable", async (field) => {
   server();
   await open();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   if (field === "Handlers") selectGateway();
   editField(field, "invalid");
-  editField("Variant ID", "renamed");
+  expect(button("Experiment").disabled).toBe(true);
+  expect(button("Add variant").disabled).toBe(true);
+  const tab = screen.getByRole("tab", { name: "No retries" });
+  fireEvent.contextMenu(tab);
+  fireEvent.keyDown(tab, { key: "F10", shiftKey: true });
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(document.querySelector(".react-flow__pane")!);
   expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe("invalid");
   expect(button("Save").disabled).toBe(true);
-  expect(button("Run").disabled).toBe(true);
-  expect(screen.getByRole("tab", { name: "No retries" }).getAttribute("aria-selected")).toBe("true");
   editField(field, field === "Handlers" ? "5" : "42");
-  fireEvent.blur(screen.getByLabelText("Variant ID"));
-  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("renamed");
-  expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe(field === "Handlers" ? "5" : "42");
+  fireEvent.contextMenu(tab);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Variant label"));
 });
 
 it("keeps variant identity when undo restores a different deleted variant before it", async () => {
@@ -532,7 +547,8 @@ it("keeps variant identity when undo restores a different deleted variant before
   vi.spyOn(window, "confirm").mockReturnValue(true);
   await open();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
-  fireEvent.click(button("Delete variant"));
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   fireEvent.click(screen.getByRole("tab", { name: "Third" }));
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("tab", { name: "Third" }).getAttribute("aria-selected")).toBe("true");
@@ -1071,6 +1087,7 @@ describe("cost estimate and resume", () => {
   it("estimates unsaved model and experiment drafts without saving or starting a job", async () => {
     const fetchMock = server();
     await open(); selectGateway(); editHandlers("5");
+    fireEvent.click(button("Experiment"));
     editField("Seed", "42");
     fireEvent.click(button("Estimate"));
     const estimate = await screen.findByRole("region", { name: "Cost estimate" });
@@ -1089,7 +1106,7 @@ describe("cost estimate and resume", () => {
     expect(body.drafts.find((draft: { path: string }) => draft.path === modelPath).content.model.blocks.gateway.params.handlers).toBe(5);
     expect(body.drafts.find((draft: { path: string }) => draft.path === experimentPath).content.experiment.execution.seed).toBe(42);
     expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
-    editHandlers("6");
+    selectGateway(); editHandlers("6");
     expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
   });
 
@@ -1771,4 +1788,178 @@ it("cancels a measured palette insertion when switching experiments before its c
   expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
   expect(button("Undo").disabled).toBe(true);
   expect(button("Save").disabled).toBe(true);
+});
+
+
+it("shows only the current Inspector target and keeps target navigation out of history", async () => {
+  server(); await open();
+  selectGateway();
+  expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
+  expect(screen.queryByLabelText("Variant ID")).toBeNull();
+  fireEvent.click(screen.getByTestId("rf__edge-gateway-to-middle"));
+  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByLabelText("Timeout")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByLabelText("Variant ID")).toBeTruthy();
+  expect(screen.queryByLabelText("Timeout")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
+  selectGateway();
+  fireEvent.click(document.querySelector(".react-flow__pane")!);
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  expect(screen.queryByLabelText("Handlers")).toBeNull();
+  selectGateway(); fireEvent.click(button("Experiment"));
+  expect(screen.getByLabelText("Replications")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect(screen.getByLabelText("Replications")).toBeTruthy();
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Save").disabled).toBe(true);
+});
+
+it("follows a selected element through rename, undo and redo, then forgets a deleted target", async () => {
+  server(); await open(); selectGateway();
+  editField("Identifier", "entry");
+  expect(screen.getByRole("heading", { name: "entry" })).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+  fireEvent.click(button("Redo"));
+  expect(screen.getByRole("heading", { name: "entry" })).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Delete" });
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "entry" })).toBeNull();
+});
+
+it("falls back to the experiment when undo removes a newly selected block or variant", async () => {
+  server(); await open();
+  fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
+  await screen.findByRole("heading", { name: "service-1" });
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  fireEvent.click(button("Add variant"));
+  expect(screen.getByLabelText("Variant ID")).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+});
+
+it.each(["ContextMenu", "F10"])("opens a tab menu with %s, supports focus navigation and restores the tab on Escape", async (key) => {
+  server(); await open();
+  const tab = screen.getByRole("tab", { name: "No retries" });
+  tab.focus(); fireEvent.keyDown(tab, { key, shiftKey: key === "F10" });
+  const duplicate = screen.getByRole("menuitem", { name: "Duplicate" });
+  expect(document.activeElement).toBe(duplicate);
+  fireEvent.keyDown(duplicate, { key: "ArrowDown" });
+  const rename = screen.getByRole("menuitem", { name: "Rename" });
+  expect(document.activeElement).toBe(rename);
+  fireEvent.click(rename);
+  expect(document.activeElement).toBe(screen.getByLabelText("Variant label"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("no-retries");
+  tab.focus(); fireEvent.keyDown(tab, { key, shiftKey: key === "F10" });
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  expect(screen.queryByRole("menu")).toBeNull(); expect(document.activeElement).toBe(tab);
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "Model" }));
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+it("explains why the last variant cannot be deleted", async () => {
+  server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: { ...documentViews[experimentPath],
+    content: { experiment: { ...experiment, variants: [experiment.variants[0]] } } } } : undefined);
+  await open(); fireEvent.contextMenu(screen.getByRole("tab", { name: "Baseline" }));
+  const deletion = screen.getByRole<HTMLButtonElement>("menuitem", { name: "Delete" });
+  expect(deletion.disabled).toBe(true);
+  expect(document.getElementById(deletion.getAttribute("aria-describedby")!)?.textContent).toContain("last variant");
+});
+
+it("opens and focuses the variant field named by a Problem", async () => {
+  server(url => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: false, diagnostics: [
+    { code: "VARIANT_ID", severity: "ERROR", message: "Invalid variant identifier", document: experimentPath,
+      pointer: "/variants/1/id", path: null },
+  ] } } : undefined);
+  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); selectGateway();
+  fireEvent.click(await screen.findByRole("button", { name: /Invalid variant identifier/ }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Variant ID"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("no-retries");
+  expect(screen.queryByLabelText("Handlers")).toBeNull();
+});
+
+it("selects an Answer service in the Inspector", async () => {
+  server(); await open(); fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  const service = [...document.querySelectorAll(".summary-services summary")].find(row => row.textContent?.includes("gateway"))!;
+  fireEvent.click(service);
+  expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
+});
+
+
+it("keeps menu keystrokes from deleting the selected diagram element", async () => {
+  server(); await open(); selectGateway();
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Delete" });
+  expect(screen.getByTestId("rf__node-gateway")).toBeTruthy();
+  expect(button("Undo").disabled).toBe(true);
+});
+
+
+it("falls back to the experiment when the last multi-selected target disappears on Undo", async () => {
+  server(); await open();
+  fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
+  await screen.findByRole("heading", { name: "service-1" });
+  fireEvent.click(screen.getByTestId("rf__node-gateway"), { ctrlKey: true });
+  const added = screen.getByTestId("rf__node-service-1");
+  fireEvent.click(added, { ctrlKey: true });
+  fireEvent.click(added, { ctrlKey: true });
+  expect(screen.getByRole("heading", { name: "service-1" })).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  expect(screen.queryByLabelText("Handlers")).toBeNull();
+  expect(screen.getByTestId("rf__node-gateway").classList.contains("selected")).toBe(true);
+});
+
+
+it("focuses Add value when a grid diagnostic names an empty value list", async () => {
+  const gridCatalog = structuredClone(catalog);
+  gridCatalog.types.find(type => type.id === "call")!.params.find(param => param.name === "timeout")!.sweepable = true;
+  server(url => {
+    if (url === "/api/v1/catalog") return { body: gridCatalog };
+    if (url.includes(encodeURIComponent(experimentPath))) return { body: { ...documentViews[experimentPath], content: {
+      experiment: { ...experiment, grid: [{ path: "gateway-to-middle.timeout", values: [] }] },
+    } } };
+    if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: false, diagnostics: [{
+      code: "GRID_VALUES", severity: "ERROR", message: "Axis values must not be empty", document: experimentPath,
+      pointer: "/grid/0/values", path: "gateway-to-middle",
+    }] } };
+  });
+  render(<App />); await screen.findByRole("heading", { name: "Run settings" }); selectGateway();
+  fireEvent.click(await screen.findByRole("button", { name: /Axis values must not be empty/ }));
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: /Add value/ }));
+});
+
+
+it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the requested Inspector target from Analysis via %s", async (action) => {
+  server(url => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [{
+    code: "SEED_HINT", severity: "WARNING", message: "Review the shared seed", document: experimentPath,
+    pointer: "/execution/seed", path: null,
+  }] } } : undefined);
+  await open(); fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  const baseline = screen.getByRole("tab", { name: "Baseline" });
+  fireEvent.click(baseline); fireEvent.click(button("Analysis"));
+  expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
+  if (action === "Experiment") fireEvent.click(button("Experiment"));
+  else if (action === "Variant") fireEvent.click(baseline);
+  else if (action === "Rename") {
+    fireEvent.contextMenu(baseline); fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+  } else if (action === "Model") {
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  } else {
+    fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+    fireEvent.click(screen.getByRole("button", { name: /Review the shared seed/ }));
+  }
+  expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
+  expect(screen.getByLabelText(action === "Variant" || action === "Rename" ? "Variant label" : "Seed")).toBeTruthy();
 });

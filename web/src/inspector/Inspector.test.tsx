@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
+import { localizeCatalog } from "../i18n/catalog";
 import { applyOverrides, withParam } from "../workspace/params";
 import type { EditorDocuments } from "../workspace/editor";
 import { Inspector } from "./Inspector";
@@ -233,4 +234,40 @@ it("shows a missing required choice as unset until the user selects it", () => {
   expect(distribution.selectedOptions[0].disabled).toBe(true);
   fireEvent.change(distribution, { target: { value: "fixed" } });
   expect(distribution.value).toBe("fixed");
+});
+
+
+it("keeps variant actions and experiment sections out of an element Inspector", () => {
+  renderInspector({ variantId: "baseline", onCommand: vi.fn() });
+  expect(screen.queryByRole("button", { name: "Add variant" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Copy variant" })).toBeNull();
+  expect(screen.queryByLabelText("Variant ID")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
+  expect(screen.queryByText("Experiment settings (shared)")).toBeNull();
+  expect(screen.getByText(/variant overrides/)).toBeTruthy();
+});
+
+it("renders catalog descriptions below scalar and object fields with accessible associations", () => {
+  const described = structuredClone(catalog);
+  const params = described.types.find(type => type.id === "service")!.params;
+  params.find(param => param.name === "handlers")!.description = "Concurrent handler slots.";
+  params.find(param => param.name === "processing")!.description = "Local processing distribution.";
+  renderInspector({ catalog: localizeCatalog(described) });
+  const field = screen.getByLabelText("Handlers");
+  const description = screen.getByText("Concurrent handler slots.");
+  expect(field.closest(".param-field")?.querySelector("input + .param-description")).toBe(description);
+  expect(field.getAttribute("aria-describedby")?.split(" ")).toContain(description.id);
+  expect(screen.getByText("Local processing distribution.").closest("fieldset")).toBeTruthy();
+});
+
+
+it("focuses a fault target field requested by a diagnostic", () => {
+  renderInspector({ selected: null, onCommand: vi.fn(), focusField: { path: "faults.0.target", request: 1 } });
+  expect(document.activeElement).toBe(screen.getByLabelText("Fault target"));
+});
+
+
+it("describes shared run settings once at the section heading", () => {
+  renderInspector({ selected: null, onCommand: vi.fn() });
+  expect(screen.getAllByText("Shared by all variants")).toHaveLength(1);
 });

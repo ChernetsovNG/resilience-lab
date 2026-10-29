@@ -39,17 +39,17 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const parameters = parametersOf(model, catalog);
   const next = parameters.find((parameter) => !grid.some((axis) => axis.path === parameter.path));
   const replace = (index: number, axis: GridAxis) => onCommand(setGridAxes(grid.map((current, position) => position === index ? axis : current)));
-  return <section className="grid-settings">
+  return <section className="grid-settings" data-inspector-field="grid">
     <h3>{t("editor.grid.title")}</h3>
     <DiagnosticMessages diagnostics={fieldDiagnostics?.get("grid")} />
     {grid.length === 0 ? <p>{t("editor.grid.empty")}</p> : null}
     {grid.map((axis, index) => {
       const parameter = parameters.find((candidate) => candidate.path === axis.path);
       const prefix = `grid.${index}`;
-      return <fieldset className="param-group" key={index}>
+      return <fieldset className="param-group" key={index} data-inspector-field={prefix}>
         <legend>{t("editor.grid.axisNumber", { number: formatNumber(index + 1) })}</legend>
         <DiagnosticMessages diagnostics={fieldDiagnostics?.get(prefix)} />
-        <label className="param-field">{t("editor.grid.axisParameter", { number: formatNumber(index + 1) })}
+        <label className="param-field" data-inspector-field={`${prefix}.path`}>{t("editor.grid.axisParameter", { number: formatNumber(index + 1) })}
           <select value={axis.path} disabled={!editable || invalid}
             onChange={(event) => {
               const selected = parameters.find((candidate) => candidate.path === event.target.value)!;
@@ -62,6 +62,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
           </select>
         </label>
         <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`${prefix}.path`)} />
+        <div data-inspector-field={`${prefix}.values`}>
         <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`${prefix}.values`)} />
         {parameter === undefined ? <p>{t("editor.grid.chooseParameter")}</p> : <>
           {axis.values.map((value, position) => <div className="grid-value" key={position}>
@@ -75,6 +76,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
           <button type="button" aria-label={t("editor.grid.addValueLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid}
             onClick={() => replace(index, { ...axis, values: [...axis.values, parameter.value] })}>{t("editor.grid.addValue")}</button>
         </>}
+        </div>
         <button type="button" aria-label={t("editor.grid.removeAxisLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid}
           onClick={() => onCommand(setGridAxes(grid.filter((_, at) => at !== index)))}>{t("editor.grid.removeAxis")}</button>
       </fieldset>;

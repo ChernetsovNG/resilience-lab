@@ -37,10 +37,11 @@ interface SummaryTableProps {
   summary: RunSummary;
   activeVariantId?: string | null;
   selectedPointId?: string;
+  onElement?: (id: string) => void;
 }
 
 /** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
-export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0" }: SummaryTableProps) {
+export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement }: SummaryTableProps) {
   const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
   const ordered = baseline === undefined ? [] : [baseline, ...summary.variants.filter(variant => variant !== baseline)];
   const columns = ordered.flatMap(variant => {
@@ -85,7 +86,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       </tbody>
     </table>
     {services.map(service => <details key={service} className="summary-services">
-      <summary>{t("results.answer.serviceMetrics", { service })}</summary>
+      <summary onClick={() => onElement?.(service)}>{t("results.answer.serviceMetrics", { service })}</summary>
       <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
         <thead><tr>
           <th scope="col">{t("results.answer.metric")}</th>

@@ -27,7 +27,7 @@ function allParams(catalog: Catalog): ParamDescriptor[] {
 /** Execution and fault field units come from catalog dimensions, including their conversion scales. */
 function descriptor(catalog: Catalog, name: string, title: string, kind: ParamDescriptor["kind"], extra: Partial<ParamDescriptor> = {}): ParamDescriptor {
   const units = allParams(catalog).find((param) => param.dimension === extra.dimension)?.units ?? [];
-  return { name, title, kind, description: t("editor.run.shared"), required: true, options: [], fields: [], sweepable: false, units, ...extra };
+  return { name, title, kind, description: "", required: true, options: [], fields: [], sweepable: false, units, ...extra };
 }
 
 /** Shared experiment settings are editable on every model or variant page. */
@@ -73,10 +73,10 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />
       {experiment.faults.length === 0 ? <p>{t("editor.fault.none")}</p> : null}
       {experiment.faults.map((fault, index) => (
-        <fieldset className="param-group" key={index}>
+        <fieldset className="param-group" key={index} data-inspector-field={`faults.${index}`}>
           <legend>{t("editor.fault.number", { number: formatNumber(index + 1) })}</legend>
           <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`faults.${index}`)} />
-          <label className="param-field">{t("editor.fault.target")}
+          <label className="param-field" data-inspector-field={`faults.${index}.target`}>{t("editor.fault.target")}
             <select value={fault.target} disabled={!editable} onChange={(event) => onCommand(setFaultParam(index, "target", event.target.value))}>
               {targets.includes(fault.target) ? null : <option value={fault.target}>{fault.target}</option>}
               {targets.map((id) => <option key={id} value={id}>{id}</option>)}
