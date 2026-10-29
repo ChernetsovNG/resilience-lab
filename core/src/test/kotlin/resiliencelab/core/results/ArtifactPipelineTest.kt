@@ -122,6 +122,8 @@ class ArtifactPipelineTest {
             assertThat(index.parts).hasSize(1)
             assertThat(index.parts.single().fromWindow).isZero()
             assertThat(index.parts.single().untilWindow).isEqualTo(100)
+            assertThat(index.schemaVersion).isEqualTo(2)
+            assertThat(index.parts.single().connections).containsExactly("gateway-to-middle", "middle-to-dependency")
         }
         for (path in files) {
             val bytes = workspace.readBytes(path)
@@ -148,9 +150,33 @@ class ArtifactPipelineTest {
                 "\"queueRejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(6)
+        assertThat(first.manifest.schemaVersion).isEqualTo(7)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
+                assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")
+                listOf(Triple("gateway-to-middle", "gateway", "middle"), Triple("middle-to-dependency", "middle", "dependency"))
+                    .forEach { (id, caller, child) ->
+                        val connection = point.aggregate.connections.getValue(id)
+                        val totals = connection.totals
+                        assertThat(totals.sentAttempts).isEqualTo(totals.succeeded + totals.failed + totals.timeouts)
+                        assertThat(totals.sentAttempts).isEqualTo(
+                            point.aggregate.services
+                                .getValue(child)
+                                .totals.offeredAttempts,
+                        )
+                        assertThat(totals.timeouts).isEqualTo(
+                            point.aggregate.services
+                                .getValue(caller)
+                                .totals.timeouts,
+                        )
+                        assertThat(totals.retries).isEqualTo(
+                            point.aggregate.services
+                                .getValue(caller)
+                                .totals.retries,
+                        )
+                        assertThat(totals.orphaned).isLessThanOrEqualTo(totals.timeouts)
+                        assertThat(connection.pooledLatency?.statistics?.count ?: 0L).isEqualTo(totals.succeeded + totals.failed)
+                    }
                 assertThat(point.saturation.rule).isEqualTo(SaturationRule())
                 assertThat(point.saturation.replications).hasSize(10)
                 assertThat(

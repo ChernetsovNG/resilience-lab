@@ -1,6 +1,7 @@
+import type { ConnectionWindowMetrics } from "../../api/apiTypes";
 import type { components } from "../../api/schema";
 import { LatencySketch } from "./sketch";
-import type { DecodedSeriesPart, DecodedWindow, WindowMetricValues } from "./types";
+import type { DecodedConnectionWindow, DecodedSeriesPart, DecodedWindow, WindowMetricValues } from "./types";
 
 type RawPart = components["schemas"]["SeriesPart"];
 type RawWindow = components["schemas"]["WindowMetrics"];
@@ -8,6 +9,12 @@ type RawWindow = components["schemas"]["WindowMetrics"];
 /** Parses one browser-decompressed part and turns every sketch into numeric window metrics. */
 export function decodeSeriesPart(text: string): DecodedSeriesPart {
   const part = JSON.parse(text) as RawPart;
+  if (part.schemaVersion !== 2) throw new Error(`Unsupported series part schema version: ${part.schemaVersion}`);
+  for (const connection of part.connections) {
+    if (connection.windows.length !== part.untilWindow - part.fromWindow || connection.windows.some((window) =>
+      !Number.isFinite(window.startMs) || window.startMs < 0 || !Number.isFinite(window.durationMs) || window.durationMs <= 0,
+    )) throw new Error("Invalid connection windows");
+  }
   const arrivals = new Map<number, number>();
   for (const node of part.nodes) {
     for (const [offset, window] of node.windows.entries()) {
@@ -24,6 +31,25 @@ export function decodeSeriesPart(text: string): DecodedSeriesPart {
         decodeWindow(window, arrivals.get(part.fromWindow + offset) ?? 0, part.profile),
       ),
     })),
+    connections: part.connections.map((connection) => ({
+      id: connection.id,
+      windows: connection.windows.map((window) => decodeConnectionWindow(window, part.profile)),
+    })),
+  };
+}
+
+function decodeConnectionWindow(window: ConnectionWindowMetrics, profile: string): DecodedConnectionWindow {
+  const sketch = LatencySketch.decode(profile, window.latency.sketch);
+  return {
+    ...window,
+    latency: {
+      count: window.latency.count,
+      sumMs: window.latency.sumMs,
+      meanMs: window.latency.count === 0 ? null : window.latency.sumMs / window.latency.count,
+      p50Ms: sketch.quantile(0.50),
+      p95Ms: sketch.quantile(0.95),
+      p99Ms: sketch.quantile(0.99),
+    },
   };
 }
 

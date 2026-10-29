@@ -56,8 +56,32 @@ object MetricsAggregator {
             p95LatencyMs = p95LatencyMs,
             p99LatencyMs = p99LatencyMs,
             services = services,
+            connections = connectionMetrics(replications),
         )
     }
+
+    private fun connectionMetrics(replications: List<ReplicationResult>): Map<String, AggregateConnectionMetrics> =
+        replications.flatMap { it.connections.keys }.distinct().sorted().associateWith { id ->
+            val values = replications.mapNotNull { it.connections[id] }
+            AggregateConnectionMetrics(
+                timeoutRate = metricSummary(values.mapNotNull { ratio(it.timeouts, it.sentAttempts) }),
+                meanInFlight = metricSummary(values.map { it.inFlightIntegralMs / it.measurementMs }),
+                pooledLatency = latencyDistribution(values.map { it.latency }),
+                totals =
+                    ConnectionTotals(
+                        sentAttempts = values.sumOf { it.sentAttempts.toLong() },
+                        retries = values.sumOf { it.retries.toLong() },
+                        succeeded = values.sumOf { it.succeeded.toLong() },
+                        failed = values.sumOf { it.failed.toLong() },
+                        timeouts = values.sumOf { it.timeouts.toLong() },
+                        orphaned = values.sumOf { it.orphaned.toLong() },
+                        inFlightIntegralMs = values.sumOf { it.inFlightIntegralMs },
+                        orphanedIntegralMs = values.sumOf { it.orphanedIntegralMs },
+                        backoffIntegralMs = values.sumOf { it.backoffIntegralMs },
+                        measurementMs = values.sumOf { it.measurementMs },
+                    ),
+            )
+        }
 
     private fun latencyDistribution(values: List<LatencyStatistics>): LatencyDistribution? {
         val accumulator = LatencyAccumulator(context = "pooled latency")

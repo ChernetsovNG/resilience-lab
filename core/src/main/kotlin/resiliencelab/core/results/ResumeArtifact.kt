@@ -48,7 +48,7 @@ internal class ResumeArtifact(
             val index = json.decodeFromString(SeriesIndex.serializer(), workspace.read(indexPath).text)
             val series = manifest.series ?: return false
             if (
-                index.schemaVersion != 1 ||
+                index.schemaVersion != 2 ||
                 index.endMs != series.warmupMs + series.measurementMs ||
                 index.windowMs != series.windowMs ||
                 index.parts.isEmpty()

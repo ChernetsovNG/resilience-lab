@@ -28,7 +28,11 @@ class ReliabilityModel(
     private val chain: ChainIr,
     private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
-    onWindow: (Int, List<resiliencelab.core.results.NodeWindow>) -> Unit = { _, _ -> },
+    onWindow: (
+        Int,
+        List<resiliencelab.core.results.NodeWindow>,
+        List<resiliencelab.core.results.ConnectionWindow>,
+    ) -> Unit = { _, _, _ -> },
     private val onOriginalCompletion: ((Double, Boolean) -> Unit)? = null,
 ) : ProcessModel(model) {
     private val measurementStartMs = chain.run.warmupMs
@@ -42,6 +46,7 @@ class ReliabilityModel(
             currentTimeMs = { time },
             clientId = chain.client.path,
             windowMs = chain.run.windowMs,
+            connectionIds = chain.calls.map { it.path },
             onWindow = onWindow,
         )
     private val runtimes =
@@ -93,6 +98,7 @@ class ReliabilityModel(
         schedule(
             eventAction =
                 ModelElement.EventActionIfc<Nothing> {
+                    metrics.startConnectionMeasurement()
                     runtimes.values.forEach { runtime ->
                         metrics.startMeasurement(
                             serviceId = runtime.serviceId,
@@ -169,6 +175,7 @@ class ReliabilityModel(
         if (workloadPrepared && !fullyDrained) {
             throw ExperimentExecutionException("Replication ended before the workload fully drained")
         }
+        if (fullyDrained) metrics.verifyConnectionsDrained()
         onReplicationCompleted?.invoke(model.currentReplicationNumber, metrics.replicationResult())
     }
 
@@ -244,8 +251,13 @@ class ReliabilityModel(
         caller: ServiceInvocation,
         child: ServiceInvocation,
         callingServiceId: String,
+        connectionId: String,
+        retry: Boolean,
         timeoutMs: Double,
     ): CallAttempt {
+        val sentMs = time
+        metrics.recordConnection(connectionId, ConnectionEvent.SENT, caller.measurementCohort)
+        if (retry) metrics.recordConnection(connectionId, ConnectionEvent.RETRY, caller.measurementCohort)
         lateinit var attempt: CallAttempt
         val timeoutEvent =
             schedule(
@@ -258,10 +270,24 @@ class ReliabilityModel(
                 child = child,
                 timeoutEvent = timeoutEvent,
                 caller = caller,
-                recordTimeout = {
+                recordTimeout = { orphaned ->
                     metrics.recordTimeout(callingServiceId, caller.measurementCohort)
+                    metrics.recordConnection(connectionId, ConnectionEvent.TIMEOUT, caller.measurementCohort)
+                    if (orphaned) metrics.recordConnection(connectionId, ConnectionEvent.ORPHANED, caller.measurementCohort)
+                },
+                recordResponse = { succeeded ->
+                    metrics.recordConnection(
+                        connectionId,
+                        if (succeeded) ConnectionEvent.SUCCEEDED else ConnectionEvent.FAILED,
+                        caller.measurementCohort,
+                        time - sentMs,
+                    )
+                },
+                recordOrphanCompleted = {
+                    metrics.recordConnection(connectionId, ConnectionEvent.ORPHAN_COMPLETED, caller.measurementCohort)
                 },
             )
+        child.incomingAttempt = attempt
         return attempt
     }
 
@@ -281,6 +307,7 @@ class ReliabilityModel(
         private var originalOutcome: AttemptOutcome? = null
         private var originalClientActive = false
         private var admitted = false
+        internal var incomingAttempt: CallAttempt? = null
 
         private val deadlineEvent: KSLEvent<*>? =
             if (originalRequest) {
@@ -399,6 +426,8 @@ class ReliabilityModel(
                                                 caller = this@ServiceInvocation,
                                                 child = child,
                                                 callingServiceId = runtime.serviceId,
+                                                connectionId = call.path,
+                                                retry = attemptNumber > 1,
                                                 timeoutMs = minOf(call.timeoutMs, originalDeadlineMs - time),
                                             )
                                         callAttempt = attempt
@@ -424,7 +453,12 @@ class ReliabilityModel(
                                                 failedAttemptNumber = attemptNumber,
                                                 jitter = { runtime.nextJitter() },
                                             )
-                                        delay(minOf(backoffMs, originalDeadlineMs - time))
+                                        metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_STARTED, measurementCohort)
+                                        try {
+                                            delay(minOf(backoffMs, originalDeadlineMs - time))
+                                        } finally {
+                                            metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_COMPLETED, measurementCohort)
+                                        }
                                         attemptNumber++
                                     }
                                 }
@@ -447,6 +481,7 @@ class ReliabilityModel(
                         delay(incomingNetwork.nextNetworkDelayMs())
                     }
                 } finally {
+                    incomingAttempt?.onChildProcessEnded()
                     if (incomingNetwork != null) {
                         activeDownstreamProcesses--
                     }

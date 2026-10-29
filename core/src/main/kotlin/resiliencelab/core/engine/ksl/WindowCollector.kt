@@ -3,6 +3,8 @@ package resiliencelab.core.engine.ksl
 import resiliencelab.core.experiment.LatencyAccumulator
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.windowCount
+import resiliencelab.core.results.ConnectionWindow
+import resiliencelab.core.results.ConnectionWindowMetrics
 import resiliencelab.core.results.NodeWindow
 import resiliencelab.core.results.WindowMetrics
 
@@ -12,13 +14,15 @@ internal enum class AttemptEvent { OFFERED, ADMITTED, QUEUE_REJECTED, TIMEOUT, R
  * Owns only one open event-time window. Integrals carry queue/handler state across boundaries; closed rows are
  * delivered synchronously and released. Events at a boundary belong to the next window; events at end/run-out
  * are excluded. The last window records its actual (possibly shorter) duration.
+ * Call occupancy carries in-flight, orphaned and backoff state across these same window boundaries.
  */
 internal class WindowCollector(
     private val clientId: String,
     services: List<ServiceNode>,
     private val endMs: Double,
     private val windowMs: Double,
-    private val onWindow: (Int, List<NodeWindow>) -> Unit,
+    connectionIds: List<String> = emptyList(),
+    private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit,
 ) {
     private val totalWindows = windowCount(endMs, windowMs)
     private var index = 0
@@ -26,6 +30,20 @@ internal class WindowCollector(
     private var lastEventMs = 0.0
     private val nodes =
         (services.map { it.path to State(it.path, it.handlers) } + (clientId to State(clientId, 0))).toMap().toSortedMap()
+    private val connections = connectionIds.sorted().associateWith { ConnectionState(it) }
+
+    fun connectionEvent(
+        id: String,
+        timeMs: Double,
+        event: ConnectionEvent,
+        latencyMs: Double,
+    ) {
+        if (!advance(timeMs)) return
+        connections.getValue(id).apply {
+            integrate(timeMs)
+            record(event, latencyMs)
+        }
+    }
 
     fun originalArrival(timeMs: Double) {
         if (advance(timeMs)) nodes.getValue(clientId).row.originalArrivals++
@@ -110,10 +128,16 @@ internal class WindowCollector(
             check(boundary > startMs) { "Window boundary did not advance" }
             if (timeMs < boundary) break
             nodes.values.forEach { it.integrate(boundary) }
-            onWindow(index, nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs)) })
+            connections.values.forEach { it.integrate(boundary) }
+            onWindow(
+                index,
+                nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs)) },
+                connections.map { (id, state) -> ConnectionWindow(id, state.snapshot(boundary - startMs)) },
+            )
             index++
             startMs = boundary
             nodes.values.forEach { it.row = Row(it.id, index) }
+            connections.values.forEach { it.row = ConnectionRow(it.id, index) }
         }
         return timeMs < endMs
     }
@@ -168,5 +192,89 @@ internal class WindowCollector(
         var busyTime = 0.0
         var queueIntegral = 0.0
         val latency = LatencyAccumulator(sparse = true, context = "node=$node window=$window")
+    }
+
+    private inner class ConnectionState(
+        val id: String,
+    ) {
+        var row = ConnectionRow(id, 0)
+        private var inFlight = 0
+        private var orphaned = 0
+        private var backoff = 0
+        private var lastMs = 0.0
+
+        fun integrate(timeMs: Double) {
+            val duration = timeMs - lastMs
+            row.inFlightIntegral += inFlight * duration
+            row.orphanedIntegral += orphaned * duration
+            row.backoffIntegral += backoff * duration
+            lastMs = timeMs
+        }
+
+        fun record(
+            event: ConnectionEvent,
+            latencyMs: Double,
+        ) {
+            when (event) {
+                ConnectionEvent.SENT -> {
+                    row.sentAttempts++
+                    inFlight++
+                }
+                ConnectionEvent.RETRY -> row.retries++
+                ConnectionEvent.SUCCEEDED -> {
+                    row.succeeded++
+                    inFlight--
+                    row.latency.add(latencyMs)
+                }
+                ConnectionEvent.FAILED -> {
+                    row.failed++
+                    inFlight--
+                    row.latency.add(latencyMs)
+                }
+                ConnectionEvent.TIMEOUT -> {
+                    row.timeouts++
+                    inFlight--
+                }
+                ConnectionEvent.ORPHANED -> {
+                    row.orphaned++
+                    orphaned++
+                }
+                ConnectionEvent.ORPHAN_COMPLETED -> orphaned--
+                ConnectionEvent.BACKOFF_STARTED -> backoff++
+                ConnectionEvent.BACKOFF_COMPLETED -> backoff--
+            }
+        }
+
+        fun snapshot(duration: Double): ConnectionWindowMetrics =
+            ConnectionWindowMetrics(
+                startMs,
+                duration,
+                row.sentAttempts,
+                row.retries,
+                row.succeeded,
+                row.failed,
+                row.timeouts,
+                row.orphaned,
+                row.inFlightIntegral,
+                row.orphanedIntegral,
+                row.backoffIntegral,
+                row.latency.snapshot(),
+            )
+    }
+
+    private class ConnectionRow(
+        id: String,
+        window: Int,
+    ) {
+        var sentAttempts = 0
+        var retries = 0
+        var succeeded = 0
+        var failed = 0
+        var timeouts = 0
+        var orphaned = 0
+        var inFlightIntegral = 0.0
+        var orphanedIntegral = 0.0
+        var backoffIntegral = 0.0
+        val latency = LatencyAccumulator(sparse = true, context = "connection=$id window=$window response")
     }
 }

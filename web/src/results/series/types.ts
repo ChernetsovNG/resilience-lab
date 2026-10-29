@@ -1,3 +1,5 @@
+import type { ConnectionWindowMetrics } from "../../api/apiTypes";
+
 export interface WindowMetricValues {
   startMs: number;
   durationMs: number;
@@ -31,10 +33,30 @@ export interface DecodedNode {
   windows: DecodedWindow[];
 }
 
+/** Latency includes only attempts with a received response; timeouts do not contribute samples. */
+export interface DecodedConnectionLatency {
+  count: number;
+  sumMs: number;
+  meanMs: number | null;
+  p50Ms: number | null;
+  p95Ms: number | null;
+  p99Ms: number | null;
+}
+
+export type DecodedConnectionWindow = Omit<ConnectionWindowMetrics, "latency"> & {
+  latency: DecodedConnectionLatency;
+};
+
+export interface DecodedConnection {
+  id: string;
+  windows: DecodedConnectionWindow[];
+}
+
 export interface DecodedSeriesPart {
   fromWindow: number;
   untilWindow: number;
   nodes: DecodedNode[];
+  connections: DecodedConnection[];
 }
 
 export interface NodeSeriesMetrics {

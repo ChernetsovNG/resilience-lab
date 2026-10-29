@@ -1,0 +1,140 @@
+package resiliencelab.core.engine.ksl
+
+import resiliencelab.core.experiment.ConnectionMetrics
+import resiliencelab.core.experiment.LatencyAccumulator
+import resiliencelab.core.experiment.TimeWeightedSeries
+
+/** Observations of the existing call lifecycle; none of these events schedules or cancels model work. */
+internal enum class ConnectionEvent {
+    SENT,
+    RETRY,
+    SUCCEEDED,
+    FAILED,
+    TIMEOUT,
+    ORPHANED,
+    ORPHAN_COMPLETED,
+    BACKOFF_STARTED,
+    BACKOFF_COMPLETED,
+}
+
+/** Cohort counters and fixed-interval occupancy, independent of the event-time window population. */
+internal class ConnectionCollector(
+    ids: List<String>,
+    private val startMs: Double,
+    private val endMs: Double,
+) {
+    private val states = ids.sorted().associateWith { State(it) }
+
+    fun record(
+        id: String,
+        timeMs: Double,
+        event: ConnectionEvent,
+        measured: Boolean,
+        latencyMs: Double,
+    ) {
+        states.getValue(id).record(timeMs, event, measured, latencyMs)
+    }
+
+    fun startMeasurement() {
+        states.values.forEach { it.observe(startMs) }
+    }
+
+    fun finish(timeMs: Double) {
+        states.values.forEach { state ->
+            state.inFlightSeries.finish(timeMs)
+            state.orphanedSeries.finish(timeMs)
+            state.backoffSeries.finish(timeMs)
+        }
+    }
+
+    fun snapshot(): Map<String, ConnectionMetrics> = states.mapValues { (_, state) -> state.snapshot() }
+
+    fun verifyDrained() {
+        states.forEach { (id, state) ->
+            check(state.inFlight == 0 && state.activeOrphaned == 0 && state.backoff == 0) {
+                "connection=$id did not fully drain: inFlight=${state.inFlight}, orphaned=${state.activeOrphaned}, backoff=${state.backoff}"
+            }
+        }
+    }
+
+    private inner class State(
+        id: String,
+    ) {
+        var sentAttempts = 0
+        var retries = 0
+        var succeeded = 0
+        var failed = 0
+        var timeouts = 0
+        var orphaned = 0
+        var inFlight = 0
+        var activeOrphaned = 0
+        var backoff = 0
+        val inFlightSeries = TimeWeightedSeries(startMs, endMs)
+        val orphanedSeries = TimeWeightedSeries(startMs, endMs)
+        val backoffSeries = TimeWeightedSeries(startMs, endMs)
+        val latency = LatencyAccumulator(context = "connection=$id window=cohort response")
+
+        fun record(
+            timeMs: Double,
+            event: ConnectionEvent,
+            measured: Boolean,
+            latencyMs: Double,
+        ) {
+            when (event) {
+                ConnectionEvent.SENT -> {
+                    inFlight++
+                    if (measured) sentAttempts++
+                }
+                ConnectionEvent.RETRY -> if (measured) retries++
+                ConnectionEvent.SUCCEEDED -> {
+                    inFlight--
+                    if (measured) {
+                        succeeded++
+                        latency.add(latencyMs)
+                    }
+                }
+                ConnectionEvent.FAILED -> {
+                    inFlight--
+                    if (measured) {
+                        failed++
+                        latency.add(latencyMs)
+                    }
+                }
+                ConnectionEvent.TIMEOUT -> {
+                    inFlight--
+                    if (measured) timeouts++
+                }
+                ConnectionEvent.ORPHANED -> {
+                    activeOrphaned++
+                    if (measured) orphaned++
+                }
+                ConnectionEvent.ORPHAN_COMPLETED -> activeOrphaned--
+                ConnectionEvent.BACKOFF_STARTED -> backoff++
+                ConnectionEvent.BACKOFF_COMPLETED -> backoff--
+            }
+            check(inFlight >= 0 && activeOrphaned >= 0 && backoff >= 0) { "Unbalanced connection observations" }
+            observe(timeMs)
+        }
+
+        fun observe(timeMs: Double) {
+            inFlightSeries.record(timeMs, inFlight.toDouble())
+            orphanedSeries.record(timeMs, activeOrphaned.toDouble())
+            backoffSeries.record(timeMs, backoff.toDouble())
+        }
+
+        fun snapshot(): ConnectionMetrics =
+            ConnectionMetrics(
+                sentAttempts,
+                retries,
+                succeeded,
+                failed,
+                timeouts,
+                orphaned,
+                inFlightSeries.integral,
+                orphanedSeries.integral,
+                backoffSeries.integral,
+                endMs - startMs,
+                latency.snapshot(),
+            )
+    }
+}

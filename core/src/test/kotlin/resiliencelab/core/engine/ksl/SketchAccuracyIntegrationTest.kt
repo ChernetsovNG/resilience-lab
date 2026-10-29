@@ -80,7 +80,7 @@ class SketchAccuracyIntegrationTest {
                 model,
                 chain,
                 PathStreamSource(StreamPlan(PathStreams.keys(chain, 0)), settings.seed, 0),
-                onWindow = { _, rows -> windows += rows },
+                onWindow = { _, rows, _ -> windows += rows },
             )
         object : ModelElement(model, name = "invocation-driver") {
             override fun initialize() {

@@ -5,12 +5,14 @@ import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.results.ConnectionWindow
 import resiliencelab.core.results.NodeWindow
 
 /**
  * Collects original-request outcomes and caused-attempt counters only for the measured arrival cohort, including
  * their run-out activity. Queue-length and handler series include all work present but cover only the fixed
  * measurement interval, so warm-up and run-out do not extend those time averages.
+ * Call counters and response latency follow the same cohort; call occupancy uses the same fixed interval.
  */
 class MetricsCollector(
     private val services: List<ServiceNode>,
@@ -19,13 +21,15 @@ class MetricsCollector(
     private val currentTimeMs: () -> Double,
     private val clientId: String = "client",
     private val windowMs: Double = (measurementEndMs - measurementStartMs) / 100.0,
-    private val onWindow: (Int, List<NodeWindow>) -> Unit = { _, _ -> },
+    private val connectionIds: List<String> = emptyList(),
+    private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { _, _, _ -> },
 ) {
     private val arrivalTimesMs = mutableListOf<Double>()
     private var allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
     private var successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
     private var failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, onWindow)
+    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, onWindow)
+    private var connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs)
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
@@ -48,6 +52,7 @@ class MetricsCollector(
             successes = successes,
             failures = failures,
             services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
+            connections = connections.snapshot(),
         )
     }
 
@@ -56,7 +61,8 @@ class MetricsCollector(
         allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
         successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
         failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, onWindow)
+        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, onWindow)
+        connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs)
         originalArrivals = 0
         successes = 0
         failures = 0
@@ -93,7 +99,27 @@ class MetricsCollector(
 
     internal fun finishMeasurement(timeMs: Double) {
         serviceMetrics.values.forEach { it.finish(timeMs) }
+        connections.finish(timeMs)
         if (timeMs >= measurementEndMs) windows.finish()
+    }
+
+    internal fun startConnectionMeasurement() {
+        connections.startMeasurement()
+    }
+
+    internal fun recordConnection(
+        id: String,
+        event: ConnectionEvent,
+        measured: Boolean,
+        latencyMs: Double = 0.0,
+    ) {
+        val timeMs = currentTimeMs()
+        windows.connectionEvent(id, timeMs, event, latencyMs)
+        connections.record(id, timeMs, event, measured, latencyMs)
+    }
+
+    internal fun verifyConnectionsDrained() {
+        connections.verifyDrained()
     }
 
     internal fun closeWindows(timeMs: Double) {

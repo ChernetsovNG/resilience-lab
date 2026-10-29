@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.engine.ksl.AttemptEvent
 import resiliencelab.core.engine.ksl.WindowCollector
 import resiliencelab.core.experiment.LatencySketch
+import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.ServiceNode
@@ -18,6 +19,218 @@ import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 
 class WindowSeriesTest {
+    private val partJson = Json { encodeDefaults = true }
+
+    @Test
+    fun `packed series use schema two and include connection coverage`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/r/series/v/p0/rep-0"
+        val writer = SeriesWriter(workspace, directory, 1.0, 1.0)
+        writer.writeWindow(
+            0,
+            listOf(NodeWindow("service", WindowMetrics(0.0, 1.0))),
+            listOf(ConnectionWindow("call", ConnectionWindowMetrics(0.0, 1.0))),
+        )
+        val index = writer.finish()
+        val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
+        assertThat(index.schemaVersion).isEqualTo(2)
+        val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
+        assertThat(part.schemaVersion).isEqualTo(2)
+        assertThat(part.connections.map { it.id }).containsExactly("call")
+        val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
+        assertThat(persistedIndex.parts.single().connections).containsExactly("call")
+    }
+
+    @Test
+    fun `mixed consecutive windows count exact UTF-8 bytes across both arrays`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/mixed/series/v/p0/rep-0"
+        val rows = List(8) { window -> listOf(NodeWindow("service-ё", WindowMetrics(window.toDouble(), 1.0))) }
+        val connections =
+            List(8) { window ->
+                listOf("call-ё\n\"", "service-ё").map { id ->
+                    ConnectionWindow(
+                        id,
+                        ConnectionWindowMetrics(
+                            window.toDouble(),
+                            1.0,
+                            sentAttempts = 4,
+                            retries = 2,
+                            succeeded = 1,
+                            failed = 1,
+                            timeouts = 2,
+                            orphaned = 1,
+                            inFlightIntegralMs = 1.5,
+                            orphanedIntegralMs = 0.5,
+                            backoffIntegralMs = 0.25,
+                            latency = LatencyStatistics(1, 0.0, listOf(1)),
+                        ),
+                    )
+                }
+            }
+
+        fun expected(
+            from: Int,
+            until: Int,
+        ) = SeriesPart(
+            fromWindow = from,
+            untilWindow = until,
+            nodes = listOf(NodeSeries(rows[0][0].id, (from until until).map { rows[it][0].metrics })),
+            connections =
+                connections[0].mapIndexed { connection, row ->
+                    ConnectionSeries(row.id, (from until until).map { connections[it][connection].metrics })
+                },
+        )
+        val budget = (0 until 7).maxOf { partBytes(expected(it, it + 2)).size }
+        val writer = SeriesWriter(workspace, directory, 8.0, 1.0, maxPartBytes = budget)
+        rows.forEachIndexed { index, window -> writer.writeWindow(index, window, connections[index].reversed()) }
+        val index = writer.finish()
+        assertThat(index.parts).hasSize(4)
+        index.parts.forEach { part ->
+            val bytes = GZIPInputStream(workspace.readBytes("$directory/${part.file}").inputStream()).use { it.readAllBytes() }
+            assertThat(bytes).isEqualTo(partBytes(expected(part.fromWindow, part.untilWindow)))
+            assertThat(bytes.size).isEqualTo(part.uncompressedBytes).isLessThanOrEqualTo(budget)
+            assertThat(DocumentVersion.of(workspace.readBytes("$directory/${part.file}"))).isEqualTo(part.sha256)
+            assertThat(part.connections).containsExactly("call-ё\n\"", "service-ё")
+            if (part.untilWindow < rows.size) {
+                assertThat(partBytes(expected(part.fromWindow, part.untilWindow + 1)).size).isGreaterThan(budget)
+            }
+        }
+    }
+
+    @Test
+    fun `split windows cover nodes and connections once with mixed and connection-only parts`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/split/series/v/p0/rep-0"
+        val nodes = List(5) { NodeWindow("row-$it", WindowMetrics(0.0, 1.0)) }
+        val connections = List(5) { ConnectionWindow("row-$it", ConnectionWindowMetrics(0.0, 1.0)) }
+
+        fun part(
+            rows: List<NodeWindow>,
+            calls: List<ConnectionWindow>,
+        ) = SeriesPart(
+            fromWindow = 0,
+            untilWindow = 1,
+            nodes = rows.map { NodeSeries(it.id, listOf(it.metrics)) },
+            connections = calls.map { ConnectionSeries(it.id, listOf(it.metrics)) },
+        )
+        val budget =
+            maxOf(
+                partBytes(part(nodes.take(2), emptyList())).size,
+                partBytes(part(nodes.takeLast(1), connections.take(1))).size,
+                partBytes(part(emptyList(), connections.take(2))).size,
+            )
+        val writer = SeriesWriter(workspace, directory, 2.0, 1.0, maxPartBytes = budget)
+        repeat(2) { window ->
+            writer.writeWindow(
+                window,
+                nodes.map { it.copy(metrics = it.metrics.copy(startMs = window.toDouble())) }.reversed(),
+                connections.map { it.copy(metrics = it.metrics.copy(startMs = window.toDouble())) }.reversed(),
+            )
+        }
+        val index = writer.finish()
+        val coveredNodes = mutableSetOf<Pair<String, Int>>()
+        val coveredConnections = mutableSetOf<Pair<String, Int>>()
+        val decoded =
+            index.parts.map { reference ->
+                val bytes = GZIPInputStream(workspace.readBytes("$directory/${reference.file}").inputStream()).use { it.readAllBytes() }
+                assertThat(bytes.size).isEqualTo(reference.uncompressedBytes).isLessThanOrEqualTo(budget)
+                Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8)).also { part ->
+                    assertThat(part.nodes.map { it.id }).isEqualTo(reference.nodes)
+                    assertThat(part.connections.map { it.id }).isEqualTo(reference.connections)
+                    assertThat(part.untilWindow - part.fromWindow).isEqualTo(1)
+                    part.nodes.forEach { row ->
+                        assertThat(row.windows).hasSize(1)
+                        assertThat(coveredNodes.add(row.id to part.fromWindow)).isTrue()
+                    }
+                    part.connections.forEach { row ->
+                        assertThat(row.windows).hasSize(1)
+                        assertThat(coveredConnections.add(row.id to part.fromWindow)).isTrue()
+                    }
+                }
+            }
+        assertThat(decoded.any { it.nodes.isNotEmpty() && it.connections.isNotEmpty() }).isTrue()
+        assertThat(decoded.any { it.nodes.isEmpty() && it.connections.isNotEmpty() }).isTrue()
+        assertThat(coveredNodes).hasSize(10)
+        assertThat(coveredConnections).hasSize(10)
+    }
+
+    @Test
+    fun `connection-only windows retain their full range`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/connections/series/v/p0/rep-0"
+        val writer = SeriesWriter(workspace, directory, 3.0, 1.0)
+        repeat(3) { window ->
+            writer.writeWindow(window, emptyList(), listOf(ConnectionWindow("call", ConnectionWindowMetrics(window.toDouble(), 1.0))))
+        }
+        val index = writer.finish()
+        val reference = index.parts.single()
+        assertThat(reference.nodes).isEmpty()
+        assertThat(reference.connections).containsExactly("call")
+        val bytes = GZIPInputStream(workspace.readBytes("$directory/${reference.file}").inputStream()).use { it.readAllBytes() }
+        val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
+        assertThat(
+            part.connections
+                .single()
+                .windows
+                .map { it.startMs },
+        ).containsExactly(0.0, 1.0, 2.0)
+    }
+
+    @Test
+    fun `one oversized connection window fails explicitly`(
+        @TempDir root: Path,
+    ) {
+        val writer = SeriesWriter(FileWorkspace(root), ".results/e/r/series/v/p0/rep-0", 1.0, 1.0, maxPartBytes = 100)
+        assertThatThrownBy {
+            writer.writeWindow(0, emptyList(), listOf(ConnectionWindow("call", ConnectionWindowMetrics(0.0, 1.0))))
+        }.hasMessageContaining("connection=call").hasMessageContaining("window=0").hasMessageContaining("100")
+    }
+
+    @Test
+    fun `mixed gzip bytes are reproducible regardless of input row order`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directories = listOf(".results/e/first/series/v/p0/rep-0", ".results/e/second/series/v/p0/rep-0")
+        val indexes =
+            directories.mapIndexed { run, directory ->
+                val writer = SeriesWriter(workspace, directory, 3.0, 1.0)
+                repeat(3) { window ->
+                    val nodes = listOf("node-a", "node-ё").map { NodeWindow(it, WindowMetrics(window.toDouble(), 1.0)) }
+                    val calls = listOf("call-a", "call-ё").map { ConnectionWindow(it, ConnectionWindowMetrics(window.toDouble(), 1.0)) }
+                    writer.writeWindow(window, if (run == 0) nodes else nodes.reversed(), if (run == 0) calls else calls.reversed())
+                }
+                writer.finish()
+            }
+        assertThat(indexes[0]).isEqualTo(indexes[1])
+        indexes[0].parts.forEach { part ->
+            assertThat(workspace.readBytes("${directories[0]}/${part.file}"))
+                .isEqualTo(workspace.readBytes("${directories[1]}/${part.file}"))
+        }
+    }
+
+    @Test
+    fun `connection identities are distinct and stable across windows`(
+        @TempDir root: Path,
+    ) {
+        val duplicate = ConnectionWindow("call", ConnectionWindowMetrics(0.0, 1.0))
+        val writer = SeriesWriter(FileWorkspace(root), ".results/e/r/series/v/p0/rep-0", 2.0, 1.0)
+        assertThatThrownBy { writer.writeWindow(0, emptyList(), listOf(duplicate, duplicate)) }.hasMessageContaining("distinct")
+        writer.writeWindow(0, emptyList(), listOf(duplicate))
+        assertThatThrownBy {
+            writer.writeWindow(1, emptyList(), listOf(duplicate.copy(id = "other", metrics = duplicate.metrics.copy(startMs = 1.0))))
+        }.hasMessageContaining("same connections")
+    }
+
     @Test
     fun `consecutive windows fill parts to the byte budget without splitting their nodes`(
         @TempDir root: Path,
@@ -58,7 +271,7 @@ class WindowSeriesTest {
     @Test
     fun `queue rejections do not dilute service residence sketches but admitted zero latency remains`() {
         val closed = mutableListOf<List<NodeWindow>>()
-        val collector = WindowCollector("client", listOf(service()), 20.0, 10.0) { _, rows -> closed += rows }
+        val collector = WindowCollector("client", listOf(service()), 20.0, 10.0) { _, rows, _ -> closed += rows }
         collector.attemptEvent("service", 0.0, AttemptEvent.OFFERED)
         collector.attemptEvent("service", 0.0, AttemptEvent.ADMITTED)
         collector.attemptCompletion("service", 4.0, 4.0, true)
@@ -92,7 +305,7 @@ class WindowSeriesTest {
     ) {
         listOf(Triple(0.07, 0.01, 7), Triple(0.13, 0.13 / 100, 100)).forEachIndexed { run, (end, step, expected) ->
             val writer = SeriesWriter(FileWorkspace(root), ".results/e/r$run/series/v/p0/rep-0", end, step)
-            val collector = WindowCollector("client", listOf(service()), end, step, writer::writeWindow)
+            val collector = WindowCollector("client", listOf(service()), end, step, onWindow = writer::writeWindow)
             collector.finish()
             val index = writer.finish()
             assertThat(index.parts).hasSize(1)
@@ -120,7 +333,7 @@ class WindowSeriesTest {
     @Test
     fun `event boundaries warmup and runout use event time and integrate held resources`() {
         val closed = mutableListOf<List<NodeWindow>>()
-        val collector = WindowCollector("client", listOf(service()), 25.0, 10.0) { _, rows -> closed += rows }
+        val collector = WindowCollector("client", listOf(service()), 25.0, 10.0) { _, rows, _ -> closed += rows }
         collector.originalArrival(0.0)
         collector.busyHandlers("service", 2.0, 1)
         collector.queueLength("service", 4.0, 2)
@@ -144,17 +357,23 @@ class WindowSeriesTest {
     }
 
     @Test
-    fun `parts cover every node and window within four MiB with verifiable checksums`(
+    fun `parts cover every node connection and window within four MiB with verifiable checksums`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
         val writer = SeriesWriter(workspace, ".results/e/r/series/v/p0/rep-0", 20.0, 10.0)
         val rows = List(20_000) { NodeWindow("service-%05d".format(it), WindowMetrics(0.0, 10.0, handlers = 1)) }
-        writer.writeWindow(0, rows)
-        writer.writeWindow(1, rows.map { it.copy(metrics = it.metrics.copy(startMs = 10.0)) })
+        val connections = List(20_000) { ConnectionWindow("call-%05d".format(it), ConnectionWindowMetrics(0.0, 10.0)) }
+        writer.writeWindow(0, rows, connections)
+        writer.writeWindow(
+            1,
+            rows.map { it.copy(metrics = it.metrics.copy(startMs = 10.0)) },
+            connections.map { it.copy(metrics = it.metrics.copy(startMs = 10.0)) },
+        )
         val index = writer.finish()
         assertThat(index.parts.size).isGreaterThan(2)
         val covered = mutableSetOf<Pair<String, Int>>()
+        val coveredConnections = mutableSetOf<Pair<String, Int>>()
         for (part in index.parts) {
             val compressed = workspace.readBytes(".results/e/r/series/v/p0/rep-0/${part.file}")
             assertThat(DocumentVersion.of(compressed)).isEqualTo(part.sha256)
@@ -162,13 +381,19 @@ class WindowSeriesTest {
             assertThat(bytes.size).isEqualTo(part.uncompressedBytes).isLessThanOrEqualTo(SeriesWriter.MAX_PART_BYTES)
             val decoded = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
             assertThat(decoded.nodes.map { it.id }).isEqualTo(part.nodes)
+            assertThat(decoded.connections.map { it.id }).isEqualTo(part.connections)
             assertThat(part.untilWindow - part.fromWindow).isEqualTo(1)
             decoded.nodes.forEach { node ->
                 assertThat(node.windows).hasSize(part.untilWindow - part.fromWindow)
                 for (window in part.fromWindow until part.untilWindow) assertThat(covered.add(node.id to window)).isTrue()
             }
+            decoded.connections.forEach { connection ->
+                assertThat(connection.windows).hasSize(part.untilWindow - part.fromWindow)
+                for (window in part.fromWindow until part.untilWindow) assertThat(coveredConnections.add(connection.id to window)).isTrue()
+            }
         }
         assertThat(covered).hasSize(40_000)
+        assertThat(coveredConnections).hasSize(40_000)
         assertThat(workspace.read(".results/e/r/series/v/p0/rep-0/index.json").text).contains("uncompressedBytes")
     }
 
@@ -182,6 +407,8 @@ class WindowSeriesTest {
             .hasMessageContaining("window=0")
             .hasMessageContaining("100")
     }
+
+    private fun partBytes(part: SeriesPart) = partJson.encodeToString(SeriesPart.serializer(), part).toByteArray(Charsets.UTF_8)
 
     private fun service() = ServiceNode("service", 1, 10, Distribution(DistributionShape.FIXED, 1.0), 0.0)
 }

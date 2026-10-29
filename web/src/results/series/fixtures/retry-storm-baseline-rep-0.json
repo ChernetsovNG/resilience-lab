@@ -1,5 +1,4363 @@
 {
   "part": {
+    "connections": [
+      {
+        "id": "gateway-to-middle",
+        "windows": [
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 0.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 8.584487480504443,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 10.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 32.72779092570791,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 20.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.64010866293317,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                1,
+                242,
+                1
+              ],
+              "sumMs": 26.349933772145363
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 30.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 34.100585380794826,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                247,
+                1,
+                250,
+                1
+              ],
+              "sumMs": 30.307215707736724
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 40.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 12.344871073669736,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                240,
+                1,
+                245,
+                1,
+                248,
+                1
+              ],
+              "sumMs": 43.740694043728
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 50.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 13.696540004912805,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 60.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 20.293479072393367,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                223,
+                1,
+                224,
+                1
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 70.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 2.7458804745344025,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                229,
+                1
+              ],
+              "sumMs": 12.735899551840575
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 80.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 9.22155291607993,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 90.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 22.59229137304466,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                224,
+                1
+              ],
+              "sumMs": 12.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 100.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 4.186155710875411,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 110.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 13.069437345682331,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 120.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 19.249843512409626,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 130.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 10.887463748033042,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                224,
+                1
+              ],
+              "sumMs": 12.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 140.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 13.737608538173731,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                224,
+                1
+              ],
+              "sumMs": 12.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 150.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 32.826637998082504,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 160.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.98427568084105,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                1,
+                238,
+                1
+              ],
+              "sumMs": 25.810913678923555
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 170.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 7.508519386328061,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                1,
+                251,
+                1
+              ],
+              "sumMs": 30.45287253062679
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 180.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 1.6839225879363653,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 190.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 10.4332044868774,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 200.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 24.180964644380765,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 210.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.76406380640327,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 220.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 230.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 240.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.0,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                360,
+                1
+              ],
+              "sumMs": 52.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 250.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.0,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                360,
+                1
+              ],
+              "sumMs": 52.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 260.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 270.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 280.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.4939100385488473,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.50608996145115,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 4.180964644380765,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 290.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.36609882212906086,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.63390117787094,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 17.76406380640327,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 300.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 20.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 310.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 20.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 320.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.8842477523543835,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.11575224764562,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 28.683922587936365,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 330.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.44887325851379956,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.5511267414862,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 37.4332044868774,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 340.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 40.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 350.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 40.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 360.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.09309679813776484,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.906903201862235,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 43.68705460583192,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 370.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 2.6371164723579454,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.362883527642055,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 57.39796498427421,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 380.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 60.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 390.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 51.216474745815106,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 400.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.838944065966757,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.16105593403324,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 47.79967483558198,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 410.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 3.1789839419603254,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.821016058039675,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 56.9843312283636,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 420.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 57.628223176753124,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 430.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 47.29495923077667,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 440.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 43.59395780769415,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 450.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 47.398919223154735,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 460.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 16.843891487341978,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 470.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 2.331286687615261,
+            "durationMs": 10.0,
+            "failed": 4,
+            "inFlightIntegralMs": 35.66871331238474,
+            "latency": {
+              "count": 4,
+              "sketch": [
+                0,
+                188,
+                1,
+                215,
+                1,
+                263,
+                1,
+                290,
+                1
+              ],
+              "sumMs": 61.44532598210827
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 3.6052005890346095,
+            "retries": 4,
+            "sentAttempts": 6,
+            "startMs": 480.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 2.817037754213402,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 35.1829622457866,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                201,
+                1,
+                210,
+                1
+              ],
+              "sumMs": 19.52144384581129
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 1.0,
+            "retries": 2,
+            "sentAttempts": 4,
+            "startMs": 490.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 3.1841736944178365,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 34.81582630558216,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                195,
+                1,
+                212,
+                1
+              ],
+              "sumMs": 18.9898984385419
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 1.0,
+            "retries": 2,
+            "sentAttempts": 4,
+            "startMs": 500.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 5.610527154288661,
+            "durationMs": 10.0,
+            "failed": 3,
+            "inFlightIntegralMs": 32.38947284571134,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                183,
+                1,
+                185,
+                1,
+                203,
+                1
+              ],
+              "sumMs": 24.45723528394126
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 2.5846269366199977,
+            "retries": 3,
+            "sentAttempts": 5,
+            "startMs": 510.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 8.71503636770126,
+            "durationMs": 10.0,
+            "failed": 4,
+            "inFlightIntegralMs": 31.28496363229874,
+            "latency": {
+              "count": 4,
+              "sketch": [
+                0,
+                193,
+                1,
+                197,
+                1,
+                208,
+                2
+              ],
+              "sumMs": 36.90081366312472
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 4,
+            "sentAttempts": 4,
+            "startMs": 520.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.874222178104219,
+            "durationMs": 10.0,
+            "failed": 3,
+            "inFlightIntegralMs": 34.12577782189578,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                193,
+                1,
+                203,
+                1,
+                218,
+                1
+              ],
+              "sumMs": 28.984978437162
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 0.5,
+            "retries": 1,
+            "sentAttempts": 3,
+            "startMs": 530.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 2.6748534487122697,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 36.32514655128773,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                214,
+                1
+              ],
+              "sumMs": 10.806074505593529
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 0.1155680773598533,
+            "retries": 2,
+            "sentAttempts": 3,
+            "startMs": 540.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 1.6614219345095762,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 33.338578065490424,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                191,
+                1
+              ],
+              "sumMs": 7.979499059202112
+            },
+            "orphaned": 5,
+            "orphanedIntegralMs": 4.0638755880264625,
+            "retries": 1,
+            "sentAttempts": 6,
+            "startMs": 550.0,
+            "succeeded": 0,
+            "timeouts": 5
+          },
+          {
+            "backoffIntegralMs": 3.5687083988840413,
+            "durationMs": 10.0,
+            "failed": 4,
+            "inFlightIntegralMs": 36.43129160111596,
+            "latency": {
+              "count": 4,
+              "sketch": [
+                0,
+                192,
+                1,
+                197,
+                1,
+                198,
+                1,
+                200,
+                1
+              ],
+              "sumMs": 34.657587680215556
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 3,
+            "sentAttempts": 3,
+            "startMs": 560.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 4.914026482370446,
+            "durationMs": 10.0,
+            "failed": 3,
+            "inFlightIntegralMs": 35.085973517629554,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                194,
+                1,
+                208,
+                1,
+                221,
+                1
+              ],
+              "sumMs": 30.075739515887904
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 3,
+            "sentAttempts": 3,
+            "startMs": 570.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.4742593633543493,
+            "durationMs": 10.0,
+            "failed": 4,
+            "inFlightIntegralMs": 34.05751441123539,
+            "latency": {
+              "count": 4,
+              "sketch": [
+                0,
+                176,
+                1,
+                187,
+                1,
+                198,
+                1,
+                208,
+                1
+              ],
+              "sumMs": 33.550878260886066
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 2,
+            "sentAttempts": 4,
+            "startMs": 580.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.443627258644483,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 38.02459896676578,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                206,
+                1,
+                213,
+                1
+              ],
+              "sumMs": 20.58125832139092
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 590.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 2.859166200153709,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 37.14083379984629,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                194,
+                1
+              ],
+              "sumMs": 8.29306781919638
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 600.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.2429918345395663,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 35.757008165460434,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                197,
+                1,
+                201,
+                1
+              ],
+              "sumMs": 17.843493753915254
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 610.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.8053421917164769,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 38.19465780828352,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                191,
+                1,
+                207,
+                1
+              ],
+              "sumMs": 17.848639776119285
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 620.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 2.5546875929867383,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 37.44531240701326,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                201,
+                1
+              ],
+              "sumMs": 9.16237891646449
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 630.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 39.0,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                390,
+                1
+              ],
+              "sumMs": 70.38661752045539
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 640.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.7972088143740166,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 38.20279118562598,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                209,
+                1,
+                387,
+                1
+              ],
+              "sumMs": 77.3301591604652
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 650.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 4.9331673481441385,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 35.06683265185586,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                201,
+                1,
+                202,
+                1
+              ],
+              "sumMs": 18.52962265167423
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 660.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.26531860216312,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 37.347515639449284,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                169,
+                1,
+                194,
+                1
+              ],
+              "sumMs": 14.925179822006612
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 670.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.29776895789802893,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 39.08939680048957,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                178,
+                1
+              ],
+              "sumMs": 7.139978226068365
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 680.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.15794631998358,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 38.84205368001642,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                389,
+                1
+              ],
+              "sumMs": 69.19246265199786
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 690.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.135403448754005,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 35.864596551245995,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                196,
+                1,
+                388,
+                1
+              ],
+              "sumMs": 77.46955799722764
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 700.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.7740695427652327,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 38.22593045723477,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                201,
+                1,
+                215,
+                1
+              ],
+              "sumMs": 20.13435551569478
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 710.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.5836550484876852,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 38.416344951512315,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                192,
+                1,
+                194,
+                1
+              ],
+              "sumMs": 16.380045184178698
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 720.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.1772955490456525,
+            "durationMs": 10.0,
+            "failed": 1,
+            "inFlightIntegralMs": 36.82270445095435,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                214,
+                1
+              ],
+              "sumMs": 10.872648508639827
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 730.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 740.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.5793767395686018,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.4206232604314,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 2.622984175071565,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 750.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.06962746346425774,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.93037253653574,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 11.949418574421202,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 760.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                333,
+                1,
+                348,
+                1
+              ],
+              "sumMs": 85.09170334547002
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 20.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 770.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.56679551312254,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                318,
+                1
+              ],
+              "sumMs": 31.610402948625506
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 7.8828729251861205,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 780.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.43320448687746,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                284,
+                1,
+                296,
+                1
+              ],
+              "sumMs": 49.19586852302052
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 790.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                1,
+                284,
+                1
+              ],
+              "sumMs": 38.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 800.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.0,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 810.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.56679551312254,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 820.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.43320448687746,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                2
+              ],
+              "sumMs": 30.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 830.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                2
+              ],
+              "sumMs": 30.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 840.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.0,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 850.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.56679551312254,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 860.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.43320448687746,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                2
+              ],
+              "sumMs": 30.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 870.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                2
+              ],
+              "sumMs": 30.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 880.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.0,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 890.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 37.56679551312254,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                248,
+                3
+              ],
+              "sumMs": 45.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 900.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 21.88287292518612,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                248,
+                2
+              ],
+              "sumMs": 30.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 910.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 2.316077412063578,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                248,
+                1
+              ],
+              "sumMs": 15.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 920.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 20.092395269384497,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 4,
+            "startMs": 930.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.19371365875054,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 940.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 5.193713658750539,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                246,
+                1,
+                253,
+                1
+              ],
+              "sumMs": 30.479822586885575
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 950.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 960.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 970.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 4.103498638469318,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 980.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 10.15740653376804,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                224,
+                1
+              ],
+              "sumMs": 12.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 990.0,
+            "succeeded": 1,
+            "timeouts": 0
+          }
+        ]
+      },
+      {
+        "id": "middle-to-dependency",
+        "windows": [
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 0.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 3.5844874805044427,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 10.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 24.22779092570791,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 20.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.076335557702606,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                1,
+                218,
+                1
+              ],
+              "sumMs": 20.349933772145363
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 30.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.664358486025392,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                1,
+                226,
+                1
+              ],
+              "sumMs": 24.307215707736727
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 40.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 10.844871073669736,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                216,
+                1,
+                221,
+                1,
+                224,
+                1
+              ],
+              "sumMs": 34.740694043728
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 50.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 8.696540004912805,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 60.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 16.793479072393367,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 70.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 2.2458804745344025,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                205,
+                1
+              ],
+              "sumMs": 9.735899551840575
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 80.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 5.882133917812467,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 90.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 17.93171037131212,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                200,
+                1
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 100.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 3.1861557108754113,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 110.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 8.069437345682331,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 120.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 15.749843512409626,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 130.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 7.887463748033042,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                200,
+                1
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 140.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 8.26185224366074,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                200,
+                1
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 150.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 24.302394292595494,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 4,
+            "startMs": 160.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 27.48427568084105,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                1,
+                214,
+                1
+              ],
+              "sumMs": 19.810913678923555
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 170.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 6.508519386328061,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                1,
+                227,
+                1
+              ],
+              "sumMs": 24.45287253062679
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 180.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 190.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 9.183922587936365,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 200.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 19.614169131258166,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 210.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 35.26406380640327,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 220.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 230.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.816077412063635,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                354,
+                1
+              ],
+              "sumMs": 49.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 240.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.183922587936365,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 250.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.0,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                354,
+                1
+              ],
+              "sumMs": 49.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 260.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.5843994281150344,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.415600571884966,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 1.680964644380765,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 270.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 1.9092888294561021,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0907111705439,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 15.264063806403271,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 280.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 17.816077412063635,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 290.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 9.0667955131226,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 300.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.26049342476358106,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.73950657523642,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 6.183922587936365,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 310.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 1.3125964652327866,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.68740353476721,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 14.9332044868774,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 320.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 1.0965652162657307,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.90343478373427,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 21.09656521626573,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 330.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 3.571249722762275,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.428750277237725,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 29.170852389010804,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 340.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 27.0667955131226,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 350.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 20.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 360.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.0516523399259086,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.94834766007409,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 25.923429163172784,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 370.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.41556725242128323,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.58443274757872,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 33.620608021644614,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 380.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 33.816077412063635,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 390.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.92521268474178,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 34.850320767307494,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 400.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 39.07478731525822,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 40.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 410.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 40.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 420.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 42.871776823246876,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 430.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 38.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 45.021118181286965,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 440.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 43.0667955131226,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 450.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.2615022064169352,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 35.738497793583065,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 51.88970258330744,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 460.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 6.602125975752017,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 20.821666311178262,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 5,
+            "orphanedIntegralMs": 86.75454140189146,
+            "retries": 3,
+            "sentAttempts": 8,
+            "startMs": 470.0,
+            "succeeded": 0,
+            "timeouts": 5
+          },
+          {
+            "backoffIntegralMs": 10.093900571932295,
+            "durationMs": 10.0,
+            "failed": 10,
+            "inFlightIntegralMs": 10.339803492688873,
+            "latency": {
+              "count": 10,
+              "sketch": [
+                0,
+                0,
+                10
+              ],
+              "sumMs": 10.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 99.81607741206363,
+            "retries": 7,
+            "sentAttempts": 11,
+            "startMs": 480.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 11.501644090244667,
+            "durationMs": 10.0,
+            "failed": 10,
+            "inFlightIntegralMs": 12.737317400488848,
+            "latency": {
+              "count": 10,
+              "sketch": [
+                0,
+                0,
+                10
+              ],
+              "sumMs": 10.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 96.98186432668763,
+            "retries": 5,
+            "sentAttempts": 9,
+            "startMs": 490.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 9.582468373869062,
+            "durationMs": 10.0,
+            "failed": 9,
+            "inFlightIntegralMs": 14.1921299235496,
+            "latency": {
+              "count": 9,
+              "sketch": [
+                0,
+                0,
+                9
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 2,
+            "orphanedIntegralMs": 97.30586271452563,
+            "retries": 8,
+            "sentAttempts": 12,
+            "startMs": 500.0,
+            "succeeded": 0,
+            "timeouts": 2
+          },
+          {
+            "backoffIntegralMs": 11.60278469551264,
+            "durationMs": 10.0,
+            "failed": 9,
+            "inFlightIntegralMs": 8.57954116755269,
+            "latency": {
+              "count": 9,
+              "sketch": [
+                0,
+                0,
+                9
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 100.64088716077651,
+            "retries": 5,
+            "sentAttempts": 9,
+            "startMs": 510.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 9.969997304304684,
+            "durationMs": 10.0,
+            "failed": 11,
+            "inFlightIntegralMs": 11.0,
+            "latency": {
+              "count": 11,
+              "sketch": [
+                0,
+                0,
+                11
+              ],
+              "sumMs": 11.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 100.0,
+            "retries": 8,
+            "sentAttempts": 11,
+            "startMs": 520.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 15.040169461246478,
+            "durationMs": 10.0,
+            "failed": 10,
+            "inFlightIntegralMs": 10.46949784776109,
+            "latency": {
+              "count": 10,
+              "sketch": [
+                0,
+                0,
+                10
+              ],
+              "sumMs": 10.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 99.78973647320652,
+            "retries": 8,
+            "sentAttempts": 11,
+            "startMs": 530.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 13.359464680954943,
+            "durationMs": 10.0,
+            "failed": 10,
+            "inFlightIntegralMs": 11.912327232666257,
+            "latency": {
+              "count": 10,
+              "sketch": [
+                0,
+                0,
+                10
+              ],
+              "sumMs": 10.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 99.06679551312254,
+            "retries": 8,
+            "sentAttempts": 13,
+            "startMs": 540.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 10.103270685610823,
+            "durationMs": 10.0,
+            "failed": 9,
+            "inFlightIntegralMs": 12.932658471480636,
+            "latency": {
+              "count": 9,
+              "sketch": [
+                0,
+                0,
+                9
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 95.45830798000213,
+            "retries": 5,
+            "sentAttempts": 8,
+            "startMs": 550.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 10.625630256488762,
+            "durationMs": 10.0,
+            "failed": 13,
+            "inFlightIntegralMs": 12.946686005227775,
+            "latency": {
+              "count": 13,
+              "sketch": [
+                0,
+                0,
+                13
+              ],
+              "sumMs": 13.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 100.0,
+            "retries": 8,
+            "sentAttempts": 12,
+            "startMs": 560.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 15.037373538803536,
+            "durationMs": 10.0,
+            "failed": 10,
+            "inFlightIntegralMs": 10.47323605029601,
+            "latency": {
+              "count": 10,
+              "sketch": [
+                0,
+                0,
+                10
+              ],
+              "sumMs": 10.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 100.0,
+            "retries": 7,
+            "sentAttempts": 11,
+            "startMs": 570.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 9.370107258572716,
+            "durationMs": 10.0,
+            "failed": 11,
+            "inFlightIntegralMs": 15.349344056580208,
+            "latency": {
+              "count": 11,
+              "sketch": [
+                0,
+                0,
+                11
+              ],
+              "sumMs": 11.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 95.81607741206358,
+            "retries": 8,
+            "sentAttempts": 11,
+            "startMs": 580.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 9.890637417149833,
+            "durationMs": 10.0,
+            "failed": 7,
+            "inFlightIntegralMs": 19.77288841005327,
+            "latency": {
+              "count": 7,
+              "sketch": [
+                0,
+                0,
+                7
+              ],
+              "sumMs": 7.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 87.06679551312254,
+            "retries": 5,
+            "sentAttempts": 8,
+            "startMs": 590.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 5.241055322843522,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 26.0,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 4,
+            "sentAttempts": 6,
+            "startMs": 600.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 5.156786642463203,
+            "durationMs": 10.0,
+            "failed": 5,
+            "inFlightIntegralMs": 25.0,
+            "latency": {
+              "count": 5,
+              "sketch": [
+                0,
+                0,
+                5
+              ],
+              "sumMs": 5.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 3,
+            "sentAttempts": 5,
+            "startMs": 610.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 6.036255019406099,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 26.158402788877424,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 5,
+            "sentAttempts": 7,
+            "startMs": 620.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 4.7099076608296855,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 29.735404746183576,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                0,
+                2
+              ],
+              "sumMs": 2.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 73.81607741206358,
+            "retries": 2,
+            "sentAttempts": 3,
+            "startMs": 630.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.927413183940075,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 32.072586816059925,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                0,
+                2
+              ],
+              "sumMs": 2.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 69.88937561999876,
+            "retries": 2,
+            "sentAttempts": 3,
+            "startMs": 640.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 4.134821345108207,
+            "durationMs": 10.0,
+            "failed": 3,
+            "inFlightIntegralMs": 29.404531483070514,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                0,
+                3
+              ],
+              "sumMs": 3.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 72.77288841005327,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 650.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 6.529622651674231,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 26.0,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 4,
+            "sentAttempts": 6,
+            "startMs": 660.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 2.925179822006612,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 26.122984175071565,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 4,
+            "sentAttempts": 7,
+            "startMs": 670.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.4265274029964985,
+            "durationMs": 10.0,
+            "failed": 4,
+            "inFlightIntegralMs": 32.71345082307187,
+            "latency": {
+              "count": 4,
+              "sketch": [
+                0,
+                0,
+                4
+              ],
+              "sumMs": 4.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 71.81607741206358,
+            "retries": 3,
+            "sentAttempts": 4,
+            "startMs": 680.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 1.4348875064574713,
+            "durationMs": 10.0,
+            "failed": 3,
+            "inFlightIntegralMs": 33.85658474798015,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                0,
+                3
+              ],
+              "sumMs": 3.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 70.13154552203287,
+            "retries": 2,
+            "sentAttempts": 4,
+            "startMs": 690.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 1.8645965512459952,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 28.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                0,
+                2
+              ],
+              "sumMs": 2.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 74.9016443422106,
+            "retries": 1,
+            "sentAttempts": 3,
+            "startMs": 700.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 7.9066914475038175,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 25.098355657789398,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 80.0,
+            "retries": 4,
+            "sentAttempts": 5,
+            "startMs": 710.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 5.317748022287105,
+            "durationMs": 10.0,
+            "failed": 6,
+            "inFlightIntegralMs": 26.31948028116676,
+            "latency": {
+              "count": 6,
+              "sketch": [
+                0,
+                0,
+                6
+              ],
+              "sumMs": 6.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 79.81607741206358,
+            "retries": 4,
+            "sentAttempts": 7,
+            "startMs": 720.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.9333543118372063,
+            "durationMs": 10.0,
+            "failed": 2,
+            "inFlightIntegralMs": 32.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                0,
+                2
+              ],
+              "sumMs": 2.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 67.81607741206358,
+            "retries": 2,
+            "sentAttempts": 2,
+            "startMs": 730.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 3.5502576330801503,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 34.33909250603699,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 54.786103436452095,
+            "retries": 1,
+            "sentAttempts": 2,
+            "startMs": 740.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 3.4948983124780852,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.505101687521915,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 1,
+            "orphanedIntegralMs": 38.804207682076594,
+            "retries": 1,
+            "sentAttempts": 1,
+            "startMs": 750.0,
+            "succeeded": 0,
+            "timeouts": 1
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 40.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 16.6989503372497,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 760.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 36.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                327,
+                1,
+                342,
+                1
+              ],
+              "sumMs": 79.09170334547002
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 770.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 35.06679551312254,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                240,
+                1,
+                312,
+                1,
+                328,
+                1
+              ],
+              "sumMs": 80.59548673466179
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 780.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                240,
+                2
+              ],
+              "sumMs": 28.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 790.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.749281898941035,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                2,
+                240,
+                1
+              ],
+              "sumMs": 38.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 800.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 810.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.250718101058965,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                3
+              ],
+              "sumMs": 36.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 820.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 830.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.749281898941035,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                3
+              ],
+              "sumMs": 36.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 840.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 850.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.250718101058965,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                3
+              ],
+              "sumMs": 36.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 860.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 870.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.749281898941035,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                3
+              ],
+              "sumMs": 36.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 880.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 30.0,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 2,
+            "startMs": 890.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 29.250718101058965,
+            "latency": {
+              "count": 3,
+              "sketch": [
+                0,
+                224,
+                3
+              ],
+              "sumMs": 36.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 900.0,
+            "succeeded": 3,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 20.88287292518612,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                224,
+                2
+              ],
+              "sumMs": 24.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 910.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 1.8160774120635779,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                224,
+                1
+              ],
+              "sumMs": 12.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 920.0,
+            "succeeded": 1,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 11.787127959673512,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 3,
+            "startMs": 930.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 26.498980968461524,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                200,
+                2
+              ],
+              "sumMs": 18.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 940.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 4.193713658750539,
+            "latency": {
+              "count": 2,
+              "sketch": [
+                0,
+                222,
+                1,
+                229,
+                1
+              ],
+              "sumMs": 24.479822586885575
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 950.0,
+            "succeeded": 2,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 960.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 0.0,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 970.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 1.6034986384693184,
+            "latency": {
+              "count": 0,
+              "sketch": [
+                0
+              ],
+              "sumMs": 0.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 1,
+            "startMs": 980.0,
+            "succeeded": 0,
+            "timeouts": 0
+          },
+          {
+            "backoffIntegralMs": 0.0,
+            "durationMs": 10.0,
+            "failed": 0,
+            "inFlightIntegralMs": 7.396501361530682,
+            "latency": {
+              "count": 1,
+              "sketch": [
+                0,
+                200,
+                1
+              ],
+              "sumMs": 9.0
+            },
+            "orphaned": 0,
+            "orphanedIntegralMs": 0.0,
+            "retries": 0,
+            "sentAttempts": 0,
+            "startMs": 990.0,
+            "succeeded": 1,
+            "timeouts": 0
+          }
+        ]
+      }
+    ],
     "fromWindow": 0,
     "nodes": [
       {
@@ -1372,7 +5730,7 @@
                 445,
                 1
               ],
-              "sumMs": 337.29680778932874
+              "sumMs": 337.2968077893289
             },
             "offeredAttempts": 0,
             "originalArrivals": 1,
@@ -1440,7 +5798,7 @@
                 428,
                 1
               ],
-              "sumMs": 108.98209113348457
+              "sumMs": 108.98209113348463
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -1510,7 +5868,7 @@
                 473,
                 1
               ],
-              "sumMs": 179.01425076915586
+              "sumMs": 179.01425076915592
             },
             "offeredAttempts": 0,
             "originalArrivals": 4,
@@ -1934,7 +6292,7 @@
                 469,
                 2
               ],
-              "sumMs": 511.927444525674
+              "sumMs": 511.92744452567376
             },
             "offeredAttempts": 0,
             "originalArrivals": 2,
@@ -1960,7 +6318,7 @@
                 471,
                 1
               ],
-              "sumMs": 335.4015498287325
+              "sumMs": 335.4015498287323
             },
             "offeredAttempts": 0,
             "originalArrivals": 1,
@@ -1986,7 +6344,7 @@
                 465,
                 1
               ],
-              "sumMs": 319.7376292355267
+              "sumMs": 319.73762923552647
             },
             "offeredAttempts": 0,
             "originalArrivals": 2,
@@ -2014,7 +6372,7 @@
                 464,
                 1
               ],
-              "sumMs": 438.10632486856616
+              "sumMs": 438.1063248685658
             },
             "offeredAttempts": 0,
             "originalArrivals": 2,
@@ -2042,7 +6400,7 @@
                 407,
                 1
               ],
-              "sumMs": 193.14921373382026
+              "sumMs": 193.14921373381992
             },
             "offeredAttempts": 0,
             "originalArrivals": 1,
@@ -2068,7 +6426,7 @@
                 370,
                 1
               ],
-              "sumMs": 112.70107549175702
+              "sumMs": 112.7010754917568
             },
             "offeredAttempts": 0,
             "originalArrivals": 1,
@@ -2094,7 +6452,7 @@
                 378,
                 1
               ],
-              "sumMs": 109.13951274933936
+              "sumMs": 109.13951274933913
             },
             "offeredAttempts": 0,
             "originalArrivals": 1,
@@ -2122,7 +6480,7 @@
                 357,
                 1
               ],
-              "sumMs": 141.96407327029976
+              "sumMs": 141.96407327029942
             },
             "offeredAttempts": 0,
             "originalArrivals": 2,
@@ -2150,7 +6508,7 @@
                 348,
                 1
               ],
-              "sumMs": 125.06670140400956
+              "sumMs": 125.06670140400922
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -2176,7 +6534,7 @@
                 302,
                 1
               ],
-              "sumMs": 52.78039215688125
+              "sumMs": 52.78039215688102
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -2200,7 +6558,7 @@
                 304,
                 1
               ],
-              "sumMs": 28.02642441564865
+              "sumMs": 28.026424415648535
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -4566,7 +8924,7 @@
           },
           {
             "admittedAttempts": 3,
-            "busyHandlerTimeMs": 8.806286341249688,
+            "busyHandlerTimeMs": 8.80628634124946,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 2,
@@ -4579,7 +8937,7 @@
             },
             "offeredAttempts": 3,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 1.480841618424165,
+            "queueLengthIntegralMs": 1.4808416184240514,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 930.0,
@@ -4603,7 +8961,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 4.99898096846141,
+            "queueLengthIntegralMs": 4.998980968461524,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 940.0,
@@ -4612,7 +8970,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 3.193713658750312,
+            "busyHandlerTimeMs": 3.1937136587505393,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 2,
@@ -4682,7 +9040,7 @@
           },
           {
             "admittedAttempts": 1,
-            "busyHandlerTimeMs": 1.103498638469432,
+            "busyHandlerTimeMs": 1.1034986384693184,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 2,
@@ -4704,7 +9062,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 6.896501361530568,
+            "busyHandlerTimeMs": 6.896501361530682,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 2,
@@ -5784,7 +10142,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 158.69797197883207,
+            "queueLengthIntegralMs": 158.69797197883213,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 450.0,
@@ -5808,7 +10166,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 158.57598236411582,
+            "queueLengthIntegralMs": 158.57598236411587,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 460.0,
@@ -5834,7 +10192,7 @@
             },
             "offeredAttempts": 3,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 152.20274087059107,
+            "queueLengthIntegralMs": 152.20274087059113,
             "queueRejections": 2,
             "retries": 0,
             "startMs": 470.0,
@@ -5858,7 +10216,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 141.67673522858115,
+            "queueLengthIntegralMs": 141.6767352285812,
             "queueRejections": 0,
             "retries": 4,
             "startMs": 480.0,
@@ -5906,7 +10264,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 109.24271439172242,
+            "queueLengthIntegralMs": 109.24271439172247,
             "queueRejections": 0,
             "retries": 2,
             "startMs": 500.0,
@@ -6098,7 +10456,7 @@
                 445,
                 1
               ],
-              "sumMs": 337.29680778932874
+              "sumMs": 337.2968077893289
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
@@ -6166,7 +10524,7 @@
                 428,
                 1
               ],
-              "sumMs": 108.98209113348457
+              "sumMs": 108.98209113348463
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -6236,7 +10594,7 @@
                 473,
                 1
               ],
-              "sumMs": 179.01425076915586
+              "sumMs": 179.01425076915592
             },
             "offeredAttempts": 4,
             "originalArrivals": 0,
@@ -6262,7 +10620,7 @@
             },
             "offeredAttempts": 4,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 115.56701735349066,
+            "queueLengthIntegralMs": 115.56701735349031,
             "queueRejections": 0,
             "retries": 2,
             "startMs": 650.0,
@@ -6310,7 +10668,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 138.41928570396192,
+            "queueLengthIntegralMs": 138.4192857039618,
             "queueRejections": 0,
             "retries": 1,
             "startMs": 670.0,
@@ -6332,7 +10690,7 @@
             },
             "offeredAttempts": 2,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 141.85475631034058,
+            "queueLengthIntegralMs": 141.85475631034035,
             "queueRejections": 0,
             "retries": 1,
             "startMs": 680.0,
@@ -6354,7 +10712,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 159.71281451008133,
+            "queueLengthIntegralMs": 159.71281451008122,
             "queueRejections": 0,
             "retries": 1,
             "startMs": 690.0,
@@ -6378,7 +10736,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 157.33699484177043,
+            "queueLengthIntegralMs": 157.33699484177032,
             "queueRejections": 0,
             "retries": 1,
             "startMs": 700.0,
@@ -6424,7 +10782,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 154.4559208372541,
+            "queueLengthIntegralMs": 154.45592083725398,
             "queueRejections": 0,
             "retries": 2,
             "startMs": 720.0,
@@ -6536,7 +10894,7 @@
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 157.8970980175086,
+            "queueLengthIntegralMs": 157.89709801750848,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 770.0,
@@ -6638,7 +10996,7 @@
             },
             "offeredAttempts": 3,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 92.95323645641065,
+            "queueLengthIntegralMs": 92.95323645641031,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 810.0,
@@ -6660,11 +11018,11 @@
                 469,
                 2
               ],
-              "sumMs": 511.927444525674
+              "sumMs": 511.92744452567376
             },
             "offeredAttempts": 2,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 106.19672497216686,
+            "queueLengthIntegralMs": 106.19672497216663,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 820.0,
@@ -6686,11 +11044,11 @@
                 471,
                 1
               ],
-              "sumMs": 335.4015498287325
+              "sumMs": 335.4015498287323
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 84.14169286608023,
+            "queueLengthIntegralMs": 84.14169286608012,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 830.0,
@@ -6712,11 +11070,11 @@
                 465,
                 1
               ],
-              "sumMs": 319.7376292355267
+              "sumMs": 319.73762923552647
             },
             "offeredAttempts": 2,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 82.82419285436629,
+            "queueLengthIntegralMs": 82.82419285436606,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 840.0,
@@ -6740,11 +11098,11 @@
                 464,
                 1
               ],
-              "sumMs": 438.10632486856616
+              "sumMs": 438.1063248685658
             },
             "offeredAttempts": 2,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 71.06876721693061,
+            "queueLengthIntegralMs": 71.06876721693038,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 850.0,
@@ -6768,11 +11126,11 @@
                 407,
                 1
               ],
-              "sumMs": 193.14921373382026
+              "sumMs": 193.14921373381992
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 67.34294285065675,
+            "queueLengthIntegralMs": 67.34294285065664,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 860.0,
@@ -6794,11 +11152,11 @@
                 370,
                 1
               ],
-              "sumMs": 112.70107549175702
+              "sumMs": 112.7010754917568
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 45.560617602727916,
+            "queueLengthIntegralMs": 45.5606176027278,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 870.0,
@@ -6820,11 +11178,11 @@
                 378,
                 1
               ],
-              "sumMs": 109.13951274933936
+              "sumMs": 109.13951274933913
             },
             "offeredAttempts": 1,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 31.167598899210702,
+            "queueLengthIntegralMs": 31.16759889921059,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 880.0,
@@ -6848,11 +11206,11 @@
                 357,
                 1
               ],
-              "sumMs": 141.96407327029976
+              "sumMs": 141.96407327029942
             },
             "offeredAttempts": 2,
             "originalArrivals": 0,
-            "queueLengthIntegralMs": 25.522090598505315,
+            "queueLengthIntegralMs": 25.522090598505088,
             "queueRejections": 0,
             "retries": 0,
             "startMs": 890.0,
@@ -6876,7 +11234,7 @@
                 348,
                 1
               ],
-              "sumMs": 125.06670140400956
+              "sumMs": 125.06670140400922
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -6902,7 +11260,7 @@
                 302,
                 1
               ],
-              "sumMs": 52.78039215688125
+              "sumMs": 52.78039215688102
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -6926,7 +11284,7 @@
                 304,
                 1
               ],
-              "sumMs": 28.02642441564865
+              "sumMs": 28.026424415648535
             },
             "offeredAttempts": 0,
             "originalArrivals": 0,
@@ -6939,7 +11297,7 @@
           },
           {
             "admittedAttempts": 4,
-            "busyHandlerTimeMs": 24.09239526938495,
+            "busyHandlerTimeMs": 24.092395269384497,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -6961,7 +11319,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 29.193713658750312,
+            "busyHandlerTimeMs": 29.19371365875054,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -6985,7 +11343,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 5.193713658750312,
+            "busyHandlerTimeMs": 5.193713658750539,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -7055,7 +11413,7 @@
           },
           {
             "admittedAttempts": 1,
-            "busyHandlerTimeMs": 5.103498638469432,
+            "busyHandlerTimeMs": 5.103498638469318,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -9400,7 +13758,7 @@
           },
           {
             "admittedAttempts": 4,
-            "busyHandlerTimeMs": 18.09239526938495,
+            "busyHandlerTimeMs": 18.092395269384497,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -9422,7 +13780,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 28.193713658750312,
+            "busyHandlerTimeMs": 28.19371365875054,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -9446,7 +13804,7 @@
           },
           {
             "admittedAttempts": 0,
-            "busyHandlerTimeMs": 4.193713658750312,
+            "busyHandlerTimeMs": 4.193713658750539,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -9516,7 +13874,7 @@
           },
           {
             "admittedAttempts": 1,
-            "busyHandlerTimeMs": 3.603498638469432,
+            "busyHandlerTimeMs": 3.6034986384693184,
             "durationMs": 10.0,
             "failures": 0,
             "handlers": 4,
@@ -9564,7 +13922,7 @@
       }
     ],
     "profile": "ddsketch-bitwise6-rational-v1",
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "untilWindow": 100
   },
   "quantiles": [

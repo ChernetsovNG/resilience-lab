@@ -12,6 +12,7 @@ import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.results.ConnectionWindow
 import resiliencelab.core.results.NodeWindow
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
@@ -70,7 +71,14 @@ class ExperimentExecutor internal constructor(
     fun run(
         experiment: CompiledExperiment,
         isCancelled: () -> Boolean = { false },
-        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _, _ -> },
+        onWindow: (
+            variant: String,
+            point: String,
+            replication: Int,
+            window: Int,
+            rows: List<NodeWindow>,
+            connections: List<ConnectionWindow>,
+        ) -> Unit = { _, _, _, _, _, _ -> },
         onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _, _ -> },
         onOriginalCompletion: ((variant: String, point: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)? = null,
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
@@ -104,7 +112,14 @@ class ExperimentExecutor internal constructor(
         experiment: CompiledExperiment,
         tasks: Collection<ExperimentTask>,
         isCancelled: () -> Boolean = { false },
-        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit = { _, _, _, _, _ -> },
+        onWindow: (
+            variant: String,
+            point: String,
+            replication: Int,
+            window: Int,
+            rows: List<NodeWindow>,
+            connections: List<ConnectionWindow>,
+        ) -> Unit = { _, _, _, _, _, _ -> },
         onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit = { _, _, _, _ -> },
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ) {
@@ -116,7 +131,14 @@ class ExperimentExecutor internal constructor(
         experiment: CompiledExperiment,
         selectedTasks: Collection<ExperimentTask>?,
         isCancelled: () -> Boolean,
-        onWindow: (variant: String, point: String, replication: Int, window: Int, rows: List<NodeWindow>) -> Unit,
+        onWindow: (
+            variant: String,
+            point: String,
+            replication: Int,
+            window: Int,
+            rows: List<NodeWindow>,
+            connections: List<ConnectionWindow>,
+        ) -> Unit,
         onReplication: (variant: String, point: String, replication: Int, result: ReplicationResult) -> Unit,
         onOriginalCompletion: ((variant: String, point: String, replication: Int, latencyMs: Double, succeeded: Boolean) -> Unit)?,
         onProgress: (completed: Int, total: Int) -> Unit,
@@ -164,8 +186,9 @@ class ExperimentExecutor internal constructor(
                                     onWindow = {
                                         window,
                                         rows,
+                                        connections,
                                         ->
-                                        onWindow(compiledVariant.id, compiledPoint.id, replication, window, rows)
+                                        onWindow(compiledVariant.id, compiledPoint.id, replication, window, rows, connections)
                                     },
                                     onOriginalCompletion =
                                         onOriginalCompletion?.let { observer ->
@@ -361,7 +384,7 @@ private fun runReplication(
     plan: StreamPlan,
     seed: Long,
     replication: Int,
-    onWindow: (Int, List<NodeWindow>) -> Unit,
+    onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit,
     onOriginalCompletion: ((Double, Boolean) -> Unit)?,
 ): ReplicationResult {
     val model = Model("resilience-lab-task", autoCSVReports = false)

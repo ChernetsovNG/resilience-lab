@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/apiClient";
 import type { SeriesIndex, SeriesPart, WindowMetrics } from "../../api/apiTypes";
+import { SeriesPartCache } from "./cache";
 import { decodeSeriesPart } from "./decode";
 import { SeriesLoadError, SeriesLoader, type SeriesApi, type SeriesDecoderFactory } from "./loader";
 
@@ -28,7 +29,7 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
 }
 
 function part(nodes: SeriesPart["nodes"], fromWindow = 0, untilWindow = fromWindow + 2): SeriesPart {
-  return { schemaVersion: 1, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes };
+  return { schemaVersion: 2, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
 }
 
 function fixture() {
@@ -42,12 +43,12 @@ function fixture() {
   ] }]);
   const texts = [JSON.stringify(client), JSON.stringify(service)];
   const index: SeriesIndex = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     endMs: 20,
     windowMs: 10,
     parts: [
-      { file: "part-0.json.gz", nodes: ["client"], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
-      { file: "part-1.json.gz", nodes: ["service"], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
+      { file: "part-0.json.gz", nodes: ["client"], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
+      { file: "part-1.json.gz", nodes: ["service"], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
     ],
   };
   return { index, texts };
@@ -75,6 +76,59 @@ function request(nodes: string[], signal?: AbortSignal) {
 }
 
 describe("series loader", () => {
+  it.each([1, 3])("rejects unsupported index schema version %s", async (schemaVersion) => {
+    const { index, texts } = fixture();
+    const api = apiFor({ ...index, schemaVersion }, texts);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
+
+    await expect(loader.load(request(["client"]))).rejects.toMatchObject({ code: "INVALID_SERIES" });
+  });
+
+  it("accounts for expanded connection rows before retaining a decoded part", async () => {
+    const { index } = fixture();
+    const mixed = part([{ id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 })] }]);
+    mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({
+      startMs, durationMs: 10, sentAttempts: 1, retries: 0, succeeded: 1, failed: 0,
+      timeouts: 0, orphaned: 0, inFlightIntegralMs: 2, orphanedIntegralMs: 0, backoffIntegralMs: 0,
+      latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
+    })) }];
+    const text = JSON.stringify(mixed);
+    const cache = new SeriesPartCache(text.length + 1);
+    const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: [mixed.connections[0].id], uncompressedBytes: text.length }] }, [text]);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory(), cache });
+
+    await loader.load(request(["client"]));
+
+    expect(cache.estimatedBytes).toBe(0);
+  });
+
+  it("passes connection-only split parts while finding the client denominator", async () => {
+    const { index, texts } = fixture();
+    const connection = part([]);
+    connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      startMs, durationMs: 10, sentAttempts: 1, retries: 0, succeeded: 0, failed: 0,
+      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 5, backoffIntegralMs: 0,
+      latency: { count: 0, sumMs: 0, sketch: [0] },
+    })) }];
+    const allTexts = [JSON.stringify(connection), texts[1], texts[0]];
+    const expandedIndex: SeriesIndex = {
+      ...index,
+      parts: [
+        { ...index.parts[0], nodes: [], connections: ["call"], uncompressedBytes: allTexts[0].length },
+        index.parts[1],
+        { ...index.parts[0], file: "part-2.json.gz", connections: [], uncompressedBytes: allTexts[2].length },
+      ],
+    };
+    const cache = new SeriesPartCache();
+    const api = apiFor(expandedIndex, allTexts);
+    const loader = new SeriesLoader({ api, decoderFactory: decoderFactory(), cache });
+
+    const result = await loader.load(request(["service"]));
+
+    expect(result[0].windows.map((value) => value.amplification)).toEqual([1.5, 2]);
+    expect(cache.get({ runId: "run", variant: "baseline", cell: "p0", replication: 0, part: 0 })?.connections[0].id).toBe("call");
+  });
+
   it("loads only requested parts and reuses decoded cache entries", async () => {
     const { index, texts } = fixture();
     const api = apiFor(index, texts);
@@ -101,6 +155,7 @@ describe("series loader", () => {
       parts: [...index.parts, {
         file: "part-2.json.gz",
         nodes: ["unrelated"],
+        connections: [],
         fromWindow: 0,
         untilWindow: 2,
         uncompressedBytes: allTexts[2].length,
@@ -134,13 +189,13 @@ describe("series loader", () => {
     ];
     const texts = parts.map((value) => JSON.stringify(value));
     const index: SeriesIndex = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       endMs: 20,
       windowMs: 10,
       parts: [
-        { file: "part-0.json.gz", nodes: ["client", "service"], fromWindow: 0, untilWindow: 1, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
-        { file: "part-1.json.gz", nodes: ["service"], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
-        { file: "part-2.json.gz", nodes: ["client"], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[2].length, sha256: "c".repeat(64) },
+        { file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 1, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
+        { file: "part-1.json.gz", nodes: ["service"], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
+        { file: "part-2.json.gz", nodes: ["client"], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[2].length, sha256: "c".repeat(64) },
       ],
     };
     const api = apiFor(index, texts);
