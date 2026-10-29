@@ -381,8 +381,8 @@ test("shows summary, assumptions and every results panel size without page scrol
   await expect(panel).toContainText("Late responses are discarded");
   await expect(panel).toContainText("Run conditions");
   await expect(panel).toContainText("Replications");
-  await expect(panel).toContainText("20261025");
-  await expect(panel).toContainText("1000 ms");
+  await expect(panel).toContainText("20,261,025");
+  await expect(panel).toContainText("1,000 ms");
   await expect(panel).toContainText("10 ms");
   await expect(panel).toContainText("ddsketch-bitwise6-rational-v1");
   await expect(panel).toContainText("Application version");

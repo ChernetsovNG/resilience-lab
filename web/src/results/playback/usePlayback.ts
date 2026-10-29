@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useEffectEvent, useState } from "react";
 import { windowCanvasResults, type CanvasResults } from "../canvasResults";
 import { seriesLoader, type SeriesLoader } from "../series";
@@ -35,7 +36,7 @@ export function usePlayback({
   const frame = enabled && window !== null && !series.loading && series.problem === null
     ? windowCanvasResults(results!, series.nodes, window, fromWindow) : null;
   const problem = series.problem ?? (enabled && window !== null && !series.loading && frame === null
-    ? "Series do not contain the selected window." : null);
+    ? t("results.playback.missingWindow") : null);
   const playing = enabled && state.key === key && state.playing && problem === null;
   const ready = frame !== null;
   const currentWindow = useEffectEvent(() => window ?? 0);

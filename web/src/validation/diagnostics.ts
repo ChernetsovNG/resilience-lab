@@ -1,11 +1,12 @@
+import { t } from "../i18n";
 import type { Diagnostic } from "../api/apiTypes";
 import type { LoadedExperiment } from "../workspace/editor";
 import { elementOf } from "../workspace/params";
 
 /** Human-readable document location shared by API and validation problem lists. */
 export function locationOf(diagnostic: Diagnostic): string {
-  const location = [diagnostic.document, diagnostic.pointer].filter((part) => part != null && part !== "").join("#") || "experiment";
-  return diagnostic.variant == null ? location : `${diagnostic.variant} · ${location}`;
+  const location = [diagnostic.document, diagnostic.pointer].filter((part) => part != null && part !== "").join("#") || t("common.experiment");
+  return diagnostic.variant == null ? location : t("common.variantLocation", { variant: diagnostic.variant, location });
 }
 
 export interface DiagnosticTarget {

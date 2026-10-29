@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { formatInterval, formatNumber } from "../i18n/format";
 import { useState } from "react";
 import { CartesianGrid, ErrorBar, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { RunSummary } from "../api/apiTypes";
@@ -11,18 +13,18 @@ interface Props {
 }
 
 const metrics: { id: MapMetric; title: string }[] = [
-  { id: "successRate", title: "Success rate" }, { id: "p95LatencyMs", title: "p95 latency" },
-  { id: "p99LatencyMs", title: "p99 latency" }, { id: "admittedAmplification", title: "Amplification" },
-  { id: "handlerUtilization", title: "Handler utilization" },
+  { id: "successRate", title: t("results.metrics.successRate") }, { id: "p95LatencyMs", title: t("results.metrics.p95LatencyMs") },
+  { id: "p99LatencyMs", title: t("results.metrics.p99LatencyMs") }, { id: "admittedAmplification", title: t("results.metrics.amplification") },
+  { id: "handlerUtilization", title: t("results.metrics.handlerUtilization") },
 ];
-const label = (value: unknown) => typeof value === "string" ? value : JSON.stringify(value);
+const label = (value: unknown) => typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value);
 
 /** A view of the saved summary; selecting a cell only changes the shared results context. */
 export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Props) {
   const [metric, setMetric] = useState<MapMetric>("successRate");
   const [chosenService, setService] = useState("");
   const variant = summary.variants.find((candidate) => candidate.id === activeVariantId);
-  if (variant === undefined) return <p className="results-empty">Select a variant page to view Map.</p>;
+  if (variant === undefined) return <p className="results-empty">{t("results.map.selectVariant")}</p>;
   const grid = summary.grid;
   const services = [...new Set(variant.points.flatMap((point) => Object.keys(point.aggregate.services)))].sort();
   const service = services.includes(chosenService) ? chosenService : services[0] ?? "";
@@ -34,39 +36,39 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
   const low = values.length === 0 ? 0 : values.reduce((min, value) => Math.min(min, value));
   const high = values.length === 0 ? 0 : values.reduce((max, value) => Math.max(max, value));
   const format = (value: number) => formatMapValue(value, metric);
-  const readout = (value: MapValue | null) => value === null ? "n/a" : format(value.mean) +
-    (value.ci95Low == null || value.ci95High == null ? "" : ` (95% CI ${format(value.ci95Low)}–${format(value.ci95High)})`);
+  const readout = (value: MapValue | null) => value === null ? formatNumber(null) : format(value.mean) +
+    (value.ci95Low == null || value.ci95High == null ? "" : t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) }));
   const color = (value: MapValue | null) => value === null ? "#f1f5f9" :
     `hsl(213 90% ${96 - 28 * (high === low ? 0.5 : (value.mean - low) / (high - low))}%)`;
   const pointButton = (cell: typeof cells[number]) => <button type="button" aria-pressed={pointId === cell.id}
     disabled={cell.point === null} title={readout(cell.value)} onClick={() => onPointChange?.(cell.id)}
     style={grid.length === 2 ? { background: color(cell.value) } : undefined}>
-    <strong>{cell.id}</strong><span>{grid.length === 2 ? cell.value === null ? "n/a" : format(cell.value.mean) : readout(cell.value)}</span>
+    <strong>{cell.id}</strong><span>{grid.length === 2 ? cell.value === null ? formatNumber(null) : format(cell.value.mean) : readout(cell.value)}</span>
   </button>;
   const chartData = cells.map((cell, index) => ({ index, mean: cell.value?.mean ?? null,
     interval: cell.value?.ci95Low == null || cell.value.ci95High == null ? undefined :
       [cell.value.mean - cell.value.ci95Low, cell.value.ci95High - cell.value.mean],
   }));
 
-  return <section className="parameter-map" aria-label={`Map · ${variant.label ?? variant.id}`}>
+  return <section className="parameter-map" aria-label={t("results.map.variantLabel", { variant: variant.label ?? variant.id })}>
     <div className="map-toolbar">
-      <label>Map metric <select value={metric} onChange={(event) => setMetric(event.target.value as MapMetric)}>
+      <label>{t("results.map.metric")} <select value={metric} onChange={(event) => setMetric(event.target.value as MapMetric)}>
         {metrics.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
       </select></label>
-      {serviceMetric ? <label>Map service <select value={service} disabled={services.length === 0} onChange={(event) => setService(event.target.value)}>
+      {serviceMetric ? <label>{t("results.map.service")} <select value={service} disabled={services.length === 0} onChange={(event) => setService(event.target.value)}>
         {services.map((id) => <option key={id} value={id}>{id}</option>)}
       </select></label> : null}
-      <span>Variant: {variant.label ?? variant.id} · Selected point: {pointId}</span>
+      <span>{t("results.map.context", { variant: variant.label ?? variant.id, point: pointId })}</span>
     </div>
-    <p className="map-note">{metric === "handlerUtilization" ? "Handler utilization: pooled busy/capacity; the summary has no replication CI for this ratio."
-      : "Means across replications; 95% CI where available in the summary. Missing values: n/a."}</p>
+    <p className="map-note">{metric === "handlerUtilization" ? t("results.map.utilizationNote")
+      : t("results.map.meansNote")}</p>
     {grid.length === 2 ? <>
-      <div className="map-legend" aria-label="Map color scale">
-        {values.length === 0 ? "No values for this metric." : <>{format(low)}<span aria-hidden="true" />{format(high)}</>}
+      <div className="map-legend" aria-label={t("results.map.colorScale")}>
+        {values.length === 0 ? t("results.map.noValues") : <>{format(low)}<span aria-hidden="true" />{format(high)}</>}
       </div>
-      <table className="map-heatmap" aria-label="Parameter heatmap">
-        <caption>Rows: {grid[0].path} · Columns: {grid[1].path}</caption>
-        <thead><tr><th scope="col">{grid[0].path} / {grid[1].path}</th>
+      <table className="map-heatmap" aria-label={t("results.map.heatmap")}>
+        <caption>{t("results.map.axes", { rows: grid[0].path, columns: grid[1].path })}</caption>
+        <thead><tr><th scope="col">{t("results.map.axisPaths", { rows: grid[0].path, columns: grid[1].path })}</th>
           {grid[1].values.map((value, index) => <th scope="col" key={index}>{label(value)}</th>)}
         </tr></thead>
         <tbody>{grid[0].values.map((value, row) => <tr key={row}>
@@ -76,32 +78,32 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
         </tr>)}</tbody>
       </table>
     </> : grid.length === 1 ? <>
-      <div role="img" aria-label="Parameter line with 95% confidence intervals">
+      <div role="img" aria-label={t("results.map.parameterLine")}>
         <ResponsiveContainer width="100%" height={240} minWidth={0} initialDimension={{ width: 600, height: 240 }}>
           <LineChart data={chartData} margin={{ top: 16, right: 24, bottom: 12, left: 24 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="index" type="category" tickFormatter={(index: number) => label(grid[0].values[index]) ?? ""} />
             <YAxis domain={["auto", "auto"]} tickFormatter={format} width={84} />
-            <Tooltip labelFormatter={(index) => `${grid[0].path} = ${label(grid[0].values[Number(index)])}`}
-              formatter={(value) => typeof value === "number" ? format(value) : "n/a"} />
+            <Tooltip labelFormatter={(index) => t("results.coordinate", { path: grid[0].path, value: label(grid[0].values[Number(index)]) ?? "" })}
+              formatter={(value) => typeof value === "number" ? format(value) : formatNumber(null)} />
             <Line type="linear" dataKey="mean" name={metrics.find((candidate) => candidate.id === metric)?.title}
               stroke="#2563eb" connectNulls={false} isAnimationActive={false} activeDot={false}
               dot={({ cx, cy, index }) => {
                 const cell = cells[index ?? -1];
                 return cell === undefined || cx == null || cy == null ? <g /> : <circle key={cell.id} cx={cx} cy={cy}
                   r={cell.id === pointId ? 7 : 4} fill={cell.id === pointId ? "#172554" : "#2563eb"}
-                  role="button" tabIndex={0} aria-label={`Select ${cell.id}`} aria-pressed={cell.id === pointId}
+                  role="button" tabIndex={0} aria-label={t("results.map.selectPoint", { point: cell.id })} aria-pressed={cell.id === pointId}
                   onClick={() => onPointChange?.(cell.id)} onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onPointChange?.(cell.id); }
-                  }}><title>{cell.id} · {readout(cell.value)}</title></circle>;
+                  }}><title>{t("results.map.pointReadout", { point: cell.id, value: readout(cell.value) })}</title></circle>;
               }}>
               <ErrorBar dataKey="interval" stroke="#475569" width={5} isAnimationActive={false} />
             </Line>
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="map-axis">{grid[0].path} (document order)</p>
-      <ul className="map-points" aria-label="Map points">{cells.map((cell) => <li key={cell.id}>
+      <p className="map-axis">{t("results.map.documentOrder", { path: grid[0].path })}</p>
+      <ul className="map-points" aria-label={t("results.map.points")}>{cells.map((cell) => <li key={cell.id}>
         <span>{label(grid[0].values[cell.column])}</span>{pointButton(cell)}
       </li>)}</ul>
     </> : null}

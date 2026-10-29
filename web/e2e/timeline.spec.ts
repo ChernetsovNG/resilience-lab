@@ -68,10 +68,10 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await inspect(page, queueSlider, before, endMs);
   const queueBefore = await value(queue, "Mean queue");
   await inspect(page, queueSlider, queuePeak, endMs);
-  expect(await value(queue, "Mean queue")).toBeCloseTo(queuePeak.queueLengthIntegralMs / queuePeak.durationMs, 3);
+  expect(await value(queue, "Mean queue")).toBeCloseTo(queuePeak.queueLengthIntegralMs / queuePeak.durationMs, 2);
   expect(await value(queue, "Mean queue")).toBeGreaterThan(queueBefore);
   await inspect(page, queueSlider, errorPeak, endMs);
-  expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.queueRejections * 1000 / errorPeak.durationMs, 3);
+  expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.queueRejections * 1000 / errorPeak.durationMs, 2);
 
   await page.getByLabel("Compare variant").selectOption("no-retries");
   await expect(queue.locator('path.recharts-line-curve[stroke-dasharray="6 4"]')).toBeVisible();
@@ -79,7 +79,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   const pinned = baseline.indexOf(queuePeak);
   await expect(page.getByTestId("timeline-cursor")).toContainText(`Window ${pinned} ·`);
   await expect(page.getByTestId("timeline-cursor")).toContainText("pinned");
-  expect(await value(queue, "Mean queue", "no-retries")).toBeCloseTo(noRetries[pinned].queueLengthIntegralMs / noRetries[pinned].durationMs, 3);
+  expect(await value(queue, "Mean queue", "no-retries")).toBeCloseTo(noRetries[pinned].queueLengthIntegralMs / noRetries[pinned].durationMs, 2);
 
   await page.getByLabel("Replication", { exact: true }).selectOption("1");
   await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
@@ -138,11 +138,11 @@ test("grid point and replication persist across views; warmup and the last short
     const slider = page.getByRole("region", { name: "Queue", exact: true }).getByRole("slider");
     await slider.focus();
     await slider.press("End");
-    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1080–1100 ms");
+    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1,080–1,100 ms");
     await page.getByRole("tab", { name: "Summary", exact: true }).click();
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p1");
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
-    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1080–1100 ms");
+    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1,080–1,100 ms");
   } finally {
     await rm(folder, { recursive: true, force: true });
   }

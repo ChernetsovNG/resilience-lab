@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { ApiError, api } from "../../api/apiClient";
 import type { SeriesIndex } from "../../api/apiTypes";
 import { DEFAULT_SERIES_CACHE_BYTES, SeriesPartCache, type SeriesPartKey } from "./cache";
@@ -77,9 +78,9 @@ export class SeriesLoader {
     } catch (error) {
       if (error instanceof SeriesLoadError || isAbort(error)) throw error;
       if (error instanceof ApiError && error.status === 404 && error.problem.code === "SERIES_NOT_FOUND") {
-        throw new SeriesLoadError("SERIES_NOT_FOUND", "Series are unavailable for this run, variant, point and replication.");
+        throw new SeriesLoadError("SERIES_NOT_FOUND", t("results.series.unavailable"));
       }
-      throw new SeriesLoadError("WORKER_ERROR", `Series could not be loaded: ${messageOf(error)}`);
+      throw new SeriesLoadError("WORKER_ERROR", t("results.series.couldNotLoad", { message: messageOf(error) }));
     } finally {
       decoder?.close();
     }
@@ -119,7 +120,7 @@ export class SeriesLoader {
         !parts.has(reference.file) && overlapsAny(reference, missing),
       );
       if (candidate === undefined) {
-        throw new SeriesLoadError("INVALID_SERIES", "Client series are missing for requested service windows.");
+        throw new SeriesLoadError("INVALID_SERIES", t("results.series.missingClients"));
       }
       const extra = await this.loadReferences(request, [candidate], getDecoder);
       for (const [file, part] of extra) parts.set(file, part);
@@ -156,7 +157,7 @@ export class SeriesLoader {
       if (raw.etag !== expected) {
         throw new SeriesLoadError(
           "ETAG_MISMATCH",
-          `Series part ${reference.file} ETag ${raw.etag ?? "missing"} does not match index SHA-256 ${expected}.`,
+          t("results.series.etagMismatch", { file: reference.file, etag: raw.etag ?? t("results.series.missingEtag"), expected }),
         );
       }
       return { reference, partNumber, text: raw.text };
@@ -164,7 +165,7 @@ export class SeriesLoader {
     const decoded = await getDecoder().decode(fetched.map((part) => part.text));
     throwIfAborted(request.signal);
     if (decoded.length !== fetched.length) {
-      throw new SeriesLoadError("INVALID_SERIES", "Series worker returned a different number of parts.");
+      throw new SeriesLoadError("INVALID_SERIES", t("results.series.partCountMismatch"));
     }
     for (const [offset, part] of decoded.entries()) {
       const source = fetched[offset];
@@ -187,7 +188,7 @@ function cacheKey(request: SeriesLoadRequest, reference: SeriesPartReference): S
 
 function partNumberOf(reference: SeriesPartReference): number {
   const match = /^part-(\d+)\.json\.gz$/.exec(reference.file);
-  if (match === null) throw new SeriesLoadError("INVALID_SERIES", `Invalid series part file: ${reference.file}`);
+  if (match === null) throw new SeriesLoadError("INVALID_SERIES", t("results.series.invalidPartFile", { file: reference.file }));
   return Number(match[1]);
 }
 
@@ -274,7 +275,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, onAb
   return new Promise<T>((resolve, reject) => {
     const abort = () => {
       onAbort();
-      reject(new DOMException("The series load was aborted.", "AbortError"));
+      reject(new DOMException(t("results.series.aborted"), "AbortError"));
     };
     signal.addEventListener("abort", abort, { once: true });
     promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
@@ -282,7 +283,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, onAb
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw new DOMException("The series load was aborted.", "AbortError");
+  if (signal?.aborted) throw new DOMException(t("results.series.aborted"), "AbortError");
 }
 
 function isAbort(error: unknown): boolean {

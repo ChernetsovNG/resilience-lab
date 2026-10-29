@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { Catalog, ExperimentFile } from "../../api/apiTypes";
 import { canonicalOf } from "../../workspace/quantities";
 
@@ -39,11 +40,11 @@ export function downsample(points: readonly TimelinePoint[], pixels: number): Ti
 export function timelineRegions(warmupMs: number, measurementMs: number, faults: ExperimentFile["faults"], catalog: Catalog): TimelineRegion[] {
   const end = warmupMs + measurementMs;
   const units = catalog.types.flatMap((type) => type.params).find((param) => param.dimension === "DURATION")?.units ?? [];
-  const regions: TimelineRegion[] = warmupMs > 0 ? [{ fromMs: 0, toMs: warmupMs, label: "Warmup", kind: "warmup" }] : [];
+  const regions: TimelineRegion[] = warmupMs > 0 ? [{ fromMs: 0, toMs: warmupMs, label: t("results.assumptions.warmup"), kind: "warmup" }] : [];
   for (const fault of faults) {
     const from = canonicalOf(fault.from, units), to = canonicalOf(fault.to, units);
     if (from === null || to === null || from >= end || to <= 0) continue;
-    regions.push({ fromMs: Math.max(0, from), toMs: Math.min(end, to), label: `Fault: ${fault.target}`, kind: "fault" });
+    regions.push({ fromMs: Math.max(0, from), toMs: Math.min(end, to), label: t("results.timeline.fault", { target: fault.target }), kind: "fault" });
   }
   return regions;
 }

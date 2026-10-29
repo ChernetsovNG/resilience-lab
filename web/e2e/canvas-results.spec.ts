@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { formatMultiplier, formatNumber, formatPercent } from "../src/i18n/format";
 import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
 
 test("maps real summary metrics and the saturation badge to the variant diagram without document writes", async ({ page, request }, testInfo) => {
@@ -42,14 +43,14 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         const services = page.getByRole("table", { name: `Services for ${variant.label} ${point.id}`, exact: true });
         for (const [id, service] of Object.entries(point.aggregate.services)) {
           const totals = service.totals;
-          const utilization = `${(100 * totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs).toFixed(1)}%`;
+          const utilization = formatPercent(totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs);
           const metrics = page.getByTestId(`canvas-results-${id}`);
           await expect(metrics).toContainText(`Utilization ${utilization}`);
-          await expect(metrics).toContainText(`Mean queue ${(totals.queueLengthIntegralMs / totals.measurementMs).toFixed(2)}`);
-          await expect(metrics).toContainText(`Queue rejections ${(100 * totals.queueRejections / totals.offeredAttempts).toFixed(1)}%`);
+          await expect(metrics).toContainText(`Mean queue ${formatNumber(totals.queueLengthIntegralMs / totals.measurementMs)}`);
+          await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.queueRejections / totals.offeredAttempts)}`);
           const serviceRow = services.getByRole("row").filter({ has: page.getByRole("rowheader", { name: id, exact: true }) });
           await expect(serviceRow.locator("td").nth(1)).toHaveText(utilization);
-          const amplification = `${service.admittedAmplification!.mean.toFixed(2)}×`;
+          const amplification = formatMultiplier(service.admittedAmplification!.mean);
           const connection = id === "gateway" ? "client-to-gateway" : id === "middle" ? "gateway-to-middle" : "middle-to-dependency";
           await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Amplification ${amplification}`);
           await expect(serviceRow.locator("td").nth(0)).toContainText(amplification);
@@ -61,8 +62,8 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         await expect(badge).toHaveCount(first === undefined ? 0 : 1);
         if (first !== undefined) {
           await expect(page.getByTestId(`rf__node-${first.node}`).getByRole("img", { name: "First saturated node" })).toBeVisible();
-          await expect(badge).toHaveAttribute("title", `${first.replicationCount} of ${variant.replications} replications`);
-          await expect(row).toContainText(`${first.node} first in ${first.replicationCount} of ${variant.replications} replications`);
+          await expect(badge).toHaveAttribute("title", `${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
+          await expect(row).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
         }
       }
     }

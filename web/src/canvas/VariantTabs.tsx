@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Variant } from "../api/apiTypes";
 
 export interface VariantTabsProps {
@@ -15,9 +16,9 @@ export interface VariantTabsProps {
  */
 export function VariantTabs({ variants, active, disabled = false, onSelect }: VariantTabsProps) {
   return (
-    <div className="variant-tabs" role="tablist" aria-label="Pages">
+    <div className="variant-tabs" role="tablist" aria-label={t("editor.pages.label")}>
       <button type="button" role="tab" disabled={disabled} aria-selected={active === null} onClick={() => onSelect(null)}>
-        Model
+        {t("editor.pages.model")}
       </button>
       {variants.map((variant) => (
         <button

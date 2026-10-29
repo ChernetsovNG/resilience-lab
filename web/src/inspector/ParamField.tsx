@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
@@ -37,8 +38,8 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
       <legend title={descriptor.description}>{descriptor.title}</legend>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
       {isOverridden(path) && onReset !== undefined ? (
-        <button type="button" className="param-reset" aria-label={`Reset ${descriptor.title}`} disabled={!editable}
-          onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>Use model value</button>
+        <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
+          onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
       {descriptor.fields.map((field) => (
         <ParamField
@@ -121,7 +122,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
             commitValue(event.target.value === "" ? undefined : event.target.value);
           }}
         >
-          {descriptor.required ? <option value="" disabled>Select…</option> : <option value="">{fallback === "" ? "Default" : `Default (${fallback})`}</option>}
+          {descriptor.required ? <option value="" disabled>{t("editor.param.select")}</option> : <option value="">{fallback === "" ? t("editor.param.default") : t("editor.param.defaultValue", { value: fallback })}</option>}
           {descriptor.options.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -145,11 +146,11 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
           }}
         />
       )}
-      {overridden ? <span className="param-badge">overridden</span> : null}
+      {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />
       {overridden && onReset !== undefined ? (
-        <button type="button" className="param-reset" aria-label={`Reset ${descriptor.title}`} disabled={!editable}
-          onClick={() => { setDraft(shown); onReset(path); }}>Use model value</button>
+        <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
+          onClick={() => { setDraft(shown); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
       {parsed.ok ? null : (
         <span className="param-error" role="alert">

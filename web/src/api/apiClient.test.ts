@@ -65,7 +65,7 @@ describe("API client", () => {
   it("reads health, catalog and workspace documents", async () => {
     const fetchMock = stubFetch((url) => ({ body: url.endsWith("/health")
       ? { status: "UP", applicationVersion: "test", kslVersion: "test" }
-      : url.endsWith("/catalog") ? { schemaVersion: 1, types: [] }
+      : url.endsWith("/catalog") ? { schemaVersion: 1, assumptions: [], types: [] }
       : [{ path: "m.model.json", kind: "MODEL", version: "v1" }] }));
 
     expect((await api.health()).status).toBe("UP");

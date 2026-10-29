@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "../i18n";
 import { api } from "../api/apiClient";
 import type { HealthView } from "../api/apiTypes";
 
@@ -15,7 +16,7 @@ export function useHealth(): { health: HealthView | null; error: string | null }
         if (active) setHealth(value);
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Health check failed");
+        if (active) setError(reason instanceof Error ? reason.message : t("app.health.failed"));
       });
     return () => {
       active = false;

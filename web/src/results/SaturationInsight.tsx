@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { SaturationSummary } from "../api/apiTypes";
 import { formatSaturation } from "./saturation";
 
@@ -9,7 +10,7 @@ export function SaturationInsight({ saturation, replications }: { saturation: Sa
       {text.firstNodes.map((node, index) => <p key={index}>{node}</p>)}
       <p>{text.withoutSaturation}</p>
       <details>
-        <summary>Degradation paths</summary>
+        <summary>{t("results.saturation.degradationPaths")}</summary>
         <ul>{text.degradationPaths.map((path, index) => <li key={index}>{path}</li>)}</ul>
       </details>
       <p className="saturation-rule">{text.rule}</p>

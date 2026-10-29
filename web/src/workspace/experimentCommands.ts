@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { Catalog, ExperimentFile, ModelFile, ParamDescriptor, Variant } from "../api/apiTypes";
 import type { EditorCommand } from "./editor";
 import { applyOverrides, elementOf, isObject, type Params } from "./params";
@@ -8,8 +9,8 @@ type Execution = ExperimentFile["execution"];
 
 /** Block, connection and variant ID syntax from ModelCompiler.ID; IDs are unique within the variant list. */
 export function variantIdError(variants: Variant[], id: string, current?: string): string | null {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id)) return "Use letters, digits, underscores or hyphens; start with a letter or digit";
-  return variants.some((variant) => variant.id === id && variant.id !== current) ? "This variant ID is already used" : null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id)) return t("app.variant.invalidId");
+  return variants.some((variant) => variant.id === id && variant.id !== current) ? t("app.variant.idUsed") : null;
 }
 
 /** Smallest free generated variant ID, independent of labels and array order. */

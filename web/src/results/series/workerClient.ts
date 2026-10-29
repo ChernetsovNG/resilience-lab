@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { SeriesDecoder } from "./loader";
 import { SeriesLoadError } from "./loader";
 import type { DecodedSeriesPart } from "./types";
@@ -19,7 +20,7 @@ export class WorkerSeriesDecoder implements SeriesDecoder {
         this.pending = undefined;
         if (event.data.error !== undefined) reject(new SeriesLoadError("INVALID_SERIES", event.data.error));
         else if (event.data.parts !== undefined) resolve(event.data.parts);
-        else reject(new SeriesLoadError("INVALID_SERIES", "Series worker returned an empty response."));
+        else reject(new SeriesLoadError("INVALID_SERIES", t("results.series.emptyResponse")));
       };
       this.worker.onerror = (event) => {
         this.pending = undefined;
@@ -31,7 +32,7 @@ export class WorkerSeriesDecoder implements SeriesDecoder {
 
   close(): void {
     this.worker.terminate();
-    this.pending?.reject(new DOMException("The series load was aborted.", "AbortError"));
+    this.pending?.reject(new DOMException(t("results.series.aborted"), "AbortError"));
     this.pending = undefined;
   }
 }

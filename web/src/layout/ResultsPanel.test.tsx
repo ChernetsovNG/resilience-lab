@@ -95,3 +95,13 @@ it("collapses and expands while preserving tabs and job status", () => {
   fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
   expect(onSizeChange).toHaveBeenCalledWith("normal");
 });
+
+it("formats numeric coordinates in the point selector without changing its values", () => {
+  const run = structuredClone(summary);
+  run.grid = [{ path: "gateway.handlers", values: [1000] }];
+  run.variants[0].points[0].coordinates = { "gateway.handlers": 1000 };
+  render(<ResultsPanel job={null} summary={run} problem={null} />);
+  const selector = screen.getByRole("combobox", { name: "Grid point" });
+  expect(within(selector).getByRole("option", { name: /gateway.handlers = 1,000/ })).toBeTruthy();
+  expect(run.grid[0].values[0]).toBe(1000);
+});

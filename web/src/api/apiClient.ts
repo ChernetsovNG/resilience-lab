@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { localizeCatalog } from "../i18n/catalog";
 import type {
   ApiProblem,
   Catalog,
@@ -48,7 +50,7 @@ async function problemOf(response: Response): Promise<ApiProblem> {
   try {
     return (await response.json()) as ApiProblem;
   } catch {
-    return { code: `HTTP_${response.status}`, message: `Request failed with status ${response.status}`, diagnostics: [] };
+    return { code: `HTTP_${response.status}`, message: t("app.api.requestFailedWithStatus", { status: response.status }), diagnostics: [] };
   }
 }
 
@@ -64,7 +66,7 @@ const seriesUrl = (runId: string, variant: string, cell: string, replication: nu
 /** Stage 1 API (ADR 0010); paths and types come from `apps/server/openapi.json`. */
 export const api = {
   health: () => request<HealthView>("/api/v1/health"),
-  catalog: () => request<Catalog>("/api/v1/catalog"),
+  catalog: () => request<Catalog>("/api/v1/catalog").then(localizeCatalog),
   documents: () => request<DocumentEntry[]>("/api/v1/workspace/documents"),
   changes: (since?: string) => request<WorkspaceChangesView>(`/api/v1/workspace/changes${since === undefined ? "" : `?since=${encodeURIComponent(since)}`}`),
   document: (path: string) => request<DocumentView>(documentUrl(path)),
