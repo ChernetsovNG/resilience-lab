@@ -67,6 +67,7 @@ describe("ElementResults", () => {
     render(<ElementResults {...options} />);
     await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
     expect(row("Sent attempts").textContent).toContain("15 RPSPooled");
+    expect(row("Orphaned attempts").textContent).toBe("Orphaned attempts2per replication");
     expect(row("Timeout share").textContent).toContain("25% (95% CI -10%–70%)");
     expect(row("Timeout share").querySelector(".summary-interval--unreliable")).toBeTruthy();
     expect(screen.getByText("Unreliable interval: increase Replications.")).toBeTruthy();

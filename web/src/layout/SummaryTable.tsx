@@ -3,6 +3,7 @@ import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatP
 import type { ReactNode } from "react";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 import { SaturationInsight } from "../results/SaturationInsight";
+import { formatHeadroom } from "../results/saturation";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
 type Metric = Pick<MetricSummary, "mean" | "ci95Low" | "ci95High">;
@@ -51,6 +52,12 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const reference = baseline?.points.find(point => point.id === selectedPointId);
   const activeVariant = activeVariantId === null ? summary.variants[0] : summary.variants.find(variant => variant.id === activeVariantId);
   const activePoint = activeVariant?.points.find(point => point.id === selectedPointId);
+  const coordinates = summary.grid.length === 0 ? "" : Object.entries(activePoint?.coordinates ?? {}).map(([path, value]) => t("results.coordinate", {
+    path, value: typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value),
+  })).join(t("results.coordinateSeparator"));
+  const variantLabel = activeVariant?.label ?? activeVariantId ?? t("results.variant");
+  const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
+    && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate) : null;
   const services = [...new Set(columns.flatMap(({ point }) => Object.keys(point.aggregate.services)))].sort();
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
   const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (
@@ -63,10 +70,10 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   );
   return <div className="answer">
     <section className="answer-insight" aria-label={t("results.saturation.title")}>
-      <h3>{t("results.answer.forVariant", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</h3>
+      <h3>{coordinates === "" ? variantLabel : t("results.answer.forVariant", { variant: variantLabel, point: coordinates })}</h3>
       {activePoint === undefined || activeVariant === undefined ?
         <p>{t("results.answer.noPoint", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</p> :
-        <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} />}
+        <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom} />}
     </section>
     {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: baseline.label, point: selectedPointId })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>

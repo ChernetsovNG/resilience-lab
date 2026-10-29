@@ -337,7 +337,10 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await expect(points.locator('option[value="p5"]')).toContainText("gateway-to-middle.attempts = 3");
     for (let point = 0; point < 6; point += 1) {
       await points.selectOption(`p${point}`);
-      await expect(page.getByRole("region", { name: "Saturation insight" }).getByRole("heading")).toContainText(`p${point}`);
+      const heading = page.getByRole("region", { name: "Saturation insight" }).getByRole("heading");
+      await expect(heading).toContainText(`gateway-to-middle.timeout = ${grid[0].values[Math.floor(point / 3)]}`);
+      await expect(heading).toContainText(`gateway-to-middle.attempts = ${grid[1].values[point % 3]}`);
+      await expect(heading).not.toContainText(`p${point}`);
       const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
       await expect(values).toHaveCount(2);
       for (const value of await values.all()) await expect(value).toContainText("%");

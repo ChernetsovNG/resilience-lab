@@ -23,7 +23,7 @@ export interface ElementResultsContext {
 
 export interface ElementMetric {
   value: number | null;
-  source: "pooled" | "replications" | "replication" | "window";
+  source: "pooled" | "replications" | "replication" | "perReplication" | "window";
   ci95Low?: number | null;
   ci95High?: number | null;
   approximate?: boolean;
@@ -60,7 +60,7 @@ export function resultSelection(runModel: ModelFile, currentModel: ModelFile, se
     ? { id: selected, kind: "call" as const, target: original.to } : null;
 }
 
-/** Summary totals stay pooled; only supplied replication metrics carry their unmodified Student bounds. */
+/** Summary rates and time averages stay pooled; event counts are per replication. Only supplied replication metrics carry their unmodified Student bounds. */
 export function projectElementResults(context: ElementResultsContext): ElementResultsData | null {
   const { summary, manifest, runModel, currentModel, experiment, catalog, variantId, pointId, replication, window, selected } = context;
   const selection = resultSelection(runModel, currentModel, selected);
@@ -118,7 +118,7 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
       retriesPerSecond: metric(window === null ? ratio(totals.retries * 1000, totals.measurementMs) : ratio(frame?.retries === undefined ? null : frame.retries * 1000, frame?.durationMs), source),
       timeoutRate: window === null && aggregate.timeoutRate != null ? withInterval(aggregate.timeoutRate)
         : metric(window === null ? ratio(totals.timeouts, totals.sentAttempts) : ratio(frame?.timeouts, frame?.sentAttempts), source),
-      orphaned: metric(window === null ? totals.orphaned : frame?.orphaned, source),
+      orphaned: metric(window === null ? ratio(totals.orphaned, variant.replications) : frame?.orphaned, window === null ? "perReplication" : "window"),
       meanOrphaned: metric(window === null ? ratio(totals.orphanedIntegralMs, totals.measurementMs) : ratio(frame?.orphanedIntegralMs, frame?.durationMs), source),
       meanInFlight: window === null && aggregate.meanInFlight != null ? withInterval(aggregate.meanInFlight)
         : metric(window === null ? ratio(totals.inFlightIntegralMs, totals.measurementMs) : ratio(frame?.inFlightIntegralMs, frame?.durationMs), source),
