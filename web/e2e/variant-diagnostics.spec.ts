@@ -17,7 +17,7 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
     await expect(badge).toHaveCSS("border-top-style", "dashed");
   }
   await page.screenshot({ path: testInfo.outputPath("model-variant-warnings.png") });
-  await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toBeHidden();
   await edgeBadge.focus();
   await edgeBadge.press("Enter");
   const problems = page.getByRole("tabpanel");

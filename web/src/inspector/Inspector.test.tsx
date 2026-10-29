@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { localizeCatalog } from "../i18n/catalog";
 import { applyOverrides, withParam } from "../workspace/params";
@@ -27,12 +28,106 @@ function renderInspector(props: Partial<InspectorProps> = {}) {
 
 const input = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
 
+afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
+
 function commit(label: string, value: string) {
   fireEvent.change(input(label), { target: { value } });
   fireEvent.blur(input(label));
 }
 
 describe("Inspector", () => {
+  it("puts available variant results before collapsed parameters", () => {
+    renderInspector({ variantId: "baseline", resultsFirst: true, results: <section aria-label="Element results">Metrics</section> });
+    const parameters = screen.getByText("Parameters").closest("details")!;
+    const results = screen.getByRole("region", { name: "Element results" });
+    expect(parameters.open).toBe(false);
+    expect(results.compareDocumentPosition(parameters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([
+    { variantId: null, resultsFirst: true, results: <section aria-label="Element results">Metrics</section> },
+    { variantId: "baseline", resultsFirst: false, results: null },
+    { variantId: "baseline", resultsFirst: false, results: <section aria-label="Element results">Unavailable</section> },
+  ])("keeps parameters open when results are not available on this page: %j", props => {
+    renderInspector(props);
+    expect(screen.getByRole("textbox", { name: "Handlers" })).toBeTruthy();
+    const results = screen.queryByRole("region", { name: "Element results" });
+    if (props.variantId === null) expect(results).toBeNull();
+    else if (results !== null) expect(input("Handlers").compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("remembers parameter disclosure across selection and remounts", async () => {
+    const props: InspectorProps = { catalog, model, experiment, selected: "gateway", variantId: "baseline", editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), resultsFirst: true, results: <p>Metrics</p> };
+    const view = render(<Inspector {...props} />);
+    const parameters = screen.getByText("Parameters").closest("details")!;
+    fireEvent.click(screen.getByText("Parameters"));
+    await waitFor(() => expect(parameters.open).toBe(true));
+    view.rerender(<Inspector {...props} selected="middle" />);
+    expect(screen.getByRole("textbox", { name: "Handlers" })).toBeTruthy();
+    view.unmount();
+    const next = render(<Inspector {...props} />);
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(true);
+    fireEvent.click(screen.getByText("Parameters"));
+    await waitFor(() => expect(screen.getByText("Parameters").closest("details")!.open).toBe(false));
+    next.unmount();
+    render(<Inspector {...props} />);
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(false);
+  });
+
+  it("reveals and focuses a requested nested parameter", async () => {
+    const props: InspectorProps = { catalog, model, experiment, selected: "gateway-to-middle", variantId: "baseline", editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), resultsFirst: true, results: <p>Metrics</p> };
+    const view = render(<Inspector {...props} />);
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(false);
+    view.rerender(<Inspector {...props} focusField={{ path: "backoff.base", request: 1 }} />);
+    await waitFor(() => expect(screen.getByText("Parameters").closest("details")!.open).toBe(true));
+    expect(document.activeElement).toBe(input("Base delay"));
+  });
+
+  it("renders results once in Analysis while keeping parameter drafts mounted", () => {
+    const props: InspectorProps = { catalog, model, experiment, selected: "gateway", variantId: "baseline", editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), resultsFirst: true, results: <section aria-label="Element results">Metrics</section> };
+    const view = render(<Inspector {...props} />);
+    fireEvent.change(input("Handlers"), { target: { value: "invalid" } });
+    view.rerender(<Inspector {...props} resultsOnly />);
+    expect(screen.getAllByRole("region", { name: "Element results", hidden: true })).toHaveLength(1);
+    view.rerender(<Inspector {...props} />);
+    expect(input("Handlers").value).toBe("invalid");
+  });
+
+  it("focuses a field after resetting an overridden object to the model value", async () => {
+    function Editor() {
+      const [documents, setDocuments] = useState<EditorDocuments>({ model, layout, experiment: {
+        ...experiment, variants: [{ ...experiment.variants[0], overrides: {
+          "gateway-to-middle.backoff": { kind: "fixed", delay: "4ms" },
+        } }],
+      } });
+      const variant = documents.experiment.variants[0];
+      return <Inspector catalog={catalog} model={applyOverrides(documents.model, variant.overrides, catalog)}
+        experiment={documents.experiment} selected="gateway-to-middle" editable variantId={variant.id}
+        overrides={variant.overrides} onParam={vi.fn()} onValidity={vi.fn()} onCommand={command => setDocuments(command)} />;
+    }
+    render(<Editor />);
+    fireEvent.click(screen.getByRole("button", { name: "Reset Backoff" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Kind")));
+    expect(input("Base delay").value).toBe("2ms");
+  });
+
+  it("keeps disclosure across remounts when browser storage cannot be written", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage denied"); });
+    const props: InspectorProps = { catalog, model, experiment, selected: "gateway", variantId: "baseline", editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), resultsFirst: true, results: <p>Metrics</p> };
+    const view = render(<Inspector {...props} />);
+    fireEvent.click(screen.getByText("Parameters"));
+    fireEvent(screen.getByText("Parameters").closest("details")!, new Event("toggle"));
+    view.unmount();
+    render(<Inspector {...props} variantId="no-retries" />);
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(true);
+    fireEvent.click(screen.getByText("Parameters"));
+    fireEvent(screen.getByText("Parameters").closest("details")!, new Event("toggle"));
+  });
+
   it("renders catalog fields with values and defaults and commits edits", () => {
     const onParam = renderInspector();
 

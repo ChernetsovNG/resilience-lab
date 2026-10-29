@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
 import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { diagnosticTarget, locationOf } from "../validation/diagnostics";
 import type { LoadedExperiment } from "../workspace/editor";
@@ -71,12 +71,6 @@ export function ResultsPanel({
       problemsRequest, timelineRequest,
     });
   }
-  const restoredJob = useRef<string | null>(null);
-  useEffect(() => {
-    if (completedJob === null || restoredJob.current === completedJob) return;
-    restoredJob.current = completedJob;
-    if (size === "collapsed") onSizeChange?.("normal");
-  }, [completedJob, size, onSizeChange]);
   const hasGrid = summary !== null && summary.grid.length > 0;
   const active = navigation.view === "map" && !hasGrid ? "answer" : navigation.view;
   useEffect(() => { onViewChange?.(active); }, [active, onViewChange]);

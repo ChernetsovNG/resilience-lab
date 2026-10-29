@@ -83,6 +83,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
   await expect(callLabel).not.toContainText("⚠");
+  await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
   const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
@@ -111,6 +112,7 @@ test("summarizes a warning from the only variant override on Model and opens its
     await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: solo", exact: true })).toBeVisible();
     await expect(handlers.locator("..").getByRole("link", { name: "In variants: solo — 1 warning", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
     const warning = page.getByRole("tabpanel").getByRole("button", { name: /LINT_HANDLERS_LITTLE/ });
     await expect(warning).toContainText("solo");
@@ -604,6 +606,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   };
   let jobs = 0;
   page.on("request", (request) => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
+  await page.getByRole("button", { name: "Restore results", exact: true }).click();
   await page.getByRole("separator", { name: "Resize results panel" }).focus();
   await page.getByRole("separator", { name: "Resize results panel" }).press("End");
   const saved = await estimate();

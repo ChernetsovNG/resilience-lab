@@ -157,15 +157,15 @@ it.each(["submission", "execution"])("keeps the tab selected during %s and reset
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
 });
 
-it("restores a collapsed panel once after success while preserving a manual tab choice", () => {
+it("preserves a manually collapsed panel after success and keeps the chosen tab", () => {
   const onSizeChange = vi.fn();
   const view = render(<ResultsPanel job={null} summary={null} problem={null} running size="collapsed" onSizeChange={onSizeChange} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
-  expect(onSizeChange).toHaveBeenCalledExactlyOnceWith("normal");
+  expect(onSizeChange).not.toHaveBeenCalled();
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
-  expect(onSizeChange).toHaveBeenCalledTimes(1);
+  expect(onSizeChange).not.toHaveBeenCalled();
 });
 
 it.each(["CANCELLED", "FAILED"] as const)("keeps the tab and collapsed size after %s", status => {

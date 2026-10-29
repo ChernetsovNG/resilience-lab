@@ -22,6 +22,16 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clea
 const workspace = (analysis = false) => <ResultsWorkspace view="answer" collapsed={false} analysis={analysis}><section /></ResultsWorkspace>;
 const height = () => Number(screen.getByRole("separator").getAttribute("aria-valuenow"));
 
+it("shows the top of a newly selected element inspector", () => {
+  const view = render(<ResultsWorkspace view="answer" collapsed={false} analysis={false} inspectorSelection="gateway"
+    inspector={<aside>Gateway</aside>}><section /></ResultsWorkspace>);
+  const content = document.querySelector<HTMLDivElement>(".inspector-content")!;
+  content.scrollTop = 500;
+  view.rerender(<ResultsWorkspace view="answer" collapsed={false} analysis={false} inspectorSelection="middle"
+    inspector={<aside>Middle</aside>}><section /></ResultsWorkspace>);
+  expect(content.scrollTop).toBe(0);
+});
+
 it.each([[408, 160, 180], [308, 150, 150]])("bounds both areas at workspace height %i and restores the desired height on growth", (size, min, max) => {
   render(workspace());
   fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });

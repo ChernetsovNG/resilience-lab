@@ -1,0 +1,74 @@
+import { expect, test } from "@playwright/test";
+
+test("gives the empty panel's space to the canvas and shows call results without scrolling", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await expect(page.getByRole("tabpanel")).toBeHidden();
+  const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
+  const initial = (await canvas.boundingBox())!;
+  expect(initial.height).toBeGreaterThan(650);
+  console.log("INITIAL_CANVAS", initial);
+  await page.screenshot({ path: testInfo.outputPath("after-initial.png") });
+
+  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+  expect((await canvas.boundingBox())!.height).toBeLessThan(initial.height);
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+  await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+  await page.getByTestId("canvas-edge-label-middle-to-dependency").click();
+  const results = page.locator(".element-results");
+  const parameters = page.locator(".inspector-parameters");
+  await expect(page.locator(".inspector h2")).toHaveText("middle-to-dependency");
+  await expect(results.getByRole("heading", { name: "Results", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(results).toContainText("Mean call duration");
+  await expect(parameters).not.toHaveAttribute("open");
+  expect(await page.locator(".inspector-content").evaluate(element => element.scrollTop)).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("after-inspector.png") });
+
+  const timeout = page.getByTestId("canvas-param-middle-to-dependency-timeout");
+  await timeout.dblclick();
+  await expect(parameters).toHaveAttribute("open");
+  await expect(timeout.getByRole("textbox", { name: "Timeout", exact: true })).toBeFocused();
+  await timeout.getByRole("textbox").press("Escape");
+  await page.getByTestId("rf__node-gateway").click();
+  await expect(parameters).toHaveAttribute("open");
+  await page.getByRole("tab", { name: "Model", exact: true }).click();
+  await expect(page.getByLabel("Handlers", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await expect(parameters).toHaveAttribute("open");
+  await parameters.locator("summary").click();
+  await expect(parameters).not.toHaveAttribute("open");
+  await page.getByRole("button", { name: "Errors: 0 · Warnings: 2", exact: true }).click();
+  await page.getByRole("tabpanel").getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ }).click();
+  await expect(parameters).toHaveAttribute("open");
+  await expect(page.locator(".inspector").getByLabel("Timeout", { exact: true })).toBeFocused();
+});
+
+test("a model-page variant diagnostic link reveals collapsed Parameters and focuses Timeout", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  await page.getByTestId("canvas-edge-label-gateway-to-middle").click();
+  const inspector = page.getByRole("complementary", { name: "Inspector", exact: true });
+  const parameters = inspector.locator(".inspector-parameters");
+  await expect(parameters).not.toHaveAttribute("open");
+  await expect(inspector.getByRole("heading", { name: "Results", exact: true })).toBeInViewport({ ratio: 1 });
+  await page.getByRole("tab", { name: "Model", exact: true }).click();
+  await expect(parameters).toHaveAttribute("open");
+  await inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(parameters).toHaveAttribute("open");
+  await expect(inspector.getByLabel("Timeout", { exact: true })).toBeFocused();
+  await expect(inspector.getByLabel("Timeout", { exact: true })).toHaveValue("80ms");
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+});

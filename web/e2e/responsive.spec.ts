@@ -72,6 +72,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
     await page.getByRole("separator", { name: "Resize inspector", exact: true }).press("End");
     await page.getByTestId("rf__node-dependency").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
+    await page.locator(".inspector-parameters > summary").click();
     await handlers.fill("3"); await handlers.press("Enter");
     await expect(page.locator(".results-context-bar .canvas-results-stale")).toBeVisible();
     await expectDesktopLayout(page, 80);

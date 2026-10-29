@@ -67,6 +67,104 @@ function editHandlers(value: string) {
 const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
 const experimentSelect = () => screen.getByRole("combobox", { name: "Experiment" }) as HTMLSelectElement;
 
+it("starts with collapsed results and preserves manual expansion until the experiment changes", async () => {
+  server(); await open();
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(button("Restore results"));
+  await selectGateway(); editHandlers("5");
+  await waitFor(() => expect(button("Save").disabled).toBe(false));
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  fireEvent.click(button("Undo"));
+  fireEvent.change(experimentSelect(), { target: { value: otherPath } });
+  await screen.findByRole("heading", { name: "Run settings" });
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.change(experimentSelect(), { target: { value: experimentPath } });
+  await screen.findByRole("heading", { name: "Run settings" });
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+
+it("keeps a manual collapse made while a run is pending after completion", async () => {
+  const gate = deferred();
+  let submitted = false;
+  server(async url => {
+    if (url !== "/api/v1/jobs") return undefined;
+    submitted = true; await gate.promise;
+    return { status: 202, body: completed };
+  });
+  await open(); fireEvent.click(button("Run"));
+  await waitFor(() => expect(submitted).toBe(true));
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  fireEvent.click(button("Collapse results"));
+  await act(async () => gate.release());
+  await screen.findByText("COMPLETED", { exact: true });
+  await waitFor(() => expect(button("Run").disabled).toBe(false));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+
+it("opens collapsed results for Estimate and preserves a later manual collapse", async () => {
+  server(); await open();
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(button("Estimate"));
+  await screen.findByRole("region", { name: "Cost estimate" });
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  fireEvent.click(button("Collapse results"));
+  await selectGateway();
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+});
+
+it("shows available element results first and opens Parameters for Problems and canvas editing", async () => {
+  server(url => {
+    if (url.endsWith("/manifest")) return { body: { ...manifest, series: null } };
+    if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: true, diagnostics: [
+      { code: "LINT", severity: "WARNING", message: "Inspect gateway handlers", variant: "baseline", document: modelPath,
+        pointer: "/blocks/gateway/params/handlers", path: "gateway" },
+    ] } };
+    return undefined;
+  });
+  await open(); fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" })); await selectGateway();
+  const parameters = () => document.querySelector<HTMLDetailsElement>(".inspector-parameters")!;
+  expect(parameters().open).toBe(false);
+  const results = within(screen.getByRole("complementary", { name: "Inspector" })).getByRole("region", { name: "Results" });
+  expect(results.compareDocumentPosition(parameters()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.doubleClick(screen.getByTestId("canvas-param-gateway-handlers"));
+  await waitFor(() => expect(parameters().open).toBe(true));
+  const inline = within(screen.getByTestId("canvas-param-gateway-handlers")).getByRole("textbox", { name: "Handlers" });
+  expect(document.activeElement).toBe(inline);
+  fireEvent.keyDown(inline, { key: "Escape" });
+  fireEvent.click(within(parameters()).getByText("Parameters", { selector: "summary" }));
+  await waitFor(() => expect(parameters().open).toBe(false));
+  fireEvent.click(button("Errors: 0 · Warnings: 1"));
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Inspect gateway handlers/ }));
+  await waitFor(() => expect(parameters().open).toBe(true));
+  expect(document.activeElement).toBe(within(parameters()).getByRole("textbox", { name: "Handlers" }));
+});
+
+it("opens collapsed variant parameters from a model-page diagnostic link and focuses the field", async () => {
+  server(url => {
+    if (url.endsWith("/manifest")) return { body: { ...manifest, series: null } };
+    if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: true, diagnostics: [
+      { code: "LINT", severity: "WARNING", message: "Inspect baseline handlers", variant: "baseline", document: modelPath,
+        pointer: "/blocks/gateway/params/handlers", path: "gateway" },
+    ] } };
+    return undefined;
+  });
+  await open(); fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" })); await selectGateway();
+  const parameters = () => document.querySelector<HTMLDetailsElement>(".inspector-parameters")!;
+  expect(parameters().open).toBe(false);
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect(parameters().open).toBe(true);
+  fireEvent.click(screen.getByRole("link", { name: "In variants: baseline — 1 warning" }));
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+  await waitFor(() => expect(parameters().open).toBe(true));
+  expect(document.activeElement).toBe(within(parameters()).getByRole("textbox", { name: "Handlers" }));
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
+});
+
 it("opens counted warnings on demand and leaves new warnings collapsed", async () => {
   let checks = 0;
   server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [
@@ -74,7 +172,7 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
   ] } } : undefined);
   await open();
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(button("Collapse results"));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(button("Errors: 0 · Warnings: 1"));
   expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
@@ -127,7 +225,7 @@ it("reveals launch diagnostics and navigates to their element", async () => {
       pointer: "/blocks/gateway/params/handlers", path: "gateway" },
   ] } } : undefined);
   await open();
-  fireEvent.click(button("Collapse results"));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(button("Run"));
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
   const row = within(screen.getByRole("tabpanel")).getByRole("button", { name: /Launch handler error/ });
@@ -991,6 +1089,7 @@ it("resizes the results with keys and dragging within bounds without editing doc
   measuredWorkspace();
   const fetchMock = server();
   await open();
+  fireEvent.click(button("Restore results"));
   const divider = screen.getByRole("separator", { name: "Resize results panel" });
   const height = () => Number(divider.getAttribute("aria-valuenow"));
   const initial = height();
@@ -1986,7 +2085,7 @@ it("shows variant warnings on Model, filters Problems by badge and links fields 
   expect(badge.textContent).toContain("3");
   expect(within(screen.getByTestId("rf__node-gateway")).getByRole("img", { name: "1 problems: warning" })
     .classList.contains("diagnostic-badge--variants")).toBe(false);
-  fireEvent.click(button("Collapse results"));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(badge);
   expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
