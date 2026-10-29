@@ -38,7 +38,7 @@ export function diagnosticTarget(
         target.element ??= existingElement(element);
         target.field = [...parameter, ...tokens.slice(4)].join(".") || null;
       }
-    } else if (tokens[0] === "execution" || tokens[0] === "faults") {
+    } else if (tokens[0] === "execution" || tokens[0] === "faults" || tokens[0] === "grid") {
       target.field = tokens.join(".");
     }
   }

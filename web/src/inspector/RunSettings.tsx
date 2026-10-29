@@ -4,6 +4,7 @@ import type { EditorCommand } from "../workspace/editor";
 import { addFault, removeFault, setExecutionParam, setFaultParam } from "../workspace/experimentCommands";
 import { canonicalOf } from "../workspace/quantities";
 import { ParamField } from "./ParamField";
+import { GridSettings } from "./GridSettings";
 
 interface Props {
   catalog: Catalog;
@@ -64,6 +65,8 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
           fieldDiagnostics={fieldDiagnostics}
           onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number | undefined))} />
       ))}
+      <GridSettings catalog={catalog} model={model} experiment={experiment} editable={editable} invalid={invalid}
+        onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
       <h3>Faults</h3>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />
       {experiment.faults.length === 0 ? <p>None.</p> : null}

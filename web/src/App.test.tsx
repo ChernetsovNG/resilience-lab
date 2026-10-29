@@ -157,6 +157,33 @@ function editField(label: string, value: string) {
   fireEvent.blur(field);
 }
 
+it("shares grid field diagnostics across pages while scoping canvas badges to their variant", async () => {
+  const gridCatalog = structuredClone(catalog);
+  gridCatalog.types.find((type) => type.id === "call")!.params.find((param) => param.name === "timeout")!.sweepable = true;
+  server((url) => {
+    if (url === "/api/v1/catalog") return { body: gridCatalog };
+    if (url.startsWith("/api/v1/workspace/document?") && decodeURIComponent(url).endsWith(experimentPath)) {
+      return { body: { ...documentViews[experimentPath], content: { experiment: { ...experiment,
+        grid: [{ path: "gateway-to-middle.timeout", values: ["0ms"] }],
+      } } } };
+    }
+    if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: false, diagnostics: [{
+      code: "PARAM_RANGE", severity: "ERROR", message: "Grid timeout must be positive", document: experimentPath,
+      pointer: "/grid/0/values/0", path: "gateway-to-middle", variant: "baseline",
+    }] } };
+  });
+  render(<App />);
+  await screen.findByRole("heading", { name: "Run settings" });
+  await waitFor(() => expect(screen.getByLabelText("Axis 1 value 1").closest(".param-field")?.textContent).toContain("Grid timeout must be positive"));
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("diagnostic--error")).toBe(false);
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("diagnostic--error")).toBe(true);
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("diagnostic--error")).toBe(false);
+  expect(screen.getByLabelText("Axis 1 value 1").getAttribute("aria-invalid")).toBe("true");
+  expect(button("Run").disabled).toBe(true);
+});
+
 it("saves precise variant overrides only to the experiment and resets fields and objects with undo", async () => {
   const fetchMock = server();
   await open();

@@ -17,6 +17,9 @@ describe("diagnostic locations", () => {
     [experimentPath, "/variants/0/overrides/gateway.processing/mean", "gateway", "processing.mean", "baseline"],
     [experimentPath, "/execution/replications", null, "execution.replications", null],
     [experimentPath, "/faults/0/failureRate", null, "faults.0.failureRate", null],
+    [experimentPath, "/grid", null, "grid", null],
+    [experimentPath, "/grid/0/path", null, "grid.0.path", null],
+    [experimentPath, "/grid/1/values/2", null, "grid.1.values.2", null],
   ])("maps %s#%s to its page, element and field", (document, pointer, element, field, variant) => {
     expect(diagnosticTarget(diagnostic(document, pointer), documents)).toEqual({ element, field, variant });
   });

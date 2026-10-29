@@ -6,6 +6,7 @@ import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
+const GridMap = lazy(() => import("../results/GridMap").then((module) => ({ default: module.GridMap })));
 
 export type ResultsPanelSize = "collapsed" | "normal" | "expanded";
 
@@ -47,7 +48,9 @@ export function ResultsPanel({
   runId = null, experiment = null, selectedNodes = [], replication = 0, onReplicationChange, cursorWindow = null, onCursorChange,
   diagnostics = [], validationPending = false, validationProblem = null, onDiagnostic,
 }: ResultsPanelProps) {
-  const [active, setActive] = useState("summary");
+  const [selectedView, setActive] = useState("summary");
+  const hasGrid = summary !== null && summary.grid.length > 0;
+  const active = selectedView === "map" && !hasGrid ? "summary" : selectedView;
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
   const points = summary?.variants[0]?.points ?? [];
@@ -67,6 +70,10 @@ export function ResultsPanel({
           aria-controls={`${id}-panel`} onClick={() => setActive("assumptions")}>
           Assumptions
         </button>
+        {hasGrid ? <button id={`${id}-map`} type="button" role="tab" aria-selected={active === "map"}
+          aria-controls={`${id}-panel`} onClick={() => setActive("map")}>
+          Map
+        </button> : null}
         <button id={`${id}-problems`} type="button" role="tab" aria-label="Problems" aria-selected={active === "problems"}
           aria-controls={`${id}-panel`} onClick={() => setActive("problems")}>
           Problems ({diagnostics.length})
@@ -107,6 +114,10 @@ export function ResultsPanel({
           {staleNotice}
           {summary === null || manifest === null || model === null || experiment === null || catalog === null || runId === null ?
             <p className="results-empty">Run the experiment to see the timeline.</p> : null}
+        </> : active === "map" && summary !== null ? <>
+          {staleNotice}
+          <Suspense fallback={<p role="status">Loading map…</p>}><GridMap summary={summary} activeVariantId={activeVariantId}
+            pointId={selectedPointId} onPointChange={onPointChange} /></Suspense>
         </> : active === "assumptions" ? <>
           {staleNotice}
           {catalog === null || model === null ? <p className="results-empty">Run the experiment to see model assumptions.</p> :
