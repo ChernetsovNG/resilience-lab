@@ -13,7 +13,8 @@ import { useValidation } from "./validation/useValidation";
 import { Canvas, type CanvasHandle } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { useHealth } from "./components/useHealth";
-import { ElementResults } from "./inspector/ElementResults";
+import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
+import { projectElementResults } from "./inspector/elementResultsData";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
@@ -50,7 +51,7 @@ export function App() {
   const [estimatePanel, setEstimatePanel] = useState<{ source: "manual" } | { source: "run"; previousJobId: string | null } | null>(null);
   const showEstimate = estimatePanel !== null && (estimatePanel.source === "manual" || run.job === null ||
     estimatePanel.previousJobId === run.job.id);
-  const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("normal");
+  const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("collapsed");
   const [resultsView, setResultsView] = useState<ResultsPanelView>("answer");
   const [analysis, setAnalysis] = useState(false);
   const [problemsRequest, setProblemsRequest] = useState(0);
@@ -61,7 +62,7 @@ export function App() {
   const [selection, setSelection] = useState<string[]>([]);
   const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
   const [inspectorTarget, setInspectorTarget] = useState<"element" | "variant" | "experiment">("experiment");
-  const [fieldFocus, setFieldFocus] = useState<{ path: string; request: number } | null>(null);
+  const [fieldFocus, setFieldFocus] = useState<{ path: string; request: number; focus?: boolean } | null>(null);
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog, loading, undo, redo, execute } = workspace;
@@ -128,6 +129,16 @@ export function App() {
   const runPoint = run.summary?.variants.find(candidate => candidate.id === variant?.id)?.points.find(point => point.id === selectedPointId);
   const queueCapacities = ownRun && run.documents !== null && catalog !== null && variant !== undefined && runPoint !== undefined
     ? canvasQueueCapacities(run.documents.model, run.documents.experiment, catalog, variant.id, runPoint.coordinates) : undefined;
+  const elementResults: ElementResultsProps | null = selected === null || !ownRun || run.job?.status !== "COMPLETED" || run.summary === null || run.manifest === null || run.documents === null || variant === undefined || catalog === null ? null : {
+    runId: run.job.runId!, summary: run.summary, manifest: run.manifest,
+    runModel: run.documents.model, currentModel: loaded.model, experiment: run.documents.experiment,
+    catalog, variantId: variant.id, pointId: selectedPointId, replication: results.selection.replication,
+    window: results.selection.window, selected,
+    onShowTimeline: () => {
+      setSelection([selected]);
+      setResultsSize("normal"); setTimelineRequest(current => current + 1);
+    },
+  };
   const diagnostics = validation.report?.diagnostics ?? [];
   const runDiagnostics = ownRun ? mergeDiagnostics(run.job?.diagnostics ?? [], problemDiagnostics(run.problem)) : [];
   const launchIsCurrent = ownRun && launchDocuments !== null && loaded !== null &&
@@ -269,6 +280,7 @@ export function App() {
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           setEstimatePanel(null);
           setProblemsElement(null);
+          setResultsSize("collapsed");
           setAnalysis(false);
           setSelection([]);
           setInspectorTarget("experiment");
@@ -346,15 +358,8 @@ export function App() {
         ) : (
           <Inspector
             resultsOnly={analysis}
-            results={selected === null || !ownRun || run.job?.status !== "COMPLETED" || run.summary === null || run.manifest === null || run.documents === null || variant === undefined ? null : <ElementResults
-              runId={run.job.runId!} summary={run.summary} manifest={run.manifest}
-              runModel={run.documents.model} currentModel={loaded.model} experiment={run.documents.experiment}
-              catalog={catalog} variantId={variant.id} pointId={selectedPointId} replication={results.selection.replication}
-              window={results.selection.window} selected={selected}
-              onShowTimeline={() => {
-                if (selected !== null) setSelection([selected]);
-                setResultsSize("normal"); setTimelineRequest(current => current + 1);
-              }} />}
+            results={elementResults === null ? null : <ElementResults {...elementResults} />}
+            resultsFirst={elementResults !== null && elementResults.manifest.complete && projectElementResults(elementResults) !== null}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
             model={model}
@@ -431,7 +436,14 @@ export function App() {
             onConnectionMetricChange={setConnectionMetric} stale={staleResults}
             analysis={analysis} onAnalysisChange={() => { setAnalysis(current => !current); setResultsSize("normal"); }} />}
         </div>
-        <div className="canvas">
+        <div className="canvas" onDoubleClick={event => {
+          if (invalid || !(event.target instanceof Element)) return;
+          const parameter = event.target.closest<HTMLElement>("[data-param-path]");
+          const id = parameter?.dataset.elementId, path = parameter?.dataset.paramPath;
+          if (id === undefined || path === undefined) return;
+          setSelection([id]); setInspectorTarget("element");
+          setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1, focus: false }));
+        }}>
           {model === null || loaded === null || catalog === null ? (
             <p className="canvas-empty">{t("app.canvas.loading")}</p>
           ) : (

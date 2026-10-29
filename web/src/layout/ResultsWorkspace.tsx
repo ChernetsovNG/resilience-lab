@@ -43,7 +43,7 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   const workspace = useRef<HTMLDivElement>(null);
   const inspectorContent = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (analysis && inspectorContent.current !== null) inspectorContent.current.scrollTop = 0;
+    if (inspectorContent.current !== null) inspectorContent.current.scrollTop = 0;
   }, [analysis, inspectorSelection]);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [heights, setHeights] = useState(storedHeights);

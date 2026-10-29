@@ -24,7 +24,7 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   const modelUrl = "/api/v1/workspace/document?path=retry-storm/retry-storm.model.json";
   const original = await (await request.get(modelUrl)).json();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
-  await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toBeHidden();
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
   const table = page.getByRole("table", { name: "Answer", exact: true });
@@ -61,6 +61,7 @@ test("estimate popover preserves diagram height and closes by button, outside cl
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
+  await page.getByRole("button", { name: "Restore results", exact: true }).click();
   const before = await canvas.boundingBox();
   await page.getByRole("button", { name: "Estimate", exact: true }).click();
   const estimate = page.getByRole("region", { name: "Cost estimate", exact: true });

@@ -69,7 +69,8 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, pat
   };
 
   return (
-    <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`} onDoubleClick={begin}>
+    <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`}
+      data-element-id={elementId} data-param-path={path} onDoubleClick={begin}>
       {editing ? (
         <form className="inline-param-editor nodrag nopan" onSubmit={(event) => { event.preventDefault(); commit(); }}>
           <label className="visually-hidden" htmlFor={id}>{descriptor.title}</label>

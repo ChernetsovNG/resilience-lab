@@ -17,7 +17,7 @@ test("service and call inspectors share Summary, Time and Timeline, including An
   await expect(results).toContainText("Pooled");
   await expect(results).toContainText("Handler utilization");
   await expect(results.locator("svg")).toHaveCount(2);
-  await expect(page.getByLabel("Handlers", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Handlers", { exact: true })).toBeHidden();
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await results.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("service-inspector.png") });
