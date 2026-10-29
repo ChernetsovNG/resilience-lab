@@ -1937,3 +1937,29 @@ it("focuses Add value when a grid diagnostic names an empty value list", async (
   fireEvent.click(await screen.findByRole("button", { name: /Axis values must not be empty/ }));
   expect(document.activeElement).toBe(screen.getByRole("button", { name: /Add value/ }));
 });
+
+
+it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the requested Inspector target from Analysis via %s", async (action) => {
+  server(url => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [{
+    code: "SEED_HINT", severity: "WARNING", message: "Review the shared seed", document: experimentPath,
+    pointer: "/execution/seed", path: null,
+  }] } } : undefined);
+  await open(); fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Answer" });
+  const baseline = screen.getByRole("tab", { name: "Baseline" });
+  fireEvent.click(baseline); fireEvent.click(button("Analysis"));
+  expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
+  if (action === "Experiment") fireEvent.click(button("Experiment"));
+  else if (action === "Variant") fireEvent.click(baseline);
+  else if (action === "Rename") {
+    fireEvent.contextMenu(baseline); fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+  } else if (action === "Model") {
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  } else {
+    fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+    fireEvent.click(screen.getByRole("button", { name: /Review the shared seed/ }));
+  }
+  expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
+  expect(screen.getByLabelText(action === "Variant" || action === "Rename" ? "Variant label" : "Seed")).toBeTruthy();
+});

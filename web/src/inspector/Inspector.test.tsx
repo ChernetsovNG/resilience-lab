@@ -265,3 +265,9 @@ it("focuses a fault target field requested by a diagnostic", () => {
   renderInspector({ selected: null, onCommand: vi.fn(), focusField: { path: "faults.0.target", request: 1 } });
   expect(document.activeElement).toBe(screen.getByLabelText("Fault target"));
 });
+
+
+it("describes shared run settings once at the section heading", () => {
+  renderInspector({ selected: null, onCommand: vi.fn() });
+  expect(screen.getAllByText("Shared by all variants")).toHaveLength(1);
+});

@@ -263,6 +263,7 @@ export function App() {
         }}
         onInspectExperiment={() => {
           if (invalid || loading) return;
+          setAnalysis(false);
           setSelection([]); setInspectorTarget("experiment"); setFieldFocus(null);
         }}
         loading={workspace.loading}
@@ -411,6 +412,7 @@ export function App() {
         <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid || !editable} onCommand={workspace.execute}
           onSelect={id => {
             if (id === variantId) {
+              setAnalysis(false);
               setSelection([]);
               setInspectorTarget(id === null ? "experiment" : "variant");
             }
@@ -418,6 +420,7 @@ export function App() {
             selectVariant(id);
           }}
           onInspect={(id, focusLabel) => {
+            setAnalysis(false);
             selectVariant(id); setSelection([]); setInspectorTarget("variant");
             setFieldFocus(previous => focusLabel ? { path: "variant.label", request: (previous?.request ?? 0) + 1 } : null);
           }} />
@@ -483,6 +486,7 @@ export function App() {
         }}
         onDiagnostic={(diagnostic) => {
           if (loaded === null || invalid || loading) return;
+          setAnalysis(false);
           const target = diagnosticTarget(diagnostic, loaded);
           selectVariant(target.variant);
           const setting = target.field?.startsWith("execution") || target.field?.startsWith("faults") || target.field?.startsWith("grid");

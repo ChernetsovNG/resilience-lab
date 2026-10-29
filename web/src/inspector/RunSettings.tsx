@@ -27,7 +27,7 @@ function allParams(catalog: Catalog): ParamDescriptor[] {
 /** Execution and fault field units come from catalog dimensions, including their conversion scales. */
 function descriptor(catalog: Catalog, name: string, title: string, kind: ParamDescriptor["kind"], extra: Partial<ParamDescriptor> = {}): ParamDescriptor {
   const units = allParams(catalog).find((param) => param.dimension === extra.dimension)?.units ?? [];
-  return { name, title, kind, description: t("editor.run.shared"), required: true, options: [], fields: [], sweepable: false, units, ...extra };
+  return { name, title, kind, description: "", required: true, options: [], fields: [], sweepable: false, units, ...extra };
 }
 
 /** Shared experiment settings are editable on every model or variant page. */
