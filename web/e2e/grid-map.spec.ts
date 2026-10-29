@@ -78,11 +78,13 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await page.screenshot({ path: testInfo.outputPath("heatmap.png") });
     await page.getByRole("button", { name: "Restore results", exact: true }).click();
 
-    await page.getByRole("tab", { name: "Summary", exact: true }).click();
-    const selectedRow = page.getByRole("table", { name: "Summary", exact: true }).locator("tr.summary-row--active-variant.summary-row--selected-point");
-    await expect(selectedRow).toContainText("p3");
-    await expect(selectedRow).toContainText("gateway-to-middle.timeout = 80ms");
-    await expect(selectedRow.locator(".saturation-insight")).toContainText("Saturation rule:");
+    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    const insight = page.getByRole("region", { name: "Saturation insight" });
+    await expect(insight.getByRole("heading")).toHaveText("Baseline · p3");
+    await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p3");
+    await expect(page.getByLabel("Grid point", { exact: true }).locator("option:checked")).toContainText("gateway-to-middle.timeout = 80ms");
+    await expect(insight).toContainText("Saturation rule:");
+    await expect(page.getByRole("table", { name: "Answer", exact: true }).getByRole("row", { name: /Success rate/ }).locator("td").first()).toContainText(formatPercent(point.aggregate.successRate!.mean));
     await page.getByRole("button", { name: /fit view/i }).click();
     await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();

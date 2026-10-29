@@ -17,8 +17,8 @@ it("offers Map only for the summary grid and returns to Summary after a run with
   expect(await screen.findByRole("list", { name: "Map points" })).toBeTruthy();
   view.rerender(<ResultsPanel job={null} summary={summary} problem={null} activeVariantId="baseline" />);
   expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
-  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Summary" }).id);
-  expect(screen.getByRole("table", { name: "Summary" })).toBeTruthy();
+  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Answer" }).id);
+  expect(screen.getByRole("table", { name: "Answer" })).toBeTruthy();
 });
 
 it("lists all diagnostics in Problems and navigates from a finding", () => {
@@ -64,7 +64,7 @@ it("explains that a cancelled run is incomplete and has no summary", () => {
   }} summary={null} problem={null} />);
 
   expect(screen.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeTruthy();
-  expect(screen.queryByRole("table", { name: "Summary" })).toBeNull();
+  expect(screen.queryByRole("table", { name: "Answer" })).toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
@@ -82,7 +82,7 @@ it("collapses and expands while preserving tabs and job status", () => {
   expect(onSizeChange).toHaveBeenCalledWith("collapsed");
   view.rerender(panel("collapsed"));
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  expect(screen.getByRole("tab", { name: "Summary" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "Answer" })).toBeTruthy();
   expect(screen.getByTestId("results-job-status").textContent).toContain("RUNNING");
 
   fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
@@ -104,4 +104,68 @@ it("formats numeric coordinates in the point selector without changing its value
   const selector = screen.getByRole("combobox", { name: "Grid point" });
   expect(within(selector).getByRole("option", { name: /gateway.handlers = 1,000/ })).toBeTruthy();
   expect(run.grid[0].values[0]).toBe(1000);
+});
+
+const runJob = (status: "RUNNING" | "COMPLETED" | "CANCELLED" | "FAILED", id = "job-1") => ({
+  id, experiment: "chain.experiment.json", runId: `run-${id}`, status,
+  completedTasks: status === "COMPLETED" ? 4 : 1, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
+});
+
+it("opens Answer after success even when Problems was selected before Run", () => {
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} running={false} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  view.rerender(<ResultsPanel job={null} summary={null} problem={null} running />);
+  view.rerender(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running />);
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} />);
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} />);
+  expect(screen.getByRole("tab", { name: "Assumptions" }).getAttribute("aria-selected")).toBe("true");
+});
+
+it("opens Answer for a run that completes without an intermediate running render", () => {
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} />);
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+});
+
+it.each(["submission", "execution"])("keeps the tab selected during %s and resets the preference for the next run", phase => {
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} running={false} />);
+  view.rerender(<ResultsPanel job={phase === "submission" ? null : runJob("RUNNING")} summary={null} problem={null} running />);
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+  view.rerender(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running />);
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} />);
+  expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
+  view.rerender(<ResultsPanel job={null} summary={null} problem={null} running />);
+  view.rerender(<ResultsPanel job={runJob("COMPLETED", "job-2")} summary={summary} problem={null} running={false} />);
+  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+});
+
+it("restores a collapsed panel once after success while preserving a manual tab choice", () => {
+  const onSizeChange = vi.fn();
+  const view = render(<ResultsPanel job={null} summary={null} problem={null} running size="collapsed" onSizeChange={onSizeChange} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
+  expect(onSizeChange).toHaveBeenCalledExactlyOnceWith("normal");
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+  view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
+  expect(onSizeChange).toHaveBeenCalledTimes(1);
+});
+
+it.each(["CANCELLED", "FAILED"] as const)("keeps the tab and collapsed size after %s", status => {
+  const onSizeChange = vi.fn();
+  const view = render(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running size="collapsed" onSizeChange={onSizeChange} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  view.rerender(<ResultsPanel job={runJob(status)} summary={null} problem={null} running={false} size="collapsed" onSizeChange={onSizeChange} />);
+  expect(onSizeChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+});
+
+it("offers selected points present only in a later variant", () => {
+  const run = structuredClone(summary);
+  run.grid = [{ path: "gateway.handlers", values: [4, 6] }];
+  run.variants[1].points.push({ ...run.variants[1].points[0], id: "p1", coordinates: { "gateway.handlers": 6 } });
+  render(<ResultsPanel job={null} summary={run} problem={null} selectedPointId="p1" />);
+  expect(within(screen.getByRole("combobox", { name: "Grid point" })).getByRole("option", { name: /p1.*gateway.handlers = 6/ })).toBeTruthy();
 });

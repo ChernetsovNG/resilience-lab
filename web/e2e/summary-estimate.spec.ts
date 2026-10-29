@@ -20,32 +20,37 @@ async function noOverflow(page: Page) {
   }))).toEqual({ horizontal: false, vertical: false, results: false });
 }
 
-test("Summary and all service metrics fit at 1440 px without editing documents", async ({ page, request }, testInfo) => {
+test("Answer and all service metrics fit at 1440 px without editing documents", async ({ page, request }, testInfo) => {
   const modelUrl = "/api/v1/workspace/document?path=retry-storm/retry-storm.model.json";
   const original = await (await request.get(modelUrl)).json();
+  await page.getByRole("tab", { name: "Problems", exact: true }).click();
+  await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await page.getByRole("button", { name: "Run", exact: true }).click();
-  const table = page.getByRole("table", { name: "Summary", exact: true });
+  await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
+  const table = page.getByRole("table", { name: "Answer", exact: true });
   await expect(table).toBeVisible();
+  const insight = page.getByRole("region", { name: "Saturation insight", exact: true });
+  await expect(insight.locator(".saturation-insight > p").first()).toContainText("dependency first");
+  await expect(insight.locator(".saturation-insight > p").first()).toBeInViewport({ ratio: 1 });
+  await noOverflow(page);
+  await expect(table.getByRole("row", { name: /Success rate/ })).toBeInViewport({ ratio: 0.2 });
+  await page.screenshot({ path: testInfo.outputPath("after-answer.png") });
   await page.getByRole("button", { name: "Close estimate", exact: true }).click();
   await noOverflow(page);
   await page.getByRole("button", { name: "Expand results", exact: true }).click();
   for (const disclosure of await page.locator(".summary-services > summary").all()) await disclosure.click();
-  for (const variant of ["Baseline", "No retries"]) {
-    const services = page.getByRole("table", { name: `Services for ${variant} p0`, exact: true });
-    await expect(services).toBeVisible();
-    for (const service of ["dependency", "gateway", "middle"]) {
-      const row = services.getByRole("row").filter({ has: page.getByRole("rowheader", { name: service, exact: true }) });
-      await expect(row).toContainText("×");
-      await expect(row).toContainText("95% CI");
-      await expect(row).toContainText("%");
+  for (const service of ["dependency", "gateway", "middle"]) {
+    const metrics = page.getByRole("table", { name: `Service metrics: ${service}`, exact: true });
+    await expect(metrics).toBeVisible();
+    for (const cell of await metrics.getByRole("row", { name: /Admitted amplification/ }).locator("td").all()) {
+      await expect(cell).toContainText("×");
+      await expect(cell).toContainText("95% CI");
     }
+    for (const cell of await metrics.getByRole("row", { name: /Handler utilization/ }).locator("td").all()) await expect(cell).toContainText("%");
   }
   await page.locator(".results-body").evaluate(el => { el.scrollTop = 0; });
-  for (const variant of ["Baseline", "No retries"]) {
-    await expect(page.getByRole("table", { name: `Services for ${variant} p0`, exact: true })).toBeInViewport({ ratio: 1 });
-  }
   await noOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("after-summary.png") });
+  await page.screenshot({ path: testInfo.outputPath("after-comparison.png") });
   expect(await (await request.get(modelUrl)).json()).toEqual(original);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
@@ -92,14 +97,28 @@ test("failed estimation starts a real run only after explicit confirmation", asy
   expect(messages).toHaveLength(1);
   expect(messages[0]).toContain("without an estimate");
   expect(jobs).toBe(0);
-  await expect(page.getByRole("table", { name: "Summary", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "Answer", exact: true })).toHaveCount(0);
   page.once("dialog", async dialog => { messages.push(dialog.message()); await dialog.accept(); });
   await run.click();
-  await expect(page.getByRole("table", { name: "Summary", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
   await expect(page.getByTestId("job-status")).toContainText("COMPLETED");
   expect(messages).toHaveLength(2);
   expect(jobs).toBe(1);
   await expect(page.getByRole("alert")).toBeVisible();
   await noOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("after-estimate-failure.png") });
+});
+
+test("keeps the tab chosen during Run estimation through real execution", async ({ page }) => {
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/v1/estimate", async route => { await pending; await route.continue(); });
+  const run = page.getByRole("button", { name: "Run", exact: true });
+  await run.click();
+  await expect(run).toBeDisabled();
+  await page.getByRole("tab", { name: "Timeline", exact: true }).click();
+  release();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  await expect(run).toBeEnabled();
+  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute("aria-selected", "true");
 });
