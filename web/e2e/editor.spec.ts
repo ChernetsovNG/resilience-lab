@@ -246,6 +246,8 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   });
   await run.focus();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "View", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(palette.getByRole("button", { name: "Client", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(service).toBeFocused();

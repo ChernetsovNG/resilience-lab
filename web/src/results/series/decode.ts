@@ -1,6 +1,7 @@
 import type { ConnectionWindowMetrics } from "../../api/apiTypes";
 import type { components } from "../../api/schema";
 import { LatencySketch } from "./sketch";
+import { MessageError } from "../../i18n/MessageError";
 import type { DecodedConnectionWindow, DecodedSeriesPart, DecodedWindow, WindowMetricValues } from "./types";
 
 type RawPart = components["schemas"]["SeriesPart"];
@@ -9,11 +10,11 @@ type RawWindow = components["schemas"]["WindowMetrics"];
 /** Parses one browser-decompressed part and turns every sketch into numeric window metrics. */
 export function decodeSeriesPart(text: string): DecodedSeriesPart {
   const part = JSON.parse(text) as RawPart;
-  if (part.schemaVersion !== 2) throw new Error(`Unsupported series part schema version: ${part.schemaVersion}`);
+  if (part.schemaVersion !== 2) throw new MessageError("results.series.unsupportedPartSchema", { version: String(part.schemaVersion) });
   for (const connection of part.connections) {
     if (connection.windows.length !== part.untilWindow - part.fromWindow || connection.windows.some((window) =>
       !Number.isFinite(window.startMs) || window.startMs < 0 || !Number.isFinite(window.durationMs) || window.durationMs <= 0,
-    )) throw new Error("Invalid connection windows");
+    )) throw new MessageError("results.series.invalidConnectionWindows");
   }
   const arrivals = new Map<number, number>();
   for (const node of part.nodes) {

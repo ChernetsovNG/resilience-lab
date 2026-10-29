@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { messages, t } from "./index";
+import { messages, setLanguage, t } from "./index";
 import { catalogText, localizeCatalog } from "./catalog";
-import { catalog } from "../test/fixtures";
+import catalogSnapshot from "../test/catalog.json" with { type: "json" };
+import type { Catalog } from "../api/apiTypes";
+
+const catalog = catalogSnapshot as Catalog;
 
 describe("messages", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.unstubAllEnvs(); setLanguage("en"); localStorage.clear(); });
 
   it("uses API values or keys as safe production fallbacks", () => {
     vi.stubEnv("DEV", false);
@@ -36,6 +39,7 @@ describe("messages", () => {
       "catalog.types.service.assumptions.0": "Translated assumption",
     };
     const catalogMessages = messages as Record<string, string>;
+    const previous = Object.fromEntries(Object.keys(additions).map(key => [key, catalogMessages[key]]));
     Object.assign(catalogMessages, additions);
     try {
       const localized = localizeCatalog(catalog);
@@ -45,14 +49,26 @@ describe("messages", () => {
       expect(catalog.types[1].title).toBe("Service");
       expect(localized.types[1].params[2].fields[1].name).toBe("mean");
     } finally {
-      for (const key of Object.keys(additions)) delete catalogMessages[key];
+      Object.assign(catalogMessages, previous);
     }
   });
   it("falls back to API text and preserves the original catalog", () => {
-    expect(catalogText("catalog.types.service.title", "Service")).toBe("Service");
+    expect(catalogText("catalog.types.future.title", "Future type")).toBe("Future type");
     const localized = localizeCatalog(catalog);
     expect(localized).toEqual(catalog);
     expect(localized).not.toBe(catalog);
     expect(localized.types[1].params[2].fields[1].title).toBe("Mean");
+  });
+  it("localizes API prose without changing identifiers, values or the source response", () => {
+    const source = structuredClone(catalog);
+    setLanguage("ru");
+    const localized = localizeCatalog(catalog);
+    expect(localized.types[1].title).toBe("Сервис");
+    expect(localized.types[1].params[0].title).toBe("Обработчики");
+    expect(localized.types[1].params[2].fields[1].name).toBe("mean");
+    expect(localized.types[1].params[1].default).toBe(0);
+    expect(catalog).toEqual(source);
+    setLanguage("en");
+    expect(localizeCatalog(catalog)).toEqual(source);
   });
 });

@@ -1,4 +1,5 @@
 import { t } from "../../i18n";
+import { MessageError } from "../../i18n/MessageError";
 import { ApiError, api } from "../../api/apiClient";
 import type { SeriesIndex } from "../../api/apiTypes";
 import { DEFAULT_SERIES_CACHE_BYTES, SeriesPartCache, type SeriesPartKey } from "./cache";
@@ -49,10 +50,11 @@ interface PartDownload {
 export type SeriesLoadErrorCode = "SERIES_NOT_FOUND" | "ETAG_MISMATCH" | "INVALID_SERIES" | "WORKER_ERROR";
 
 export class SeriesLoadError extends Error {
-  constructor(readonly code: SeriesLoadErrorCode, message: string | (() => string)) {
-    super(typeof message === "function" ? message() : message);
-    if (typeof message === "function") Object.defineProperty(this, "message", { get: message });
+  constructor(readonly code: SeriesLoadErrorCode, message: string | Error | (() => string)) {
+    const text = () => typeof message === "function" ? message() : typeof message === "string" ? message : message.message;
+    super(text());
     this.name = "SeriesLoadError";
+    if (typeof message !== "string") Object.defineProperty(this, "message", { get: text });
   }
 }
 
@@ -96,9 +98,9 @@ export class SeriesLoader {
     } catch (error) {
       if (error instanceof SeriesLoadError || isAbort(error)) throw error;
       if (error instanceof ApiError && error.status === 404 && error.problem.code === "SERIES_NOT_FOUND") {
-        throw new SeriesLoadError("SERIES_NOT_FOUND", () => t("results.series.unavailable"));
+        throw new SeriesLoadError("SERIES_NOT_FOUND", new MessageError("results.series.unavailable"));
       }
-      throw new SeriesLoadError("WORKER_ERROR", () => t("results.series.couldNotLoad", { message: messageOf(error) }));
+      throw new SeriesLoadError("WORKER_ERROR", new MessageError("results.series.couldNotLoad", { get message() { return messageOf(error); } }));
     } finally {
       decoder?.close();
     }
@@ -117,7 +119,7 @@ export class SeriesLoader {
     );
     throwIfAborted(request.signal);
     if (index.schemaVersion !== 2) {
-      throw new SeriesLoadError("INVALID_SERIES", `Unsupported series index schema version: ${index.schemaVersion}`);
+      throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const connectionRequest = "connections" in request;
     const selected = selectSeriesParts(index, connectionRequest ? [] : request.nodes,
@@ -143,7 +145,7 @@ export class SeriesLoader {
         !parts.has(reference.file) && overlapsAny(reference, missing),
       );
       if (candidate === undefined) {
-        throw new SeriesLoadError("INVALID_SERIES", t("results.series.missingClients"));
+        throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.missingClients"));
       }
       const extra = await this.loadReferences(request, [candidate], getDecoder);
       for (const [file, part] of extra) parts.set(file, part);
@@ -202,7 +204,7 @@ export class SeriesLoader {
         if (raw.etag !== expected) {
           throw new SeriesLoadError(
             "ETAG_MISMATCH",
-            t("results.series.etagMismatch", { file: reference.file, etag: raw.etag ?? t("results.series.missingEtag"), expected }),
+            new MessageError("results.series.etagMismatch", { file: reference.file, get etag() { return raw.etag ?? t("results.series.missingEtag"); }, expected }),
           );
         }
         return { reference, partNumber, text: raw.text };
@@ -210,7 +212,7 @@ export class SeriesLoader {
       const decoded = await getDecoder().decode(fetched.map((part) => part.text));
       throwIfAborted(request.signal);
       if (decoded.length !== fetched.length) {
-        throw new SeriesLoadError("INVALID_SERIES", t("results.series.partCountMismatch"));
+        throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.partCountMismatch"));
       }
       for (const [offset, part] of decoded.entries()) {
         const source = fetched[offset];
@@ -236,7 +238,7 @@ function cacheKey(request: SeriesSelectionRequest, reference: SeriesPartReferenc
 
 function partNumberOf(reference: SeriesPartReference): number {
   const match = /^part-(\d+)\.json\.gz$/.exec(reference.file);
-  if (match === null) throw new SeriesLoadError("INVALID_SERIES", t("results.series.invalidPartFile", { file: reference.file }));
+  if (match === null) throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.invalidPartFile", { file: reference.file }));
   return Number(match[1]);
 }
 

@@ -12,7 +12,7 @@ interface Props {
   onPointChange?: (id: string) => void;
 }
 
-const metrics: { id: MapMetric; title: string }[] = [
+const mapMetrics = (): { id: MapMetric; title: string }[] => [
   { id: "successRate", title: t("results.metrics.successRate") }, { id: "p95LatencyMs", title: t("results.metrics.p95LatencyMs") },
   { id: "p99LatencyMs", title: t("results.metrics.p99LatencyMs") }, { id: "admittedAmplification", title: t("results.metrics.amplification") },
   { id: "handlerUtilization", title: t("results.metrics.handlerUtilization") },
@@ -21,6 +21,7 @@ const label = (value: unknown) => typeof value === "number" ? formatNumber(value
 
 /** A view of the saved summary; selecting a cell only changes the shared results context. */
 export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Props) {
+  const metrics = mapMetrics();
   const [metric, setMetric] = useState<MapMetric>("successRate");
   const [chosenService, setService] = useState("");
   const variant = summary.variants.find((candidate) => candidate.id === activeVariantId);

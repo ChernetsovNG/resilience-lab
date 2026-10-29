@@ -46,6 +46,7 @@ export default defineConfig({
   timeout: 120_000,
   use: {
     baseURL: webURL,
+    locale: "en-US",
     browserName: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

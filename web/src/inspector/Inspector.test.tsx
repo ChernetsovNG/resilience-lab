@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
-import { localizeCatalog } from "../i18n/catalog";
 import { applyOverrides, withParam } from "../workspace/params";
 import type { EditorDocuments } from "../workspace/editor";
 import { Inspector } from "./Inspector";
@@ -347,7 +346,7 @@ it("renders catalog descriptions below scalar and object fields with accessible 
   const params = described.types.find(type => type.id === "service")!.params;
   params.find(param => param.name === "handlers")!.description = "Concurrent handler slots.";
   params.find(param => param.name === "processing")!.description = "Local processing distribution.";
-  renderInspector({ catalog: localizeCatalog(described) });
+  renderInspector({ catalog: described });
   const field = screen.getByLabelText("Handlers");
   const description = screen.getByText("Concurrent handler slots.");
   expect(field.closest(".param-field")?.querySelector("input + .param-description")).toBe(description);

@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { catalogOption } from "../i18n/catalog";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
 import { DiagnosticMessages, VariantDiagnosticLinks } from "../validation/DiagnosticDisplay";
@@ -135,10 +136,10 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
             commitValue(event.target.value === "" ? undefined : event.target.value);
           }}
         >
-          {descriptor.required ? <option value="" disabled>{t("editor.param.select")}</option> : <option value="">{fallback === "" ? t("editor.param.default") : t("editor.param.defaultValue", { value: fallback })}</option>}
+          {descriptor.required ? <option value="" disabled>{t("editor.param.select")}</option> : <option value="">{fallback === "" ? t("editor.param.default") : t("editor.param.defaultValue", { value: catalogOption(fallback) })}</option>}
           {descriptor.options.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {catalogOption(option)}
             </option>
           ))}
         </select>

@@ -85,7 +85,7 @@ export function useRun(pollMs = 500): Run {
         }
       } else {
         if (next.status === "FAILED") {
-          setProblem({ code: next.errorCode ?? "JOB_FAILED", message: next.error ?? t("app.run.failed"),
+          setProblem({ code: next.errorCode ?? "JOB_FAILED", get message() { return next.error ?? t("app.run.failed"); },
             ...(next.errorArgs == null ? {} : { args: next.errorArgs }),
             ...(resuming ? { requiresNewRun: true } : {}), diagnostics: next.diagnostics });
         }
@@ -103,7 +103,7 @@ export function useRun(pollMs = 500): Run {
       if (live()) {
         const failure = problemOf(error);
         const restart = resuming && error instanceof ApiError && (error.status === 400 || failure.code === "RUN_COMPLETE");
-        setProblem({ ...failure, ...(restart ? { requiresNewRun: true } : {}) });
+        setProblem({ ...failure, get message() { return failure.message; }, ...(restart ? { requiresNewRun: true } : {}) });
       }
     } finally {
       if (live()) setRunning(false);

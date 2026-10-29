@@ -9,7 +9,7 @@ export function DiagnosticBadge({ diagnostics }: { diagnostics: readonly Diagnos
   const summary = summarizeDiagnostics(diagnostics);
   if (summary === null) return null;
   return <span className={`diagnostic-badge diagnostic--${summary.severity.toLowerCase()}`} role="img"
-    aria-label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: summary.severity.toLowerCase() })} title={diagnostics.map((item) => backendMessage(item)).join("\n")}>
+    aria-label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: t(`results.problems.severity.${summary.severity}`).toLowerCase() })} title={diagnostics.map((item) => backendMessage(item)).join("\n")}>
     {t("editor.diagnostics.badge", { symbol: summary.severity === "ERROR" ? t("editor.symbols.error") : t("editor.symbols.warning"), count: formatNumber(summary.count) })}
   </span>;
 }
