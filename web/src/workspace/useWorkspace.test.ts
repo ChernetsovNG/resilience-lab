@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocumentContent, DocumentView } from "../api/apiTypes";
 import { catalog, documentViews, experiment, experimentPath, layout, layoutPath, model, modelPath } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
+import { setLanguage } from "../i18n";
+import { localizeCatalog } from "../i18n/catalog";
 import { useWorkspace } from "./useWorkspace";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setLanguage("en");
+  localStorage.clear();
 });
 
 function deferred() {
@@ -50,12 +54,32 @@ describe("useWorkspace", () => {
 
     const { result } = await loaded();
 
-    expect(result.current.catalog).toEqual(catalog);
+    expect(result.current.catalog).toEqual(localizeCatalog(catalog));
     expect(result.current.experiments).toEqual([experimentPath]);
     expect(result.current.loaded?.modelPath).toBe(modelPath);
     expect(result.current.loaded?.layout?.positions.gateway).toEqual({ x: 260, y: 100 });
     expect(result.current.dirty).toBe(false);
     expect(result.current.loading).toBe(false);
+  });
+
+  it("switches the catalog language without fetching again or changing documents and undo history", async () => {
+    const fetchMock = stubWorkspace();
+    const { result } = await loaded();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    const edited = result.current.loaded;
+    act(() => setLanguage("ru"));
+    expect(result.current.catalog?.types[1].title).toBe("Сервис");
+    expect(result.current.catalog?.types[1].params[0].title).toBe("Обработчики");
+    expect(result.current.loaded).toBe(edited);
+    expect(result.current.dirty).toBe(true);
+    act(() => result.current.undo());
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
+    act(() => result.current.redo());
+    expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(6);
+    act(() => setLanguage("en"));
+    expect(result.current.catalog?.types[1].title).toBe("Service");
+    expect(catalog.types[1].title).toBe("Service");
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/catalog")).toHaveLength(1);
   });
 
   it("saves edits with If-Match and clears the unsaved state", async () => {

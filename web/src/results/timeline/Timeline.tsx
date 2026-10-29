@@ -1,4 +1,5 @@
-import { t } from "../../i18n";
+import { t, type Language } from "../../i18n";
+import { useLanguage } from "../../i18n/useLanguage";
 import { TimelineGrid } from "./TimelineGrid";
 import { formatDuration, formatNumber } from "../../i18n/format";
 import { useMemo, useState } from "react";
@@ -13,32 +14,35 @@ import { canonicalOf } from "../../workspace/quantities";
 
 type MetricKey = Exclude<keyof TimelineMetricValues, "startMs" | "durationMs" | "amplification">;
 interface Metric { key: MetricKey; label: string; nodes?: readonly ("client" | "service" | "call")[] }
-const groups: { title: string; unit: string; scale: number; metrics: Metric[] }[] = [
-  { title: t("results.timeline.rates"), unit: "RPS", scale: 1, metrics: [
-    { key: "sentAttemptsPerSecond", label: t("results.timeline.sentAttempts"), nodes: ["call"] },
-    { key: "originalArrivalsPerSecond", label: t("results.metrics.originalRequests"), nodes: ["client"] },
-    { key: "offeredAttemptsPerSecond", label: t("results.metrics.offeredAttempts"), nodes: ["service"] },
-    { key: "admittedAttemptsPerSecond", label: t("results.metrics.admittedAttempts"), nodes: ["service"] },
-    { key: "successesPerSecond", label: t("results.metrics.successes") },
-    { key: "retriesPerSecond", label: t("results.metrics.retries"), nodes: ["service", "call"] },
+const timelineGroups = (language: Language): { title: string; unit: string; scale: number; metrics: Metric[] }[] => {
+  const text = (key: string) => t(key, {}, language);
+  return [
+  { title: text("results.timeline.rates"), unit: "RPS", scale: 1, metrics: [
+    { key: "sentAttemptsPerSecond", label: text("results.timeline.sentAttempts"), nodes: ["call"] },
+    { key: "originalArrivalsPerSecond", label: text("results.metrics.originalRequests"), nodes: ["client"] },
+    { key: "offeredAttemptsPerSecond", label: text("results.metrics.offeredAttempts"), nodes: ["service"] },
+    { key: "admittedAttemptsPerSecond", label: text("results.metrics.admittedAttempts"), nodes: ["service"] },
+    { key: "successesPerSecond", label: text("results.metrics.successes") },
+    { key: "retriesPerSecond", label: text("results.metrics.retries"), nodes: ["service", "call"] },
   ] },
-  { title: t("results.timeline.latency"), unit: "ms", scale: 1, metrics: [
-    { key: "meanLatencyMs", label: t("results.metrics.meanLatencyMs") }, { key: "p50LatencyMs", label: t("results.metrics.p50LatencyMs") },
-    { key: "p95LatencyMs", label: t("results.metrics.p95LatencyMs") }, { key: "p99LatencyMs", label: t("results.metrics.p99LatencyMs") },
+  { title: text("results.timeline.latency"), unit: "ms", scale: 1, metrics: [
+    { key: "meanLatencyMs", label: text("results.metrics.meanLatencyMs") }, { key: "p50LatencyMs", label: text("results.metrics.p50LatencyMs") },
+    { key: "p95LatencyMs", label: text("results.metrics.p95LatencyMs") }, { key: "p99LatencyMs", label: text("results.metrics.p99LatencyMs") },
   ] },
-  { title: t("results.timeline.errors"), unit: "RPS", scale: 1, metrics: [
-    { key: "failuresPerSecond", label: t("results.metrics.failures") }, { key: "timeoutsPerSecond", label: t("results.metrics.timeouts"), nodes: ["service", "call"] },
-    { key: "orphanedPerSecond", label: t("results.timeline.orphanedAttempts"), nodes: ["call"] },
-    { key: "queueRejectionsPerSecond", label: t("results.metrics.queueRejections"), nodes: ["service"] },
+  { title: text("results.timeline.errors"), unit: "RPS", scale: 1, metrics: [
+    { key: "failuresPerSecond", label: text("results.metrics.failures") }, { key: "timeoutsPerSecond", label: text("results.metrics.timeouts"), nodes: ["service", "call"] },
+    { key: "orphanedPerSecond", label: text("results.timeline.orphanedAttempts"), nodes: ["call"] },
+    { key: "queueRejectionsPerSecond", label: text("results.metrics.queueRejections"), nodes: ["service"] },
   ] },
-  { title: t("results.timeline.utilization"), unit: "%", scale: 100, metrics: [{ key: "handlerUtilization", label: t("results.metrics.handlerUtilization"), nodes: ["service"] }] },
-  { title: t("results.timeline.callState"), unit: "requests", scale: 1, metrics: [
-    { key: "meanInFlight", label: t("results.timeline.meanInFlight"), nodes: ["call"] },
-    { key: "meanOrphaned", label: t("results.timeline.meanOrphaned"), nodes: ["call"] },
-    { key: "meanBackoff", label: t("results.timeline.meanBackoff"), nodes: ["call"] },
+  { title: text("results.timeline.utilization"), unit: "%", scale: 100, metrics: [{ key: "handlerUtilization", label: text("results.metrics.handlerUtilization"), nodes: ["service"] }] },
+  { title: text("results.timeline.callState"), unit: "requests", scale: 1, metrics: [
+    { key: "meanInFlight", label: text("results.timeline.meanInFlight"), nodes: ["call"] },
+    { key: "meanOrphaned", label: text("results.timeline.meanOrphaned"), nodes: ["call"] },
+    { key: "meanBackoff", label: text("results.timeline.meanBackoff"), nodes: ["call"] },
   ] },
-  { title: t("results.timeline.queue"), unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: t("results.metrics.meanQueue"), nodes: ["service"] }] },
-];
+  { title: text("results.timeline.queue"), unit: "requests", scale: 1, metrics: [{ key: "meanQueueLength", label: text("results.metrics.meanQueue"), nodes: ["service"] }] },
+  ];
+};
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 
 interface TimelineProps {
@@ -65,6 +69,8 @@ export function Timeline(props: TimelineProps) {
 
 function RunTimeline({ enabled = true, runId, summary, manifest, model, experiment, catalog, activeVariantId, pointId,
   replication, cursorWindow, selectedNodes, onCursorChange }: TimelineProps) {
+  const language = useLanguage();
+  const groups = useMemo(() => timelineGroups(language), [language]);
   const canvasKey = JSON.stringify(selectedNodes);
   const availableConnections = model.connections.filter((connection) => connection.type === "call").map((connection) => connection.id);
   const availableNodes = [...Object.keys(model.blocks), ...availableConnections];
@@ -143,7 +149,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       return { ...group, lines };
     }).filter((group) => group.lines.length > 0);
   }, [primary.nodes, overlay.nodes, primaryConnections.connections,
-    overlayConnections.connections, model, metricKeys, variant, compared]);
+    overlayConnections.connections, model, metricKeys, variant, compared, groups]);
   const thresholds: TimelineThreshold[] = [variant, compared].flatMap((source, index) => {
     if (source === undefined) return [];
     const point = source.points.find((candidate) => candidate.id === pointId);

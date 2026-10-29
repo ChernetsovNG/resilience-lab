@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { MessageError } from "../../i18n/MessageError";
 
 export const LATENCY_PROFILE = "ddsketch-bitwise6-rational-v1";
 
@@ -10,7 +10,7 @@ const view = new DataView(new ArrayBuffer(8));
 
 function count(value: unknown, minimum: number): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > MAX_COUNT) {
-    throw new Error(t("results.series.sketch.invalidCount"));
+    throw new MessageError("results.series.sketch.invalidCount");
   }
   return value;
 }
@@ -32,9 +32,9 @@ export class LatencySketch {
   ) {}
 
   static decode(profile: unknown, data: unknown): LatencySketch {
-    if (profile !== LATENCY_PROFILE) throw new Error(t("results.series.sketch.unsupportedProfile", { profile: String(profile) }));
+    if (profile !== LATENCY_PROFILE) throw new MessageError("results.series.sketch.unsupportedProfile", { profile: String(profile) });
     if (!Array.isArray(data) || data.length % 2 !== 1 || data.length > 1 + 2 * MAX_SPAN) {
-      throw new Error(t("results.series.sketch.canonical"));
+      throw new MessageError("results.series.sketch.canonical");
     }
     const zeroCount = count(data[0], 0);
     let total = zeroCount;
@@ -44,12 +44,12 @@ export class LatencySketch {
     for (let offset = 1; offset < data.length; offset += 2) {
       const index: unknown = data[offset];
       if (typeof index !== "number" || !Number.isInteger(index) || index < MIN_INDEX || index > MAX_INDEX || index <= high) {
-        throw new Error(t("results.series.sketch.invalidIndex"));
+        throw new MessageError("results.series.sketch.invalidIndex");
       }
       const n = count(data[offset + 1], 1);
-      if (n > MAX_COUNT - total) throw new Error(t("results.series.sketch.countLimit"));
+      if (n > MAX_COUNT - total) throw new MessageError("results.series.sketch.countLimit");
       if (Math.max(high, index) - Math.min(low, index) + 1 > MAX_SPAN) {
-        throw new Error(t("results.series.sketch.indexSpanLimit"));
+        throw new MessageError("results.series.sketch.indexSpanLimit");
       }
       bins.push([index, n]);
       total += n;
@@ -61,7 +61,7 @@ export class LatencySketch {
 
   quantile(probability: number): number | null {
     if (!Number.isFinite(probability) || probability <= 0 || probability >= 1) {
-      throw new Error(t("results.series.sketch.probability"));
+      throw new MessageError("results.series.sketch.probability");
     }
     if (this.total === 0) return null;
     const rank = (position: number): number => {
@@ -71,7 +71,7 @@ export class LatencySketch {
         cumulative += n;
         if (position < cumulative) return representative(index);
       }
-      throw new Error(t("results.series.sketch.rank"));
+      throw new MessageError("results.series.sketch.rank");
     };
     if (this.total === 1) return rank(0);
     const position = probability * (this.total + 1);

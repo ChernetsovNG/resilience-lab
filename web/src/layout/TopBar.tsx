@@ -1,6 +1,7 @@
 import type { JobView } from "../api/apiTypes";
 import type { ReactNode } from "react";
 import { t } from "../i18n";
+import { ViewMenu } from "./ViewMenu";
 
 export interface TopBarProps {
   experiments: string[];
@@ -92,6 +93,7 @@ export function TopBar(props: TopBarProps) {
       {active ? <button type="button" onClick={onCancel} disabled={job.cancelRequested}>{t("app.topBar.cancel")}</button> : null}
       {props.estimatePanel}
       </div>
+      <ViewMenu />
     </header>
   );
 }

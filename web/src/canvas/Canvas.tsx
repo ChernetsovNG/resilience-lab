@@ -17,7 +17,7 @@ import "@xyflow/react/dist/style.css";
 const fitViewOptions = { padding: { top: "64px" as const, bottom: 0.15, left: 0.15, right: 0.15 }, minZoom: 0.05 };
 const nodeTypes = { block: BlockNode };
 const edgeTypes = { call: CallEdge };
-const ariaLabelConfig: AriaLabelConfig = {
+const ariaLabelConfig = (): AriaLabelConfig => ({
   "node.a11yDescription.default": t("editor.canvas.nodeDescription"),
   "node.a11yDescription.keyboardDisabled": t("editor.canvas.nodeKeyboardDescription"),
   "node.a11yDescription.ariaLiveMessage": ({ direction, x, y }) => t("editor.canvas.nodeMoved", {
@@ -31,7 +31,7 @@ const ariaLabelConfig: AriaLabelConfig = {
   "controls.interactive.ariaLabel": t("editor.canvas.toggleInteractivity"),
   "minimap.ariaLabel": t("editor.canvas.miniMap"),
   "handle.ariaLabel": t("editor.canvas.handle"),
-};
+});
 
 /** Palette activation places a block using the canvas viewport at the moment of activation. */
 export interface CanvasHandle {
@@ -119,7 +119,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     return () => cancelAnimationFrame(frame);
   }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ readonly message: string | null } | null>(null);
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
   if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: {} }]);
@@ -233,7 +233,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     <>
     <ReactFlow
       aria-label={t("editor.canvas.label")}
-      ariaLabelConfig={ariaLabelConfig}
+      ariaLabelConfig={ariaLabelConfig()}
       proOptions={{ hideAttribution: true }}
       nodes={nodes}
       edges={edges}
@@ -268,11 +268,13 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       onConnect={({ source, target, sourceHandle, targetHandle }) => {
         if (!editable) return;
         const rule = connectionRule(catalog, model, source, target, sourceHandle, targetHandle);
-        setNotice(rule.error);
+        setNotice(rule.error === null ? null : { get message() {
+          return connectionRule(catalog, model, source, target, sourceHandle, targetHandle).error;
+        } });
         if (rule.type !== null) onCommand(addConnection(catalog, source, target, sourceHandle, targetHandle));
       }}
       onConnectEnd={(_, connection) => {
-        if (connection.fromNode !== null && connection.isValid !== true) setNotice(t("editor.canvas.connectionHint"));
+        if (connection.fromNode !== null && connection.isValid !== true) setNotice({ get message() { return t("editor.canvas.connectionHint"); } });
       }}
     >
       <Background gap={20} />
@@ -280,7 +282,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"
           aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>
       </Panel>
-      {notice === null ? null : <div className="canvas-notice" role="alert">{notice}</div>}
+      {notice === null ? null : <div className="canvas-notice" role="alert">{notice.message}</div>}
     </ReactFlow>
     <div className="canvas-navigation react-flow" role="group" aria-label={t("editor.canvas.navigation")}>
       <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions} />

@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { t } from "../i18n";
+import { localizeCatalog } from "../i18n/catalog";
+import { useLanguage } from "../i18n/useLanguage";
+import { MessageError } from "../i18n/MessageError";
 import { ApiError, api } from "../api/apiClient";
 import type { ApiProblem, Catalog, DocumentEntry, LayoutFile, WorkspaceChangeView } from "../api/apiTypes";
 import {
@@ -42,29 +45,29 @@ export interface Workspace {
 
 export function problemOf(error: unknown): ApiProblem {
   if (error instanceof ApiError) return error.problem;
-  return { code: "CLIENT_ERROR", message: error instanceof Error ? error.message : t("app.workspace.requestFailed"), diagnostics: [] };
+  return { code: "CLIENT_ERROR", get message() { return error instanceof Error ? error.message : t("app.workspace.requestFailed"); }, diagnostics: [] };
 }
 
 async function loadExperiment(experimentPath: string, recoveryLayoutPath?: string): Promise<LoadedExperiment> {
   const experimentView = await api.document(experimentPath);
   const experiment = experimentView.content.experiment;
-  if (experiment == null) throw new Error(t("app.workspace.notExperiment", { path: experimentPath }));
+  if (experiment == null) throw new MessageError("app.workspace.notExperiment", { path: experimentPath });
   const modelPath = resolveRef(experimentPath, experiment.modelRef);
-  if (modelPath === null) throw new Error(t("app.workspace.modelRefOutside", { path: experimentPath }));
+  if (modelPath === null) throw new MessageError("app.workspace.modelRefOutside", { path: experimentPath });
   const modelView = await api.document(modelPath);
   const model = modelView.content.model;
-  if (model == null) throw new Error(t("app.workspace.notModel", { path: modelPath }));
+  if (model == null) throw new MessageError("app.workspace.notModel", { path: modelPath });
   const layoutPath = experiment.layoutRef == null
     ? experimentPath.replace(/\.experiment\.json$/, ".layout.json")
     : resolveRef(experimentPath, experiment.layoutRef);
-  if (layoutPath === null) throw new Error(t("app.workspace.layoutRefOutside", { path: experimentPath }));
+  if (layoutPath === null) throw new MessageError("app.workspace.layoutRefOutside", { path: experimentPath });
   let layout: LayoutFile = { schemaVersion: 1, positions: {} };
   let layoutVersion: string | null = null;
   // Recover a known or conflicting generated sibling on reload, without attaching its reference or overwriting it.
   if (experiment.layoutRef != null || recoveryLayoutPath === layoutPath) {
     try {
       const layoutView = await api.document(layoutPath);
-      if (layoutView.content.layout == null) throw new Error(t("app.workspace.notLayout", { path: layoutPath }));
+      if (layoutView.content.layout == null) throw new MessageError("app.workspace.notLayout", { path: layoutPath });
       layout = layoutView.content.layout;
       layoutVersion = layoutView.version;
     } catch (error) {
@@ -80,7 +83,9 @@ async function loadExperiment(experimentPath: string, recoveryLayoutPath?: strin
 
 /** Loads workspace documents, tracks external changes and saves command edits with conditional versions (stage 1 design §6.2). */
 export function useWorkspace(): Workspace {
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const language = useLanguage();
+  const [sourceCatalog, setCatalog] = useState<Catalog | null>(null);
+  const catalog = useMemo(() => sourceCatalog === null ? null : localizeCatalog(sourceCatalog, language), [sourceCatalog, language]);
   const [experiments, setExperiments] = useState<string[]>([]);
   const [editor, dispatch] = useReducer(editorReducer, initialEditorState);
   const { loaded, conflictPath } = editor;

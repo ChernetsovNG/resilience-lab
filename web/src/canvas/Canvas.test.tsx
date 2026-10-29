@@ -6,10 +6,26 @@ import { Canvas } from "./Canvas";
 import { VariantTabs } from "./VariantTabs";
 import { canvasResults, type CanvasResults } from "../results/canvasResults";
 import { summary } from "../test/fixtures";
+import { setLanguage } from "../i18n";
+import { localizeCatalog } from "../i18n/catalog";
 
 beforeAll(mockReactFlowDom);
 
 describe("Canvas", () => {
+  it.each([1, 4, 10])("labels service parameters before their values with %s handlers", async handlers => {
+    setLanguage("ru");
+    try {
+      const configured = { ...model, blocks: { ...model.blocks,
+        gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, handlers } },
+      } };
+      render(<Canvas catalog={localizeCatalog(catalog)} onCommand={vi.fn()} model={configured} layout={layout}
+        selected={[]} onSelect={vi.fn()} />);
+      const node = await screen.findByTestId("rf__node-gateway");
+      expect(node.querySelector(".block-summary")?.textContent?.replace(/\s+/g, " ").trim())
+        .toBe(`обработчики: ${handlers} · очередь: 16 · среднее: 1ms`);
+    } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
+  });
+
   it("publishes zoom after connected nodes have been measured", async () => {
     const observer = globalThis.ResizeObserver;
     const measurements: (() => void)[] = [];

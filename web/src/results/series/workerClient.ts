@@ -1,11 +1,12 @@
 import { t } from "../../i18n";
+import { MessageError } from "../../i18n/MessageError";
 import type { SeriesDecoder } from "./loader";
 import { SeriesLoadError } from "./loader";
 import type { DecodedSeriesPart } from "./types";
 
 interface WorkerResponse {
   parts?: DecodedSeriesPart[];
-  error?: string;
+  error?: string | Pick<MessageError, "key" | "params">;
 }
 
 /** One-shot module worker; closing it rejects unfinished work and prevents stale cache writes. */
@@ -18,9 +19,12 @@ export class WorkerSeriesDecoder implements SeriesDecoder {
       this.pending = { resolve, reject };
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
         this.pending = undefined;
-        if (event.data.error !== undefined) reject(new SeriesLoadError("INVALID_SERIES", event.data.error));
+        if (event.data.error !== undefined) {
+          const error = event.data.error;
+          reject(new SeriesLoadError("INVALID_SERIES", typeof error === "string" ? error : new MessageError(error.key, error.params)));
+        }
         else if (event.data.parts !== undefined) resolve(event.data.parts);
-        else reject(new SeriesLoadError("INVALID_SERIES", t("results.series.emptyResponse")));
+        else reject(new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.emptyResponse")));
       };
       this.worker.onerror = (event) => {
         this.pending = undefined;

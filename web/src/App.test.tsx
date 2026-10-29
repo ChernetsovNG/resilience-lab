@@ -1078,7 +1078,7 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
 
   fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
   expect(screen.getByText(stale)).toBeTruthy();
-  expect(screen.getByText("Student 95% confidence intervals are not clipped.")).toBeTruthy();
+  expect(screen.getByText("Shared assumptions")).toBeTruthy();
   fireEvent.click(button("Undo"));
   expect(screen.queryByText(stale)).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));

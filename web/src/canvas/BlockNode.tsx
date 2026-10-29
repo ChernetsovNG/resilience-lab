@@ -56,6 +56,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         title={data.result.firstSaturation}>{t("editor.symbols.saturation")}</span>}
       {data.block.type === "service" ? (
         <span className="block-summary">
+          <span>{t("editor.canvas.handlers")}</span>
           <InlineParamEditor {...editorProps} path="handlers" onCommit={(value) => data.onParam(data.id, "handlers", value)} />
           <span>{t("editor.canvas.handlersQueue")}</span>
           <InlineParamEditor {...editorProps} path="queue" onCommit={(value) => data.onParam(data.id, "queue", value)} />

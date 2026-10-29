@@ -196,7 +196,7 @@ async function save(page: Page) {
   await expect(page.getByText("Unsaved changes")).toBeHidden();
 }
 async function move(page: Page, locator: Locator, dx: number, dy: number) {
-  const box = await locator.boundingBox();
+  const box = await locator.locator(".block-node > strong").boundingBox();
   expect(box).not.toBeNull();
   const x = box!.x + box!.width / 2;
   const y = box!.y + box!.height / 2;
@@ -245,6 +245,8 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
       y: Math.round((box.height / 2 - matrix.f) / matrix.d / 20) * 20 };
   });
   await run.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "View", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(palette.getByRole("button", { name: "Client", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
