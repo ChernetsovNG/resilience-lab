@@ -77,7 +77,7 @@ export function App() {
   const playback = usePlayback({
     runId: run.job?.runId ?? "", variant: showDiagramResults ? variant?.id ?? null : null,
     pointId: selectedPointId, replication: results.selection.replication, window: results.selection.window,
-    windowMs, windowCount, nodes: ownRun && run.documents !== null ? Object.keys(run.documents.model.blocks) : [],
+    windowCount, nodes: ownRun && run.documents !== null ? Object.keys(run.documents.model.blocks) : [],
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
   const diagramResults = playback.frame ?? summaryDiagramResults;

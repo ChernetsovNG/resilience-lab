@@ -58,7 +58,7 @@ function setup(loader: { load: (request: SeriesLoadRequest) => Promise<NodeSerie
   return renderHook(({ variant, pointId, replication }: Context) => {
     const [window, onWindowChange] = useState<number | null>(null);
     return { window, ...usePlayback({
-      runId: "run-1", variant, pointId, replication, window, windowMs: 100, windowCount,
+      runId: "run-1", variant, pointId, replication, window, windowCount,
       nodes, results: summary, onWindowChange,
     }, loader) };
   }, { initialProps: { variant: "baseline", pointId: "p0", replication: 0 } as Context });
@@ -183,4 +183,22 @@ it("waits at a range boundary and resumes from the selected absolute window afte
   expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(32);
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(33);
+});
+
+it.each([10, 36_000])("paces playback in windows per second for %d ms windows", async (windowMs) => {
+  vi.useFakeTimers();
+  const timed = { load: async () => series.map((node) => ({ ...node, windows: node.windows.map((window, index) => ({
+    ...window, startMs: index * windowMs, durationMs: windowMs,
+  })) })) };
+  const { result } = setup(timed);
+  await act(async () => result.current.play());
+  act(() => vi.advanceTimersByTime(120));
+  expect(result.current.window).toBe(1);
+  act(() => result.current.setSpeed(0.25));
+  act(() => vi.advanceTimersByTime(400));
+  expect(result.current.window).toBe(2);
+  act(() => result.current.setSpeed(4));
+  act(() => vi.advanceTimersByTime(120));
+  expect(result.current.window).toBe(5);
+  expect(result.current.playing).toBe(false);
 });

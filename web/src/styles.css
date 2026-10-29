@@ -165,7 +165,23 @@ select {
 }
 
 .canvas {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 3.5rem;
   min-height: 0;
+}
+
+.canvas-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.2rem 0.5rem;
+  border-top: 1px solid #d5dbe3;
+  background: #f8fafc;
+}
+
+.canvas-navigation > .react-flow__panel {
+  position: static;
+  margin: 0;
 }
 
 .canvas-empty,
@@ -437,6 +453,7 @@ select {
 .timeline-interaction { position: absolute; inset: 12px 12px 32px 56px; cursor: crosshair; touch-action: none; }
 .timeline-interaction:focus-visible { outline: 2px solid #2563eb; }
 .timeline-axis { margin: 0 12px 0.25rem 56px; text-align: center; color: #52606d; font-size: 0.65rem; }
+.timeline-latency-note { margin: 0.25rem 0; color: #52606d; font-size: 0.7rem; }
 .timeline-readout { margin: 0.25rem 0 0; font-size: 0.75rem; }
 .timeline-readout > div { display: flex; justify-content: space-between; gap: 0.5rem; }
 .timeline-readout dt { min-width: 0; overflow-wrap: anywhere; }
