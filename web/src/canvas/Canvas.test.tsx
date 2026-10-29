@@ -4,7 +4,7 @@ import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
 import { Canvas } from "./Canvas";
 import { VariantTabs } from "./VariantTabs";
-import { canvasResults } from "../results/canvasResults";
+import { canvasResults, type CanvasResults } from "../results/canvasResults";
 import { summary } from "../test/fixtures";
 
 beforeAll(mockReactFlowDom);
@@ -325,4 +325,32 @@ it("does not move selected nodes when arrow keys are used on a variant diagnosti
   fireEvent.keyDown(badge, { key: "ArrowRight" });
   expect(onCommand).not.toHaveBeenCalled();
   expect(screen.getByTestId("rf__node-gateway").style.transform).toBe("translate(260px,100px)");
+});
+
+
+it("keeps metric rows and edge labels while empty or stale playback values are loading", async () => {
+  const summaryResults = canvasResults(summary, model, "baseline", "p0")!;
+  const frame: CanvasResults = { ...summaryResults, window: 31 };
+  const props = { catalog, model, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [] };
+  const { rerender } = render(<Canvas {...props} results={frame} />);
+  const metrics = await screen.findByTestId("canvas-results-gateway");
+  const lines = Array.from(metrics.children).map(child => child.textContent);
+  const edge = screen.getByTestId("canvas-edge-label-client-to-gateway").querySelector(".canvas-edge-results")!;
+  const label = edge.textContent;
+  rerender(<Canvas {...props} results={{ ...frame, pending: "Loading playback series" }} />);
+  expect(Array.from(metrics.children).map(child => child.textContent)).toEqual(lines);
+  expect(metrics.getAttribute("aria-busy")).toBe("true");
+  expect(metrics.classList.contains("canvas-metrics--pending")).toBe(true);
+  expect(metrics.firstElementChild?.getAttribute("title")).toContain("Loading playback series");
+  expect(edge.textContent).toBe(label);
+  expect(edge.getAttribute("title")).toContain("Loading playback series");
+  expect(edge.classList.contains("canvas-metrics--pending")).toBe(true);
+  rerender(<Canvas {...props} results={{ ...frame, window: undefined, pending: "Loading playback series" }} />);
+  expect(metrics.children).toHaveLength(3);
+  expect(metrics.classList.contains("canvas-metrics--empty")).toBe(true);
+  expect(edge.classList.contains("canvas-metrics--empty")).toBe(true);
+  rerender(<Canvas {...props} results={{ ...frame, window: 32 }} />);
+  expect(metrics.getAttribute("aria-busy")).toBeNull();
+  expect(metrics.classList.contains("canvas-metrics--pending")).toBe(false);
+  expect(edge.classList.contains("canvas-metrics--empty")).toBe(false);
 });

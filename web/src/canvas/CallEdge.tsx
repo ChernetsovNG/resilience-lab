@@ -19,6 +19,8 @@ export type CallEdgeType = Edge<{
   disabled: boolean;
   amplification?: number | null;
   result?: ConnectionCanvasResults;
+  resultsPending?: string;
+  resultsEmpty?: boolean;
   labelY?: number;
   connectionMetric?: ConnectionOverlayMetric;
   onSelect?: (multiple: boolean) => void;
@@ -30,7 +32,7 @@ export type CallEdgeType = Edge<{
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, selected, data }: EdgeProps<CallEdgeType>) {
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, amplification, windowed, result, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
+  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, amplification, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     editable: parametersEditable, disabled, onValidity };
@@ -38,6 +40,9 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const metricText = connectionMetric === "sentAttemptsPerSecond" ? formatRate(metricValue)
     : connectionMetric === "timeoutRate" ? formatPercent(metricValue)
       : connectionMetric === "meanOrphaned" ? formatNumber(metricValue) : formatMultiplier(amplification ?? null);
+  const metricTitle = connectionMetric === "amplification" ? windowed ? t("editor.canvas.amplificationWindowTitle")
+    : t("editor.canvas.amplificationPooledTitle") : t(`results.context.connection.metric.${connectionMetric}`);
+  const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
@@ -64,9 +69,9 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           </div> : null}
           <DiagnosticBadge diagnostics={diagnostics} />
           <VariantDiagnosticBadge diagnostics={variantDiagnostics} onOpen={onProblems} disabled={disabled} />
-          {amplification === undefined ? null : <span className="canvas-edge-results"
-            title={connectionMetric === "amplification" ? windowed ? t("editor.canvas.amplificationWindowTitle")
-              : t("editor.canvas.amplificationPooledTitle") : t(`results.context.connection.metric.${connectionMetric}`)}>
+          {amplification === undefined ? null : <span className={`canvas-edge-results${resultsPending === undefined ? "" : " canvas-metrics--pending"}${resultsEmpty ? " canvas-metrics--empty" : ""}`}
+            aria-busy={resultsPending === undefined ? undefined : true} aria-hidden={resultsEmpty || undefined}
+            title={tooltip}>
             {connectionMetric === "amplification" ? t("editor.canvas.amplification", { value: metricText })
               : t("editor.canvas.connectionMetric", { metric: t(`results.context.connection.metric.${connectionMetric}`), value: metricText })}
           </span>}

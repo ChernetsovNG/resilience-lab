@@ -2,7 +2,7 @@ import { useState } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { windowCanvasResults, type CanvasResults } from "../canvasResults";
-import type { NodeSeriesMetrics, SeriesLoadRequest, WindowMetricValues } from "../series";
+import type { ConnectionSeriesLoadRequest, NodeSeriesMetrics, SeriesLoadRequest, WindowMetricValues } from "../series";
 import { usePlayback } from "./usePlayback";
 
 const summary: CanvasResults = {
@@ -117,7 +117,8 @@ it("stops on context changes and ignores obsolete replies", async () => {
   expect(result.current.playing).toBe(false);
   expect(pending[0].request.signal?.aborted).toBe(true);
   await act(async () => pending[0].resolve(series));
-  expect(result.current.frame).toBeNull();
+  expect(result.current.frame?.window).toBeUndefined();
+  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
   expect(pending[1].request).toMatchObject({ variant: "no-retries", cell: "p1", replication: 1 });
   await act(async () => pending[1].resolve(series));
   expect(result.current.frame?.connections.get("call")?.amplification).toBe(1);
@@ -133,7 +134,8 @@ it("reports failed series without advancing a phantom frame", async () => {
   expect(result.current.problem).toBe("Series unavailable");
   act(() => vi.advanceTimersByTime(5000));
   expect(result.current.window).toBe(0);
-  expect(result.current.frame).toBeNull();
+  expect(result.current.frame?.window).toBeUndefined();
+  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
 });
 
 it("preserves absolute window numbers when only a later range is loaded", () => {
@@ -176,10 +178,15 @@ it("waits at a range boundary and resumes from the selected absolute window afte
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(32);
   expect(result.current.loading).toBe(true);
+  expect(result.current.frame?.window).toBe(31);
+  expect(result.current.frame?.pending).toMatch(/Loading/);
+  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(31);
   expect(pending[1].request).toMatchObject({ fromWindow: 32, untilWindow: 64 });
   act(() => vi.advanceTimersByTime(5000));
   expect(result.current.window).toBe(32);
-  await act(async () => pending[1].resolve(range(pending[1].request)));
+  const current = pending.find(item => item.request.fromWindow === 32 && !item.request.signal?.aborted)!;
+  await act(async () => current.resolve(range(current.request)));
+  expect(result.current.frame?.pending).toBeUndefined();
   expect(result.current.frame?.services.get("dependency")?.meanQueue).toBe(32);
   act(() => vi.advanceTimersByTime(120));
   expect(result.current.window).toBe(33);
@@ -219,4 +226,82 @@ it("uses the connection's own windows while playing a frame", async () => {
   await waitFor(() => expect(hook.result.current.frame?.connections.get("call")).toMatchObject({
     sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5,
   }));
+});
+
+
+it("reserves empty metrics before the first recorded window arrives", async () => {
+  const { result } = setup({ load: () => new Promise(() => {}) });
+  await act(async () => result.current.seek(0));
+  expect(result.current.frame?.window).toBeUndefined();
+  expect(result.current.frame?.pending).toMatch(/Loading/);
+  expect(result.current.frame?.services.get("dependency")).toMatchObject({
+    utilization: null, meanQueue: null, queueRejectionRate: null, windowed: true,
+  });
+  expect(result.current.frame?.connections.get("call")?.amplification).toBeNull();
+});
+
+it.each([
+  { runId: "run-2" }, { variant: "no-retries" }, { pointId: "p1" }, { replication: 1 },
+])("does not retain values across playback context changes: %j", async (change) => {
+  let first = true;
+  const loader = { load: async (request: SeriesLoadRequest) => {
+    if (first) { first = false; return range(request); }
+    return new Promise<NodeSeriesMetrics[]>(() => {});
+  } };
+  const initialProps = { runId: "run-1", variant: "baseline", pointId: "p0", replication: 0 };
+  const { result, rerender } = renderHook(props => usePlayback({ ...props, window: 5, windowCount: 100,
+    nodes: ["dependency"], results: summary, onWindowChange: vi.fn(),
+  }, loader), { initialProps });
+  await waitFor(() => expect(result.current.frame?.window).toBe(5));
+  rerender({ ...initialProps, ...change });
+  expect(result.current.frame?.window).toBeUndefined();
+  expect(result.current.frame?.services.get("dependency")?.meanQueue).toBeNull();
+  expect(result.current.frame?.connections.get("call")?.amplification).toBeNull();
+});
+
+it("prefetches the next node and connection ranges before the cursor reaches their boundary", async () => {
+  const requests: SeriesLoadRequest[] = [];
+  const connectionRequests: ConnectionSeriesLoadRequest[] = [];
+  const ownSummary = { ...summary, connections: new Map([["call", {
+    ...summary.connections.get("call")!, sentAttemptsPerSecond: 999,
+  }]]) };
+  const loader = {
+    load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); },
+    loadConnections: async (request: ConnectionSeriesLoadRequest) => {
+      connectionRequests.push(request);
+      return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({
+        startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
+        orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
+        latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
+      })) }];
+    },
+  };
+  const { result, rerender } = renderHook(({ window }) => usePlayback({
+    runId: "run-1", variant: "baseline", pointId: "p0", replication: 0, window, windowCount: 70,
+    nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
+  }, loader), { initialProps: { window: 0 } });
+  await waitFor(() => expect(result.current.frame?.window).toBe(0));
+  expect(requests).toHaveLength(1);
+  rerender({ window: 24 });
+  await waitFor(() => expect(requests.some(request => request.fromWindow === 32 && request.untilWindow === 64)).toBe(true));
+  expect(connectionRequests.some(request => request.fromWindow === 32 && request.untilWindow === 64)).toBe(true);
+  expect(result.current.frame?.window).toBe(24);
+  expect(result.current.frame?.pending).toBeUndefined();
+  rerender({ window: 62 });
+  await waitFor(() => expect(requests.some(request => request.fromWindow === 64 && request.untilWindow === 70)).toBe(true));
+});
+
+it("retries a failed prefetch in the foreground without interrupting the current frame", async () => {
+  let fail = true;
+  const loader = { load: async (request: SeriesLoadRequest) => {
+    if (request.fromWindow === 32 && fail) { fail = false; throw new Error("Prefetch unavailable"); }
+    return range(request);
+  } };
+  const { result } = setup(loader, 100);
+  await act(async () => result.current.seek(24));
+  expect(result.current.frame?.window).toBe(24);
+  expect(result.current.problem).toBeNull();
+  await act(async () => result.current.seek(32));
+  expect(result.current.frame?.window).toBe(32);
+  expect(result.current.problem).toBeNull();
 });

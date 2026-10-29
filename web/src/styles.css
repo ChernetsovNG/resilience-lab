@@ -1050,6 +1050,9 @@ select {
   padding-top: 0.25rem;
 }
 
+.canvas-metrics--pending { opacity: 0.5; }
+.canvas-metrics--empty { visibility: hidden; }
+
 .block-node .saturation-badge {
   position: absolute;
   top: -0.6rem;

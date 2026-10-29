@@ -1616,7 +1616,7 @@ it("keeps an estimate dismissed when its pending request completes", async () =>
   expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
 });
 
-it("hides pooled metrics while a Time frame loads or fails", async () => {
+it("reserves empty metric rows without borrowing pooled values while a Time frame loads or fails", async () => {
   const gate = deferred();
   vi.spyOn(seriesLoader, "load").mockImplementation(async () => {
     await gate.promise;
@@ -1629,12 +1629,14 @@ it("hides pooled metrics while a Time frame loads or fails", async () => {
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
   fireEvent.click(button("Time"));
-  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
-  expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
+  expect(screen.getByTestId("canvas-results-gateway").classList.contains("canvas-metrics--empty")).toBe(true);
+  expect(screen.getByTestId("canvas-results-gateway").textContent).not.toContain("50%");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").querySelector(".canvas-metrics--empty")).toBeTruthy();
   await act(async () => gate.release());
   await screen.findByText("Series unavailable");
-  expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
-  expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
+  expect(screen.getByTestId("canvas-results-gateway").classList.contains("canvas-metrics--empty")).toBe(true);
+  expect(screen.getByTestId("canvas-results-gateway").textContent).not.toContain("50%");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").querySelector(".canvas-metrics--empty")).toBeTruthy();
   fireEvent.click(button("Summary"));
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
 });
@@ -1685,7 +1687,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   const legend = screen.getByLabelText("Node color scale");
   expect(legend.textContent).toBe("Queue fill: 0%–100%");
   fireEvent.click(button("Time"));
-  await screen.findByTestId("canvas-results-gateway");
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").getAttribute("aria-busy")).toBeNull());
   expect(color("gateway")).toBe(halfFull);
   fireEvent.click(button("Next window"));
   await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Mean queue 4"));
@@ -1693,13 +1695,13 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   expect(color("gateway")).toBe(color("middle"));
   expect(legend.textContent).toBe("Queue fill: 0%–100%");
   fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
-  await screen.findByTestId("canvas-results-gateway");
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").getAttribute("aria-busy")).toBeNull());
   expect(color("gateway")).toBe(halfFull);
   await selectGateway();
   editField("Queue capacity", "128");
   expect(color("gateway")).toBe(halfFull);
   fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p2" } });
-  await screen.findByTestId("canvas-results-gateway");
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").getAttribute("aria-busy")).toBeNull());
   expect(color("gateway")).toBe("");
 });
 

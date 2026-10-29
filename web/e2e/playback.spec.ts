@@ -130,3 +130,72 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await rm(directory, { recursive: true });
   }
 });
+
+
+test("retry-storm nodes and edge labels retain their geometry while playback ranges load", async ({ page }) => {
+  const directory = resolve("../apps/server/build/e2e-workspace/playback-layout");
+  await mkdir(directory);
+  const releases: (() => void)[] = [];
+  let hold = false;
+  const release = () => { hold = false; releases.splice(0).forEach(done => done()); };
+  try {
+    for (const name of ["retry-storm.experiment.json", "retry-storm.model.json", "retry-storm.layout.json"]) {
+      await copyFile(resolve("../examples/retry-storm", name), resolve(directory, name));
+    }
+    await page.goto("/");
+    await page.getByLabel("Experiment", { exact: true }).selectOption("playback-layout/retry-storm.experiment.json");
+    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    const metrics = page.getByTestId("canvas-results-gateway");
+    await expect(metrics).toBeVisible();
+    await page.getByRole("button", { name: /fit view/i }).click();
+    const nodes = ["gateway", "middle", "dependency"].map(id => page.getByTestId(`rf__node-${id}`));
+    const heights = await Promise.all(nodes.map(node => node.evaluate(element => element.getBoundingClientRect().height)));
+    const edge = page.getByTestId("canvas-edge-label-middle-to-dependency");
+    const anchor = await edge.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
+    });
+    const checkGeometry = async () => {
+      for (const [index, node] of nodes.entries()) {
+        expect(await node.evaluate(element => element.getBoundingClientRect().height)).toBeCloseTo(heights[index], 1);
+      }
+      const current = await edge.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
+      });
+      expect(current.x).toBeCloseTo(anchor.x, 1);
+      expect(current.y).toBeCloseTo(anchor.y, 1);
+    };
+    await page.route(/\/series\/baseline\/p0\/0$/, async route => {
+      if (hold) await new Promise<void>(done => releases.push(done));
+      await route.continue();
+    });
+    hold = true;
+    await page.getByRole("button", { name: "Time", exact: true }).click();
+    await expect.poll(() => releases.length).toBeGreaterThan(0);
+    await checkGeometry();
+    await expect(metrics).toHaveClass(/canvas-metrics--empty/);
+    release();
+    await expect(metrics).not.toHaveAttribute("aria-busy", "true");
+    const slider = page.getByRole("slider", { name: "Playback window", exact: true });
+    for (const start of [30, 62]) {
+      await seek(slider, start);
+      await expect(metrics).not.toHaveAttribute("aria-busy", "true");
+      hold = true;
+      for (let window = start; window <= start + 4; window++) {
+        if (window > start) await page.getByRole("button", { name: "Next window", exact: true }).click();
+        await expect(slider).toHaveValue(String(window));
+        if (window >= start + 2) await expect(metrics).toHaveAttribute("aria-busy", "true");
+        await checkGeometry();
+      }
+      release();
+      await expect(metrics).not.toHaveAttribute("aria-busy", "true");
+      await checkGeometry();
+    }
+  } finally {
+    release();
+    await rm(directory, { recursive: true });
+  }
+});
