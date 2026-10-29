@@ -74,9 +74,12 @@ export function ResultsPanel({
   const hasGrid = summary !== null && summary.grid.length > 0;
   const active = navigation.view === "map" && !hasGrid ? "answer" : navigation.view;
   useEffect(() => { onViewChange?.(active); }, [active, onViewChange]);
-  const selectView = (view: ResultsPanelView) => setNavigation({
-    ...navigation, view, changedDuringRun: navigation.changedDuringRun || (running && view !== active),
-  });
+  const selectView = (view: ResultsPanelView) => {
+    setNavigation({
+      ...navigation, view, changedDuringRun: navigation.changedDuringRun || (running && view !== active),
+    });
+    if (size === "collapsed") onSizeChange?.("normal");
+  };
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
   const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
