@@ -1,5 +1,5 @@
-import { useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
-import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
+import { useEffect, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import { Background, Controls, MiniMap, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
 import type { CanvasResults } from "../results/canvasResults";
@@ -42,8 +42,14 @@ export function Canvas(props: CanvasProps) {
 function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, overrides = {}, results = null }: CanvasProps) {
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const initialized = useNodesInitialized();
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
+  useEffect(() => {
+    if (initialized && width > 0 && height > 0) void fitView({ padding: 0.15, minZoom: 0.05 });
+  }, [fitView, initialized, width, height, sizes]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
   const [notice, setNotice] = useState<string | null>(null);
   const nodes: BlockNodeType[] = Object.entries(model.blocks).map(([id, block]) => ({
@@ -128,6 +134,7 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
   };
 
   return (
+    <>
     <ReactFlow
       aria-label="Model canvas"
       nodes={nodes}
@@ -135,6 +142,8 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
+      fitViewOptions={{ padding: 0.15, minZoom: 0.05 }}
+      minZoom={0.05}
       snapToGrid
       snapGrid={[20, 20]}
       nodesDraggable={editable}
@@ -169,9 +178,12 @@ function ModelCanvas({ model, layout, catalog, selected, onSelect, editable = fa
       }}
     >
       <Background gap={20} />
-      <Controls showInteractive={false} />
-      <MiniMap pannable zoomable style={{ width: 120, height: 70 }} />
       {notice === null ? null : <div className="canvas-notice" role="alert">{notice}</div>}
     </ReactFlow>
+    <div className="canvas-navigation react-flow" role="group" aria-label="Canvas navigation">
+      <Controls showInteractive={false} orientation="horizontal" />
+      <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
+    </div>
+    </>
   );
 }

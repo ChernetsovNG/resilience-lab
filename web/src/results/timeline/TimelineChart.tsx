@@ -64,7 +64,10 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
             fill={region.kind === "warmup" ? "#94a3b8" : "#f59e0b"} fillOpacity={0.14} />)}
           {sampled.map((line) => <Line key={line.id} data={line.points} dataKey="value" type="stepAfter"
             name={line.label} stroke={line.color} strokeWidth={1.6} strokeDasharray={line.comparison ? "6 4" : undefined}
-            dot={false} activeDot={false} connectNulls={false} isAnimationActive={false} />)}
+            dot={unit === "ms" ? ({ cx, cy, payload, index }: { cx?: number; cy?: number; payload: TimelinePoint; index: number }) =>
+              payload.value !== null && payload.startMs === line.windows[payload.window].startMs
+                ? <circle key={index} className="timeline-latency-marker" cx={cx} cy={cy} r={2} fill="#fff" stroke={line.color} />
+                : <g key={index} /> : false} activeDot={false} connectNulls={false} isAnimationActive={false} />)}
           {cursorWindow === null ? null : <ReferenceLine x={cursorWindow * windowMs} stroke="#111827" strokeWidth={2} />}
           {hoverWindow === null ? null : <ReferenceLine x={hoverWindow * windowMs} stroke="#475569" strokeDasharray="3 3" />}
         </LineChart>
@@ -84,6 +87,7 @@ export function TimelineChart({ title, unit, lines, regions, endMs, windowMs, ho
         }} />
     </div>
     <p className="timeline-axis">Simulation time (ms)</p>
+    {unit === "ms" ? <p className="timeline-latency-note">Markers show recorded window values. Empty windows have no latency value and remain gaps.</p> : null}
     <dl className="timeline-readout">
       {lines.map((line) => {
         const raw = active === null ? null : line.windows[active]?.[line.metric] ?? null;

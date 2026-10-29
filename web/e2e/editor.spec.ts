@@ -211,7 +211,7 @@ async function connect(page: Page, from: string, to: string, targetPort = "in") 
 }
 
 test("extends the chain through real drag and ports, persists positions and commits a move as one layout-only command", async ({ page, files }) => {
-  const canvas = page.locator(".react-flow");
+  const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = await canvas.boundingBox();
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true })
     .dragTo(canvas, { targetPosition: { x: bounds!.width * 0.55, y: bounds!.height * 0.7 } });

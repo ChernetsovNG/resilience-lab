@@ -1,4 +1,4 @@
-import type { usePlayback } from "./usePlayback";
+import { PLAYBACK_WINDOWS_PER_SECOND, type usePlayback } from "./usePlayback";
 
 interface PlaybackControlsProps {
   playback: ReturnType<typeof usePlayback>;
@@ -17,7 +17,7 @@ export function PlaybackControls({ playback, window, windowCount, replication, r
     <button type="button" aria-label="Previous window" title="Previous window" onClick={() => playback.seek((window ?? 0) - 1)} disabled={window === null || window === 0}>‹</button>
     <button type="button" aria-label="Next window" title="Next window" onClick={() => playback.seek(window === null ? 0 : window + 1)} disabled={window === windowCount - 1}>›</button>
     <label>Speed <select aria-label="Playback speed" value={playback.speed} onChange={(event) => playback.setSpeed(Number(event.target.value))}>
-      {[0.25, 0.5, 1, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}×</option>)}
+      {[0.25, 0.5, 1, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}× ({speed * PLAYBACK_WINDOWS_PER_SECOND} windows/s)</option>)}
     </select></label>
     <label>Replication <select aria-label="Playback replication" value={replication} onChange={(event) => onReplicationChange(Number(event.target.value))}>
       {Array.from({ length: replications }, (_, index) => <option key={index} value={index}>{index}</option>)}

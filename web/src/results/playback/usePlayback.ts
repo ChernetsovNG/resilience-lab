@@ -3,13 +3,14 @@ import { windowCanvasResults, type CanvasResults } from "../canvasResults";
 import { seriesLoader, type SeriesLoader } from "../series";
 import { useTimelineSeries } from "../timeline/useTimelineSeries";
 
+export const PLAYBACK_WINDOWS_PER_SECOND = 10;
+
 interface PlaybackOptions {
   runId: string;
   variant: string | null;
   pointId: string;
   replication: number;
   window: number | null;
-  windowMs: number;
   windowCount: number;
   nodes: readonly string[];
   results: CanvasResults | null;
@@ -18,7 +19,7 @@ interface PlaybackOptions {
 
 /** Browser time only advances the shared window; series alone determine every frame. */
 export function usePlayback({
-  runId, variant, pointId, replication, window, windowMs, windowCount, nodes, results, onWindowChange,
+  runId, variant, pointId, replication, window, windowCount, nodes, results, onWindowChange,
 }: PlaybackOptions, loader: Pick<SeriesLoader, "load"> = seriesLoader) {
   const key = JSON.stringify([runId, variant, pointId, replication]);
   const [state, setState] = useState({ key, playing: false });
@@ -46,7 +47,7 @@ export function usePlayback({
     const start = performance.now();
     let previous = first;
     const timer = setInterval(() => {
-      const next = Math.min(windowCount - 1, first + Math.floor((performance.now() - start) * speed / windowMs));
+      const next = Math.min(windowCount - 1, first + Math.floor((performance.now() - start) * speed * PLAYBACK_WINDOWS_PER_SECOND / 1000));
       if (next !== previous) {
         previous = next;
         advance(next);
@@ -54,7 +55,7 @@ export function usePlayback({
       if (next === windowCount - 1) setState({ key, playing: false });
     }, 40);
     return () => clearInterval(timer);
-  }, [playing, ready, key, speed, windowMs, windowCount]);
+  }, [playing, ready, key, speed, windowCount]);
 
   const pause = () => setState({ key, playing: false });
   const seek = (next: number | null) => {
