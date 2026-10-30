@@ -15,6 +15,7 @@ import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics }
 import { useValidation } from "./validation/useValidation";
 import { Canvas, type CanvasHandle } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
+import { VariantChanges } from "./canvas/VariantChanges";
 import { useHealth } from "./components/useHealth";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
 import { projectElementResults } from "./inspector/elementResultsData";
@@ -116,6 +117,13 @@ export function App() {
   const structureEditable = editable && variant === undefined;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
+  const selectVariantChange = (id: string, path: string) => {
+    if (invalid || loading) return;
+    setAnalysis(false);
+    setSelection([id]); setInspectorTarget("element");
+    setFaultRequest(current => current + 1);
+    setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1 }));
+  };
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
   const staleResults = ownRun && loaded !== null && run.documents !== null && (
     !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
@@ -397,6 +405,8 @@ export function App() {
         ) : (
           <Inspector
             resultsOnly={analysis}
+            variantChanges={variant === undefined ? undefined : <VariantChanges model={loaded.model} catalog={catalog}
+              overrides={overrides} disabled={invalid || loading} onSelect={selectVariantChange} />}
             results={elementResults === null ? null : <ElementResults {...elementResults} />}
             resultsFirst={elementResults !== null && elementResults.manifest.complete && projectElementResults(elementResults) !== null}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
@@ -425,7 +435,7 @@ export function App() {
             }}
           />
         )}>
-      <Palette hidden={analysis} catalog={catalog} editable={structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
+      <Palette hidden={analysis} catalog={catalog} editable={editable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
       <main className="canvas-area" onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented && event.target instanceof Element &&
           !event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) {
@@ -489,6 +499,10 @@ export function App() {
             <Canvas
               ref={canvas}
               model={model}
+              baseModel={loaded.model}
+              variant={variant}
+              onSelectChange={selectVariantChange}
+              onModelPage={() => { if (!invalid) { setAnalysis(false); selectVariant(null); setFieldFocus(null); } }}
               layout={loaded.layout}
               key={loaded.experimentPath}
               catalog={catalog}

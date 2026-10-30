@@ -1,8 +1,8 @@
 import { t } from "../i18n";
-import { formatNumber } from "../i18n/format";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Catalog } from "../api/apiTypes";
-import { isObject, type Params } from "../workspace/params";
+import type { Params } from "../workspace/params";
+import { catalogParameter, formatParameterValue } from "../workspace/parameterValues";
 import { parseParam } from "../workspace/paramParsing";
 
 export interface InlineParamEditorProps {
@@ -10,6 +10,8 @@ export interface InlineParamEditorProps {
   elementId: string;
   elementType: string;
   params: Params;
+  modelParams?: Params;
+  overridden?: boolean;
   path: string;
   editable: boolean;
   disabled?: boolean;
@@ -17,25 +19,13 @@ export interface InlineParamEditorProps {
   onValidity: (key: string, valid: boolean) => void;
 }
 
-function catalogParameter(catalog: Catalog, type: string, params: Params, path: string) {
-  const [root, ...fields] = path.split(".");
-  let descriptor = catalog.types.find((candidate) => candidate.id === type)?.params.find((param) => param.name === root);
-  if (descriptor === undefined) return undefined;
-  let value = params[root] ?? descriptor.default;
-  for (const field of fields) {
-    descriptor = descriptor.fields.find((param) => param.name === field)!;
-    value = (isObject(value) ? value[field] : undefined) ?? descriptor?.default;
-  }
-  return { descriptor, value };
-}
-
 /** A catalog-backed value on the canvas; only malformed drafts remain open and block loss-prone navigation. */
-export function InlineParamEditor({ catalog, elementId, elementType, params, path, editable, disabled = false, onCommit, onValidity }: InlineParamEditorProps) {
+export function InlineParamEditor({ catalog, elementId, elementType, params, modelParams, overridden = false, path, editable, disabled = false, onCommit, onValidity }: InlineParamEditorProps) {
   const id = useId();
   const { descriptor, value } = catalogParameter(catalog, elementType, params, path)!;
   const shown = value == null ? "" : String(value);
-  const displayed = value == null && descriptor.required ? t("editor.param.required")
-    : typeof value === "number" ? formatNumber(value) : shown;
+  const displayed = value == null && !descriptor.required ? shown : formatParameterValue(value, descriptor);
+  const modelValue = modelParams === undefined ? undefined : catalogParameter(catalog, elementType, modelParams, path);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(shown);
   const [previous, setPrevious] = useState(shown);
@@ -72,6 +62,10 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, pat
   return (
     <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`}
       data-element-id={elementId} data-param-path={path} onDoubleClick={begin}>
+      {overridden && modelValue !== undefined ? <del className="inline-param-model"
+        title={t("editor.variant.modelValue", { value: formatParameterValue(modelValue.value, descriptor) })}>
+        {formatParameterValue(modelValue.value, descriptor)}
+      </del> : null}
       {editing ? (
         <form className="inline-param-editor nodrag nopan" onSubmit={(event) => { event.preventDefault(); commit(); }}>
           <label className="visually-hidden" htmlFor={id}>{descriptor.title}</label>

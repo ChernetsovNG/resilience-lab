@@ -13,8 +13,45 @@ import type { Catalog, TypeDescriptor } from "../api/apiTypes";
 import fullCatalog from "../test/catalog.json";
 import { setViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
+import { applyOverrides } from "../workspace/params";
 
 beforeAll(mockReactFlowDom);
+
+it("marks overridden route weights before any results exist", async () => {
+  const base = structuredClone(model);
+  base.blocks.middle = { type: "router", params: { policy: "weighted" } };
+  const route = base.connections.find(connection => connection.id === "middle-to-dependency")!;
+  route.type = "route";
+  route.params = { weight: 1 };
+  const variant = { id: "route-change", overrides: { "middle-to-dependency.weight": 2 } };
+  const extended = fullCatalog as Catalog;
+  render(<Canvas model={applyOverrides(base, variant.overrides, extended)} baseModel={base} catalog={extended}
+    variant={variant} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const label = await screen.findByTestId("canvas-edge-label-middle-to-dependency");
+  expect(label.classList.contains("canvas-edge-label--overridden")).toBe(true);
+  expect(label.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("Overridden parameters");
+  expect(screen.getByTestId("canvas-param-middle-to-dependency-weight").querySelector("del")?.textContent).toBe("1");
+});
+
+it("marks only overridden elements and shows their model values while preserving metric backgrounds", async () => {
+  const variant = { id: "changed", overrides: { "gateway.handlers": 6, "gateway.processing.mean": "8ms", "gateway-to-middle.attempts": 1 } };
+  const snapshot = applyOverrides(model, variant.overrides, catalog);
+  const props = { catalog, model: snapshot, baseModel: model, variant, layout, selected: [],
+    onSelect: vi.fn(), onCommand: vi.fn(), parametersEditable: true };
+  const { rerender } = render(<Canvas {...props} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.querySelector(".block-node--overridden")).not.toBeNull();
+  expect(screen.getByTestId("rf__node-middle").querySelector(".block-node--overridden")).toBeNull();
+  expect(screen.getByTestId("canvas-param-gateway-handlers").querySelector("del")?.textContent).toBe("4");
+  expect(screen.getByTestId("canvas-param-gateway-processing.mean").querySelector("del")?.textContent).toBe("1ms");
+  expect(screen.getByTestId("canvas-param-gateway-queue").querySelector("del")).toBeNull();
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("canvas-edge-label--overridden")).toBe(true);
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-attempts").querySelector("del")?.textContent).toBe("3");
+  const results = canvasResults(summary, model, "baseline", "p0", catalog)!;
+  rerender(<Canvas {...props} results={results} />);
+  expect((gateway.querySelector(".block-node") as HTMLElement).style.backgroundColor).not.toBe("");
+  expect(gateway.querySelector(".block-node--overridden")).not.toBeNull();
+});
 
 it.each([true, false])("uses the live grid for the background and drops with snapping %s", async snapToGrid => {
   const onCommand = vi.fn();

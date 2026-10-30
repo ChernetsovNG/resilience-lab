@@ -1,12 +1,12 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import { useEffect, useImperativeHandle, useMemo, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
-import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
+import type { Catalog, Diagnostic, LayoutFile, ModelFile, Variant } from "../api/apiTypes";
 import type { CanvasResults, ConnectionOverlayMetric, NodeOverlayMetric } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
-import { ownEntry } from "../workspace/params";
+import { elementOf, ownEntry } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { useViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
@@ -15,6 +15,7 @@ import type { CourseFault } from "../experiment/course";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import { CallEdge } from "./CallEdge";
+import { VariantChanges } from "./VariantChanges";
 import "@xyflow/react/dist/style.css";
 
 const baseFitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
@@ -45,6 +46,11 @@ export interface CanvasProps {
   ref?: Ref<CanvasHandle>;
   /** The model as the active variant page sees it. */
   model: ModelFile;
+  /** Original model values shown beside the active variant's overrides. */
+  baseModel?: ModelFile;
+  variant?: Variant;
+  onSelectChange?: (id: string, path: string) => void;
+  onModelPage?: () => void;
   overrides?: Record<string, unknown>;
   results?: CanvasResults | null;
   nodeMetric?: NodeOverlayMetric;
@@ -76,13 +82,26 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
-function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
-  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = {}, results = null,
+function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
+  disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
   nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
   const { gridStep, snapToGrid, showGrid } = useViewSettings();
+  const variantVisible = variant !== undefined;
+  const banner = useRef<HTMLDetailsElement>(null);
+  const [bannerHeight, setBannerHeight] = useState(0);
+  useLayoutEffect(() => {
+    const element = banner.current;
+    if (element === null) return;
+    const measure = () => setBannerHeight(element.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [variant?.id]);
   const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
     ...baseFitViewOptions.padding, bottom: `${Math.max(80, bottomInset + 16)}px` as `${number}px`,
-  } }), [bottomInset]);
+    top: `${Math.max(64, variantVisible ? bannerHeight + 16 : 0)}px` as `${number}px`,
+  } }), [bottomInset, bannerHeight, variantVisible]);
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
@@ -95,9 +114,16 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   const pending = insertions[0];
   const pendingId = pending === undefined ? null : nextBlockId(model, pending.type);
   const pendingSize = measurement !== null && measurement.request === pending ? measurement.size : undefined;
+  const [notice, setNotice] = useState<{ readonly message: string | null; variant?: string } | null>(null);
+  const gesture = useRef<{ x: number; y: number } | null>(null);
+  const structureHint = () => {
+    if (variant !== undefined && !disabled) setNotice({ variant: variant.id,
+      get message() { return t("editor.variant.structureHint"); } });
+  };
   useImperativeHandle(ref, () => ({
     addBlock: (type) => {
-      if (!editable || disabled || width <= 0 || height <= 0) return;
+      if (!editable) { structureHint(); return; }
+      if (disabled || width <= 0 || height <= 0) return;
       const viewport = getViewport();
       const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
       if (catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) {
@@ -128,7 +154,6 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     return () => cancelAnimationFrame(frame);
   }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand, gridStep, snapToGrid]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
-  const [notice, setNotice] = useState<{ readonly message: string | null } | null>(null);
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
   if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: initialParams(catalog.types.find(type => type.id === pending.type)?.params ?? []) }]);
@@ -162,7 +187,8 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       needsConnection: block.type === "client"
         ? !model.connections.some(connection => connection.from === id && connection.type === "request") : !reachable.has(id),
       faults: faults.filter(fault => fault.elementId === id), onFault,
-      id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
+      id, block, modelBlock: baseModel === undefined ? undefined : ownEntry(baseModel.blocks, id), overrides,
+      catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
       editable: id !== pendingId && editable, parametersEditable: id !== pendingId && parametersEditable, disabled: id === pendingId || disabled,
@@ -189,6 +215,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
         faults: faults.filter(fault => fault.elementId === connection.id), onFault,
+        modelParams: baseModel === undefined ? undefined : elementOf(baseModel, connection.id)?.params, overrides,
         labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         result: matched, connectionMetric,
@@ -236,7 +263,10 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     if (pending !== undefined && incoming !== undefined && incoming.width > 0 && incoming.height > 0) {
       setMeasurement({ request: pending, size: incoming });
     }
-    if (!editable) return;
+    if (!editable) {
+      if (changes.some(change => change.type === "position")) structureHint();
+      return;
+    }
     const positions = changes.flatMap((change) => change.type === "position" && change.position !== undefined
       ? [{ id: change.id, position: change.position, dragging: change.dragging }] : []);
     if (positions.length === 0) return;
@@ -253,8 +283,35 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
     if (settled.length > 0) onCommand(moveBlocks(Object.fromEntries(settled.map((change) => [change.id, change.position]))));
   };
 
+  const count = Object.keys(overrides).length;
+  const variantSummary = variant === undefined ? "" : t("editor.variant.banner", { name: variant.label ?? variant.id,
+    count: t(count === 1 ? "editor.variant.changeCountOne" : "editor.variant.changeCount", { count: formatNumber(count) }) });
   return (
-    <>
+    <div className={`model-canvas${variant === undefined ? "" : " variant-canvas"}`}
+      onMouseDownCapture={event => {
+        if (variant === undefined || disabled || !(event.target instanceof Element)
+          || event.target.closest("button, input, textarea, select, .inline-param") !== null
+          || event.target.closest(".react-flow__node, .react-flow__handle") === null) return;
+        gesture.current = { x: event.clientX, y: event.clientY };
+        event.stopPropagation();
+      }}
+      onMouseMoveCapture={event => {
+        const start = gesture.current;
+        if (start !== null && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) {
+          gesture.current = null;
+          structureHint();
+        }
+      }}
+      onMouseUpCapture={() => { gesture.current = null; }} onMouseLeave={() => { gesture.current = null; }}>
+    {variant === undefined ? null : <details ref={banner} key={variant.id} className="variant-banner" data-testid="variant-banner">
+      <summary title={variantSummary}>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor">
+          <rect x="3" y="7" width="10" height="7" rx="1" /><path d="M5 7V5a3 3 0 0 1 6 0v2" />
+        </svg>
+        {variantSummary}
+      </summary>
+      <VariantChanges model={baseModel ?? model} catalog={catalog} overrides={overrides} disabled={disabled} onSelect={onSelectChange} />
+    </details>}
     <ReactFlow
       aria-label={t("editor.canvas.label")}
       ariaLabelConfig={ariaLabelConfig()}
@@ -278,19 +335,20 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       onEdgeClick={(event, edge) => select(event, edge.id)}
       onPaneClick={() => { if (!disabled) onSelect([]); }}
       onDragOver={(event) => {
-        if (!editable) return;
+        if ((!editable && variant === undefined) || disabled) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
       }}
       onDrop={(event) => {
-        if (!editable) return;
         event.preventDefault();
+        if (!editable) { structureHint(); return; }
+        if (disabled) return;
         const type = event.dataTransfer.getData("application/resilience-lab-block");
         const point = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid });
         onCommand(addBlock(catalog, type, point));
       }}
       onConnect={({ source, target, sourceHandle, targetHandle }) => {
-        if (!editable) return;
+        if (!editable) { structureHint(); return; }
         const rule = connectionRule(catalog, model, source, target, sourceHandle, targetHandle);
         setNotice(rule.error === null ? null : { get message() {
           return connectionRule(catalog, model, source, target, sourceHandle, targetHandle).error;
@@ -298,6 +356,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         if (rule.type !== null) onCommand(addConnection(catalog, source, target, sourceHandle, targetHandle));
       }}
       onConnectEnd={(_, connection) => {
+        if (!editable) return;
         if (connection.fromNode !== null && connection.isValid !== true) setNotice({ get message() { return t("editor.canvas.connectionHint"); } });
       }}
     >
@@ -306,12 +365,17 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"
           aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>
       </Panel>
-      {notice === null ? null : <div className="canvas-notice" role="alert">{notice.message}</div>}
+      {notice === null || (notice.variant !== undefined && notice.variant !== variant?.id) ? null
+        : <div className="canvas-notice" role="alert"
+          style={notice.variant === undefined ? undefined : { top: bannerHeight + 16, zIndex: 1003 }}>
+          {notice.message}{notice.variant === undefined ? null : <>
+          {" "}<a href="#model" onClick={event => { event.preventDefault(); setNotice(null); onModelPage?.(); }}>{t("editor.pages.model")}</a>
+        </>}</div>}
     <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}>
       <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions} />
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </Panel>
     </ReactFlow>
-    </>
+    </div>
   );
 }
