@@ -38,7 +38,7 @@ test("service parameters stay together at the same node height in English and Ru
   await expect(page.getByTestId("canvas-param-gateway-handlers")).toHaveText("4");
   await page.getByRole("button", { name: "Сервис", exact: true }).click();
   const added = page.locator(".react-flow__node.selected .block-node");
-  await expect(added.locator(".block-summary")).toContainText("Обязательно");
+  await expect(added.locator(".block-summary")).toHaveText("обработчики: 200очередь: 100среднее: 10ms");
   expect(await added.evaluate(element => [...element.querySelectorAll(".inline-param-value")]
     .every(value => value.getBoundingClientRect().right <= element.getBoundingClientRect().right))).toBe(true);
 });

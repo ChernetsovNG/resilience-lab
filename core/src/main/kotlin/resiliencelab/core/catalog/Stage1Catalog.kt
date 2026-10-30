@@ -1,6 +1,9 @@
 package resiliencelab.core.catalog
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -63,9 +66,22 @@ object Stage1Catalog {
                 ),
         )
 
-    /** Quantity parameters list the units [Quantities] accepts for their dimension (ADR 0001, items 1 and 6). */
-    private fun withUnits(param: ParamDescriptor): ParamDescriptor =
-        param.copy(units = param.dimension?.let(Quantities::unitsOf).orEmpty(), fields = param.fields.map(::withUnits))
+    /**
+     * Quantity parameters list the units [Quantities] accepts for their dimension (ADR 0001, items 1 and 6).
+     * Nested initial values follow their enclosing object or the first initial array item.
+     */
+    private fun withUnits(param: ParamDescriptor): ParamDescriptor {
+        val fields =
+            when (val initial = param.initial) {
+                is JsonObject -> initial
+                is JsonArray -> initial.firstOrNull() as? JsonObject
+                else -> null
+            }
+        return param.copy(
+            units = param.dimension?.let(Quantities::unitsOf).orEmpty(),
+            fields = param.fields.map { field -> withUnits(field.copy(initial = fields?.get(field.name) ?: field.initial)) },
+        )
+    }
 
     private fun client() =
         TypeDescriptor(
@@ -82,8 +98,11 @@ object Stage1Catalog {
                         name = "load",
                         kind = ParamKind.OBJECT,
                         title = "Load profile",
-                        description = "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants.",
+                        description =
+                            "Piecewise-linear intensity from simulation start including warm-up; compare profiles in " +
+                                "variants. Initially one point at 0s with 10/s.",
                         required = true,
+                        initial = Json.parseToJsonElement("""{"points":[{"time":"0s","rate":"10/s"}]}"""),
                         fields =
                             listOf(
                                 ParamDescriptor(
@@ -121,8 +140,9 @@ object Stage1Catalog {
                         name = "deadline",
                         kind = ParamKind.QUANTITY,
                         title = "Deadline",
-                        description = "End-to-end deadline of each original request.",
+                        description = "End-to-end deadline of each original request. Initially 10s.",
                         required = true,
+                        initial = JsonPrimitive("10s"),
                         dimension = Dimension.DURATION,
                         exclusiveMinimum = 0.0,
                         sweepable = true,
@@ -145,8 +165,9 @@ object Stage1Catalog {
                         name = "handlers",
                         kind = ParamKind.INTEGER,
                         title = "Handlers",
-                        description = "Concurrent handlers.",
+                        description = "Concurrent handlers. Initially 200.",
                         required = true,
+                        initial = JsonPrimitive(200),
                         minimum = 1.0,
                         sweepable = true,
                     ),
@@ -154,16 +175,18 @@ object Stage1Catalog {
                         name = "queue",
                         kind = ParamKind.INTEGER,
                         title = "Queue capacity",
-                        description = "Waiting places in the FIFO queue; zero disables queueing.",
+                        description = "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
                         default = JsonPrimitive(0),
+                        initial = JsonPrimitive(100),
                         minimum = 0.0,
                         sweepable = true,
                     ),
                     distribution(
                         name = "processing",
                         title = "Processing time",
-                        description = "Local processing time of one attempt.",
+                        description = "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
                         default = null,
+                        initial = Json.parseToJsonElement("""{"kind":"exponential","mean":"10ms"}"""),
                     ),
                     ParamDescriptor(
                         name = "failureRate",
@@ -203,8 +226,9 @@ object Stage1Catalog {
                         name = "maxClientConnections",
                         kind = ParamKind.INTEGER,
                         title = "Maximum client connections",
-                        description = "Concurrent client connections; excess attempts are rejected immediately.",
+                        description = "Concurrent client connections; excess attempts are rejected immediately. Initially 1000.",
                         required = true,
+                        initial = JsonPrimitive(1000),
                         minimum = 1.0,
                         sweepable = true,
                     ),
@@ -212,8 +236,9 @@ object Stage1Catalog {
                         name = "poolSize",
                         kind = ParamKind.INTEGER,
                         title = "Server pool size",
-                        description = "Concurrent server connections held through local delay and the outgoing call.",
+                        description = "Concurrent server connections held through local delay and the outgoing call. Initially 20.",
                         required = true,
+                        initial = JsonPrimitive(20),
                         minimum = 1.0,
                         sweepable = true,
                     ),
@@ -221,8 +246,9 @@ object Stage1Catalog {
                         name = "waitTimeout",
                         kind = ParamKind.QUANTITY,
                         title = "Server connection wait timeout",
-                        description = "Maximum FIFO wait for a server connection; zero permits immediate acquisition only.",
+                        description = "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Initially 5s.",
                         required = true,
+                        initial = JsonPrimitive("5s"),
                         dimension = Dimension.DURATION,
                         minimum = 0.0,
                         sweepable = true,
@@ -230,12 +256,15 @@ object Stage1Catalog {
                     distribution(
                         name = "processing",
                         title = "Pooler delay",
-                        description = "Local delay after acquiring a server connection, before the outgoing call.",
+                        description =
+                            "Local delay after acquiring a server connection, before the outgoing call. Initially fixed " +
+                                "at 0.1ms.",
                         default =
                             buildJsonObject {
                                 put("kind", "fixed")
                                 put("mean", "0ms")
                             },
+                        initial = Json.parseToJsonElement("""{"kind":"fixed","mean":"0.1ms"}"""),
                     ),
                 ),
         )
@@ -265,19 +294,21 @@ object Stage1Catalog {
                     distribution(
                         name = "network",
                         title = "Network delay",
-                        description = "One-way network delay, drawn separately for the request and the response.",
+                        description = "One-way network delay, drawn separately for the request and the response. Initially fixed at 1ms.",
                         default =
                             buildJsonObject {
                                 put("kind", "fixed")
                                 put("mean", "0ms")
                             },
+                        initial = Json.parseToJsonElement("""{"kind":"fixed","mean":"1ms"}"""),
                     ),
                     ParamDescriptor(
                         name = "timeout",
                         kind = ParamKind.QUANTITY,
                         title = "Timeout",
-                        description = "Per-attempt timeout, also bounded by the remaining deadline.",
+                        description = "Per-attempt timeout, also bounded by the remaining deadline. Initially 1s.",
                         required = true,
+                        initial = JsonPrimitive("1s"),
                         dimension = Dimension.DURATION,
                         exclusiveMinimum = 0.0,
                         sweepable = true,
@@ -317,8 +348,11 @@ object Stage1Catalog {
                                     name = "size",
                                     kind = ParamKind.INTEGER,
                                     title = "Pool size",
-                                    description = "Maximum simultaneous connections for this call on each caller instance.",
+                                    description =
+                                        "Maximum simultaneous connections for this call on each caller instance. Initially 10 when " +
+                                            "the pool is enabled.",
                                     required = true,
+                                    initial = JsonPrimitive(10),
                                     minimum = 1.0,
                                     sweepable = true,
                                 ),
@@ -461,11 +495,22 @@ object Stage1Catalog {
                             "handlers" ->
                                 param.copy(
                                     name = "maxConnections",
+                                    initial = JsonPrimitive(100),
                                     title = "Maximum connections",
-                                    description = "Maximum concurrent database queries (max_connections).",
+                                    description = "Maximum concurrent database queries (max_connections). Initially 100.",
                                 )
-                            "queue" -> param.copy(title = "Query queue capacity", description = "Waiting queries; zero disables queueing.")
-                            "processing" -> param.copy(title = "Query time", description = "Execution time of one database query.")
+                            "queue" ->
+                                param.copy(
+                                    initial = JsonPrimitive(0),
+                                    title = "Query queue capacity",
+                                    description = "Waiting queries; zero disables queueing. Initially 0.",
+                                )
+                            "processing" ->
+                                param.copy(
+                                    initial = Json.parseToJsonElement("""{"kind":"exponential","mean":"5ms"}"""),
+                                    title = "Query time",
+                                    description = "Execution time of one database query. Initially exponential with a mean of 5ms.",
+                                )
                             "failureRate" ->
                                 param.copy(
                                     title = "Query failure rate",
@@ -482,6 +527,7 @@ object Stage1Catalog {
         title: String,
         description: String,
         default: JsonElement?,
+        initial: JsonElement? = default,
     ) = ParamDescriptor(
         name = name,
         kind = ParamKind.OBJECT,
@@ -489,6 +535,7 @@ object Stage1Catalog {
         description = description,
         required = default == null,
         default = default,
+        initial = initial,
         fields =
             listOf(
                 ParamDescriptor(

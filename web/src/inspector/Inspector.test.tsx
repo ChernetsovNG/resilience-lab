@@ -449,3 +449,25 @@ it("shows results below parameters on a variant and only results in Analysis", (
   view.rerender(<Inspector {...props} variantId={null} />);
   expect(screen.queryByRole("region", { name: "Element results" })).toBeNull();
 });
+
+
+it("enables an optional call pool with catalog initial values", () => {
+  const onParam = renderInspector({ selected: "gateway-to-middle", catalog: serverCatalog as typeof catalog });
+  fireEvent.click(screen.getByRole("button", { name: "Enable Connection pool" }));
+  expect(onParam).toHaveBeenCalledWith("gateway-to-middle", "pool", { size: 10, acquireTimeout: "30s" });
+});
+
+
+it("enables a pool only in the active variant without changing the shared model", () => {
+  const before: EditorDocuments = structuredClone({ model, layout, experiment });
+  let after = before;
+  const onParam = renderInspector({ selected: "gateway-to-middle", catalog: serverCatalog as typeof catalog,
+    variantId: "baseline", onCommand: command => { after = command(before); } });
+  fireEvent.click(screen.getByRole("button", { name: "Enable Connection pool" }));
+  expect(onParam).not.toHaveBeenCalled();
+  expect(after.model).toBe(before.model);
+  expect(after.experiment.variants[0].overrides).toEqual({
+    "gateway-to-middle.pool": { size: 10, acquireTimeout: "30s" },
+  });
+  expect(after.experiment.variants[1]).toBe(before.experiment.variants[1]);
+});

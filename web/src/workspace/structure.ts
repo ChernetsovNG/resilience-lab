@@ -2,6 +2,7 @@ import { t } from "../i18n";
 import type { BlockInstance, Catalog, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand, EditorDocuments } from "./editor";
 import { elementOf, ownEntry } from "./params";
+import { initialParams } from "./initialParams";
 
 type Position = LayoutFile["positions"][string];
 
@@ -47,14 +48,15 @@ export function nextBlockId(model: ModelFile, type: string): string {
   return freeId(type, usedIds(model), true);
 }
 
-/** Creates only explicitly entered data; catalog defaults are displayed, never materialized. */
+/** Writes catalog initial values explicitly together with the block position; reading existing elements never applies them. */
 export function addBlock(catalog: Catalog, type: string, position: Position): EditorCommand {
   return (documents) => {
-    if (!catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) return documents;
+    const descriptor = catalog.types.find((entry) => entry.id === type && entry.category === "BLOCK");
+    if (descriptor === undefined) return documents;
     const id = nextBlockId(documents.model, type);
     return {
       ...documents,
-      model: { ...documents.model, blocks: { ...documents.model.blocks, [id]: { type, params: {} } } },
+      model: { ...documents.model, blocks: { ...documents.model.blocks, [id]: { type, params: initialParams(descriptor.params) } } },
       layout: { ...documents.layout, positions: { ...documents.layout.positions, [id]: position } },
     };
   };
@@ -84,7 +86,7 @@ export function addConnection(catalog: Catalog, from: string, to: string, source
     if (rule.type === null) return documents;
     const id = freeId(`${from}-to-${to}`, usedIds(documents.model));
     return { ...documents, model: { ...documents.model, connections: [
-      ...documents.model.connections, { id, type: rule.type, from, to, params: {} },
+      ...documents.model.connections, { id, type: rule.type, from, to, params: initialParams(catalog.types.find(entry => entry.id === rule.type)?.params ?? []) },
     ] } };
   };
 }

@@ -428,3 +428,31 @@ it("keeps metric rows and edge labels while empty or stale playback values are l
   expect(metrics.classList.contains("canvas-metrics--pending")).toBe(false);
   expect(edge.classList.contains("canvas-metrics--empty")).toBe(false);
 });
+
+
+it("shows a muted wiring hint while preserving parameter and cycle error badges", async () => {
+  const unreachable = { code: "TOPOLOGY_GRAPH", severity: "ERROR" as const, message: "Not reachable", path: "gateway",
+    args: { reason: "unreachable", service: "gateway" } };
+  const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn() };
+  const view = render(<Canvas {...props} elementDiagnostics={new Map([["gateway", [unreachable]]])} />);
+  const node = await screen.findByTestId("rf__node-gateway");
+  expect(node.textContent).toContain("Connect this block to the model");
+  expect(node.querySelector(".diagnostic--error")).toBeNull();
+  const parameter = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "Invalid handlers", path: "gateway" };
+  view.rerender(<Canvas {...props} elementDiagnostics={new Map([["gateway", [unreachable, parameter]]])} />);
+  expect(node.querySelector(".diagnostic--error")?.getAttribute("aria-label")).toBe("1 problems: error");
+  expect(node.textContent).toContain("Connect this block to the model");
+  view.rerender(<Canvas {...props} elementDiagnostics={new Map([["gateway", [{ ...unreachable, args: { reason: "cycle", service: "gateway" } }]]])} />);
+  expect(node.querySelector(".diagnostic--error")).not.toBeNull();
+  expect(node.textContent).not.toContain("Connect this block to the model");
+  view.rerender(<Canvas {...props} elementDiagnostics={new Map()} />);
+  expect(node.textContent).not.toContain("Connect this block to the model");
+});
+
+
+it("hints disconnected blocks even when a missing request only has a global diagnostic", async () => {
+  const detached = { ...model, connections: [] };
+  render(<Canvas catalog={catalog} model={detached} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const nodes = await screen.findAllByTestId("block-node");
+  for (const node of nodes) expect(node.textContent).toContain("Connect this block to the model");
+});

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
 import { DiagnosticMessages, VariantDiagnosticLinks } from "../validation/DiagnosticDisplay";
 import { isObject } from "../workspace/params";
+import { initialParams } from "../workspace/initialParams";
 import { parseParam } from "../workspace/paramParsing";
 
 export interface ParamFieldProps {
@@ -65,7 +66,14 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
       {value == null && descriptor.default == null && !descriptor.required
-        ? <p className="param-description">{t("editor.param.notSet")}</p>
+        ? <><p className="param-description">{t("editor.param.notSet")}</p>
+          {editable ? <button type="button" onClick={() => {
+            const initial = initialParams(descriptor.fields);
+            if (onFieldCommit === undefined) onCommit(initial);
+            else onFieldCommit(path, initial);
+          }}>
+            {t("editor.param.enable", { title: descriptor.title })}
+          </button> : null}</>
         : descriptor.fields.map((field) => (
         <ParamField
           key={`${field.name}-${resetCount}`}

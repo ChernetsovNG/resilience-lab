@@ -534,7 +534,7 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   expect(await page.evaluate(() => (window as Window & { paletteErrors: string[] }).paletteErrors)).toEqual([]);
 });
 
-test("measures a new Client before collision checks when required-field hints make it wider", async ({ page, files }) => {
+test("measures a new Client before collision checks with its initial values and wiring hint", async ({ page, files }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const source = (await stored(page, files.model)).content.model as ModelFile;
   const sourceLayout = (await stored(page, files.layout)).content.layout as LayoutFile;
@@ -564,7 +564,7 @@ test("measures a new Client before collision checks when required-field hints ma
   await expect(incoming).toHaveCSS("transform", "matrix(1, 0, 0, 1, -100, 280)");
   const oldBox = (await page.getByTestId("rf__node-client").boundingBox())!;
   const newBox = (await incoming.boundingBox())!;
-  expect(newBox.width).toBeGreaterThan(oldBox.width);
+  await expect(incoming.locator(".block-wiring-hint")).toBeVisible();
   expect(newBox.x < oldBox.x + oldBox.width && newBox.x + newBox.width > oldBox.x &&
     newBox.y < oldBox.y + oldBox.height && newBox.y + newBox.height > oldBox.y).toBe(false);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -582,7 +582,7 @@ test("extends the chain through real drag and ports, persists positions and comm
   await expect(node).toHaveClass(/selected/);
   await page.getByLabel("Handlers", { exact: true }).fill("2");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
-  await expect(page.getByLabel("Distribution", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Distribution", { exact: true })).toHaveValue("exponential");
   await page.getByLabel("Distribution", { exact: true }).selectOption("fixed");
   await page.getByLabel("Mean", { exact: true }).fill("2ms");
   await page.getByLabel("Mean", { exact: true }).press("Enter");
@@ -598,7 +598,9 @@ test("extends the chain through real drag and ports, persists positions and comm
   await save(page);
   const initial = await stored(page, files.model);
   const layout = (await stored(page, files.layout)).content.layout as LayoutFile;
-  expect(initial.content.model.blocks["service-1"].params).toEqual({ handlers: 2, processing: { kind: "fixed", mean: "2ms" } });
+  expect(initial.content.model.blocks["service-1"].params).toEqual({
+    handlers: 2, queue: 100, processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", replicas: 1,
+  });
   expect(initial.content.model.connections.at(-1)).toMatchObject({ id: "dependency-to-service-1", from: "dependency", to: "service-1", type: "call", params: { timeout: "80ms" } });
   expect(layout.positions["service-1"].x % 20).toBe(0);
   expect(layout.positions["service-1"].y % 20).toBe(0);
@@ -749,4 +751,34 @@ test("keeps the Inspector on one target and manages variant pages through their 
   await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
   const original = JSON.parse(await readFile(resolve("../apps/server/build/e2e-workspace", files.experiment), "utf8"));
   expect(original.variants).toHaveLength(2);
+});
+
+
+test("inserts a database with explicit initial values and a wiring hint, then connects it", async ({ page, files }) => {
+  const palette = page.getByRole("complementary", { name: "Palette" });
+  const run = page.getByRole("button", { name: "Run", exact: true });
+  await palette.getByRole("button", { name: "Database", exact: true }).click();
+  const database = page.getByTestId("rf__node-database-1");
+  await expect(database).toBeVisible();
+  await expect(page.getByLabel("Maximum connections", { exact: true })).toHaveValue("100");
+  await expect(page.getByLabel("Mean", { exact: true })).toHaveValue("5ms");
+  await expect(database.locator(".block-wiring-hint")).toHaveText("Connect this block to the model");
+  await expect(database.locator(".diagnostic--error")).toHaveCount(0);
+  await expect(page.locator(".validation-problems")).not.toContainText("PARAM_");
+  await expect(run).toBeDisabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(database).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(database.locator(".block-wiring-hint")).toBeVisible();
+  await connect(page, "dependency", "database-1");
+  await expect(database.locator(".block-wiring-hint")).toHaveCount(0);
+  await save(page);
+  await expect(run).toBeEnabled();
+  const saved = (await stored(page, files.model)).content.model as ModelFile;
+  expect(saved.blocks["database-1"].params).toEqual({
+    maxConnections: 100, queue: 0, processing: { kind: "exponential", mean: "5ms" }, failureRate: "0%",
+  });
+  expect(saved.connections.find(connection => connection.to === "database-1")?.params).toEqual({
+    network: { kind: "fixed", mean: "1ms" }, timeout: "1s", attempts: 1, retryTarget: "any", backoff: { kind: "none" },
+  });
 });

@@ -18,6 +18,9 @@ export type BlockNodeType = Node<{
   disabled: boolean;
   overridden?: boolean;
   diagnostics?: readonly Diagnostic[];
+  needsConnection: boolean;
+  incomingConnections: number;
+  outgoingConnections: number;
   variantDiagnostics?: readonly Diagnostic[];
   onProblems?: () => void;
   result?: ServiceCanvasResults;
@@ -42,6 +45,13 @@ function summaryOf(block: BlockInstance): string {
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
+  const isWiringHint = (diagnostic: Diagnostic) =>
+    (diagnostic.code === "TOPOLOGY_GRAPH" && (diagnostic.args?.reason === "unreachable"
+      || (diagnostic.args?.reason === "request" && data.outgoingConnections === 0)))
+    || (diagnostic.code === "ROUTER_INPUT" && data.incomingConnections === 0)
+    || (["ROUTER_OUTPUT", "POOLER_OUTPUT"].includes(diagnostic.code) && data.outgoingConnections === 0);
+  const diagnostics = data.diagnostics ?? [];
+  const wiringHint = data.needsConnection || diagnostics.some(isWiringHint);
   const choice = selectedOverlayOutput(overlayOutputs(data.catalog, "BLOCK"), data.nodeMetric);
   const output = choice?.types.includes(data.block.type) ? data.result?.outputs.find(output => output.id === choice.id) : undefined;
   const colorValue = output === undefined ? null : data.result?.values[output.id];
@@ -58,7 +68,8 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
       ))}
       <strong>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</strong>
-      <DiagnosticBadge diagnostics={data.diagnostics ?? []} />
+      <DiagnosticBadge diagnostics={diagnostics.filter(diagnostic => !isWiringHint(diagnostic))} />
+      {wiringHint ? <span className="block-wiring-hint" role="status">{t("editor.canvas.connectBlock")}</span> : null}
       <VariantDiagnosticBadge diagnostics={data.variantDiagnostics} onOpen={data.onProblems} disabled={data.disabled} />
       {data.result?.firstSaturation == null ? null : <span className="saturation-badge" role="img" aria-label={t("editor.canvas.firstSaturatedNode")}
         title={data.result.firstSaturation}>{t("editor.symbols.saturation")}</span>}

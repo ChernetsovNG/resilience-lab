@@ -693,6 +693,9 @@ export interface components {
             /** Format: double */
             exclusiveMinimum?: number | null;
             fields: components["schemas"]["ParamDescriptor"][];
+            initial?: unknown[] | boolean | number | null | {
+                [key: string]: unknown;
+            } | string;
             /** @enum {string} */
             kind: "INTEGER" | "NUMBER" | "QUANTITY" | "CHOICE" | "OBJECT" | "ARRAY";
             /** Format: double */
