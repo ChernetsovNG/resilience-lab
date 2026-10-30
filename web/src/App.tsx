@@ -426,8 +426,8 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
-          {!ownRun || run.summary === null || variant === undefined || catalog === null ? null : <ResultsContextBar
-            catalog={catalog} summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
+          {!ownRun || run.summary === null || variant === undefined || catalog === null || model === null ? null : <ResultsContextBar
+            catalog={catalog} model={model} summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
             metric={nodeMetric} onMetricChange={setNodeMetric} connectionMetric={connectionMetric}

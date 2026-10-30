@@ -1,4 +1,4 @@
-import type { Catalog, RunSummary, Variant } from "../api/apiTypes";
+import type { Catalog, ModelFile, RunSummary, Variant } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
 import { utilizationColor, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./canvasResults";
@@ -9,6 +9,7 @@ import type { ResultsSelection } from "./selection";
 
 interface ResultsContextBarProps {
   catalog: Catalog;
+  model: ModelFile;
   summary: RunSummary;
   variant: Variant;
   selection: ResultsSelection;
@@ -28,7 +29,7 @@ interface ResultsContextBarProps {
 }
 
 /** Controls the shared result context without changing documents or editor history. */
-export function ResultsContextBar({ catalog, summary, variant, selection, onSelect, replications, playback,
+export function ResultsContextBar({ catalog, model, summary, variant, selection, onSelect, replications, playback,
   windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "amplification", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const pointLabels = new Map(points.map(point => [point.id, Object.keys(point.coordinates).length === 0 ? point.id : t("results.gridPointCoordinates", {
@@ -42,7 +43,7 @@ export function ResultsContextBar({ catalog, summary, variant, selection, onSele
     end: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)), replication: formatNumber(selection.replication),
     variant: variant.label ?? variant.id, pointId: selection.pointId,
   }) : t("app.canvas.summaryContext", { variant: variant.label ?? variant.id, pointId: selection.pointId });
-  const nodeOutputs = overlayOutputs(catalog, "BLOCK"), connectionOutputs = overlayOutputs(catalog, "CONNECTION");
+  const nodeOutputs = overlayOutputs(catalog, "BLOCK", model), connectionOutputs = overlayOutputs(catalog, "CONNECTION", model);
   const output = selectedOverlayOutput(nodeOutputs, metric);
   const connectionOutput = selectedOverlayOutput(connectionOutputs, connectionMetric);
   const optionLabel = (output: OverlayOutput, choices: readonly OverlayOutput[]) => choices.some(choice => choice.key !== output.key && choice.overlay!.title === output.overlay!.title)

@@ -9,7 +9,8 @@ import { summary } from "../test/fixtures";
 import { setLanguage } from "../i18n";
 import { localizeCatalog } from "../i18n/catalog";
 import { overlayOutputs } from "../results/outputs";
-import type { TypeDescriptor } from "../api/apiTypes";
+import type { Catalog, TypeDescriptor } from "../api/apiTypes";
+import fullCatalog from "../test/catalog.json";
 
 beforeAll(mockReactFlowDom);
 
@@ -21,6 +22,24 @@ it("includes the full metric label and a large queue value in its tooltip", asyn
   const metrics = await screen.findByTestId("canvas-results-gateway");
   const queue = [...metrics.children].find(row => row.textContent?.startsWith("Mean queue"))!;
   expect(queue.getAttribute("title")).toContain("Mean queue 9,999,999.99");
+});
+
+it("one shared utilization choice colors both services and databases", async () => {
+  const extended = fullCatalog as Catalog;
+  const snapshot = { ...model, blocks: { ...model.blocks, middle: { ...model.blocks.middle, type: "database",
+    params: { maxConnections: 4, queue: 16, processing: { kind: "fixed", mean: "1ms" } } } } };
+  const run = structuredClone(summary);
+  run.variants[0].points[0].aggregate.services.middle = structuredClone(run.variants[0].points[0].aggregate.services.gateway);
+  const choices = overlayOutputs(extended, "BLOCK", snapshot).filter(output => output.overlay!.title === "Utilization");
+  expect(choices).toHaveLength(1);
+  expect(choices[0].key).toBe("utilization");
+  expect(choices[0].types).toEqual(["service", "database"]);
+  render(<Canvas catalog={extended} model={snapshot} layout={layout} onCommand={vi.fn()} onSelect={vi.fn()} selected={[]}
+    results={canvasResults(run, snapshot, "baseline", "p0", extended)} nodeMetric={choices[0].key} />);
+  await screen.findByTestId("canvas-results-middle");
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  expect(color("gateway")).not.toBe("");
+  expect(color("middle")).toBe(color("gateway"));
 });
 
 it("applies colliding output ids only to the type selected in the overlay", async () => {

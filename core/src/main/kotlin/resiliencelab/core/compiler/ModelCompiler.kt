@@ -450,14 +450,19 @@ class ModelCompiler(
     ): GraphParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
-        val services = model.blocks.filterValues { it.type == "service" }.toSortedMap()
+        val services = model.blocks.filterValues { it.type == "service" || it.type == "database" }.toSortedMap()
         val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink) }
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
             services.map { (id, block) ->
-                val steps = readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
-                readService(id, block.params, document, origins[id], sink)?.copy(scenario = steps)
+                val steps =
+                    if (block.type == "service") {
+                        readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
+                    } else {
+                        null
+                    }
+                readService(id, block.params, document, origins[id], sink, block.type)?.copy(scenario = steps)
             }
         val routerNodes = routers.map { (id, block) -> readRouter(id, block.params, document, origins[id], sink) }
         val indexed = model.connections.withIndex()
@@ -756,6 +761,7 @@ class ModelCompiler(
             graph.services.associate { service ->
                 val id = service.path
                 val block = model.blocks.getValue(id)
+                if (block.type != "service") return@associate id to listOf(service)
                 val pointer = JsonPointer.of("blocks", id)
                 val reader = reader("service", TypeCategory.BLOCK, block.params, document, "$pointer/params", id, sink, origins[id])!!
                 val count = reader.int("replicas") ?: 1
@@ -832,11 +838,12 @@ class ModelCompiler(
         document: String,
         overrides: OverrideOrigins?,
         sink: Diagnostics,
+        type: String = "service",
     ): ServiceNode? {
         val reader =
-            reader("service", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+            reader(type, TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
                 ?: return null
-        val handlers = reader.int("handlers")
+        val handlers = reader.int(if (type == "database") "maxConnections" else "handlers")
         val queue = reader.int("queue")
         val processing = reader.obj("processing")?.let(::distribution)
         val failure = reader.quantity("failureRate")

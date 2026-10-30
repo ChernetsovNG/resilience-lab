@@ -26,6 +26,37 @@ const test = base.extend<{ files: Files }>({
 });
 test.use({ actionTimeout: 10_000 });
 
+test("opens edits saves and runs a database without losing query parameters", async ({ page, files }) => {
+  const source = (await stored(page, files.model)).content.model as ModelFile;
+  source.blocks.dependency.type = "database";
+  source.blocks.dependency.params = {
+    maxConnections: 2, queue: 8, processing: { kind: "lognormal", mean: "7ms", stdDev: "2ms" }, failureRate: "1%",
+  };
+  const experiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
+  experiment.faults = [];
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(source));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.experiment), JSON.stringify(experiment));
+  await page.reload();
+  await expect(page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Database", exact: true })).toBeVisible();
+  await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
+  await expect(page.getByRole("group", { name: "Query time", exact: true }).getByLabel("Mean", { exact: true })).toHaveValue("7ms");
+  await page.getByLabel("Maximum connections", { exact: true }).fill("3");
+  await page.getByLabel("Maximum connections", { exact: true }).press("Enter");
+  await save(page);
+  source.blocks.dependency.params.maxConnections = 3;
+  expect((await stored(page, files.model)).content.model).toEqual(source);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect((await stored(page, files.model)).content.model).toEqual(source);
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
+  await expect(page.locator(".element-results")).toContainText("Connections busy");
+  await expect(page.locator(".element-results")).toContainText("Mean query queue");
+  await expect(page.locator(".element-results")).toContainText("max_connections rejection share");
+});
+
 test("opens saves and runs replica groups without losing per-replica parameters", async ({ page, files }) => {
   const grouped = (await stored(page, files.model)).content.model as ModelFile;
   grouped.blocks.middle.params.replicas = 3;

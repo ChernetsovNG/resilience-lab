@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OutputCalculation, TypeDescriptor } from "../api/apiTypes";
 import { localizeCatalog } from "../i18n/catalog";
-import { catalog } from "../test/fixtures";
+import { catalog, model } from "../test/fixtures";
 import { calculateOutput, inspectorOutputs, outputValue, outputWindow, outputsOf, overlayOutputs, selectedOverlayOutput, timelineGroups } from "./outputs";
 import { decodeSeriesPart } from "./series/decode";
 import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
@@ -49,6 +49,20 @@ describe("catalog output contract", () => {
     expect(amplification).toHaveLength(1);
     expect(amplification[0].key).toBe("amplification");
     expect(amplification[0].types).toEqual(["request", "call"]);
+  });
+
+  it("hides outputs of missing model types without changing the keys used by canvas renderers", () => {
+    const service = catalog.types.find(type => type.id === "service")!;
+    const pool: TypeDescriptor = { ...service, id: "pool", outputs: [{
+      ...service.outputs.find(output => output.id === "admittedAttemptsPerSecond")!, id: "meanQueue",
+      overlay: { title: "Pool throughput", label: "Pool throughput {value}", description: "Pool throughput", order: 1 },
+    }] };
+    const extended = { ...catalog, types: [...catalog.types, pool] };
+    const all = overlayOutputs(extended, "BLOCK");
+    const visible = overlayOutputs(extended, "BLOCK", model);
+    expect(visible.map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
+    expect(visible.find(output => output.id === "meanQueue")!.key).toBe(all.find(output => output.types.includes("service") && output.id === "meanQueue")!.key);
+    expect(overlayOutputs(extended, "CONNECTION", { ...model, connections: [] })).toEqual([]);
   });
 
   it("matches the existing retry-storm node values and core quantile bits in every window", () => {

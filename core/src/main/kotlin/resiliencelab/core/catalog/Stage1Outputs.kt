@@ -184,6 +184,37 @@ internal object Stage1Outputs {
             ),
         ) + latencies(service = true)
 
+    /** Database rows reuse service statistics, with query terminology in Timeline and the inspector. */
+    val database: List<OutputDescriptor> =
+        service.filterNot { it.id in setOf("retriesPerSecond", "timeoutsPerSecond") }.map { output ->
+            val (title, description) =
+                when (output.id) {
+                    "offeredAttemptsPerSecond" ->
+                        "Offered queries" to
+                            "Queries arriving at the database per second, including queue rejections."
+                    "admittedAttemptsPerSecond" -> "Admitted queries" to "Queries admitted for execution or FIFO waiting per second."
+                    "successesPerSecond" -> "Successful queries" to "Successfully completed queries per second."
+                    "failuresPerSecond" -> "Failed queries" to "Executed queries that failed per second; excludes queue rejections."
+                    "queueRejectionsPerSecond" ->
+                        "max_connections rejections" to
+                            "Queries rejected per second when connections and the query queue are full."
+                    "utilization" -> "Connections busy" to "Busy connection time divided by available connection time."
+                    "meanQueue" -> "Mean query queue" to "Waiting-query integral divided by interval duration."
+                    "queueFill" ->
+                        "Query queue fill" to
+                            "Mean waiting queries divided by query queue capacity; no value when queueing is disabled."
+                    "queueRejectionRate" -> "max_connections rejection share" to "Rejected queries divided by offered queries."
+                    else ->
+                        output.title to
+                            "Query residence time, including FIFO waiting and execution; rejected queries have no latency sample."
+                }
+            output.copy(
+                title = title,
+                description = description,
+                inspector = output.inspector?.copy(title = title),
+            )
+        }
+
     private fun occupancy(
         id: String,
         field: String,
