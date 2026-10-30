@@ -9,6 +9,11 @@ internal enum class CoreMessage(
     val template: String,
 ) {
     GRID_AXES("GRID_AXES", null, "A grid must contain one or two axes"),
+    GRID_LOAD_PROFILE(
+        "GRID_PATH",
+        "loadProfile",
+        "Load profile '{path}' does not support grid sweeps; compare profiles in variants",
+    ),
     GRID_VALUES("GRID_VALUES", null, "A grid axis must contain at least one value"),
     GRID_PATH_OVERLAP("GRID_PATH", "overlap", "Grid axis paths must not overlap"),
     GRID_PATH_PARAMETER("GRID_PATH", "parameter", "Override '{path}' does not name a parameter of a block or connection"),
@@ -57,6 +62,9 @@ internal enum class CoreMessage(
     PARAM_NUMBER("PARAM_TYPE", "number", "Parameter '{parameter}' must be a number"),
     PARAM_CHOICE("PARAM_TYPE", "choice", "Parameter '{parameter}' must be one of {options}"),
     PARAM_OBJECT("PARAM_TYPE", "object", "Parameter '{parameter}' must be an object"),
+    PARAM_ARRAY("PARAM_TYPE", "array", "Parameter '{parameter}' must be a non-empty array of objects"),
+    LOAD_POINT_ORDER("LOAD_POINT_ORDER", null, "Load point times must be strictly increasing"),
+    LOAD_RANGE("LOAD_RANGE", null, "Load intensity and its positive mean inter-arrival interval must be finite"),
     PARAM_MISSING("PARAM_MISSING", null, "Required parameter '{parameter}' is missing"),
     PARAM_LOGNORMAL("PARAM_MISSING", "lognormal", "lognormal requires {parameter}"),
     PARAM_MINIMUM("PARAM_RANGE", "minimum", "Parameter '{parameter}' is out of range: >= {minimum}"),
@@ -73,7 +81,6 @@ internal enum class CoreMessage(
         "exclusiveBetweenUnit",
         "Parameter '{parameter}' is out of range: > {minimum}{unit} and <= {maximum}{unit}",
     ),
-    PARAM_RATE_INTERVAL("PARAM_RANGE", "rateInterval", "Arrival rate is too small: the mean interval between requests is not finite"),
     PARAM_POSITIVE_MEAN("PARAM_RANGE", "positiveMean", "mean must be greater than zero for {kind}"),
     PARAM_PROCESSING_MULTIPLIER("PARAM_RANGE", "processingMultiplier", "processingMultiplier must be greater than zero"),
     QUANTITY_INVALID("QUANTITY_INVALID", null, "Parameter '{parameter}' must be a quantity with one of the units {units}"),
@@ -97,7 +104,7 @@ internal enum class CoreMessage(
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,
-        "Handlers {handlers} are below λ·W = {demand} (λ = {ratePerSecond} requests/s, W = {holdingMs} ms)",
+        "Handlers {handlers} are below λ·W = {demand} (λ = {ratePerSecond} requests/s, W = {holdingMs} ms; profile maximum, conservative)",
     ),
     LINT_DEADLINE_BUDGET("LINT_DEADLINE_BUDGET", null, "Deadline {deadlineMs} ms is below the entry call budget {requiredMs} ms"),
     LINT_FEW_REPLICATIONS(
@@ -117,6 +124,11 @@ internal enum class CoreMessage(
         "ESTIMATE_EXTRAPOLATION",
         null,
         "S1 timing anchors cover {minServices}–{maxServices} services; actual time may differ substantially",
+    ),
+    ESTIMATE_LONG_MODEL_TIME(
+        "ESTIMATE_LONG_MODEL_TIME",
+        null,
+        "Modelled arrival interval is {durationSeconds} s with about {arrivals} requests per replication; consider a shorter period",
     ),
     ESTIMATE_UI_CACHE(
         "ESTIMATE_UI_CACHE",

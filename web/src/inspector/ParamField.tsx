@@ -31,7 +31,21 @@ export interface ParamFieldProps {
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
 export function ParamField(props: ParamFieldProps) {
+  if (props.descriptor.kind === "ARRAY") return <ArrayField {...props} />;
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
+}
+
+function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+  const id = useId();
+  return <div className="param-field" data-inspector-field={path}>
+    <label htmlFor={id}>{descriptor.title}</label>
+    <textarea id={id} readOnly value={JSON.stringify(value ?? descriptor.default ?? null, null, 2)}
+      aria-describedby={`${id}-description`} />
+    <p id={`${id}-description`} className="param-description">{descriptor.description}</p>
+    <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
+    <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
+      onSelect={variant => onVariantDiagnostic?.(variant, path)} />
+  </div>;
 }
 
 function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {

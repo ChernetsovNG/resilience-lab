@@ -286,6 +286,8 @@ describe("Inspector", () => {
     customCatalog.types[0].params.find((param) => param.name === "deadline")!.units = [
       { symbol: "tick", numerator: 2, denominator: 1 }, { symbol: "s", numerator: 1000, denominator: 1 },
     ];
+    const points = customCatalog.types[0].params.find(param => param.name === "load")!.fields.find(field => field.name === "points")!;
+    points.fields.find(field => field.name === "time")!.units = customCatalog.types[0].params.find(param => param.name === "deadline")!.units;
     let documents: EditorDocuments = { model, experiment, layout };
     renderInspector({ selected: null, catalog: customCatalog,
       onCommand: (command) => { documents = command(documents); } });

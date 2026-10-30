@@ -15,6 +15,7 @@ import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
@@ -247,7 +248,7 @@ class ModelLinterTest {
     fun `handler demand includes the entire downstream path without retries or faults`() {
         val changed =
             chain.copy(
-                client = chain.client.copy(arrivalRatePerMs = 0.125),
+                client = chain.client.copy(load = LoadProfile.constant(0.125)),
                 services = listOf(service("c", 8.0, 1), service("a", 2.0, 1), service("b", 2.0, 2)),
                 calls = chain.calls.reversed().map { it.copy(network = fixed(1.0), attempts = 5) },
             )
@@ -256,7 +257,7 @@ class ModelLinterTest {
 
         assertThat(warning.path).isEqualTo("a")
         assertThat(warning.pointer).isEqualTo("/blocks/a/params/handlers")
-        assertThat(warning.message).isEqualTo("Handlers 1 are below λ·W = 2 (λ = 125 requests/s, W = 16 ms)")
+        assertThat(warning.message).isEqualTo("Handlers 1 are below λ·W = 2 (λ = 125 requests/s, W = 16 ms; profile maximum, conservative)")
         assertThat(
             warnings(
                 changed.copy(
@@ -385,7 +386,7 @@ class ModelLinterTest {
             chain.copy(
                 services = listOf(service("a", 2.0, 1)),
                 calls = emptyList(),
-                client = chain.client.copy(arrivalRatePerMs = 1.0),
+                client = chain.client.copy(load = LoadProfile.constant(1.0)),
             )
 
         assertThat(linter.lint(experiment(single)).map { it.code }).containsExactly("LINT_HANDLERS_LITTLE")

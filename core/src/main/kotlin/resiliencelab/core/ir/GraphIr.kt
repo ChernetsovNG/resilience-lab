@@ -43,13 +43,13 @@ data class Origin(
 /** Source of original requests; [pathSegments] is the canonical instance identity. */
 data class ClientNode(
     val pathSegments: List<String>,
-    val arrivalRatePerMs: Double,
+    val load: LoadProfile,
     val deadlineMs: Double,
     val origin: Origin = Origin.UNSPECIFIED,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(path: String, arrivalRatePerMs: Double, deadlineMs: Double, origin: Origin = Origin.UNSPECIFIED) :
-        this(path.split('/'), arrivalRatePerMs, deadlineMs, origin)
+        this(path.split('/'), LoadProfile.constant(arrivalRatePerMs), deadlineMs, origin)
 
     val path: String get() = displayPath(pathSegments)
 }

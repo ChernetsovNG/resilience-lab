@@ -41,9 +41,9 @@ export function newExperiment(directory: string): DocumentDraft[] {
   const name = nameOf(path);
   return [
     { path: `${path}/${name}.model.json`, content: { model: {
-      schemaVersion: 3,
+      schemaVersion: 4,
       blocks: {
-        client: { type: "client", params: { rate: "10/s", deadline: "1s" } },
+        client: { type: "client", params: { load: { points: [{ time: "0s", rate: "10/s" }] }, deadline: "1s" } },
         service: { type: "service", params: { handlers: 1, queue: 10, processing: { kind: "fixed", mean: "10ms" } } },
       },
       connections: [{ id: "client-to-service", type: "request", from: "client", to: "service", params: {} }],

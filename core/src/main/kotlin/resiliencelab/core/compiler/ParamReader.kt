@@ -1,5 +1,6 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -107,6 +108,30 @@ internal class ParamReader(
         val value = element as? JsonObject ?: return fail(CoreMessage.PARAM_OBJECT, name, "Parameter '$name' must be an object")
         val childPointer = JsonPointer.child(pointer, name)
         return ParamReader(value, descriptor.fields, document, childPointer, path, diagnostics, overrides, "$prefix$name.")
+    }
+
+    /** Non-empty arrays of catalog-described objects; diagnostics retain each array index. */
+    fun objects(name: String): List<ParamReader>? {
+        val descriptor = descriptor(name)
+        val element = valueOf(descriptor) ?: return null
+        val values =
+            element as? JsonArray
+                ?: return fail(CoreMessage.PARAM_ARRAY, name, "Parameter '$name' must be a non-empty array of objects")
+        if (values.isEmpty() || values.any { it !is JsonObject }) {
+            return fail(CoreMessage.PARAM_ARRAY, name, "Parameter '$name' must be a non-empty array of objects")
+        }
+        return values.mapIndexed { index, value ->
+            ParamReader(
+                value as JsonObject,
+                descriptor.fields,
+                document,
+                JsonPointer.child(JsonPointer.child(pointer, name), index.toString()),
+                path,
+                diagnostics,
+                overrides,
+                "$prefix$name.",
+            )
+        }
     }
 
     /**

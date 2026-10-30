@@ -36,8 +36,8 @@ class ScenarioDocumentTest {
         val field = scenario?.let { ",\"scenario\":$it" }.orEmpty()
         val decoded =
             DocumentCodec.decodeModel(
-                """{"schemaVersion":3,"blocks":{
-              "client":{"type":"client","params":{"rate":"10/s","deadline":"1s"}},
+                """{"schemaVersion":4,"blocks":{
+              "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "10/s"}]},"deadline":"1s"}},
               "order":{"type":"service","params":{"handlers":10,"processing":{"kind":"fixed","mean":"2ms"}}$field},
               "database":{"type":"service","params":{"handlers":10,"processing":{"kind":"fixed","mean":"1ms"}}},
               "psp":{"type":"service","params":{"handlers":10,"processing":{"kind":"fixed","mean":"1ms"}}}
@@ -76,7 +76,7 @@ class ScenarioDocumentTest {
                 .filterIsInstance<ServiceStep.Call>()
                 .map { it.edge },
         ).containsExactly("db", "payment", "db")
-        assertThat(Json.parseToJsonElement(encoded).jsonObject["schemaVersion"]).isEqualTo(JsonPrimitive(3))
+        assertThat(Json.parseToJsonElement(encoded).jsonObject["schemaVersion"]).isEqualTo(JsonPrimitive(4))
     }
 
     @Test

@@ -29,8 +29,8 @@ class DatabaseBlockTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":3,"blocks":{
-              "client":{"type":"client","params":{"rate":"10/s","deadline":"1s"}},
+                """{"schemaVersion":4,"blocks":{
+              "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "db":{"type":"database","params":{"maxConnections":1,"queue":1,"processing":{"kind":"fixed","mean":"10ms"}}}
             },"connections":[

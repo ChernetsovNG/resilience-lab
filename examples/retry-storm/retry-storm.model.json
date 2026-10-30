@@ -3,7 +3,14 @@
     "client": {
       "params": {
         "deadline": "250ms",
-        "rate": "120/s"
+        "load": {
+          "points": [
+            {
+              "rate": "120/s",
+              "time": "0s"
+            }
+          ]
+        }
       },
       "type": "client"
     },
@@ -90,5 +97,5 @@
     }
   ],
   "description": "Retry storm on a three-service chain with a degraded dependency.",
-  "schemaVersion": 3
+  "schemaVersion": 4
 }

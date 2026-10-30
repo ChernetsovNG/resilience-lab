@@ -168,10 +168,19 @@ class ReliabilityModel(
         ArrivalGenerator(
             reliabilityModel = this,
             entryServiceId = graph.entry,
-            arrivalRate = graph.client.arrivalRatePerMs,
+            load = graph.client.load,
             warmupMs = graph.run.warmupMs,
             measurementMs = graph.run.measurementMs,
             stream = streams.stream(graph.client.pathSegments, StreamRole.ARRIVALS),
+            acceptanceStream =
+                if (graph.client.load.isConstant) {
+                    null
+                } else {
+                    streams.stream(
+                        graph.client.pathSegments,
+                        StreamRole.ARRIVAL_ACCEPTANCE,
+                    )
+                },
         )
         CompletionMonitor(
             reliabilityModel = this,

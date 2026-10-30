@@ -10,6 +10,8 @@ import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadPoint
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
@@ -28,6 +30,32 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test
 
 class GraphArtifactDeterminismTest {
+    @Test
+    fun `profiled arrivals preserve every artifact byte across workers and document order`(
+        @TempDir root: Path,
+    ) {
+        val base = graph()
+        val profiled =
+            base.copy(
+                client =
+                    base.client.copy(
+                        load =
+                            LoadProfile(
+                                listOf(LoadPoint(0.0, 0.05), LoadPoint(50.0, 0.2)),
+                            ),
+                    ),
+            )
+        val reference = run(root.resolve("reference"), profiled, 1, false)
+        for (workers in listOf(1, 2, 4, 8)) {
+            val actual = run(root.resolve("workers-$workers"), profiled, workers, true)
+            assertThat(actual.result).isEqualTo(reference.result)
+            assertThat(actual.files.keys).containsExactlyInAnyOrderElementsOf(reference.files.keys)
+            reference.files.forEach { (path, bytes) ->
+                assertThat(actual.files.getValue(path)).describedAs("$workers/$path").isEqualTo(bytes)
+            }
+        }
+    }
+
     @Test
     fun `weighted routing and other retry artifacts match across workers and document task order`(
         @TempDir root: Path,
@@ -200,7 +228,7 @@ class GraphArtifactDeterminismTest {
             TestChains.backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 1.0, 3.0),
         )
         return base.copy(
-            client = base.client.copy(arrivalRatePerMs = 0.1, deadlineMs = 40.0),
+            client = base.client.copy(load = LoadProfile.constant(0.1), deadlineMs = 40.0),
             services =
                 listOf(
                     node(

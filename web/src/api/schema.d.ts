@@ -663,7 +663,7 @@ export interface components {
             exclusiveMinimum?: number | null;
             fields: components["schemas"]["ParamDescriptor"][];
             /** @enum {string} */
-            kind: "INTEGER" | "NUMBER" | "QUANTITY" | "CHOICE" | "OBJECT";
+            kind: "INTEGER" | "NUMBER" | "QUANTITY" | "CHOICE" | "OBJECT" | "ARRAY";
             /** Format: double */
             maximum?: number | null;
             /** Format: double */

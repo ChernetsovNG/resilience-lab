@@ -87,6 +87,16 @@ internal object CostEstimator {
         experiment.variants.forEach { variant ->
             variant.points.forEach { point ->
                 val graph = point.graph
+                val duration = graph.run.warmupMs + graph.run.measurementMs
+                if (duration >= 3_600_000.0) {
+                    val arrivals = graph.client.load.average(duration) * duration
+                    warnings[CoreMessage.ESTIMATE_LONG_MODEL_TIME] =
+                        EstimateWarning(
+                            CoreMessage.ESTIMATE_LONG_MODEL_TIME,
+                            "Modelled arrival interval is ${duration / 1_000.0} s with about $arrivals requests per replication; consider a shorter period",
+                            mapOf("durationSeconds" to JsonPrimitive(duration / 1_000.0), "arrivals" to JsonPrimitive(arrivals)),
+                        )
+                }
                 if (graph.services.size > 5000) {
                     warnings[CoreMessage.ESTIMATE_EXTRAPOLATION] =
                         EstimateWarning(
@@ -133,7 +143,8 @@ internal object CostEstimator {
 
     /** Configured attempts give a conservative event estimate; stochastic queue wakeups are not predicted exactly. */
     private fun expectedEvents(graph: GraphIr): Double {
-        val arrivals = graph.client.arrivalRatePerMs * (graph.run.warmupMs + graph.run.measurementMs)
+        val duration = graph.run.warmupMs + graph.run.measurementMs
+        val arrivals = graph.client.load.average(duration) * duration
         val visits = mutableMapOf(graph.entry to 1.0)
         val services = graph.services.associateBy { it.path }
         val routers = graph.routers.associateBy { it.path }

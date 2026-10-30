@@ -262,8 +262,8 @@ class ReplicaGroupsTest {
     ): ModelFile =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":3,"blocks":{
-              "client":{"type":"client","params":{"rate":"10/s","deadline":"1s"}},
+                """{"schemaVersion":4,"blocks":{
+              "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"1ms"}}},
               "worker":{"type":"service","params":{"replicas":$replicas,"handlers":2,"processing":{"kind":"fixed","mean":"2ms"}},
                 "scenario":[{"type":"process"},{"type":"call","connection":"worker-to-tail"},{"type":"process"},{"type":"call","connection":"worker-to-tail"}]$overrides},

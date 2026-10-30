@@ -73,14 +73,43 @@ object Stage1Catalog {
             params =
                 listOf(
                     ParamDescriptor(
-                        name = "rate",
-                        kind = ParamKind.QUANTITY,
-                        title = "Arrival rate",
-                        description = "Mean rate of original requests.",
+                        name = "load",
+                        kind = ParamKind.OBJECT,
+                        title = "Load profile",
+                        description = "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants.",
                         required = true,
-                        dimension = Dimension.RATE,
-                        exclusiveMinimum = 0.0,
-                        sweepable = true,
+                        fields =
+                            listOf(
+                                ParamDescriptor(
+                                    name = "points",
+                                    kind = ParamKind.ARRAY,
+                                    title = "Load points",
+                                    description =
+                                        "Increasing times with linear interpolation; the nearest rate is held outside the points.",
+                                    required = true,
+                                    fields =
+                                        listOf(
+                                            ParamDescriptor(
+                                                name = "time",
+                                                kind = ParamKind.QUANTITY,
+                                                title = "Time",
+                                                description = "Time from simulation start, including warm-up.",
+                                                required = true,
+                                                dimension = Dimension.DURATION,
+                                                minimum = 0.0,
+                                            ),
+                                            ParamDescriptor(
+                                                name = "rate",
+                                                kind = ParamKind.QUANTITY,
+                                                title = "Intensity",
+                                                description = "Non-negative arrival intensity.",
+                                                required = true,
+                                                dimension = Dimension.RATE,
+                                                minimum = 0.0,
+                                            ),
+                                        ),
+                                ),
+                            ),
                     ),
                     ParamDescriptor(
                         name = "deadline",

@@ -2541,7 +2541,7 @@
           },
           "kind" : {
             "type" : "string",
-            "enum" : [ "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT" ]
+            "enum" : [ "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT", "ARRAY" ]
           },
           "maximum" : {
             "type" : [ "number", "null" ],
