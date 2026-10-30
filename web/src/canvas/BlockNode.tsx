@@ -1,3 +1,5 @@
+import { FaultBadge } from "../experiment/FaultBadge";
+import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
 import { formatOutput, outputField, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { Handle, Position } from "@xyflow/react";
@@ -23,6 +25,8 @@ export type BlockNodeType = Node<{
   outgoingConnections: number;
   variantDiagnostics?: readonly Diagnostic[];
   onProblems?: () => void;
+  faults?: readonly CourseFault[];
+  onFault?: (index: number) => void;
   result?: ServiceCanvasResults;
   resultsPending?: string;
   resultsEmpty?: boolean;
@@ -68,6 +72,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
       ))}
       <strong>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</strong>
+      <FaultBadge faults={data.faults} onOpen={data.onFault} disabled={data.disabled} />
       <DiagnosticBadge diagnostics={diagnostics.filter(diagnostic => !isWiringHint(diagnostic))} />
       {wiringHint ? <span className="block-wiring-hint" role="status">{t("editor.canvas.connectBlock")}</span> : null}
       <VariantDiagnosticBadge diagnostics={data.variantDiagnostics} onOpen={data.onProblems} disabled={data.disabled} />

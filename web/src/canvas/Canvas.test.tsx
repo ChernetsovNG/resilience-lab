@@ -456,3 +456,25 @@ it("hints disconnected blocks even when a missing request only has a global diag
   const nodes = await screen.findAllByTestId("block-node");
   for (const node of nodes) expect(node.textContent).toContain("Connect this block to the model");
 });
+
+it("marks only fault targets including replica groups and connection copies", async () => {
+  const { courseData } = await import("../experiment/course");
+  const run = { ...experiment, faults: [
+    { target: "gateway#2", from: "0ms", to: "1s", kind: "unavailable" },
+    { target: "gateway-to-middle#2", from: "200ms", to: "700ms", kind: "slowdown", multiplier: 2 },
+  ] };
+  const onFault = vi.fn();
+  const grouped = structuredClone(model);
+  grouped.blocks.gateway.params.replicas = 2;
+  render(<Canvas catalog={catalog} model={grouped} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()}
+    faults={courseData(grouped, run, catalog).faults} onFault={onFault} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.querySelector(".fault-badge")?.getAttribute("title")).toContain("gateway#2");
+  expect(screen.getByTestId("rf__node-middle").querySelector(".fault-badge")).toBeNull();
+  expect(screen.getByTestId("rf__node-dependency").querySelector(".fault-badge")).toBeNull();
+  const edge = screen.getByTestId("canvas-edge-label-gateway-to-middle");
+  const badge = edge.querySelector<HTMLButtonElement>(".fault-badge")!;
+  expect(badge.title).toBe("gateway#2 → middle · Slowdown 2× · 0.2–0.7 s");
+  fireEvent.click(badge);
+  expect(onFault).toHaveBeenCalledWith(1);
+});

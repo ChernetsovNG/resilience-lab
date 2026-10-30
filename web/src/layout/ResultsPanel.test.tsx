@@ -227,3 +227,17 @@ it("opens Timeline from the inspector request and preserves later tab choices", 
   view.rerender(<ResultsPanel {...props} timelineRequest={2} />);
   expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
 });
+
+it("shows the submitted load and faults above the Answer using variant and point overrides", async () => {
+  const { catalog, model, experiment } = await import("../test/fixtures");
+  const run = structuredClone(experiment);
+  run.variants[0].overrides = { "client.load.points": [{ time: "0s", rate: "30/s" }] };
+  const result = structuredClone(summary);
+  result.variants[0].points.push({ ...structuredClone(result.variants[0].points[0]), id: "p1", coordinates: { "client.load.points": [{ time: "0s", rate: "90/s" }] } });
+  const view = render(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p0" />);
+  expect(screen.getByTestId("run-conditions").textContent).toBe("Load 30 RPS; faults: dependency · Slowdown 6× · 0.2–0.7 s");
+  view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p1" />);
+  expect(screen.getByTestId("run-conditions").textContent).toContain("Load 90 RPS");
+  view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} />);
+  expect(screen.getByTestId("run-conditions").textContent).toContain("Load 30 RPS");
+});

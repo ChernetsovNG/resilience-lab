@@ -1,3 +1,5 @@
+import { FaultBadge } from "../experiment/FaultBadge";
+import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
@@ -15,6 +17,8 @@ export type CallEdgeType = Edge<{
   diagnostics: readonly Diagnostic[];
   variantDiagnostics?: readonly Diagnostic[];
   onProblems?: () => void;
+  faults?: readonly CourseFault[];
+  onFault?: (index: number) => void;
   parametersEditable: boolean;
   disabled: boolean;
   result?: ConnectionCanvasResults;
@@ -44,7 +48,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
         style={selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : undefined} />
-      {connection.type === "call" || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
+      {connection.type === "call" || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
         <div
           className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
           data-testid={`canvas-edge-label-${connection.id}`}
@@ -64,6 +68,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
             <span>{t("editor.symbols.multiplier")}</span>
             {overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}
           </div> : null}
+          <FaultBadge faults={data?.faults} onOpen={data?.onFault} disabled={disabled} />
           <DiagnosticBadge diagnostics={diagnostics} />
           <VariantDiagnosticBadge diagnostics={variantDiagnostics} onOpen={onProblems} disabled={disabled} />
           {result === undefined ? null : <span className={`canvas-edge-results${resultsPending === undefined ? "" : " canvas-metrics--pending"}${resultsEmpty ? " canvas-metrics--empty" : ""}`}

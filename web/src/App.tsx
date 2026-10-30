@@ -1,3 +1,5 @@
+import { ExperimentCourse } from "./experiment/ExperimentCourse";
+import { courseData } from "./experiment/course";
 import { backendMessage } from "./i18n/backendMessage";
 import { CostEstimate } from "./run/CostEstimate";
 import { useEstimate } from "./run/useEstimate";
@@ -63,6 +65,8 @@ export function App() {
   const [observedErrors, setObservedErrors] = useState<{ path: string | null; validation: string; run: string }>({ path: null, validation: "[]", run: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
   const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
+  const [courseHeight, setCourseHeight] = useState(0);
+  const [faultRequest, setFaultRequest] = useState(0);
   const [inspectorTarget, setInspectorTarget] = useState<"element" | "variant" | "experiment">("experiment");
   const [fieldFocus, setFieldFocus] = useState<{ path: string; request: number; focus?: boolean } | null>(null);
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -267,6 +271,19 @@ export function App() {
     return () => window.removeEventListener("keydown", exit);
   }, [analysis]);
 
+  const openFault = (index: number) => {
+    if (invalid || loading) return;
+    setAnalysis(false);
+    setSelection([]);
+    setInspectorTarget("experiment");
+    setFieldFocus(previous => ({ path: `faults.${index}.target`, request: (previous?.request ?? 0) + 1 }));
+    setFaultRequest(current => current + 1);
+  };
+  const courseModel = model === null || catalog === null ? null : applyOverrides(model,
+    ownRun && !staleResults ? run.summary?.variants.find(candidate => candidate.id === variantId)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {} : {}, catalog);
+  const courseFaults = loaded === null || courseModel === null || catalog === null ? [] : courseData(courseModel, loaded.experiment, catalog).faults;
+  const courseTime = ownRun && !staleResults && variant !== undefined && seriesMetadata != null;
+
   const requestEstimate = () => {
     if (resultsSize === "collapsed") setResultsSize("normal");
     setEstimatePanel({ source: "manual" });
@@ -371,7 +388,7 @@ export function App() {
           </EstimatePopover>
         ) : null}
       />
-      <ResultsWorkspace view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
+      <ResultsWorkspace canvasFooterHeight={loaded === null || catalog === null ? 0 : 32} inspectorRequest={faultRequest} view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
         inspectorSelection={target === "element" ? selected : null}
         inspector={model === null || loaded === null || catalog === null ? (
           <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
@@ -474,6 +491,7 @@ export function App() {
               key={loaded.experimentPath}
               catalog={catalog}
               selected={selection}
+              faults={courseFaults} onFault={openFault} bottomInset={courseHeight}
               elementDiagnostics={elementDiagnostics}
               variantElementDiagnostics={variantElementDiagnostics}
               onProblems={id => {
@@ -507,6 +525,10 @@ export function App() {
           )}
           {loaded !== null && !hasClient ? <p className="canvas-empty canvas-client-hint">{t("app.canvas.addClient")}</p> : null}
         </div>
+        {courseModel === null || loaded === null || catalog === null ? null : <ExperimentCourse
+          model={courseModel} experiment={loaded.experiment} catalog={catalog} onFault={openFault} onHeightChange={setCourseHeight} disabled={invalid || loading}
+          cursorWindow={courseTime ? results.selection.window : null} windowMs={windowMs}
+          onCursorChange={courseTime ? playback.seek : undefined} />}
         <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid || !editable} onCommand={workspace.execute}
           onSelect={id => {
             if (id === variantId) {
