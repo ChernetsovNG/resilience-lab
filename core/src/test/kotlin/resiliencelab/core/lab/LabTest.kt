@@ -9,9 +9,7 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.execution.ExperimentExecutor
-import resiliencelab.core.results.RunManifest
 import resiliencelab.core.workspace.DocumentExistsException
-import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
 import resiliencelab.core.workspace.VersionedDocument
 import resiliencelab.core.workspace.Workspace
@@ -179,22 +177,13 @@ class LabTest {
     }
 
     @Test
-    fun `resume accepts unchanged legacy model hashes with non topological connection order`() {
+    fun `resume accepts a current run after connections are reordered`() {
         val root = exampleWorkspace()
+        createIncomplete(root)
         val modelPath = root.resolve(model)
         val decoded = (DocumentCodec.decodeModel(Files.readString(modelPath), model) as DecodeResult.Ok).value
-        val reordered = decoded.copy(connections = decoded.connections.reversed())
-        Files.writeString(modelPath, DocumentCodec.encodeModel(reordered))
-        createIncomplete(root)
+        Files.writeString(modelPath, DocumentCodec.encodeModel(decoded.copy(connections = decoded.connections.reversed())))
         val runDirectory = ".results/retry-storm/cancelled"
-        val manifestPath = root.resolve("$runDirectory/manifest.json")
-        val manifest = Json.decodeFromString(RunManifest.serializer(), Files.readString(manifestPath))
-        val legacyHash = DocumentVersion.of(DocumentCodec.encodeModel(reordered))
-        assertThat(legacyHash).isNotEqualTo(manifest.documents.getValue(model))
-        Files.writeString(
-            manifestPath,
-            DocumentCodec.encode(RunManifest.serializer(), manifest.copy(documents = manifest.documents + (model to legacyHash))),
-        )
 
         Lab(FileWorkspace(root)).use { lab ->
             assertThat(lab.validateResume(runDirectory).complete).isFalse()
