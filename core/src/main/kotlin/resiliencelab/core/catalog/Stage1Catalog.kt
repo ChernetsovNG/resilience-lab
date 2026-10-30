@@ -20,6 +20,11 @@ object Stage1Catalog {
                         "retries do not re-enter the caller queue.",
                     "An upstream timeout or deadline does not release downstream handlers or remove admitted work.",
                 ),
+            "database" to
+                listOf(
+                    "Each query holds one connection until completion; waiting queries use a bounded FIFO queue.",
+                    "An upstream timeout does not cancel an admitted query or release its connection.",
+                ),
             "request" to
                 listOf("Client requests enter the first service without network delay, per-attempt timeout, or retries."),
             "call" to
@@ -37,7 +42,7 @@ object Stage1Catalog {
         Catalog(
             schemaVersion = 2,
             types =
-                listOf(client(), service(), request(), call(), router(), route()).map { type ->
+                listOf(client(), service(), request(), call(), router(), route(), database()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
                 },
             assumptions =
@@ -167,7 +172,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
-            connects = ConnectionRule("service", listOf("service", "router")),
+            connects = ConnectionRule("service", listOf("service", "router", "database")),
             params =
                 listOf(
                     distribution(
@@ -268,7 +273,9 @@ object Stage1Catalog {
             version = 1,
             category = TypeCategory.BLOCK,
             title = "Router",
-            description = "Selects a service or another router without queueing or delay; outputs are measured on route connections.",
+            description =
+                "Selects a service, database or another router without queueing or delay; " +
+                    "outputs are measured on route connections.",
             ports = listOf(PortDescriptor("in", PortDirection.IN), PortDescriptor("out", PortDirection.OUT)),
             params =
                 listOf(
@@ -289,8 +296,8 @@ object Stage1Catalog {
             version = 1,
             category = TypeCategory.CONNECTION,
             title = "Route",
-            description = "One router output to a service or another router.",
-            connects = ConnectionRule("router", listOf("service", "router")),
+            description = "One router output to a service, database or another router.",
+            connects = ConnectionRule("router", listOf("service", "router", "database")),
             params =
                 listOf(
                     ParamDescriptor(
@@ -324,6 +331,36 @@ object Stage1Catalog {
                     ),
                 ),
         )
+
+    private fun database() =
+        service().let { service ->
+            service.copy(
+                id = "database",
+                title = "Database",
+                description = "Database server with limited concurrent queries and a bounded FIFO query queue; no outgoing calls.",
+                ports = listOf(PortDescriptor("in", PortDirection.IN)),
+                outputs = Stage1Outputs.database,
+                params =
+                    service.params.filterNot { it.name == "replicas" }.map { param ->
+                        when (param.name) {
+                            "handlers" ->
+                                param.copy(
+                                    name = "maxConnections",
+                                    title = "Maximum connections",
+                                    description = "Maximum concurrent database queries (max_connections).",
+                                )
+                            "queue" -> param.copy(title = "Query queue capacity", description = "Waiting queries; zero disables queueing.")
+                            "processing" -> param.copy(title = "Query time", description = "Execution time of one database query.")
+                            "failureRate" ->
+                                param.copy(
+                                    title = "Query failure rate",
+                                    description = "Probability that one executed query fails.",
+                                )
+                            else -> param
+                        }
+                    },
+            )
+        }
 
     private fun distribution(
         name: String,

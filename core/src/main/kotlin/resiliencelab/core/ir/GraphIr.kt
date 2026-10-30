@@ -54,7 +54,11 @@ data class ClientNode(
     val path: String get() = displayPath(pathSegments)
 }
 
-/** Blocking service with a bounded FIFO queue and an ordered invocation scenario. */
+/**
+ * Blocking service with a bounded FIFO queue and an ordered invocation scenario.
+ * A database shares this runtime shape: handlers are connections, processing is query execution,
+ * and its scenario contains only processing because the compiler forbids outgoing connections.
+ */
 data class ServiceNode(
     val pathSegments: List<String>,
     val handlers: Int,

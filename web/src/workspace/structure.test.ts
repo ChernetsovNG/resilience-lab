@@ -26,6 +26,22 @@ function roundTrip(before: EditorDocuments, command: EditorCommand) {
 }
 
 describe("structure commands", () => {
+  it("adds a database leaf and preserves its query parameters when editing and saving", () => {
+    const fullCatalog = outputCatalog as Catalog;
+    const added = roundTrip(documents(), addBlock(fullCatalog, "database", { x: 20, y: 40 }));
+    expect(added.model.blocks["database-1"]).toEqual({ type: "database", params: {} });
+    added.model.blocks["database-1"].params = {
+      maxConnections: 3, queue: 12, processing: { kind: "lognormal", mean: "7ms", stdDev: "2ms" }, failureRate: "2%",
+    };
+    added.model.blocks.router = { type: "router", params: {} };
+    expect(connectionRule(fullCatalog, added.model, "gateway", "database-1", "out", "in").type).toBe("call");
+    expect(connectionRule(fullCatalog, added.model, "router", "database-1", "out", "in").type).toBe("route");
+    expect(connectionRule(fullCatalog, added.model, "database-1", "gateway", "out", "in").error).toBeTruthy();
+    const after = roundTrip(added, setModelParam("gateway", "handlers", 8));
+    const saved = JSON.parse(JSON.stringify(documentDrafts(after)[0])).content.model;
+    expect(saved.blocks["database-1"]).toEqual(added.model.blocks["database-1"]);
+  });
+
   it("renames and deletes group and copied connection fault references including replica suffixes", () => {
     const before = documents();
     before.experiment.faults = ["middle#2", "gateway-to-middle#2", "dependency"].map(target => ({ target, from: "0ms", to: "1s", processingMultiplier: 2 }));
