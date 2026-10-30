@@ -102,6 +102,9 @@ class FifoResourceWithQ(
         if (grew && requestQ.isNotEmpty) scheduleQueueNotification()
     }
 
+    /** Reconsiders a request after it withdrew an invalidated native capacity promise. */
+    internal fun retrySlotQueue() = scheduleQueueNotification()
+
     private fun scheduleQueueNotification() {
         if (notificationPending) return
         notificationPending = true

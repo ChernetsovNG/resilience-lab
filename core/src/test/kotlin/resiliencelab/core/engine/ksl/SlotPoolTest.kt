@@ -204,6 +204,45 @@ class SlotPoolTest {
         assertThat(rig.pool.queue.size).isZero()
     }
 
+    @Test
+    fun `capacity loss between native notification and waiter resumption preserves FIFO and original waits`() {
+        val rig =
+            simulate(
+                waitLimitMs = 8.0,
+                interleavedCapacities = 2 to 0,
+                changes = listOf(6.0 to 2),
+                attempts = listOf(Attempt("holder", 0.0, 10.0), Attempt("first", 1.0), Attempt("second", 1.0)),
+            )
+
+        assertThat(rig.acquiredAt).containsExactlyEntriesOf(mapOf("holder" to 0.0, "first" to 6.0, "second" to 7.0))
+        assertThat(rig.waits).containsAllEntriesOf(mapOf("first" to 5.0, "second" to 6.0))
+        val metrics = rig.snapshots.single()
+        assertThat(metrics.waitCount).isEqualTo(2)
+        assertThat(metrics.totalWaitMs).isEqualTo(11.0)
+        assertThat(metrics.queueIntegralMs).isEqualTo(11.0)
+        assertThat(metrics.waitLimitCount).isZero()
+        assertThat(rig.admittedCount).isEqualTo(3)
+        assertThat(rig.pool.queue.size).isZero()
+        assertThat(rig.pool.resource.numBusy).isZero()
+    }
+
+    @Test
+    fun `two issued promises recover from partial capacity loss without duplicate resumes`() {
+        val rig =
+            simulate(
+                waitLimitMs = 8.0,
+                interleavedCapacities = 3 to 2,
+                attempts = listOf(Attempt("holder", 0.0, 10.0), Attempt("first", 1.0), Attempt("second", 1.0)),
+            )
+
+        assertThat(rig.acquiredAt).containsExactlyEntriesOf(mapOf("holder" to 0.0, "first" to 4.0, "second" to 5.0))
+        assertThat(rig.waits).containsAllEntriesOf(mapOf("first" to 3.0, "second" to 4.0))
+        assertThat(rig.snapshots.single().totalWaitMs).isEqualTo(7.0)
+        assertThat(rig.snapshots.single().waitCount).isEqualTo(2)
+        assertThat(rig.snapshots.single().waitLimitCount).isZero()
+        assertThat(rig.admittedCount).isEqualTo(3)
+    }
+
     private fun simulate(
         capacity: Int = 1,
         queueCapacity: Int = 3,
@@ -211,9 +250,10 @@ class SlotPoolTest {
         changes: List<Pair<Double, Int>> = emptyList(),
         attempts: List<Attempt>,
         replications: Int = 1,
+        interleavedCapacities: Pair<Int, Int>? = null,
     ): Rig {
         val model = Model("SlotPoolTest", autoCSVReports = false)
-        val rig = Rig(model, capacity, queueCapacity, waitLimitMs, changes, attempts)
+        val rig = Rig(model, capacity, queueCapacity, waitLimitMs, changes, attempts, interleavedCapacities)
         model.numberOfReplications = replications
         model.lengthOfReplication = 30.0
         model.simulate()
@@ -234,8 +274,10 @@ class SlotPoolTest {
         waitLimitMs: Double?,
         private val changes: List<Pair<Double, Int>>,
         private val attempts: List<Attempt>,
+        private val interleavedCapacities: Pair<Int, Int>?,
     ) : ProcessModel(parent, null) {
-        val pool = SlotPool(this, "slots", capacity, queueCapacity, waitLimitMs)
+        var admittedCount = 0
+        val pool = SlotPool(this, "slots", capacity, queueCapacity, waitLimitMs, onAdmitted = { admittedCount++ })
         val outcomes = linkedMapOf<String, SlotAcquisitionOutcome>()
         val acquiredAt = linkedMapOf<String, Double>()
         val completedAt = linkedMapOf<String, Double>()
@@ -243,12 +285,27 @@ class SlotPoolTest {
         val snapshots = mutableListOf<SlotPoolMetrics>()
 
         override fun initialize() {
+            admittedCount = 0
             outcomes.clear()
             acquiredAt.clear()
             completedAt.clear()
             waits.clear()
             changes.groupBy({ it.first }, { it.second }).forEach { (at, capacities) ->
                 schedule(EventActionIfc<Nothing> { capacities.forEach(pool::changeCapacity) }, at)
+            }
+            if (interleavedCapacities != null) {
+                schedule(
+                    EventActionIfc<Nothing> {
+                        pool.changeCapacity(interleavedCapacities.first)
+                        schedule(
+                            EventActionIfc<Nothing> { pool.changeCapacity(interleavedCapacities.second) },
+                            0.0,
+                            priority = RELEASE_PRIORITY,
+                        )
+                    },
+                    4.0,
+                    priority = RELEASE_PRIORITY,
+                )
             }
             attempts.forEach { activate(Work(it).work, it.at) }
         }

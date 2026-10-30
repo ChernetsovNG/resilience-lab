@@ -40,6 +40,8 @@ internal data class SlotPoolMetrics(
  * A null wait limit waits indefinitely; a zero limit permits only allocation at the arrival instant.
  * Capacity changes never preempt work, and growth serves waiting requests using KSL's allocation order.
  * All metrics reset at each replication; the legacy callbacks retain their queue/allocation ordering.
+ * Timed queues use stable admission ranks to preserve FIFO when capacity loss cancels a native wake.
+ * Native timeInQ observes each queue residence; [metrics] counts the full logical wait once.
  */
 internal class SlotPool(
     parent: ModelElement,
@@ -62,6 +64,9 @@ internal class SlotPool(
     private val waitedEntities = mutableSetOf<ProcessModel.Entity>()
     private val timedAcquisitions = mutableSetOf<ProcessModel.Entity>()
     private val waitingSince = mutableMapOf<ProcessModel.Entity.Request, Double>()
+    private var nextAdmissionRank = 0
+    private var capacityRevision = 0L
+    private var requeueingRequest: ProcessModel.Entity.Request? = null
     private var lastTime = 0.0
     private var busy = 0
     private var queued = 0
@@ -77,6 +82,10 @@ internal class SlotPool(
     init {
         resource = FifoResourceWithQ(parent, name, maxOf(1, initialCapacity), queue, deferReleaseNotifications = waitLimitMs != null)
         resource.initialCapacity = initialCapacity
+        if (waitLimitMs != null) {
+            queue.initialDiscipline = Queue.Discipline.RANKED
+            queue.currentDiscipline = Queue.Discipline.RANKED
+        }
         queue.addQueueListener(
             object : QueueListenerIfc<ProcessModel.Entity.Request> {
                 override fun update(
@@ -84,6 +93,10 @@ internal class SlotPool(
                     queue: Queue<ProcessModel.Entity.Request>,
                     qObject: ProcessModel.Entity.Request?,
                 ) {
+                    if (qObject != null && qObject === requeueingRequest) return
+                    if (waitLimitMs != null && status == Queue.Status.ENQUEUED && qObject != null) {
+                        assignAdmissionRank(qObject)
+                    }
                     advance()
                     queued = queue.size
                     onQueueLengthChanged(queue.size)
@@ -122,6 +135,9 @@ internal class SlotPool(
         waitedEntities.clear()
         timedAcquisitions.clear()
         waitingSince.clear()
+        nextAdmissionRank = 0
+        capacityRevision = 0L
+        requeueingRequest = null
         lastTime = 0.0
         busy = 0
         queued = 0
@@ -178,6 +194,7 @@ internal class SlotPool(
         limitMs: Double,
     ): Allocation? {
         var expired = false
+        var observedCapacityRevision = capacityRevision
         val expiry =
             schedule(
                 EventActionIfc<Nothing> {
@@ -192,9 +209,19 @@ internal class SlotPool(
             )
         try {
             suspend()
-            // A decrease between wakeup and resumption must not preempt existing work or admit
-            // beyond capacity. Removing the request below also releases its KSL unit promise.
-            while (!expired && resource.capacity <= resource.numBusy) suspend()
+            while (!expired) {
+                if (observedCapacityRevision != capacityRevision) {
+                    // Public removal clears this request's native promise/resume-pending flag.
+                    // Its original admission rank restores FIFO without disturbing other wakeups.
+                    requeueAfterCapacityLoss(request)
+                    observedCapacityRevision = capacityRevision
+                    if (queue.peekNext() === request && resource.canAllocate(1)) break
+                    if (resource.capacity > resource.numBusy) resource.retrySlotQueue()
+                } else if (queue.peekNext() === request && resource.capacity > resource.numBusy) {
+                    break
+                }
+                suspend()
+            }
             if (expired) return null
             queue.remove(request)
             return resource.allocate(entity, 1, queue)
@@ -204,10 +231,34 @@ internal class SlotPool(
         }
     }
 
+    private fun assignAdmissionRank(request: ProcessModel.Entity.Request) {
+        if (queue.size == 1) nextAdmissionRank = 0
+        if (nextAdmissionRank == Int.MAX_VALUE) {
+            // Rebase only active ranks before overflow; no bound on total acquisitions is added.
+            val earlier = queue.immutableList.filter { it !== request }
+            earlier.forEachIndexed { rank, queuedRequest -> queuedRequest.priority = rank }
+            nextAdmissionRank = earlier.size
+        }
+        request.priority = nextAdmissionRank++
+    }
+
+    private fun requeueAfterCapacityLoss(request: ProcessModel.Entity.Request) {
+        requeueingRequest = request
+        try {
+            // Native timeInQ records each queue residence. Logical wait metrics retain the original
+            // waitingSince entry, original expiry event, and a single wait/admission count.
+            queue.remove(request)
+            queue.enqueue(request)
+        } finally {
+            requeueingRequest = null
+        }
+    }
+
     /** Sets the capacity immediately, including zero or below busy; occupied units finish normally. */
     fun changeCapacity(capacity: Int) {
         require(capacity >= 0)
         advance()
+        if (capacity < resource.capacity) capacityRevision++
         resource.changeSlotCapacity(capacity)
         this.capacity = capacity
     }
