@@ -53,7 +53,7 @@ class GraphIrTest {
                 10,
                 fixed,
                 0.0,
-                scenario = listOf(ServiceStep.Process, ServiceStep.Call("ab"), ServiceStep.Call("ac"), ServiceStep.Call("ab")),
+                scenario = listOf(ServiceStep.Process(), ServiceStep.Call("ab"), ServiceStep.Call("ac"), ServiceStep.Call("ab")),
             )
         val b = ServiceNode(listOf("a", "#2"), 10, 10, fixed, 0.0)
         val c = ServiceNode("a-other", 10, 10, fixed, 0.0)

@@ -129,7 +129,7 @@ const service = (handlers: number, queue: number, mean: string) => ({
 });
 
 export const model: ModelFile = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   blocks: {
     client: { type: "client", params: { deadline: "250ms", rate: "120/s" } },
     dependency: service(2, 8, "8ms"),

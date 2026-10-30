@@ -165,7 +165,7 @@ class GraphArtifactDeterminismTest {
                     node(
                         "entry",
                         listOf(
-                            ServiceStep.Process,
+                            ServiceStep.Process(TestChains.exponential(3.0), 0.05),
                             ServiceStep.Call("entry-left"),
                             ServiceStep.Call("entry-right"),
                             ServiceStep.Call("entry-left"),

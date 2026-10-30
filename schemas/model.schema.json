@@ -82,6 +82,9 @@
               ],
               "type": "object"
             },
+            "scenario": {
+              "type": "null"
+            },
             "type": {
               "const": "client"
             }
@@ -247,6 +250,16 @@
                 "processing"
               ],
               "type": "object"
+            },
+            "scenario": {
+              "items": {
+                "$ref": "#/$defs/resiliencelab.core.document.ScenarioStep"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ]
             },
             "type": {
               "const": "service"
@@ -606,6 +619,164 @@
           "type": "object"
         }
       ]
+    },
+    "resiliencelab.core.document.ScenarioStep": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "connection": {
+              "type": "null"
+            },
+            "failureRate": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                  "type": "string",
+                  "x-quantity": {
+                    "dimension": "PROBABILITY",
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "units": [
+                      {
+                        "denominator": 100.0,
+                        "numerator": 1.0,
+                        "symbol": "%"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "0%",
+              "description": "Probability that one local attempt fails. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+              "title": "Failure rate"
+            },
+            "processing": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "description": "Distribution of the duration.",
+                      "enum": [
+                        "fixed",
+                        "exponential",
+                        "lognormal"
+                      ],
+                      "title": "Distribution",
+                      "type": "string"
+                    },
+                    "mean": {
+                      "description": "Mean duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                      "title": "Mean",
+                      "type": "string",
+                      "x-quantity": {
+                        "dimension": "DURATION",
+                        "minimum": 0.0,
+                        "units": [
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1.0,
+                            "symbol": "ms"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1000.0,
+                            "symbol": "s"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 60000.0,
+                            "symbol": "min"
+                          }
+                        ]
+                      }
+                    },
+                    "stdDev": {
+                      "anyOf": [
+                        {
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                          "type": "string",
+                          "x-quantity": {
+                            "dimension": "DURATION",
+                            "exclusiveMinimum": 0.0,
+                            "units": [
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1.0,
+                                "symbol": "ms"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1000.0,
+                                "symbol": "s"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 60000.0,
+                                "symbol": "min"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Required for lognormal only. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                      "title": "Standard deviation"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mean"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Local processing time of one attempt.",
+              "title": "Processing time"
+            },
+            "type": {
+              "const": "process"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "connection": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "failureRate": {
+              "type": "null"
+            },
+            "processing": {
+              "type": "null"
+            },
+            "type": {
+              "const": "call"
+            }
+          },
+          "required": [
+            "type",
+            "connection"
+          ],
+          "type": "object"
+        }
+      ]
     }
   },
   "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/model.schema.json",
@@ -639,7 +810,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 1,
+          "const": 2,
           "type": "integer"
         },
         {

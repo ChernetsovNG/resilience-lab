@@ -8,6 +8,7 @@ import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.ServiceStep
 import java.math.BigInteger
 import kotlin.math.pow
 
@@ -113,7 +114,25 @@ class ModelLinter(
                     deadlineBudget(graph, calls.firstOrNull())?.let(::add)
                 }
             }.distinct()
-            .toList()
+            .toList() +
+            graph.services.flatMap { service ->
+                val used =
+                    graph
+                        .scenario(service)
+                        .filterIsInstance<ServiceStep.Call>()
+                        .map { it.edge }
+                        .toSet()
+                graph.outgoingCalls(service.path).filter { it.path !in used }.map { call ->
+                    warning(
+                        CoreMessage.LINT_SCENARIO_UNUSED,
+                        "Outgoing connection '${call.path}' is not used in the scenario of service '${service.path}'",
+                        service.origin,
+                        service.path,
+                        "/scenario",
+                        mapOf("connection" to JsonPrimitive(call.path), "service" to JsonPrimitive(service.path)),
+                    )
+                }
+            }
     }
 
     /**

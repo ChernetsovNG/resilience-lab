@@ -23,8 +23,10 @@ internal class ServiceRuntime(
     onBusyHandlersChanged: (Int) -> Unit,
 ) {
     val serviceId: String = node.path
-    private val durationSampler =
-        DurationSamplerFactory.create(node.processing, streams.stream(node.pathSegments, StreamRole.PROCESSING))
+    private val processingStream = streams.stream(node.pathSegments, StreamRole.PROCESSING)
+    private val durationSamplers =
+        (listOf(node.processing) + scenario.filterIsInstance<ServiceStep.Process>().mapNotNull { it.processing })
+            .associateWith { DurationSamplerFactory.create(it, processingStream) }
     private val outcomeStream = streams.stream(node.pathSegments, StreamRole.OUTCOME)
     private var activeFault: FaultSpan? = null
 
@@ -53,10 +55,11 @@ internal class ServiceRuntime(
         if (activeFault == fault) activeFault = null
     }
 
-    fun nextDurationMs(): Double = durationSampler.next() * (activeFault?.processingMultiplier ?: 1.0)
+    fun nextDurationMs(step: ServiceStep.Process): Double =
+        durationSamplers.getValue(step.processing ?: node.processing).next() * (activeFault?.processingMultiplier ?: 1.0)
 
-    fun nextLocalFailure(): Boolean {
-        val failureProbability = activeFault?.failureProbability ?: node.failureProbability
+    fun nextLocalFailure(step: ServiceStep.Process): Boolean {
+        val failureProbability = activeFault?.failureProbability ?: step.failureProbability ?: node.failureProbability
         return outcomeStream.randU01() < failureProbability
     }
 }

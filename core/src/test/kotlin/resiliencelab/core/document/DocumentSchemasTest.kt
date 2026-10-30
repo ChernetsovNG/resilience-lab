@@ -85,8 +85,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":1", "\"schemaVersion\":1,\"extra\":1"),
-                model.replace("\"schemaVersion\":1", "\"schemaVersion\":2"),
+                model.replace("\"schemaVersion\":2", "\"schemaVersion\":2,\"extra\":1"),
+                model.replace("\"schemaVersion\":2", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -99,6 +99,33 @@ class DocumentSchemasTest {
         assertThat(validate("model", call)).isNotEmpty()
         assertThat(validate("layout", """{"schemaVersion":1,"positions":{"c":{"x":0,"y":1,"z":2}}}""")).isNotEmpty()
         assertThat(validate("layout", """{"schemaVersion":1,"positions":{"c":{"x":0}}}""")).isNotEmpty()
+    }
+
+    @Test
+    fun `scenario schema accepts process and call steps and rejects wrong shapes`() {
+        fun withScenario(steps: String) = model.replace("\"type\":\"service\"", "\"type\":\"service\",\"scenario\":$steps")
+        assertThat(
+            validate(
+                "model",
+                withScenario(
+                    """[{"type":"process"},{"type":"process","processing":{"kind":"fixed","mean":"2ms"},"failureRate":"1%"},{"type":"call","connection":"db"}]""",
+                ),
+            ),
+        ).isEmpty()
+        listOf(
+            "[]",
+            """[{"type":"parallel"}]""",
+            """[{"type":"call"}]""",
+            """[{"type":"process","connection":"db"}]""",
+            """[{"type":"call","connection":"db","failureRate":"1%"}]""",
+            """[{"type":"process","processing":{"kind":"fixed","mean":"2/s"}}]""",
+        ).forEach { steps -> assertThat(validate("model", withScenario(steps))).describedAs(steps).isNotEmpty() }
+        val nullable =
+            withScenario(
+                """[{"type":"process","connection":null},{"type":"call","connection":"db","processing":null,"failureRate":null}]""",
+            )
+        assertThat(DocumentCodec.decodeModel(nullable, "m.model.json")).isInstanceOf(DecodeResult.Ok::class.java)
+        assertThat(validate("model", nullable)).isEmpty()
     }
 
     @Test
@@ -237,5 +264,5 @@ class DocumentSchemasTest {
         """{"schemaVersion":1,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":1,"blocks":{"c":{"type":"client","params":{"rate":"120/s","deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":2,"blocks":{"c":{"type":"client","params":{"rate":"120/s","deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

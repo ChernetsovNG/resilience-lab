@@ -12,6 +12,20 @@ import kotlin.test.Test
 
 class DocumentCodecTest {
     @Test
+    fun `empty whitespace and multiple root values are shape diagnostics instead of exceptions`() {
+        for (text in listOf("", " \n\t", "{} {}")) {
+            for (decoded in listOf(
+                DocumentCodec.decodeModel(text, "m.model.json"),
+                DocumentCodec.decodeExperiment(text, "e.experiment.json"),
+                DocumentCodec.decodeLayout(text, "l.layout.json"),
+            )) {
+                assertThat(decoded).describedAs(text).isInstanceOf(DecodeResult.Failed::class.java)
+                assertThat((decoded as DecodeResult.Failed).diagnostics.single().code).isIn("DOCUMENT_SHAPE", "JSON_SYNTAX")
+            }
+        }
+    }
+
+    @Test
     fun `rejects duplicate keys, non-finite numbers and syntax errors`() {
         val duplicate = StrictJson.check("""{"a": 1, "a": 2}""", "x.json")!!
         assertThat(duplicate.code).isEqualTo("JSON_DUPLICATE_KEY")
@@ -32,28 +46,28 @@ class DocumentCodecTest {
 
     @Test
     fun `decodes a model and reports shape and version problems`() {
-        val text = """{"schemaVersion": 1, "blocks": {"c": {"type": "client"}}, "connections": []}"""
+        val text = """{"schemaVersion": 2, "blocks": {"c": {"type": "client"}}, "connections": []}"""
         val decoded = DocumentCodec.decodeModel(text, "m.model.json")
         assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
         assertThat((decoded as DecodeResult.Ok).value.blocks.keys).containsExactly("c")
 
-        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 1, "blocks": {}, "extra": 1}""", "m.model.json")
+        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 2, "blocks": {}, "extra": 1}""", "m.model.json")
         assertThat((unknownField as DecodeResult.Failed).diagnostics.single().code).isEqualTo("DOCUMENT_SHAPE")
 
-        val wrongVersion = DocumentCodec.decodeModel("""{"schemaVersion": 2, "blocks": {}}""", "m.model.json")
+        val wrongVersion = DocumentCodec.decodeModel("""{"schemaVersion": 1, "oldShape": {}}""", "m.model.json")
         val diagnostic = (wrongVersion as DecodeResult.Failed).diagnostics.single()
         assertThat(diagnostic.code).isEqualTo("SCHEMA_VERSION")
         assertThat(diagnostic.pointer).isEqualTo("/schemaVersion")
-        assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion 2; expected 1")
+        assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion 1; expected 2")
         assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
-            .isEqualTo(Json.parseToJsonElement("""{"actual":2,"expected":1}"""))
+            .isEqualTo(Json.parseToJsonElement("""{"actual":1,"expected":2}"""))
     }
 
     @Test
     fun `writes canonical text with sorted keys, two-space indent and a final newline`() {
         val model =
             ModelFile(
-                schemaVersion = 1,
+                schemaVersion = 2,
                 blocks =
                     linkedMapOf(
                         "b" to
@@ -86,7 +100,7 @@ class DocumentCodecTest {
                   "type": "service"
                 }
               },
-              "schemaVersion": 1
+              "schemaVersion": 2
             }
 
             """.trimIndent(),
@@ -116,7 +130,7 @@ class DocumentCodecTest {
     fun `keeps descriptions and notes of documents, blocks and connections`() {
         val model =
             ModelFile(
-                schemaVersion = 1,
+                schemaVersion = 2,
                 description = "Chain",
                 notes = "Calibrated on staging",
                 blocks = mapOf("a" to BlockInstance(type = "client", description = "Load", notes = "Peak hour")),

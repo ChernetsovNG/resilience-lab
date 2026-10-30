@@ -8,12 +8,12 @@ afterEach(() => {
 
 describe("API client", () => {
   it("reads documents by encoded path", async () => {
-    const fetchMock = stubFetch(() => ({ body: { path: "a/b.model.json", kind: "MODEL", version: "v1", content: { model: { schemaVersion: 1, blocks: {}, connections: [], description: null, notes: null }, experiment: null, layout: null } } }));
+    const fetchMock = stubFetch(() => ({ body: { path: "a/b.model.json", kind: "MODEL", version: "v1", content: { model: { schemaVersion: 2, blocks: {}, connections: [], description: null, notes: null }, experiment: null, layout: null } } }));
 
     const document = await api.document("a/b.model.json");
 
     expect(document.path).toBe("a/b.model.json");
-    expect(document.content.model?.schemaVersion).toBe(1);
+    expect(document.content.model?.schemaVersion).toBe(2);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/workspace/document?path=a%2Fb.model.json", undefined);
   });
@@ -21,14 +21,14 @@ describe("API client", () => {
   it("saves a document with its version in If-Match", async () => {
     const fetchMock = stubFetch(() => ({ body: { path: "m.model.json", kind: "MODEL", version: "v2" } }));
 
-    await api.saveDocument("m.model.json", { model: { schemaVersion: 1, blocks: {}, connections: [] } }, "v1");
+    await api.saveDocument("m.model.json", { model: { schemaVersion: 2, blocks: {}, connections: [] } }, "v1");
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/v1/workspace/document?path=m.model.json");
     expect(init?.method).toBe("PUT");
     expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
     expect((init?.headers as Record<string, string>)["If-Match"]).toBe('"v1"');
-    expect(JSON.parse(String(init?.body))).toEqual({ model: { schemaVersion: 1, blocks: {}, connections: [] } });
+    expect(JSON.parse(String(init?.body))).toEqual({ model: { schemaVersion: 2, blocks: {}, connections: [] } });
   });
 
   it("creates a document without If-Match", async () => {

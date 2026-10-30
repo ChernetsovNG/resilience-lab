@@ -1528,6 +1528,12 @@
             "type" : "object",
             "additionalProperties" : true
           },
+          "scenario" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/ScenarioStep"
+            }
+          },
           "type" : {
             "type" : "string"
           }
@@ -2734,6 +2740,25 @@
           }
         },
         "required" : [ "firstNodes", "replications", "rule", "withoutSaturation" ]
+      },
+      "ScenarioStep" : {
+        "type" : "object",
+        "properties" : {
+          "connection" : {
+            "type" : [ "string", "null" ]
+          },
+          "failureRate" : {
+            "type" : [ "string", "null" ]
+          },
+          "processing" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : true
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "type" ]
       },
       "SeriesIndex" : {
         "type" : "object",

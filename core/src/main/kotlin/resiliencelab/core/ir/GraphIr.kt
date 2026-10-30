@@ -62,7 +62,7 @@ data class ServiceNode(
     val processing: Distribution,
     val failureProbability: Double,
     val origin: Origin = Origin.UNSPECIFIED,
-    /** Null selects processing followed by the sole outgoing call, as in stage 1. */
+    /** Null selects processing followed by outgoing calls in path order. */
     val scenario: List<ServiceStep>? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
@@ -81,8 +81,11 @@ data class ServiceNode(
 
 /** Ordered local processing and synchronous calls of one service invocation. */
 sealed interface ServiceStep {
-    /** Process with the service's duration distribution and failure probability. */
-    data object Process : ServiceStep
+    /** Omitted processing and failure probability use the effective service parameters. */
+    data class Process(
+        val processing: Distribution? = null,
+        val failureProbability: Double? = null,
+    ) : ServiceStep
 
     /** Invoke the outgoing edge identified by [edge]. */
     data class Call(
@@ -193,11 +196,10 @@ data class GraphIr(
     /** Resolve a scenario's edge reference. */
     fun call(path: String): CallEdge = callsByPath.getValue(path)
 
-    /** The stage-1 default is defined only when there is at most one outgoing call. */
+    /** Processing followed by outgoing calls in path order; documents with multiple calls require an explicit scenario. */
     fun defaultScenario(service: ServiceNode): List<ServiceStep> {
         val edges = outgoingCalls(service.path)
-        require(edges.size <= 1) { "Service '${service.path}' needs a scenario for multiple calls" }
-        return listOf(ServiceStep.Process) + edges.map { ServiceStep.Call(it.path) }
+        return listOf(ServiceStep.Process()) + edges.map { ServiceStep.Call(it.path) }
     }
 
     /** Effective steps, also available for IR constructed directly in code. */

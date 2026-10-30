@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.Severity
@@ -26,6 +27,7 @@ sealed interface DecodeResult<out T> {
 /** Strict reading and deterministic writing of workspace documents (ADR 0005, items 4 and 7). */
 object DocumentCodec {
     const val SCHEMA_VERSION = 1
+    const val MODEL_SCHEMA_VERSION = 2
 
     @OptIn(ExperimentalSerializationApi::class)
     private val reader =
@@ -46,17 +48,17 @@ object DocumentCodec {
     fun decodeModel(
         text: String,
         document: String,
-    ): DecodeResult<ModelFile> = decode(text, document, ModelFile.serializer()) { it.schemaVersion }
+    ): DecodeResult<ModelFile> = decode(text, document, ModelFile.serializer(), MODEL_SCHEMA_VERSION)
 
     fun decodeLayout(
         text: String,
         document: String,
-    ): DecodeResult<LayoutFile> = decode(text, document, LayoutFile.serializer()) { it.schemaVersion }
+    ): DecodeResult<LayoutFile> = decode(text, document, LayoutFile.serializer())
 
     fun decodeExperiment(
         text: String,
         document: String,
-    ): DecodeResult<ExperimentFile> = decode(text, document, ExperimentFile.serializer()) { it.schemaVersion }
+    ): DecodeResult<ExperimentFile> = decode(text, document, ExperimentFile.serializer())
 
     fun encodeModel(file: ModelFile): String = encode(ModelFile.serializer(), file)
 
@@ -81,31 +83,33 @@ object DocumentCodec {
         text: String,
         document: String,
         serializer: KSerializer<T>,
-        version: (T) -> Int,
+        expectedVersion: Int = SCHEMA_VERSION,
     ): DecodeResult<T> {
         StrictJson.check(text, document)?.let { return DecodeResult.Failed(listOf(it)) }
         val value =
             try {
+                val root = reader.parseToJsonElement(text) as? JsonObject
+                val actualVersion = (root?.get("schemaVersion") as? JsonPrimitive)?.intOrNull
+                if (actualVersion != null && actualVersion != expectedVersion) {
+                    return DecodeResult.Failed(
+                        listOf(
+                            Diagnostic(
+                                code = CoreMessage.SCHEMA_VERSION,
+                                severity = Severity.ERROR,
+                                message = "Unsupported schemaVersion $actualVersion; expected $expectedVersion",
+                                document = document,
+                                pointer = "/schemaVersion",
+                                args = mapOf("actual" to JsonPrimitive(actualVersion), "expected" to JsonPrimitive(expectedVersion)),
+                            ),
+                        ),
+                    )
+                }
                 reader.decodeFromString(serializer, text)
             } catch (exception: SerializationException) {
                 return DecodeResult.Failed(listOf(shape(exception, document)))
             } catch (exception: IllegalArgumentException) {
                 return DecodeResult.Failed(listOf(shape(exception, document)))
             }
-        if (version(value) != SCHEMA_VERSION) {
-            return DecodeResult.Failed(
-                listOf(
-                    Diagnostic(
-                        code = CoreMessage.SCHEMA_VERSION,
-                        severity = Severity.ERROR,
-                        message = "Unsupported schemaVersion ${version(value)}; expected $SCHEMA_VERSION",
-                        document = document,
-                        pointer = "/schemaVersion",
-                        args = mapOf("actual" to JsonPrimitive(version(value)), "expected" to JsonPrimitive(SCHEMA_VERSION)),
-                    ),
-                ),
-            )
-        }
         return DecodeResult.Ok(value)
     }
 

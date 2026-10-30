@@ -21,7 +21,7 @@ class GridExperimentTest {
 
     private val model =
         """
-        {"schemaVersion":1,"blocks":{
+        {"schemaVersion":2,"blocks":{
           "client":{"type":"client","params":{"rate":"100/s","deadline":"10ms"}},
           "entry":{"type":"service","params":{"handlers":1,"queue":4,"processing":{"kind":"exponential","mean":"3ms"}}}
         },"connections":[{"id":"request","type":"request","from":"client","to":"entry"}]}

@@ -57,7 +57,7 @@ class GraphScenarioTest {
     @Test
     fun `failed second call skips later processing and calls`() {
         val base =
-            graph(listOf(ServiceStep.Process, ServiceStep.Call("a"), ServiceStep.Call("b"), ServiceStep.Process, ServiceStep.Call("a")))
+            graph(listOf(ServiceStep.Process(), ServiceStep.Call("a"), ServiceStep.Call("b"), ServiceStep.Process(), ServiceStep.Call("a")))
         val rig = simulate(base.copy(services = base.services.map { if (it.path == "right") it.copy(failureProbability = 1.0) else it }))
         assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.DOWNSTREAM_FAILURE)
         assertThat(
@@ -112,7 +112,7 @@ class GraphScenarioTest {
                                 if (it.path ==
                                     "left"
                                 ) {
-                                    it.copy(scenario = listOf(ServiceStep.Process, ServiceStep.Process))
+                                    it.copy(scenario = listOf(ServiceStep.Process(), ServiceStep.Process()))
                                 } else {
                                     it
                                 }
@@ -246,7 +246,7 @@ class GraphScenarioTest {
 
     private fun graph(
         steps: List<ServiceStep> =
-            listOf(ServiceStep.Process, ServiceStep.Call("a"), ServiceStep.Process, ServiceStep.Call("b"), ServiceStep.Process),
+            listOf(ServiceStep.Process(), ServiceStep.Call("a"), ServiceStep.Process(), ServiceStep.Call("b"), ServiceStep.Process()),
     ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
