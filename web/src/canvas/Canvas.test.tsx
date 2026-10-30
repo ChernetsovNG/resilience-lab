@@ -67,7 +67,7 @@ it("applies colliding output ids only to the type selected in the overlay", asyn
 });
 
 describe("Canvas", () => {
-  it.each([1, 4, 10])("labels service parameters before their values with %s handlers", async handlers => {
+  it.each([1, 4, 10])("keeps service parameter labels and values together with %s handlers", async handlers => {
     setLanguage("ru");
     try {
       const configured = { ...model, blocks: { ...model.blocks,
@@ -76,8 +76,10 @@ describe("Canvas", () => {
       render(<Canvas catalog={localizeCatalog(catalog)} onCommand={vi.fn()} model={configured} layout={layout}
         selected={[]} onSelect={vi.fn()} />);
       const node = await screen.findByTestId("rf__node-gateway");
-      expect(node.querySelector(".block-summary")?.textContent?.replace(/\s+/g, " ").trim())
-        .toBe(`обработчики: ${handlers} · очередь: 16 · среднее: 1ms`);
+      const pairs = node.querySelectorAll(".block-summary > span");
+      expect([...pairs].map(pair => pair.textContent?.trim()))
+        .toEqual([`обработчики: ${handlers}`, "очередь: 16", "среднее: 1ms"]);
+      for (const pair of pairs) expect(pair.querySelector(".inline-param")).not.toBeNull();
     } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
   });
 

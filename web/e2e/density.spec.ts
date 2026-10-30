@@ -1,5 +1,48 @@
 import { expect, test } from "@playwright/test";
 
+test("service parameters stay together at the same node height in English and Russian", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  const node = page.getByTestId("rf__node-gateway").locator(".block-node");
+  const height = () => node.evaluate(element => (element as HTMLElement).offsetHeight);
+  const englishHeight = await height();
+  await page.screenshot({ path: testInfo.outputPath("parameters-en.png") });
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await page.getByLabel("Language", { exact: true }).selectOption("ru");
+  await page.getByRole("button", { name: "Вид", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("parameters-ru.png") });
+  await page.locator(".palette").screenshot({ path: testInfo.outputPath("palette-ru.png") });
+  expect(await height()).toBe(englishHeight);
+  const pairs = node.locator(".block-summary > span");
+  await expect(pairs).toHaveCount(3);
+  for (const pair of await pairs.all()) {
+    expect(await pair.evaluate(element => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+    await expect(pair).not.toContainText("·");
+  }
+  const router = page.getByRole("button", { name: "Маршрутизатор", exact: true });
+  await expect(router.locator("svg")).toHaveAttribute("stroke", "currentColor");
+  await page.getByTestId("canvas-param-gateway-handlers").dblclick();
+  const input = node.getByRole("textbox", { name: "Обработчики", exact: true });
+  const inputBox = (await input.boundingBox())!;
+  const nodeBox = (await node.boundingBox())!;
+  expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(nodeBox.x + nodeBox.width);
+  expect(await height()).toBe(englishHeight);
+  await input.fill("2147483647");
+  await input.press("Enter");
+  await expect(page.getByTestId("canvas-param-gateway-handlers")).toHaveText(/2\s147\s483\s647/);
+  expect.soft(await node.evaluate(element => [...element.querySelectorAll(".inline-param-value")]
+    .every(value => value.getBoundingClientRect().right <= element.getBoundingClientRect().right))).toBe(true);
+  await page.getByRole("button", { name: "Отменить действие", exact: true }).click();
+  await expect(page.getByTestId("canvas-param-gateway-handlers")).toHaveText("4");
+  await page.getByRole("button", { name: "Сервис", exact: true }).click();
+  const added = page.locator(".react-flow__node.selected .block-node");
+  await expect(added.locator(".block-summary")).toContainText("Обязательно");
+  expect(await added.evaluate(element => [...element.querySelectorAll(".inline-param-value")]
+    .every(value => value.getBoundingClientRect().right <= element.getBoundingClientRect().right))).toBe(true);
+});
+
 test("compact inspector and canvas overlays give the model more space", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
