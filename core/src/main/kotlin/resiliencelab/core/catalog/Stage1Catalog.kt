@@ -249,6 +249,34 @@ object Stage1Catalog {
                         options = listOf("any", "other"),
                     ),
                     ParamDescriptor(
+                        name = "pool",
+                        kind = ParamKind.OBJECT,
+                        title = "Connection pool",
+                        description = "Slots owned by the calling instance, held until response or attempt timeout.",
+                        fields =
+                            listOf(
+                                ParamDescriptor(
+                                    name = "size",
+                                    kind = ParamKind.INTEGER,
+                                    title = "Pool size",
+                                    description = "Maximum simultaneous connections for this call on each caller instance.",
+                                    required = true,
+                                    minimum = 1.0,
+                                    sweepable = true,
+                                ),
+                                ParamDescriptor(
+                                    name = "acquireTimeout",
+                                    kind = ParamKind.QUANTITY,
+                                    title = "Acquisition timeout",
+                                    description = "Maximum connection wait, also bounded by the remaining deadline; zero does not wait.",
+                                    default = JsonPrimitive("30s"),
+                                    dimension = Dimension.DURATION,
+                                    minimum = 0.0,
+                                    sweepable = true,
+                                ),
+                            ),
+                    ),
+                    ParamDescriptor(
                         name = "backoff",
                         kind = ParamKind.OBJECT,
                         title = "Backoff",

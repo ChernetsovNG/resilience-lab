@@ -184,7 +184,7 @@ class RouterCompilerTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":4,"blocks":{
+                """{"schemaVersion":5,"blocks":{
               "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"1ms"}}},
               "router":{"type":"router","params":{"policy":"random"}},

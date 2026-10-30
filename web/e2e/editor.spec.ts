@@ -101,9 +101,30 @@ test("opens saves and runs replica groups without losing per-replica parameters"
   expect((await stored(page, files.model)).content.model).toEqual(grouped);
 });
 
+test("opens saves and runs a call pool without losing its configuration", async ({ page, files }) => {
+  const pooled = (await stored(page, files.model)).content.model as ModelFile;
+  pooled.connections.find(edge => edge.id === "gateway-to-middle")!.params.pool = { size: 2, acquireTimeout: "5ms" };
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(pooled));
+  await page.reload();
+  await page.getByTestId("canvas-param-gateway-to-middle-timeout").click();
+  await expect(page.getByLabel("Pool size", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("Acquisition timeout", { exact: true })).toHaveValue("5ms");
+  await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+  await page.getByLabel("Handlers", { exact: true }).fill("5");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await save(page);
+  pooled.blocks.gateway.params.handlers = 5;
+  expect((await stored(page, files.model)).content.model).toEqual(pooled);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect((await stored(page, files.model)).content.model).toEqual(pooled);
+});
+
 test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
   const routed = (await stored(page, files.model)).content.model as ModelFile;
-  expect(routed.schemaVersion).toBe(4);
+  expect(routed.schemaVersion).toBe(5);
   routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null, replicaOverrides: null };
   routed.blocks.gateway.scenario = [
     { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null },

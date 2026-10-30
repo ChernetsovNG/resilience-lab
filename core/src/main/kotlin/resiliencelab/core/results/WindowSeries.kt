@@ -52,6 +52,8 @@ data class NodeSeries(
 /**
  * Event-time call statistics for [startMs, startMs + durationMs), including warm-up and excluding run-out.
  * Latency includes responses observed by the caller; timeouts and late responses do not contribute samples.
+ * Pool integrals cover this window; wait counts and full wait durations belong to the wait-completion window.
+ * Pool fields are zero without a pool; deadline expiry is excluded from [poolAcquireTimeouts].
  */
 @Serializable
 data class ConnectionWindowMetrics(
@@ -67,6 +69,12 @@ data class ConnectionWindowMetrics(
     val orphanedIntegralMs: Double = 0.0,
     val backoffIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
+    val poolBusyTimeMs: Double = 0.0,
+    val poolCapacityTimeMs: Double = 0.0,
+    val poolQueueIntegralMs: Double = 0.0,
+    val poolWaitCount: Int = 0,
+    val poolWaitTimeMs: Double = 0.0,
+    val poolAcquireTimeouts: Int = 0,
 )
 
 /** One connection in a closed window, passed directly to the artifact writer. */
@@ -85,7 +93,7 @@ data class ConnectionSeries(
 /** A group of nodes and connections on a contiguous window range; the latency profile applies to every contained sketch. */
 @Serializable
 data class SeriesPart(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = Versions.SERIES_SCHEMA,
     val profile: String = LatencySketch.PROFILE,
     val fromWindow: Int,
     val untilWindow: Int,
@@ -217,7 +225,7 @@ class SeriesWriter(
         until: Int,
     ): ByteArray =
         (
-            "{\"schemaVersion\":2,\"profile\":\"${LatencySketch.PROFILE}\",\"fromWindow\":$from," +
+            "{\"schemaVersion\":${Versions.SERIES_SCHEMA},\"profile\":\"${LatencySketch.PROFILE}\",\"fromWindow\":$from," +
                 "\"untilWindow\":$until,\"nodes\":["
         ).toByteArray(Charsets.UTF_8)
 
@@ -305,7 +313,7 @@ class SeriesWriter(
         uninterruptedArtifactWrite {
             require(nextWindow == expectedWindows) { "Incomplete series: $nextWindow windows" }
             flushPending()
-            val index = SeriesIndex(schemaVersion = 2, endMs = endMs, windowMs = windowMs, parts = parts.toList())
+            val index = SeriesIndex(schemaVersion = Versions.SERIES_SCHEMA, endMs = endMs, windowMs = windowMs, parts = parts.toList())
             workspace.create("$directory/index.json", DocumentCodec.encode(SeriesIndex.serializer(), index))
             index
         }

@@ -22,6 +22,7 @@ internal class ConnectionCollector(
     ids: List<String>,
     private val startMs: Double,
     private val endMs: Double,
+    private val poolSizes: Map<String, Int> = emptyMap(),
 ) {
     private val states = ids.sorted().associateWith { State(it) }
 
@@ -35,6 +36,33 @@ internal class ConnectionCollector(
         states.getValue(id).record(timeMs, event, measured, latencyMs)
     }
 
+    fun poolState(
+        id: String,
+        timeMs: Double,
+        busy: Int?,
+        queueLength: Int?,
+    ) {
+        states.getValue(id).apply {
+            if (busy != null) poolBusy = busy
+            if (queueLength != null) poolQueued = queueLength
+            observe(timeMs)
+        }
+    }
+
+    fun poolWait(
+        id: String,
+        measured: Boolean,
+        waitMs: Double,
+        expired: Boolean,
+    ) {
+        if (!measured) return
+        states.getValue(id).apply {
+            poolWaitCount++
+            poolWaitTimeMs += waitMs
+            if (expired) poolAcquireTimeouts++
+        }
+    }
+
     fun startMeasurement() {
         states.values.forEach { it.observe(startMs) }
     }
@@ -44,6 +72,9 @@ internal class ConnectionCollector(
             state.inFlightSeries.finish(timeMs)
             state.orphanedSeries.finish(timeMs)
             state.backoffSeries.finish(timeMs)
+            state.poolBusySeries.finish(timeMs)
+            state.poolQueueSeries.finish(timeMs)
+            state.poolCapacitySeries.finish(timeMs)
         }
     }
 
@@ -51,7 +82,7 @@ internal class ConnectionCollector(
 
     fun verifyDrained() {
         states.forEach { (id, state) ->
-            check(state.inFlight == 0 && state.activeOrphaned == 0 && state.backoff == 0) {
+            check(state.inFlight == 0 && state.activeOrphaned == 0 && state.backoff == 0 && state.poolBusy == 0 && state.poolQueued == 0) {
                 "connection=$id did not fully drain: inFlight=${state.inFlight}, orphaned=${state.activeOrphaned}, backoff=${state.backoff}"
             }
         }
@@ -66,6 +97,15 @@ internal class ConnectionCollector(
         var failed = 0
         var timeouts = 0
         var orphaned = 0
+        var poolBusy = 0
+        var poolQueued = 0
+        private val poolSize = poolSizes[id] ?: 0
+        var poolWaitCount = 0
+        var poolWaitTimeMs = 0.0
+        var poolAcquireTimeouts = 0
+        val poolBusySeries = TimeWeightedSeries(startMs, endMs)
+        val poolQueueSeries = TimeWeightedSeries(startMs, endMs)
+        val poolCapacitySeries = TimeWeightedSeries(startMs, endMs)
         var inFlight = 0
         var activeOrphaned = 0
         var backoff = 0
@@ -120,6 +160,9 @@ internal class ConnectionCollector(
             inFlightSeries.record(timeMs, inFlight.toDouble())
             orphanedSeries.record(timeMs, activeOrphaned.toDouble())
             backoffSeries.record(timeMs, backoff.toDouble())
+            poolBusySeries.record(timeMs, poolBusy.toDouble())
+            poolQueueSeries.record(timeMs, poolQueued.toDouble())
+            poolCapacitySeries.record(timeMs, poolSize.toDouble())
         }
 
         fun snapshot(): ConnectionMetrics =
@@ -135,6 +178,12 @@ internal class ConnectionCollector(
                 backoffSeries.integral,
                 endMs - startMs,
                 latency.snapshot(),
+                poolBusyTimeMs = poolBusySeries.integral,
+                poolCapacityTimeMs = poolCapacitySeries.integral,
+                poolQueueIntegralMs = poolQueueSeries.integral,
+                poolWaitCount = poolWaitCount,
+                poolWaitTimeMs = poolWaitTimeMs,
+                poolAcquireTimeouts = poolAcquireTimeouts,
             )
     }
 }

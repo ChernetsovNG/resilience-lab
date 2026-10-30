@@ -38,6 +38,14 @@ describe("withParam", () => {
     expect(model.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "1ms" });
   });
 
+  it("preserves a call pool through an unrelated edit and JSON save round trip", () => {
+    const pooled = withParam(model, "gateway-to-middle", "pool", { size: 2, acquireTimeout: "30s" });
+    const saved = JSON.parse(JSON.stringify(withParam(pooled, "gateway", "handlers", 6)));
+    expect(elementOf(saved, "gateway-to-middle")?.params.pool).toEqual({ size: 2, acquireTimeout: "30s" });
+    expect(elementOf(pooled, "gateway-to-middle")?.params.pool).toEqual({ size: 2, acquireTimeout: "30s" });
+    expect(elementOf(withParam(model, "gateway", "handlers", 6), "gateway-to-middle")?.params.pool).toBeUndefined();
+  });
+
   it("treats inherited names such as constructor as ordinary IDs", () => {
     const withConstructor = {
       ...model,

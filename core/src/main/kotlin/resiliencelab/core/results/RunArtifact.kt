@@ -43,7 +43,9 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 7
+    const val ARTIFACT_SCHEMA = 8
+    const val SERIES_SCHEMA = 3
+    const val REPLICATION_SCHEMA = 2
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
@@ -160,7 +162,7 @@ class ArtifactWriter(
         result: ReplicationResult,
     ) {
         uninterruptedArtifactWrite {
-            val artifact = ReplicationArtifact(1, LatencySketch.PROFILE, "ms", result)
+            val artifact = ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result)
             workspace.create("$taskDirectory/replication.json", DocumentCodec.encode(ReplicationArtifact.serializer(), artifact))
         }
     }
@@ -188,7 +190,11 @@ class ArtifactWriter(
                                 val directory = "$runDirectory/series/$id/${point.id}/rep-$replication"
                                 val path = "$directory/replication.json"
                                 val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
-                                require(artifact.schemaVersion == 1 && artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") {
+                                require(
+                                    artifact.schemaVersion == Versions.REPLICATION_SCHEMA &&
+                                        artifact.profile == LatencySketch.PROFILE &&
+                                        artifact.unit == "ms",
+                                ) {
                                     "Unsupported replication format in '$path'"
                                 }
                                 artifact.result to saturationReader.read(directory, replication, callChain)

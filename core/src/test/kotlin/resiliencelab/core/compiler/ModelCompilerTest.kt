@@ -23,7 +23,7 @@ class ModelCompilerTest {
 
     private val model =
         """
-        {"schemaVersion": 4, "blocks": {
+        {"schemaVersion": 5, "blocks": {
           "client": {"type": "client", "params": {"load": {"points": [{"time": "0s", "rate": "120/s"}]}, "deadline": "250ms"}},
           "gateway": {"type": "service", "params": {"handlers": 4, "queue": 16, "processing": {"kind": "fixed", "mean": "1ms"}}},
           "dependency": {"type": "service", "params": {"handlers": 2, "queue": 8, "processing": {"kind": "exponential", "mean": "8ms"}}}
@@ -235,7 +235,7 @@ class ModelCompilerTest {
     fun `document order does not change the compiled experiment`() {
         val reordered =
             """
-            {"schemaVersion": 4, "connections": [
+            {"schemaVersion": 5, "connections": [
               {"id": "gateway-to-dependency", "type": "call", "from": "gateway", "to": "dependency",
                "params": {"backoff": {"max": "20ms", "base": "2ms", "kind": "exponential-full-jitter"}, "attempts": 3, "timeout": "80ms"}},
               {"id": "client-to-gateway", "type": "request", "from": "client", "to": "gateway"}

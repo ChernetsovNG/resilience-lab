@@ -18,6 +18,7 @@ function stubSeries() {
   const connections: DecodedConnection[] = [{ id: "gateway-to-middle", windows: [0, 10, 20].map((startMs) => ({
     startMs, durationMs: startMs === 20 ? 5 : 10, sentAttempts: startMs === 20 ? 0 : 3, retries: 1,
     succeeded: 1, failed: 1, timeouts: 1, orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 4,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     backoffIntegralMs: 5, latency: { count: 2, sumMs: 12, meanMs: 6, p50Ms: 4, p95Ms: 8, p99Ms: 8 },
   })) }];
   vi.spyOn(seriesLoader, "load").mockImplementation(async (request) => nodes.filter((node) => request.nodes.includes(node.id)));

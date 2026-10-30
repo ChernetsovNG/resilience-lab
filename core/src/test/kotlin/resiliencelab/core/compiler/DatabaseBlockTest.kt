@@ -1,5 +1,6 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import ksl.modeling.entity.ProcessModel
@@ -29,7 +30,7 @@ class DatabaseBlockTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":4,"blocks":{
+                """{"schemaVersion":5,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "db":{"type":"database","params":{"maxConnections":1,"queue":1,"processing":{"kind":"fixed","mean":"10ms"}}}
@@ -75,6 +76,38 @@ class DatabaseBlockTest {
         assertThat(windows.sumOf { it.queueLengthIntegralMs }).isEqualTo(9.0)
         assertThat(windows.sumOf { it.latency.count }).isEqualTo(2)
         assertThat(windows.sumOf { it.latency.sumMs }).isEqualTo(29.0)
+    }
+
+    @Test
+    fun `pooled database call preserves the client load profile and waits before offering queries`() {
+        val load =
+            Json.parseToJsonElement(
+                """{"points":[{"time":"0ms","rate":"10/s"},{"time":"100ms","rate":"30/s"}]}""",
+            )
+        val pool = Json.parseToJsonElement("""{"size":1,"acquireTimeout":"50ms"}""")
+        val client = model.blocks.getValue("client")
+        val params = JsonObject(client.params + ("load" to load))
+        val source =
+            model.copy(
+                blocks = model.blocks + ("client" to client.copy(params = params)),
+                connections =
+                    model.connections.map { connection ->
+                        if (connection.type == "call") {
+                            connection.copy(params = JsonObject(connection.params + ("pool" to pool)))
+                        } else {
+                            connection
+                        }
+                    },
+            )
+        val compiled = graph(source)
+        assertThat(compiled.client.load.rateAt(50.0)).isEqualTo(0.02)
+        val rig = simulate(compiled, listOf(0.0, 1.0, 2.0))
+        assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(10.0, 20.0, 30.0)
+        val result = rig.reliability.metrics.replicationResult()
+        assertThat(result.services.getValue("db").queueLengthIntegralMs).isZero()
+        assertThat(result.connections.getValue("query").poolBusyTimeMs).isEqualTo(30.0)
+        assertThat(result.connections.getValue("query").poolQueueIntegralMs).isEqualTo(27.0)
+        assertThat(result.connections.getValue("query").poolWaitCount).isEqualTo(2)
     }
 
     @Test

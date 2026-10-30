@@ -9,6 +9,7 @@ import resiliencelab.core.engine.ksl.PathStreams
 import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.CallPool
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
@@ -116,6 +117,34 @@ class GraphArtifactDeterminismTest {
                 expected.files.forEach { (path, bytes) ->
                     assertThat(actual.files.getValue(path)).describedAs("$workers/$reverse/$path").isEqualTo(bytes)
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `pooled call artifacts match at one two four and eight workers with reversed documents`(
+        @TempDir root: Path,
+    ) {
+        val initial = graph()
+        val base =
+            initial.copy(
+                client = initial.client.copy(load = LoadProfile(listOf(LoadPoint(0.0, 0.5), LoadPoint(130.0, 0.7)))),
+            )
+        val pooled = base.copy(calls = base.calls.map { it.copy(pool = CallPool(1, 3.0)) })
+        assertThat(PathStreams.keys(pooled, 0)).isEqualTo(PathStreams.keys(base, 0))
+        val expected = run(root.resolve("reference"), pooled, 1, false)
+        assertThat(
+            expected.result.variants
+                .flatMap { it.points }
+                .flatMap { it.replications }
+                .sumOf { replication -> replication.connections.values.sumOf { it.poolWaitCount } },
+        ).isPositive()
+        for (workers in listOf(1, 2, 4, 8)) {
+            val actual = run(root.resolve("pooled-$workers"), pooled, workers, true)
+            assertThat(actual.result).isEqualTo(expected.result)
+            assertThat(actual.files.keys).containsExactlyInAnyOrderElementsOf(expected.files.keys)
+            expected.files.forEach { (path, bytes) ->
+                assertThat(actual.files.getValue(path)).describedAs("$workers/$path").isEqualTo(bytes)
             }
         }
     }

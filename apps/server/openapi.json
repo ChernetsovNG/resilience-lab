@@ -1730,6 +1730,30 @@
             "type" : "number",
             "format" : "double"
           },
+          "poolAcquireTimeouts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "poolBusyTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolCapacityTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolQueueIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolWaitCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "poolWaitTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "retries" : {
             "type" : "integer",
             "format" : "int64"
@@ -1747,7 +1771,7 @@
             "format" : "int64"
           }
         },
-        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "poolAcquireTimeouts", "poolBusyTimeMs", "poolCapacityTimeMs", "poolQueueIntegralMs", "poolWaitCount", "poolWaitTimeMs", "retries", "sentAttempts", "succeeded", "timeouts" ]
       },
       "ConnectionWindowMetrics" : {
         "type" : "object",
@@ -1779,6 +1803,30 @@
             "type" : "number",
             "format" : "double"
           },
+          "poolAcquireTimeouts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "poolBusyTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolCapacityTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolQueueIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "poolWaitCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "poolWaitTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "retries" : {
             "type" : "integer",
             "format" : "int32"
@@ -1800,7 +1848,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "startMs", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "poolAcquireTimeouts", "poolBusyTimeMs", "poolCapacityTimeMs", "poolQueueIntegralMs", "poolWaitCount", "poolWaitTimeMs", "retries", "sentAttempts", "startMs", "succeeded", "timeouts" ]
       },
       "Diagnostic" : {
         "type" : "object",

@@ -1023,6 +1023,65 @@
                   "description": "One-way network delay, drawn separately for the request and the response.",
                   "title": "Network delay"
                 },
+                "pool": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "acquireTimeout": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "30s",
+                          "description": "Maximum connection wait, also bounded by the remaining deadline; zero does not wait. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "title": "Acquisition timeout"
+                        },
+                        "size": {
+                          "description": "Maximum simultaneous connections for this call on each caller instance.",
+                          "minimum": 1.0,
+                          "title": "Pool size",
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "size"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Slots owned by the calling instance, held until response or attempt timeout.",
+                  "title": "Connection pool"
+                },
                 "retryTarget": {
                   "anyOf": [
                     {
@@ -1385,7 +1444,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 4,
+          "const": 5,
           "type": "integer"
         },
         {

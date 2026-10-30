@@ -22,7 +22,7 @@ class WindowSeriesTest {
     private val partJson = Json { encodeDefaults = true }
 
     @Test
-    fun `packed series use schema two and include connection coverage`(
+    fun `packed series use schema three and include connection coverage`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
@@ -35,9 +35,9 @@ class WindowSeriesTest {
         )
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
-        assertThat(index.schemaVersion).isEqualTo(2)
+        assertThat(index.schemaVersion).isEqualTo(3)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(2)
+        assertThat(part.schemaVersion).isEqualTo(3)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")

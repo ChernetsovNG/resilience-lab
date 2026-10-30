@@ -22,6 +22,7 @@ internal class WindowCollector(
     private val endMs: Double,
     private val windowMs: Double,
     connectionIds: List<String> = emptyList(),
+    private val connectionPoolSizes: Map<String, Int> = emptyMap(),
     private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit,
 ) {
     private val totalWindows = windowCount(endMs, windowMs)
@@ -42,6 +43,34 @@ internal class WindowCollector(
         connections.getValue(id).apply {
             integrate(timeMs)
             record(event, latencyMs)
+        }
+    }
+
+    fun poolState(
+        id: String,
+        timeMs: Double,
+        busy: Int?,
+        queueLength: Int?,
+    ) {
+        if (!advance(timeMs)) return
+        connections.getValue(id).apply {
+            integrate(timeMs)
+            if (busy != null) poolBusy = busy
+            if (queueLength != null) poolQueued = queueLength
+        }
+    }
+
+    fun poolWait(
+        id: String,
+        timeMs: Double,
+        waitMs: Double,
+        expired: Boolean,
+    ) {
+        if (!advance(timeMs)) return
+        connections.getValue(id).row.apply {
+            poolWaitCount++
+            poolWaitTimeMs += waitMs
+            if (expired) poolAcquireTimeouts++
         }
     }
 
@@ -198,6 +227,9 @@ internal class WindowCollector(
         val id: String,
     ) {
         var row = ConnectionRow(id, 0)
+        var poolBusy = 0
+        var poolQueued = 0
+        private val poolSize = connectionPoolSizes[id] ?: 0
         private var inFlight = 0
         private var orphaned = 0
         private var backoff = 0
@@ -208,6 +240,9 @@ internal class WindowCollector(
             row.inFlightIntegral += inFlight * duration
             row.orphanedIntegral += orphaned * duration
             row.backoffIntegral += backoff * duration
+            row.poolBusyTimeMs += poolBusy * duration
+            row.poolQueueIntegralMs += poolQueued * duration
+            row.poolCapacityTimeMs += poolSize * duration
             lastMs = timeMs
         }
 
@@ -259,6 +294,12 @@ internal class WindowCollector(
                 row.orphanedIntegral,
                 row.backoffIntegral,
                 row.latency.snapshot(),
+                poolBusyTimeMs = row.poolBusyTimeMs,
+                poolCapacityTimeMs = row.poolCapacityTimeMs,
+                poolQueueIntegralMs = row.poolQueueIntegralMs,
+                poolWaitCount = row.poolWaitCount,
+                poolWaitTimeMs = row.poolWaitTimeMs,
+                poolAcquireTimeouts = row.poolAcquireTimeouts,
             )
     }
 
@@ -275,6 +316,12 @@ internal class WindowCollector(
         var inFlightIntegral = 0.0
         var orphanedIntegral = 0.0
         var backoffIntegral = 0.0
+        var poolBusyTimeMs = 0.0
+        var poolCapacityTimeMs = 0.0
+        var poolQueueIntegralMs = 0.0
+        var poolWaitCount = 0
+        var poolWaitTimeMs = 0.0
+        var poolAcquireTimeouts = 0
         val latency = LatencyAccumulator(sparse = true, context = "connection=$id window=$window response")
     }
 }

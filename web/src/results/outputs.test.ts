@@ -7,7 +7,7 @@ import { decodeSeriesPart } from "./series/decode";
 import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
 
 describe("catalog output contract", () => {
-  it("preserves the six Timeline groups, units, labels and metric order", () => {
+  it("preserves existing Timeline groups and adds pool outputs with their units", () => {
     expect(timelineGroups(catalog).map(group => [group.title, group.unit, group.scale, group.metrics.map(metric => metric.label)])).toEqual([
       ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries"]],
       ["Latency", "ms", 1, ["Mean latency", "p50 latency", "p95 latency", "p99 latency"]],
@@ -15,6 +15,8 @@ describe("catalog output contract", () => {
       ["Utilization", "%", 100, ["Handler utilization"]],
       ["Call state", "requests", 1, ["Mean in-flight", "Mean orphaned work", "Mean backoff"]],
       ["Queue", "requests", 1, ["Mean queue"]],
+      ["Pool utilization", "%", 100, ["Connection pool utilization"]],
+      ["Connection pool", "requests", 1, ["Mean connection wait queue", "Connection acquisition timeouts"]],
     ]);
   });
 
@@ -27,6 +29,7 @@ describe("catalog output contract", () => {
       ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
       ["Orphaned attempts", "REQUESTS"], ["Mean orphaned work", "REQUESTS"], ["Mean in flight", "REQUESTS"],
       ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Admitted amplification", "MULTIPLIER"],
+      ["Connection pool utilization", "PERCENT"], ["Mean connection wait queue", "REQUESTS"], ["Connection acquisition timeouts", "REQUESTS"],
     ]);
     expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
     expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Amplification", "Sent attempts", "Timeout share", "Orphaned work"]);

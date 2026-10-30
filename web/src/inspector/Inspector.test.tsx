@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import serverCatalog from "../test/catalog.json";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { applyOverrides, withParam } from "../workspace/params";
 import type { EditorDocuments } from "../workspace/editor";
@@ -85,6 +86,21 @@ describe("Inspector", () => {
     renderInspector({ selected: null, focusField: { path: "execution", request: 1 } });
     await waitFor(() => expect(screen.getByText("Run settings").closest("details")!.open).toBe(true));
     expect(document.activeElement).toBe(input("Replications"));
+  });
+
+  it("does not report missing required pool fields when the optional pool is absent", () => {
+    const onParam = renderInspector({ selected: "gateway-to-middle", catalog: serverCatalog as typeof catalog });
+    expect(screen.getByRole("group", { name: "Connection pool" })).toBeTruthy();
+    expect(screen.queryAllByRole("alert")).toHaveLength(0);
+    expect(onParam).not.toHaveBeenCalled();
+  });
+
+  it("shows a configured pool in read-only mode", () => {
+    renderInspector({ selected: "gateway-to-middle", catalog: serverCatalog as typeof catalog,
+      model: withParam(model, "gateway-to-middle", "pool", { size: 2, acquireTimeout: "30s" }), editable: false });
+    expect(input("Pool size").value).toBe("2");
+    expect(input("Pool size").readOnly).toBe(true);
+    expect(input("Acquisition timeout").value).toBe("30s");
   });
 
   it("puts available variant results before collapsed parameters", () => {

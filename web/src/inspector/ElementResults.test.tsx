@@ -8,7 +8,7 @@ import { ElementResults, type ElementResultsProps } from "./ElementResults";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
 
 const raw: SeriesPart = {
-  schemaVersion: 2, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
+  schemaVersion: 3, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
   nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({
     startMs, durationMs: 100, handlers: 2, originalArrivals: 0, admittedAttempts: 8, offeredAttempts: 10,
     retries: 1, queueRejections: 2, successes: 7, failures: 1, timeouts: 1, busyHandlerTimeMs: 100, queueLengthIntegralMs: 100,
@@ -16,6 +16,7 @@ const raw: SeriesPart = {
   })) })),
   connections: [{ id: "gateway-to-middle", windows: [0, 100, 200].map(startMs => ({
     startMs, durationMs: 100, sentAttempts: 4, retries: 1, succeeded: 1, failed: 1, timeouts: 2, orphaned: 1,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     inFlightIntegralMs: 20, orphanedIntegralMs: 10, backoffIntegralMs: 5,
     latency: { count: 2, sumMs: 24, sketch: [2] },
   })) }],
@@ -32,6 +33,7 @@ function props(): ElementResultsProps {
   };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
+      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
     timeoutRate: { mean: 0.25, stdDev: 0.05, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
     meanInFlight: { mean: 3, stdDev: 0.2, min: 2, max: 4, ci95Low: 1, ci95High: 5 },

@@ -5,7 +5,7 @@ import { selectSeriesParts } from "./selection";
 type SeriesIndex = components["schemas"]["SeriesIndex"];
 
 const index: SeriesIndex = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   endMs: 1000,
   windowMs: 10,
   parts: [

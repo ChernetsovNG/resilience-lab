@@ -221,6 +221,7 @@ it("uses the connection's own windows while playing a frame", async () => {
   }]]) };
   const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
     startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
     latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
   }] }] };
@@ -275,6 +276,7 @@ it("prefetches the next node and connection ranges before the cursor reaches the
       connectionRequests.push(request);
       return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({
         startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
+        poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
         orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
         latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
       })) }];

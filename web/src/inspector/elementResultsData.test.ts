@@ -20,6 +20,7 @@ function fixture(): ElementResultsContext {
   run.variants[0].points[0].coordinates = { "gateway-to-middle.timeout": "150ms" };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
+      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
     timeoutRate: { mean: 0.25, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
     meanInFlight: { mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
@@ -34,6 +35,7 @@ function fixture(): ElementResultsContext {
     window: null, selected: "gateway", nodes,
     connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({
       startMs, durationMs: 25, sentAttempts: 4, retries: 1, succeeded: 1, failed: 1, timeouts: 2,
+      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       orphaned: 2, inFlightIntegralMs: 6, orphanedIntegralMs: 3, backoffIntegralMs: 2,
       latency: { count: 2, sumMs: 24, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
     })) }] };
