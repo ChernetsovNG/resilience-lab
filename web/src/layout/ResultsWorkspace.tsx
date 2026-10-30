@@ -32,7 +32,7 @@ function storedHeights(): Record<string, number> {
 }
 
 /** Bounded canvas/results split; browser preferences never enter documents or undo history. */
-export function ResultsWorkspace({ children, view, collapsed, analysis, inspector, inspectorSelection = null, inspectorRequest = 0, canvasFooterHeight = 0 }: {
+export function ResultsWorkspace({ children, view, collapsed, analysis, inspector, inspectorSelection = null, inspectorRequest = 0, onInspectorCollapsedChange, canvasFooterHeight = 0 }: {
   children: ReactNode;
   view: ResultsPanelView;
   collapsed: boolean;
@@ -40,17 +40,21 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   inspector?: ReactNode;
   inspectorSelection?: string | null;
   inspectorRequest?: number;
+  onInspectorCollapsedChange?: (collapsed: boolean) => void;
   canvasFooterHeight?: number;
 }) {
   const workspace = useRef<HTMLDivElement>(null);
   const inspectorContent = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (inspectorContent.current !== null) inspectorContent.current.scrollTop = 0;
-  }, [analysis, inspectorSelection]);
+  }, [analysis, inspectorSelection, inspectorRequest]);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [heights, setHeights] = useState(storedHeights);
   const [inspectorSize, setInspectorSize] = useState(storedInspector);
   const [lastInspectorRequest, setLastInspectorRequest] = useState(inspectorRequest);
+  useEffect(() => {
+    onInspectorCollapsedChange?.(inspectorSize.collapsed);
+  }, [inspectorSize.collapsed, onInspectorCollapsedChange]);
   if (lastInspectorRequest !== inspectorRequest) {
     setLastInspectorRequest(inspectorRequest);
     if (inspectorSize.collapsed) setInspectorSize(current => ({ ...current, collapsed: false }));

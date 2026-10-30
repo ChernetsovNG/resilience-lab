@@ -57,7 +57,7 @@ test("compact inspector and canvas overlays give the model more space", async ({
   await expect(faults).not.toHaveAttribute("open");
   expect(await page.locator(".inspector-content").evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   expect(await inspector.evaluate(element => getComputedStyle(element).fontSize)).toBe("13px");
-  expect(await inspector.locator(".inspector-type").evaluate(element => getComputedStyle(element).fontSize)).toBe("12px");
+  expect(await inspector.locator(".inspector-type").first().evaluate(element => getComputedStyle(element).fontSize)).toBe("12px");
   expect(await inspector.getByLabel("Replications", { exact: true }).evaluate(element => element.getBoundingClientRect().height)).toBe(26);
   expect(await inspector.getByLabel("Replications", { exact: true }).evaluate(element => getComputedStyle(element.parentElement!).fontSize)).toBe("12px");
   const navigation = page.getByRole("group", { name: "Canvas navigation", exact: true });

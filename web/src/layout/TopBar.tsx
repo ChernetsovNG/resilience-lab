@@ -7,10 +7,13 @@ export interface TopBarProps {
   models: string[];
   model: string | null;
   onModel: (path: string) => void;
+  onNewModel: () => void;
   experiments: string[];
   experiment: string | null;
   onExperiment: (path: string) => void;
+  onNewExperiment: () => void;
   onInspectExperiment: () => void;
+  runSettingsPressed: boolean;
   /** An experiment is being opened. */
   loading: boolean;
   dirty: boolean;
@@ -51,12 +54,14 @@ export function TopBar(props: TopBarProps) {
   return (
     <header className="top-bar">
       <h1 title={t("app.name")}>{t("app.name")}</h1>
+      {props.fileMenu}
       <span className="top-bar-label">{t("app.topBar.model")}</span>
       <select aria-label={t("app.topBar.model")} value={props.model ?? ""} title={props.model ?? t("app.topBar.noModel")}
         disabled={loading || saving || running || props.estimating || invalid}
-        onChange={event => props.onModel(event.target.value)}>
+        onChange={event => event.target.value === "__create__" ? props.onNewModel() : props.onModel(event.target.value)}>
         {props.model === null ? <option value="">{t("app.topBar.noModel")}</option> : null}
         {props.models.map(path => <option key={path} value={path}>{path.replace(/\.model\.json$/, "")}</option>)}
+        <option value="__create__">{t("app.topBar.newModel")}</option>
       </select>
       <span className="top-bar-label">{t("app.topBar.experiment")}</span>
       <select
@@ -64,7 +69,7 @@ export function TopBar(props: TopBarProps) {
         value={experiment ?? ""}
         title={experiment ?? t("app.topBar.noExperiment")}
         disabled={loading || saving || running || props.estimating || invalid}
-        onChange={(event) => onExperiment(event.target.value)}
+        onChange={event => event.target.value === "__create__" ? props.onNewExperiment() : onExperiment(event.target.value)}
       >
         {experiment === null ? <option value="">{t("app.topBar.noExperiment")}</option> : null}
         {experiments.map((path) => (
@@ -72,11 +77,14 @@ export function TopBar(props: TopBarProps) {
             {path}
           </option>
         ))}
+        <option value="__create__" disabled={experiment === null}>{t("app.topBar.newExperiment")}</option>
       </select>
       <button type="button" onClick={props.onInspectExperiment} disabled={experiment === null || loading || invalid}
+        aria-pressed={props.runSettingsPressed}
         aria-label={t("app.topBar.runSettings")} title={t("app.topBar.runSettings")}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="4" /><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5 5l3 3m8 8 3 3M5 19l3-3M16 8l3-3" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M10 2h4l.6 3 2.1 1.2 2.9-1 2 3.5-2.3 2v2.6l2.3 2-2 3.5-2.9-1-2.1 1.2L14 22h-4l-.6-3-2.1-1.2-2.9 1-2-3.5 2.3-2v-2.6l-2.3-2 2-3.5 2.9 1L9.4 5Z" />
         </svg>
       </button>
       <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title={t("app.topBar.undoTitle")}>
@@ -89,7 +97,6 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={onSave} disabled={(!dirty && !props.savePending) || invalid || conflict || saving || loading}>
         {t("app.topBar.save")}
       </button>
-      {props.fileMenu}
       <div className="run-actions">
       <button type="button" onClick={props.onEstimate}
         disabled={experiment === null || loading || saving || invalid || running || props.estimating}>

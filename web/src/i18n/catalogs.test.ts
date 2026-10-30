@@ -41,6 +41,13 @@ const catalogEntries: [string, string][] = [
 const placeholders = (text: string) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map(([, name]) => name))].sort();
 
 describe("language catalogs", () => {
+  it.each([["en", en], ["ru", ru]] as const)("covers run field explanations in %s", (_, messages) => {
+    const dictionary: Record<string, string> = messages;
+    for (const field of ["replications", "warmup", "measurement", "window", "seed", "maxRealTime"]) {
+      expect(dictionary[`editor.run.${field}.description`]?.trim(), field).toBeTruthy();
+    }
+  });
+
   it("keeps English and Russian keys identical", () => {
     expect(Object.keys(ru).sort()).toEqual(Object.keys(en).sort());
   });

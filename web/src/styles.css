@@ -639,12 +639,17 @@ select {
   font-size: var(--font-secondary);
 }
 
-.inspector-execution .param-field--with-action {
-  grid-template-columns: minmax(0, 1fr) minmax(8rem, 1fr) auto;
+.inspector-execution .param-field--with-action > input {
+  grid-column: 2;
+  grid-row: 1;
+  padding-right: 2rem;
 }
 
 .inspector-execution .param-field > .seed-random {
-  grid-column: 3;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  margin-right: 0.125rem;
   display: grid;
   place-items: center;
   padding: 0.125rem 0.25rem;
@@ -1377,6 +1382,7 @@ select {
 .help-hint-popover[hidden] { display: none; }
 .param-field-label, .inspector-heading, .status-job { display: flex; align-items: center; gap: .35rem; }
 .inspector-heading { justify-content: space-between; }
+.top-bar button[aria-pressed="true"] { background: #dbeafe; border-color: #2563eb; }
 .status-job > [role="status"] { overflow: hidden; text-overflow: ellipsis; }
 .type-help-dialog {
   box-sizing: border-box; width: min(64rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem);

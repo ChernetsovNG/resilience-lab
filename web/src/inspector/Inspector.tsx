@@ -22,6 +22,7 @@ export interface InspectorProps {
   /** The model as the active variant page sees it. */
   model: ModelFile;
   experiment: ExperimentFile;
+  experimentPath?: string;
   selected: string | null;
   /** Session-only target; defaults to the selected element or the experiment. */
   target?: "element" | "variant" | "experiment";
@@ -42,7 +43,7 @@ export interface InspectorProps {
 }
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
-export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity,
+export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
@@ -57,12 +58,21 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
+  const showElement = (resultsOnly || target === "element") && element !== null;
+  const variant = target === "variant" ? experiment.variants.find(candidate => candidate.id === variantId) : undefined;
+  const heading = showElement ? selected : resultsOnly ? null
+    : target === "experiment" ? t("editor.run.title") : variant?.label || variant?.id || null;
+  const subtitle = showElement ? (type?.title ?? element?.type) + (variantId === null ? "" : t("editor.inspector.variantOverrides"))
+    : target === "variant" ? t("editor.variant.type") : experimentPath?.split("/").at(-1)?.replace(/\.experiment\.json$/, "");
 
   return (
     <aside ref={panel} hidden={hidden} className="inspector" aria-label={t("editor.inspector.label")}>
       {resultsOnly && selected === null ? <p>{t("results.element.select")}</p> : null}
-      {(resultsOnly || target === "element") && selected !== null && element !== null ?
-        <div className="inspector-heading"><h2>{selected}</h2><TypeHelp key={element.type} catalog={catalog} typeId={element.type} /></div> : null}
+      {heading === null ? null : <>
+        <div className="inspector-heading"><h2>{heading}</h2>
+          {showElement && element !== null ? <TypeHelp key={element.type} catalog={catalog} typeId={element.type} /> : null}</div>
+        {subtitle === undefined ? null : <p className="inspector-type" title={target === "experiment" ? experimentPath : undefined}>{subtitle}</p>}
+      </>}
       <div hidden={resultsOnly}>
       {target === "variant" && onCommand !== undefined ? (
         <><VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
@@ -71,10 +81,6 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
       ) : null}
       {target === "element" && selected !== null && element !== null ? (
         <>
-          <p className="inspector-type">
-            {type?.title ?? element.type}
-            {variantId === null ? "" : t("editor.inspector.variantOverrides")}
-          </p>
           {prioritizeResults && !resultsOnly ? results : null}
           <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
           {onRename === undefined ? null : (

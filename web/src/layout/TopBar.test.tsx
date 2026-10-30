@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TopBar, type TopBarProps } from "./TopBar";
 
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
-  return { models: ["first.model.json", "second.model.json"], model: "first.model.json", onModel: vi.fn(),
+  return { models: ["first.model.json", "second.model.json"], model: "first.model.json", onModel: vi.fn(), onNewModel: vi.fn(), onNewExperiment: vi.fn(), runSettingsPressed: false,
     experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), onInspectExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
     canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), estimating: false, onEstimate: vi.fn(), canResume: false, onResume: vi.fn(), onCancel: vi.fn(), job: null, ...overrides };

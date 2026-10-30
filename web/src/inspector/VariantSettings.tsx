@@ -20,7 +20,6 @@ export function VariantSettings({ variants, active, disabled, editable, onComman
   const variant = variants.find((candidate) => candidate.id === active);
   return variant === undefined ? null : (
     <section className="variant-settings" aria-label={t("editor.variant.label")}>
-      <h2>{t("editor.variant.properties")}</h2>
       <VariantText key={`${variant.id}-id`} label={t("editor.variant.id")} path="variant.id" value={variant.id} editable={editable}
         error={(id) => variantIdError(variants, id, variant.id)} onValidity={onValidity} diagnostics={fieldDiagnostics?.get("variant.id")}
         onCommit={(id) => { if (!disabled) onCommand(updateVariant(variant.id, { id })); }} />
