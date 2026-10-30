@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { copySmallExperiment } from "./fixtures";
+import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
 import { formatNumber, formatPercent } from "../src/i18n/format";
@@ -29,7 +30,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
   const names = ["retry-storm.experiment.json", "retry-storm.model.json", "retry-storm.layout.json"];
   await mkdir(directory);
   try {
-    for (const name of names) await copyFile(resolve("../examples/retry-storm", name), resolve(directory, name));
+    await copySmallExperiment(directory, "retry-storm.experiment.json", "10ms");
     const documents = () => Promise.all(names.map(async (name) =>
       (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`grid-map/${name}`)}`)).json()));
     await page.goto("/");
@@ -103,7 +104,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 1");
     await page.getByRole("button", { name: "Previous window", exact: true }).click();
     await expect(page.getByTestId("canvas-results-dependency").locator("span")).toHaveText(frame);
-    await page.getByLabel("Playback speed", { exact: true }).selectOption("0.25");
+    await page.getByLabel("Playback speed", { exact: true }).selectOption("1");
     await page.getByRole("button", { name: "Play run", exact: true }).click();
     await expect.poll(async () => Number(await page.getByRole("slider", { name: "Playback window", exact: true }).inputValue())).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Pause run", exact: true }).click();

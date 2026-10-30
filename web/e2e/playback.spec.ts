@@ -1,3 +1,4 @@
+import { copySmallExperiment } from "./fixtures";
 import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -20,9 +21,7 @@ async function windows(request: APIRequestContext, runId: string) {
 }
 
 async function seek(slider: Locator, index: number) {
-  await slider.focus();
-  await slider.press("Home");
-  for (let step = 0; step < index; step++) await slider.press("ArrowRight");
+  await slider.fill(String(index));
 }
 
 test("retry-storm playback has deterministic window frames and a shared Timeline cursor without document writes", async ({ page, request }, testInfo) => {
@@ -96,7 +95,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(status).toContainText(`Cursor ${formatDuration(dependency.at(-1)!.startMs)}`);
 
     await seek(slider, 0);
-    await page.getByLabel("Playback speed", { exact: true }).selectOption("0.25");
+    await page.getByLabel("Playback speed", { exact: true }).selectOption("4");
     await page.getByRole("button", { name: "Play run", exact: true }).click();
     await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Pause run", exact: true }).click();
@@ -139,9 +138,7 @@ test("retry-storm nodes and edge labels retain their geometry while playback ran
   let hold = false;
   const release = () => { hold = false; releases.splice(0).forEach(done => done()); };
   try {
-    for (const name of ["retry-storm.experiment.json", "retry-storm.model.json", "retry-storm.layout.json"]) {
-      await copyFile(resolve("../examples/retry-storm", name), resolve(directory, name));
-    }
+    await copySmallExperiment(directory, "retry-storm.experiment.json", "3ms");
     await page.goto("/");
     await page.getByLabel("Experiment", { exact: true }).selectOption("playback-layout/retry-storm.experiment.json");
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
