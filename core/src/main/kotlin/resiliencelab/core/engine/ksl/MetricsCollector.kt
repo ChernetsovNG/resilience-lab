@@ -80,9 +80,11 @@ class MetricsCollector(
     ) {
         poolerMetrics[serviceId]?.let { pooler ->
             pooler.clients.record(measurementStartMs, busyHandlers.toDouble())
+            pooler.clientSlots.start()
             return
         }
         val metrics = serviceMetrics.getValue(serviceId)
+        metrics.slots.start()
         metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
         metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
     }
@@ -109,6 +111,30 @@ class MetricsCollector(
         } else {
             pooler.clients.record(timeMs, busyHandlers.toDouble())
         }
+    }
+
+    internal fun recordSlotCapacity(
+        id: String,
+        set: String,
+        capacity: Int,
+    ) {
+        val now = currentTimeMs()
+        windows.slotCapacity(id, set, now, capacity)
+        when (set) {
+            "handlers" -> serviceMetrics.getValue(id).slots.capacity(now, capacity)
+            "serverConnections" -> poolerMetrics.getValue(id).serverSlots.capacity(now, capacity)
+            "clientConnections" -> poolerMetrics.getValue(id).clientSlots.capacity(now, capacity)
+            "pool" -> connections.poolCapacity(id, now, capacity)
+        }
+    }
+
+    internal fun recordHandlerAcquisition(
+        id: String,
+        acquisition: SlotAcquisition,
+        measured: Boolean,
+    ) {
+        windows.handlerAcquisition(id, currentTimeMs(), acquisition)
+        if (measured) serviceMetrics[id]?.slots?.completed(acquisition)
     }
 
     internal fun finishMeasurement(timeMs: Double) {
@@ -271,6 +297,7 @@ class MetricsCollector(
         queued: Int,
     ) {
         poolerMetrics.getValue(id).apply {
+            serverSlots.start()
             servers.record(measurementStartMs, busy.toDouble())
             queue.record(measurementStartMs, queued.toDouble())
         }
@@ -306,6 +333,7 @@ class MetricsCollector(
         private val measurementStartMs: Double,
         private val measurementEndMs: Double,
     ) {
+        var slots = SlotStatistics(measurementStartMs, measurementEndMs, configuredHandlers)
         var offeredAttempts = 0
         var admittedAttempts = 0
         var timeouts = 0
@@ -316,6 +344,7 @@ class MetricsCollector(
         var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
 
         fun reset() {
+            slots = SlotStatistics(measurementStartMs, measurementEndMs, configuredHandlers)
             offeredAttempts = 0
             admittedAttempts = 0
             timeouts = 0
@@ -327,6 +356,7 @@ class MetricsCollector(
         }
 
         fun finish(timeMs: Double) {
+            slots.finish(timeMs)
             queueLengthSeries.finish(timeMs)
             busyHandlerSeries.finish(timeMs)
         }
@@ -338,12 +368,17 @@ class MetricsCollector(
                 timeouts = timeouts,
                 retries = retries,
                 failures = failures,
-                queueRejections = queueRejections,
-                handlers = configuredHandlers,
                 measurementMs = measurementEndMs - measurementStartMs,
-                busyHandlerTimeMs = busyHandlerSeries.integral,
-                queueLengthIntegralMs = queueLengthSeries.integral,
                 queueDurationsMs = queueLengthSeries.durations,
+                slotPools =
+                    mapOf(
+                        "handlers" to
+                            slots
+                                .snapshot(
+                                    busyHandlerSeries.integral,
+                                    queueLengthSeries.integral,
+                                ).copy(queueFullCount = queueRejections.toLong()),
+                    ),
             )
     }
 }

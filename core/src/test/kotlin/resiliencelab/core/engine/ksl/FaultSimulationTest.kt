@@ -280,8 +280,8 @@ class FaultSimulationTest {
             )
         assertThat(rig.completions).containsExactly(5.0, 10.0, 12.0)
         val connection = rig.result.connections.getValue("entry-to-backend")
-        assertThat(connection.poolBusyTimeMs).isEqualTo(12.0)
-        assertThat(connection.poolWaitTimeMs).isEqualTo(4.0)
+        assertThat(connection.slotPools.getValue("pool").busyIntegralMs).isEqualTo(12.0)
+        assertThat(connection.slotPools.getValue("pool").totalWaitMs).isEqualTo(4.0)
         assertThat(connection.orphaned).isZero()
         assertThat(
             rig.result.services

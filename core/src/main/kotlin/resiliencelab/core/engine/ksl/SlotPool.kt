@@ -9,6 +9,7 @@ import ksl.modeling.queue.Queue
 import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.KSLEvent
 import ksl.simulation.ModelElement
+import resiliencelab.core.experiment.SlotPoolMetrics
 
 /** The four admission outcomes; only [IMMEDIATE] and [WAITED] carry an allocation. */
 internal enum class SlotAcquisitionOutcome { IMMEDIATE, WAITED, QUEUE_FULL, WAIT_LIMIT }
@@ -18,21 +19,6 @@ internal data class SlotAcquisition(
     val outcome: SlotAcquisitionOutcome,
     val allocation: Allocation? = null,
     val waitMs: Double = 0.0,
-)
-
-/**
- * Integrals cover replication start through the snapshot time, in slot/queue units times milliseconds.
- * [waitCount] counts requests that entered a real wait; [totalWaitMs] sums finished waits, including
- * wait-limit rejection. Immediate acquisitions and full-queue rejections do not count as waits.
- */
-internal data class SlotPoolMetrics(
-    val busyIntegralMs: Double,
-    val queueIntegralMs: Double,
-    val capacityIntegralMs: Double,
-    val waitCount: Long,
-    val totalWaitMs: Double,
-    val queueFullCount: Long,
-    val waitLimitCount: Long,
 )
 
 /**
@@ -52,6 +38,7 @@ internal class SlotPool(
     private val onAdmitted: (ProcessModel.Entity) -> Unit = {},
     private val onQueueLengthChanged: (Int) -> Unit = {},
     private val onBusyChanged: (Int) -> Unit = {},
+    private val onCapacityChanged: (Int) -> Unit = {},
 ) : ModelElement(parent, "$name:slots") {
     init {
         require(initialCapacity >= 0)
@@ -102,14 +89,16 @@ internal class SlotPool(
                         if (queue.size > 1 || !resource.canAllocate(1)) {
                             waitingSince[qObject] = time
                             waitedEntities += qObject.entity
-                            waits++
                         }
                         onAdmitted(qObject.entity)
                         if (qObject in waitingSince && qObject.entity in acquiringEntities) {
                             throw Waiting(qObject)
                         }
                     } else if (qObject != null) {
-                        waitingSince.remove(qObject)?.let { totalWait += time - it }
+                        waitingSince.remove(qObject)?.let {
+                            waits++
+                            totalWait += time - it
+                        }
                     }
                 }
             },
@@ -264,6 +253,7 @@ internal class SlotPool(
         if (capacity < resource.capacity) capacityRevision++
         resource.changeSlotCapacity(capacity)
         this.capacity = capacity
+        onCapacityChanged(capacity)
     }
 
     /** A snapshot through the current simulation time, without changing event scheduling. */

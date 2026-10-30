@@ -369,7 +369,13 @@ class TimeoutRaceTest {
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(2)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
-        assertThat(result.services.getValue("backend").queueRejections).isEqualTo(1)
+        assertThat(
+            result.services
+                .getValue("backend")
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
+        ).isEqualTo(1)
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
         assertThat(rig.reliabilityModel.activeDownstreamProcesses).isZero()
@@ -419,7 +425,13 @@ class TimeoutRaceTest {
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isZero()
         assertThat(result.services.getValue("backend").admittedAttempts).isZero()
-        assertThat(result.services.getValue("backend").queueRejections).isZero()
+        assertThat(
+            result.services
+                .getValue("backend")
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
+        ).isZero()
     }
 
     /** Request and response delays of the first attempt: the first two draws of the call's network stream. */

@@ -17,10 +17,12 @@ function poolerModel(): ModelFile {
 function poolerSummary() {
   const result = structuredClone(summary);
   result.variants[0].points[0].aggregate.poolers = { pooler: {
-    totals: { offeredAttempts: 10, admittedAttempts: 8, clientConnectionRejections: 2, waitTimeouts: 1,
-      successes: 7, failures: 1, busyClientConnectionTimeMs: 300, clientConnectionCapacityTimeMs: 1200,
-      busyServerConnectionTimeMs: 150, serverConnectionCapacityTimeMs: 300, serverQueueLengthIntegralMs: 50,
-      serverWaitCount: 5, serverWaitTimeMs: 25, measurementMs: 100 },
+    totals: { offeredAttempts: 10,
+      admittedAttempts: 8,
+      successes: 7,
+      failures: 1,
+      measurementMs: 100,
+      slotPools: { clientConnections: { busyIntegralMs: 300, queueIntegralMs: 0, capacityIntegralMs: 1200, waitCount: 0, totalWaitMs: 0, queueFullCount: 2, waitLimitCount: 0 }, serverConnections: { busyIntegralMs: 150, queueIntegralMs: 50, capacityIntegralMs: 300, waitCount: 5, totalWaitMs: 25, queueFullCount: 0, waitLimitCount: 1 } } },
     pooledLatency: { meanMs: 12, p95Ms: 20, p99Ms: 25, statistics: { count: 8, sumMs: 96, sketch: [8] } },
   } };
   return result;
@@ -58,14 +60,19 @@ describe("transaction pooler integration", () => {
   });
 
   it("decodes pooler resource fields from the current series format", () => {
-    const part = { schemaVersion: 4, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1, connections: [],
-      nodes: [{ id: "pooler", windows: [{ startMs: 0, durationMs: 10, handlers: 0, originalArrivals: 0,
-        offeredAttempts: 3, admittedAttempts: 2, queueRejections: 0, successes: 1, failures: 1, timeouts: 0, retries: 0,
-        busyHandlerTimeMs: 0, queueLengthIntegralMs: 0, latency: { count: 2, sumMs: 15, sketch: [2] },
-        pooler: { maxClientConnections: 2, poolSize: 1, clientConnectionRejections: 1, waitTimeouts: 1,
-          busyClientConnectionTimeMs: 15, busyServerConnectionTimeMs: 10, serverQueueLengthIntegralMs: 5, serverWaitCount: 1, serverWaitTimeMs: 5 },
-      }] }] };
-    expect(decodeSeriesPart(JSON.stringify(part)).nodes[0].windows[0].metrics.pooler?.serverWaitTimeMs).toBe(5);
+    const part = { schemaVersion: 5, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1, connections: [],
+      nodes: [{ id: "pooler", windows: [{ startMs: 0,
+      durationMs: 10,
+      originalArrivals: 0,
+      offeredAttempts: 3,
+      admittedAttempts: 2,
+      successes: 1,
+      failures: 1,
+      timeouts: 0,
+      retries: 0,
+      latency: { count: 2, sumMs: 15, sketch: [2] },
+      slotPools: { clientConnections: { busyIntegralMs: 15, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 1, waitLimitCount: 0 }, serverConnections: { busyIntegralMs: 10, queueIntegralMs: 5, capacityIntegralMs: (1) * (10), waitCount: 1, totalWaitMs: 5, queueFullCount: 0, waitLimitCount: 1 } } }] }] };
+    expect(decodeSeriesPart(JSON.stringify(part)).nodes[0].windows[0].metrics.slotPools.serverConnections?.totalWaitMs).toBe(5);
     expect(() => decodeSeriesPart(JSON.stringify({ ...part, schemaVersion: 2 }))).toThrow(/schema/i);
   });
 });

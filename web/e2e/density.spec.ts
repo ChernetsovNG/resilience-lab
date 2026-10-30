@@ -87,7 +87,7 @@ test("large queue values keep the node height and expose their full text", async
     for (const variant of summary.variants) {
       for (const point of variant.points) {
         const totals = point.aggregate.services.gateway.totals;
-        totals.queueLengthIntegralMs = (variant.id === "baseline" ? 0 : 9_999_999.99) * totals.measurementMs;
+        totals.slotPools.handlers.queueIntegralMs = (variant.id === "baseline" ? 0 : 9_999_999.99) * totals.measurementMs;
       }
     }
     await route.fulfill({ response, json: summary });

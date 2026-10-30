@@ -77,21 +77,22 @@ describe("catalog output contract", () => {
       return bytes.getUint32(0).toString(16).padStart(8, "0") + bytes.getUint32(4).toString(16).padStart(8, "0");
     };
     for (const node of decoded.nodes) for (const [index, frame] of node.windows.entries()) {
-      const raw = golden.part.nodes.find(candidate => candidate.id === node.id)!.windows[index];
-      const type = raw.handlers === 0 ? "client" : "service";
+      const raw = golden.part.nodes.find(candidate => candidate.id === node.id)!.windows[index] as import("../api/apiTypes").WindowMetrics;
+      const type = Object.keys(raw.slotPools).length === 0 ? "client" : "service";
       const values = outputWindow(outputsOf(catalog, type), { ...frame.metrics, params: { queue: 16 } });
       const counts = type === "client" ? ["originalArrivals", "successes", "failures"] as const
-        : ["offeredAttempts", "admittedAttempts", "successes", "retries", "failures", "timeouts", "queueRejections"] as const;
+        : ["offeredAttempts", "admittedAttempts", "successes", "retries", "failures", "timeouts"] as const;
       for (const field of counts) expect(values[`${field}PerSecond`]).toBe(raw[field] * 1000 / raw.durationMs);
       expect(values.meanLatencyMs).toBe(raw.latency.count === 0 ? null : raw.latency.sumMs / raw.latency.count);
       const quantiles = expectedQuantiles.get(`${node.id}/${index}`)!;
       expect([bits(values.p50LatencyMs), bits(values.p95LatencyMs), bits(values.p99LatencyMs)])
         .toEqual([quantiles.p50 ?? null, quantiles.p95 ?? null, quantiles.p99 ?? null]);
       if (type === "service") {
-        expect(values.utilization).toBe(raw.busyHandlerTimeMs / (raw.handlers * raw.durationMs));
-        expect(values.meanQueue).toBe(raw.queueLengthIntegralMs / raw.durationMs);
-        expect(values.queueFill).toBeCloseTo(raw.queueLengthIntegralMs / raw.durationMs / 16, 14);
-        const rejection = raw.offeredAttempts === 0 ? null : raw.queueRejections / raw.offeredAttempts;
+        expect(values.queueRejectionsPerSecond).toBe(raw.slotPools.handlers.queueFullCount * 1000 / raw.durationMs);
+        expect(values.utilization).toBe(raw.slotPools.handlers.busyIntegralMs / raw.slotPools.handlers.capacityIntegralMs);
+        expect(values.meanQueue).toBe(raw.slotPools.handlers.queueIntegralMs / raw.durationMs);
+        expect(values.queueFill).toBeCloseTo(raw.slotPools.handlers.queueIntegralMs / raw.durationMs / 16, 14);
+        const rejection = raw.offeredAttempts === 0 ? null : raw.slotPools.handlers.queueFullCount / raw.offeredAttempts;
         expect(values.queueRejectionRate).toBe(rejection);
       }
     }

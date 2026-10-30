@@ -159,12 +159,48 @@ class CallPoolTest {
                         .serializer(),
                     rig.result.connections.getValue(CALL),
                 ).jsonObject
-        assertThat(metrics["poolBusyTimeMs"]).isEqualTo(JsonPrimitive(40.0))
-        assertThat(metrics["poolCapacityTimeMs"]).isEqualTo(JsonPrimitive(100.0))
-        assertThat(metrics["poolQueueIntegralMs"]).isEqualTo(JsonPrimitive(9.0))
-        assertThat(metrics["poolWaitCount"]).isEqualTo(JsonPrimitive(2))
-        assertThat(metrics["poolWaitTimeMs"]).isEqualTo(JsonPrimitive(9.0))
-        assertThat(metrics["poolAcquireTimeouts"]).isEqualTo(JsonPrimitive(1))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["busyIntegralMs"],
+        ).isEqualTo(JsonPrimitive(40.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["capacityIntegralMs"],
+        ).isEqualTo(JsonPrimitive(100.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["queueIntegralMs"],
+        ).isEqualTo(JsonPrimitive(9.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["waitCount"],
+        ).isEqualTo(JsonPrimitive(2))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["totalWaitMs"],
+        ).isEqualTo(JsonPrimitive(9.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["waitLimitCount"],
+        ).isEqualTo(JsonPrimitive(1))
         val windows =
             rig.windows.map {
                 json
@@ -174,10 +210,26 @@ class CallPoolTest {
                         it.metrics,
                     ).jsonObject
             }
-        assertThat(windows.map { it["poolBusyTimeMs"] }).containsExactlyElementsOf(
+        assertThat(
+            windows.map {
+                it
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("pool")
+                    .jsonObject["busyIntegralMs"]
+            },
+        ).containsExactlyElementsOf(
             listOf(10.0, 10.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0).map(::JsonPrimitive),
         )
-        assertThat(windows.map { it["poolWaitCount"] }).containsExactlyElementsOf(
+        assertThat(
+            windows.map {
+                it
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("pool")
+                    .jsonObject["waitCount"]
+            },
+        ).containsExactlyElementsOf(
             listOf(1, 0, 1, 0, 0, 0, 0, 0, 0, 0).map(::JsonPrimitive),
         )
     }
@@ -193,11 +245,41 @@ class CallPoolTest {
                         .serializer(),
                     rig.result.connections.getValue(CALL),
                 ).jsonObject
-        assertThat(metrics["poolBusyTimeMs"]).isEqualTo(JsonPrimitive(20.0))
-        assertThat(metrics["poolCapacityTimeMs"]).isEqualTo(JsonPrimitive(20.0))
-        assertThat(metrics["poolQueueIntegralMs"]).isEqualTo(JsonPrimitive(15.0))
-        assertThat(metrics["poolWaitCount"]).isEqualTo(JsonPrimitive(1))
-        assertThat(metrics["poolWaitTimeMs"]).isEqualTo(JsonPrimitive(35.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["busyIntegralMs"],
+        ).isEqualTo(JsonPrimitive(20.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["capacityIntegralMs"],
+        ).isEqualTo(JsonPrimitive(20.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["queueIntegralMs"],
+        ).isEqualTo(JsonPrimitive(15.0))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["waitCount"],
+        ).isEqualTo(JsonPrimitive(1))
+        assertThat(
+            metrics
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("pool")
+                .jsonObject["totalWaitMs"],
+        ).isEqualTo(JsonPrimitive(35.0))
         val windows =
             rig.windows.map {
                 json
@@ -207,7 +289,15 @@ class CallPoolTest {
                         it.metrics,
                     ).jsonObject
             }
-        assertThat(windows.map { it["poolWaitCount"] }).containsOnly(JsonPrimitive(0))
+        assertThat(
+            windows.map {
+                it
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("pool")
+                    .jsonObject["waitCount"]
+            },
+        ).containsOnly(JsonPrimitive(0))
     }
 
     private fun graph(

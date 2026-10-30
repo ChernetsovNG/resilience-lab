@@ -43,7 +43,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const nodes = await windows(request, runId);
     const dependency = nodes.get("dependency")!;
     const client = nodes.get("client")!;
-    const queue = (index: number) => dependency[index].queueLengthIntegralMs / dependency[index].durationMs;
+    const queue = (index: number) => dependency[index].slotPools.handlers.queueIntegralMs / dependency[index].durationMs;
     const amplification = (index: number) => dependency[index].admittedAttempts / client[index].originalArrivals;
     const candidates = dependency.map((_, index) => index).filter((index) =>
       dependency[index].startMs < 200 && client[index].originalArrivals > 0 && dependency[index].admittedAttempts > 0);

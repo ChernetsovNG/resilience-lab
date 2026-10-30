@@ -116,27 +116,30 @@ internal object Stage1Outputs {
             rate("retries", "Retries", "rates", 5),
             rate("failures", "Failures", "errors", 0),
             rate("timeouts", "Timeouts", "errors", 1),
-            rate("queueRejections", "Queue rejections", "errors", 3),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "handlers",
+                SlotPoolOutputs.Quantity.QUEUE_FULL_RATE,
+                "queueRejectionsPerSecond",
+                "Queue rejections",
+                "Queue rejections per second, using the actual window duration.",
+                timeline = OutputTimeline("errors", "Errors and rejections", 2, 3),
+            ),
+            SlotPoolOutputs.output(
+                "handlers",
+                SlotPoolOutputs.Quantity.UTILIZATION,
                 "utilization",
                 "Handler utilization",
                 "Busy handler time divided by available handler time.",
-                OutputUnit.PERCENT,
-                OutputKind.UTILIZATION,
-                calculation(OutputCalculationKind.NORMALIZED_RATIO, "busyHandlerTimeMs", "durationMs", "handlers"),
-                pooled("busyHandlerTimeMs", "handlerCapacityTimeMs"),
                 OutputTimeline("utilization", "Utilization", 3, 0),
                 OutputInspector("Handler utilization", 0, chartOrder = 0),
                 OutputOverlay("Utilization", "Utilization {value}", "Busy handler time / handler capacity time, {interval}.", 0),
             ),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "handlers",
+                SlotPoolOutputs.Quantity.QUEUE,
                 "meanQueue",
                 "Mean queue",
                 "Queue length integral divided by interval duration.",
-                OutputUnit.REQUESTS,
-                OutputKind.MEAN_LEVEL,
-                ratio("queueLengthIntegralMs", "durationMs"),
-                pooled("queueLengthIntegralMs", "measurementMs"),
                 OutputTimeline("queue", "Queue", 5, 0),
                 OutputInspector("Mean queue", 1, chartOrder = 1),
                 OutputOverlay(
@@ -154,11 +157,11 @@ internal object Stage1Outputs {
                 "Mean queue divided by effective queue capacity; no value when queueing is disabled.",
                 OutputUnit.PERCENT,
                 OutputKind.FRACTION,
-                calculation(OutputCalculationKind.NORMALIZED_RATIO, "queueLengthIntegralMs", "durationMs", "params.queue"),
+                calculation(OutputCalculationKind.NORMALIZED_RATIO, "slotPools.handlers.queueIntegralMs", "durationMs", "params.queue"),
                 OutputSummary(
                     calculation(
                         OutputCalculationKind.NORMALIZED_RATIO,
-                        "totals.queueLengthIntegralMs",
+                        "totals.slotPools.handlers.queueIntegralMs",
                         "totals.measurementMs",
                         "params.queue",
                     ),
@@ -171,8 +174,8 @@ internal object Stage1Outputs {
                 "Rejected attempts divided by offered attempts.",
                 OutputUnit.PERCENT,
                 OutputKind.FRACTION,
-                ratio("queueRejections", "offeredAttempts"),
-                pooled("queueRejections", "offeredAttempts"),
+                ratio("slotPools.handlers.queueFullCount", "offeredAttempts"),
+                pooled("slotPools.handlers.queueFullCount", "offeredAttempts"),
                 inspector = OutputInspector("Queue rejection share", 3),
                 overlay =
                     OutputOverlay(
@@ -181,6 +184,20 @@ internal object Stage1Outputs {
                         "Queue rejections / offered attempts, {interval}.",
                         2,
                     ),
+            ),
+            SlotPoolOutputs.output(
+                "handlers",
+                SlotPoolOutputs.Quantity.WAIT,
+                "meanWaitMs",
+                "Mean handler wait",
+                "Completed FIFO waits, including expiry.",
+            ),
+            SlotPoolOutputs.output(
+                "handlers",
+                SlotPoolOutputs.Quantity.WAIT_LIMIT,
+                "waitLimitCount",
+                "Handler wait limits",
+                "Wait-limit rejections per replication.",
             ),
         ) + latencies(service = true)
 
@@ -204,6 +221,8 @@ internal object Stage1Outputs {
                         "Query queue fill" to
                             "Mean waiting queries divided by query queue capacity; no value when queueing is disabled."
                     "queueRejectionRate" -> "max_connections rejection share" to "Rejected queries divided by offered queries."
+                    "meanWaitMs" -> "Mean connection wait" to "Completed database connection waits, including expiry."
+                    "waitLimitCount" -> "Connection wait limits" to "Database connection wait-limit rejections per replication."
                     else ->
                         output.title to
                             "Query residence time, including FIFO waiting and execution; rejected queries have no latency sample."
@@ -301,39 +320,47 @@ internal object Stage1Outputs {
                 OutputSummary(ratio("totals.orphaned", "replications"), OutputSummarySource.PER_REPLICATION),
                 inspector = OutputInspector("Orphaned attempts", 3),
             ),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "pool",
+                SlotPoolOutputs.Quantity.UTILIZATION,
                 "poolUtilization",
                 "Connection pool utilization",
                 "Occupied connection time divided by available pool capacity time; absent pools have no utilization.",
-                OutputUnit.PERCENT,
-                OutputKind.UTILIZATION,
-                ratio("poolBusyTimeMs", "poolCapacityTimeMs"),
-                pooled("poolBusyTimeMs", "poolCapacityTimeMs"),
                 OutputTimeline("poolUtilization", "Pool utilization", 6, 0),
                 OutputInspector("Connection pool utilization", 9),
             ),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "pool",
+                SlotPoolOutputs.Quantity.QUEUE,
                 "meanPoolQueue",
                 "Mean connection wait queue",
                 "Integral of callers waiting for a connection divided by interval duration.",
-                OutputUnit.REQUESTS,
-                OutputKind.MEAN_LEVEL,
-                ratio("poolQueueIntegralMs", "durationMs"),
-                pooled("poolQueueIntegralMs", "measurementMs"),
                 OutputTimeline("pool", "Connection pool", 7, 0),
                 OutputInspector("Mean connection wait queue", 10),
             ),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "pool",
+                SlotPoolOutputs.Quantity.WAIT_LIMIT,
                 "poolAcquireTimeouts",
                 "Connection acquisition timeouts",
                 "Attempts rejected by the acquisition timeout before sending; deadline expiry is excluded.",
-                OutputUnit.REQUESTS,
-                OutputKind.COUNT,
-                calculation(OutputCalculationKind.VALUE, "poolAcquireTimeouts"),
-                OutputSummary(ratio("totals.poolAcquireTimeouts", "replications"), OutputSummarySource.PER_REPLICATION),
                 OutputTimeline("pool", "Connection pool", 7, 1),
                 OutputInspector("Connection acquisition timeouts", 11),
             ),
             amplification.copy(inspector = OutputInspector("Admitted amplification", 8)),
+            SlotPoolOutputs.output(
+                "pool",
+                SlotPoolOutputs.Quantity.WAIT,
+                "meanPoolWaitMs",
+                "Mean pool wait",
+                "Completed connection waits, including expiry.",
+            ),
+            SlotPoolOutputs.output(
+                "pool",
+                SlotPoolOutputs.Quantity.QUEUE_FULL,
+                "poolQueueFullCount",
+                "Pool queue rejections",
+                "Full-queue rejections per replication.",
+            ),
         ) + latencies(call = true)
 }

@@ -10,17 +10,30 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function stubSeries() {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [0, 10, 20].map(startMs => recordedWindow({
-    startMs, durationMs: startMs === 20 ? 5 : 10, offeredAttempts: 5, admittedAttempts: 4, queueRejections: 1,
-    successes: 3, failures: 1, timeouts: 1, retries: 2, busyHandlerTimeMs: 7.5, queueLengthIntegralMs: 10,
-    latency: { count: 1, sumMs: 10, meanMs: 10, p50Ms: 8, p95Ms: 20, p99Ms: 25 }, client: { originalArrivals: 4 / 1.2 },
-  })) }];
-  const connections: DecodedConnection[] = [{ id: "gateway-to-middle", windows: [0, 10, 20].map((startMs) => ({
-    startMs, durationMs: startMs === 20 ? 5 : 10, sentAttempts: startMs === 20 ? 0 : 3, retries: 1,
-    succeeded: 1, failed: 1, timeouts: 1, orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 4,
-    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-    backoffIntegralMs: 5, latency: { count: 2, sumMs: 12, meanMs: 6, p50Ms: 4, p95Ms: 8, p99Ms: 8 },
-  })) }];
+  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [0, 10, 20].map(startMs => recordedWindow({ startMs,
+      durationMs: startMs === 20 ? 5 : 10,
+      offeredAttempts: 5,
+      admittedAttempts: 4,
+      successes: 3,
+      failures: 1,
+      timeouts: 1,
+      retries: 2,
+      latency: { count: 1, sumMs: 10, meanMs: 10, p50Ms: 8, p95Ms: 20, p99Ms: 25 },
+      client: { originalArrivals: 4 / 1.2 },
+      slotPools: { handlers: { busyIntegralMs: 7.5, queueIntegralMs: 10, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 1, waitLimitCount: 0 } } })) }];
+  const connections: DecodedConnection[] = [{ id: "gateway-to-middle", windows: [0, 10, 20].map((startMs) => ({ startMs,
+      durationMs: startMs === 20 ? 5 : 10,
+      sentAttempts: startMs === 20 ? 0 : 3,
+      retries: 1,
+      succeeded: 1,
+      failed: 1,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 20,
+      orphanedIntegralMs: 4,
+      backoffIntegralMs: 5,
+      latency: { count: 2, sumMs: 12, meanMs: 6, p50Ms: 4, p95Ms: 8, p99Ms: 8 },
+      slotPools: {  } })) }];
   vi.spyOn(seriesLoader, "load").mockImplementation(async (request) => nodes.filter((node) => request.nodes.includes(node.id)));
   vi.spyOn(seriesLoader, "loadConnections").mockImplementation(async (request) => connections.filter((connection) => request.connections.includes(connection.id)));
 }

@@ -69,6 +69,7 @@ class ReliabilityModel(
                     streams = streams,
                     scenario = graph.scenario(service),
                     onAdmitted = ::recordAdmission,
+                    onSlotCapacityChanged = { set, capacity -> metrics.recordSlotCapacity(service.path, set, capacity) },
                     onQueueLengthChanged = { queueLength ->
                         metrics.recordQueueLength(service.path, this@ReliabilityModel.time, queueLength)
                     },
@@ -94,6 +95,7 @@ class ReliabilityModel(
                             pool.acquireTimeoutMs,
                             onQueueLengthChanged = { metrics.recordPoolState(call.path, queueLength = it) },
                             onBusyChanged = { metrics.recordPoolState(call.path, busy = it) },
+                            onCapacityChanged = { metrics.recordSlotCapacity(call.path, "pool", it) },
                         )
                 }
             }.toMap()
@@ -662,6 +664,7 @@ class ReliabilityModel(
                     metrics.recordOffered(runtime.serviceId, measurementCohort)
                     try {
                         val acquisition = with(runtime.slots) { acquire() }
+                        if (runtime.serverSlots == null) metrics.recordHandlerAcquisition(runtime.serviceId, acquisition, measurementCohort)
                         val allocation = acquisition.allocation ?: throw QueueFullException(runtime.serviceId)
                         try {
                             val server = runtime.serverSlots

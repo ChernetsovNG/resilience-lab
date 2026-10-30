@@ -73,9 +73,27 @@ class ReplicaSimulationTest {
         val graph = documents.graph(roundRobin(), fault)
         val (result, outcomes) = run(graph)
         assertThat(outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED)
-        assertThat(result.services.getValue("worker#1").busyHandlerTimeMs).isEqualTo(10.0)
-        assertThat(result.services.getValue("worker#2").busyHandlerTimeMs).isEqualTo(26.0)
-        assertThat(result.services.getValue("worker#3").busyHandlerTimeMs).isEqualTo(10.0)
+        assertThat(
+            result.services
+                .getValue("worker#1")
+                .slotPools
+                .getValue("handlers")
+                .busyIntegralMs,
+        ).isEqualTo(10.0)
+        assertThat(
+            result.services
+                .getValue("worker#2")
+                .slotPools
+                .getValue("handlers")
+                .busyIntegralMs,
+        ).isEqualTo(26.0)
+        assertThat(
+            result.services
+                .getValue("worker#3")
+                .slotPools
+                .getValue("handlers")
+                .busyIntegralMs,
+        ).isEqualTo(10.0)
     }
 
     @Test
@@ -107,7 +125,13 @@ class ReplicaSimulationTest {
             }
         val (result, _) = run(documents.graph(model, fault))
         for (number in 1..3) {
-            assertThat(result.services.getValue("worker#$number").busyHandlerTimeMs).isEqualTo(22.0)
+            assertThat(
+                result.services
+                    .getValue("worker#$number")
+                    .slotPools
+                    .getValue("handlers")
+                    .busyIntegralMs,
+            ).isEqualTo(22.0)
             assertThat(result.connections.getValue("worker-to-tail#$number").sentAttempts).isEqualTo(2)
         }
     }
@@ -140,7 +164,15 @@ class ReplicaSimulationTest {
         val (result, outcomes) = run(documents.graph(source, fault))
 
         assertThat(outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED)
-        assertThat((1..3).map { result.services.getValue("worker#$it").busyHandlerTimeMs }).containsExactly(10.0, 810.0, 10.0)
+        assertThat(
+            (1..3).map {
+                result.services
+                    .getValue("worker#$it")
+                    .slotPools
+                    .getValue("handlers")
+                    .busyIntegralMs
+            },
+        ).containsExactly(10.0, 810.0, 10.0)
         // Two calls each hold the handler for another 200 ms in each network direction.
         assertThat(result.connections.getValue("worker-to-tail#2").sentAttempts).isEqualTo(2)
     }

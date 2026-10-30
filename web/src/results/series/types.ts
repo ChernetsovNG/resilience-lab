@@ -9,7 +9,7 @@ export type WindowMetricValues = Omit<WindowMetrics, "latency"> & {
 export interface DecodedWindow {
   originalArrivals: number;
   admittedAttempts: number;
-  handlers: number;
+  hasSlots: boolean;
   metrics: WindowMetricValues;
   latency: { count: number; sumMs: number };
 }

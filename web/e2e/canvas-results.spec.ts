@@ -42,11 +42,11 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
         const column = summary.variants.findIndex(candidate => candidate.id === variant.id);
         for (const [id, service] of Object.entries(point.aggregate.services)) {
           const totals = service.totals;
-          const utilization = formatPercent(totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs);
+          const utilization = formatPercent(totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs);
           const metrics = page.getByTestId(`canvas-results-${id}`);
           await expect(metrics).toContainText(`Utilization ${utilization}`);
-          await expect(metrics).toContainText(`Mean queue ${formatNumber(totals.queueLengthIntegralMs / totals.measurementMs)}`);
-          await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.queueRejections / totals.offeredAttempts)}`);
+          await expect(metrics).toContainText(`Mean queue ${formatNumber(totals.slotPools.handlers.queueIntegralMs / totals.measurementMs)}`);
+          await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.slotPools.handlers.queueFullCount / totals.offeredAttempts)}`);
           const disclosure = page.locator("details.summary-services").filter({ has: page.getByText(`${id} metrics`, { exact: true }) });
           if (await disclosure.getAttribute("open") === null) await disclosure.locator("summary").click();
           const services = page.getByRole("table", { name: `Service metrics: ${id}`, exact: true });

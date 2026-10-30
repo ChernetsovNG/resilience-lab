@@ -4,13 +4,14 @@ import type { NodeSeriesMetrics, WindowMetricValues } from "../results/series/ty
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
 import { projectElementResults, type ElementResultsContext } from "./elementResultsData";
 
-const window = (startMs: number, durationMs: number, meanLatencyMs: number | null = 20): WindowMetricValues => recordedWindow({
-  startMs, durationMs, offeredAttempts: durationMs / 5, admittedAttempts: durationMs * 0.19,
-  queueRejections: durationMs / 100, busyHandlerTimeMs: durationMs * 0.75, queueLengthIntegralMs: durationMs * 2,
-  latency: { count: meanLatencyMs == null ? 0 : 1, sumMs: meanLatencyMs ?? 0, meanMs: meanLatencyMs,
+const window = (startMs: number, durationMs: number, meanLatencyMs: number | null = 20): WindowMetricValues => recordedWindow({ startMs,
+      durationMs,
+      offeredAttempts: durationMs / 5,
+      admittedAttempts: durationMs * 0.19,
+      latency: { count: meanLatencyMs == null ? 0 : 1, sumMs: meanLatencyMs ?? 0, meanMs: meanLatencyMs,
     p50Ms: meanLatencyMs, p95Ms: meanLatencyMs, p99Ms: meanLatencyMs },
-  client: { originalArrivals: durationMs * 0.19 / 2.25 },
-});
+      client: { originalArrivals: durationMs * 0.19 / 2.25 },
+      slotPools: { handlers: { busyIntegralMs: durationMs * 0.75, queueIntegralMs: durationMs * 2, capacityIntegralMs: durationMs, waitCount: 0, totalWaitMs: 0, queueFullCount: durationMs / 100, waitLimitCount: 0 } } });
 function fixture(): ElementResultsContext {
   const run = structuredClone(summary);
   run.variants[0].points[0].aggregate.services.middle = {
@@ -19,9 +20,17 @@ function fixture(): ElementResultsContext {
   };
   run.variants[0].points[0].coordinates = { "gateway-to-middle.timeout": "150ms" };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
-    totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
+    totals: { measurementMs: 2000,
+      sentAttempts: 30,
+      retries: 10,
+      succeeded: 20,
+      failed: 4,
+      timeouts: 6,
+      orphaned: 4,
+      inFlightIntegralMs: 5000,
+      orphanedIntegralMs: 300,
+      backoffIntegralMs: 100,
+      slotPools: {  } },
     timeoutRate: { count: 2, mean: 0.25, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
     meanInFlight: { count: 2, mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
     pooledLatency: { meanMs: 22, p95Ms: 30, p99Ms: 40, statistics: { count: 24, sumMs: 528, sketch: [24] } },
@@ -33,12 +42,19 @@ function fixture(): ElementResultsContext {
   return { summary: run, manifest: { ...manifest, series: { ...manifest.series!, measurementMs: 1025, windowMs: 100 } },
     runModel: model, currentModel: model, experiment, catalog, variantId: "baseline", pointId: "p0", replication: 0,
     window: null, selected: "gateway", nodes,
-    connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({
-      startMs, durationMs: 25, sentAttempts: 4, retries: 1, succeeded: 1, failed: 1, timeouts: 2,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      orphaned: 2, inFlightIntegralMs: 6, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+    connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({ startMs,
+      durationMs: 25,
+      sentAttempts: 4,
+      retries: 1,
+      succeeded: 1,
+      failed: 1,
+      timeouts: 2,
+      orphaned: 2,
+      inFlightIntegralMs: 6,
+      orphanedIntegralMs: 3,
+      backoffIntegralMs: 2,
       latency: { count: 2, sumMs: 24, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
-    })) }] };
+      slotPools: {  } })) }] };
 }
 const values = (context: ElementResultsContext) => projectElementResults(context)!.values;
 
@@ -109,7 +125,9 @@ describe("element results sources", () => {
   it("keeps empty latency and zero denominators unavailable", () => {
     const context = fixture();
     Object.assign(context.summary.variants[0].points[0].aggregate.services.gateway.totals,
-      { offeredAttempts: 0, handlerCapacityTimeMs: 0, measurementMs: 0 });
+      { offeredAttempts: 0,
+      measurementMs: 0,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } });
     context.nodes = [{ id: "gateway", windows: [window(100, 10, null)], latency: [{ count: 0, sumMs: 0 }] }];
     const result = values(context);
     for (const key of ["utilization", "meanQueue", "queueRejectionRate", "admittedAttemptsPerSecond", "meanLatencyMs"]) {

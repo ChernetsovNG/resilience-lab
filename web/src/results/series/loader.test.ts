@@ -11,27 +11,21 @@ const CLIENT_SHA = "a".repeat(64);
 const SERVICE_SHA = "b".repeat(64);
 
 function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
-  return {
-    startMs: 0,
-    durationMs: 10,
-    originalArrivals: 0,
-    offeredAttempts: 0,
-    admittedAttempts: 0,
-    queueRejections: 0,
-    successes: 0,
-    failures: 0,
-    timeouts: 0,
-    retries: 0,
-    busyHandlerTimeMs: 0,
-    handlers: 0,
-    queueLengthIntegralMs: 0,
-    latency: { count: 0, sumMs: 0, sketch: [0] },
-    ...values,
-  };
+  return { startMs: 0,
+      durationMs: 10,
+      originalArrivals: 0,
+      offeredAttempts: 0,
+      admittedAttempts: 0,
+      successes: 0,
+      failures: 0,
+      timeouts: 0,
+      retries: 0,
+      latency: { count: 0, sumMs: 0, sketch: [0] },
+      slotPools: {  }, ...values };
 }
 
 function part(nodes: SeriesPart["nodes"], fromWindow = 0, untilWindow = fromWindow + 2): SeriesPart {
-  return { schemaVersion: 4, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
+  return { schemaVersion: 5, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
 }
 
 function fixture() {
@@ -40,12 +34,15 @@ function fixture() {
     window({ startMs: 10, originalArrivals: 20 }),
   ] }]);
   const service = part([{ id: "service", windows: [
-    window({ handlers: 2, admittedAttempts: 15 }),
-    window({ startMs: 10, handlers: 2, admittedAttempts: 40 }),
+    window({ admittedAttempts: 15,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
+    window({ startMs: 10,
+      admittedAttempts: 40,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
   ] }]);
   const texts = [JSON.stringify(client), JSON.stringify(service)];
   const index: SeriesIndex = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     endMs: 20,
     windowMs: 10,
     parts: [
@@ -79,12 +76,19 @@ function request(nodes: string[], signal?: AbortSignal) {
 
 describe("series loader", () => {
   it("returns each connection's own windows from connection-only and mixed parts", async () => {
-    const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({
-      startMs, durationMs: startMs === 20 ? 5 : 10, sentAttempts, retries: 1, succeeded: 1, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 2, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+    const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({ startMs,
+      durationMs: startMs === 20 ? 5 : 10,
+      sentAttempts,
+      retries: 1,
+      succeeded: 1,
+      failed: 0,
+      timeouts: 2,
+      orphaned: 1,
+      inFlightIntegralMs: 5,
+      orphanedIntegralMs: 3,
+      backoffIntegralMs: 2,
       latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
-    });
+      slotPools: {  } });
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 999 }), window({ startMs: 10 })] }]);
     mixed.connections = [{ id: "first-call", windows: [callWindow(0, 11), callWindow(10, 12)] }];
     const connectionOnly = part([]);
@@ -95,7 +99,7 @@ describe("series loader", () => {
     unrelated.connections = [{ id: "unselected-call", windows: [callWindow(0, 31), callWindow(10, 32)] }];
     const parts = [mixed, connectionOnly, last, unrelated];
     const texts = parts.map((value) => JSON.stringify(value));
-    const index: SeriesIndex = { schemaVersion: 4, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
+    const index: SeriesIndex = { schemaVersion: 5, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
       file: `part-${index}.json.gz`, nodes: value.nodes.map((node) => node.id),
       connections: value.connections.map((connection) => connection.id), fromWindow: value.fromWindow,
       untilWindow: value.untilWindow, uncompressedBytes: texts[index].length, sha256: String(index).repeat(64),
@@ -125,12 +129,19 @@ describe("series loader", () => {
   it("reuses a mixed decoded part between node and connection selections", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+      durationMs: 10,
+      sentAttempts: 3,
+      retries: 1,
+      succeeded: 1,
+      failed: 0,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 5,
+      orphanedIntegralMs: 3,
+      backoffIntegralMs: 2,
       latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
-    })) }];
+      slotPools: {  } })) }];
     const text = JSON.stringify(mixed);
     const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
     const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
@@ -146,12 +157,19 @@ describe("series loader", () => {
   it("shares a concurrent mixed-part download while allowing either consumer to abort", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+      durationMs: 10,
+      sentAttempts: 3,
+      retries: 1,
+      succeeded: 1,
+      failed: 0,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 5,
+      orphanedIntegralMs: 3,
+      backoffIntegralMs: 2,
       latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
-    })) }];
+      slotPools: {  } })) }];
     const text = JSON.stringify(mixed);
     const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
     let resolvePart: ((value: { text: string; etag: string }) => void) | undefined;
@@ -180,12 +198,19 @@ describe("series loader", () => {
   it("reuses a completed download while another view is still decoding that part", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      startMs, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 3, backoffIntegralMs: 2,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+      durationMs: 10,
+      sentAttempts: 3,
+      retries: 1,
+      succeeded: 1,
+      failed: 0,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 5,
+      orphanedIntegralMs: 3,
+      backoffIntegralMs: 2,
       latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
-    })) }];
+      slotPools: {  } })) }];
     const text = JSON.stringify(mixed);
     const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: ["call"], uncompressedBytes: text.length }] }, [text]);
     const pending: (() => void)[] = [];
@@ -208,13 +233,19 @@ describe("series loader", () => {
     const measured = part([
       { id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 }), window({ startMs: 20, durationMs: 5 })] },
       { id: "service", windows: [
-        window({ handlers: 1, latency: { count: 100, sumMs: 10000, sketch: [0, 64, 100] } }),
-        window({ startMs: 10, handlers: 1, latency: { count: 1, sumMs: 10, sketch: [0, 64, 1] } }),
-        window({ startMs: 20, durationMs: 5, handlers: 1, latency: { count: 2, sumMs: 80, sketch: [0, 64, 2] } }),
+        window({ latency: { count: 100, sumMs: 10000, sketch: [0, 64, 100] },
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
+        window({ startMs: 10,
+      latency: { count: 1, sumMs: 10, sketch: [0, 64, 1] },
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
+        window({ startMs: 20,
+      durationMs: 5,
+      latency: { count: 2, sumMs: 80, sketch: [0, 64, 2] },
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (5), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
       ] },
     ], 0, 3);
     const text = JSON.stringify(measured);
-    const index: SeriesIndex = { schemaVersion: 4, endMs: 25, windowMs: 10, parts: [{
+    const index: SeriesIndex = { schemaVersion: 5, endMs: 25, windowMs: 10, parts: [{
       file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 3,
       uncompressedBytes: text.length, sha256: CLIENT_SHA,
     }] };
@@ -226,7 +257,7 @@ describe("series loader", () => {
     expect(result[0].windows.map((value) => [value.startMs, value.durationMs])).toEqual([[10, 10], [20, 5]]);
   });
 
-  it.each([1, 2, 3, 5])("rejects unsupported index schema version %s", async (schemaVersion) => {
+  it.each([1, 2, 3, 4, 6])("rejects unsupported index schema version %s", async (schemaVersion) => {
     const { index, texts } = fixture();
     const api = apiFor({ ...index, schemaVersion }, texts);
     const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
@@ -237,12 +268,19 @@ describe("series loader", () => {
   it("accounts for expanded connection rows before retaining a decoded part", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({
-      startMs, durationMs: 10, sentAttempts: 1, retries: 0, succeeded: 1, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 0, orphaned: 0, inFlightIntegralMs: 2, orphanedIntegralMs: 0, backoffIntegralMs: 0,
+    mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({ startMs,
+      durationMs: 10,
+      sentAttempts: 1,
+      retries: 0,
+      succeeded: 1,
+      failed: 0,
+      timeouts: 0,
+      orphaned: 0,
+      inFlightIntegralMs: 2,
+      orphanedIntegralMs: 0,
+      backoffIntegralMs: 0,
       latency: { count: 1, sumMs: 2, sketch: [0, 64, 1] },
-    })) }];
+      slotPools: {  } })) }];
     const text = JSON.stringify(mixed);
     const cache = new SeriesPartCache(text.length + 1);
     const api = apiFor({ ...index, parts: [{ ...index.parts[0], connections: [mixed.connections[0].id], uncompressedBytes: text.length }] }, [text]);
@@ -256,12 +294,19 @@ describe("series loader", () => {
   it("passes connection-only split parts while finding the client denominator", async () => {
     const { index, texts } = fixture();
     const connection = part([]);
-    connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      startMs, durationMs: 10, sentAttempts: 1, retries: 0, succeeded: 0, failed: 0,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      timeouts: 1, orphaned: 1, inFlightIntegralMs: 5, orphanedIntegralMs: 5, backoffIntegralMs: 0,
+    connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+      durationMs: 10,
+      sentAttempts: 1,
+      retries: 0,
+      succeeded: 0,
+      failed: 0,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 5,
+      orphanedIntegralMs: 5,
+      backoffIntegralMs: 0,
       latency: { count: 0, sumMs: 0, sketch: [0] },
-    })) }];
+      slotPools: {  } })) }];
     const allTexts = [JSON.stringify(connection), texts[1], texts[0]];
     const expandedIndex: SeriesIndex = {
       ...index,
@@ -300,7 +345,8 @@ describe("series loader", () => {
 
   it("loads only the client and reuses one decoder during fallback", async () => {
     const { index, texts } = fixture();
-    const unrelated = part([{ id: "unrelated", windows: [window({ handlers: 1 }), window({ startMs: 10, handlers: 1 })] }]);
+    const unrelated = part([{ id: "unrelated", windows: [window({ slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }), window({ startMs: 10,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] }]);
     const allTexts = [...texts, JSON.stringify(unrelated)];
     const expandedIndex: SeriesIndex = {
       ...index,
@@ -334,14 +380,17 @@ describe("series loader", () => {
     const parts = [
       part([
         { id: "client", windows: [window({ originalArrivals: 10 })] },
-        { id: "service", windows: [window({ handlers: 2, admittedAttempts: 15 })] },
+        { id: "service", windows: [window({ admittedAttempts: 15,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
       ], 0, 1),
-      part([{ id: "service", windows: [window({ startMs: 10, handlers: 2, admittedAttempts: 40 })] }], 1, 2),
+      part([{ id: "service", windows: [window({ startMs: 10,
+      admittedAttempts: 40,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] }], 1, 2),
       part([{ id: "client", windows: [window({ startMs: 10, originalArrivals: 20 })] }], 1, 2),
     ];
     const texts = parts.map((value) => JSON.stringify(value));
     const index: SeriesIndex = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       endMs: 20,
       windowMs: 10,
       parts: [

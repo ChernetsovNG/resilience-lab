@@ -1,5 +1,7 @@
 package resiliencelab.core.experiment
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -26,6 +28,7 @@ data class ReplicationResult(
  * Offered attempts include queue rejections; admitted attempts were queued or immediately allocated.
  * Queue and handler observations include all work present, including warm-up work, but exclude run-out.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ServiceMetrics(
     val offeredAttempts: Int,
@@ -33,15 +36,12 @@ data class ServiceMetrics(
     val timeouts: Int,
     val retries: Int,
     val failures: Int,
-    val queueRejections: Int,
-    val handlers: Int,
     val measurementMs: Double,
-    val busyHandlerTimeMs: Double,
-    val queueLengthIntegralMs: Double,
     val queueDurationsMs: Map<Double, Double>,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 ) {
-    val handlerUtilization: Double get() = busyHandlerTimeMs / (handlers * measurementMs)
-    val meanQueueLength: Double get() = queueLengthIntegralMs / measurementMs
+    val handlerUtilization: Double get() = slotPools.getValue("handlers").let { it.busyIntegralMs / it.capacityIntegralMs }
+    val meanQueueLength: Double get() = slotPools.getValue("handlers").queueIntegralMs / measurementMs
     val p95QueueLength: Double
         get() {
             val target = 0.95 * queueDurationsMs.values.sum()
@@ -109,6 +109,7 @@ data class AggregateServiceMetrics(
 )
 
 /** Pooled numerators, denominators and time integrals; rates can be reconstructed without averaging rates. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ServiceTotals(
     val originalArrivals: Long,
@@ -117,11 +118,8 @@ data class ServiceTotals(
     val timeouts: Long,
     val retries: Long,
     val failures: Long,
-    val queueRejections: Long,
-    val busyHandlerTimeMs: Double,
-    val handlerCapacityTimeMs: Double,
-    val queueLengthIntegralMs: Double,
     val measurementMs: Double,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /**
@@ -130,8 +128,9 @@ data class ServiceTotals(
  * Timeout durations never enter [latency]; orphaned work lasts through the child's response network delay.
  * Pool integrals cover the same fixed interval; wait counts/durations belong to completed waits of the measured
  * cohort, including run-out. Pool acquisition expiry excludes deadline expiry and does not count as a sent attempt.
- * All pool fields default to zero when no pool exists.
+ * An absent pool is omitted from [slotPools].
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ConnectionMetrics(
     val sentAttempts: Int,
@@ -145,12 +144,7 @@ data class ConnectionMetrics(
     val backoffIntegralMs: Double,
     val measurementMs: Double,
     val latency: LatencyStatistics,
-    val poolBusyTimeMs: Double = 0.0,
-    val poolCapacityTimeMs: Double = 0.0,
-    val poolQueueIntegralMs: Double = 0.0,
-    val poolWaitCount: Int = 0,
-    val poolWaitTimeMs: Double = 0.0,
-    val poolAcquireTimeouts: Int = 0,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /** Replication-level timeout fraction and mean in-flight occupancy, plus pooled response latency and totals. */
@@ -163,6 +157,7 @@ data class AggregateConnectionMetrics(
 )
 
 /** Pooled call counters and occupancy integrals; [measurementMs] is summed across contributing replications. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ConnectionTotals(
     val sentAttempts: Long,
@@ -175,12 +170,7 @@ data class ConnectionTotals(
     val orphanedIntegralMs: Double,
     val backoffIntegralMs: Double,
     val measurementMs: Double,
-    val poolBusyTimeMs: Double = 0.0,
-    val poolCapacityTimeMs: Double = 0.0,
-    val poolQueueIntegralMs: Double = 0.0,
-    val poolWaitCount: Long = 0L,
-    val poolWaitTimeMs: Double = 0.0,
-    val poolAcquireTimeouts: Long = 0L,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /**
@@ -189,23 +179,16 @@ data class ConnectionTotals(
  * Occupancy and queue integrals include all work within the fixed measurement interval, excluding run-out.
  * Wait counts and durations describe completed waits of cohort attempts, including expired waits.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class PoolerMetrics(
     val offeredAttempts: Int,
     val admittedAttempts: Int,
-    val clientConnectionRejections: Int,
-    val waitTimeouts: Int,
     val successes: Int,
     val failures: Int,
-    val maxClientConnections: Int,
-    val poolSize: Int,
     val measurementMs: Double,
-    val busyClientConnectionTimeMs: Double,
-    val busyServerConnectionTimeMs: Double,
-    val serverQueueLengthIntegralMs: Double,
-    val serverWaitCount: Int,
-    val serverWaitTimeMs: Double,
     val latency: LatencyStatistics,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /** Pooled transaction-pooler counters, resource time and residence distribution across independent replications. */
@@ -216,20 +199,30 @@ data class AggregatePoolerMetrics(
 )
 
 /** Capacities are integrated over each replication's measurement interval before pooling. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class PoolerTotals(
     val offeredAttempts: Long,
     val admittedAttempts: Long,
-    val clientConnectionRejections: Long,
-    val waitTimeouts: Long,
     val successes: Long,
     val failures: Long,
-    val busyClientConnectionTimeMs: Double,
-    val clientConnectionCapacityTimeMs: Double,
-    val busyServerConnectionTimeMs: Double,
-    val serverConnectionCapacityTimeMs: Double,
-    val serverQueueLengthIntegralMs: Double,
-    val serverWaitCount: Long,
-    val serverWaitTimeMs: Double,
     val measurementMs: Double,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+)
+
+/**
+ * Common sufficient statistics of one owned slot set. Integrals are slot/queue units × milliseconds.
+ * Completed waits (including expiry) count once; immediate acquisitions have no wait sample.
+ * Windows use event time; replication totals use the measured arrival cohort including run-out.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class SlotPoolMetrics(
+    @EncodeDefault val busyIntegralMs: Double = 0.0,
+    @EncodeDefault val queueIntegralMs: Double = 0.0,
+    @EncodeDefault val capacityIntegralMs: Double = 0.0,
+    @EncodeDefault val waitCount: Long = 0L,
+    @EncodeDefault val totalWaitMs: Double = 0.0,
+    @EncodeDefault val queueFullCount: Long = 0L,
+    @EncodeDefault val waitLimitCount: Long = 0L,
 )

@@ -69,10 +69,10 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await expect(heatmap.getByRole("button").nth(3)).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /p3/);
     const dependency = point.aggregate.services.dependency.totals;
-    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${formatNumber(dependency.queueLengthIntegralMs / dependency.measurementMs)}`);
+    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${formatNumber(dependency.slotPools.handlers.queueIntegralMs / dependency.measurementMs)}`);
     await page.getByRole("combobox", { name: "Map metric", exact: true }).selectOption("handlerUtilization");
     await page.getByRole("combobox", { name: "Map service", exact: true }).selectOption("dependency");
-    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(dependency.busyHandlerTimeMs / dependency.handlerCapacityTimeMs));
+    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(dependency.slotPools.handlers.busyIntegralMs / dependency.slotPools.handlers.capacityIntegralMs));
     await page.getByRole("button", { name: "Analysis", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("heatmap.png") });
     await page.getByRole("button", { name: "Analysis", exact: true }).click();

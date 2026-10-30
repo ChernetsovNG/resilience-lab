@@ -20,7 +20,7 @@ export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, serv
   if (metric === "admittedAmplification") return aggregate.services[service]?.admittedAmplification ?? null;
   if (metric === "handlerUtilization") {
     const totals = aggregate.services[service]?.totals;
-    return totals == null || totals.handlerCapacityTimeMs === 0 ? null : { mean: totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs };
+    return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? null : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
   }
   return aggregate[metric] ?? null;
 }

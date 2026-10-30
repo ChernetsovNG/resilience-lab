@@ -1,5 +1,6 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
@@ -8,6 +9,7 @@ import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.LatencyStatistics
+import resiliencelab.core.experiment.SlotPoolMetrics
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.workspace.Workspace
 import java.io.ByteArrayOutputStream
@@ -19,6 +21,7 @@ import java.util.zip.GZIPOutputStream
  * Queue rejections contribute only to their counter, never to the service residence sketch.
  * These populations differ from the measured-arrival cohort in replication.json, whose outcomes include run-out.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class WindowMetrics(
     val startMs: Double,
@@ -26,30 +29,12 @@ data class WindowMetrics(
     val originalArrivals: Int = 0,
     val offeredAttempts: Int = 0,
     val admittedAttempts: Int = 0,
-    val queueRejections: Int = 0,
     val successes: Int = 0,
     val failures: Int = 0,
     val timeouts: Int = 0,
     val retries: Int = 0,
-    val busyHandlerTimeMs: Double = 0.0,
-    val handlers: Int = 0,
-    val queueLengthIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
-    val pooler: PoolerWindowMetrics? = null,
-)
-
-/** Pooler-only resource fields of a node row; counters and residence latency remain in [WindowMetrics]. */
-@Serializable
-data class PoolerWindowMetrics(
-    val maxClientConnections: Int,
-    val poolSize: Int,
-    val clientConnectionRejections: Int,
-    val waitTimeouts: Int,
-    val busyClientConnectionTimeMs: Double,
-    val busyServerConnectionTimeMs: Double,
-    val serverQueueLengthIntegralMs: Double,
-    val serverWaitCount: Int,
-    val serverWaitTimeMs: Double,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /** One node in a closed window, passed directly to the artifact writer. */
@@ -69,8 +54,9 @@ data class NodeSeries(
  * Event-time call statistics for [startMs, startMs + durationMs), including warm-up and excluding run-out.
  * Latency includes responses observed by the caller; timeouts and late responses do not contribute samples.
  * Pool integrals cover this window; wait counts and full wait durations belong to the wait-completion window.
- * Pool fields are zero without a pool; deadline expiry is excluded from [poolAcquireTimeouts].
+ * Missing pools are omitted; deadline expiry is excluded from pool wait-limit rejections.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ConnectionWindowMetrics(
     val startMs: Double,
@@ -85,12 +71,7 @@ data class ConnectionWindowMetrics(
     val orphanedIntegralMs: Double = 0.0,
     val backoffIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
-    val poolBusyTimeMs: Double = 0.0,
-    val poolCapacityTimeMs: Double = 0.0,
-    val poolQueueIntegralMs: Double = 0.0,
-    val poolWaitCount: Int = 0,
-    val poolWaitTimeMs: Double = 0.0,
-    val poolAcquireTimeouts: Int = 0,
+    @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
 /** One connection in a closed window, passed directly to the artifact writer. */

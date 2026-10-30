@@ -28,7 +28,52 @@ class WindowSeriesTest {
         }
 
     @Test
-    fun `packed series use schema four preserve legacy rows and include connection coverage`(
+    fun `capacity changes never fragment unrelated call occupancy integrals`() {
+        fun collect(changes: Boolean): ConnectionWindowMetrics {
+            val closed = mutableListOf<ConnectionWindow>()
+            val collector =
+                WindowCollector(
+                    "client",
+                    emptyList(),
+                    10.0,
+                    10.0,
+                    connectionIds = listOf("call"),
+                    connectionPoolSizes = mapOf("call" to 3),
+                    onWindow = { _, _, calls -> closed += calls },
+                )
+            repeat(3) { collector.connectionEvent("call", 0.1, resiliencelab.core.engine.ksl.ConnectionEvent.SENT, 0.0) }
+            if (changes) for (event in 2..99) collector.slotCapacity("call", "pool", event * 0.1, 2 + event % 2)
+            repeat(3) { collector.connectionEvent("call", 9.97, resiliencelab.core.engine.ksl.ConnectionEvent.SUCCEEDED, 0.0) }
+            collector.finish()
+            return closed.single().metrics
+        }
+        assertThat(collect(true).inFlightIntegralMs).isEqualTo(collect(false).inFlightIntegralMs)
+    }
+
+    @Test
+    fun `constant slot capacity uses one exact window duration product despite fractional work events`() {
+        val closed = mutableListOf<NodeWindow>()
+        val collector =
+            WindowCollector(
+                "client",
+                listOf(service().copy(handlers = 3)),
+                10.0,
+                10.0,
+                onWindow = { _, nodes, _ -> closed += nodes },
+            )
+        repeat(100) { collector.busyHandlers("service", it * 0.1, it % 3) }
+        collector.finish()
+        assertThat(
+            closed
+                .single { it.id == "service" }
+                .metrics.slotPools
+                .getValue("handlers")
+                .capacityIntegralMs,
+        ).isEqualTo(30.0)
+    }
+
+    @Test
+    fun `packed series use schema five with slot maps and connection coverage`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
@@ -42,9 +87,9 @@ class WindowSeriesTest {
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
         assertThat(bytes.toString(Charsets.UTF_8)).doesNotContain("\"pooler\"")
-        assertThat(index.schemaVersion).isEqualTo(4)
+        assertThat(index.schemaVersion).isEqualTo(5)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(4)
+        assertThat(part.schemaVersion).isEqualTo(5)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")
@@ -246,7 +291,26 @@ class WindowSeriesTest {
         val directory = ".results/e/packed/series/v/p0/rep-0"
         val rows =
             List(12) { window ->
-                listOf("service-a", "service-ё").map { id -> NodeWindow(id, WindowMetrics(window.toDouble(), 1.0, handlers = 1)) }
+                listOf("service-a", "service-ё").map { id ->
+                    NodeWindow(
+                        id,
+                        WindowMetrics(
+                            window.toDouble(),
+                            1.0,
+                            slotPools =
+                                mapOf(
+                                    "handlers" to
+                                        resiliencelab.core.experiment.SlotPoolMetrics(
+                                            busyIntegralMs = 0.0,
+                                            queueIntegralMs = 0.0,
+                                            capacityIntegralMs =
+                                                (1).toDouble() * (1.0),
+                                            queueFullCount = (0).toLong(),
+                                        ),
+                                ),
+                        ),
+                    )
+                }
             }
 
         fun expected(
@@ -295,13 +359,13 @@ class WindowSeriesTest {
         }
         collector.finish()
         val mixed = closed[0].single { it.id == "service" }.metrics
-        assertThat(mixed.queueRejections).isEqualTo(200)
+        assertThat(mixed.slotPools.getValue("handlers").queueFullCount).isEqualTo(200)
         assertThat(mixed.latency.count).isEqualTo(2L)
         assertThat(mixed.latency.sumMs).isEqualTo(4.0)
         assertThat(mixed.latency.sketch[0]).isEqualTo(1L)
         assertThat(LatencySketch.fromBins(mixed.latency.sketch).percentile(0.95)!!).isCloseTo(4.0, offset(4.0 / 128))
         val rejected = closed[1].single { it.id == "service" }.metrics
-        assertThat(rejected.queueRejections).isEqualTo(100)
+        assertThat(rejected.slotPools.getValue("handlers").queueFullCount).isEqualTo(100)
         assertThat(rejected.latency.count).isZero()
         assertThat(rejected.latency.sketch).containsExactly(0L)
     }
@@ -357,9 +421,13 @@ class WindowSeriesTest {
         assertThat(client.map { it.failures }).containsExactly(0, 0, 1)
         assertThat(client.map { it.durationMs }).containsExactly(10.0, 10.0, 5.0)
         val services = closed.map { rows -> rows.first { it.id == "service" }.metrics }
-        assertThat(services.map { it.busyHandlerTimeMs }).containsExactly(8.0, 3.0, 0.0)
-        assertThat(services.map { it.queueLengthIntegralMs }).containsExactly(12.0, 10.0, 0.0)
-        services.forEach { assertThat(it.busyHandlerTimeMs / (it.handlers * it.durationMs)).isBetween(0.0, 1.0) }
+        assertThat(services.map { it.slotPools.getValue("handlers").busyIntegralMs }).containsExactly(8.0, 3.0, 0.0)
+        assertThat(services.map { it.slotPools.getValue("handlers").queueIntegralMs }).containsExactly(12.0, 10.0, 0.0)
+        services.forEach {
+            assertThat(
+                it.slotPools.getValue("handlers").busyIntegralMs / (it.slotPools.getValue("handlers").capacityIntegralMs),
+            ).isBetween(0.0, 1.0)
+        }
         assertThat(client.sumOf { it.latency.sumMs }).isCloseTo(34.0, offset(1e-12))
     }
 
@@ -369,7 +437,27 @@ class WindowSeriesTest {
     ) {
         val workspace = FileWorkspace(root)
         val writer = SeriesWriter(workspace, ".results/e/r/series/v/p0/rep-0", 20.0, 10.0)
-        val rows = List(20_000) { NodeWindow("service-%05d".format(it), WindowMetrics(0.0, 10.0, handlers = 1)) }
+        val rows =
+            List(20_000) {
+                NodeWindow(
+                    "service-%05d".format(it),
+                    WindowMetrics(
+                        0.0,
+                        10.0,
+                        slotPools =
+                            mapOf(
+                                "handlers" to
+                                    resiliencelab.core.experiment.SlotPoolMetrics(
+                                        busyIntegralMs = 0.0,
+                                        queueIntegralMs = 0.0,
+                                        capacityIntegralMs =
+                                            (1).toDouble() * (10.0),
+                                        queueFullCount = (0).toLong(),
+                                    ),
+                            ),
+                    ),
+                )
+            }
         val connections = List(20_000) { ConnectionWindow("call-%05d".format(it), ConnectionWindowMetrics(0.0, 10.0)) }
         writer.writeWindow(0, rows, connections)
         writer.writeWindow(

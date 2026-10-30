@@ -252,10 +252,17 @@ class SaturationTest {
         WindowMetrics(
             startMs = startMs,
             durationMs = durationMs,
-            busyHandlerTimeMs = utilization * durationMs,
-            handlers = 1,
-            queueLengthIntegralMs = queueLength * durationMs,
-            queueRejections = queueRejections,
+            slotPools =
+                mapOf(
+                    "handlers" to
+                        resiliencelab.core.experiment.SlotPoolMetrics(
+                            busyIntegralMs = utilization * durationMs,
+                            queueIntegralMs =
+                                queueLength * durationMs,
+                            capacityIntegralMs = (1).toDouble() * (durationMs),
+                            queueFullCount = (queueRejections).toLong(),
+                        ),
+                ),
         ),
     )
 }

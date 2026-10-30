@@ -17,11 +17,12 @@ const summary: CanvasResults = {
 
 function metric(index: number, meanQueueLength: number, amplification: number | null): WindowMetricValues {
   const durationMs = index === 5 ? 50 : 100;
-  return recordedWindow({
-    startMs: index * 100, durationMs, offeredAttempts: durationMs / 5, admittedAttempts: durationMs * 0.15,
-    queueRejections: durationMs / 20, busyHandlerTimeMs: durationMs * 0.8, queueLengthIntegralMs: meanQueueLength * durationMs,
-    client: { originalArrivals: amplification == null ? 0 : durationMs * 0.15 / amplification },
-  });
+  return recordedWindow({ startMs: index * 100,
+      durationMs,
+      offeredAttempts: durationMs / 5,
+      admittedAttempts: durationMs * 0.15,
+      client: { originalArrivals: amplification == null ? 0 : durationMs * 0.15 / amplification },
+      slotPools: { handlers: { busyIntegralMs: durationMs * 0.8, queueIntegralMs: meanQueueLength * durationMs, capacityIntegralMs: durationMs, waitCount: 0, totalWaitMs: 0, queueFullCount: durationMs / 20, waitLimitCount: 0 } } });
 }
 const series: NodeSeriesMetrics[] = [
   { id: "dependency", windows: [metric(0, 0, 1), metric(1, 1, 1.5), metric(2, 3, 2), metric(3, 9, 3), metric(4, 4, 2), metric(5, 1, 1)] },
@@ -50,7 +51,7 @@ describe("windowCanvasResults", () => {
     expect(windowCanvasResults(summary, series, -1)).toBeNull();
     const zero = metric(0, 0, null);
     zero.offeredAttempts = 0;
-    zero.handlers = 0;
+    zero.slotPools.handlers.capacityIntegralMs = 0;
     const frame = windowCanvasResults(summary, [{ id: "dependency", windows: [zero] }], 0)!;
     expect(frame.services.get("dependency")?.values).toMatchObject({ utilization: null, meanQueue: 0, queueRejectionRate: null });
     expect(frame.connections.get("call")?.values.amplification).toBeNull();
@@ -219,12 +220,19 @@ it("uses the connection's own windows while playing a frame", async () => {
   const ownSummary: CanvasResults = { ...summary, connections: new Map([["call", {
     ...summary.connections.get("call")!, hasOwnSeries: true, values: { amplification: 1.2, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5 },
   }]]) };
-  const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
-    startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
-    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-    orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
-    latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
-  }] }] };
+  const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{ startMs: 0,
+      durationMs: 100,
+      sentAttempts: 4,
+      retries: 1,
+      timeouts: 1,
+      succeeded: 1,
+      failed: 0,
+      orphaned: 1,
+      inFlightIntegralMs: 20,
+      orphanedIntegralMs: 50,
+      backoffIntegralMs: 10,
+      latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
+      slotPools: {  } }] }] };
   const hook = renderHook(() => usePlayback({ runId: "run-1", variant: "baseline", pointId: "p0", replication: 0,
     window: 0, windowCount: 1, nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
   }, loader));
@@ -274,12 +282,19 @@ it("prefetches the next node and connection ranges before the cursor reaches the
     load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); },
     loadConnections: async (request: ConnectionSeriesLoadRequest) => {
       connectionRequests.push(request);
-      return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({
-        startMs: 0, durationMs: 100, sentAttempts: 4, retries: 1, timeouts: 1, succeeded: 1, failed: 0,
-        poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-        orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
-        latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
-      })) }];
+      return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({ startMs: 0,
+      durationMs: 100,
+      sentAttempts: 4,
+      retries: 1,
+      timeouts: 1,
+      succeeded: 1,
+      failed: 0,
+      orphaned: 1,
+      inFlightIntegralMs: 20,
+      orphanedIntegralMs: 50,
+      backoffIntegralMs: 10,
+      latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
+      slotPools: {  } })) }];
     },
   };
   const { result, rerender } = renderHook(({ window }) => usePlayback({

@@ -2,6 +2,7 @@ package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.experiment.ConnectionMetrics
 import resiliencelab.core.experiment.LatencyAccumulator
+import resiliencelab.core.experiment.SlotPoolMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
 
 /** Observations of the existing call lifecycle; none of these events schedules or cancels model work. */
@@ -63,6 +64,17 @@ internal class ConnectionCollector(
         }
     }
 
+    fun poolCapacity(
+        id: String,
+        timeMs: Double,
+        capacity: Int,
+    ) {
+        states.getValue(id).apply {
+            poolSize = capacity
+            poolCapacitySeries.record(timeMs, capacity.toDouble())
+        }
+    }
+
     fun startMeasurement() {
         states.values.forEach { it.observe(startMs) }
     }
@@ -99,7 +111,8 @@ internal class ConnectionCollector(
         var orphaned = 0
         var poolBusy = 0
         var poolQueued = 0
-        private val poolSize = poolSizes[id] ?: 0
+        var poolSize = poolSizes[id] ?: 0
+        private val ownsPool = id in poolSizes
         var poolWaitCount = 0
         var poolWaitTimeMs = 0.0
         var poolAcquireTimeouts = 0
@@ -178,12 +191,23 @@ internal class ConnectionCollector(
                 backoffSeries.integral,
                 endMs - startMs,
                 latency.snapshot(),
-                poolBusyTimeMs = poolBusySeries.integral,
-                poolCapacityTimeMs = poolCapacitySeries.integral,
-                poolQueueIntegralMs = poolQueueSeries.integral,
-                poolWaitCount = poolWaitCount,
-                poolWaitTimeMs = poolWaitTimeMs,
-                poolAcquireTimeouts = poolAcquireTimeouts,
+                slotPools =
+                    if (ownsPool) {
+                        mapOf(
+                            "pool" to
+                                SlotPoolMetrics(
+                                    poolBusySeries.integral,
+                                    poolQueueSeries.integral,
+                                    poolCapacitySeries.integral,
+                                    poolWaitCount.toLong(),
+                                    poolWaitTimeMs,
+                                    0L,
+                                    poolAcquireTimeouts.toLong(),
+                                ),
+                        )
+                    } else {
+                        emptyMap()
+                    },
             )
     }
 }

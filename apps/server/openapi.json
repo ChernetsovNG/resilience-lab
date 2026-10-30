@@ -1755,30 +1755,6 @@
             "type" : "number",
             "format" : "double"
           },
-          "poolAcquireTimeouts" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "poolBusyTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolCapacityTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolQueueIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolWaitCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "poolWaitTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
           "retries" : {
             "type" : "integer",
             "format" : "int64"
@@ -1786,6 +1762,12 @@
           "sentAttempts" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "slotPools" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/SlotPoolMetrics"
+            }
           },
           "succeeded" : {
             "type" : "integer",
@@ -1796,7 +1778,7 @@
             "format" : "int64"
           }
         },
-        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "poolAcquireTimeouts", "poolBusyTimeMs", "poolCapacityTimeMs", "poolQueueIntegralMs", "poolWaitCount", "poolWaitTimeMs", "retries", "sentAttempts", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "slotPools", "succeeded", "timeouts" ]
       },
       "ConnectionWindowMetrics" : {
         "type" : "object",
@@ -1828,30 +1810,6 @@
             "type" : "number",
             "format" : "double"
           },
-          "poolAcquireTimeouts" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "poolBusyTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolCapacityTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolQueueIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "poolWaitCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "poolWaitTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
           "retries" : {
             "type" : "integer",
             "format" : "int32"
@@ -1859,6 +1817,12 @@
           "sentAttempts" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "slotPools" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/SlotPoolMetrics"
+            }
           },
           "startMs" : {
             "type" : "number",
@@ -1873,7 +1837,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "poolAcquireTimeouts", "poolBusyTimeMs", "poolCapacityTimeMs", "poolQueueIntegralMs", "poolWaitCount", "poolWaitTimeMs", "retries", "sentAttempts", "startMs", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "slotPools", "startMs", "succeeded", "timeouts" ]
       },
       "Diagnostic" : {
         "type" : "object",
@@ -2701,22 +2665,6 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "busyClientConnectionTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "busyServerConnectionTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "clientConnectionCapacityTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "clientConnectionRejections" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
           "failures" : {
             "type" : "integer",
             "format" : "int64"
@@ -2729,74 +2677,18 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "serverConnectionCapacityTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "serverQueueLengthIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "serverWaitCount" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
-          "serverWaitTimeMs" : {
-            "type" : "number",
-            "format" : "double"
+          "slotPools" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/SlotPoolMetrics"
+            }
           },
           "successes" : {
             "type" : "integer",
             "format" : "int64"
-          },
-          "waitTimeouts" : {
-            "type" : "integer",
-            "format" : "int64"
           }
         },
-        "required" : [ "admittedAttempts", "busyClientConnectionTimeMs", "busyServerConnectionTimeMs", "clientConnectionCapacityTimeMs", "clientConnectionRejections", "failures", "measurementMs", "offeredAttempts", "serverConnectionCapacityTimeMs", "serverQueueLengthIntegralMs", "serverWaitCount", "serverWaitTimeMs", "successes", "waitTimeouts" ]
-      },
-      "PoolerWindowMetrics" : {
-        "type" : "object",
-        "properties" : {
-          "busyClientConnectionTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "busyServerConnectionTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "clientConnectionRejections" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "maxClientConnections" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "poolSize" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "serverQueueLengthIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "serverWaitCount" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "serverWaitTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "waitTimeouts" : {
-            "type" : "integer",
-            "format" : "int32"
-          }
-        },
-        "required" : [ "busyClientConnectionTimeMs", "busyServerConnectionTimeMs", "clientConnectionRejections", "maxClientConnections", "poolSize", "serverQueueLengthIntegralMs", "serverWaitCount", "serverWaitTimeMs", "waitTimeouts" ]
+        "required" : [ "admittedAttempts", "failures", "measurementMs", "offeredAttempts", "slotPools", "successes" ]
       },
       "PortDescriptor" : {
         "type" : "object",
@@ -3183,17 +3075,9 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "busyHandlerTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
           "failures" : {
             "type" : "integer",
             "format" : "int64"
-          },
-          "handlerCapacityTimeMs" : {
-            "type" : "number",
-            "format" : "double"
           },
           "measurementMs" : {
             "type" : "number",
@@ -3207,24 +3091,56 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "queueLengthIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "queueRejections" : {
-            "type" : "integer",
-            "format" : "int64"
-          },
           "retries" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "slotPools" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/SlotPoolMetrics"
+            }
           },
           "timeouts" : {
             "type" : "integer",
             "format" : "int64"
           }
         },
-        "required" : [ "admittedAttempts", "busyHandlerTimeMs", "failures", "handlerCapacityTimeMs", "measurementMs", "offeredAttempts", "originalArrivals", "queueLengthIntegralMs", "queueRejections", "retries", "timeouts" ]
+        "required" : [ "admittedAttempts", "failures", "measurementMs", "offeredAttempts", "originalArrivals", "retries", "slotPools", "timeouts" ]
+      },
+      "SlotPoolMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "busyIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "capacityIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "queueFullCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "queueIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "totalWaitMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "waitCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "waitLimitCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "busyIntegralMs", "capacityIntegralMs", "queueFullCount", "queueIntegralMs", "totalWaitMs", "waitCount", "waitLimitCount" ]
       },
       "TypeDescriptor" : {
         "type" : "object",
@@ -3361,19 +3277,11 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "busyHandlerTimeMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
           "durationMs" : {
             "type" : "number",
             "format" : "double"
           },
           "failures" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
-          "handlers" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -3388,24 +3296,15 @@
             "type" : "integer",
             "format" : "int32"
           },
-          "pooler" : {
-            "oneOf" : [ {
-              "$ref" : "#/components/schemas/PoolerWindowMetrics"
-            }, {
-              "type" : "null"
-            } ]
-          },
-          "queueLengthIntegralMs" : {
-            "type" : "number",
-            "format" : "double"
-          },
-          "queueRejections" : {
-            "type" : "integer",
-            "format" : "int32"
-          },
           "retries" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "slotPools" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/SlotPoolMetrics"
+            }
           },
           "startMs" : {
             "type" : "number",
@@ -3420,7 +3319,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "admittedAttempts", "busyHandlerTimeMs", "durationMs", "failures", "handlers", "latency", "offeredAttempts", "originalArrivals", "queueLengthIntegralMs", "queueRejections", "retries", "startMs", "successes", "timeouts" ]
+        "required" : [ "admittedAttempts", "durationMs", "failures", "latency", "offeredAttempts", "originalArrivals", "retries", "slotPools", "startMs", "successes", "timeouts" ]
       },
       "WorkspaceChangeView" : {
         "type" : "object",

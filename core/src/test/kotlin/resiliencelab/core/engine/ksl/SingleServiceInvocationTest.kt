@@ -42,12 +42,19 @@ class SingleServiceInvocationTest {
                 timeouts = 0,
                 retries = 0,
                 failures = 0,
-                queueRejections = 0,
-                handlers = 1,
                 measurementMs = 100.0,
-                busyHandlerTimeMs = 20.0,
-                queueLengthIntegralMs = 0.0,
                 queueDurationsMs = mapOf(0.0 to 100.0),
+                slotPools =
+                    mapOf(
+                        "handlers" to
+                            resiliencelab.core.experiment.SlotPoolMetrics(
+                                busyIntegralMs = 20.0,
+                                queueIntegralMs = 0.0,
+                                capacityIntegralMs =
+                                    (1).toDouble() * (100.0),
+                                queueFullCount = (0).toLong(),
+                            ),
+                    ),
             ),
         )
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
@@ -90,7 +97,13 @@ class SingleServiceInvocationTest {
         assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(2)
         assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(2)
         assertThat(result.services.getValue("entry").failures).isEqualTo(2)
-        assertThat(result.services.getValue("entry").queueRejections).isZero()
+        assertThat(
+            result.services
+                .getValue("entry")
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
+        ).isZero()
         assertThat(result.services.getValue("backend").offeredAttempts).isZero()
         assertThat(result.services.getValue("backend").admittedAttempts).isZero()
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
@@ -126,7 +139,7 @@ class SingleServiceInvocationTest {
         assertThat(service.offeredAttempts).isEqualTo(2)
         assertThat(service.admittedAttempts).isEqualTo(1)
         assertThat(service.failures).isZero()
-        assertThat(service.queueRejections).isEqualTo(1)
+        assertThat(service.slotPools.getValue("handlers").queueFullCount).isEqualTo(1)
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
     }
