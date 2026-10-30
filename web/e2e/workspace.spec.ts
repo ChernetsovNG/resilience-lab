@@ -129,7 +129,8 @@ test("summarizes a warning from the only variant override on Model and opens its
 test("shows each variant with its own overrides and editable parameters", async ({ page }) => {
   await page.getByRole("tab", { name: "No retries" }).click();
   const callLabel = page.getByTestId("canvas-edge-label-gateway-to-middle");
-  await expect(callLabel).toContainText("· 1×");
+  await expect(page.getByTestId("canvas-param-gateway-to-middle-attempts").getByRole("button")).toHaveText("1");
+  await expect(page.getByTestId("canvas-param-gateway-to-middle-attempts").locator("del")).toHaveText("3");
   await callLabel.click();
 
   const attempts = page.getByLabel("Attempts", { exact: true });

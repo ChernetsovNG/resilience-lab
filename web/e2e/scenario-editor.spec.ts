@@ -333,7 +333,8 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
   await timeout.dblclick();
   await input.fill("100ms");
   await input.press("Enter");
-  await expect(timeout).toHaveText("100ms");
+  await expect(timeout.getByRole("button")).toHaveText("100ms");
+  await expect(timeout.locator("del")).toHaveText("80ms");
   await save(page);
 
   const experiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
@@ -342,7 +343,8 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
 
   await page.reload();
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
-  await expect(timeout).toHaveText("100ms");
+  await expect(timeout.getByRole("button")).toHaveText("100ms");
+  await expect(timeout.locator("del")).toHaveText("80ms");
 });
 
 test("keeps every canvas value clickable and opens gateway mean with an error-colored message", async ({ page, files }) => {
@@ -517,7 +519,9 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await page.reload();
   await expect(node).toBeVisible();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
-  await expect(service).toBeDisabled();
+  await service.click();
+  await expect(page.getByRole("alert")).toContainText("Structure is edited on the Model page");
+  await expect(page.getByTestId("rf__node-service-2")).toHaveCount(0);
   await page.getByRole("tab", { name: "Model", exact: true }).click();
   await service.click();
   const second = page.getByTestId("rf__node-service-2");
@@ -682,7 +686,9 @@ test("moves a multi-selection once, copies its internal connection, and keeps va
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service" })).toBeDisabled();
+  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service" }).click();
+  await expect(page.getByRole("alert")).toContainText("Structure is edited on the Model page");
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
   await gateway.click();
   await expect(page.getByLabel("Identifier", { exact: true })).not.toBeEditable();
   await page.keyboard.press("Delete");

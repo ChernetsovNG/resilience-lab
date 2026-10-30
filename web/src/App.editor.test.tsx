@@ -124,7 +124,9 @@ it("copies multi-selected blocks and internal connections; variant pages reject 
   fireEvent.keyDown(document.body, { key: "Delete" });
   expect(screen.getAllByTestId("block-node")).toHaveLength(4);
   expect(button("Save").disabled).toBe(true);
-  expect((within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
+  expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
 });
 
 it("creates an empty-parameter block by dropping a catalog type and undoes model and layout together", async () => {

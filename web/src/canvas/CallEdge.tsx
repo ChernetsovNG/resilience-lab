@@ -9,9 +9,12 @@ import { summarizeDiagnostics } from "../validation/diagnostics";
 import type { ConnectionCanvasResults, ConnectionOverlayMetric } from "../results/canvasResults";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
+import { isOverridden, type Params } from "../workspace/params";
 
 export type CallEdgeType = Edge<{
   connection: ConnectionInstance;
+  modelParams?: Params;
+  overrides?: Params;
   catalog: Catalog;
   overridden: boolean;
   diagnostics: readonly Diagnostic[];
@@ -38,7 +41,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
-    editable: parametersEditable, disabled, onValidity };
+    modelParams: data?.modelParams, editable: parametersEditable, disabled, onValidity };
   const output = selectedOverlayOutput(overlayOutputs(catalog, "CONNECTION"), connectionMetric);
   const metricValue = output?.types.includes(connection.type) ? result?.values[output.id] ?? null : null;
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
@@ -48,9 +51,9 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
         style={selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : undefined} />
-      {connection.type === "call" || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
+      {connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
         <div
-          className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
+          className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${overridden ? " canvas-edge-label--overridden" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
           data-testid={`canvas-edge-label-${connection.id}`}
           role="button" tabIndex={0} aria-label={connection.id} aria-pressed={selected}
           onClick={event => { event.stopPropagation(); onSelect?.(event.ctrlKey || event.metaKey || event.shiftKey); }}
@@ -62,11 +65,18 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           style={{ pointerEvents: "all", transform: `translate(-50%, -100%) translate(${labelX}px,${badgeY ?? labelY - 36}px)` }}
         >
           {connection.type === "call" ? <div className="canvas-edge-parameters">
-            <InlineParamEditor {...editorProps} path="timeout" onCommit={(value) => onParam(connection.id, "timeout", value)} />
+            <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />
             <span>{t("editor.symbols.separator")}</span>
-            <InlineParamEditor {...editorProps} path="attempts" onCommit={(value) => onParam(connection.id, "attempts", value)} />
+            <InlineParamEditor {...editorProps} path="attempts" overridden={isOverridden(data?.overrides ?? {}, connection.id, "attempts")} onCommit={(value) => onParam(connection.id, "attempts", value)} />
             <span>{t("editor.symbols.multiplier")}</span>
             {overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}
+          </div> : overridden ? <div className="canvas-edge-parameters">
+            {catalog.types.find(type => type.id === connection.type)?.params
+              .filter(param => param.kind !== "OBJECT" && param.kind !== "ARRAY" && isOverridden(data?.overrides ?? {}, connection.id, param.name))
+              .map(param => <span key={param.name}>{param.title}{" "}
+                <InlineParamEditor {...editorProps} path={param.name} overridden onCommit={value => onParam(connection.id, param.name, value)} />
+              </span>)}
+            <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span>
           </div> : null}
           <FaultBadge faults={data?.faults} onOpen={data?.onFault} disabled={disabled} />
           <DiagnosticBadge diagnostics={diagnostics} />

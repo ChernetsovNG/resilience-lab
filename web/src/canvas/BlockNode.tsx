@@ -8,11 +8,13 @@ import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/
 import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } from "../results/canvasResults";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { InlineParamEditor } from "./InlineParamEditor";
-import { isObject } from "../workspace/params";
+import { isObject, isOverridden, type Params } from "../workspace/params";
 
 export type BlockNodeType = Node<{
   id: string;
   block: BlockInstance;
+  modelBlock?: BlockInstance;
+  overrides?: Params;
   catalog: Catalog;
   ports: TypeDescriptor["ports"];
   editable: boolean;
@@ -63,9 +65,10 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
   const tooltip = (title: string) => data.resultsPending === undefined ? title : `${title} ${t("editor.symbols.separator")} ${data.resultsPending}`;
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
-    editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
+    modelParams: data.modelBlock?.params, editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
+  const overridden = (path: string) => isOverridden(data.overrides ?? {}, data.id, path);
   return (
-    <div className={`block-node block-node--${data.block.type}`} data-testid="block-node"
+    <div className={`block-node block-node--${data.block.type}${data.overridden ? " block-node--overridden" : ""}`} data-testid="block-node"
       style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
       {data.ports.map((port) => (
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
@@ -81,16 +84,17 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
       {data.block.type === "service" ? (
         <span className="block-summary">
           <span>{t("editor.canvas.handlers")}
-            <InlineParamEditor {...editorProps} path="handlers" onCommit={(value) => data.onParam(data.id, "handlers", value)} />
+            <InlineParamEditor {...editorProps} path="handlers" overridden={overridden("handlers")} onCommit={(value) => data.onParam(data.id, "handlers", value)} />
           </span>
           <span>{t("editor.canvas.handlersQueue")}
-            <InlineParamEditor {...editorProps} path="queue" onCommit={(value) => data.onParam(data.id, "queue", value)} />
+            <InlineParamEditor {...editorProps} path="queue" overridden={overridden("queue")} onCommit={(value) => data.onParam(data.id, "queue", value)} />
           </span>
           <span>{t("editor.canvas.processingMean")}
-            <InlineParamEditor {...editorProps} path="processing.mean" onCommit={(value) => data.onParam(data.id, "processing.mean", value)} />
+            <InlineParamEditor {...editorProps} path="processing.mean" overridden={overridden("processing.mean")} onCommit={(value) => data.onParam(data.id, "processing.mean", value)} />
           </span>
         </span>
-      ) : <span>{summaryOf(data.block)}</span>}
+      ) : <span>{data.overridden && data.modelBlock !== undefined && data.block.type === "client"
+        ? <del className="inline-param-model">{summaryOf(data.modelBlock)}</del> : null}{summaryOf(data.block)}</span>}
       {data.result === undefined ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
         aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.resultsEmpty || undefined}
         data-testid={`canvas-results-${data.id}`}>

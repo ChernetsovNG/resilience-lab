@@ -6,6 +6,99 @@ import { setupAppTests, server, open, selectGateway, editHandlers, button, exper
 
 setupAppTests();
 
+it("explains variant tabs and counts recorded overrides, including zero and one", async () => {
+  server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: {
+    ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [
+      ...experiment.variants, { id: "one", label: "One change", overrides: { "gateway.handlers": 4 } },
+    ] } },
+  } } : undefined);
+  await open();
+  expect(screen.getByText("Variants")).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "Model" }).title).toBe("Edit the model structure here");
+  expect(screen.getByRole("tab", { name: "Baseline" }).title).toBe("Baseline: model with 0 overridden parameters");
+  expect(screen.getByRole("tab", { name: "One change" }).title).toBe("One change: model with 1 overridden parameter");
+  expect(screen.getByRole("tab", { name: "No retries" }).title).toBe("No retries: model with 2 overridden parameters");
+});
+
+it("opens the same changes list on the canvas and in variant properties and focuses its selected field", async () => {
+  server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  const banner = screen.getByTestId("variant-banner");
+  expect(banner.textContent).toContain("No retries · Structure is read-only · 2 changes");
+  fireEvent.click(banner.querySelector("summary")!);
+  const row = within(banner).getByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" });
+  expect(within(banner).getByRole("button", { name: "middle-to-dependency · Attempts: 3 → 1" })).toBeTruthy();
+  fireEvent.click(button("Collapse inspector"));
+  fireEvent.click(row);
+  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByLabelText("Attempts"));
+  expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  const inspector = screen.getByRole("complementary", { name: "Inspector" });
+  expect(within(inspector).getByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByTestId("variant-banner").textContent).toContain("Same as model");
+  expect(screen.queryByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" })).toBeNull();
+});
+
+it("describes service and nested overrides with catalog titles and values", async () => {
+  server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: {
+    ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "custom", label: "Custom", overrides: {
+      "gateway.handlers": 1234, "gateway.processing.mean": "9ms", "gateway-to-middle.network.mean": "7ms",
+    } }] } },
+  } } : undefined);
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "Custom" }));
+  const banner = screen.getByTestId("variant-banner");
+  fireEvent.click(banner.querySelector("summary")!);
+  expect(within(banner).getByRole("button", { name: "gateway · Handlers: 4 → 1,234" })).toBeTruthy();
+  fireEvent.click(within(banner).getByRole("button", { name: "gateway · Processing time · Mean: 1ms → 9ms" }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Mean"));
+  expect(within(banner).getByRole("button", { name: "gateway-to-middle · Network delay · Mean: 0.5ms → 7ms" })).toBeTruthy();
+});
+
+it("focuses the Inspector textarea when a load-profile array override is selected", async () => {
+  server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: {
+    ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "profile", overrides: {
+      "client.load.points": [{ at: "0ms", rate: "20/s" }],
+    } }] } },
+  } } : undefined);
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "profile" }));
+  const banner = screen.getByTestId("variant-banner");
+  fireEvent.click(banner.querySelector("summary")!);
+  fireEvent.click(within(banner).getByRole("button"));
+  const field = screen.getByRole("complementary", { name: "Inspector" }).querySelector("textarea");
+  expect(field).not.toBeNull();
+  expect(document.activeElement).toBe(field);
+});
+
+it("explains blocked node, handle and palette gestures and links to Model without modifying documents", async () => {
+  server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  const node = screen.getByTestId("rf__node-gateway");
+  const position = node.style.transform;
+  fireEvent.mouseDown(node, { clientX: 50, clientY: 50 });
+  fireEvent.mouseMove(node, { clientX: 90, clientY: 70 });
+  fireEvent.mouseUp(node);
+  expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
+  expect(node.style.transform).toBe(position);
+  expect(button("Save").disabled).toBe(true);
+  fireEvent.click(screen.getByRole("link", { name: "Model" }));
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.mouseDown(node.querySelector(".react-flow__handle")!, { clientX: 50, clientY: 50 });
+  fireEvent.mouseMove(node, { clientX: 90, clientY: 70 });
+  fireEvent.mouseUp(node);
+  expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
+  fireEvent.click(button("Service"));
+  expect(screen.getByTestId("variant-banner")).toBeTruthy();
+  expect(button("Save").disabled).toBe(true);
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+});
+
 
 it("saves precise variant overrides only to the experiment and resets fields and objects with undo", async () => {
   const fetchMock = server();

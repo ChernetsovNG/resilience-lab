@@ -13,6 +13,7 @@ import { InspectorSection } from "./InspectorSection";
 export interface InspectorProps {
   catalog: Catalog;
   results?: ReactNode;
+  variantChanges?: ReactNode;
   /** Prioritize available results; without them, parameters default to open unless a preference was saved. */
   resultsFirst?: boolean;
   resultsOnly?: boolean;
@@ -42,7 +43,7 @@ export interface InspectorProps {
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
-  target = selected === null ? "experiment" : "element", focusField, results, resultsFirst = false, resultsOnly = false }: InspectorProps) {
+  target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
   useEffect(() => {
@@ -51,7 +52,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
       .find(element => element.dataset.inspectorField === focusField.path);
     const section = field?.closest<HTMLDetailsElement>(".inspector-section");
     if (section !== null && section !== undefined) section.open = true;
-    if (focusField.focus !== false) field?.querySelector<HTMLElement>("input, select, button:not(:disabled)")?.focus();
+    if (focusField.focus !== false) field?.querySelector<HTMLElement>("input, select, textarea, button:not(:disabled)")?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
@@ -63,8 +64,9 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
       </> : null}
       <div hidden={resultsOnly}>
       {target === "variant" && onCommand !== undefined ? (
-        <VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
+        <><VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
+          {variantChanges}</>
       ) : null}
       {target === "element" && selected !== null && element !== null && type !== undefined ? (
         <>

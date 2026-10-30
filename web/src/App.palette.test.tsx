@@ -28,12 +28,13 @@ describe("palette insertion", () => {
     expect(await screen.findByTestId("rf__node-service-1")).toBeTruthy();
   });
 
-  it("disables insertion on a variant page and while an input draft is invalid", async () => {
+  it("explains blocked insertion on a variant page and disables insertion while an input draft is invalid", async () => {
     server();
     await open();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
-    expect(button("Service").disabled).toBe(true);
+    expect(button("Service").disabled).toBe(false);
     fireEvent.click(button("Service"));
+    expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     await selectGateway();

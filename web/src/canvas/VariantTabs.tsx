@@ -50,9 +50,11 @@ export function VariantTabs({ variants, active, disabled = false, onSelect, onIn
   return (
     <>
       <div className="variant-tabs" role="tablist" aria-label={t("editor.pages.label")}>
-        <button type="button" role="tab" disabled={disabled} aria-selected={active === null} onClick={() => onSelect(null)}>
+        <button type="button" role="tab" className="model-page-tab" title={t("editor.pages.modelHint")}
+          disabled={disabled} aria-selected={active === null} onClick={() => onSelect(null)}>
           {t("editor.pages.model")}
         </button>
+        <span className="variant-tabs-label">{t("editor.pages.variants")}</span>
         {variants.map((variant) => (
           <button
             key={variant.id}
@@ -61,6 +63,9 @@ export function VariantTabs({ variants, active, disabled = false, onSelect, onIn
             role="tab"
             disabled={disabled}
             aria-selected={variant.id === active}
+            title={t(Object.keys(variant.overrides).length === 1 ? "editor.pages.variantHintOne" : "editor.pages.variantHint", {
+              name: variant.label ?? variant.id, count: Object.keys(variant.overrides).length,
+            })}
             aria-haspopup="menu"
             aria-expanded={menu?.id === variant.id}
             onClick={() => onSelect(variant.id)}
