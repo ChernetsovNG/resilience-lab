@@ -8,16 +8,23 @@
   },
   "faults": [
     {
+      "from": "200ms",
+      "kind": "slowdown",
+      "multiplier": 6.0,
+      "target": "dependency",
+      "to": "700ms"
+    },
+    {
       "failureRate": "5%",
       "from": "200ms",
-      "processingMultiplier": 6.0,
+      "kind": "errors",
       "target": "dependency",
       "to": "700ms"
     }
   ],
   "layoutRef": "retry-storm.layout.json",
   "modelRef": "retry-storm.model.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "variants": [
     {
       "id": "baseline",

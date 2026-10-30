@@ -149,9 +149,9 @@ describe("shared experiment commands and history", () => {
     result = setExecutionParam("measurement", "2s")(result);
     result = setFaultParam(0, "target", "middle")(result);
     result = setFaultParam(0, "from", "100ms")(result);
-    result = setFaultParam(0, "failureRate", undefined)(result);
+    result = setFaultParam(0, "multiplier", undefined)(result);
     expect(result.experiment.execution).toEqual({ ...experiment.execution, seed: 9_007_199_254_740_991, measurement: "2s" });
-    expect(result.experiment.faults[0]).toEqual({ target: "middle", from: "100ms", to: "700ms", processingMultiplier: 6 });
+    expect(result.experiment.faults[0]).toEqual({ target: "middle", from: "100ms", to: "700ms", kind: "slowdown" });
     expect(result.experiment.variants).toBe(experiment.variants);
     expect(result.model).toBe(model);
   });
@@ -163,7 +163,7 @@ describe("shared experiment commands and history", () => {
       addVariant("new", "New", "no-retries"), updateVariant("no-retries", { id: "changed", label: "Changed" }),
       removeVariant("no-retries"), setExecutionParam("replications", 5), setExecutionParam("window", "25ms"),
       setFaultParam(0, "to", "800ms"), removeFault(0),
-      addFault({ target: "middle", from: "0ms", to: "1s", failureRate: "10%" }),
+      addFault({ target: "middle", from: "0ms", to: "1s", kind: "errors", failureRate: "10%" }),
     ];
     const loaded = { ...documents, experimentPath: "test.experiment.json", modelPath: "test.model.json", layoutPath: "test.layout.json",
       saved: documents, versions: { model: "m", layout: "l", experiment: "e" } };

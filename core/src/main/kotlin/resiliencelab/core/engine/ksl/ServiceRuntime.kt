@@ -4,6 +4,7 @@ import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.ModelElement
+import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
@@ -29,8 +30,8 @@ internal class ServiceRuntime(
     private val durationSamplers =
         (listOf(node.processing) + scenario.filterIsInstance<ServiceStep.Process>().mapNotNull { it.processing })
             .associateWith { DurationSamplerFactory.create(it, processingStream) }
-    private val outcomeStream = if (node.pooler == null) streams.stream(node.pathSegments, StreamRole.OUTCOME) else null
-    private var activeFault: FaultSpan? = null
+    private val outcomeStream by lazy { streams.stream(node.pathSegments, StreamRole.OUTCOME) }
+    val faults = FaultState()
 
     val slots =
         SlotPool(
@@ -58,22 +59,31 @@ internal class ServiceRuntime(
     val queue: RequestQ get() = slots.queue
 
     fun resetFaults() {
-        activeFault = null
+        faults.clear()
     }
 
     fun startFault(fault: FaultSpan) {
-        activeFault = fault
+        faults.start(fault)
+        updateCapacity(fault)
     }
 
     fun endFault(fault: FaultSpan) {
-        if (activeFault == fault) activeFault = null
+        faults.end(fault)
+        updateCapacity(fault)
+    }
+
+    private fun updateCapacity(fault: FaultSpan) {
+        if (fault.kind != FaultKind.CAPACITY_LOSS) return
+        val pool = serverSlots ?: slots
+        pool.changeCapacity(faults.capacity ?: node.pooler?.poolSize ?: node.handlers)
     }
 
     fun nextDurationMs(step: ServiceStep.Process): Double =
-        durationSamplers.getValue(step.processing ?: node.processing).next() * (activeFault?.processingMultiplier ?: 1.0)
+        durationSamplers.getValue(step.processing ?: node.processing).next() * faults.multiplier + faults.delayMs
 
     fun nextLocalFailure(step: ServiceStep.Process): Boolean {
-        val failureProbability = activeFault?.failureProbability ?: step.failureProbability ?: node.failureProbability
-        return outcomeStream?.randU01()?.let { it < failureProbability } ?: false
+        if (node.pooler != null && faults.failureProbability == null) return false
+        val failureProbability = faults.failureProbability ?: step.failureProbability ?: node.failureProbability
+        return outcomeStream.randU01() < failureProbability
     }
 }

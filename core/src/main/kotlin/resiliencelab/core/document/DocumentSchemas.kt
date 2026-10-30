@@ -35,7 +35,7 @@ class DocumentSchemas(
     fun generate(): Map<String, String> =
         linkedMapOf(
             "model.schema.json" to model(),
-            "layout.schema.json" to structural(LayoutFile.serializer()),
+            "layout.schema.json" to structural(LayoutFile.serializer(), DocumentCodec.LAYOUT_SCHEMA_VERSION),
             "experiment.schema.json" to experiment(),
         ).mapValues { (name, schema) ->
             val identified =
@@ -45,7 +45,7 @@ class DocumentSchemas(
 
     private fun structural(
         serializer: KSerializer<*>,
-        schemaVersion: Int = DocumentCodec.SCHEMA_VERSION,
+        schemaVersion: Int,
     ): JsonObject =
         numericStrings(
             Json
@@ -297,7 +297,7 @@ class DocumentSchemas(
     }
 
     private fun experiment(): JsonObject {
-        val schema = structural(ExperimentFile.serializer())
+        val schema = structural(ExperimentFile.serializer(), DocumentCodec.EXPERIMENT_SCHEMA_VERSION)
         val definitions = schema.getValue("\$defs").jsonObject.toMutableMap()
         val execution = "resiliencelab.core.document.ExecutionSettings"
         definitions[execution] =
@@ -322,11 +322,21 @@ class DocumentSchemas(
                 "maxRealTime" to duration("maxRealTime"),
                 "window" to duration("window", required = false),
             )
-        val fault = "resiliencelab.core.document.Fault"
-        definitions[fault] =
-            definitions.getValue(fault).jsonObject.properties(
-                "from" to duration("from", allowZero = true),
-                "to" to duration("to"),
+        definitions["resiliencelab.core.document.Fault"] = fault(definitions.getValue("resiliencelab.core.document.Fault").jsonObject)
+        return JsonObject(schema + ("\$defs" to JsonObject(definitions)))
+    }
+
+    private fun fault(shape: JsonObject): JsonObject {
+        val parameters =
+            mapOf(
+                "multiplier" to
+                    numericStrings(
+                        buildJsonObject {
+                            put("type", JsonArray(listOf(JsonPrimitive("number"), JsonPrimitive("null"))))
+                            put("exclusiveMinimum", 0)
+                        },
+                    ),
+                "delay" to duration("delay", allowZero = true, required = false),
                 "failureRate" to
                     parameter(
                         ParamDescriptor(
@@ -334,21 +344,71 @@ class DocumentSchemas(
                             ParamKind.QUANTITY,
                             "Failure rate",
                             "Probability of a failed attempt.",
+                            required = true,
                             dimension = Dimension.PROBABILITY,
                             units = Quantities.unitsOf(Dimension.PROBABILITY),
                             minimum = 0.0,
                             maximum = 1.0,
                         ),
                     ),
-                "processingMultiplier" to
+                "capacity" to
                     numericStrings(
                         buildJsonObject {
-                            put("type", JsonArray(listOf(JsonPrimitive("number"), JsonPrimitive("null"))))
-                            put("exclusiveMinimum", 0)
+                            put("type", "integer")
+                            put("minimum", 0)
                         },
                     ),
             )
-        return JsonObject(schema + ("\$defs" to JsonObject(definitions)))
+        val kinds =
+            mapOf(
+                "slowdown" to setOf("multiplier", "delay"),
+                "errors" to setOf("failureRate"),
+                "unavailable" to emptySet(),
+                "blackhole" to emptySet(),
+                "capacityLoss" to setOf("capacity"),
+            )
+        return buildJsonObject {
+            put(
+                "oneOf",
+                JsonArray(
+                    kinds.map { (kind, allowed) ->
+                        val specialized =
+                            shape.properties(
+                                "kind" to buildJsonObject { put("const", kind) },
+                                "from" to duration("from", allowZero = true),
+                                "to" to duration("to", allowZero = true),
+                                *parameters
+                                    .map { (name, value) ->
+                                        name to if (name in allowed) value else buildJsonObject { put("type", "null") }
+                                    }.toTypedArray(),
+                            )
+                        buildJsonObject {
+                            specialized.forEach { (key, value) -> put(key, value) }
+                            if (kind == "slowdown") {
+                                put(
+                                    "anyOf",
+                                    JsonArray(
+                                        allowed.map { name ->
+                                            buildJsonObject {
+                                                put("required", JsonArray(listOf(JsonPrimitive(name))))
+                                                put(
+                                                    "properties",
+                                                    buildJsonObject {
+                                                        put(name, buildJsonObject { put("not", buildJsonObject { put("type", "null") }) })
+                                                    },
+                                                )
+                                            }
+                                        },
+                                    ),
+                                )
+                            } else {
+                                put("required", JsonArray(shape.getValue("required").jsonArray + allowed.map(::JsonPrimitive)))
+                            }
+                        }
+                    },
+                ),
+            )
+        }
     }
 
     private fun duration(

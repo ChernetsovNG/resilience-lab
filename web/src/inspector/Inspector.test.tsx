@@ -68,7 +68,7 @@ describe("Inspector", () => {
 
   it.each([
     ["execution", "Run settings", "execution.seed", "Seed"],
-    ["faults", "Faults", "faults.0.processingMultiplier", "Processing multiplier"],
+    ["faults", "Faults", "faults.0.multiplier", "Time multiplier"],
     ["grid", "Parameter grid", "grid.0.path", "Axis 1 parameter"],
   ])("opens collapsed %s when Problems requests its field", async (section, title, path, label) => {
     localStorage.setItem(`resilience-lab.inspector-${section}-open`, "false");
@@ -279,7 +279,7 @@ describe("Inspector", () => {
     expect((screen.getByLabelText("Fault target") as HTMLSelectElement).value).toBe("dependency");
     expect(input("Fault start").value).toBe("200ms");
     expect(input("Fault end").value).toBe("700ms");
-    expect(input("Processing multiplier").value).toBe("6");
+    expect(input("Time multiplier").value).toBe("6");
   });
 
   it("keeps the series window unset and updates its default hint from measurement", () => {
@@ -374,7 +374,9 @@ describe("Inspector", () => {
     />);
     expect(screen.getByText(/Increase the timeout budget/).closest(".param-field")?.textContent).toContain("Base delay");
     unmount();
-    renderInspector({ selected: null, fieldDiagnostics: new Map([
+    renderInspector({ selected: null, experiment: { ...experiment,
+      faults: [{ target: "dependency", from: "200ms", to: "700ms", kind: "errors", failureRate: "5%" }],
+    }, fieldDiagnostics: new Map([
       ["execution.replications", [{ ...warning, severity: "ERROR", message: "Invalid replications" }]],
       ["execution.window", [{ ...warning, severity: "ERROR", message: "Invalid series window" }]],
       ["faults.0.failureRate", [{ ...warning, message: "Invalid fault probability" }]],

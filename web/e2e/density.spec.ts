@@ -52,6 +52,9 @@ test("compact inspector and canvas overlays give the model more space", async ({
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
   expect((await canvas.boundingBox())!.height).toBeGreaterThan(740);
   const inspector = page.locator(".inspector");
+  const faults = inspector.locator("details").filter({ has: page.getByText("Faults", { exact: true }) });
+  await faults.locator(":scope > summary").click();
+  await expect(faults).not.toHaveAttribute("open");
   expect(await page.locator(".inspector-content").evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   expect(await inspector.evaluate(element => getComputedStyle(element).fontSize)).toBe("13px");
   expect(await inspector.locator(".inspector-type").evaluate(element => getComputedStyle(element).fontSize)).toBe("12px");
@@ -70,9 +73,6 @@ test("compact inspector and canvas overlays give the model more space", async ({
   const before = await page.locator(".react-flow__viewport").getAttribute("style");
   await page.getByRole("button", { name: "Zoom In", exact: true }).click();
   await expect(page.locator(".react-flow__viewport")).not.toHaveAttribute("style", before!);
-  const faults = inspector.locator("details").filter({ has: page.getByText("Faults", { exact: true }) });
-  await faults.locator(":scope > summary").click();
-  await expect(faults).not.toHaveAttribute("open");
   await page.reload();
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(faults).not.toHaveAttribute("open");

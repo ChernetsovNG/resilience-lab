@@ -21,7 +21,7 @@ internal class CallAttempt(
     private var orphaned = false
 
     fun onChildCompleted() {
-        if (status != AttemptOutcome.PENDING) return
+        if (status != AttemptOutcome.PENDING || child.noResponse) return
         status =
             if (child.outcome == AttemptOutcome.SUCCEEDED) {
                 AttemptOutcome.SUCCEEDED
@@ -39,6 +39,7 @@ internal class CallAttempt(
         status = AttemptOutcome.TIMED_OUT
         orphaned = !childEnded
         recordTimeout(orphaned)
+        if (child.noResponse) child.completeRouting()
         caller.resumeProcess()
     }
 

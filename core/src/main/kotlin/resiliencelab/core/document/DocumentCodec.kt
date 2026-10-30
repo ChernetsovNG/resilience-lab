@@ -26,7 +26,8 @@ sealed interface DecodeResult<out T> {
 
 /** Strict reading and deterministic writing of workspace documents (ADR 0005, items 4 and 7). */
 object DocumentCodec {
-    const val SCHEMA_VERSION = 1
+    const val EXPERIMENT_SCHEMA_VERSION = 2
+    const val LAYOUT_SCHEMA_VERSION = 1
     const val MODEL_SCHEMA_VERSION = 5
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -53,12 +54,12 @@ object DocumentCodec {
     fun decodeLayout(
         text: String,
         document: String,
-    ): DecodeResult<LayoutFile> = decode(text, document, LayoutFile.serializer())
+    ): DecodeResult<LayoutFile> = decode(text, document, LayoutFile.serializer(), LAYOUT_SCHEMA_VERSION)
 
     fun decodeExperiment(
         text: String,
         document: String,
-    ): DecodeResult<ExperimentFile> = decode(text, document, ExperimentFile.serializer())
+    ): DecodeResult<ExperimentFile> = decode(text, document, ExperimentFile.serializer(), EXPERIMENT_SCHEMA_VERSION)
 
     fun encodeModel(file: ModelFile): String = encode(ModelFile.serializer(), file)
 
@@ -83,7 +84,7 @@ object DocumentCodec {
         text: String,
         document: String,
         serializer: KSerializer<T>,
-        expectedVersion: Int = SCHEMA_VERSION,
+        expectedVersion: Int,
     ): DecodeResult<T> {
         StrictJson.check(text, document)?.let { return DecodeResult.Failed(listOf(it)) }
         val value =

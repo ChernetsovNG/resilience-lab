@@ -93,14 +93,17 @@ data class ExecutionSettings(
     val window: String? = null,
 )
 
-/** A degradation of a service, replica or call while processing or transmission starts within [from, to). */
+/** A kind-specific degradation of a block, replica or connection during [from, to). */
 @Serializable
 data class Fault(
     val target: String,
     val from: String,
     val to: String,
-    val processingMultiplier: Double? = null,
+    val kind: String,
+    val multiplier: Double? = null,
+    val delay: String? = null,
     val failureRate: String? = null,
+    val capacity: Int? = null,
 )
 
 /** A variant: parameter overrides keyed by `blockOrConnectionId.param[.field]`. */

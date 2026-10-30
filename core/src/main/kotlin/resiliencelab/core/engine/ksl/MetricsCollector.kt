@@ -217,7 +217,7 @@ class MetricsCollector(
         serviceId: String,
         measured: Boolean = true,
     ) {
-        if (measured) serviceMetrics.getValue(serviceId).failures++
+        if (measured) serviceMetrics[serviceId]?.let { it.failures++ }
     }
 
     internal fun recordQueueRejection(

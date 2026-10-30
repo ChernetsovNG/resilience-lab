@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import type { ExperimentFile } from "./api/apiTypes";
 import { catalog, documentViews, experiment, experimentPath } from "./test/fixtures";
 import { setupAppTests, server, open, selectGateway, editHandlers, button, experimentSelect, editField } from "./test/app";
 
@@ -109,8 +110,8 @@ it("edits shared execution and fault settings from a variant and preserves inval
   fireEvent.change(screen.getByLabelText("Fault target"), { target: { value: "middle" } });
   editField("Fault start", "100ms");
   editField("Fault end", "500ms");
-  editField("Processing multiplier", "4");
-  editField("Fault failure rate", "25%");
+  editField("Time multiplier", "4");
+  editField("Delay added", "50ms");
   editField("Seed", "9007199254740992");
   expect(button("Save").disabled).toBe(true);
   expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
@@ -122,7 +123,7 @@ it("edits shared execution and fault settings from a variant and preserves inval
   const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
   const saved = JSON.parse(String(put[1]?.body)).experiment;
   expect(saved.execution).toEqual({ replications: 3, warmup: "100ms", measurement: "2s", seed: 9007199254740991, maxRealTime: "10s" });
-  expect(saved.faults).toEqual([{ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 4, failureRate: "25%" }]);
+  expect(saved.faults).toEqual([{ target: "middle", from: "100ms", to: "500ms", kind: "slowdown", multiplier: 4, delay: "50ms" }]);
   expect(saved.variants).toEqual(experiment.variants);
   fireEvent.click(button("Add fault"));
   expect(screen.getAllByLabelText("Fault target")).toHaveLength(2);
@@ -142,7 +143,10 @@ it("reads duration and probability units for shared fields from the catalog", as
     }
   };
   customCatalog.types.forEach((type) => changeUnits(type.params));
-  const fetchMock = server((url) => url === "/api/v1/catalog" ? { body: customCatalog } : undefined);
+  const fetchMock = server((url) => url === "/api/v1/catalog" ? { body: customCatalog }
+    : url.includes(encodeURIComponent(experimentPath)) ? { body: { ...documentViews[experimentPath], content: { experiment: {
+      ...experiment, faults: [{ target: "dependency", from: "200ms", to: "700ms", kind: "errors", failureRate: "5%" }],
+    } } } } : undefined);
   await open();
   editField("Measurement", "20tick");
   editField("Fault failure rate", "250permille");
@@ -152,6 +156,33 @@ it("reads duration and probability units for shared fields from the catalog", as
   const saved = JSON.parse(String(put[1]?.body)).experiment;
   expect(saved.execution.measurement).toBe("20tick");
   expect(saved.faults[0].failureRate).toBe("250permille");
+});
+
+it("shows every fault kind and saves its untouched parameters after an execution edit", async () => {
+  const faults: ExperimentFile["faults"] = [
+    { target: "middle", from: "100ms", to: "500ms", kind: "slowdown", multiplier: 3, delay: "200ms", failureRate: null, capacity: null },
+    { target: "gateway-to-middle", from: "200ms", to: "600ms", kind: "errors", failureRate: "25%", multiplier: null, delay: null, capacity: null },
+    { target: "dependency", from: "300ms", to: "700ms", kind: "unavailable", multiplier: null, delay: null, failureRate: null, capacity: null },
+    { target: "middle-to-dependency", from: "400ms", to: "800ms", kind: "blackhole", multiplier: null, delay: null, failureRate: null, capacity: null },
+    { target: "gateway", from: "500ms", to: "900ms", kind: "capacityLoss", capacity: 0, multiplier: null, delay: null, failureRate: null },
+  ];
+  const fetchMock = server(url => url.includes(encodeURIComponent(experimentPath)) ? {
+    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, schemaVersion: 2, faults } } },
+  } : undefined);
+  await open();
+  expect(screen.getAllByLabelText("Fault kind").map(field => (field as HTMLInputElement).value))
+    .toEqual(["Slowdown", "Errors", "Fast unavailability", "Black hole", "Capacity loss"]);
+  expect((screen.getByLabelText("Time multiplier") as HTMLInputElement).value).toBe("3");
+  expect((screen.getByLabelText("Delay added") as HTMLInputElement).value).toBe("200ms");
+  expect((screen.getByLabelText("Fault failure rate") as HTMLInputElement).value).toBe("25%");
+  expect((screen.getByLabelText("Capacity during fault") as HTMLInputElement).value).toBe("0");
+  editField("Seed", "42");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.schemaVersion).toBe(2);
+  expect(saved.faults).toEqual(faults);
 });
 
 it("keeps navigation blocked while either the canvas or Inspector draft is invalid", async () => {

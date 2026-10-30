@@ -10,6 +10,7 @@ import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadProfile
@@ -39,7 +40,14 @@ class DegradationRunoutTest {
                             target = "entry",
                             fromMs = 10.0,
                             toMs = 20.0,
-                            processingMultiplier = 4.0,
+                            kind = FaultKind.SLOWDOWN,
+                            multiplier = 4.0,
+                        ),
+                        FaultSpan(
+                            target = "entry",
+                            fromMs = 10.0,
+                            toMs = 20.0,
+                            kind = FaultKind.ERRORS,
                             failureProbability = 1.0,
                         ),
                     ),

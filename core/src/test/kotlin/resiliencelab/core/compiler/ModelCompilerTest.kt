@@ -15,6 +15,7 @@ import resiliencelab.core.document.GridAxis
 import resiliencelab.core.document.ModelFile
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.Origin
 import kotlin.test.Test
 
@@ -36,9 +37,10 @@ class ModelCompilerTest {
 
     private val experiment =
         """
-        {"schemaVersion": 1, "modelRef": "m.model.json",
+        {"schemaVersion": 2, "modelRef": "m.model.json",
          "execution": {"replications": 2, "warmup": "0ms", "measurement": "1s", "seed": 20261025},
-         "faults": [{"target": "dependency", "from": "200ms", "to": "700ms", "processingMultiplier": 6.0, "failureRate": "5%"}],
+         "faults": [{"target": "dependency", "from": "200ms", "to": "700ms", "kind": "slowdown", "multiplier": 6.0},
+                    {"target": "dependency", "from": "200ms", "to": "700ms", "kind": "errors", "failureRate": "5%"}],
          "variants": [{"id": "baseline"}, {"id": "no-retries", "label": "No retries", "overrides": {"gateway-to-dependency.attempts": 1}}]}
         """.trimIndent()
 
@@ -87,7 +89,7 @@ class ModelCompilerTest {
         assertThat(call.backoff.kind).isEqualTo(BackoffKind.EXPONENTIAL_FULL_JITTER)
         assertThat(call.backoff.multiplier).isEqualTo(2.0)
         assertThat(call.network.meanMs).isEqualTo(0.0)
-        assertThat(baseline.faults.single().failureProbability).isEqualTo(0.05)
+        assertThat(baseline.faults.single { it.kind == FaultKind.ERRORS }.failureProbability).isEqualTo(0.05)
         val noRetries = compiled.variants.first { it.id == "no-retries" }
         assertThat(noRetries.label).isEqualTo("No retries")
         assertThat(
@@ -113,7 +115,7 @@ class ModelCompilerTest {
         assertThat(chain.client.origin).isEqualTo(Origin("m.model.json", "/blocks/client"))
         assertThat(chain.services.last().origin).isEqualTo(Origin("m.model.json", "/blocks/dependency"))
         assertThat(chain.calls.single().origin).isEqualTo(Origin("m.model.json", "/connections/1"))
-        assertThat(chain.faults.single().origin).isEqualTo(Origin("e.experiment.json", "/faults/0"))
+        assertThat(chain.faults.first().origin).isEqualTo(Origin("e.experiment.json", "/faults/0"))
     }
 
     @Test
@@ -384,11 +386,11 @@ class ModelCompilerTest {
                 .replace("\"replications\": 2", "\"replications\": 0")
         assertThat(codes(compile(experimentText = broken))).contains("FAULT_TARGET", "SEED_RANGE", "EXECUTION_RANGE")
 
-        val second = """{"target": "dependency", "from": "600ms", "to": "900ms", "processingMultiplier": 2.0}"""
+        val second = """{"target": "dependency", "from": "600ms", "to": "900ms", "kind": "slowdown", "multiplier": 2.0}"""
         val overlapping = experiment.replace("\"failureRate\": \"5%\"}]", "\"failureRate\": \"5%\"}, $second]")
-        assertThat(codes(compile(experimentText = overlapping))).containsExactly("FAULT_OVERLAP")
+        assertThat(codes(compile(experimentText = overlapping))).isEmpty()
 
-        val empty = experiment.replace(", \"processingMultiplier\": 6.0, \"failureRate\": \"5%\"", "")
+        val empty = experiment.replace(", \"multiplier\": 6.0", "")
         assertThat(codes(compile(experimentText = empty))).containsExactly("FAULT_EMPTY")
     }
 

@@ -10,6 +10,7 @@ import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
@@ -67,7 +68,7 @@ class ChainModelTest {
     @Test
     fun `a fault multiplies processing only while it is active`() {
         val chain =
-            chain(faults = listOf(FaultSpan("front", fromMs = 0.0, toMs = 50.0, processingMultiplier = 3.0, failureProbability = null)))
+            chain(faults = listOf(FaultSpan("front", fromMs = 0.0, toMs = 50.0, kind = FaultKind.SLOWDOWN, multiplier = 3.0)))
                 .copy(calls = emptyList(), services = listOf(ServiceNode("front", 2, 4, Distribution(DistributionShape.FIXED, 10.0), 0.0)))
         val plan = StreamPlan(PathStreams.keys(chain, 0))
         val model = Model("FaultWindow", autoCSVReports = false)

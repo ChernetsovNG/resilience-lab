@@ -170,11 +170,11 @@ export const modelPath = "retry-storm/retry-storm.model.json";
 export const layoutPath = "retry-storm/retry-storm.layout.json";
 
 export const experiment: ExperimentFile = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   modelRef: "retry-storm.model.json",
   layoutRef: "retry-storm.layout.json",
   execution: { replications: 2, warmup: "0ms", measurement: "1s", seed: 20261025, maxRealTime: "30s" },
-  faults: [{ target: "dependency", from: "200ms", to: "700ms", processingMultiplier: 6, failureRate: "5%" }],
+  faults: [{ target: "dependency", from: "200ms", to: "700ms", kind: "slowdown", multiplier: 6 }],
   grid: [],
   variants: [
     { id: "baseline", label: "Baseline", overrides: {} },

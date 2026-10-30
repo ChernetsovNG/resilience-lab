@@ -2,6 +2,10 @@ package resiliencelab.core.engine.ksl
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import resiliencelab.core.ir.FaultKind
+import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.PoolerSettings
+import resiliencelab.core.ir.RouteEdge
 import kotlin.test.Test
 
 class PathStreamsTest {
@@ -86,5 +90,27 @@ class PathStreamsTest {
             .containsExactlyElementsOf(PathStreams.keys(original, 0).filter { it.path == listOf("backend") })
         val model = ksl.simulation.Model("SegmentedPathTest", autoCSVReports = false)
         assertThat(TestChains.reliabilityModel(model, graph).runReplication().originalArrivals).isPositive()
+    }
+
+    @Test
+    fun `route and pooler error sources stay independent when another fault source is added`() {
+        val original = TestChains.simple()
+        val graph =
+            original.copy(
+                services = original.services.map { if (it.path == "backend") it.copy(pooler = PoolerSettings(1, 20.0)) else it },
+                routes = listOf(RouteEdge("route", "router", "backend")),
+                faults = listOf("backend", "route").map { FaultSpan(it, 0.0, 10.0, FaultKind.ERRORS, failureProbability = 0.5) },
+            )
+        val expanded =
+            graph.copy(
+                faults =
+                    graph.faults + FaultSpan("entry-to-backend", 0.0, 10.0, FaultKind.ERRORS, failureProbability = 0.1),
+            )
+        val small = PathStreamSource(StreamPlan(PathStreams.keys(graph, 0)), 42, 0)
+        val large = PathStreamSource(StreamPlan(PathStreams.keys(expanded, 0)), 42, 0)
+        for (path in listOf("entry", "backend", "route")) {
+            assertThat(DoubleArray(8) { large.stream(path, StreamRole.OUTCOME).randU01() })
+                .containsExactly(*DoubleArray(8) { small.stream(path, StreamRole.OUTCOME).randU01() })
+        }
     }
 }

@@ -22,9 +22,9 @@ it("preserves both edges of missing values and steps rather than joining gaps", 
 
 it("marks warmup and clipped fault intervals using catalog duration units", () => {
   expect(timelineRegions(100, 1000, [
-    { target: "dependency", from: "0.2s", to: "700ms" },
-    { target: "gateway", from: "900ms", to: "2s" },
-    { target: "outside", from: "2s", to: "3s" },
+    { target: "dependency", from: "0.2s", to: "700ms", kind: "slowdown", multiplier: 2 },
+    { target: "gateway", from: "900ms", to: "2s", kind: "unavailable" },
+    { target: "outside", from: "2s", to: "3s", kind: "blackhole" },
   ], catalog)).toEqual([
     { fromMs: 0, toMs: 100, label: "Warmup", kind: "warmup" },
     { fromMs: 200, toMs: 700, label: "Fault: dependency", kind: "fault" },

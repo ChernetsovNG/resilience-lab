@@ -69,7 +69,7 @@ class ReplicaSimulationTest {
 
     @Test
     fun `fault on replica two changes only its processing`() {
-        val fault = documents.experiment("""[{"target":"worker#2","from":"0ms","to":"1s","processingMultiplier":5}]""")
+        val fault = documents.experiment("""[{"target":"worker#2","from":"0ms","to":"1s","kind":"slowdown","multiplier":5}]""")
         val graph = documents.graph(roundRobin(), fault)
         val (result, outcomes) = run(graph)
         assertThat(outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED)
@@ -80,7 +80,7 @@ class ReplicaSimulationTest {
 
     @Test
     fun `group connection fault affects every copy without changing local work`() {
-        val fault = documents.experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","processingMultiplier":3}]""")
+        val fault = documents.experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","kind":"slowdown","multiplier":3}]""")
         val model =
             roundRobin().let { model ->
                 model.copy(
@@ -113,8 +113,41 @@ class ReplicaSimulationTest {
     }
 
     @Test
+    fun `two hundred millisecond delay on one outgoing copy slows only replica two`() {
+        val fault =
+            documents.experiment(
+                """[{"target":"worker-to-tail#2","from":"0ms","to":"1s","kind":"slowdown","delay":"200ms"}]""",
+            )
+        val source =
+            roundRobin().let { model ->
+                val client = model.blocks.getValue("client")
+                model.copy(
+                    blocks =
+                        model.blocks + (
+                            "client" to client.copy(params = JsonObject(client.params + ("deadline" to JsonPrimitive("5s"))))
+                        ),
+                    connections =
+                        model.connections.map { connection ->
+                            if (connection.type == "call") {
+                                connection.copy(params = JsonObject(connection.params + ("timeout" to JsonPrimitive("2s"))))
+                            } else {
+                                connection
+                            }
+                        },
+                )
+            }
+
+        val (result, outcomes) = run(documents.graph(source, fault))
+
+        assertThat(outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED, AttemptOutcome.SUCCEEDED)
+        assertThat((1..3).map { result.services.getValue("worker#$it").busyHandlerTimeMs }).containsExactly(10.0, 810.0, 10.0)
+        // Two calls each hold the handler for another 200 ms in each network direction.
+        assertThat(result.connections.getValue("worker-to-tail#2").sentAttempts).isEqualTo(2)
+    }
+
+    @Test
     fun `connection failure is retried without offering work to the downstream service`() {
-        val fault = documents.experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","failureRate":"100%"}]""")
+        val fault = documents.experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","kind":"errors","failureRate":"100%"}]""")
         val source =
             roundRobin().let { model ->
                 model.copy(

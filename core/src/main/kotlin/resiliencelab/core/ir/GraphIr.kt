@@ -175,13 +175,23 @@ data class RouteEdge(
     val path: String get() = displayPath(pathSegments)
 }
 
-/** Degradation of [target] while local processing starts within [fromMs, toMs). */
+/** Effects available on executable blocks and connections; capacity loss requires a slot pool. */
+enum class FaultKind { SLOWDOWN, ERRORS, UNAVAILABLE, BLACKHOLE, CAPACITY_LOSS }
+
+/**
+ * A degradation active during [fromMs, toMs). Overlaps multiply slowdown factors, add delays,
+ * combine error probabilities as independent events and choose the minimum capacity.
+ * Active error faults replace the target's normal failure probability.
+ */
 data class FaultSpan(
     val targetSegments: List<String>,
     val fromMs: Double,
     val toMs: Double,
-    val processingMultiplier: Double?,
-    val failureProbability: Double?,
+    val kind: FaultKind,
+    val multiplier: Double = 1.0,
+    val delayMs: Double = 0.0,
+    val failureProbability: Double? = null,
+    val capacity: Int? = null,
     val origin: Origin = Origin.UNSPECIFIED,
 ) {
     /** Construct a fault on a stage-1 or hierarchical address. */
@@ -189,10 +199,13 @@ data class FaultSpan(
         target: String,
         fromMs: Double,
         toMs: Double,
-        processingMultiplier: Double?,
-        failureProbability: Double?,
+        kind: FaultKind,
+        multiplier: Double = 1.0,
+        delayMs: Double = 0.0,
+        failureProbability: Double? = null,
+        capacity: Int? = null,
         origin: Origin = Origin.UNSPECIFIED,
-    ) : this(target.split('/'), fromMs, toMs, processingMultiplier, failureProbability, origin)
+    ) : this(target.split('/'), fromMs, toMs, kind, multiplier, delayMs, failureProbability, capacity, origin)
 
     val target: String get() = displayPath(targetSegments)
 }

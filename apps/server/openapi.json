@@ -2128,13 +2128,23 @@
       "Fault" : {
         "type" : "object",
         "properties" : {
+          "capacity" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "delay" : {
+            "type" : [ "string", "null" ]
+          },
           "failureRate" : {
             "type" : [ "string", "null" ]
           },
           "from" : {
             "type" : "string"
           },
-          "processingMultiplier" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "multiplier" : {
             "type" : [ "number", "null" ],
             "format" : "double"
           },
@@ -2145,7 +2155,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "from", "target", "to" ]
+        "required" : [ "from", "kind", "target", "to" ]
       },
       "FirstNodeSaturation" : {
         "type" : "object",
