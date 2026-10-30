@@ -3,7 +3,7 @@ import type { MetricSummary, RunSummary } from "../api/apiTypes";
 
 type Point = RunSummary["variants"][number]["points"][number];
 export type MapMetric = "successRate" | "p95LatencyMs" | "p99LatencyMs" | "admittedAmplification" | "handlerUtilization";
-export type MapValue = Pick<MetricSummary, "mean" | "ci95Low" | "ci95High">;
+export type MapValue = Pick<MetricSummary, "mean" | "stdDev">;
 
 /** The first axis is outermost. Positions, rather than coordinate equality, distinguish repeated values. */
 export function gridCells(grid: RunSummary["grid"], points: Point[]) {
@@ -15,7 +15,7 @@ export function gridCells(grid: RunSummary["grid"], points: Point[]) {
   }));
 }
 
-/** Replication means/intervals come from the artifact; utilization is the pooled busy/capacity ratio. */
+/** Replication means and spread come from the artifact; utilization is the pooled busy/capacity ratio. */
 export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, service: string): MapValue | null {
   if (metric === "admittedAmplification") return aggregate.services[service]?.admittedAmplification ?? null;
   if (metric === "handlerUtilization") {

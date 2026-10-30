@@ -7,6 +7,8 @@ import { downsample, timelineRegions, type TimelinePoint, type TimelineRegion } 
 import { useConnectionSeries } from "../results/timeline/useConnectionSeries";
 import { useTimelineSeries } from "../results/timeline/useTimelineSeries";
 import { projectElementResults, resultSelection, type ElementMetric } from "./elementResultsData";
+import { confidenceInterval } from "../results/confidence";
+import { useConfidenceLevel } from "../layout/confidenceLevel";
 
 export interface ElementResultsProps {
   runId: string;
@@ -68,6 +70,7 @@ function MiniChart({ element, title, points, format, replication, regions, endMs
 
 /** Selected-element output uses the same immutable run context and bounded loader cache as Timeline and playback. */
 export function ElementResults(props: ElementResultsProps) {
+  const level = useConfidenceLevel();
   const { runId, summary, manifest, runModel, currentModel, experiment, catalog, variantId, pointId, replication, window, selected, onShowTimeline } = props;
   const initial = projectElementResults(props);
   const selection = resultSelection(runModel, currentModel, selected);
@@ -85,6 +88,7 @@ export function ElementResults(props: ElementResultsProps) {
   const result = projectElementResults({ ...props, nodes: primary.nodes, connections: calls.connections });
   const regions = timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog);
   const variant = summary.variants.find(variant => variant.id === variantId);
+  const intervalFor = (metric: ElementMetric) => confidenceInterval({ mean: metric.value, stdDev: metric.stdDev }, variant?.replications ?? 0, level);
   const sourceLabel = (metric: ElementMetric) => metric.source === "window"
     ? t("inspector.results.window", { window: formatNumber(window) }) : metric.source === "replication"
       ? t("inspector.results.replication", { replication: formatNumber(replication) }) : t(`inspector.results.${metric.source}`);
@@ -105,9 +109,10 @@ export function ElementResults(props: ElementResultsProps) {
             const key = output.id, label = output.inspector!.title;
             const format = (value: number | null | undefined) => formatOutput(output, value);
             const value = result.values[key];
+            const interval = intervalFor(value);
             return <tr key={key}><th scope="row">{label}</th><td>{format(value.value)}
-              {value.ci95Low == null || value.ci95High == null ? null : <span className={`summary-interval${(variant?.replications ?? 0) < 5 ? " summary-interval--unreliable" : ""}`}>
-                {t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) })}
+              {interval === null ? null : <span className={`summary-interval${(variant?.replications ?? 0) < 5 ? " summary-interval--unreliable" : ""}`}>
+                {t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) })}
               </span>}
               <small>{sourceLabel(value)}</small>
               {value.approximate ? <small title={t("editor.canvas.amplificationWindowTitle")}>{t("inspector.results.approximate")}</small> : null}
@@ -115,7 +120,7 @@ export function ElementResults(props: ElementResultsProps) {
           })}
           {result.timeoutMs !== null ? <tr><th scope="row">{t("inspector.results.timeout")}</th><td>{formatDuration(result.timeoutMs)}</td></tr> : null}
         </tbody></table>
-        {window === null && (variant?.replications ?? 0) < 5 && Object.values(result.values).some(value => value.ci95Low != null && value.ci95High != null)
+        {window === null && (variant?.replications ?? 0) < 5 && Object.values(result.values).some(value => intervalFor(value) !== null)
           ? <p className="summary-reliability-warning">{t("results.answer.lowReplications")}</p> : null}
         {window === null && result.latencyCoverage !== undefined ? <p className="element-results-note">{t("inspector.results.coveredLatency", {
           from: formatDuration(result.latencyCoverage.fromMs), to: formatDuration(result.latencyCoverage.toMs),

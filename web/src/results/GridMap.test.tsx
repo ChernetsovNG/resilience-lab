@@ -1,8 +1,27 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { summary } from "../test/fixtures";
 import { GridMap } from "./GridMap";
 import { gridCells, mapMetric } from "./map";
+import { setConfidenceLevel } from "../layout/confidenceLevel";
+
+afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
+
+it.each([false, true])("updates Map intervals and descriptions without changing the mean (two axes: %s)", twoAxes => {
+  const run = gridSummary(twoAxes);
+  run.variants[0].replications = 10;
+  run.variants[0].points[0].aggregate.successRate = { mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
+  render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
+  const points = screen.getByRole(twoAxes ? "table" : "list", { name: twoAxes ? "Parameter heatmap" : "Map points" });
+  const point = within(points).getAllByRole("button")[0] as HTMLButtonElement;
+  expect(point.title).toContain("95% CI 42.8%–57.2%");
+  act(() => setConfidenceLevel(99));
+  expect(point.title).toContain("99% CI 39.7%–60.3%");
+  expect(screen.getByText(/Means across replications/).textContent).toContain("99% CI");
+  if (!twoAxes) expect(screen.getByRole("img", { name: "Parameter line with 99% confidence intervals" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
+  expect(point.title).toBe("50%");
+});
 
 function gridSummary(twoAxes = true) {
   const result = structuredClone(summary);
@@ -12,7 +31,7 @@ function gridSummary(twoAxes = true) {
   result.variants[0].points = Array.from({ length: twoAxes ? 6 : 3 }, (_, index) => ({
     ...template, id: `p${index}`, coordinates: {}, aggregate: {
       ...template.aggregate,
-      successRate: { mean: index / 10, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
+      successRate: { mean: index / 10, stdDev: 0.02, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
     },
   }));
   return result;
@@ -66,14 +85,14 @@ it("renders the heatmap in grid order, selects points and reads service metrics 
   expect(screen.getByText(/pooled busy\/capacity/)).toBeTruthy();
 });
 
-it("shows every one-axis value with the unmodified confidence interval and point selection", () => {
+it("shows every one-axis value with the selected confidence interval and point selection", () => {
   const onPointChange = vi.fn();
   render(<GridMap summary={gridSummary(false)} activeVariantId="baseline" pointId="p0" onPointChange={onPointChange} />);
   expect(screen.getByRole("img", { name: "Parameter line with 95% confidence intervals" })).toBeTruthy();
   const points = screen.getByRole("list", { name: "Map points" });
   const buttons = within(points).getAllByRole("button");
   expect(buttons).toHaveLength(3);
-  expect(buttons[0].textContent).toContain("95% CI -20%–20%");
+  expect(buttons[0].textContent).toContain("95% CI -18%–18%");
   fireEvent.click(buttons[2]);
   expect(onPointChange).toHaveBeenCalledWith("p2");
 });

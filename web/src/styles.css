@@ -138,12 +138,15 @@ select {
 }
 
 .view-menu > button {
+  anchor-name: --view-menu;
   display: flex;
   padding: 0.35rem;
 }
 
 .view-menu-panel {
   inset: 3rem 0.75rem auto auto;
+  position-anchor: --view-menu;
+  top: calc(anchor(bottom) + 0.25rem);
   margin: 0;
   padding: 0.75rem;
   border: 1px solid #9aa5b1;

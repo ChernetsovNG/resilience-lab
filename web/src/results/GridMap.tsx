@@ -1,9 +1,11 @@
 import { t } from "../i18n";
-import { formatInterval, formatNumber } from "../i18n/format";
+import { formatInterval, formatNumber, formatPercent } from "../i18n/format";
 import { useState } from "react";
 import { CartesianGrid, ErrorBar, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { RunSummary } from "../api/apiTypes";
 import { formatMapValue, gridCells, mapMetric, type MapMetric, type MapValue } from "./map";
+import { confidenceInterval } from "./confidence";
+import { useConfidenceLevel } from "../layout/confidenceLevel";
 
 interface Props {
   summary: RunSummary;
@@ -21,6 +23,7 @@ const label = (value: unknown) => typeof value === "number" ? formatNumber(value
 
 /** A view of the saved summary; selecting a cell only changes the shared results context. */
 export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Props) {
+  const level = useConfidenceLevel();
   const metrics = mapMetrics();
   const [metric, setMetric] = useState<MapMetric>("successRate");
   const [chosenService, setService] = useState("");
@@ -30,25 +33,26 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
   const services = [...new Set(variant.points.flatMap((point) => Object.keys(point.aggregate.services)))].sort();
   const service = services.includes(chosenService) ? chosenService : services[0] ?? "";
   const serviceMetric = metric === "admittedAmplification" || metric === "handlerUtilization";
-  const cells = gridCells(grid, variant.points).map((cell) => ({
-    ...cell, value: cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service),
-  }));
+  const cells = gridCells(grid, variant.points).map((cell) => {
+    const value = cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service);
+    return { ...cell, value, interval: confidenceInterval(value, variant.replications, level) };
+  });
   const values = cells.flatMap((cell) => cell.value === null ? [] : [cell.value.mean]);
   const low = values.length === 0 ? 0 : values.reduce((min, value) => Math.min(min, value));
   const high = values.length === 0 ? 0 : values.reduce((max, value) => Math.max(max, value));
   const format = (value: number) => formatMapValue(value, metric);
-  const readout = (value: MapValue | null) => value === null ? formatNumber(null) : format(value.mean) +
-    (value.ci95Low == null || value.ci95High == null ? "" : t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) }));
+  const readout = ({ value, interval }: typeof cells[number]) => value === null ? formatNumber(null) : format(value.mean) +
+    (interval === null ? "" : t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) }));
   const color = (value: MapValue | null) => value === null ? "#f1f5f9" :
     `hsl(213 90% ${96 - 28 * (high === low ? 0.5 : (value.mean - low) / (high - low))}%)`;
   const pointButton = (cell: typeof cells[number]) => <button type="button" aria-pressed={pointId === cell.id}
-    disabled={cell.point === null} title={readout(cell.value)} onClick={() => onPointChange?.(cell.id)}
+    disabled={cell.point === null} title={readout(cell)} onClick={() => onPointChange?.(cell.id)}
     style={grid.length === 2 ? { background: color(cell.value) } : undefined}>
-    <strong>{cell.id}</strong><span>{grid.length === 2 ? cell.value === null ? formatNumber(null) : format(cell.value.mean) : readout(cell.value)}</span>
+    <strong>{cell.id}</strong><span>{grid.length === 2 ? cell.value === null ? formatNumber(null) : format(cell.value.mean) : readout(cell)}</span>
   </button>;
   const chartData = cells.map((cell, index) => ({ index, mean: cell.value?.mean ?? null,
-    interval: cell.value?.ci95Low == null || cell.value.ci95High == null ? undefined :
-      [cell.value.mean - cell.value.ci95Low, cell.value.ci95High - cell.value.mean],
+    interval: cell.value === null || cell.interval === null ? undefined :
+      [cell.value.mean - cell.interval[0], cell.interval[1] - cell.value.mean],
   }));
 
   return <section className="parameter-map" aria-label={t("results.map.variantLabel", { variant: variant.label ?? variant.id })}>
@@ -62,7 +66,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
       <span>{t("results.map.context", { variant: variant.label ?? variant.id, point: pointId })}</span>
     </div>
     <p className="map-note">{metric === "handlerUtilization" ? t("results.map.utilizationNote")
-      : t("results.map.meansNote")}</p>
+      : t("results.map.meansNote", { level: formatPercent(level / 100) })}</p>
     {grid.length === 2 ? <>
       <div className="map-legend" aria-label={t("results.map.colorScale")}>
         {values.length === 0 ? t("results.map.noValues") : <>{format(low)}<span aria-hidden="true" />{format(high)}</>}
@@ -79,7 +83,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
         </tr>)}</tbody>
       </table>
     </> : grid.length === 1 ? <>
-      <div role="img" aria-label={t("results.map.parameterLine")}>
+      <div role="img" aria-label={t("results.map.parameterLine", { level: formatPercent(level / 100) })}>
         <ResponsiveContainer width="100%" height={240} minWidth={0} initialDimension={{ width: 600, height: 240 }}>
           <LineChart data={chartData} margin={{ top: 16, right: 24, bottom: 12, left: 24 }}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -96,7 +100,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
                   role="button" tabIndex={0} aria-label={t("results.map.selectPoint", { point: cell.id })} aria-pressed={cell.id === pointId}
                   onClick={() => onPointChange?.(cell.id)} onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onPointChange?.(cell.id); }
-                  }}><title>{t("results.map.pointReadout", { point: cell.id, value: readout(cell.value) })}</title></circle>;
+                  }}><title>{t("results.map.pointReadout", { point: cell.id, value: readout(cell) })}</title></circle>;
               }}>
               <ErrorBar dataKey="interval" stroke="#475569" width={5} isAnimationActive={false} />
             </Line>

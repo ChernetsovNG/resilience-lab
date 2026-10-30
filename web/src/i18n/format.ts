@@ -42,6 +42,8 @@ export function formatSize(bytes: Value): string {
   });
 }
 
-export function formatInterval(low: Value, high: Value, format: (value: number) => string = formatNumber): string {
-  return missing(low) || missing(high) ? t("common.na") : t("common.interval", { low: format(low), high: format(high) });
+export function formatInterval(low: Value, high: Value, format: (value: number) => string = formatNumber, confidenceLevel = 95): string {
+  return missing(low) || missing(high) ? t("common.na") : t("common.interval", {
+    level: formatPercent(confidenceLevel / 100), low: format(low), high: format(high),
+  });
 }
