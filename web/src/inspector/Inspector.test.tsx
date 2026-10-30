@@ -36,7 +36,18 @@ function commit(label: string, value: string) {
 }
 
 describe("Inspector", () => {
-  it.each(["Run settings", "Parameter grid", "Faults"])("remembers %s independently across remounts", async title => {
+  it.each([
+    { selected: null, target: "experiment" as const, title: "Run settings", subtitle: "checkout-grid" },
+    { selected: "gateway", target: "element" as const, title: "gateway", subtitle: "Service" },
+    { selected: null, target: "variant" as const, title: "Baseline", subtitle: "Variant" },
+  ])("identifies the $target in the common heading and subtitle", ({ selected, target, title, subtitle }) => {
+    renderInspector({ selected, target, variantId: target === "variant" ? "baseline" : null,
+      experimentPath: "checkout/checkout-grid.experiment.json", onCommand: vi.fn() });
+    expect(screen.getByRole("heading", { name: title, level: 2 }).parentElement?.className).toBe("inspector-heading");
+    expect(screen.getByText(subtitle, { selector: ".inspector-type" })).toBeTruthy();
+  });
+
+  it.each(["Run", "Parameter grid", "Faults"])("remembers %s independently across remounts", async title => {
     const props: InspectorProps = { catalog, model, experiment, selected: null, editable: true,
       overrides: {}, onParam: vi.fn(), onValidity: vi.fn() };
     const view = render(<Inspector {...props} />);
@@ -45,14 +56,14 @@ describe("Inspector", () => {
     fireEvent.click(screen.getByText(title));
     await waitFor(() => expect(section!.open).toBe(false));
     // Opening another group must not overwrite this group's preference.
-    const other = screen.getByText(title === "Faults" ? "Run settings" : "Faults").closest("summary")!;
+    const other = screen.getByText(title === "Faults" ? "Run" : "Faults").closest("summary")!;
     fireEvent.click(other);
     await waitFor(() => expect(other.closest("details")!.open).toBe(false));
     view.unmount();
     render(<Inspector {...props} />);
     expect(screen.getByText(title).closest("details")!.open).toBe(false);
-    expect(screen.getByText(title === "Faults" ? "Parameter grid" : "Run settings").closest("details")!.open)
-      .toBe(title === "Run settings" ? false : true);
+    expect(screen.getByText(title === "Faults" ? "Parameter grid" : "Run").closest("details")!.open)
+      .toBe(title === "Run" ? false : true);
   });
 
   it("restores collapsed model parameters and reveals a requested field", async () => {
@@ -67,7 +78,7 @@ describe("Inspector", () => {
   });
 
   it.each([
-    ["execution", "Run settings", "execution.seed", "Seed"],
+    ["execution", "Run", "execution.seed", "Seed"],
     ["faults", "Faults", "faults.0.multiplier", "Time multiplier"],
     ["grid", "Parameter grid", "grid.0.path", "Axis 1 parameter"],
   ])("opens collapsed %s when Problems requests its field", async (section, title, path, label) => {
@@ -84,7 +95,7 @@ describe("Inspector", () => {
   it("reveals run settings for diagnostics on the execution group", async () => {
     localStorage.setItem("resilience-lab.inspector-execution-open", "false");
     renderInspector({ selected: null, focusField: { path: "execution", request: 1 } });
-    await waitFor(() => expect(screen.getByText("Run settings").closest("details")!.open).toBe(true));
+    await waitFor(() => expect(screen.getByText("Run", { selector: "summary h3" }).closest("details")!.open).toBe(true));
     expect(document.activeElement).toBe(input("Replications"));
   });
 

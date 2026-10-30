@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { t } from "../i18n";
 import type { DocumentEntry } from "../api/apiTypes";
 import { copyModel, documentsToDelete, downloadDocuments, newExperiment, newModel, readImports } from "../workspace/fileActions";
@@ -6,8 +6,13 @@ import type { Workspace } from "../workspace/useWorkspace";
 
 type FileAction = "new" | "newExperiment" | "saveAs" | "import" | "deleteModel" | "deleteExperiment";
 
+/** Creation shortcuts share the File menu's dialog and unsaved-change confirmation. */
+export interface FileMenuHandle {
+  start: (action: "new" | "newExperiment") => Promise<void>;
+}
+
 /** File commands use server workspace documents; native File/Blob transfer copies to and from the browser. */
-export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspace; disabled: boolean; onOpened: () => void }) {
+export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Workspace; disabled: boolean; onOpened: () => void; ref?: Ref<FileMenuHandle> }) {
   const menu = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [action, setAction] = useState<FileAction | null>(null);
@@ -24,7 +29,8 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
   }, [action]);
 
   const start = async (next: FileAction) => {
-    if (working) return;
+    if (disabled || working) return;
+    if (next === "newExperiment" && workspace.loaded === null) return;
     menu.current?.hidePopover?.();
     const deleting = next === "deleteModel" || next === "deleteExperiment";
     if ((next === "new" || next === "newExperiment" || deleting) && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
@@ -36,6 +42,7 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
       finally { setWorking(false); }
     }
   };
+  useImperativeHandle(ref, () => ({ start }));
   const submit = async () => {
     if (action === null || working) return;
     if (action === "import" && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;

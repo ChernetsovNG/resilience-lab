@@ -48,7 +48,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
     seriesWindow,
     descriptor(catalog, "seed", t("editor.run.seed"), "INTEGER", { minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
     duration("maxRealTime", t("editor.run.realTimeLimit"), true),
-  ];
+  ].map(field => ({ ...field, description: t(`editor.run.${field.name}.description`) }));
   const faultFields = (fault: ExperimentFile["faults"][number]) => [
     duration("from", t("editor.fault.start")), duration("to", t("editor.fault.end"), true),
     ...(fault.kind === "slowdown" ? [
@@ -67,7 +67,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
   ];
   return (
     <>
-      <InspectorSection name="execution" title={<h2>{t("editor.run.title")}</h2>}>
+      <InspectorSection name="execution" title={<h3>{t("editor.run.execution")}</h3>}>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("execution")} />
       <p className="inspector-type">{t("editor.run.shared")}</p>
       {executionFields.map((field) => (
@@ -90,8 +90,6 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
           onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number | undefined))} />
       ))}
       </InspectorSection>
-      <GridSettings catalog={catalog} model={model} experiment={experiment} editable={editable} invalid={invalid}
-        onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
       <InspectorSection name="faults" title={<h3>{t("editor.fault.title")}</h3>}>
       <div data-inspector-field="faults">
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />
@@ -127,6 +125,8 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
       }))}>{t("editor.fault.add")}</button>
       </div>
       </InspectorSection>
+      <GridSettings catalog={catalog} model={model} experiment={experiment} editable={editable} invalid={invalid}
+        onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
     </>
   );
 }

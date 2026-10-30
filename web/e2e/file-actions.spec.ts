@@ -23,8 +23,10 @@ async function action(page: Page, name: string) {
   await page.getByRole("button", { name: "File", exact: true }).click();
   await page.getByRole("button", { name, exact: true }).click();
 }
-async function createIn(page: Page, name: string, directory: string) {
-  await action(page, name);
+async function createIn(page: Page, name: string, directory: string, fromList = false) {
+  if (fromList) await page.getByRole("combobox", { name: name === "New model" ? "Model" : "Experiment", exact: true })
+    .selectOption({ label: `+ ${name}…` });
+  else await action(page, name);
   const dialog = page.getByRole("dialog", { name, exact: true });
   await dialog.getByLabel(name === "New model" ? "Model name" : name === "New experiment" ? "Experiment name" : "Destination directory").fill(directory);
   await dialog.getByRole("button", { name, exact: true }).click();
@@ -33,6 +35,30 @@ async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
   expect(response.ok()).toBe(true);
   return response.json();
+}
+
+for (const [label, title] of [["Model", "New model"], ["Experiment", "New experiment"]]) {
+  test(`creation from ${label} preserves selection and unsaved edits on cancellation`, async ({ page, directory }) => {
+    const selector = page.getByRole("combobox", { name: label, exact: true });
+    const previous = await selector.inputValue();
+    await expect(page.locator(".top-bar button").first()).toHaveText("File");
+    await selector.selectOption({ label: `+ ${title}…` });
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(selector).toHaveValue(previous);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(selector).toHaveValue(previous);
+
+    await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+    await page.getByLabel("Handlers", { exact: true }).fill("7");
+    await page.getByLabel("Handlers", { exact: true }).press("Enter");
+    page.once("dialog", confirmation => confirmation.dismiss());
+    await selector.selectOption({ label: `+ ${title}…` });
+    await expect(dialog).not.toBeVisible();
+    await expect(selector).toHaveValue(previous);
+    await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("7");
+    expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model.blocks.gateway.params.handlers).not.toBe(7);
+  });
 }
 
 test("deletes a newly created model and its files, then returns to the last model", async ({ page, directory }) => {
@@ -60,7 +86,7 @@ test("deletes a newly created model and its files, then returns to the last mode
 test("creates an empty model and runs a system built from the palette", async ({ page, directory }, testInfo) => {
   const target = `file-new-${randomUUID()}`;
   try {
-    await createIn(page, "New model", target);
+    await createIn(page, "New model", target, true);
     const path = `${target}/${target}.experiment.json`;
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(path);
     await expect(page.getByTestId("block-node")).toHaveCount(0);
@@ -96,7 +122,7 @@ test("creates an empty model and runs a system built from the palette", async ({
 test("creates a new question for the current model without changing its source experiment", async ({ page, directory }) => {
   const source = resolve(root, directory, "retry-storm.experiment.json");
   const before = await readFile(source, "utf8");
-  await createIn(page, "New experiment", "capacity");
+  await createIn(page, "New experiment", "capacity", true);
   await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${directory}/retry-storm.model.json`);
   await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${directory}/capacity.experiment.json`);
   await expect(page.getByTestId("block-node")).toHaveCount(4);

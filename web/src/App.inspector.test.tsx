@@ -6,6 +6,40 @@ import { setupAppTests, server, open, selectGateway, button, editField } from ".
 
 setupAppTests();
 
+it("reveals run settings on every click even with the Inspector and execution section collapsed", async () => {
+  localStorage.setItem("resilience-lab.inspector-execution-open", "false");
+  server(); await open();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    fireEvent.click(button("Collapse inspector"));
+    expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
+    fireEvent.click(button("Run settings"));
+    expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Seed" })).toBeTruthy();
+    fireEvent.click(screen.getByText("Run", { selector: "summary h3" }));
+  }
+});
+
+it("marks settings pressed only while the visible Inspector shows them", async () => {
+  server(); await open();
+  const settings = button("Run settings");
+  expect(settings.getAttribute("aria-pressed")).toBe("true");
+  await selectGateway();
+  expect(settings.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(settings);
+  expect(settings.getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByTestId("rf__node-gateway").classList.contains("selected")).toBe(false);
+  expect(screen.getByText("retry-storm", { selector: ".inspector-type" })).toBeTruthy();
+  fireEvent.click(button("Collapse inspector"));
+  expect(settings.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(button("Expand inspector"));
+  expect(settings.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(settings.getAttribute("aria-pressed")).toBe("false");
+  expect(screen.getByRole("heading", { name: "Baseline" })).toBeTruthy();
+  expect(screen.getByText("Variant", { selector: ".inspector-type" })).toBeTruthy();
+});
+
 
 it("shows available element results first and opens Parameters for Problems and canvas editing", async () => {
   server(url => {
@@ -159,6 +193,7 @@ it.each(["Run settings", "Variant", "Rename", "Problem", "Model"])("reveals the 
   await screen.findByRole("table", { name: "Answer" });
   const baseline = screen.getByRole("tab", { name: "Baseline" });
   fireEvent.click(baseline); fireEvent.click(button("Analysis"));
+  expect(button("Run settings").getAttribute("aria-pressed")).toBe("false");
   expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "Seed" })).toBeNull();
   if (action === "Run settings") fireEvent.click(button("Run settings"));
@@ -174,4 +209,5 @@ it.each(["Run settings", "Variant", "Rename", "Problem", "Model"])("reveals the 
   }
   expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
   expect(screen.getByLabelText(action === "Variant" || action === "Rename" ? "Variant label" : "Seed")).toBeTruthy();
+  if (action === "Run settings") expect(button("Run settings").getAttribute("aria-pressed")).toBe("true");
 });

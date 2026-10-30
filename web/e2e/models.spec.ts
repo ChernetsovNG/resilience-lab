@@ -10,7 +10,7 @@ test("checkout keeps its diagram while switching its two questions and remembers
   const model = page.getByLabel("Model", { exact: true });
   const experiment = page.getByLabel("Experiment", { exact: true });
   await model.selectOption("checkout/checkout.model.json");
-  await expect(experiment.locator("option")).toHaveCount(2);
+  await expect(experiment.locator('option[value$=".experiment.json"]')).toHaveCount(2);
   await experiment.selectOption("checkout/checkout.experiment.json");
   await expect(experiment).toHaveAttribute("title", "checkout/checkout.experiment.json");
   let diagram: string[] = [];

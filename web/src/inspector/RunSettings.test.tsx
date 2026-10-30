@@ -4,8 +4,9 @@ import { afterEach, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { dirtyDocuments, editorReducer, initialEditorState } from "../workspace/editor";
 import { RunSettings } from "./RunSettings";
+import { setLanguage } from "../i18n";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); setLanguage("en"); });
 
 function Settings({ editable = true } = {}) {
   const documents = { model, layout, experiment };
@@ -60,4 +61,30 @@ it("disables random seed when run settings are read-only", () => {
   fireEvent.click(random);
   expect(seed.value).toBe(previous);
   expect(screen.getByTestId("history-size").textContent).toBe("0");
+});
+
+it.each([
+  { language: "en", prefix: "More about: ", fields: [
+    ["Replications", "independent runs"], ["Warm-up", "excluded from results"],
+    ["Measurement", "start of warm-up"], ["Series window", "measurement / 100"],
+    ["Seed", "same result"], ["Real-time limit", "real time"],
+  ] },
+  { language: "ru", prefix: "Подробнее: ", fields: [
+    ["Повторения", "независимых прогонов"], ["Разогрев", "не входит в результаты"],
+    ["Измерение", "от начала разогрева"], ["Окно временных рядов", "измерение / 100"],
+    ["Начальное значение генератора", "тот же результат"], ["Ограничение реального времени", "реального времени"],
+  ] },
+] as const)("explains all six run fields with associated help in $language", ({ language, prefix, fields }) => {
+  setLanguage(language);
+  render(<Settings />);
+  expect(screen.getAllByRole("heading").map(heading => heading.textContent)).toEqual(language === "ru"
+    ? ["Прогон", "Отказы", "Перебор"] : ["Run", "Faults", "Parameter grid"]);
+  for (const [label, description] of fields) {
+    const input = screen.getByRole("textbox", { name: label });
+    fireEvent.focus(screen.getByRole("button", { name: prefix + label }));
+    const tooltip = screen.getByRole("tooltip");
+    expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(tooltip.id);
+    expect(tooltip.textContent).toContain(description);
+    fireEvent.keyDown(window, { key: "Escape" });
+  }
 });

@@ -25,7 +25,7 @@ import { ProblemList } from "./layout/ProblemList";
 import { ResultsWorkspace } from "./layout/ResultsWorkspace";
 import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
-import { FileMenu } from "./layout/FileMenu";
+import { FileMenu, type FileMenuHandle } from "./layout/FileMenu";
 import { StatusBar } from "./layout/StatusBar";
 import { currentViewSettings } from "./layout/viewSettings";
 import { useRun, type RunDocuments } from "./run/useRun";
@@ -44,6 +44,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
 export function App() {
   const workspace = useWorkspace();
   const canvas = useRef<CanvasHandle>(null);
+  const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
   const health = useHealth();
@@ -68,7 +69,8 @@ export function App() {
   const [selection, setSelection] = useState<string[]>([]);
   const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
   const [courseHeight, setCourseHeight] = useState(0);
-  const [faultRequest, setFaultRequest] = useState(0);
+  const [inspectorRequest, setInspectorRequest] = useState(0);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [inspectorTarget, setInspectorTarget] = useState<"element" | "variant" | "experiment">("experiment");
   const [fieldFocus, setFieldFocus] = useState<{ path: string; request: number; focus?: boolean } | null>(null);
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
@@ -121,7 +123,7 @@ export function App() {
     if (invalid || loading) return;
     setAnalysis(false);
     setSelection([id]); setInspectorTarget("element");
-    setFaultRequest(current => current + 1);
+    setInspectorRequest(current => current + 1);
     setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1 }));
   };
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
@@ -287,7 +289,7 @@ export function App() {
     setSelection([]);
     setInspectorTarget("experiment");
     setFieldFocus(previous => ({ path: `faults.${index}.target`, request: (previous?.request ?? 0) + 1 }));
-    setFaultRequest(current => current + 1);
+    setInspectorRequest(current => current + 1);
   };
   const courseModel = model === null || catalog === null ? null : applyOverrides(model,
     ownRun && !staleResults ? run.summary?.variants.find(candidate => candidate.id === variantId)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {} : {}, catalog);
@@ -318,6 +320,8 @@ export function App() {
       <TopBar
         models={workspace.models}
         model={workspace.selectedModel}
+        onNewModel={() => { void fileMenu.current?.start("new"); }}
+        onNewExperiment={() => { void fileMenu.current?.start("newExperiment"); }}
         onModel={path => {
           if (invalid || loading || workspace.saving || run.running || runPending || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
@@ -335,8 +339,11 @@ export function App() {
         onInspectExperiment={() => {
           if (invalid || loading) return;
           setAnalysis(false);
-          setSelection([]); setInspectorTarget("experiment"); setFieldFocus(null);
+          setSelection([]); setInspectorTarget("experiment");
+          setInspectorRequest(current => current + 1);
+          setFieldFocus(previous => ({ path: "execution", request: (previous?.request ?? 0) + 1, focus: false }));
         }}
+        runSettingsPressed={loaded !== null && target === "experiment" && !analysis && !inspectorCollapsed}
         loading={workspace.loading}
         dirty={workspace.dirty}
         savePending={loaded?.versions.experiment === null}
@@ -344,7 +351,7 @@ export function App() {
         conflict={workspace.conflict}
         saving={workspace.saving}
         onSave={() => void workspace.save()}
-        fileMenu={<FileMenu workspace={workspace}
+        fileMenu={<FileMenu ref={fileMenu} workspace={workspace}
           disabled={invalid || loading || workspace.saving || run.running || runPending || estimate.pending}
           onOpened={resetExperimentView} />}
         canUndo={workspace.canUndo}
@@ -398,7 +405,8 @@ export function App() {
           </EstimatePopover>
         ) : null}
       />
-      <ResultsWorkspace canvasFooterHeight={loaded === null || catalog === null ? 0 : 32} inspectorRequest={faultRequest} view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
+      <ResultsWorkspace canvasFooterHeight={loaded === null || catalog === null ? 0 : 32} inspectorRequest={inspectorRequest}
+        onInspectorCollapsedChange={setInspectorCollapsed} view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
         inspectorSelection={target === "element" ? selected : null}
         inspector={model === null || loaded === null || catalog === null ? (
           <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />
@@ -413,6 +421,7 @@ export function App() {
             catalog={catalog}
             model={model}
             experiment={loaded.experiment}
+            experimentPath={loaded.experimentPath}
             selected={selected}
             target={target}
             focusField={fieldFocus}
