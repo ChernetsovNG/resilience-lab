@@ -710,7 +710,7 @@
   "messages.JSON_SYNTAX": "Некорректный JSON: строка {line}, столбец {column}; {detail}",
   "messages.JSON_SYNTAX.detail": "Некорректный JSON: {detail}",
   "messages.ESTIMATE_EXTRAPOLATION": "Диапазон числа сервисов в опорных замерах времени S1: {minServices}–{maxServices}; фактическое время может значительно отличаться",
-  "messages.ESTIMATE_UI_CACHE": "Ожидаемый объём несжатых данных задач превышает лимит кэша интерфейса: {cacheMiB} МиБ; загружайте только выбранные узлы",
+  "messages.ESTIMATE_UI_CACHE": "Ожидаемый объём несжатых данных задач превышает лимит кэша интерфейса: {cacheMiB} МиБ; загружайте только выбранные узлы. Главный источник объёма: {storageSource} ({sourceRows} строк на повторение)",
   "messages.DOCUMENT_CHANGED": "Документы эксперимента изменились после проверки; отправьте эксперимент заново",
   "messages.RUN_COMPLETE": "Прогон уже завершён",
   "messages.RUN_INCOMPATIBLE.versions": "Версии прогона изменились; запустите прогон заново",
@@ -1023,7 +1023,7 @@
   "catalog.types.client.params.load.points.time.description": "Время от начала симуляции, включая разогрев.",
   "catalog.types.client.params.load.description": "Кусочно-линейная интенсивность от начала симуляции, включая разогрев. Профили сравниваются вариантами. Начальное значение: Одна точка: 0s, 10/s.",
   "catalog.types.client.params.load.points.time.title": "Время",
-  "messages.ESTIMATE_LONG_MODEL_TIME": "Интервал поступления запросов в модели: {durationSeconds} с, примерно {arrivals} запросов на повторение. Рассмотрите более короткий период",
+  "messages.ESTIMATE_LONG_MODEL_TIME": "Интервал поступления запросов в модели: {durationSeconds} с, примерно {arrivals} запросов на повторение. Рассмотрите более короткий период. Главный источник объёма: {storageSource} ({sourceRows} строк на повторение)",
   "messages.LOAD_RANGE": "Интенсивность нагрузки и средний интервал между запросами при положительной интенсивности должны быть конечными",
   "editor.canvas.loadProfile": "Профиль нагрузки",
   "catalog.types.client.params.load.points.rate.description": "Неотрицательная интенсивность поступления запросов.",
@@ -1244,5 +1244,10 @@
   "help.type.unknown": "Справка для типа «{type}» недоступна.",
   "help.units": "Единицы",
   "help.symbol": "?",
-  "help.noValue": "—"
+  "help.noValue": "—",
+  "messages.storageSource.replicaInstances": "экземпляры реплик и их вызовы",
+  "messages.storageSource.nodes": "строки узлов",
+  "messages.storageSource.connections": "строки связей вызова",
+  "messages.storageSource.routerOutputs": "строки выходов маршрутизаторов",
+  "messages.storageSource.groups": "строки групп реплик"
 }

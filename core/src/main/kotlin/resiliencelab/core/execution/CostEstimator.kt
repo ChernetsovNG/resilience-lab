@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CoreMessage
+import resiliencelab.core.experiment.ReplicaGroupKind
+import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceStep
@@ -45,7 +47,7 @@ data class EstimateWarning(
     ) : this(code.code, message, code.args(args))
 }
 
-/** Applies S1 timing and S3/S5 storage anchors without constructing a KSL model. */
+/** Applies S1 timing and S3/S5 storage anchors, recalibrated for graph rows, without constructing a KSL model. */
 internal object CostEstimator {
     private data class TaskEstimate(
         val events: Double,
@@ -54,6 +56,25 @@ internal object CostEstimator {
         val artifactBytes: Long,
         val parts: Long,
         val seconds: Double,
+        val storageSource: StorageSource,
+        val sourceRows: Long,
+    )
+
+    private enum class StorageSource(
+        val id: String,
+        val description: String,
+    ) {
+        REPLICAS("replicaInstances", "replica instances and their calls"),
+        NODES("nodes", "node rows"),
+        CONNECTIONS("connections", "call connection rows"),
+        ROUTES("routerOutputs", "router output rows"),
+        GROUPS("groups", "replica group rows"),
+    }
+
+    private data class StorageRow(
+        val bytes: Long,
+        val source: StorageSource,
+        val group: Boolean = false,
     )
 
     private data class TimingAnchor(
@@ -88,13 +109,22 @@ internal object CostEstimator {
             variant.points.forEach { point ->
                 val graph = point.graph
                 val duration = graph.run.warmupMs + graph.run.measurementMs
+                val perReplication = estimateTask(graph)
+                val sourceArgs =
+                    mapOf(
+                        "storageSource" to JsonPrimitive(perReplication.storageSource.id),
+                        "sourceRows" to JsonPrimitive(perReplication.sourceRows),
+                    )
+                val sourceMessage =
+                    "Main storage contributor: ${perReplication.storageSource.description} (${perReplication.sourceRows} rows per replication)"
                 if (duration >= 3_600_000.0) {
                     val arrivals = graph.client.load.average(duration) * duration
                     warnings[CoreMessage.ESTIMATE_LONG_MODEL_TIME] =
                         EstimateWarning(
                             CoreMessage.ESTIMATE_LONG_MODEL_TIME,
-                            "Modelled arrival interval is ${duration / 1_000.0} s with about $arrivals requests per replication; consider a shorter period",
-                            mapOf("durationSeconds" to JsonPrimitive(duration / 1_000.0), "arrivals" to JsonPrimitive(arrivals)),
+                            "Modelled arrival interval is ${duration / 1_000.0} s with about $arrivals requests per replication; consider a shorter period. $sourceMessage",
+                            sourceArgs +
+                                mapOf("durationSeconds" to JsonPrimitive(duration / 1_000.0), "arrivals" to JsonPrimitive(arrivals)),
                         )
                 }
                 if (graph.services.size > 5000) {
@@ -105,13 +135,12 @@ internal object CostEstimator {
                             mapOf("minServices" to JsonPrimitive(50), "maxServices" to JsonPrimitive(5000)),
                         )
                 }
-                val perReplication = estimateTask(graph)
                 if (perReplication.rawBytes > UI_CACHE_BYTES) {
                     warnings[CoreMessage.ESTIMATE_UI_CACHE] =
                         EstimateWarning(
                             CoreMessage.ESTIMATE_UI_CACHE,
-                            "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only",
-                            mapOf("cacheMiB" to JsonPrimitive(UI_CACHE_BYTES / (1024 * 1024))),
+                            "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only. $sourceMessage",
+                            sourceArgs + mapOf("cacheMiB" to JsonPrimitive(UI_CACHE_BYTES / (1024 * 1024))),
                         )
                 }
                 val count = experiment.run.replications
@@ -164,6 +193,8 @@ internal object CostEstimator {
             }
             val service = services.getValue(path)
             if (service.path != graph.entry) perOriginalRequest += 2.0 * count
+            // Pooler processing delay is already a Process step; the additional server pool can acquire, expire, and wake.
+            if (service.pooler != null) perOriginalRequest += 3.0 * count
             graph.scenario(service).forEach { step ->
                 when (step) {
                     is ServiceStep.Process -> perOriginalRequest += 3.0 * count
@@ -171,6 +202,8 @@ internal object CostEstimator {
                         val call = graph.call(step.edge)
                         val attempts = count * call.attempts
                         perOriginalRequest += 2.0 * attempts
+                        // Conservatively allow an acquisition, wait expiry, and queue wakeup for every attempt.
+                        if (call.pool != null) perOriginalRequest += 3.0 * attempts
                         visits[call.to] = (visits[call.to] ?: 0.0) + attempts
                     }
                 }
@@ -186,18 +219,78 @@ internal object CostEstimator {
         val events = expectedEvents(graph)
         require(events.isFinite() && events >= 0.0) { "Experiment event estimate exceeds numeric range" }
         val windows = windowCount(graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs)
-        val rows = Math.multiplyExact((graph.services.size + 1).toLong(), windows.toLong())
-        val rawBytes = Math.multiplyExact(rows, BYTES_PER_NODE_WINDOW)
-        val parts = ceil(rawBytes.toDouble() / SeriesWriter.MAX_PART_BYTES).toLong().coerceAtLeast(1)
+        val groups = ReplicaGroups.membership(graph)
+        val replicaNodes =
+            groups
+                .filter { it.kind == ReplicaGroupKind.NODE }
+                .flatMap { it.instances }
+                .map { it.id }
+                .toSet()
+        val replicaCalls =
+            groups
+                .filter { it.kind == ReplicaGroupKind.CONNECTION }
+                .flatMap { it.instances }
+                .map { it.id }
+                .toSet()
+        val calls = graph.calls.associateBy { it.path }
+        val rowKinds =
+            buildList {
+                add(StorageRow(BYTES_PER_NODE_WINDOW, StorageSource.NODES))
+                graph.services.forEach { service ->
+                    val sets = if (service.pooler == null) 1 else 2
+                    val source = if (service.path in replicaNodes) StorageSource.REPLICAS else StorageSource.NODES
+                    add(StorageRow(BYTES_PER_NODE_WINDOW + sets * BYTES_PER_SLOT_POOL, source))
+                }
+                graph.calls.forEach { call ->
+                    val poolBytes = if (call.pool == null) 0 else BYTES_PER_SLOT_POOL
+                    val source = if (call.path in replicaCalls) StorageSource.REPLICAS else StorageSource.CONNECTIONS
+                    add(StorageRow(BYTES_PER_CONNECTION_WINDOW + poolBytes, source))
+                }
+                graph.routes.forEach { add(StorageRow(BYTES_PER_CONNECTION_WINDOW, StorageSource.ROUTES)) }
+                groups.forEach { group ->
+                    val bytes =
+                        when (group.kind) {
+                            ReplicaGroupKind.NODE -> BYTES_PER_NODE_WINDOW + BYTES_PER_SLOT_POOL + BYTES_PER_REPLICA_EXTREMA
+                            ReplicaGroupKind.CONNECTION ->
+                                BYTES_PER_CONNECTION_WINDOW +
+                                    if (group.instances.any { calls.getValue(it.id).pool != null }) {
+                                        BYTES_PER_SLOT_POOL + BYTES_PER_REPLICA_EXTREMA
+                                    } else {
+                                        0
+                                    }
+                        }
+                    add(StorageRow(bytes, StorageSource.GROUPS, group = true))
+                }
+            }
+        val rows = Math.multiplyExact(rowKinds.size.toLong(), windows.toLong())
+        val rawBytes = Math.multiplyExact(rowKinds.sumOf { it.bytes }, windows.toLong())
+        // The writer never packs GROUP and INSTANCE rows together, even when both fit in one part.
+        val parts =
+            rowKinds.groupBy { it.group }.values.sumOf { kind ->
+                val bytesPerWindow = kind.sumOf { it.bytes }
+                val budget = SeriesWriter.MAX_PART_BYTES.toLong() - PART_OVERHEAD_BYTES
+                if (bytesPerWindow > budget) {
+                    Math.multiplyExact(Math.ceilDiv(bytesPerWindow, budget), windows.toLong())
+                } else {
+                    Math.ceilDiv(windows.toLong(), budget / bytesPerWindow)
+                }
+            }
         val compressedBytes = ceil(rawBytes * GZIP_RATIO).toLong()
-        val metadataBytes = Math.multiplyExact((graph.services.size + 1).toLong(), 1024)
-        val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, 512)), metadataBytes)
+        // Replication and summary sketches use a capped population term; actual sketch occupancy is unknown before execution.
+        val arrivals =
+            graph.client.load.average(graph.run.warmupMs + graph.run.measurementMs) *
+                (graph.run.warmupMs + graph.run.measurementMs)
+        val bytesPerElement = METADATA_BYTES_PER_ELEMENT + ceil(minOf(arrivals, 2_000.0) * 4).toLong()
+        val metadataBytes = Math.multiplyExact(rowKinds.size.toLong(), bytesPerElement)
+        val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, PART_OVERHEAD_BYTES)), metadataBytes)
+        val source = StorageSource.entries.maxBy { source -> rowKinds.filter { it.source == source }.sumOf { it.bytes } }
+        val sourceRows = Math.multiplyExact(rowKinds.count { it.source == source }.toLong(), windows.toLong())
         val anchor = timingAnchor(graph.services.size)
         val seconds =
             anchor.interceptSeconds +
                 anchor.secondsPerMillionEvents * events / 1_000_000 +
                 rows * WRITE_SECONDS_PER_ROW
-        return TaskEstimate(events, rows, rawBytes, artifactBytes, parts, seconds)
+        return TaskEstimate(events, rows, rawBytes, artifactBytes, parts, seconds, source, sourceRows)
     }
 
     private fun timingAnchor(services: Int): TimingAnchor {
@@ -229,8 +322,14 @@ internal object CostEstimator {
         return max(1.0, workers.toDouble())
     }
 
-    private const val BYTES_PER_NODE_WINDOW = 512L
-    private const val GZIP_RATIO = 0.25
+    // Storage anchors checked against retry-storm, checkout, and a replicated graph with pools and a pooler.
+    private const val BYTES_PER_NODE_WINDOW = 256L
+    private const val BYTES_PER_CONNECTION_WINDOW = 320L
+    private const val BYTES_PER_SLOT_POOL = 192L
+    private const val BYTES_PER_REPLICA_EXTREMA = 256L
+    private const val METADATA_BYTES_PER_ELEMENT = 3_072L
+    private const val PART_OVERHEAD_BYTES = 512L
+    private const val GZIP_RATIO = 0.125
     private const val UI_CACHE_BYTES = 64L * 1024 * 1024
     private const val WRITE_SECONDS_PER_ROW = 7.6316 / 3_000_000
 }

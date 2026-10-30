@@ -710,7 +710,7 @@
   "messages.JSON_SYNTAX": "Invalid JSON at line {line}, column {column}: {detail}",
   "messages.JSON_SYNTAX.detail": "Invalid JSON: {detail}",
   "messages.ESTIMATE_EXTRAPOLATION": "S1 timing anchors cover {minServices}–{maxServices} services; actual time may differ substantially",
-  "messages.ESTIMATE_UI_CACHE": "Estimated uncompressed task data exceed the {cacheMiB} MiB UI cache budget; load selected nodes only",
+  "messages.ESTIMATE_UI_CACHE": "Estimated uncompressed task data exceed the {cacheMiB} MiB UI cache budget; load selected nodes only. Main storage contributor: {storageSource} ({sourceRows} rows per replication)",
   "messages.DOCUMENT_CHANGED": "Experiment documents changed after validation; submit the experiment again",
   "messages.RUN_COMPLETE": "Run is already complete",
   "messages.RUN_INCOMPATIBLE.versions": "Run versions changed; run again",
@@ -1023,7 +1023,7 @@
   "catalog.types.client.params.load.points.time.description": "Time from simulation start, including warm-up.",
   "catalog.types.client.params.load.description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants. Initially one point at 0s with 10/s.",
   "catalog.types.client.params.load.points.time.title": "Time",
-  "messages.ESTIMATE_LONG_MODEL_TIME": "Modelled arrival interval is {durationSeconds} s with about {arrivals} requests per replication; consider a shorter period",
+  "messages.ESTIMATE_LONG_MODEL_TIME": "Modelled arrival interval is {durationSeconds} s with about {arrivals} requests per replication; consider a shorter period. Main storage contributor: {storageSource} ({sourceRows} rows per replication)",
   "messages.LOAD_RANGE": "Load intensity and its positive mean inter-arrival interval must be finite",
   "editor.canvas.loadProfile": "Load profile",
   "catalog.types.client.params.load.points.rate.description": "Non-negative arrival intensity.",
@@ -1244,5 +1244,10 @@
   "help.type.unknown": "Help is unavailable for type “{type}”.",
   "help.units": "Units",
   "help.symbol": "?",
-  "help.noValue": "—"
+  "help.noValue": "—",
+  "messages.storageSource.replicaInstances": "replica instances and their calls",
+  "messages.storageSource.nodes": "node rows",
+  "messages.storageSource.connections": "call connection rows",
+  "messages.storageSource.routerOutputs": "router output rows",
+  "messages.storageSource.groups": "replica group rows"
 }

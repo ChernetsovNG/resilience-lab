@@ -133,12 +133,12 @@ internal enum class CoreMessage(
     ESTIMATE_LONG_MODEL_TIME(
         "ESTIMATE_LONG_MODEL_TIME",
         null,
-        "Modelled arrival interval is {durationSeconds} s with about {arrivals} requests per replication; consider a shorter period",
+        "Modelled arrival interval is {durationSeconds} s with about {arrivals} requests per replication; consider a shorter period. Main storage contributor: {storageSource} ({sourceRows} rows per replication)",
     ),
     ESTIMATE_UI_CACHE(
         "ESTIMATE_UI_CACHE",
         null,
-        "Estimated uncompressed task data exceed the {cacheMiB} MiB UI cache budget; load selected nodes only",
+        "Estimated uncompressed task data exceed the {cacheMiB} MiB UI cache budget; load selected nodes only. Main storage contributor: {storageSource} ({sourceRows} rows per replication)",
     ),
     DOCUMENT_CHANGED("DOCUMENT_CHANGED", null, "Experiment documents changed after validation; submit the experiment again"),
     RESULT_SLOT_HANDLERS("RESULT_SLOT_HANDLERS", null, "handlers {element}"),
