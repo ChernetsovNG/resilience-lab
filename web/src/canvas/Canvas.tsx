@@ -8,6 +8,7 @@ import type { CanvasResults, ConnectionOverlayMetric, NodeOverlayMetric } from "
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
+import { useViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
 import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf } from "../workspace/structure";
 import type { CourseFault } from "../experiment/course";
@@ -78,6 +79,7 @@ export function Canvas(props: CanvasProps) {
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = {}, results = null,
   nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
+  const { gridStep, snapToGrid, showGrid } = useViewSettings();
   const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
     ...baseFitViewOptions.padding, bottom: `${Math.max(80, bottomInset + 16)}px` as `${number}px`,
   } }), [bottomInset]);
@@ -120,11 +122,11 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       if (editable && !disabled) {
         const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ ...node.position,
           width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }));
-        onCommand(addBlock(catalog, pending.type, insertionPosition(pending.center, occupied, measurement.size)));
+        onCommand(addBlock(catalog, pending.type, insertionPosition(pending.center, occupied, measurement.size, gridStep, snapToGrid)));
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand]);
+  }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand, gridStep, snapToGrid]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
   const [notice, setNotice] = useState<{ readonly message: string | null } | null>(null);
   const blocks = Object.entries(model.blocks);
@@ -264,8 +266,8 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       fitView
       fitViewOptions={fitViewOptions}
       minZoom={0.05}
-      snapToGrid
-      snapGrid={[20, 20]}
+      snapToGrid={snapToGrid}
+      snapGrid={[gridStep, gridStep]}
       nodesDraggable={editable}
       nodesConnectable={editable}
       elementsSelectable={!disabled}
@@ -284,7 +286,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         if (!editable) return;
         event.preventDefault();
         const type = event.dataTransfer.getData("application/resilience-lab-block");
-        const point = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: true });
+        const point = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid });
         onCommand(addBlock(catalog, type, point));
       }}
       onConnect={({ source, target, sourceHandle, targetHandle }) => {
@@ -299,7 +301,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
         if (connection.fromNode !== null && connection.isValid !== true) setNotice({ get message() { return t("editor.canvas.connectionHint"); } });
       }}
     >
-      <Background gap={20} />
+      {showGrid && <Background gap={gridStep} />}
       <Panel position="bottom-right" className="react-flow__attribution">
         <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"
           aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>

@@ -159,6 +159,29 @@ it("persists a keyboard move as a layout command and restores it with undo", asy
   expect(button("Save").disabled).toBe(true);
 });
 
+it("uses the live View grid for keyboard movement and clipboard insertion without changing existing positions", async () => {
+  server();
+  await open(); await selectGateway();
+  const node = screen.getByTestId("rf__node-gateway");
+  const step = screen.getByLabelText("Grid step");
+  try {
+    fireEvent.change(step, { target: { value: "40" } });
+    expect(node.style.transform).toBe("translate(260px,100px)");
+    expect(button("Save").disabled).toBe(true);
+    expect(button("Undo").disabled).toBe(true);
+    fireEvent.keyDown(document.body, { key: "c", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
+    expect((await screen.findByTestId("rf__node-service-1")).style.transform).toBe("translate(360px,200px)");
+    fireEvent.click(button("Undo"));
+    fireEvent.click(node);
+    fireEvent.keyDown(node, { key: "ArrowRight", code: "ArrowRight" });
+    expect(node.style.transform).toBe("translate(320px,120px)");
+    fireEvent.click(button("Undo"));
+    expect(node.style.transform).toBe("translate(260px,100px)");
+    expect(button("Save").disabled).toBe(true);
+  } finally { fireEvent.change(step, { target: { value: "20" } }); }
+});
+
 it("targets the pasted fragment with subsequent arrow and delete actions", async () => {
   server();
   await open(); await selectGateway();

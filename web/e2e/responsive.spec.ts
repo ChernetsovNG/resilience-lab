@@ -92,7 +92,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
 });
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
-  test(`example, Run, Answer, Time and Timeline at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
+  test(`example, Run, Answer, Time and Timeline at ${viewport.width}×${viewport.height}${viewport.width === 1440 ? " with 125% text" : ""}`, async ({ page }, testInfo) => {
     const directory = resolve(`../apps/server/build/e2e-workspace/responsive-${viewport.width}`);
     await mkdir(directory);
     try {
@@ -100,6 +100,24 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       await page.setViewportSize(viewport);
       await page.goto("/");
       await selectExperiment(page, `responsive-${viewport.width}/retry-storm.experiment.json`);
+      if (viewport.width === 1440) {
+        const diagramSize = () => page.getByTestId("rf__node-gateway").locator(".block-node").evaluate(element => ({
+          width: (element as HTMLElement).offsetWidth, height: (element as HTMLElement).offsetHeight,
+          font: getComputedStyle(element).fontSize,
+          labelFont: getComputedStyle(document.querySelector(".canvas-edge-label")!).fontSize,
+        }));
+        const original = await diagramSize();
+        await page.getByRole("button", { name: "View", exact: true }).click();
+        await page.getByLabel("Grid step", { exact: true }).selectOption("40");
+        await page.getByLabel("Snap to grid", { exact: true }).uncheck();
+        await page.getByLabel("Show grid", { exact: true }).uncheck();
+        await page.getByLabel("Interface text size", { exact: true }).selectOption("125");
+        await page.getByRole("button", { name: "View", exact: true }).click();
+        expect(await page.locator("html").evaluate(element => getComputedStyle(element).fontSize)).toBe("20px");
+        expect(await diagramSize()).toEqual(original);
+        await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+        await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+      }
       await expect(page.getByText("Shared by all variants", { exact: true })).toHaveCount(1);
       await page.getByRole("tab", { name: "Baseline", exact: true }).click();
       const run = page.getByRole("button", { name: "Run", exact: true });
@@ -139,6 +157,14 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
       await page.reload();
       await expect(page.getByRole("button", { name: "Expand inspector", exact: true })).toBeVisible();
+      if (viewport.width === 1440) {
+        await page.getByRole("button", { name: "View", exact: true }).click();
+        await expect(page.getByLabel("Grid step", { exact: true })).toHaveValue("40");
+        await expect(page.getByLabel("Snap to grid", { exact: true })).not.toBeChecked();
+        await expect(page.getByLabel("Show grid", { exact: true })).not.toBeChecked();
+        await expect(page.getByLabel("Interface text size", { exact: true })).toHaveValue("125");
+        expect(await page.locator("html").evaluate(element => getComputedStyle(element).fontSize)).toBe("20px");
+      }
     } finally {
       await rm(directory, { recursive: true });
     }

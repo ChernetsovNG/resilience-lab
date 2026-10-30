@@ -26,6 +26,7 @@ import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./la
 import { TopBar } from "./layout/TopBar";
 import { FileMenu } from "./layout/FileMenu";
 import { StatusBar } from "./layout/StatusBar";
+import { currentViewSettings } from "./layout/viewSettings";
 import { useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
@@ -235,8 +236,9 @@ export function App() {
         }
         if ((event.ctrlKey || event.metaKey) && key === "v" && clipboard.current?.path === loaded.experimentPath) {
           event.preventDefault();
-          clipboard.current.offset += 40;
-          const command = pasteSelection(clipboard.current.fragment, clipboard.current.offset);
+          const { gridStep, snapToGrid } = currentViewSettings();
+          clipboard.current.offset += 2 * gridStep;
+          const command = pasteSelection(clipboard.current.fragment, clipboard.current.offset, gridStep, snapToGrid);
           const pasted = command(loaded);
           const before = new Set([...Object.keys(loaded.model.blocks), ...loaded.model.connections.map((edge) => edge.id)]);
           execute(command);
