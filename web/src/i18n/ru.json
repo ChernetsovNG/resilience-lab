@@ -393,11 +393,11 @@
   "results.saturation.none": "Нет насыщения.",
   "results.saturation.pathSeparator": " → ",
   "results.saturation.replicationPath": "Повторение {replication}: {path}",
-  "results.saturation.rule": "Сервис считается насыщенным, если загрузка обработчиков не опускается ниже {utilization}, а средняя очередь остаётся выше {queue} не менее {duration}. Сервис также считается насыщенным, если в каждом последовательном окне число отказов очереди превышает {rejections}, а между началами первого и последнего окна прошло не менее {duration}.",
+  "results.saturation.rule": "Набор слотов считается насыщенным, если его загрузка не опускается ниже {utilization}, а средняя очередь остаётся выше {queue} не менее {duration}. Насыщение также подтверждается, если в каждом последовательном окне число отказов по полной очереди или пределу ожидания превышает {rejections}, а между началами первого и последнего окна прошло не менее {duration}. Набор без очереди проверяется только по отказам.",
   "results.saturation.howDetected": "Как определяется насыщение",
   "results.saturation.additionalRule": " Дополнительные сохранённые настройки: {rule}.",
-  "results.answer.headroom": "Запас мощности: наибольшая загрузка обработчиков по объединённым данным {utilization}; наибольшая средняя очередь по объединённым данным {queue}; задержка p99 на входе по объединённым данным {p99}.",
-  "results.answer.valueAtService": "{value} у сервиса {service}",
+  "results.answer.headroom": "Запас по ёмкости: наибольшая загрузка по объединённым данным {utilization}; наибольшая средняя очередь по объединённым данным {queue}; задержка p99 на входе по объединённым данным {p99}.",
+  "results.answer.valueAtService": "{value}: {service}",
   "results.answer.queuedRequests": "Запросов: {value}",
   "inspector.results.perReplication": "по повторению",
   "results.saturation.ruleParameter": "{name} = {value}",
@@ -1211,5 +1211,10 @@
   "catalog.types.call.outputs.groupMeanLatencyMs.title": "Средняя задержка группы",
   "catalog.types.call.outputs.groupMeanLatencyMs.description": "Задержки запросов измеряемой когорты, объединённые по экземплярам группы, включая завершение работы после измерения.",
   "catalog.types.call.outputs.groupP99LatencyMs.title": "p99 задержки группы",
-  "catalog.types.call.outputs.groupP99LatencyMs.description": "p99 по объединённому скетчу задержек экземпляров группы."
+  "catalog.types.call.outputs.groupP99LatencyMs.description": "p99 по объединённому скетчу задержек экземпляров группы.",
+  "messages.RESULT_SLOT_HANDLERS": "обработчики {element}",
+  "messages.RESULT_SLOT_DATABASE": "соединения {element}",
+  "messages.RESULT_SLOT_POOL": "пул соединений {from} → {to}",
+  "messages.RESULT_SLOT_CLIENTS": "клиентские подключения {element}",
+  "messages.RESULT_SLOT_SERVERS": "серверные соединения {element}"
 }

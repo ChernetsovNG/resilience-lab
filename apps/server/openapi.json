@@ -1710,6 +1710,25 @@
         },
         "required" : [ "params", "type" ]
       },
+      "CapacityHeadroom" : {
+        "type" : "object",
+        "properties" : {
+          "meanQueueLength" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/SlotPoolPeak"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "utilization" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/SlotPoolPeak"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
       "Catalog" : {
         "type" : "object",
         "properties" : {
@@ -2189,6 +2208,9 @@
       "FirstNodeSaturation" : {
         "type" : "object",
         "properties" : {
+          "label" : {
+            "$ref" : "#/components/schemas/SlotPoolLabel"
+          },
           "maxStartMs" : {
             "type" : "number",
             "format" : "double"
@@ -2207,9 +2229,12 @@
           "replicationCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "slotPool" : {
+            "type" : "string"
           }
         },
-        "required" : [ "maxStartMs", "medianStartMs", "minStartMs", "node", "replicationCount" ]
+        "required" : [ "label", "maxStartMs", "medianStartMs", "minStartMs", "node", "replicationCount", "slotPool" ]
       },
       "GridAxis" : {
         "type" : "object",
@@ -2714,6 +2739,9 @@
               "additionalProperties" : true
             }
           },
+          "headroom" : {
+            "$ref" : "#/components/schemas/CapacityHeadroom"
+          },
           "id" : {
             "type" : "string"
           },
@@ -2721,7 +2749,7 @@
             "$ref" : "#/components/schemas/SaturationSummary"
           }
         },
-        "required" : [ "aggregate", "coordinates", "id", "saturation" ]
+        "required" : [ "aggregate", "coordinates", "headroom", "id", "saturation" ]
       },
       "PoolerTotals" : {
         "type" : "object",
@@ -2987,7 +3015,13 @@
       "SaturatedNode" : {
         "type" : "object",
         "properties" : {
+          "label" : {
+            "$ref" : "#/components/schemas/SlotPoolLabel"
+          },
           "node" : {
+            "type" : "string"
+          },
+          "slotPool" : {
             "type" : "string"
           },
           "startMs" : {
@@ -2995,15 +3029,11 @@
             "format" : "double"
           }
         },
-        "required" : [ "node", "startMs" ]
+        "required" : [ "label", "node", "slotPool", "startMs" ]
       },
       "SaturationRule" : {
         "type" : "object",
         "properties" : {
-          "handlerUtilizationThreshold" : {
-            "type" : "number",
-            "format" : "double"
-          },
           "meanQueueLengthThreshold" : {
             "type" : "number",
             "format" : "double"
@@ -3012,12 +3042,16 @@
             "type" : "number",
             "format" : "double"
           },
-          "queueRejectionsThreshold" : {
+          "rejectionsThreshold" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "utilizationThreshold" : {
+            "type" : "number",
+            "format" : "double"
           }
         },
-        "required" : [ "handlerUtilizationThreshold", "meanQueueLengthThreshold", "minimumDurationMs", "queueRejectionsThreshold" ]
+        "required" : [ "meanQueueLengthThreshold", "minimumDurationMs", "rejectionsThreshold", "utilizationThreshold" ]
       },
       "SaturationSummary" : {
         "type" : "object",
@@ -3249,6 +3283,24 @@
         },
         "required" : [ "admittedAttempts", "failures", "measurementMs", "offeredAttempts", "originalArrivals", "retries", "slotPools", "timeouts" ]
       },
+      "SlotPoolLabel" : {
+        "type" : "object",
+        "properties" : {
+          "args" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : [ "string", "number" ]
+            }
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "args", "code", "message" ]
+      },
       "SlotPoolMetrics" : {
         "type" : "object",
         "properties" : {
@@ -3289,6 +3341,25 @@
           }
         },
         "required" : [ "busyIntegralMs", "capacityIntegralMs", "queueFullCount", "queueIntegralMs", "totalWaitMs", "waitCount", "waitLimitCount" ]
+      },
+      "SlotPoolPeak" : {
+        "type" : "object",
+        "properties" : {
+          "label" : {
+            "$ref" : "#/components/schemas/SlotPoolLabel"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "slotPool" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "label", "node", "slotPool", "value" ]
       },
       "TypeDescriptor" : {
         "type" : "object",

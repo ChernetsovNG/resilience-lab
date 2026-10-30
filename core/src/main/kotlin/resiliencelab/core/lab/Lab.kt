@@ -189,6 +189,7 @@ class Lab(
                         requireNotNull(manifest.series).points,
                         manifest.grid,
                         callOrder(compiled),
+                        compiled.variants.associate { variant -> variant.id to variant.points.associate { it.id to it.graph } },
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
             }
@@ -260,6 +261,7 @@ class Lab(
                             requireNotNull(manifest.series).points,
                             manifest.grid,
                             callOrder(compiled),
+                            compiled.variants.associate { variant -> variant.id to variant.points.associate { it.id to it.graph } },
                         )
                     RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
                 }

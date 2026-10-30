@@ -393,10 +393,10 @@
   "results.saturation.none": "No saturation.",
   "results.saturation.pathSeparator": " → ",
   "results.saturation.replicationPath": "Replication {replication}: {path}",
-  "results.saturation.rule": "A service counts as saturated when handler utilization stays at or above {utilization} and the mean queue stays above {queue} for at least {duration}. It also counts as saturated when each consecutive window has more than {rejections} queue rejections and the window starts span at least {duration}.",
+  "results.saturation.rule": "A slot set counts as saturated when utilization stays at or above {utilization} and the mean queue stays above {queue} for at least {duration}. It also counts as saturated when each consecutive window has more than {rejections} rejections (queue full or wait limit) and the window starts span at least {duration}. Slot sets without a waiting queue use only the rejection rule.",
   "results.saturation.howDetected": "How saturation is detected",
   "results.saturation.additionalRule": " Additional recorded settings: {rule}.",
-  "results.answer.headroom": "Capacity headroom: highest handler utilization (pooled) {utilization}; largest mean queue (pooled) {queue}; entry p99 (pooled) {p99}.",
+  "results.answer.headroom": "Capacity headroom: highest utilization (pooled) {utilization}; largest mean queue (pooled) {queue}; entry p99 (pooled) {p99}.",
   "results.answer.valueAtService": "{value} at {service}",
   "results.answer.queuedRequests": "{value} requests",
   "inspector.results.perReplication": "per replication",
@@ -1211,5 +1211,10 @@
   "catalog.types.call.outputs.groupMeanLatencyMs.title": "Group mean latency",
   "catalog.types.call.outputs.groupMeanLatencyMs.description": "Merged group latency observations of the measured arrival cohort, including run-out.",
   "catalog.types.call.outputs.groupP99LatencyMs.title": "Group p99 latency",
-  "catalog.types.call.outputs.groupP99LatencyMs.description": "The p99 of merged group latency sketches; instance percentiles are never averaged."
+  "catalog.types.call.outputs.groupP99LatencyMs.description": "The p99 of merged group latency sketches; instance percentiles are never averaged.",
+  "messages.RESULT_SLOT_HANDLERS": "handlers {element}",
+  "messages.RESULT_SLOT_DATABASE": "connections {element}",
+  "messages.RESULT_SLOT_POOL": "connection pool {from} → {to}",
+  "messages.RESULT_SLOT_CLIENTS": "client connections {element}",
+  "messages.RESULT_SLOT_SERVERS": "server connections {element}"
 }

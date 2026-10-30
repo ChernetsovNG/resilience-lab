@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { recordedWindow } from "../test/series";
-import { catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
+import { slotPoolResource, catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
 import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
 import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
 import { canvasResults, windowCanvasResults } from "./canvasResults";
@@ -83,8 +83,8 @@ describe("canvasResults", () => {
     const run = fixture();
     const saturation = run.variants[0].points[0].saturation;
     saturation.firstNodes = [
-      { node: "middle", replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
-      { node: "gateway", replicationCount: 1, medianStartMs: 300, minStartMs: 300, maxStartMs: 300 },
+      { node: "middle", ...slotPoolResource("middle"), replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
+      { node: "gateway", ...slotPoolResource("gateway"), replicationCount: 1, medianStartMs: 300, minStartMs: 300, maxStartMs: 300 },
     ];
     const result = canvasResults(run, model, "baseline", "p0", catalog)!;
     expect(result.services.get("middle")?.firstSaturation).toBe("1 of 2 replications");

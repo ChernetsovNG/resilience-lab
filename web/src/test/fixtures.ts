@@ -189,8 +189,13 @@ export const documentViews: Record<string, DocumentView> = {
   [layoutPath]: { path: layoutPath, kind: "LAYOUT", version: "v-layout", content: { layout } },
 };
 
+/** A service resource label matching the core's recorded message contract. */
+export function slotPoolResource(node: string) {
+  return { slotPool: "handlers", label: { code: "RESULT_SLOT_HANDLERS", message: `handlers ${node}`, args: { element: node } } };
+}
+
 export const noSaturation = {
-  rule: { minimumDurationMs: 100, handlerUtilizationThreshold: 0.95, meanQueueLengthThreshold: 0.5, queueRejectionsThreshold: 0 },
+  rule: { minimumDurationMs: 100, utilizationThreshold: 0.95, meanQueueLengthThreshold: 0.5, rejectionsThreshold: 0 },
   withoutSaturation: 2,
   firstNodes: [],
   replications: [
@@ -200,7 +205,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 12,
+  schemaVersion: 13,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -208,7 +213,7 @@ export const summary: RunSummary = {
       id: "baseline",
       label: "Baseline",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { groups: [],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, headroom: {}, aggregate: { groups: [],
         pooledLatency: {},
         connections: {},
         poolers: {},
@@ -235,13 +240,13 @@ export const summary: RunSummary = {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { groups: [], pooledLatency: {}, services: {}, connections: {}, poolers: {} } }],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, headroom: {}, aggregate: { groups: [], pooledLatency: {}, services: {}, connections: {}, poolers: {} } }],
     },
   ],
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 12,
+  schemaVersion: 13,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",

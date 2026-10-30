@@ -23,6 +23,49 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 
 class CliTest {
+    @Test
+    fun `prints recorded headroom instead of computing a service maximum`() {
+        val stdout = StringBuilder()
+        val status =
+            runCommand(
+                listOf("run", experiment),
+                stdout,
+                StringBuilder(),
+                workspace,
+                newRunId = { "headroom" },
+                execute = { lab, path, id, _, _ ->
+                    val result = lab.run(path, id)
+                    val peak =
+                        resiliencelab.core.results.SlotPoolPeak(
+                            "to-db#2",
+                            "pool",
+                            0.91,
+                            resiliencelab.core.results.SlotPoolLabel(
+                                "RESULT_SLOT_POOL",
+                                "connection pool order-service#2 → pgbouncer",
+                                emptyMap(),
+                            ),
+                        )
+                    result.copy(
+                        summary =
+                            result.summary.copy(
+                                variants =
+                                    result.summary.variants.map { variant ->
+                                        variant.copy(
+                                            points =
+                                                variant.points.map { point ->
+                                                    point.copy(headroom = resiliencelab.core.results.CapacityHeadroom(peak))
+                                                },
+                                        )
+                                    },
+                            ),
+                    )
+                },
+            )
+        assertThat(status).isZero()
+        assertThat(stdout.toString()).contains("91.00% at connection pool order-service#2 → pgbouncer", "mean queue n/a")
+    }
+
     @TempDir
     lateinit var workspace: Path
 

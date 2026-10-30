@@ -75,6 +75,8 @@ data class ServiceNode(
     /** Null selects processing followed by outgoing calls in path order. */
     val scenario: List<ServiceStep>? = null,
     val pooler: PoolerSettings? = null,
+    /** Catalog type retained for resource names in results; runtime service semantics remain shared. */
+    val type: String = "service",
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -86,7 +88,8 @@ data class ServiceNode(
         origin: Origin = Origin.UNSPECIFIED,
         scenario: List<ServiceStep>? = null,
         pooler: PoolerSettings? = null,
-    ) : this(path.split('/'), handlers, queueCapacity, processing, failureProbability, origin, scenario, pooler)
+        type: String = "service",
+    ) : this(path.split('/'), handlers, queueCapacity, processing, failureProbability, origin, scenario, pooler, type)
 
     val path: String get() = displayPath(pathSegments)
 }

@@ -1,7 +1,7 @@
 import { recordedWindow } from "./test/series";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { documentViews, experiment, experimentPath, model, modelPath, summary } from "./test/fixtures";
+import { slotPoolResource, documentViews, experiment, experimentPath, model, modelPath, summary } from "./test/fixtures";
 import { seriesLoader } from "./results/series";
 import { setupAppTests, deferred, server, open, selectGateway, editHandlers, button, editField } from "./test/app";
 
@@ -59,7 +59,7 @@ describe("diagram results", () => {
     second.coordinates = { "gateway.handlers": 6 };
     second.aggregate.services.gateway.totals.slotPools.handlers.busyIntegralMs = 1500;
     second.saturation.firstNodes = [
-      { node: "gateway", replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
+      { node: "gateway", ...slotPoolResource("gateway"), replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
     ];
     run.variants[0].points.push(second);
     const alternative = structuredClone(second);

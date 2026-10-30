@@ -2,6 +2,7 @@ package resiliencelab.core.results
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
+import resiliencelab.core.experiment.SlotPoolMetrics
 
 /**
  * Thresholds of the event-time saturation rule. Queue and utilization conditions use the same closed windows.
@@ -11,21 +12,23 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class SaturationRule(
     @EncodeDefault val minimumDurationMs: Double = 100.0,
-    @EncodeDefault val handlerUtilizationThreshold: Double = 0.95,
+    @EncodeDefault val utilizationThreshold: Double = 0.95,
     @EncodeDefault val meanQueueLengthThreshold: Double = 0.5,
-    @EncodeDefault val queueRejectionsThreshold: Int = 0,
+    @EncodeDefault val rejectionsThreshold: Int = 0,
 )
 
-/** One saturated node and the start of its first qualifying window. */
+/** One saturated element and slot set, with the start of its first qualifying window. */
 @Serializable
 data class SaturatedNode(
     val node: String,
     val startMs: Double,
+    @EncodeDefault val slotPool: String = "handlers",
+    @EncodeDefault val label: SlotPoolLabel = SlotPoolLabels.label(node, slotPool),
 )
 
 /**
- * Degradation path of one replication, ordered by onset, downstream position, then node id for deterministic ties.
- * An empty path explicitly means that no node saturated.
+ * Degradation path of one replication, ordered by onset, downstream position, element id and slot-set name.
+ * An empty path explicitly means that no slot set saturated.
  */
 @Serializable
 data class ReplicationSaturation(
@@ -41,10 +44,12 @@ data class FirstNodeSaturation(
     val medianStartMs: Double,
     val minStartMs: Double,
     val maxStartMs: Double,
+    @EncodeDefault val slotPool: String = "handlers",
+    @EncodeDefault val label: SlotPoolLabel = SlotPoolLabels.label(node, slotPool),
 )
 
 /**
- * Saturation insight for one variant point. [firstNodes] sorts by descending count then node id; [replications]
+ * Saturation insight for one variant point. [firstNodes] sorts by descending count, element id and slot set; [replications]
  * sorts by replication number. Empty paths are counted only in [withoutSaturation], never in onset statistics.
  */
 @Serializable
@@ -55,28 +60,38 @@ data class SaturationSummary(
     val replications: List<ReplicationSaturation>,
 )
 
-/** Applies the stage 1 saturation rule and aggregates independent replications without hiding empty paths. */
+/** Applies the same sustained-pressure rule to every instance slot set, including connection pools. */
 object SaturationAnalyzer {
     /**
-     * Reads [windows] chronologically for each node. [callChain] is the graph's topological node order; equal onsets
-     * put downstream nodes first, with node id as the fallback for nodes outside that order.
+     * Reads [windows] chronologically for each element. Connection rows use only window bounds and [WindowMetrics.slotPools].
+     * [callChain] places calls between source and target; equal onsets put downstream elements first.
      */
     fun detect(
         replication: Int,
         windows: Sequence<NodeWindow>,
         rule: SaturationRule = SaturationRule(),
         callChain: List<String> = emptyList(),
+        labels: Map<String, Map<String, SlotPoolLabel>> = emptyMap(),
+        positions: Map<String, Int> = callChain.withIndex().associate { it.value to it.index },
     ): ReplicationSaturation {
-        val positions = callChain.withIndex().associate { it.value to it.index }
-        val states = mutableMapOf<String, NodeState>()
-        windows.forEach { row -> states.getOrPut(row.id) { NodeState() }.observe(row.metrics, rule) }
+        val states = mutableMapOf<Pair<String, String>, NodeState>()
+        windows.forEach { row ->
+            row.metrics.slotPools.forEach { (slot, pool) ->
+                states
+                    .getOrPut(row.id to slot) { NodeState() }
+                    .observe(row.metrics, pool, slot != "clientConnections", rule)
+            }
+        }
         val path =
             states
-                .mapNotNull { (node, state) -> state.startMs?.let { SaturatedNode(node, it) } }
-                .sortedWith(
+                .mapNotNull { (key, state) ->
+                    val (node, slot) = key
+                    state.startMs?.let { SaturatedNode(node, it, slot, labels[node]?.get(slot) ?: SlotPoolLabels.label(node, slot)) }
+                }.sortedWith(
                     compareBy<SaturatedNode> { it.startMs }
                         .thenByDescending { positions[it.node] ?: -1 }
-                        .thenBy { it.node },
+                        .thenBy { it.node }
+                        .thenBy { it.slotPool },
                 )
         return ReplicationSaturation(replication, path)
     }
@@ -89,17 +104,19 @@ object SaturationAnalyzer {
         val firstNodes =
             ordered
                 .mapNotNull { it.degradationPath.firstOrNull() }
-                .groupBy { it.node }
-                .map { (node, occurrences) ->
+                .groupBy { it.node to it.slotPool }
+                .map { (key, occurrences) ->
                     val times = occurrences.map { it.startMs }.sorted()
                     FirstNodeSaturation(
-                        node,
+                        key.first,
                         occurrences.size,
                         median(times),
                         times.first(),
                         times.last(),
+                        key.second,
+                        occurrences.first().label,
                     )
-                }.sortedWith(compareByDescending<FirstNodeSaturation> { it.replicationCount }.thenBy { it.node })
+                }.sortedWith(compareByDescending<FirstNodeSaturation> { it.replicationCount }.thenBy { it.node }.thenBy { it.slotPool })
         return SaturationSummary(
             rule,
             ordered.count { it.degradationPath.isEmpty() },
@@ -120,21 +137,22 @@ object SaturationAnalyzer {
 
         fun observe(
             metrics: WindowMetrics,
+            pool: SlotPoolMetrics,
+            hasQueue: Boolean,
             rule: SaturationRule,
         ) {
-            val handlers = metrics.slotPools["handlers"]
             val queued =
-                metrics.durationMs > 0 &&
-                    handlers != null &&
-                    handlers.capacityIntegralMs > 0 &&
-                    handlers.busyIntegralMs / handlers.capacityIntegralMs >= rule.handlerUtilizationThreshold &&
-                    handlers.queueIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
+                hasQueue &&
+                    metrics.durationMs > 0 &&
+                    pool.capacityIntegralMs > 0 &&
+                    pool.busyIntegralMs / pool.capacityIntegralMs >= rule.utilizationThreshold &&
+                    pool.queueIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
             backlog.observe(metrics, rule, queued, metrics.startMs + metrics.durationMs)
             // A rejection count does not establish pressure throughout its window; require later observations.
             overflow.observe(
                 metrics,
                 rule,
-                metrics.durationMs > 0 && (handlers?.queueFullCount ?: 0L) > rule.queueRejectionsThreshold,
+                metrics.durationMs > 0 && pool.queueFullCount + pool.waitLimitCount > rule.rejectionsThreshold,
                 metrics.startMs,
             )
         }

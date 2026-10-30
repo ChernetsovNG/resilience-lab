@@ -14,6 +14,8 @@ class SaturationArtifactReader(
         directory: String,
         replication: Int,
         callChain: List<String>,
+        labels: Map<String, Map<String, SlotPoolLabel>> = emptyMap(),
+        positions: Map<String, Int> = callChain.withIndex().associate { it.value to it.index },
     ): ReplicationSaturation {
         val index = json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         val windows =
@@ -25,8 +27,18 @@ class SaturationArtifactReader(
                     part.nodes.forEach { node ->
                         node.windows.forEach { metrics -> yield(NodeWindow(node.id, metrics)) }
                     }
+                    part.connections.forEach { connection ->
+                        connection.windows.forEach { metrics ->
+                            yield(
+                                NodeWindow(
+                                    connection.id,
+                                    WindowMetrics(metrics.startMs, metrics.durationMs, slotPools = metrics.slotPools),
+                                ),
+                            )
+                        }
+                    }
                 }
             }
-        return SaturationAnalyzer.detect(replication, windows, callChain = callChain)
+        return SaturationAnalyzer.detect(replication, windows, labels = labels, positions = positions)
     }
 }
