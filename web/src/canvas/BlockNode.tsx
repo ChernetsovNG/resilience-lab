@@ -68,10 +68,13 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
       {data.result === undefined ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
         aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.resultsEmpty || undefined}
         data-testid={`canvas-results-${data.id}`}>
-        {data.result.outputs.map(output => <span key={output.id}
-          title={tooltip(outputText(output.overlay!.description, { interval }))}>
-          {outputText(output.overlay!.label, { value: formatOutput(output, data.result!.values[output.id]) })}
-        </span>)}
+        {data.result.outputs.map(output => {
+          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result!.values[output.id]) });
+          return <span key={output.id}
+            title={tooltip(`${text} ${t("editor.symbols.separator")} ${outputText(output.overlay!.description, { interval })}`)}>
+            {text}
+          </span>;
+        })}
       </div>}
     </div>
   );

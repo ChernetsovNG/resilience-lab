@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
@@ -8,13 +8,12 @@ import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
 import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
-
-let unsavedParametersOpen: boolean | null = null;
+import { InspectorSection } from "./InspectorSection";
 
 export interface InspectorProps {
   catalog: Catalog;
   results?: ReactNode;
-  /** Prioritize available results; unavailable elements keep their parameters open. */
+  /** Prioritize available results; without them, parameters default to open unless a preference was saved. */
   resultsFirst?: boolean;
   resultsOnly?: boolean;
   hidden?: boolean;
@@ -45,18 +44,13 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
   hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
   target = selected === null ? "experiment" : "element", focusField, results, resultsFirst = false, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
-  const [parametersOpen, setParametersOpen] = useState(() => {
-    if (unsavedParametersOpen !== null) return unsavedParametersOpen;
-    try { return localStorage.getItem("resilience-lab.inspector-parameters-open") === "true"; }
-    catch { return false; }
-  });
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
   useEffect(() => {
     if (hidden || focusField == null) return;
     const field = [...(panel.current?.querySelectorAll<HTMLElement>("[data-inspector-field]") ?? [])]
       .find(element => element.dataset.inspectorField === focusField.path);
-    const parameters = field?.closest<HTMLDetailsElement>(".inspector-parameters");
-    if (parameters !== null && parameters !== undefined) parameters.open = true;
+    const section = field?.closest<HTMLDetailsElement>(".inspector-section");
+    if (section !== null && section !== undefined) section.open = true;
     if (focusField.focus !== false) field?.querySelector<HTMLElement>("input, select, button:not(:disabled)")?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
@@ -80,17 +74,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
             {variantId === null ? "" : t("editor.inspector.variantOverrides")}
           </p>
           {prioritizeResults && !resultsOnly ? results : null}
-          <details className="inspector-parameters" open={!prioritizeResults || parametersOpen} onToggle={event => {
-            if (!prioritizeResults) return;
-            const open = event.currentTarget.open;
-            setParametersOpen(open);
-            try {
-              localStorage.setItem("resilience-lab.inspector-parameters-open", String(open));
-              unsavedParametersOpen = null;
-            } catch { unsavedParametersOpen = open; }
-          }}>
-          <summary hidden={!prioritizeResults}>{t("editor.inspector.parameters")}</summary>
-          {prioritizeResults ? null : <h3>{t("editor.inspector.parameters")}</h3>}
+          <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
@@ -119,7 +103,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
               navigationDisabled={invalid}
             />
           ))}
-          </details>
+          </InspectorSection>
         </>
       ) : null}
       {target === "experiment" ? <section className="experiment-settings">

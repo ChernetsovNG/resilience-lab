@@ -14,7 +14,7 @@ import type { BlockNodeType } from "./BlockNode";
 import { CallEdge } from "./CallEdge";
 import "@xyflow/react/dist/style.css";
 
-const fitViewOptions = { padding: { top: "64px" as const, bottom: 0.15, left: 0.15, right: 0.15 }, minZoom: 0.05 };
+const fitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
 const nodeTypes = { block: BlockNode };
 const edgeTypes = { call: CallEdge };
 const ariaLabelConfig = (): AriaLabelConfig => ({
@@ -281,11 +281,11 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
           aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>
       </Panel>
       {notice === null ? null : <div className="canvas-notice" role="alert">{notice.message}</div>}
-    </ReactFlow>
-    <div className="canvas-navigation react-flow" role="group" aria-label={t("editor.canvas.navigation")}>
+    <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}>
       <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions} />
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
-    </div>
+    </Panel>
+    </ReactFlow>
     </>
   );
 }

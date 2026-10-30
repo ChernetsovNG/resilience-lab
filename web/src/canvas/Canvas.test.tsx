@@ -13,6 +13,16 @@ import type { TypeDescriptor } from "../api/apiTypes";
 
 beforeAll(mockReactFlowDom);
 
+it("includes the full metric label and a large queue value in its tooltip", async () => {
+  const results = canvasResults(summary, model, "baseline", "p0", catalog)!;
+  results.services.get("gateway")!.values.meanQueue = 9_999_999.99;
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+    onCommand={vi.fn()} results={results} />);
+  const metrics = await screen.findByTestId("canvas-results-gateway");
+  const queue = [...metrics.children].find(row => row.textContent?.startsWith("Mean queue"))!;
+  expect(queue.getAttribute("title")).toContain("Mean queue 9,999,999.99");
+});
+
 it("applies colliding output ids only to the type selected in the overlay", async () => {
   const service = catalog.types.find(type => type.id === "service")!;
   const pool: TypeDescriptor = { ...service, id: "pool", title: "Pool", outputs: [{

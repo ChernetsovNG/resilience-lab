@@ -35,6 +35,58 @@ function commit(label: string, value: string) {
 }
 
 describe("Inspector", () => {
+  it.each(["Run settings", "Parameter grid", "Faults"])("remembers %s independently across remounts", async title => {
+    const props: InspectorProps = { catalog, model, experiment, selected: null, editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn() };
+    const view = render(<Inspector {...props} />);
+    const section = screen.getByText(title).closest("details");
+    expect(section).not.toBeNull();
+    fireEvent.click(screen.getByText(title));
+    await waitFor(() => expect(section!.open).toBe(false));
+    // Opening another group must not overwrite this group's preference.
+    const other = screen.getByText(title === "Faults" ? "Run settings" : "Faults").closest("summary")!;
+    fireEvent.click(other);
+    await waitFor(() => expect(other.closest("details")!.open).toBe(false));
+    view.unmount();
+    render(<Inspector {...props} />);
+    expect(screen.getByText(title).closest("details")!.open).toBe(false);
+    expect(screen.getByText(title === "Faults" ? "Parameter grid" : "Run settings").closest("details")!.open)
+      .toBe(title === "Run settings" ? false : true);
+  });
+
+  it("restores collapsed model parameters and reveals a requested field", async () => {
+    localStorage.setItem("resilience-lab.inspector-parameters-open", "false");
+    const props: InspectorProps = { catalog, model, experiment, selected: "gateway", editable: true,
+      overrides: {}, onParam: vi.fn(), onValidity: vi.fn() };
+    const view = render(<Inspector {...props} />);
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(false);
+    view.rerender(<Inspector {...props} focusField={{ path: "handlers", request: 1 }} />);
+    await waitFor(() => expect(document.activeElement).toBe(input("Handlers")));
+    expect(screen.getByText("Parameters").closest("details")!.open).toBe(true);
+  });
+
+  it.each([
+    ["execution", "Run settings", "execution.seed", "Seed"],
+    ["faults", "Faults", "faults.0.processingMultiplier", "Processing multiplier"],
+    ["grid", "Parameter grid", "grid.0.path", "Axis 1 parameter"],
+  ])("opens collapsed %s when Problems requests its field", async (section, title, path, label) => {
+    localStorage.setItem(`resilience-lab.inspector-${section}-open`, "false");
+    const props: InspectorProps = { catalog, model, experiment: { ...experiment, grid: [{ path: "gateway.handlers", values: [4] }] },
+      selected: null, editable: true, overrides: {}, onParam: vi.fn(), onValidity: vi.fn(), onCommand: vi.fn() };
+    const view = render(<Inspector {...props} />);
+    expect(screen.getByText(title).closest("details")?.open).toBe(false);
+    view.rerender(<Inspector {...props} focusField={{ path, request: 1 }} />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(label)));
+    expect(screen.getByText(title).closest("details")!.open).toBe(true);
+  });
+
+  it("reveals run settings for diagnostics on the execution group", async () => {
+    localStorage.setItem("resilience-lab.inspector-execution-open", "false");
+    renderInspector({ selected: null, focusField: { path: "execution", request: 1 } });
+    await waitFor(() => expect(screen.getByText("Run settings").closest("details")!.open).toBe(true));
+    expect(document.activeElement).toBe(input("Replications"));
+  });
+
   it("puts available variant results before collapsed parameters", () => {
     renderInspector({ variantId: "baseline", resultsFirst: true, results: <section aria-label="Element results">Metrics</section> });
     const parameters = screen.getByText("Parameters").closest("details")!;

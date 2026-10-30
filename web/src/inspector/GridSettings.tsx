@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { InspectorSection } from "./InspectorSection";
 import { formatNumber } from "../i18n/format";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile, ParamDescriptor } from "../api/apiTypes";
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
@@ -39,8 +40,8 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const parameters = parametersOf(model, catalog);
   const next = parameters.find((parameter) => !grid.some((axis) => axis.path === parameter.path));
   const replace = (index: number, axis: GridAxis) => onCommand(setGridAxes(grid.map((current, position) => position === index ? axis : current)));
-  return <section className="grid-settings" data-inspector-field="grid">
-    <h3>{t("editor.grid.title")}</h3>
+  return <InspectorSection name="grid" title={<h3>{t("editor.grid.title")}</h3>}>
+    <section className="grid-settings" data-inspector-field="grid">
     <DiagnosticMessages diagnostics={fieldDiagnostics?.get("grid")} />
     {grid.length === 0 ? <p>{t("editor.grid.empty")}</p> : null}
     {grid.map((axis, index) => {
@@ -83,5 +84,6 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     })}
     <button type="button" disabled={!editable || invalid || grid.length >= 2 || next === undefined}
       onClick={() => { if (next !== undefined) onCommand(setGridAxes([...grid, { path: next.path, values: [next.value] }])); }}>{t("editor.grid.addAxis")}</button>
-  </section>;
+    </section>
+  </InspectorSection>;
 }
