@@ -192,7 +192,10 @@ jobs:
           retention-days: 1
 
   e2e-shard:
-    needs: [changes, e2e-server]
+    needs: changes
+    permissions:
+      contents: read
+      actions: read
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -236,14 +239,35 @@ jobs:
           distribution: microsoft
           java-version: '25'
           cache-jdk: false
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Wait for E2E server
+        timeout-minutes: 5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          const url = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}/jobs?filter=all&per_page=100`;
+          for (;;) {
+            const response = await fetch(url, {
+              headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+            });
+            if (!response.ok) throw new Error(`Cannot read E2E server status: HTTP ${response.status}`);
+            const { jobs } = await response.json();
+            const server = jobs.filter(job => job.name === 'e2e-server').sort((a, b) => b.id - a.id)[0];
+            if (server?.status === 'completed') {
+              if (server.conclusion !== 'success') throw new Error(`E2E server ended with ${server.conclusion}`);
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+          NODE
       - name: Download E2E server
         uses: actions/download-artifact@v8
         with:
           name: e2e-server
           path: .e2e-server
-      - name: Install frontend dependencies
-        working-directory: web
-        run: npm ci
       - name: Run real browser workflows
         working-directory: web
         env:
