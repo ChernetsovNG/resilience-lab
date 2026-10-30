@@ -601,8 +601,8 @@ select {
   column-gap: 0.5rem;
 }
 
-.inspector-execution .param-field > :not(label, input, select),
-.inspector-faults .param-field > :not(label, input, select) { grid-column: 1 / -1; }
+.inspector-execution .param-field > :not(label, .param-field-label, input, select),
+.inspector-faults .param-field > :not(label, .param-field-label, input, select) { grid-column: 1 / -1; }
 
 .inspector-type {
   margin: 0.25rem 0 0.375rem;
@@ -1356,3 +1356,44 @@ select {
 .problems-filter { display: flex; align-items: center; gap: 0.75rem; font-size: var(--font-secondary); }
 
 .block-node .block-wiring-hint { color: #64748b; font-size: var(--font-secondary); }
+
+/* Shared field help uses the top layer to escape scrolling inspectors and popovers. */
+.help-hint { display: inline-flex; vertical-align: middle; flex-shrink: 0; }
+.help-hint-button, .inspector .help-hint-button, .status-bar .help-hint-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1rem; height: 1rem; padding: 0; border: 1px solid #9aa5b1; border-radius: 50%;
+  background: #f8fafc; color: #52606d; font: inherit; font-size: var(--font-secondary); line-height: 1;
+  cursor: help; flex-shrink: 0;
+}
+.help-hint-button:hover { background: #e0e7ff; color: #1d4ed8; }
+.help-hint-button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.help-hint-popover {
+  position: fixed; inset: auto; margin: 0; box-sizing: border-box;
+  width: min(23rem, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto;
+  padding: .65rem .8rem; border: 1px solid #9aa5b1; border-radius: .35rem;
+  background: #fff; color: #1f2937; font-size: var(--font-ui); font-weight: 400; line-height: 1.5;
+  white-space: normal; text-align: start; overflow-wrap: anywhere; box-shadow: 0 4px 16px #102a4330;
+}
+.help-hint-popover[hidden] { display: none; }
+.param-field-label, .inspector-heading, .status-job { display: flex; align-items: center; gap: .35rem; }
+.inspector-heading { justify-content: space-between; }
+.status-job > [role="status"] { overflow: hidden; text-overflow: ellipsis; }
+.type-help-dialog {
+  box-sizing: border-box; width: min(64rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem);
+  overflow: auto; padding: 1rem 1.25rem; border: 1px solid #9aa5b1; border-radius: .5rem;
+  background: #fff; color: #1f2937; font-size: var(--font-ui);
+}
+.type-help-dialog::backdrop { background: #102a4366; }
+.type-help-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.type-help-dialog h2 { margin: 0; font-size: 1.25rem; }
+.type-help-dialog h3 { margin: 1.25rem 0 .5rem; font-size: 1rem; }
+.type-help-dialog > header button { flex-shrink: 0; }
+.type-help-table { overflow-x: auto; }
+.type-help-dialog table { border-collapse: collapse; width: 100%; text-align: start; }
+.type-help-dialog :is(th, td) { padding: .5rem; border-bottom: 1px solid #e4e7eb; vertical-align: top; text-align: start; }
+.type-help-dialog th[scope="row"] { font-weight: 500; min-width: 9rem; }
+.type-help-dialog td { overflow-wrap: anywhere; }
+.type-help-dialog td p { margin: .35rem 0 0; color: #52606d; }
+.type-help-outputs > div { margin: .6rem 0; }
+.type-help-outputs dt { font-weight: 600; }
+.type-help-outputs dd { margin: .15rem 0 0; color: #52606d; }
