@@ -573,6 +573,63 @@ export interface components {
             id: string;
             windows: components["schemas"]["WindowMetrics"][];
         };
+        OutputCalculation: {
+            capacity?: string | null;
+            divisor?: string | null;
+            field: string;
+            /** @enum {string} */
+            kind: "VALUE" | "RATE" | "RATIO" | "NORMALIZED_RATIO" | "MEAN" | "QUANTILE";
+            /** Format: double */
+            percentile?: number | null;
+        };
+        OutputDescriptor: {
+            approximateWindow: boolean;
+            calculation: components["schemas"]["OutputCalculation"];
+            description: string;
+            id: string;
+            inspector?: components["schemas"]["OutputInspector"] | null;
+            /** @enum {string} */
+            kind: "RATE" | "MEAN_LEVEL" | "UTILIZATION" | "FRACTION" | "LATENCY" | "COUNT" | "RATIO";
+            overlay?: components["schemas"]["OutputOverlay"] | null;
+            summary?: components["schemas"]["OutputSummary"] | null;
+            timeline?: components["schemas"]["OutputTimeline"] | null;
+            title: string;
+            /** @enum {string} */
+            unit: "PER_SECOND" | "MILLISECONDS" | "PERCENT" | "REQUESTS" | "MULTIPLIER";
+        };
+        OutputInspector: {
+            /** Format: int32 */
+            chartOrder?: number | null;
+            /** Format: int32 */
+            order: number;
+            showValue: boolean;
+            thresholdParameter?: string | null;
+            title: string;
+        };
+        OutputOverlay: {
+            description: string;
+            label: string;
+            /** Format: int32 */
+            order: number;
+            scaleParameter?: string | null;
+            scaleTitle?: string | null;
+            title: string;
+            windowDescription?: string | null;
+        };
+        OutputSummary: {
+            calculation: components["schemas"]["OutputCalculation"];
+            intervalField?: string | null;
+            /** @enum {string} */
+            source: "POOLED" | "REPLICATION" | "PER_REPLICATION";
+        };
+        OutputTimeline: {
+            group: string;
+            /** Format: int32 */
+            groupOrder: number;
+            groupTitle: string;
+            /** Format: int32 */
+            order: number;
+        };
         ParamDescriptor: {
             default?: unknown[] | boolean | number | null | {
                 [key: string]: unknown;
@@ -763,6 +820,7 @@ export interface components {
             connects?: components["schemas"]["ConnectionRule"] | null;
             description: string;
             id: string;
+            outputs: components["schemas"]["OutputDescriptor"][];
             params: components["schemas"]["ParamDescriptor"][];
             ports: components["schemas"]["PortDescriptor"][];
             title: string;

@@ -2,7 +2,7 @@ import type { ConnectionWindowMetrics } from "../../api/apiTypes";
 import type { components } from "../../api/schema";
 import { LatencySketch } from "./sketch";
 import { MessageError } from "../../i18n/MessageError";
-import type { DecodedConnectionWindow, DecodedSeriesPart, DecodedWindow, WindowMetricValues } from "./types";
+import type { DecodedConnectionWindow, DecodedSeriesPart, DecodedWindow } from "./types";
 
 type RawPart = components["schemas"]["SeriesPart"];
 type RawWindow = components["schemas"]["WindowMetrics"];
@@ -40,55 +40,24 @@ export function decodeSeriesPart(text: string): DecodedSeriesPart {
 }
 
 function decodeConnectionWindow(window: ConnectionWindowMetrics, profile: string): DecodedConnectionWindow {
-  const sketch = LatencySketch.decode(profile, window.latency.sketch);
-  return {
-    ...window,
-    latency: {
-      count: window.latency.count,
-      sumMs: window.latency.sumMs,
-      meanMs: window.latency.count === 0 ? null : window.latency.sumMs / window.latency.count,
-      p50Ms: sketch.quantile(0.50),
-      p95Ms: sketch.quantile(0.95),
-      p99Ms: sketch.quantile(0.99),
-    },
-  };
+  return { ...window, latency: decodeLatency(window.latency, profile) };
 }
 
 function decodeWindow(window: RawWindow, originalArrivals: number, profile: string): DecodedWindow {
-  const sketch = LatencySketch.decode(profile, window.latency.sketch);
-  const metrics = metricsOf(window, sketch);
-  if (window.handlers > 0) {
-    metrics.amplification = originalArrivals === 0 ? null : window.admittedAttempts / originalArrivals;
-  }
   return {
     originalArrivals: window.originalArrivals,
     admittedAttempts: window.admittedAttempts,
     handlers: window.handlers,
     latency: { count: window.latency.count, sumMs: window.latency.sumMs },
-    metrics,
+    metrics: { ...window, latency: decodeLatency(window.latency, profile), client: { originalArrivals } },
   };
 }
 
-function metricsOf(window: RawWindow, sketch: LatencySketch): WindowMetricValues {
-  const rate = (count: number) => count * 1000 / window.durationMs;
-  const service = window.handlers > 0;
+function decodeLatency(latency: RawWindow["latency"], profile: string) {
+  const sketch = LatencySketch.decode(profile, latency.sketch);
   return {
-    startMs: window.startMs,
-    durationMs: window.durationMs,
-    originalArrivalsPerSecond: rate(window.originalArrivals),
-    offeredAttemptsPerSecond: rate(window.offeredAttempts),
-    admittedAttemptsPerSecond: rate(window.admittedAttempts),
-    queueRejectionsPerSecond: rate(window.queueRejections),
-    successesPerSecond: rate(window.successes),
-    failuresPerSecond: rate(window.failures),
-    timeoutsPerSecond: rate(window.timeouts),
-    retriesPerSecond: rate(window.retries),
-    handlerUtilization: service ? window.busyHandlerTimeMs / (window.handlers * window.durationMs) : null,
-    meanQueueLength: service ? window.queueLengthIntegralMs / window.durationMs : null,
-    meanLatencyMs: window.latency.count === 0 ? null : window.latency.sumMs / window.latency.count,
-    p50LatencyMs: sketch.quantile(0.50),
-    p95LatencyMs: sketch.quantile(0.95),
-    p99LatencyMs: sketch.quantile(0.99),
-    amplification: null,
+    count: latency.count, sumMs: latency.sumMs,
+    meanMs: latency.count === 0 ? null : latency.sumMs / latency.count,
+    p50Ms: sketch.quantile(0.50), p95Ms: sketch.quantile(0.95), p99Ms: sketch.quantile(0.99),
   };
 }

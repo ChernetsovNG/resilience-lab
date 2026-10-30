@@ -1,0 +1,133 @@
+import { describe, expect, it } from "vitest";
+import type { OutputCalculation, TypeDescriptor } from "../api/apiTypes";
+import { localizeCatalog } from "../i18n/catalog";
+import { catalog } from "../test/fixtures";
+import { calculateOutput, inspectorOutputs, outputValue, outputWindow, outputsOf, overlayOutputs, selectedOverlayOutput, timelineGroups } from "./outputs";
+import { decodeSeriesPart } from "./series/decode";
+import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
+
+describe("catalog output contract", () => {
+  it("preserves the six Timeline groups, units, labels and metric order", () => {
+    expect(timelineGroups(catalog).map(group => [group.title, group.unit, group.scale, group.metrics.map(metric => metric.label)])).toEqual([
+      ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries"]],
+      ["Latency", "ms", 1, ["Mean latency", "p50 latency", "p95 latency", "p99 latency"]],
+      ["Errors and rejections", "RPS", 1, ["Failures", "Timeouts", "Orphaned attempts", "Queue rejections"]],
+      ["Utilization", "%", 100, ["Handler utilization"]],
+      ["Call state", "requests", 1, ["Mean in-flight", "Mean orphaned work", "Mean backoff"]],
+      ["Queue", "requests", 1, ["Mean queue"]],
+    ]);
+  });
+
+  it("preserves inspector and overlay sets, labels and units", () => {
+    expect(inspectorOutputs(outputsOf(catalog, "service")).map(output => [output.inspector!.title, output.unit])).toEqual([
+      ["Handler utilization", "PERCENT"], ["Mean queue", "REQUESTS"], ["Queue fill", "PERCENT"],
+      ["Queue rejection share", "PERCENT"], ["Admitted attempts", "PER_SECOND"], ["Mean latency", "MILLISECONDS"],
+    ]);
+    expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([
+      ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
+      ["Orphaned attempts", "REQUESTS"], ["Mean orphaned work", "REQUESTS"], ["Mean in flight", "REQUESTS"],
+      ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Admitted amplification", "MULTIPLIER"],
+    ]);
+    expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
+    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Amplification", "Sent attempts", "Timeout share", "Orphaned work"]);
+  });
+
+  it("keeps different type-local outputs with the same id as separate overlay choices", () => {
+    const service = catalog.types.find(type => type.id === "service")!;
+    const pool: TypeDescriptor = { ...service, id: "pool", title: "Pool", outputs: [{
+      ...service.outputs.find(output => output.id === "admittedAttemptsPerSecond")!, id: "meanQueue",
+      overlay: { title: "Pool throughput", label: "Pool throughput {value}", description: "Pool throughput", order: 1 },
+    }] };
+    const choices = overlayOutputs({ ...catalog, types: [...catalog.types, pool] }, "BLOCK").filter(output => output.id === "meanQueue");
+    expect(choices.map(output => output.overlay!.title)).toEqual(["Mean queue", "Pool throughput"]);
+    expect(choices.map(output => output.unit)).toEqual(["REQUESTS", "PER_SECOND"]);
+    expect(new Set(choices.map(output => output.key)).size).toBe(2);
+    expect(selectedOverlayOutput(choices, choices[0].key)?.types).toEqual(["service"]);
+    expect(selectedOverlayOutput(choices, choices[1].key)?.types).toEqual(["pool"]);
+    expect(selectedOverlayOutput(choices, "meanQueue")?.types).toEqual(["service"]);
+    const amplification = overlayOutputs(catalog, "CONNECTION").filter(output => output.id === "amplification");
+    expect(amplification).toHaveLength(1);
+    expect(amplification[0].key).toBe("amplification");
+    expect(amplification[0].types).toEqual(["request", "call"]);
+  });
+
+  it("matches the existing retry-storm node values and core quantile bits in every window", () => {
+    const decoded = decodeSeriesPart(JSON.stringify(golden.part));
+    const expectedQuantiles = new Map(golden.quantiles.map(value => [`${value.node}/${value.window}`, value]));
+    const bits = (value: number | null) => {
+      if (value === null) return null;
+      const bytes = new DataView(new ArrayBuffer(8)); bytes.setFloat64(0, value);
+      return bytes.getUint32(0).toString(16).padStart(8, "0") + bytes.getUint32(4).toString(16).padStart(8, "0");
+    };
+    for (const node of decoded.nodes) for (const [index, frame] of node.windows.entries()) {
+      const raw = golden.part.nodes.find(candidate => candidate.id === node.id)!.windows[index];
+      const type = raw.handlers === 0 ? "client" : "service";
+      const values = outputWindow(outputsOf(catalog, type), { ...frame.metrics, params: { queue: 16 } });
+      const counts = type === "client" ? ["originalArrivals", "successes", "failures"] as const
+        : ["offeredAttempts", "admittedAttempts", "successes", "retries", "failures", "timeouts", "queueRejections"] as const;
+      for (const field of counts) expect(values[`${field}PerSecond`]).toBe(raw[field] * 1000 / raw.durationMs);
+      expect(values.meanLatencyMs).toBe(raw.latency.count === 0 ? null : raw.latency.sumMs / raw.latency.count);
+      const quantiles = expectedQuantiles.get(`${node.id}/${index}`)!;
+      expect([bits(values.p50LatencyMs), bits(values.p95LatencyMs), bits(values.p99LatencyMs)])
+        .toEqual([quantiles.p50 ?? null, quantiles.p95 ?? null, quantiles.p99 ?? null]);
+      if (type === "service") {
+        expect(values.utilization).toBe(raw.busyHandlerTimeMs / (raw.handlers * raw.durationMs));
+        expect(values.meanQueue).toBe(raw.queueLengthIntegralMs / raw.durationMs);
+        expect(values.queueFill).toBeCloseTo(raw.queueLengthIntegralMs / raw.durationMs / 16, 14);
+        const rejection = raw.offeredAttempts === 0 ? null : raw.queueRejections / raw.offeredAttempts;
+        expect(values.queueRejectionRate).toBe(rejection);
+      }
+    }
+  });
+
+  it("matches every retry-storm call output using its own raw window and target arrivals", () => {
+    const decoded = decodeSeriesPart(JSON.stringify(golden.part));
+    for (const connection of decoded.connections) for (const [index, frame] of connection.windows.entries()) {
+      const raw = golden.part.connections.find(candidate => candidate.id === connection.id)!.windows[index];
+      const target = decoded.nodes.find(node => node.id === (connection.id === "gateway-to-middle" ? "middle" : "dependency"))!.windows[index].metrics;
+      const values = outputWindow(outputsOf(catalog, "call"), { ...frame, target, client: target.client });
+      expect(values.sentAttemptsPerSecond).toBe(raw.sentAttempts * 1000 / raw.durationMs);
+      expect(values.retriesPerSecond).toBe(raw.retries * 1000 / raw.durationMs);
+      expect(values.successesPerSecond).toBe(raw.succeeded * 1000 / raw.durationMs);
+      expect(values.failuresPerSecond).toBe(raw.failed * 1000 / raw.durationMs);
+      expect(values.timeoutsPerSecond).toBe(raw.timeouts * 1000 / raw.durationMs);
+      expect(values.orphanedPerSecond).toBe(raw.orphaned * 1000 / raw.durationMs);
+      expect(values.orphaned).toBe(raw.orphaned);
+      expect(values.meanInFlight).toBe(raw.inFlightIntegralMs / raw.durationMs);
+      expect(values.meanOrphaned).toBe(raw.orphanedIntegralMs / raw.durationMs);
+      expect(values.meanBackoff).toBe(raw.backoffIntegralMs / raw.durationMs);
+      expect(values.timeoutRate).toBe(raw.sentAttempts === 0 ? null : raw.timeouts / raw.sentAttempts);
+      expect(values.meanLatencyMs).toBe(raw.latency.count === 0 ? null : raw.latency.sumMs / raw.latency.count);
+      expect([values.p50LatencyMs, values.p95LatencyMs, values.p99LatencyMs]).toEqual([frame.latency.p50Ms, frame.latency.p95Ms, frame.latency.p99Ms]);
+      expect(values.amplification).toBe(target.client!.originalArrivals === 0 ? null : target.admittedAttempts / target.client!.originalArrivals);
+    }
+  });
+
+  it.each([
+    [{ kind: "VALUE", field: "missing" }, {}, null],
+    [{ kind: "RATIO", field: "count", divisor: "durationMs" }, { count: 0, durationMs: 0 }, null],
+    [{ kind: "NORMALIZED_RATIO", field: "busy", divisor: "durationMs", capacity: "handlers" }, { busy: 1, durationMs: 1, handlers: 0 }, null],
+    [{ kind: "MEAN", field: "latency" }, { latency: { count: 0, sumMs: 0 } }, null],
+    [{ kind: "VALUE", field: "value" }, { value: Infinity }, null],
+    [{ kind: "VALUE", field: "value" }, Object.create({ value: 12 }), null],
+    [{ kind: "RATE", field: "count", divisor: "durationMs" }, { count: 2, durationMs: 25 }, 80],
+    [{ kind: "RATIO", field: "count", divisor: "params.capacity" }, { count: 2, params: { capacity: 4 } }, 0.5],
+  ] as [OutputCalculation, unknown, number | null][])("keeps unavailable inputs distinct from zero: %j", (calculation, context, expected) => {
+    expect(calculateOutput(calculation, context)).toBe(expected);
+  });
+
+  it("uses the supplied replication mean and preserves confidence bounds outside the physical range", () => {
+    const output = outputsOf(catalog, "call").find(output => output.id === "timeoutRate")!;
+    expect(outputValue(output, { timeoutRate: { mean: 0.25, ci95Low: -0.1, ci95High: 1.2 }, totals: { timeouts: 0, sentAttempts: 100 } }, false))
+      .toEqual({ value: 0.25, source: "replications", ci95Low: -0.1, ci95High: 1.2 });
+    expect(outputValue(output, { timeouts: 0, sentAttempts: 100 }, true)).toEqual({ value: 0, source: "window" });
+  });
+
+  it("localizes outputs without changing calculations or mutating the API catalog", () => {
+    const localized = localizeCatalog(catalog, "ru");
+    const original = outputsOf(catalog, "service")[0], translated = outputsOf(localized, "service")[0];
+    expect(translated.title).not.toBe(original.title);
+    expect(translated.calculation).toEqual(original.calculation);
+    expect(original.title).toBe("Offered attempts");
+  });
+});

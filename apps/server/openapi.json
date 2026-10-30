@@ -2256,6 +2256,173 @@
         },
         "required" : [ "id", "windows" ]
       },
+      "OutputCalculation" : {
+        "type" : "object",
+        "properties" : {
+          "capacity" : {
+            "type" : [ "string", "null" ]
+          },
+          "divisor" : {
+            "type" : [ "string", "null" ]
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "VALUE", "RATE", "RATIO", "NORMALIZED_RATIO", "MEAN", "QUANTILE" ]
+          },
+          "percentile" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          }
+        },
+        "required" : [ "field", "kind" ]
+      },
+      "OutputDescriptor" : {
+        "type" : "object",
+        "properties" : {
+          "approximateWindow" : {
+            "type" : "boolean"
+          },
+          "calculation" : {
+            "$ref" : "#/components/schemas/OutputCalculation"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "inspector" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/OutputInspector"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "RATE", "MEAN_LEVEL", "UTILIZATION", "FRACTION", "LATENCY", "COUNT", "RATIO" ]
+          },
+          "overlay" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/OutputOverlay"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "summary" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/OutputSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "timeline" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/OutputTimeline"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string",
+            "enum" : [ "PER_SECOND", "MILLISECONDS", "PERCENT", "REQUESTS", "MULTIPLIER" ]
+          }
+        },
+        "required" : [ "approximateWindow", "calculation", "description", "id", "kind", "title", "unit" ]
+      },
+      "OutputInspector" : {
+        "type" : "object",
+        "properties" : {
+          "chartOrder" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "order" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "showValue" : {
+            "type" : "boolean"
+          },
+          "thresholdParameter" : {
+            "type" : [ "string", "null" ]
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "order", "showValue", "title" ]
+      },
+      "OutputOverlay" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "order" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "scaleParameter" : {
+            "type" : [ "string", "null" ]
+          },
+          "scaleTitle" : {
+            "type" : [ "string", "null" ]
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "windowDescription" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "description", "label", "order", "title" ]
+      },
+      "OutputSummary" : {
+        "type" : "object",
+        "properties" : {
+          "calculation" : {
+            "$ref" : "#/components/schemas/OutputCalculation"
+          },
+          "intervalField" : {
+            "type" : [ "string", "null" ]
+          },
+          "source" : {
+            "type" : "string",
+            "enum" : [ "POOLED", "REPLICATION", "PER_REPLICATION" ]
+          }
+        },
+        "required" : [ "calculation", "source" ]
+      },
+      "OutputTimeline" : {
+        "type" : "object",
+        "properties" : {
+          "group" : {
+            "type" : "string"
+          },
+          "groupOrder" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "groupTitle" : {
+            "type" : "string"
+          },
+          "order" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "group", "groupOrder", "groupTitle", "order" ]
+      },
       "ParamDescriptor" : {
         "type" : "object",
         "properties" : {
@@ -2776,6 +2943,12 @@
           "id" : {
             "type" : "string"
           },
+          "outputs" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OutputDescriptor"
+            }
+          },
           "params" : {
             "type" : "array",
             "items" : {
@@ -2796,7 +2969,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "assumptions", "category", "description", "id", "params", "ports", "title", "version" ]
+        "required" : [ "assumptions", "category", "description", "id", "outputs", "params", "ports", "title", "version" ]
       },
       "ValidationRequest" : {
         "type" : "object",

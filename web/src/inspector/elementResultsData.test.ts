@@ -1,13 +1,15 @@
+import { recordedWindow } from "../test/series";
 import { describe, expect, it } from "vitest";
 import type { NodeSeriesMetrics, WindowMetricValues } from "../results/series/types";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
 import { projectElementResults, type ElementResultsContext } from "./elementResultsData";
 
-const window = (startMs: number, durationMs: number, values: Partial<WindowMetricValues> = {}): WindowMetricValues => ({
-  startMs, durationMs, originalArrivalsPerSecond: 0, offeredAttemptsPerSecond: 200, admittedAttemptsPerSecond: 190,
-  queueRejectionsPerSecond: 10, successesPerSecond: 0, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
-  handlerUtilization: 0.75, meanQueueLength: 2, meanLatencyMs: 20, p50LatencyMs: 20, p95LatencyMs: 20, p99LatencyMs: 20,
-  amplification: 2.25, ...values,
+const window = (startMs: number, durationMs: number, meanLatencyMs: number | null = 20): WindowMetricValues => recordedWindow({
+  startMs, durationMs, offeredAttempts: durationMs / 5, admittedAttempts: durationMs * 0.19,
+  queueRejections: durationMs / 100, busyHandlerTimeMs: durationMs * 0.75, queueLengthIntegralMs: durationMs * 2,
+  latency: { count: meanLatencyMs == null ? 0 : 1, sumMs: meanLatencyMs ?? 0, meanMs: meanLatencyMs,
+    p50Ms: meanLatencyMs, p95Ms: meanLatencyMs, p99Ms: meanLatencyMs },
+  client: { originalArrivals: durationMs * 0.19 / 2.25 },
 });
 function fixture(): ElementResultsContext {
   const run = structuredClone(summary);
@@ -23,8 +25,8 @@ function fixture(): ElementResultsContext {
     meanInFlight: { mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
     pooledLatency: { meanMs: 22, p95Ms: 30, p99Ms: 40, statistics: { count: 24, sumMs: 528, sketch: [24] } },
   };
-  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [window(0, 100, { meanLatencyMs: 999 }),
-    window(100, 100, { meanLatencyMs: 10 }), window(200, 900, { meanLatencyMs: 50 }), window(1100, 25)],
+  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [window(0, 100, 999),
+    window(100, 100, 10), window(200, 900, 50), window(1100, 25)],
     latency: [{ count: 1, sumMs: 999 }, { count: 1, sumMs: 10 }, { count: 9, sumMs: 450 }, { count: 2, sumMs: 40 }],
   }, { id: "middle", windows: [window(0, 100), window(100, 100), window(200, 900), window(1100, 25)] }];
   return { summary: run, manifest: { ...manifest, series: { ...manifest.series!, measurementMs: 1025, windowMs: 100 } },
@@ -106,7 +108,7 @@ describe("element results sources", () => {
     const context = fixture();
     Object.assign(context.summary.variants[0].points[0].aggregate.services.gateway.totals,
       { offeredAttempts: 0, handlerCapacityTimeMs: 0, measurementMs: 0 });
-    context.nodes = [{ id: "gateway", windows: [window(100, 10, { meanLatencyMs: null })], latency: [{ count: 0, sumMs: 0 }] }];
+    context.nodes = [{ id: "gateway", windows: [window(100, 10, null)], latency: [{ count: 0, sumMs: 0 }] }];
     const result = values(context);
     for (const key of ["utilization", "meanQueue", "queueRejectionRate", "admittedAttemptsPerSecond", "meanLatencyMs"]) {
       expect(result[key].value).toBeNull();

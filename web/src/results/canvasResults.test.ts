@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { recordedWindow } from "../test/series";
 import { catalog, experiment, experimentPath, layout, layoutPath, model, modelPath, summary } from "../test/fixtures";
 import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
 import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
-import { canvasQueueCapacities, canvasResults, windowCanvasResults } from "./canvasResults";
+import { canvasResults, windowCanvasResults } from "./canvasResults";
 
 function fixture() {
   const run = structuredClone(summary);
@@ -22,23 +23,23 @@ function fixture() {
 it("uses the catalog's disabled-queue default when run parameters omit capacity", () => {
   const snapshot = structuredClone(model);
   delete snapshot.blocks.gateway.params.queue;
-  expect(canvasQueueCapacities(snapshot, experiment, catalog, "baseline", {}).get("gateway")).toBe(0);
-  expect(canvasQueueCapacities(snapshot, experiment, catalog, "missing-variant", {}).size).toBe(0);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, snapshot, experiment)?.services.get("gateway")?.params.queue).toBe(0);
+  expect(canvasResults(summary, snapshot, "missing-variant", "p0", catalog, snapshot, experiment)).toBeNull();
 });
 
 describe("canvasResults", () => {
   it("uses pooled time and count totals, with amplification from the called service", () => {
-    const result = canvasResults(fixture(), model, "baseline", "p0")!;
-    expect(result.services.get("gateway")).toEqual({
-      utilization: 0.5, meanQueue: 0.1, queueRejectionRate: 20 / 260, firstSaturation: null,
+    const result = canvasResults(fixture(), model, "baseline", "p0", catalog)!;
+    expect(result.services.get("gateway")?.values).toEqual({
+      utilization: 0.5, meanQueue: 0.1, queueRejectionRate: 20 / 260,
     });
-    expect(result.services.get("middle")).toEqual({
-      utilization: 0.8, meanQueue: 0.25, queueRejectionRate: 0.25, firstSaturation: null,
+    expect(result.services.get("middle")?.values).toEqual({
+      utilization: 0.8, meanQueue: 0.25, queueRejectionRate: 0.25,
     });
-    expect(result.connections.get("gateway-to-middle")).toEqual({
-      from: "gateway", to: "middle", type: "call", amplification: 2.5,
+    expect(result.connections.get("gateway-to-middle")).toMatchObject({
+      from: "gateway", to: "middle", type: "call", values: { amplification: 2.5 },
     });
-    expect(result.connections.get("client-to-gateway")?.amplification).toBe(1.2);
+    expect(result.connections.get("client-to-gateway")?.values.amplification).toBe(1.2);
     expect(result.services.has("client")).toBe(false);
     expect(result.services.has("dependency")).toBe(false);
     expect(result.connections.has("middle-to-dependency")).toBe(false);
@@ -51,10 +52,10 @@ describe("canvasResults", () => {
     point.id = "p1";
     point.aggregate.services.gateway.totals.busyHandlerTimeMs = 1500;
     run.variants[0].points.push(point);
-    expect(canvasResults(run, model, "baseline", "p1")?.services.get("gateway")?.utilization).toBe(0.75);
-    expect(canvasResults(run, model, "no-retries", "p0")?.services.size).toBe(0);
-    expect(canvasResults(run, model, "baseline", "p2")).toBeNull();
-    expect(canvasResults(run, model, "new-variant", "p0")).toBeNull();
+    expect(canvasResults(run, model, "baseline", "p1", catalog)?.services.get("gateway")?.values.utilization).toBe(0.75);
+    expect(canvasResults(run, model, "no-retries", "p0", catalog)?.services.size).toBe(0);
+    expect(canvasResults(run, model, "baseline", "p2", catalog)).toBeNull();
+    expect(canvasResults(run, model, "new-variant", "p0", catalog)).toBeNull();
   });
 
   it("keeps unavailable metrics distinct from zero", () => {
@@ -64,16 +65,16 @@ describe("canvasResults", () => {
     service.totals = {
       ...service.totals, handlerCapacityTimeMs: 0, measurementMs: 0, offeredAttempts: 0,
     };
-    const result = canvasResults(run, model, "baseline", "p0")!;
-    expect(result.services.get("gateway")).toEqual({
-      utilization: null, meanQueue: null, queueRejectionRate: null, firstSaturation: null,
+    const result = canvasResults(run, model, "baseline", "p0", catalog)!;
+    expect(result.services.get("gateway")?.values).toEqual({
+      utilization: null, meanQueue: null, queueRejectionRate: null,
     });
-    expect(result.connections.get("client-to-gateway")?.amplification).toBeNull();
+    expect(result.connections.get("client-to-gateway")?.values.amplification).toBeNull();
     const middle = run.variants[0].points[0].aggregate.services.middle;
     middle.totals.busyHandlerTimeMs = 0;
     middle.totals.queueLengthIntegralMs = 0;
     middle.totals.queueRejections = 0;
-    expect(canvasResults(run, model, "baseline", "p0")?.services.get("middle")).toMatchObject({
+    expect(canvasResults(run, model, "baseline", "p0", catalog)?.services.get("middle")?.values).toMatchObject({
       utilization: 0, meanQueue: 0, queueRejectionRate: 0,
     });
   });
@@ -85,16 +86,16 @@ describe("canvasResults", () => {
       { node: "middle", replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
       { node: "gateway", replicationCount: 1, medianStartMs: 300, minStartMs: 300, maxStartMs: 300 },
     ];
-    const result = canvasResults(run, model, "baseline", "p0")!;
+    const result = canvasResults(run, model, "baseline", "p0", catalog)!;
     expect(result.services.get("middle")?.firstSaturation).toBe("1 of 2 replications");
     expect(result.services.get("gateway")?.firstSaturation).toBeNull();
     saturation.firstNodes = [];
-    expect(canvasResults(run, model, "baseline", "p0")?.services.get("middle")?.firstSaturation).toBeNull();
+    expect(canvasResults(run, model, "baseline", "p0", catalog)?.services.get("middle")?.firstSaturation).toBeNull();
   });
 
   it("does not read inherited records as service data", () => {
     const snapshot = { ...model, blocks: { ["constructor"]: model.blocks.gateway }, connections: [] };
-    expect(canvasResults(summary, snapshot, "baseline", "p0")?.services.size).toBe(0);
+    expect(canvasResults(summary, snapshot, "baseline", "p0", catalog)?.services.size).toBe(0);
   });
 });
 
@@ -109,17 +110,17 @@ it("keeps edited elements associated but excludes a replacement with a reused ID
   let state = openEditor();
   const snapshot = state.loaded!.model;
   state = editorReducer(state, { type: "command", command: setModelParam("gateway", "handlers", 6) });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.get("gateway")?.values.utilization).toBe(0.5);
   state = editorReducer(state, { type: "command", command: deleteElements(["gateway"]) });
   state = editorReducer(state, { type: "command", command: addBlock(catalog, "service", { x: 260, y: 100 }) });
   const added = Object.keys(state.loaded!.model.blocks).find((id) => !Object.hasOwn(snapshot.blocks, id))!;
   state = editorReducer(state, { type: "command", command: renameElement(added, "gateway") });
   expect(state.loaded!.model.blocks.gateway.params).toEqual({});
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.has("gateway")).toBe(false);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.has("gateway")).toBe(false);
   for (let count = 0; count < 3; count++) state = editorReducer(state, { type: "undo" });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.get("gateway")?.values.utilization).toBe(0.5);
   for (let count = 0; count < 3; count++) state = editorReducer(state, { type: "redo" });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.has("gateway")).toBe(false);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.has("gateway")).toBe(false);
 });
 
 it("excludes a newly created connection even when the editor reuses its ID and endpoints", () => {
@@ -128,16 +129,16 @@ it("excludes a newly created connection even when the editor reuses its ID and e
   state = editorReducer(state, { type: "command", command: deleteElements(["client-to-gateway"]) });
   state = editorReducer(state, { type: "command", command: addConnection(catalog, "client", "gateway", "out", "in") });
   expect(state.loaded!.model.connections.some((edge) => edge.id === "client-to-gateway")).toBe(true);
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.connections.has("client-to-gateway")).toBe(false);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.connections.has("client-to-gateway")).toBe(false);
   state = editorReducer(editorReducer(state, { type: "undo" }), { type: "undo" });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.connections.get("client-to-gateway")?.amplification).toBe(1.2);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.connections.get("client-to-gateway")?.values.amplification).toBe(1.2);
 });
 
 it("preserves associations when the same file is reloaded with new object references", () => {
   let state = openEditor();
   const snapshot = state.loaded!.model;
   state = editorReducer(state, { type: "open", loaded: structuredClone(state.loaded!) });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.get("gateway")?.values.utilization).toBe(0.5);
 });
 
 it("restores saved element associations when reload discards a local deletion", () => {
@@ -146,7 +147,7 @@ it("restores saved element associations when reload discards a local deletion", 
   const saved = structuredClone(state.loaded!);
   state = editorReducer(state, { type: "command", command: deleteElements(["gateway"]) });
   state = editorReducer(state, { type: "open", loaded: saved });
-  expect(canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)?.services.get("gateway")?.utilization).toBe(0.5);
+  expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.get("gateway")?.values.utilization).toBe(0.5);
 });
 
 it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s is renamed back", (id) => {
@@ -154,9 +155,9 @@ it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s
   const snapshot = state.loaded!.model;
   state = editorReducer(state, { type: "command", command: renameElement(id, "temporary") });
   state = editorReducer(state, { type: "command", command: renameElement("temporary", id) });
-  const result = canvasResults(summary, snapshot, "baseline", "p0", state.loaded!.model)!;
-  expect(result.services.get("gateway")?.utilization).toBe(0.5);
-  expect(result.connections.get("client-to-gateway")?.amplification).toBe(1.2);
+  const result = canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)!;
+  expect(result.services.get("gateway")?.values.utilization).toBe(0.5);
+  expect(result.connections.get("client-to-gateway")?.values.amplification).toBe(1.2);
 });
 
 
@@ -167,28 +168,24 @@ it("projects connection totals independently of the target service", () => {
       inFlightIntegralMs: 600, orphanedIntegralMs: 250, backoffIntegralMs: 100, measurementMs: 2000 },
     timeoutRate: { mean: 0.3, min: 0.2, max: 0.4 },
   };
-  const result = canvasResults(run, model, "baseline", "p0")!;
-  expect(result.connections.get("gateway-to-middle")).toMatchObject({
+  const result = canvasResults(run, model, "baseline", "p0", catalog)!;
+  expect(result.connections.get("gateway-to-middle")?.values).toMatchObject({
     sentAttemptsPerSecond: 20, timeoutRate: 0.3, meanOrphaned: 0.125, amplification: 2.5,
   });
   // A connection has its own result even if the target has no service totals.
   delete run.variants[0].points[0].aggregate.services.middle;
-  expect(canvasResults(run, model, "baseline", "p0")?.connections.get("gateway-to-middle")?.sentAttemptsPerSecond).toBe(20);
+  expect(canvasResults(run, model, "baseline", "p0", catalog)?.connections.get("gateway-to-middle")?.values.sentAttemptsPerSecond).toBe(20);
   const frame = windowCanvasResults(result, [
-    { id: "gateway", windows: [{ startMs: 0, durationMs: 100, handlerUtilization: 0.5, meanQueueLength: 0,
-      originalArrivalsPerSecond: 0, admittedAttemptsPerSecond: 0, successesPerSecond: 0, failuresPerSecond: 0,
-      timeoutsPerSecond: 0, retriesPerSecond: 0, meanLatencyMs: null, p50LatencyMs: null, p95LatencyMs: null, p99LatencyMs: null,
-      queueRejectionsPerSecond: 0, offeredAttemptsPerSecond: 9999, amplification: 99 }] },
-    { id: "middle", windows: [{ startMs: 0, durationMs: 100, handlerUtilization: 0.5, meanQueueLength: 0,
-      originalArrivalsPerSecond: 0, admittedAttemptsPerSecond: 0, successesPerSecond: 0, failuresPerSecond: 0,
-      timeoutsPerSecond: 0, retriesPerSecond: 0, meanLatencyMs: null, p50LatencyMs: null, p95LatencyMs: null, p99LatencyMs: null,
-      queueRejectionsPerSecond: 0, offeredAttemptsPerSecond: 9999, amplification: 77 }] },
+    { id: "gateway", windows: [recordedWindow({ busyHandlerTimeMs: 50, offeredAttempts: 9999,
+      admittedAttempts: 99, client: { originalArrivals: 1 } })] },
+    { id: "middle", windows: [recordedWindow({ busyHandlerTimeMs: 50, offeredAttempts: 9999,
+      admittedAttempts: 77, client: { originalArrivals: 1 } })] },
   ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
     startMs: 0, durationMs: 100, sentAttempts: 2, retries: 1, succeeded: 0, failed: 0, timeouts: 1,
     orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 0,
     latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
   }] }])!;
-  expect(frame.connections.get("gateway-to-middle")).toMatchObject({
+  expect(frame.connections.get("gateway-to-middle")?.values).toMatchObject({
     sentAttemptsPerSecond: 20, timeoutRate: 0.5, meanOrphaned: 0.5, amplification: 77,
   });
 });

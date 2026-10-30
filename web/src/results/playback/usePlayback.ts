@@ -1,6 +1,6 @@
 import { t } from "../../i18n";
 import { useEffect, useEffectEvent, useState } from "react";
-import { windowCanvasResults, type CanvasResults } from "../canvasResults";
+import { emptyCanvasValues, windowCanvasResults, type CanvasResults } from "../canvasResults";
 import { seriesLoader, type SeriesLoader } from "../series";
 import { useConnectionSeries } from "../timeline/useConnectionSeries";
 import { useTimelineSeries } from "../timeline/useTimelineSeries";
@@ -34,7 +34,7 @@ export function usePlayback({
   const untilWindow = Math.min(windowCount, fromWindow + rangeSize);
   const series = useTimelineSeries(loader, runId, enabled && window !== null ? variant : null,
     pointId, replication, nodes, untilWindow, fromWindow);
-  const connections = [...(results?.connections ?? [])].filter(([, connection]) => connection.sentAttemptsPerSecond !== undefined).map(([id]) => id);
+  const connections = [...(results?.connections ?? [])].filter(([, connection]) => connection.hasOwnSeries).map(([id]) => id);
   const connectionLoader = loader.loadConnections === undefined ? seriesLoader : loader as Pick<SeriesLoader, "loadConnections">;
   const connectionSeries = useConnectionSeries(connectionLoader, runId, enabled && window !== null && !series.loading ? variant : null,
     pointId, replication, connections, untilWindow, fromWindow);
@@ -58,10 +58,10 @@ export function usePlayback({
   const frame: CanvasResults | null = !active ? null : currentFrame ?? {
     ...(previous ?? {
       services: new Map([...results.services].map(([id, service]) => [id, {
-        ...service, windowed: true, utilization: null, meanQueue: null, queueRejectionRate: null,
+        ...service, windowed: true, values: emptyCanvasValues(service.values),
       }])),
       connections: new Map([...results.connections].map(([id, connection]) => [id, {
-        ...connection, amplification: null, sentAttemptsPerSecond: null, timeoutRate: null, meanOrphaned: null,
+        ...connection, values: emptyCanvasValues(connection.values),
       }])),
     }),
     pending: problem ?? t("results.playback.loading"),

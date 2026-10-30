@@ -57,6 +57,7 @@ object Stage1Catalog {
     private fun client() =
         TypeDescriptor(
             id = "client",
+            outputs = Stage1Outputs.client,
             version = 1,
             category = TypeCategory.BLOCK,
             title = "Client",
@@ -90,6 +91,7 @@ object Stage1Catalog {
     private fun service() =
         TypeDescriptor(
             id = "service",
+            outputs = Stage1Outputs.service,
             version = 1,
             category = TypeCategory.BLOCK,
             title = "Service",
@@ -138,6 +140,7 @@ object Stage1Catalog {
     private fun request() =
         TypeDescriptor(
             id = "request",
+            outputs = Stage1Outputs.request,
             version = 1,
             category = TypeCategory.CONNECTION,
             title = "Request",
@@ -148,6 +151,7 @@ object Stage1Catalog {
     private fun call() =
         TypeDescriptor(
             id = "call",
+            outputs = Stage1Outputs.call,
             version = 1,
             category = TypeCategory.CONNECTION,
             title = "Call",

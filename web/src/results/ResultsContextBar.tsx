@@ -1,12 +1,14 @@
-import type { RunSummary, Variant } from "../api/apiTypes";
+import type { Catalog, RunSummary, Variant } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
 import { utilizationColor, type ConnectionOverlayMetric, type NodeOverlayMetric } from "./canvasResults";
+import { overlayOutputs, selectedOverlayOutput, type OverlayOutput } from "./outputs";
 import { PlaybackControls } from "./playback/PlaybackControls";
 import type { usePlayback } from "./playback/usePlayback";
 import type { ResultsSelection } from "./selection";
 
 interface ResultsContextBarProps {
+  catalog: Catalog;
   summary: RunSummary;
   variant: Variant;
   selection: ResultsSelection;
@@ -26,7 +28,7 @@ interface ResultsContextBarProps {
 }
 
 /** Controls the shared result context without changing documents or editor history. */
-export function ResultsContextBar({ summary, variant, selection, onSelect, replications, playback,
+export function ResultsContextBar({ catalog, summary, variant, selection, onSelect, replications, playback,
   windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "amplification", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const pointLabels = new Map(points.map(point => [point.id, Object.keys(point.coordinates).length === 0 ? point.id : t("results.gridPointCoordinates", {
@@ -40,7 +42,13 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
     end: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)), replication: formatNumber(selection.replication),
     variant: variant.label ?? variant.id, pointId: selection.pointId,
   }) : t("app.canvas.summaryContext", { variant: variant.label ?? variant.id, pointId: selection.pointId });
-  const metricLabel = metric === "off" ? "" : metric === "meanQueue" ? t("results.context.queueFill") : t(`results.context.metric.${metric}`);
+  const nodeOutputs = overlayOutputs(catalog, "BLOCK"), connectionOutputs = overlayOutputs(catalog, "CONNECTION");
+  const output = selectedOverlayOutput(nodeOutputs, metric);
+  const connectionOutput = selectedOverlayOutput(connectionOutputs, connectionMetric);
+  const optionLabel = (output: OverlayOutput, choices: readonly OverlayOutput[]) => choices.some(choice => choice.key !== output.key && choice.overlay!.title === output.overlay!.title)
+    ? t("results.context.outputType", { metric: output.overlay!.title,
+      types: output.types.map(id => catalog.types.find(type => type.id === id)?.title ?? id).join(", ") }) : output.overlay!.title;
+  const metricLabel = output?.overlay?.scaleTitle ?? output?.overlay?.title ?? "";
   const limit = formatPercent(1);
   const minimum = formatPercent(0);
   return <div className="results-context-bar" role="region" aria-label={t("app.canvas.results")}
@@ -67,23 +75,22 @@ export function ResultsContextBar({ summary, variant, selection, onSelect, repli
         from: formatNumber(selection.window! * windowMs, 1), to: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)),
       })}</span>
     </> : null}
-    <select aria-label={t("results.context.overlay")} title={t(`results.context.metric.${metric}`)}
-      value={metric} onChange={event => onMetricChange(event.target.value as NodeOverlayMetric | "off")}>
-      {(["utilization", "meanQueue", "queueRejectionRate", "off"] as const).map(value =>
-        <option key={value} value={value}>{t(`results.context.metric.${value}`)}</option>)}
+    <select aria-label={t("results.context.overlay")} title={output?.overlay?.title ?? t("results.context.metric.off")}
+      value={output?.key ?? metric} onChange={event => onMetricChange(event.target.value as NodeOverlayMetric | "off")}>
+      {nodeOutputs.map(output => <option key={output.key} value={output.key}>{optionLabel(output, nodeOutputs)}</option>)}
+      <option value="off">{t("results.context.metric.off")}</option>
     </select>
     <select aria-label={t("results.context.connection.overlay")} title={t("results.context.connection.overlay")}
-      value={connectionMetric} disabled={metric === "off"} onChange={event => onConnectionMetricChange?.(event.target.value as ConnectionOverlayMetric)}>
-      {(["amplification", "sentAttemptsPerSecond", "timeoutRate", "meanOrphaned"] as const).map(value =>
-        <option key={value} value={value}>{t(`results.context.connection.metric.${value}`)}</option>)}
+      value={connectionOutput?.key ?? connectionMetric} disabled={metric === "off"} onChange={event => onConnectionMetricChange?.(event.target.value as ConnectionOverlayMetric)}>
+      {connectionOutputs.map(output => <option key={output.key} value={output.key}>{optionLabel(output, connectionOutputs)}</option>)}
     </select>
     {metric === "off" ? null : <>
       <span className="overlay-legend" aria-label={t("results.context.scale")} title={metricLabel}>
-        <span className={metric === "meanQueue" ? undefined : "sr-only"}>{metricLabel}{t("results.context.legendSeparator")}</span>{minimum}{t("results.context.rangeSeparator")}{limit}
+        <span className={output?.overlay?.scaleParameter != null ? undefined : "sr-only"}>{metricLabel}{t("results.context.legendSeparator")}</span>{minimum}{t("results.context.rangeSeparator")}{limit}
         <span className="overlay-scale" aria-hidden="true"
           style={{ background: `linear-gradient(90deg, ${utilizationColor(0)}, ${utilizationColor(0.5)}, ${utilizationColor(1)})` }} />
       </span>
-      <span className="sr-only">{t("results.context.connection.legend", { metric: t(`results.context.connection.metric.${connectionMetric}`) })}</span>
+      <span className="sr-only">{t("results.context.connection.legend", { metric: connectionOutput?.overlay?.title ?? connectionMetric })}</span>
     </>}
     {stale ? <span className="canvas-results-stale" role="status" title={t("app.canvas.stale")}>{t("app.canvas.stale")}</span> : null}
     <span className="results-context-actions">

@@ -1,3 +1,5 @@
+import { recordedWindow } from "../../test/series";
+import { localizeCatalog } from "../../i18n/catalog";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { catalog, experiment, manifest, model, summary } from "../../test/fixtures";
@@ -8,11 +10,10 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function stubSeries() {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [0, 10, 20].map((startMs) => ({
-    startMs, durationMs: startMs === 20 ? 5 : 10, originalArrivalsPerSecond: 0, offeredAttemptsPerSecond: 500,
-    admittedAttemptsPerSecond: 400, queueRejectionsPerSecond: 100, successesPerSecond: 300, failuresPerSecond: 100,
-    timeoutsPerSecond: 100, retriesPerSecond: 200, handlerUtilization: 0.75, meanQueueLength: 1,
-    meanLatencyMs: 10, p50LatencyMs: 8, p95LatencyMs: 20, p99LatencyMs: 25, amplification: 1.2,
+  const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [0, 10, 20].map(startMs => recordedWindow({
+    startMs, durationMs: startMs === 20 ? 5 : 10, offeredAttempts: 5, admittedAttempts: 4, queueRejections: 1,
+    successes: 3, failures: 1, timeouts: 1, retries: 2, busyHandlerTimeMs: 7.5, queueLengthIntegralMs: 10,
+    latency: { count: 1, sumMs: 10, meanMs: 10, p50Ms: 8, p95Ms: 20, p99Ms: 25 }, client: { originalArrivals: 4 / 1.2 },
   })) }];
   const connections: DecodedConnection[] = [{ id: "gateway-to-middle", windows: [0, 10, 20].map((startMs) => ({
     startMs, durationMs: startMs === 20 ? 5 : 10, sentAttempts: startMs === 20 ? 0 : 3, retries: 1,
@@ -24,6 +25,16 @@ function stubSeries() {
 }
 
 const shortManifest = { ...manifest, series: { ...manifest.series!, warmupMs: 10, measurementMs: 15 } };
+
+it("keeps selected metrics and their charts when catalog labels change language", async () => {
+  stubSeries();
+  const props = { runId: "language", summary, manifest: shortManifest, model, experiment,
+    activeVariantId: "baseline", pointId: "p0", replication: 0, cursorWindow: 0, selectedNodes: ["gateway"] };
+  const view = render(<Timeline {...props} catalog={localizeCatalog(catalog, "ru")} />);
+  await screen.findByRole("region", { name: "Загрузка" });
+  view.rerender(<Timeline {...props} catalog={localizeCatalog(catalog, "en")} />);
+  expect(screen.getByRole("region", { name: "Utilization" })).toBeTruthy();
+});
 
 
 it("does not substitute another variant when the selected variant is absent from the run", () => {

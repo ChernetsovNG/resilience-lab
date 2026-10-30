@@ -8,8 +8,34 @@ import { canvasResults, type CanvasResults } from "../results/canvasResults";
 import { summary } from "../test/fixtures";
 import { setLanguage } from "../i18n";
 import { localizeCatalog } from "../i18n/catalog";
+import { overlayOutputs } from "../results/outputs";
+import type { TypeDescriptor } from "../api/apiTypes";
 
 beforeAll(mockReactFlowDom);
+
+it("applies colliding output ids only to the type selected in the overlay", async () => {
+  const service = catalog.types.find(type => type.id === "service")!;
+  const pool: TypeDescriptor = { ...service, id: "pool", title: "Pool", outputs: [{
+    ...service.outputs.find(output => output.id === "admittedAttemptsPerSecond")!, id: "meanQueue",
+    overlay: { title: "Pool throughput", label: "Pool throughput {value}", description: "Pool throughput", order: 1 },
+  }] };
+  const extended = { ...catalog, types: [...catalog.types, pool] };
+  const snapshot = { ...model, blocks: { ...model.blocks, middle: { ...model.blocks.middle, type: pool.id } } };
+  const run = structuredClone(summary);
+  run.variants[0].points[0].aggregate.services.middle = structuredClone(run.variants[0].points[0].aggregate.services.gateway);
+  const choices = overlayOutputs(extended, "BLOCK").filter(output => output.id === "meanQueue");
+  const props = { catalog: extended, model: snapshot, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [],
+    results: canvasResults(run, snapshot, "baseline", "p0", extended) };
+  const view = render(<Canvas {...props} nodeMetric={choices[0].key} />);
+  await screen.findByTestId("canvas-results-middle");
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  expect(color("gateway")).not.toBe("");
+  expect(color("middle")).toBe("");
+  expect(screen.getByTestId("canvas-results-middle").textContent).toContain("Pool throughput 120 RPS");
+  view.rerender(<Canvas {...props} nodeMetric={choices[1].key} />);
+  expect(color("gateway")).toBe("");
+  expect(color("middle")).not.toBe("");
+});
 
 describe("Canvas", () => {
   it.each([1, 4, 10])("labels service parameters before their values with %s handlers", async handlers => {
@@ -290,7 +316,7 @@ it("does not give old results to new nodes, new edges or retargeted edges", asyn
     ],
   };
   render(<Canvas catalog={catalog} onCommand={vi.fn()} model={current} layout={layout} selected={[]} onSelect={vi.fn()}
-    results={canvasResults(summary, model, "baseline", "p0")} />);
+    results={canvasResults(summary, model, "baseline", "p0", catalog)} />);
   expect(await screen.findByTestId("canvas-results-gateway")).toBeTruthy();
   expect(screen.queryByTestId("canvas-results-added")).toBeNull();
   expect(screen.getByTestId("canvas-edge-label-new-call").textContent).not.toContain("Amplification");
@@ -317,8 +343,9 @@ it("highlights a selected connection's endpoints and provides a wide line hit ta
 it("changes connection overlay labels without borrowing target node values", async () => {
   const props = { catalog, model, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [], results: {
     services: new Map(), connections: new Map([["gateway-to-middle", {
-      from: "gateway", to: "middle", type: "call", amplification: 2.5,
-      sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5,
+      from: "gateway", to: "middle", type: "call", hasOwnSeries: true, params: {},
+      outputs: catalog.types.find(type => type.id === "call")!.outputs.filter(output => output.overlay != null),
+      values: { amplification: 2.5, sentAttemptsPerSecond: 40, timeoutRate: 0.25, meanOrphaned: 0.5 },
     }]]),
   } };
   const view = render(<Canvas {...props} connectionMetric="sentAttemptsPerSecond" />);
@@ -345,7 +372,7 @@ it("does not move selected nodes when arrow keys are used on a variant diagnosti
 
 
 it("keeps metric rows and edge labels while empty or stale playback values are loading", async () => {
-  const summaryResults = canvasResults(summary, model, "baseline", "p0")!;
+  const summaryResults = canvasResults(summary, model, "baseline", "p0", catalog)!;
   const frame: CanvasResults = { ...summaryResults, window: 31 };
   const props = { catalog, model, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [] };
   const { rerender } = render(<Canvas {...props} results={frame} />);

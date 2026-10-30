@@ -1,3 +1,4 @@
+import { recordedWindow } from "./test/series";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -1519,12 +1520,11 @@ it("shares point, replication and time between the context row, Answer, Timeline
   run.variants[0].points.push(point);
   run.variants[1].points.push({ ...point, id: "p2", coordinates: { "gateway.handlers": 6 } });
   vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, replication, cell }) => nodes.map(id => ({
-    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => ({
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({
       startMs: (fromWindow + index) * 10, durationMs: 10,
-      originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 200, admittedAttemptsPerSecond: 150,
-      queueRejectionsPerSecond: 50, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
-      handlerUtilization: cell === "p1" && replication === 1 ? 0.8 : 0.2, meanQueueLength: replication === 1 ? 3 : 7,
-      meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1.5,
+      originalArrivals: 1, offeredAttempts: 2, admittedAttempts: 1.5, queueRejections: 0.5, successes: 1,
+      busyHandlerTimeMs: cell === "p1" && replication === 1 ? 8 : 2, queueLengthIntegralMs: replication === 1 ? 30 : 70,
+      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 }, client: { originalArrivals: 1 },
     })),
   })));
   server(url => url.endsWith("/summary") ? { body: run } : undefined);
@@ -1657,13 +1657,12 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   run.variants[0].points.push({ ...point, id: "p1", coordinates: { "gateway.queue": 8 } });
   run.variants[0].points.push({ ...point, id: "p2", coordinates: { "gateway.queue": 0 } });
   vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, cell }) => nodes.map(id => ({
-    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => ({
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({
       startMs: (fromWindow + index) * 10, durationMs: 10,
-      originalArrivalsPerSecond: 100, offeredAttemptsPerSecond: 100, admittedAttemptsPerSecond: 100,
-      queueRejectionsPerSecond: 0, successesPerSecond: 100, failuresPerSecond: 0, timeoutsPerSecond: 0, retriesPerSecond: 0,
-      handlerUtilization: 0.5, meanQueueLength: cell === "p2" && id === "gateway" ? 0
-        : (id === "gateway" ? 8 : 4) / ((fromWindow + index) === 0 ? 1 : 2),
-      meanLatencyMs: 5, p50LatencyMs: 5, p95LatencyMs: 7, p99LatencyMs: 9, amplification: 1,
+      originalArrivals: 1, offeredAttempts: 1, admittedAttempts: 1, successes: 1, busyHandlerTimeMs: 5,
+      queueLengthIntegralMs: cell === "p2" && id === "gateway" ? 0
+        : (id === "gateway" ? 80 : 40) / ((fromWindow + index) === 0 ? 1 : 2),
+      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 }, client: { originalArrivals: 1 },
     })),
   })));
   server(url => {

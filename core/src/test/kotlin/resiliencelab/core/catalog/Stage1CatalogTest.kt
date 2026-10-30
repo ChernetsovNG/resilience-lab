@@ -1,11 +1,72 @@
 package resiliencelab.core.catalog
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
+import resiliencelab.core.results.ConnectionWindowMetrics
+import resiliencelab.core.results.WindowMetrics
+import java.nio.file.Path
+import kotlin.io.path.readText
 import kotlin.test.Test
 
 class Stage1CatalogTest {
     private val catalog = Stage1Catalog.catalog
+
+    @Test
+    fun `every type declares its outputs in the serialized catalog`() {
+        val types =
+            Json
+                .encodeToJsonElement(Catalog.serializer(), catalog)
+                .jsonObject
+                .getValue("types")
+                .jsonArray
+        assertThat(types).allSatisfy { type ->
+            assertThat(type.jsonObject["outputs"]?.jsonArray).isNotNull().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `output identifiers are unique and calculations reference existing fields`() {
+        val json = Json { encodeDefaults = true }
+        val node = json.encodeToJsonElement(WindowMetrics.serializer(), WindowMetrics(0.0, 100.0)).jsonObject
+        val connection = json.encodeToJsonElement(ConnectionWindowMetrics.serializer(), ConnectionWindowMetrics(0.0, 100.0)).jsonObject
+        catalog.types.forEach { type ->
+            assertThat(type.outputs.map { it.id }).doesNotHaveDuplicates()
+            type.outputs.forEach { output ->
+                val calculation = output.calculation
+                listOfNotNull(calculation.field, calculation.divisor, calculation.capacity).forEach { path ->
+                    val parts = path.split('.')
+                    if (parts.first() == "params") {
+                        assertThat(type.params.map { it.name }).contains(parts[1])
+                    } else {
+                        val scoped = parts.first() in setOf("target", "client")
+                        var field: JsonElement? = if (scoped || type.category == TypeCategory.BLOCK) node else connection
+                        for (part in if (scoped) parts.drop(1) else parts) field = field?.jsonObject?.get(part)
+                        assertThat(field).describedAs("%s.%s references %s", type.id, output.id, path).isNotNull()
+                    }
+                }
+                if (calculation.kind == OutputCalculationKind.QUANTILE) {
+                    assertThat(calculation.percentile).isIn(0.5, 0.95, 0.99)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `request has no own series and summary populations retain their semantics`() {
+        assertThat(catalog.type("request")!!.outputs).allSatisfy { output ->
+            assertThat(output.timeline).isNull()
+            assertThat(output.inspector).isNull()
+            assertThat(output.calculation.field).startsWith("target.")
+        }
+        val residence = catalog.type("service")!!.outputs.first { it.id == "meanLatencyMs" }
+        assertThat(residence.summary!!.source).isEqualTo(OutputSummarySource.REPLICATION)
+        assertThat(residence.summary!!.intervalField).isNull()
+        val timeout = catalog.type("call")!!.outputs.first { it.id == "timeoutRate" }
+        assertThat(timeout.summary!!.intervalField).isEqualTo("timeoutRate")
+    }
 
     @Test
     fun `contains the stage 1 block and connection types`() {
@@ -46,5 +107,11 @@ class Stage1CatalogTest {
     fun `survives a JSON round trip`() {
         val json = Json.encodeToString(Catalog.serializer(), catalog)
         assertThat(Json.decodeFromString(Catalog.serializer(), json)).isEqualTo(catalog)
+    }
+
+    @Test
+    fun `web catalog fixture matches the core catalog including outputs`() {
+        val fixture = Json.decodeFromString(Catalog.serializer(), Path.of("../web/src/test/catalog.json").readText())
+        assertThat(fixture).isEqualTo(catalog)
     }
 }
