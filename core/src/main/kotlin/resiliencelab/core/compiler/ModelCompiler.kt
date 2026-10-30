@@ -23,6 +23,9 @@ import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadPoint
+import resiliencelab.core.ir.LoadProfile
+import resiliencelab.core.ir.LoadSinusoid
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
@@ -97,7 +100,7 @@ class ModelCompiler(
                     points.mapIndexedNotNull { pointIndex, point ->
                         val patched = applyOverrides(model, overrides + point, variant.id, experimentDocument, sink)
                         val parts =
-                            buildGraph(patched.model, modelDocument, patched.origins, sink, structureOk)
+                            buildGraph(patched.model, modelDocument, patched.origins, sink, structureOk, run)
                                 ?: return@mapIndexedNotNull null
                         run?.let {
                             val expanded =
@@ -447,12 +450,13 @@ class ModelCompiler(
         origins: Map<String, OverrideOrigins>,
         sink: Diagnostics,
         structureOk: Boolean,
+        run: RunSettings?,
     ): GraphParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
         val services = model.blocks.filterValues { it.type == "service" || it.type == "database" }.toSortedMap()
         val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
-        val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink) }
+        val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink, run) }
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
             services.map { (id, block) ->
@@ -725,21 +729,68 @@ class ModelCompiler(
         document: String,
         overrides: OverrideOrigins?,
         sink: Diagnostics,
+        run: RunSettings?,
     ): ClientNode? {
         val reader =
             reader("client", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
                 ?: return null
-        val rate = reader.quantity("rate")
-        val deadline = reader.quantity("deadline")
-        if (rate != null && !(1.0 / rate).isFinite()) {
-            return reader.fail(
-                CoreMessage.PARAM_RATE_INTERVAL,
-                "rate",
-                "Arrival rate is too small: the mean interval between requests is not finite",
-            )
+        val loadReader = reader.obj("load")
+        val pointReaders = loadReader?.objects("points")
+        val points =
+            pointReaders?.map { point ->
+                val time = point.quantity("time")
+                val rate = point.quantity("rate")
+                if (time == null || rate == null) null else LoadPoint(time, rate)
+            }
+        pointReaders?.forEachIndexed { index, point ->
+            if (index > 0 &&
+                points?.get(index) != null &&
+                points[index - 1] != null &&
+                points[index]!!.timeMs <= points[index - 1]!!.timeMs
+            ) {
+                point.fail<Unit>(CoreMessage.LOAD_POINT_ORDER, "time", "Load point times must be strictly increasing")
+            }
         }
-        if (rate == null || deadline == null) return null
-        return ClientNode(id, rate, deadline, Origin(document, JsonPointer.of("blocks", id)))
+        val wave =
+            loadReader?.obj("sinusoid")?.let { sine ->
+                val amplitude = sine.quantity("amplitude")
+                val period = sine.quantity("period")
+                val phase = sine.number("phase")
+                if (amplitude == null || period == null || phase == null) null else LoadSinusoid(amplitude, period, phase)
+            }
+        val deadline = reader.quantity("deadline")
+        if (points == null || points.any { it == null } || deadline == null) return null
+        if (points.filterNotNull().zipWithNext().any { (a, b) -> a.timeMs >= b.timeMs }) return null
+        val load = LoadProfile(points.filterNotNull(), wave)
+        if (run != null) {
+            val end = run.warmupMs + run.measurementMs
+            val minimum = load.minimum(end)
+            val maximum = load.maximum(end)
+            val dependency =
+                overrides
+                    ?.pointers
+                    ?.entries
+                    ?.filter { it.key.startsWith("load.") }
+                    ?.maxByOrNull { if (it.value.startsWith("/grid/")) 1 else 0 }
+                    ?.key
+            if (!minimum.isFinite() || !maximum.isFinite() || (maximum > 0.0 && !(1.0 / maximum).isFinite())) {
+                return reader.fail(
+                    CoreMessage.LOAD_RANGE,
+                    "load",
+                    "Load intensity and its positive mean inter-arrival interval must be finite",
+                    dependsOn = dependency,
+                )
+            }
+            if (minimum < 0.0) {
+                return reader.fail(
+                    CoreMessage.LOAD_NEGATIVE,
+                    "load",
+                    "Load intensity must not become negative during the arrival interval",
+                    dependsOn = dependency,
+                )
+            }
+        }
+        return ClientNode(id.split('/'), load, deadline, Origin(document, JsonPointer.of("blocks", id)))
     }
 
     private fun routingPolicy(value: String): RoutingPolicy =

@@ -26,6 +26,30 @@ const test = base.extend<{ files: Files }>({
 });
 test.use({ actionTimeout: 10_000 });
 
+test("opens saves and runs a load profile without losing points or sinusoid fields", async ({ page, files }) => {
+  const profiled = (await stored(page, files.model)).content.model as ModelFile;
+  const load = { points: [{ time: "0s", rate: "120/s" }, { time: "1s", rate: "180/s" }],
+    sinusoid: { amplitude: "20/s", period: "1s", phase: -0.5 } };
+  profiled.blocks.client.params.load = load;
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(profiled));
+  await page.reload();
+  await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
+  const points = page.getByRole("textbox", { name: "Load points" });
+  await expect(points).toHaveAttribute("readonly", "");
+  expect(JSON.parse(await points.inputValue())).toEqual(load.points);
+  await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+  await page.getByLabel("Handlers", { exact: true }).fill("5");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await save(page);
+  profiled.blocks.gateway.params.handlers = 5;
+  expect((await stored(page, files.model)).content.model).toEqual(profiled);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect((await stored(page, files.model)).content.model).toEqual(profiled);
+});
+
 test("opens edits saves and runs a database without losing query parameters", async ({ page, files }) => {
   const source = (await stored(page, files.model)).content.model as ModelFile;
   source.blocks.dependency.type = "database";
@@ -80,7 +104,7 @@ test("opens saves and runs replica groups without losing per-replica parameters"
 
 test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
   const routed = (await stored(page, files.model)).content.model as ModelFile;
-  expect(routed.schemaVersion).toBe(3);
+  expect(routed.schemaVersion).toBe(4);
   routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null, replicaOverrides: null };
   routed.blocks.gateway.scenario = [
     { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null },

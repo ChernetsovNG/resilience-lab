@@ -23,8 +23,8 @@ class ModelCompilerTest {
 
     private val model =
         """
-        {"schemaVersion": 3, "blocks": {
-          "client": {"type": "client", "params": {"rate": "120/s", "deadline": "250ms"}},
+        {"schemaVersion": 4, "blocks": {
+          "client": {"type": "client", "params": {"load": {"points": [{"time": "0s", "rate": "120/s"}]}, "deadline": "250ms"}},
           "gateway": {"type": "service", "params": {"handlers": 4, "queue": 16, "processing": {"kind": "fixed", "mean": "1ms"}}},
           "dependency": {"type": "service", "params": {"handlers": 2, "queue": 8, "processing": {"kind": "exponential", "mean": "8ms"}}}
         }, "connections": [
@@ -69,7 +69,11 @@ class ModelCompilerTest {
                 .points
                 .single()
                 .graph
-        assertThat(baseline.client.arrivalRatePerMs).isEqualTo(0.12)
+        assertThat(
+            baseline.client.load.points
+                .first()
+                .ratePerMs,
+        ).isEqualTo(0.12)
         assertThat(baseline.client.deadlineMs).isEqualTo(250.0)
         assertThat(baseline.entry).isEqualTo("gateway")
         assertThat(baseline.services.map { it.path }).containsExactly("gateway", "dependency")
@@ -213,9 +217,13 @@ class ModelCompilerTest {
 
     @Test
     fun `rejects values whose derived quantities are not finite`() {
-        val tinyRate = model.replace("\"rate\": \"120/s\"", "\"rate\": \"1e-320/ms\"")
+        val tinyRate =
+            model.replace(
+                "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"120/s\"}]}",
+                "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"1e-320/ms\"}]}",
+            )
         val rate = compile(modelText = tinyRate).diagnostics.single()
-        assertThat(rate.code to rate.pointer).isEqualTo("PARAM_RANGE" to "/blocks/client/params/rate")
+        assertThat(rate.code to rate.pointer).isEqualTo("LOAD_RANGE" to "/blocks/client/params/load")
 
         val endless =
             experiment.replace("\"warmup\": \"0ms\", \"measurement\": \"1s\"", "\"warmup\": \"1e308ms\", \"measurement\": \"1e308ms\"")
@@ -227,7 +235,7 @@ class ModelCompilerTest {
     fun `document order does not change the compiled experiment`() {
         val reordered =
             """
-            {"schemaVersion": 3, "connections": [
+            {"schemaVersion": 4, "connections": [
               {"id": "gateway-to-dependency", "type": "call", "from": "gateway", "to": "dependency",
                "params": {"backoff": {"max": "20ms", "base": "2ms", "kind": "exponential-full-jitter"}, "attempts": 3, "timeout": "80ms"}},
               {"id": "client-to-gateway", "type": "request", "from": "client", "to": "gateway"}
@@ -236,7 +244,7 @@ class ModelCompilerTest {
                 "params": {"processing": {"mean": "8ms", "kind": "exponential"}, "queue": 8, "handlers": 2}},
               "gateway": {"type": "service",
                 "params": {"queue": 16, "handlers": 4, "processing": {"kind": "fixed", "mean": "1ms"}}},
-              "client": {"type": "client", "params": {"deadline": "250ms", "rate": "120/s"}}
+              "client": {"type": "client", "params": {"deadline": "250ms", "load": {"points": [{"time": "0s", "rate": "120/s"}]}}}
             }}
             """.trimIndent()
 
@@ -305,7 +313,7 @@ class ModelCompilerTest {
         val twoClients =
             model.replace(
                 "\"gateway\": {",
-                "\"spare\": {\"type\": \"client\", \"params\": {\"rate\": \"1/s\", \"deadline\": \"1s\"}}, \"gateway\": {",
+                "\"spare\": {\"type\": \"client\", \"params\": {\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"1/s\"}]}, \"deadline\": \"1s\"}}, \"gateway\": {",
             )
         assertThat(codes(compile(modelText = twoClients))).contains("TOPOLOGY_CLIENT")
 
@@ -644,7 +652,11 @@ class ModelCompilerTest {
 
         val (broken, pointer) =
             if (type == "service") {
-                model.replace("\"rate\": \"120/s\"", "\"rate\": \"0/s\"") to "/blocks/client/params/rate"
+                model.replace(
+                    "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"120/s\"}]}",
+                    "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"1e-320/ms\"}]}",
+                ) to
+                    "/blocks/client/params/load"
             } else {
                 model.replace("\"handlers\": 4", "\"handlers\": 0") to "/blocks/gateway/params/handlers"
             }
@@ -653,7 +665,7 @@ class ModelCompilerTest {
         assertThat(independent.experiment).isNull()
         assertThat(independent.diagnostics.map { Triple(it.code, it.document, it.pointer) })
             .describedAs(type)
-            .contains(Triple("PARAM_RANGE", "m.model.json", pointer))
+            .contains(Triple(if (type == "service") "LOAD_RANGE" else "PARAM_RANGE", "m.model.json", pointer))
     }
 
     @Test
@@ -711,7 +723,11 @@ class ModelCompilerTest {
 
         val (broken, pointer) =
             if (type == "service") {
-                modelText.replace("\"rate\": \"120/s\"", "\"rate\": \"0/s\"") to "/blocks/client/params/rate"
+                modelText.replace(
+                    "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"120/s\"}]}",
+                    "\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"1e-320/ms\"}]}",
+                ) to
+                    "/blocks/client/params/load"
             } else {
                 modelText.replace("\"handlers\": 4", "\"handlers\": 0") to "/blocks/gateway/params/handlers"
             }
@@ -720,7 +736,7 @@ class ModelCompilerTest {
         assertThat(independent.experiment).isNull()
         assertThat(independent.diagnostics.map { Triple(it.code, it.document, it.pointer) })
             .describedAs(type)
-            .contains(Triple("PARAM_RANGE", "m.model.json", pointer))
+            .contains(Triple(if (type == "service") "LOAD_RANGE" else "PARAM_RANGE", "m.model.json", pointer))
     }
 
     @Test

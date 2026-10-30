@@ -25,6 +25,7 @@ enum class ParamKind {
     QUANTITY,
     CHOICE,
     OBJECT,
+    ARRAY,
 }
 
 /** A named port of a block type. */

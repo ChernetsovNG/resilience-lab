@@ -93,7 +93,7 @@ class DocumentSchemasTest {
             listOf(
                 model.replace("\"client\"", "\"unknown\""),
                 model.replace("\"client\"", "\"call\""),
-                model.replace("\"rate\":\"120/s\",", ""),
+                model.replace("\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"120/s\"}]},", ""),
                 model.replace("\"120/s\"", "120"),
                 model.replace("\"120/s\"", "\"120\""),
                 model.replace("\"120/s\"", "\"120ms\""),
@@ -106,8 +106,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":3", "\"schemaVersion\":3,\"extra\":1"),
-                model.replace("\"schemaVersion\":3", "\"schemaVersion\":1"),
+                model.replace("\"schemaVersion\":4", "\"schemaVersion\":4,\"extra\":1"),
+                model.replace("\"schemaVersion\":4", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -238,7 +238,7 @@ class DocumentSchemasTest {
                             type.copy(
                                 params =
                                     type.params.map { param ->
-                                        if (param.name == "rate") param.copy(units = listOf(QuantityUnit("rps", 1.0, 1_000.0))) else param
+                                        if (param.name == "deadline") param.copy(units = listOf(QuantityUnit("tick", 1.0, 1.0))) else param
                                     } + ParamDescriptor("burst", ParamKind.INTEGER, "Burst", "Burst size.", required = true, minimum = 2.0),
                             )
                         }
@@ -247,10 +247,10 @@ class DocumentSchemasTest {
         val schemas = DocumentSchemas(changed).generate()
         assertThat(schemas.getValue("model.schema.json")).isNotEqualTo(generated.getValue("model.schema.json"))
         val schema = factory.getSchema(schemas.getValue("model.schema.json"), InputFormat.JSON)
-        val newUnits = model.replace("\"120/s\"", "\"120rps\"")
+        val newUnits = model.replace("\"1s\"", "\"1000tick\"")
         assertThat(schema.validate(newUnits, InputFormat.JSON)).isNotEmpty()
-        assertThat(schema.validate(newUnits.replace("\"120rps\"", "\"120rps\",\"burst\":2"), InputFormat.JSON)).isEmpty()
-        assertThat(schema.validate(model.replace("\"120/s\"", "\"120/s\",\"burst\":2"), InputFormat.JSON)).isNotEmpty()
+        assertThat(schema.validate(newUnits.replace("\"1000tick\"", "\"1000tick\",\"burst\":2"), InputFormat.JSON)).isEmpty()
+        assertThat(schema.validate(model.replace("\"1s\"", "\"1s\",\"burst\":2"), InputFormat.JSON)).isNotEmpty()
         assertThat(schemas).isEqualTo(DocumentSchemas(changed).generate())
     }
 
@@ -271,6 +271,7 @@ class DocumentSchemasTest {
                 assertThat(property.getValue("description").toString()).contains("Canonical value", "checked by the core")
             }
             if (descriptor.kind == ParamKind.OBJECT) assertAnnotations(descriptor.fields, value.properties())
+            if (descriptor.kind == ParamKind.ARRAY) assertAnnotations(descriptor.fields, value.getValue("items").jsonObject.properties())
         }
     }
 
@@ -285,5 +286,5 @@ class DocumentSchemasTest {
         """{"schemaVersion":1,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":3,"blocks":{"c":{"type":"client","params":{"rate":"120/s","deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":4,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

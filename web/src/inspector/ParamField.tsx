@@ -31,12 +31,27 @@ export interface ParamFieldProps {
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
 export function ParamField(props: ParamFieldProps) {
+  if (props.descriptor.kind === "ARRAY") return <ArrayField {...props} />;
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
+}
+
+function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+  const id = useId();
+  return <div className="param-field" data-inspector-field={path}>
+    <label htmlFor={id}>{descriptor.title}</label>
+    <textarea id={id} readOnly value={JSON.stringify(value ?? descriptor.default ?? null, null, 2)}
+      aria-describedby={`${id}-description`} />
+    <p id={`${id}-description`} className="param-description">{descriptor.description}</p>
+    <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
+    <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
+      onSelect={variant => onVariantDiagnostic?.(variant, path)} />
+  </div>;
 }
 
 function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
+  const fields = !descriptor.required && value == null && descriptor.default == null ? [] : descriptor.fields;
   const [resetCount, setResetCount] = useState(0);
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}
@@ -50,7 +65,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
-      {descriptor.fields.map((field) => (
+      {fields.map((field) => (
         <ParamField
           key={`${field.name}-${resetCount}`}
           descriptor={field}

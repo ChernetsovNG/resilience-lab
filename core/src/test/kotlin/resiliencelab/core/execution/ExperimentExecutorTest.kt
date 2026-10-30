@@ -17,6 +17,7 @@ import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import java.util.Collections
@@ -356,7 +357,7 @@ class ExperimentExecutorTest {
     ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
-            client = base.client.copy(arrivalRatePerMs = arrivalRatePerMs, deadlineMs = deadlineMs),
+            client = base.client.copy(load = LoadProfile.constant(arrivalRatePerMs), deadlineMs = deadlineMs),
             services =
                 listOf(
                     base.services.first().copy(

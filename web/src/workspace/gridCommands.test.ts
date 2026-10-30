@@ -33,7 +33,7 @@ describe("grid commands", () => {
   });
 
   it("repairs an imported oversized grid without allowing it to grow", () => {
-    const grid = ["client.rate", "gateway.handlers", "middle.handlers", "dependency.handlers"]
+    const grid = ["client.load.sinusoid.phase", "gateway.handlers", "middle.handlers", "dependency.handlers"]
       .map((path) => ({ path, values: [1] }));
     const documents = { model, layout, experiment: { ...experiment, grid } };
     const edited = setGridAxes([{ ...grid[0], values: [2] }, ...grid.slice(1)])(documents);

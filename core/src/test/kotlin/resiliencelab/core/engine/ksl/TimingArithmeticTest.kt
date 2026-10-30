@@ -5,6 +5,7 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import org.assertj.core.api.Assertions.assertThatCode
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
@@ -48,10 +49,11 @@ class TimingArithmeticTest {
         ArrivalGenerator(
             reliabilityModel = reliabilityModel,
             entryServiceId = "entry",
-            arrivalRate = 1.0 / Double.MAX_VALUE,
+            load = LoadProfile.constant(1.0 / Double.MAX_VALUE),
             warmupMs = Double.MAX_VALUE,
             measurementMs = Double.MAX_VALUE,
             stream = TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS),
+            acceptanceStream = null,
         )
 
         assertThatExceptionOfType(ExperimentExecutionException::class.java)

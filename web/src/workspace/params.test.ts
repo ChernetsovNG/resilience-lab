@@ -3,6 +3,17 @@ import { catalog, model } from "../test/fixtures";
 import { applyOverrides, elementOf, isOverridden, withParam } from "./params";
 
 describe("withParam", () => {
+  it("preserves all load points and sinusoid fields through edits overrides and JSON roundtrip", () => {
+    const load = { points: [{ time: "0s", rate: "10/s" }, { time: "1s", rate: "20/s" }],
+      sinusoid: { amplitude: "5/s", period: "2s", phase: -1.5 } };
+    const profiled = withParam(model, "client", "load", load);
+    const changed = withParam(profiled, "gateway", "handlers", 6);
+    expect(JSON.parse(JSON.stringify(changed)).blocks.client.params.load).toEqual(load);
+    const effective = applyOverrides(changed, { "client.load.sinusoid.amplitude": "7/s" }, catalog);
+    expect(effective.blocks.client.params.load).toEqual({ ...load, sinusoid: { ...load.sinusoid, amplitude: "7/s" } });
+    expect(profiled.blocks.client.params.load).toEqual(load);
+  });
+
   it("sets and removes parameters of blocks and connections without changing the source", () => {
     const changed = withParam(model, "gateway", "handlers", 6);
     expect(changed.blocks.gateway.params.handlers).toBe(6);

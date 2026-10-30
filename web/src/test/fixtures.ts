@@ -56,7 +56,7 @@ export const catalog: Catalog = {
       assumptions: ["Client deadlines bound waiting."],
       ports: [{ id: "out", direction: "OUT" }],
       params: [
-        param({ name: "rate", kind: "QUANTITY", title: "Arrival rate", required: true, dimension: "RATE" }),
+        (outputCatalog as Catalog).types.find(type => type.id === "client")!.params.find(param => param.name === "load")!,
         param({ name: "deadline", kind: "QUANTITY", title: "Deadline", required: true, dimension: "DURATION" }),
       ],
     },
@@ -129,9 +129,9 @@ const service = (handlers: number, queue: number, mean: string) => ({
 });
 
 export const model: ModelFile = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   blocks: {
-    client: { type: "client", params: { deadline: "250ms", rate: "120/s" } },
+    client: { type: "client", params: { deadline: "250ms", load: { points: [{ time: "0s", rate: "120/s" }] } } },
     dependency: service(2, 8, "8ms"),
     gateway: service(4, 16, "1ms"),
     middle: service(4, 12, "2ms"),

@@ -231,6 +231,12 @@ class DocumentSchemas(
                         put("enum", JsonArray(descriptor.options.map(::JsonPrimitive)))
                     }
                 ParamKind.OBJECT -> parameters(descriptor.fields)
+                ParamKind.ARRAY ->
+                    buildJsonObject {
+                        put("type", "array")
+                        put("minItems", 1)
+                        put("items", parameters(descriptor.fields))
+                    }
                 ParamKind.QUANTITY -> quantity(descriptor)
             }
         return buildJsonObject {

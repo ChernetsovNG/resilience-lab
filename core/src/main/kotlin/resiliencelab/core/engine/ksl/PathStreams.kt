@@ -16,6 +16,7 @@ enum class StreamRole(
     val id: String,
 ) {
     ARRIVALS("arrivals"),
+    ARRIVAL_ACCEPTANCE("arrival-acceptance"),
     PROCESSING("processing"),
     OUTCOME("outcome"),
     NETWORK("network"),
@@ -90,6 +91,7 @@ object PathStreams {
     fun sources(graph: GraphIr): List<Pair<List<String>, StreamRole>> =
         buildList {
             add(graph.client.pathSegments to StreamRole.ARRIVALS)
+            if (!graph.client.load.isConstant) add(graph.client.pathSegments to StreamRole.ARRIVAL_ACCEPTANCE)
             graph.services.forEach {
                 add(it.pathSegments to StreamRole.PROCESSING)
                 add(it.pathSegments to StreamRole.OUTCOME)

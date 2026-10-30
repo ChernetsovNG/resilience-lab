@@ -12,6 +12,7 @@ import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.nanoseconds
@@ -74,7 +75,10 @@ class DegradationRunoutTest {
         val expected =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRatePerMs = chain.client.arrivalRatePerMs,
+                arrivalRatePerMs =
+                    chain.client.load.points
+                        .first()
+                        .ratePerMs,
                 endMs = 25.0,
             )
         assertThat(expected).isNotEmpty()
@@ -114,13 +118,16 @@ class DegradationRunoutTest {
                             attempts = 1,
                         ),
                     ),
-                client = base.client.copy(arrivalRatePerMs = 10.0, deadlineMs = 100_000.0),
+                client = base.client.copy(load = LoadProfile.constant(10.0), deadlineMs = 100_000.0),
             )
         val execution = execution(warmupMs = 10.0, measurementMs = 5.0)
         val allArrivals =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRatePerMs = chain.client.arrivalRatePerMs,
+                arrivalRatePerMs =
+                    chain.client.load.points
+                        .first()
+                        .ratePerMs,
                 endMs = 15.0,
             )
         val measurementArrivals = allArrivals.filter { it >= 10.0 }
@@ -227,7 +234,7 @@ class DegradationRunoutTest {
                             attempts = 1,
                         ),
                     ),
-                client = base.client.copy(arrivalRatePerMs = 0.01, deadlineMs = 1_000.0),
+                client = base.client.copy(load = LoadProfile.constant(0.01), deadlineMs = 1_000.0),
             )
         val execution =
             execution(
@@ -279,7 +286,10 @@ class DegradationRunoutTest {
         val firstArrivalMs =
             expectedArrivals(
                 seed = execution.seed,
-                arrivalRatePerMs = chain.client.arrivalRatePerMs,
+                arrivalRatePerMs =
+                    chain.client.load.points
+                        .first()
+                        .ratePerMs,
                 endMs = 100.0,
             ).first()
         val model = Model("DegradationRunoutTest-cap", autoCSVReports = false)
@@ -311,7 +321,7 @@ class DegradationRunoutTest {
             calls = emptyList(),
             client =
                 base.client.copy(
-                    arrivalRatePerMs = arrivalRate,
+                    load = LoadProfile.constant(arrivalRate),
                     deadlineMs = requestDeadlineMs,
                 ),
             faults = emptyList(),

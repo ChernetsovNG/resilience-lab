@@ -10,10 +10,35 @@ import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.LoadPoint
+import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.ServiceNode
 import kotlin.test.Test
 
 class CostEstimatorTest {
+    @Test
+    fun `uses average profile intensity and warns on long modelled time`() {
+        val base = TestChains.simple()
+        val ramp =
+            base.copy(
+                client =
+                    base.client.copy(
+                        load =
+                            LoadProfile(
+                                listOf(
+                                    LoadPoint(0.0, 0.0),
+                                    LoadPoint(1_000.0, 0.02),
+                                ),
+                            ),
+                    ),
+            )
+        assertThat(CostEstimator.estimate(experiment(ramp), 1).expectedEvents)
+            .isEqualTo(CostEstimator.estimate(experiment(base), 1).expectedEvents)
+        val long = base.copy(run = base.run.copy(measurementMs = 86_400_000.0))
+        assertThat(CostEstimator.estimate(experiment(long), 1).warnings.map { it.code })
+            .contains("ESTIMATE_LONG_MODEL_TIME")
+    }
+
     private fun experiment(chain: GraphIr) =
         CompiledExperiment(
             variants = listOf(CompiledVariant("baseline", "Baseline", listOf(CompiledPoint("p0", emptyMap(), chain)))),
@@ -73,7 +98,7 @@ class CostEstimatorTest {
         val base = TestChains.simple()
         val chain =
             base.copy(
-                client = base.client.copy(arrivalRatePerMs = 0.0),
+                client = base.client.copy(load = LoadProfile.constant(0.0)),
                 run = base.run.copy(measurementMs = Int.MAX_VALUE.toDouble(), windowMs = 1.0),
             )
 

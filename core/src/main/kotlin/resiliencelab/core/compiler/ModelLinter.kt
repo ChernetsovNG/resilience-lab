@@ -207,7 +207,7 @@ class ModelLinter(
      * On the successful path without queueing, failures or retries, W(service) = processing mean
      * + 2 × outgoing network mean + W(next service). A leaf's W is its processing mean.
      * The service holds its handler while waiting downstream, and releases it before its own response network delay.
-     * Compare handlers with client arrivalRatePerMs × W; this is the offered-load estimate before timeout truncation.
+     * Compare handlers with the maximum client profile intensity × W: a conservative estimate before timeout truncation.
      */
     private fun handlerDemand(
         graph: GraphIr,
@@ -215,23 +215,26 @@ class ModelLinter(
         outgoing: Map<String, CallEdge>,
     ): List<Diagnostic> {
         var holdingMs = 0.0
+        val maximumRate = graph.client.load.maximum(graph.run.warmupMs + graph.run.measurementMs)
         return buildList {
             ordered.asReversed().forEach { service ->
                 holdingMs += service.processing.meanMs + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
-                val demand = graph.client.arrivalRatePerMs * holdingMs
+                val demand = maximumRate * holdingMs
                 if (service.handlers < demand) {
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
                             "Handlers ${service.handlers} are below λ·W = ${number(demand)} " +
-                                "(λ = ${number(graph.client.arrivalRatePerMs * 1_000.0)} requests/s, W = ${number(holdingMs)} ms)",
+                                "(λ = ${number(
+                                    maximumRate * 1_000.0,
+                                )} requests/s, W = ${number(holdingMs)} ms; profile maximum, conservative)",
                             service.origin,
                             service.path,
                             "/params/handlers",
                             mapOf(
                                 "handlers" to JsonPrimitive(service.handlers),
                                 "demand" to messageNumber(demand),
-                                "ratePerSecond" to messageNumber(graph.client.arrivalRatePerMs * 1_000.0),
+                                "ratePerSecond" to messageNumber(maximumRate * 1_000.0),
                                 "holdingMs" to messageNumber(holdingMs),
                             ),
                         ),
