@@ -155,7 +155,7 @@ describe("structure commands", () => {
 
   it("renames and deletes group and copied connection fault references including replica suffixes", () => {
     const before = documents();
-    before.experiment.faults = ["middle#2", "gateway-to-middle#2", "dependency"].map(target => ({ target, from: "0ms", to: "1s", processingMultiplier: 2 }));
+    before.experiment.faults = ["middle#2", "gateway-to-middle#2", "dependency"].map(target => ({ target, from: "0ms", to: "1s", kind: "slowdown", multiplier: 2 }));
     const renamed = renameElement("middle", "worker")(before);
     expect(renamed.experiment.faults.map(fault => fault.target)).toEqual(["worker#2", "gateway-to-middle#2", "dependency"]);
     const deleted = deleteElements(["worker"])(renamed);
@@ -256,7 +256,7 @@ describe("structure commands", () => {
       "gateway-to-middle.timeout": "90ms", "middle-to-dependency.attempts": 1,
       "client-to-gateway.extra": true, "gateway.handlers": 4,
     };
-    before.experiment.faults.push({ target: "middle", from: "1ms", to: "2ms" });
+    before.experiment.faults.push({ target: "middle", from: "1ms", to: "2ms", kind: "unavailable" });
     const withGrid = { ...before, experiment: { ...before.experiment, grid: [
       { path: "middle.handlers", values: [1, 2] }, { path: "gateway.handlers", values: [4, 5] },
     ] } };

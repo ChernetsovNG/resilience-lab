@@ -255,13 +255,18 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     await id.fill("alternative");
     await id.press("Enter");
     await page.getByRole("button", { name: "Run settings", exact: true }).click();
-    for (const [name, value] of [["Replications", "2"], ["Seed", "42"], ["Real-time limit", "10s"],
-      ["Fault start", "100ms"], ["Fault end", "500ms"], ["Processing multiplier", "2"], ["Fault failure rate", "5%"]]) {
+    for (const [name, value] of [["Replications", "2"], ["Seed", "42"], ["Real-time limit", "10s"]]) {
       const field = page.getByLabel(name, { exact: true });
       await field.fill(value);
       await field.press("Enter");
     }
-    await page.getByRole("combobox", { name: "Fault target", exact: true }).selectOption("middle");
+    const fault = page.getByRole("group", { name: "Fault 1", exact: true });
+    for (const [name, value] of [["Fault start", "100ms"], ["Fault end", "500ms"], ["Time multiplier", "2"]]) {
+      const field = fault.getByLabel(name, { exact: true });
+      await field.fill(value);
+      await field.press("Enter");
+    }
+    await fault.getByRole("combobox", { name: "Fault target", exact: true }).selectOption("middle");
     await page.getByRole("tab", { name: "Model", exact: true }).click();
     await expect(page.getByLabel("Seed", { exact: true })).toHaveValue("42");
     await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -269,7 +274,10 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
     expect(saved.content.experiment.variants[2]).toMatchObject({ id: "alternative", label: "Alternative", overrides: {} });
     expect(saved.content.experiment.execution).toMatchObject({ seed: 42, replications: 2, maxRealTime: "10s" });
-    expect(saved.content.experiment.faults[0]).toEqual({ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 2, failureRate: "5%" });
+    expect(saved.content.experiment.faults[0]).toEqual({
+      target: "middle", from: "100ms", to: "500ms", kind: "slowdown", multiplier: 2,
+      delay: null, failureRate: null, capacity: null,
+    });
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
     const summary = page.getByRole("table", { name: "Answer" });

@@ -516,10 +516,14 @@ export interface components {
             experiment: string;
         };
         Fault: {
+            /** Format: int32 */
+            capacity?: number | null;
+            delay?: string | null;
             failureRate?: string | null;
             from: string;
+            kind: string;
             /** Format: double */
-            processingMultiplier?: number | null;
+            multiplier?: number | null;
             target: string;
             to: string;
         };

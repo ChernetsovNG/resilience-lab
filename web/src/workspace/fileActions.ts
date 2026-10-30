@@ -39,7 +39,7 @@ function parseDocument(text: string, name: string): Record<string, unknown> {
 /** Default question for a model: one baseline and ten independent replications. */
 export function defaultExperiment(modelRef: string, layoutRef: string | null): ExperimentFile {
   return {
-    schemaVersion: 1, modelRef, layoutRef,
+    schemaVersion: 2, modelRef, layoutRef,
     execution: { replications: 10, seed: 1, warmup: "0ms", measurement: "1s", maxRealTime: "30s" },
     faults: [], grid: [], variants: [{ id: "baseline", label: t("file.baseline"), overrides: {} }],
   };

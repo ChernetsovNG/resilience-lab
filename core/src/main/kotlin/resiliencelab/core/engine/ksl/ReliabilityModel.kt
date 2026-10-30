@@ -10,6 +10,8 @@ import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.FaultKind
+import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
@@ -96,6 +98,7 @@ class ReliabilityModel(
                 }
             }.toMap()
     private val routerRuntimes = graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams) }
+    private val routeFaults = graph.routes.associate { it.path to FaultState() }
 
     var activeInvocations: Int = 0
         private set
@@ -126,6 +129,7 @@ class ReliabilityModel(
         runtimes.values.forEach { it.resetFaults() }
         callRuntimes.values.forEach { it.resetFaults() }
         routerRuntimes.values.forEach { it.reset() }
+        routeFaults.values.forEach { it.clear() }
         scheduleWindowClose(1)
         schedule(
             eventAction =
@@ -154,19 +158,37 @@ class ReliabilityModel(
             priority = KSLEvent.DEFAULT_PRIORITY - 1,
         )
         graph.faults.forEach { fault ->
-            val runtime = runtimes[fault.target]
-            val call = callRuntimes[fault.target]
-            require(runtime != null || call != null) { "Unknown fault target '${fault.target}'" }
+            require(fault.target in runtimes || fault.target in callRuntimes || fault.target in routeFaults) {
+                "Unknown fault target '${fault.target}'"
+            }
+            // Settle every fault boundary before KSL releases slots or resumes queued processing at this instant.
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime?.startFault(fault) ?: call!!.startFault(fault) },
+                eventAction = ModelElement.EventActionIfc<Nothing> { changeFault(fault, starting = true) },
                 timeToEvent = fault.fromMs,
-                priority = KSLEvent.DEFAULT_PRIORITY - 1,
+                priority = RELEASE_PRIORITY - 1,
             )
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime?.endFault(fault) ?: call!!.endFault(fault) },
+                eventAction = ModelElement.EventActionIfc<Nothing> { changeFault(fault, starting = false) },
                 timeToEvent = fault.toMs,
-                priority = KSLEvent.DEFAULT_PRIORITY - 1,
+                priority = RELEASE_PRIORITY - 1,
             )
+        }
+    }
+
+    private fun changeFault(
+        fault: FaultSpan,
+        starting: Boolean,
+    ) {
+        val service = runtimes[fault.target]
+        if (service != null) {
+            if (starting) service.startFault(fault) else service.endFault(fault)
+            return
+        }
+        val call = callRuntimes[fault.target]
+        val state = call?.faults ?: routeFaults.getValue(fault.target)
+        if (starting) state.start(fault) else state.end(fault)
+        if (call != null && fault.kind == FaultKind.CAPACITY_LOSS) {
+            connectionPools.getValue(fault.target).changeCapacity(state.capacity ?: requireNotNull(call.edge.pool).size)
         }
     }
 
@@ -365,7 +387,10 @@ class ReliabilityModel(
         private var originalOutcome: AttemptOutcome? = null
         private var originalClientActive = false
         private var admitted = false
+        private var routingCompleted = false
         internal var incomingAttempt: CallAttempt? = null
+        internal var noResponse: Boolean = false
+            private set
 
         private val deadlineEvent: KSLEvent<*>? =
             if (originalRequest) {
@@ -389,6 +414,13 @@ class ReliabilityModel(
             admitted = true
             activeInvocations++
             metrics.recordAdmitted(runtime.serviceId, measurementCohort)
+        }
+
+        /** A blackholed attempt has no child work, but remains in flight at its selected outputs until timeout. */
+        internal fun completeRouting() {
+            if (routingCompleted) return
+            routingCompleted = true
+            selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
         }
 
         private fun onOriginalDeadline() {
@@ -488,6 +520,9 @@ class ReliabilityModel(
                                 val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
                                 callAttempt = attempt
                                 blockUntilCompleted(attempt.child.work)
+                                if (attempt.status == AttemptOutcome.PENDING && attempt.child.noResponse) {
+                                    awaitAttemptTimeout()
+                                }
                                 if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
                                 attempt.status
                             }
@@ -511,6 +546,24 @@ class ReliabilityModel(
                     metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_COMPLETED, measurementCohort)
                 }
                 attemptNumber++
+            }
+        }
+
+        @Suppress("DEPRECATION") // The attempt timeout resumes the waiting caller through KSL's public process API.
+        private suspend fun KSLProcessBuilder.awaitAttemptTimeout() {
+            suspend()
+        }
+
+        private fun nextNetworkDelayMs(): Double {
+            val states = selectedRoutes.map { routeFaults.getValue(it.path) }
+            return incomingNetwork?.nextNetworkDelayMs(states) ?: states.sumOf { it.delayMs }
+        }
+
+        private suspend fun KSLProcessBuilder.blackhole() {
+            noResponse = true
+            if (originalRequest) {
+                delay(maxOf(0.0, originalDeadlineMs - time))
+                currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
             }
         }
 
@@ -568,21 +621,45 @@ class ReliabilityModel(
                         selectedTarget = route.to
                     }
                     runtime = runtimes.getValue(selectedTarget)
-                    if (incomingNetwork != null) {
-                        val transmissionFailed = incomingNetwork.nextTransmissionFailed()
-                        delay(incomingNetwork.nextNetworkDelayMs())
-                        if (transmissionFailed) {
-                            currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
-                            return@process
-                        }
-                    }
-                    val serviceArrivalMs = time
-                    metrics.recordOffered(runtime.serviceId, measurementCohort)
                     if (originalRequest) {
                         originalClientActive = true
                         activeOriginalRequests++
                         metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
                     }
+                    val transmissionStates = selectedRoutes.map { routeFaults.getValue(it.path) } + listOfNotNull(incomingNetwork?.faults)
+                    if (transmissionStates.any { it.blackhole }) {
+                        blackhole()
+                        return@process
+                    }
+                    if (transmissionStates.any { it.unavailable }) {
+                        currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
+                        return@process
+                    }
+                    if (incomingNetwork != null || selectedRoutes.isNotEmpty()) {
+                        val routeFailures =
+                            selectedRoutes.map { route ->
+                                routeFaults.getValue(route.path).failureProbability?.let { probability ->
+                                    streams.stream(route.pathSegments, StreamRole.OUTCOME).randU01() < probability
+                                } ?: false
+                            }
+                        val transmissionFailed = incomingNetwork?.nextTransmissionFailed() == true || routeFailures.any { it }
+                        val networkDelayMs = nextNetworkDelayMs()
+                        if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
+                        if (transmissionFailed) {
+                            currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
+                            return@process
+                        }
+                    }
+                    if (runtime.faults.blackhole) {
+                        blackhole()
+                        return@process
+                    }
+                    if (runtime.faults.unavailable) {
+                        currentOutcome = AttemptOutcome.LOCAL_FAILURE
+                        return@process
+                    }
+                    val serviceArrivalMs = time
+                    metrics.recordOffered(runtime.serviceId, measurementCohort)
                     try {
                         val acquisition = with(runtime.slots) { acquire() }
                         val allocation = acquisition.allocation ?: throw QueueFullException(runtime.serviceId)
@@ -603,7 +680,10 @@ class ReliabilityModel(
                                         release(serverAllocation)
                                     }
                                 }
-                                if (incomingNetwork != null) delay(incomingNetwork.nextNetworkDelayMs())
+                                if (incomingNetwork != null || selectedRoutes.isNotEmpty()) {
+                                    val networkDelayMs = nextNetworkDelayMs()
+                                    if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
+                                }
                             }
                         } finally {
                             release(allocation)
@@ -619,10 +699,14 @@ class ReliabilityModel(
                     } catch (exception: QueueFullException) {
                         currentOutcome = AttemptOutcome.QUEUE_REJECTED
                         metrics.recordQueueRejection(runtime.serviceId, measurementCohort)
-                        if (incomingNetwork != null && runtime.serverSlots != null) delay(incomingNetwork.nextNetworkDelayMs())
+                        if (runtime.serverSlots != null && (incomingNetwork != null || selectedRoutes.isNotEmpty())) {
+                            val networkDelayMs = nextNetworkDelayMs()
+                            if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
+                        }
                     }
-                    if (incomingNetwork != null && runtime.serverSlots == null) {
-                        delay(incomingNetwork.nextNetworkDelayMs())
+                    if (runtime.serverSlots == null && (incomingNetwork != null || selectedRoutes.isNotEmpty())) {
+                        val networkDelayMs = nextNetworkDelayMs()
+                        if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
                     }
                 } finally {
                     if (originalRequest) {
@@ -641,7 +725,7 @@ class ReliabilityModel(
                             )
                         }
                     }
-                    selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
+                    if (!noResponse || incomingAttempt?.status != AttemptOutcome.PENDING) completeRouting()
                     incomingAttempt?.onChildProcessEnded()
                     if (incomingNetwork != null) {
                         activeDownstreamProcesses--

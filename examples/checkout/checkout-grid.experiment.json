@@ -9,7 +9,8 @@
   "faults": [
     {
       "from": "20s",
-      "processingMultiplier": 8.0,
+      "kind": "slowdown",
+      "multiplier": 8.0,
       "target": "psp",
       "to": "40s"
     }
@@ -35,7 +36,7 @@
   "layoutRef": "checkout.layout.json",
   "modelRef": "checkout.model.json",
   "notes": "Нагрузка, отказы, разогрев 10 s, измерение 60 s, 10 повторений и seed 20261029 совпадают с checkout.experiment.json. Сетка 3×3 — выбранный диапазон чувствительности: timeout 1 s,3 s,5 s и общее число попыток 1,2,3. Базовые значения модели — 3 s и 3 попытки (точка p5); остальные точки меняют только эти два параметра. Сетка применяется только к единственному варианту baseline; отдельный эксперимент сохраняет смысл четырёх вариантов сравнения.",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "variants": [
     {
       "id": "baseline",

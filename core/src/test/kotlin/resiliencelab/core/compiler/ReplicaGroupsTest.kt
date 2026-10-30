@@ -97,7 +97,7 @@ class ReplicaGroupsTest {
     fun `faults bind after variant overrides to all group instances and connection copies`() {
         val experiment =
             experiment(
-                """[{"target":"worker","from":"0ms","to":"1s","processingMultiplier":2},{"target":"worker-to-tail","from":"0ms","to":"1s","processingMultiplier":3}]""",
+                """[{"target":"worker","from":"0ms","to":"1s","kind":"slowdown","multiplier":2},{"target":"worker-to-tail","from":"0ms","to":"1s","kind":"slowdown","multiplier":3}]""",
             )
         val graph = graph(model(3), experiment)
         assertThat(graph.faults.map { it.target }).containsExactly(
@@ -108,7 +108,7 @@ class ReplicaGroupsTest {
             "worker-to-tail#2",
             "worker-to-tail#3",
         )
-        val replica = experiment("""[{"target":"worker#2","from":"0ms","to":"1s","processingMultiplier":5}]""")
+        val replica = experiment("""[{"target":"worker#2","from":"0ms","to":"1s","kind":"slowdown","multiplier":5}]""")
         val expanded =
             graph(
                 model(1),
@@ -145,7 +145,7 @@ class ReplicaGroupsTest {
 
     @Test
     fun `adding replicas preserves every existing stream address`() {
-        val experiment = experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","failureRate":"5%"}]""")
+        val experiment = experiment("""[{"target":"worker-to-tail","from":"0ms","to":"1s","kind":"errors","failureRate":"5%"}]""")
         val first = graph(model(3), experiment)
         val larger = graph(model(5), experiment)
         val originalKeys = PathStreams.keys(first, 0)
@@ -280,7 +280,7 @@ class ReplicaGroupsTest {
     internal fun experiment(faults: String = "[]"): ExperimentFile =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":1,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"faults":$faults,"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":2,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"faults":$faults,"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

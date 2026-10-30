@@ -94,7 +94,9 @@ object PathStreams {
             if (!graph.client.load.isConstant) add(graph.client.pathSegments to StreamRole.ARRIVAL_ACCEPTANCE)
             graph.services.forEach {
                 add(it.pathSegments to StreamRole.PROCESSING)
-                if (it.pooler == null) add(it.pathSegments to StreamRole.OUTCOME)
+                if (it.pooler == null || graph.faults.any { fault -> fault.target == it.path && fault.failureProbability != null }) {
+                    add(it.pathSegments to StreamRole.OUTCOME)
+                }
             }
             graph.calls.forEach {
                 add(it.pathSegments to StreamRole.NETWORK)
@@ -104,6 +106,11 @@ object PathStreams {
                 }
             }
             graph.routers.forEach { add(it.pathSegments to StreamRole.ROUTING) }
+            graph.routes.forEach {
+                if (graph.faults.any { fault -> fault.target == it.path && fault.failureProbability != null }) {
+                    add(it.pathSegments to StreamRole.OUTCOME)
+                }
+            }
         }
 
     /** Keys of all sources of [graph] for one replication. */

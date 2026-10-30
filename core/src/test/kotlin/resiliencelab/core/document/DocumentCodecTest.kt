@@ -12,6 +12,34 @@ import kotlin.test.Test
 
 class DocumentCodecTest {
     @Test
+    fun `reads experiment version two faults and keeps layout at version one`() {
+        val text =
+            """{"schemaVersion":2,"modelRef":"m.model.json",
+              "execution":{"replications":1,"warmup":"0ms","measurement":"1s","seed":1},
+              "faults":[
+                {"target":"service","from":"0ms","to":"1s","kind":"slowdown","multiplier":2,"delay":"20ms"},
+                {"target":"service","from":"0ms","to":"1s","kind":"errors","failureRate":"5%"},
+                {"target":"service","from":"0ms","to":"1s","kind":"unavailable"},
+                {"target":"service","from":"0ms","to":"1s","kind":"blackhole"},
+                {"target":"service","from":"0ms","to":"1s","kind":"capacityLoss","capacity":0}
+              ],"variants":[{"id":"baseline"}]}"""
+
+        val decoded = DocumentCodec.decodeExperiment(text, "e.experiment.json")
+
+        assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
+        val experiment = (decoded as DecodeResult.Ok).value
+        assertThat(experiment.faults).hasSize(5)
+        assertThat(DocumentCodec.decodeExperiment(DocumentCodec.encodeExperiment(experiment), "e.experiment.json"))
+            .isEqualTo(decoded)
+        assertThat(DocumentCodec.decodeLayout("""{"schemaVersion":1,"positions":{}}""", "l.layout.json"))
+            .isInstanceOf(DecodeResult.Ok::class.java)
+        val old = DocumentCodec.decodeExperiment("""{"schemaVersion":1,"oldShape":true}""", "old.experiment.json")
+        val diagnostic = (old as DecodeResult.Failed).diagnostics.single()
+        assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
+        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(2))
+    }
+
+    @Test
     fun `empty whitespace and multiple root values are shape diagnostics instead of exceptions`() {
         for (text in listOf("", " \n\t", "{} {}")) {
             for (decoded in listOf(
@@ -114,7 +142,7 @@ class DocumentCodecTest {
     fun `round-trips experiment and layout documents`() {
         val experiment =
             ExperimentFile(
-                schemaVersion = 1,
+                schemaVersion = 2,
                 modelRef = "m.model.json",
                 execution = ExecutionSettings(replications = 2, warmup = "0ms", measurement = "1s", seed = 7),
                 variants = listOf(Variant(id = "baseline")),

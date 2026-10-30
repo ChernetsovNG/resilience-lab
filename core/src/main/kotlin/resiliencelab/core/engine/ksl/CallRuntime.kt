@@ -12,24 +12,28 @@ internal class CallRuntime(
         DurationSamplerFactory.create(edge.network, streams.stream(edge.pathSegments, StreamRole.NETWORK))
     private val jitterStream = streams.stream(edge.pathSegments, StreamRole.JITTER)
     private val outcomeStream by lazy { streams.stream(edge.pathSegments, StreamRole.OUTCOME) }
-    private var activeFault: FaultSpan? = null
+    val faults = FaultState()
 
     fun resetFaults() {
-        activeFault = null
+        faults.clear()
     }
 
     fun startFault(fault: FaultSpan) {
-        activeFault = fault
+        faults.start(fault)
     }
 
     fun endFault(fault: FaultSpan) {
-        if (activeFault == fault) activeFault = null
+        faults.end(fault)
     }
 
-    fun nextNetworkDelayMs(): Double = networkSampler.next() * (activeFault?.processingMultiplier ?: 1.0)
+    fun nextNetworkDelayMs(routeFaults: List<FaultState> = emptyList()): Double {
+        val multiplier = routeFaults.fold(faults.multiplier) { value, state -> value * state.multiplier }
+        val delayMs = routeFaults.fold(faults.delayMs) { value, state -> value + state.delayMs }
+        return networkSampler.next() * multiplier + delayMs
+    }
 
     /** Sample once at request transmission; a rejected transmission offers no work to the service. */
-    fun nextTransmissionFailed(): Boolean = activeFault?.failureProbability?.let { outcomeStream.randU01() < it } ?: false
+    fun nextTransmissionFailed(): Boolean = faults.failureProbability?.let { outcomeStream.randU01() < it } ?: false
 
     fun nextJitter(): Double = jitterStream.randU01()
 }

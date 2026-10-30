@@ -20,6 +20,44 @@ import java.nio.file.Path
 import kotlin.test.Test
 
 class DocumentSchemasTest {
+    @Test
+    fun `fault schema accepts kind parameters and rejects missing or unrelated values`() {
+        fun withFault(fields: String) =
+            experiment().replace(
+                "\"variants\":",
+                "\"faults\":[{\"target\":\"service\",\"from\":\"0ms\",\"to\":\"1s\",$fields}],\"variants\":",
+            )
+        for (fields in listOf(
+            "\"kind\":\"slowdown\",\"multiplier\":2",
+            "\"kind\":\"slowdown\",\"delay\":\"0ms\"",
+            "\"kind\":\"slowdown\",\"multiplier\":2,\"delay\":\"20ms\"",
+            "\"kind\":\"errors\",\"failureRate\":\"5%\"",
+            "\"kind\":\"capacityLoss\",\"capacity\":0",
+            "\"kind\":\"unavailable\"",
+            "\"kind\":\"blackhole\"",
+        )) {
+            assertThat(validate("experiment", withFault(fields))).describedAs(fields).isEmpty()
+        }
+        for (fields in listOf(
+            "\"kind\":\"periodic\"",
+            "\"kind\":\"slowdown\"",
+            "\"kind\":\"slowdown\",\"multiplier\":0",
+            "\"kind\":\"slowdown\",\"multiplier\":null",
+            "\"kind\":\"slowdown\",\"delay\":\"-1ms\"",
+            "\"kind\":\"slowdown\",\"multiplier\":2,\"failureRate\":\"5%\"",
+            "\"kind\":\"errors\"",
+            "\"kind\":\"errors\",\"failureRate\":null",
+            "\"kind\":\"errors\",\"failureRate\":\"5%\",\"capacity\":0",
+            "\"kind\":\"capacityLoss\"",
+            "\"kind\":\"capacityLoss\",\"capacity\":-1",
+            "\"kind\":\"unavailable\",\"delay\":\"1ms\"",
+            "\"kind\":\"blackhole\",\"multiplier\":2",
+            "\"processingMultiplier\":2",
+        )) {
+            assertThat(validate("experiment", withFault(fields))).describedAs(fields).isNotEmpty()
+        }
+    }
+
     private val root = Path.of(System.getProperty("resilience-lab.project-root"))
     private val factory = JsonSchemaFactory.getInstance(VersionFlag.V202012)
     private val generated = DocumentSchemas().generate()
@@ -283,7 +321,7 @@ class DocumentSchemasTest {
     ) = factory.getSchema(generated.getValue("$kind.schema.json"), InputFormat.JSON).validate(text, InputFormat.JSON)
 
     private fun experiment(overrides: String = "{}") =
-        """{"schemaVersion":1,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
+        """{"schemaVersion":2,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
         """{"schemaVersion":5,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""

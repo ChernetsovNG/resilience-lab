@@ -86,7 +86,7 @@ class ReplicaArtifactTest {
         @TempDir root: Path,
     ) {
         val source = documents.model(3, tailReplicas = 2, overrides = """, "replicaOverrides":{"2":{"handlers":4}}""")
-        val experiment = documents.experiment("""[{"target":"worker#2","from":"100ms","to":"500ms","processingMultiplier":3}]""")
+        val experiment = documents.experiment("""[{"target":"worker#2","from":"100ms","to":"500ms","kind":"slowdown","multiplier":3}]""")
 
         fun run(
             source: ModelFile,

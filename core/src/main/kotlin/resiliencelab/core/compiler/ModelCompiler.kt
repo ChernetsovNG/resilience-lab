@@ -22,6 +22,7 @@ import resiliencelab.core.ir.CallPool
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
@@ -88,7 +89,7 @@ class ModelCompiler(
         val sink = Diagnostics()
         val structureOk = checkStructure(model, modelDocument, sink)
         val run = runSettings(experiment, experimentDocument, sink)
-        val faultSpans = faults(experiment, model, experimentDocument, sink)
+        val faultSpans = faults(experiment, model, experimentDocument, sink, run)
         checkVariants(experiment, experimentDocument, sink)
         val points = gridPoints(experiment, experimentDocument, sink)
         val variants =
@@ -1205,41 +1206,130 @@ class ModelCompiler(
         model: ModelFile,
         document: String,
         sink: Diagnostics,
-    ): List<FaultSpan> {
-        val spans =
-            experiment.faults.mapIndexedNotNull { index, fault ->
-                val pointer = JsonPointer.of("faults", index)
-                val before = sink.errorCount()
-                val base = fault.target.substringBefore('#')
-                if (model.blocks[base]?.type != "service" && model.connections.none { it.id == base && it.type == "call" }) {
-                    sink.error(
-                        CoreMessage.FAULT_TARGET,
-                        "Fault target '${fault.target}' is not a service, replica or call",
-                        document,
-                        "$pointer/target",
-                        fault.target,
-                        args =
-                            mapOf(
-                                "target" to JsonPrimitive(fault.target),
-                            ),
-                    )
+        run: RunSettings?,
+    ): List<FaultSpan> =
+        experiment.faults.mapIndexedNotNull { index, fault ->
+            val pointer = JsonPointer.of("faults", index)
+            val before = sink.errorCount()
+            val base = fault.target.substringBefore('#')
+            if (model.blocks[base]?.type !in setOf("service", "database", "pooler") &&
+                model.connections.none { it.id == base && it.type in setOf("call", "route") }
+            ) {
+                sink.error(
+                    CoreMessage.FAULT_TARGET,
+                    "Fault target '${fault.target}' is not a service, database, pooler, replica, call or route",
+                    document,
+                    "$pointer/target",
+                    fault.target,
+                    args = mapOf("target" to JsonPrimitive(fault.target)),
+                )
+            }
+            val kind =
+                when (fault.kind) {
+                    "slowdown" -> FaultKind.SLOWDOWN
+                    "errors" -> FaultKind.ERRORS
+                    "unavailable" -> FaultKind.UNAVAILABLE
+                    "blackhole" -> FaultKind.BLACKHOLE
+                    "capacityLoss" -> FaultKind.CAPACITY_LOSS
+                    else -> {
+                        sink.error(
+                            CoreMessage.FAULT_KIND,
+                            "Unknown fault kind '${fault.kind}'",
+                            document,
+                            "$pointer/kind",
+                            fault.target,
+                            args = mapOf("kind" to JsonPrimitive(fault.kind)),
+                        )
+                        null
+                    }
                 }
-                val from = duration(fault.from, "$pointer/from", document, sink, allowZero = true)
-                val to = duration(fault.to, "$pointer/to", document, sink, allowZero = false)
-                if (from != null && to != null && to <= from) {
+            val from = duration(fault.from, "$pointer/from", document, sink, allowZero = true)
+            val to = duration(fault.to, "$pointer/to", document, sink, allowZero = true)
+            if (from != null && to != null) {
+                if (to <= from) {
                     sink.error(CoreMessage.FAULT_INTERVAL, "Fault must end after it starts", document, "$pointer/to", fault.target)
-                }
-                val multiplier = fault.processingMultiplier
-                if (multiplier != null && !(multiplier > 0.0 && multiplier.isFinite())) {
+                } else if (run != null && to > run.warmupMs + run.measurementMs) {
+                    val durationMs = run.warmupMs + run.measurementMs
                     sink.error(
-                        CoreMessage.PARAM_PROCESSING_MULTIPLIER,
-                        "processingMultiplier must be greater than zero",
+                        CoreMessage.FAULT_INTERVAL_OUTSIDE,
+                        "Fault interval must be within the run from 0 to $durationMs ms",
                         document,
-                        "$pointer/processingMultiplier",
+                        "$pointer/to",
                         fault.target,
+                        args = mapOf("durationMs" to JsonPrimitive(durationMs)),
                     )
                 }
-                val failure =
+            }
+            val allowed =
+                when (kind) {
+                    FaultKind.SLOWDOWN -> setOf("multiplier", "delay")
+                    FaultKind.ERRORS -> setOf("failureRate")
+                    FaultKind.CAPACITY_LOSS -> setOf("capacity")
+                    else -> emptySet()
+                }
+            val fields =
+                listOfNotNull(
+                    fault.multiplier?.let { "multiplier" },
+                    fault.delay?.let { "delay" },
+                    fault.failureRate?.let { "failureRate" },
+                    fault.capacity?.let { "capacity" },
+                )
+            if (kind != null) {
+                (fields - allowed).forEach { field ->
+                    sink.error(
+                        CoreMessage.FAULT_FIELD,
+                        "Field '$field' does not apply to fault kind '${fault.kind}'",
+                        document,
+                        "$pointer/$field",
+                        fault.target,
+                        args = mapOf("field" to JsonPrimitive(field), "kind" to JsonPrimitive(fault.kind)),
+                    )
+                }
+            }
+            val multiplier = if (kind == FaultKind.SLOWDOWN) fault.multiplier else null
+            if (multiplier != null && !(multiplier > 0.0 && multiplier.isFinite())) {
+                sink.error(
+                    CoreMessage.PARAM_EXCLUSIVE_MINIMUM,
+                    "Parameter 'multiplier' is out of range: > 0",
+                    document,
+                    "$pointer/multiplier",
+                    fault.target,
+                    args = mapOf("parameter" to JsonPrimitive("multiplier"), "minimum" to JsonPrimitive(0)),
+                )
+            }
+            val delay =
+                if (kind == FaultKind.SLOWDOWN) {
+                    fault.delay?.let { duration(it, "$pointer/delay", document, sink, allowZero = true) }
+                } else {
+                    null
+                }
+            if (kind == FaultKind.SLOWDOWN && multiplier == null && fault.delay == null) {
+                sink.error(
+                    CoreMessage.FAULT_EMPTY,
+                    "Slowdown fault must set multiplier or delay",
+                    document,
+                    pointer,
+                    fault.target,
+                )
+            }
+            val required =
+                when (kind) {
+                    FaultKind.ERRORS -> "failureRate"
+                    FaultKind.CAPACITY_LOSS -> "capacity"
+                    else -> null
+                }
+            if (required != null && required !in fields) {
+                sink.error(
+                    CoreMessage.PARAM_MISSING,
+                    "Required parameter '$required' is missing",
+                    document,
+                    "$pointer/$required",
+                    fault.target,
+                    args = mapOf("parameter" to JsonPrimitive(required)),
+                )
+            }
+            val failure =
+                if (kind == FaultKind.ERRORS) {
                     fault.failureRate?.let { text ->
                         Quantities.parse(text, Dimension.PROBABILITY)?.takeIf { it <= 1.0 }.also {
                             if (it == null) {
@@ -1254,24 +1344,35 @@ class ModelCompiler(
                             }
                         }
                     }
-                if (multiplier == null && fault.failureRate == null) {
-                    sink.error(
-                        CoreMessage.FAULT_EMPTY,
-                        "Fault must set processingMultiplier or failureRate",
-                        document,
-                        pointer,
-                        fault.target,
-                    )
-                }
-                if (sink.errorCount() > before) {
-                    null
                 } else {
-                    FaultSpan(fault.target, from!!, to!!, multiplier, failure, Origin(document, pointer))
+                    null
                 }
+            if (kind == FaultKind.CAPACITY_LOSS && fault.capacity != null && fault.capacity < 0) {
+                sink.error(
+                    CoreMessage.PARAM_MINIMUM,
+                    "Parameter 'capacity' is out of range: >= 0",
+                    document,
+                    "$pointer/capacity",
+                    fault.target,
+                    args = mapOf("parameter" to JsonPrimitive("capacity"), "minimum" to JsonPrimitive(0)),
+                )
             }
-        checkFaultOverlaps(spans, document, sink)
-        return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
-    }
+            if (sink.errorCount() > before) {
+                null
+            } else {
+                FaultSpan(
+                    fault.target,
+                    requireNotNull(from),
+                    requireNotNull(to),
+                    requireNotNull(kind),
+                    multiplier ?: 1.0,
+                    delay ?: 0.0,
+                    failure,
+                    fault.capacity,
+                    Origin(document, pointer),
+                )
+            }
+        }
 
     private fun bindFaults(
         faults: List<FaultSpan>,
@@ -1279,9 +1380,12 @@ class ModelCompiler(
         sink: Diagnostics,
         variant: String,
     ): List<FaultSpan> {
-        val elements = graph.services.map { it.path to it.pathSegments } + graph.calls.map { it.path to it.pathSegments }
-        val spans =
-            faults.flatMap { fault ->
+        val elements =
+            graph.services.map { Triple(it.path, it.pathSegments, it.pooler?.poolSize ?: it.handlers) } +
+                graph.calls.map { Triple(it.path, it.pathSegments, it.pool?.size) } +
+                graph.routes.map { Triple(it.path, it.pathSegments, null) }
+        return faults
+            .flatMap { fault ->
                 val targets =
                     elements.filter { (path, segments) ->
                         path == fault.target || segments.dropLast(1).singleOrNull() == fault.target
@@ -1289,7 +1393,7 @@ class ModelCompiler(
                 if (targets.isEmpty()) {
                     sink.error(
                         CoreMessage.FAULT_TARGET,
-                        "Fault target '${fault.target}' is not a service, replica or call",
+                        "Fault target '${fault.target}' is not a service, database, pooler, replica, call or route",
                         fault.origin.document,
                         fault.origin.pointer + "/target",
                         fault.target,
@@ -1297,33 +1401,45 @@ class ModelCompiler(
                         args = mapOf("target" to JsonPrimitive(fault.target)),
                     )
                 }
-                targets.map { (_, segments) -> fault.copy(targetSegments = segments) }
-            }
-        faults.firstOrNull()?.let { checkFaultOverlaps(spans, it.origin.document, sink) }
-        return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
-    }
-
-    private fun checkFaultOverlaps(
-        spans: List<FaultSpan>,
-        document: String,
-        sink: Diagnostics,
-    ) {
-        spans.groupBy { it.target }.forEach { (target, list) ->
-            val overlap = list.sortedBy { it.fromMs }.zipWithNext().any { (first, second) -> second.fromMs < first.toMs }
-            if (overlap) {
-                sink.error(
-                    CoreMessage.FAULT_OVERLAP,
-                    "Faults on '$target' overlap in time",
-                    document,
-                    "/faults",
-                    target,
-                    args =
-                        mapOf(
-                            "target" to JsonPrimitive(target),
-                        ),
-                )
-            }
-        }
+                targets.mapNotNull { (path, segments, nominalCapacity) ->
+                    if (fault.kind == FaultKind.CAPACITY_LOSS && nominalCapacity == null) {
+                        sink.error(
+                            CoreMessage.FAULT_CAPACITY_TARGET,
+                            "Fault target '$path' has no slot pool",
+                            fault.origin.document,
+                            fault.origin.pointer + "/target",
+                            path,
+                            variant,
+                            args = mapOf("target" to JsonPrimitive(path)),
+                        )
+                        null
+                    } else if (fault.kind == FaultKind.CAPACITY_LOSS && requireNotNull(fault.capacity) > requireNotNull(nominalCapacity)) {
+                        sink.error(
+                            CoreMessage.PARAM_MAXIMUM,
+                            "Parameter 'capacity' is out of range: <= $nominalCapacity",
+                            fault.origin.document,
+                            fault.origin.pointer + "/capacity",
+                            path,
+                            variant,
+                            args = mapOf("parameter" to JsonPrimitive("capacity"), "maximum" to JsonPrimitive(nominalCapacity)),
+                        )
+                        null
+                    } else {
+                        fault.copy(targetSegments = segments)
+                    }
+                }
+            }.sortedWith(
+                compareBy(
+                    { it.target },
+                    { it.fromMs },
+                    { it.toMs },
+                    { it.kind },
+                    { it.multiplier },
+                    { it.delayMs },
+                    { it.failureProbability },
+                    { it.capacity },
+                ),
+            )
     }
 
     private fun checkVariants(

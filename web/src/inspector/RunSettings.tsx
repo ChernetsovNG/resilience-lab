@@ -49,14 +49,22 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
     descriptor(catalog, "seed", t("editor.run.seed"), "INTEGER", { minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
     duration("maxRealTime", t("editor.run.realTimeLimit"), true),
   ];
-  const faultFields = [
+  const faultFields = (fault: ExperimentFile["faults"][number]) => [
     duration("from", t("editor.fault.start")), duration("to", t("editor.fault.end"), true),
-    descriptor(catalog, "processingMultiplier", t("editor.fault.processingMultiplier"), "NUMBER", { required: false, exclusiveMinimum: 0 }),
-    descriptor(catalog, "failureRate", t("editor.fault.failureRate"), "QUANTITY", { required: false, dimension: "PROBABILITY", minimum: 0, maximum: 1 }),
+    ...(fault.kind === "slowdown" ? [
+      descriptor(catalog, "multiplier", t("editor.fault.multiplier"), "NUMBER", { required: false, exclusiveMinimum: 0 }),
+      { ...duration("delay", t("editor.fault.delay")), required: false },
+    ] : []),
+    ...(fault.kind === "errors" ? [descriptor(catalog, "failureRate", t("editor.fault.failureRate"), "QUANTITY", {
+      dimension: "PROBABILITY", minimum: 0, maximum: 1,
+    })] : []),
+    ...(fault.kind === "capacityLoss" ? [descriptor(catalog, "capacity", t("editor.fault.capacity"), "INTEGER", { minimum: 0 })] : []),
   ];
-  const targets = Object.entries(model.blocks).filter(([, block]) =>
-    catalog.types.find((type) => type.id === block.type)?.params.some((param) => param.name === "processing"),
-  ).map(([id]) => id);
+  const faultKinds = ["slowdown", "errors", "unavailable", "blackhole", "capacityLoss"];
+  const targets = [
+    ...Object.entries(model.blocks).filter(([, block]) => block.type !== "client" && block.type !== "router").map(([id]) => id),
+    ...model.connections.filter(connection => connection.type === "call" || connection.type === "route").map(connection => connection.id),
+  ];
   return (
     <>
       <InspectorSection name="execution" title={<h2>{t("editor.run.title")}</h2>}>
@@ -86,7 +94,11 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
             </select>
             <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`faults.${index}.target`)} />
           </label>
-          {faultFields.map((field) => (
+          <label className="param-field" data-inspector-field={`faults.${index}.kind`}>{t("editor.fault.kind")}
+            <input type="text" readOnly value={faultKinds.includes(fault.kind) ? t(`faults.kinds.${fault.kind}`) : fault.kind} />
+            <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`faults.${index}.kind`)} />
+          </label>
+          {faultFields(fault).map((field) => (
             <ParamField key={field.name} descriptor={field} value={fault[field.name as keyof typeof fault]}
               path={`faults.${index}.${field.name}`} editable={editable} isOverridden={() => false} onValidity={onValidity}
               fieldDiagnostics={fieldDiagnostics}
@@ -98,7 +110,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
       ))}
       <button type="button" disabled={!editable || invalid || targets.length === 0} onClick={() => onCommand(addFault({
         target: targets[0], from: `0${duration("from", "").units[0]?.symbol ?? ""}`,
-        to: experiment.execution.measurement, processingMultiplier: 2,
+        to: experiment.execution.measurement, kind: "slowdown", multiplier: 2,
       }))}>{t("editor.fault.add")}</button>
       </div>
       </InspectorSection>
