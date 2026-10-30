@@ -9,6 +9,7 @@ import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
@@ -43,7 +44,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 12
+    const val ARTIFACT_SCHEMA = 13
     const val SERIES_SCHEMA = 6
     const val REPLICATION_SCHEMA = 5
 }
@@ -122,6 +123,7 @@ data class PointSummary(
     val coordinates: Map<String, JsonElement>,
     val aggregate: AggregateMetrics,
     val saturation: SaturationSummary,
+    val headroom: CapacityHeadroom = CapacityHeadroom(),
 )
 
 /** Summary of a run, loaded first by the UI; [grid] retains document axis and value order for Map. */
@@ -176,6 +178,7 @@ class ArtifactWriter(
         points: List<GridPoint>,
         grid: List<GridAxis>,
         callChain: List<String>,
+        graphs: Map<String, Map<String, GraphIr>> = emptyMap(),
     ): RunSummary {
         val json = Json { explicitNulls = false }
         val saturationReader = SaturationArtifactReader(workspace)
@@ -185,6 +188,9 @@ class ArtifactWriter(
             variants.map { (id, label) ->
                 val summaries =
                     points.map { point ->
+                        val graph = graphs[id]?.get(point.id)
+                        val labels = graph?.let(SlotPoolLabels::from).orEmpty()
+                        val positions = graph?.let(SlotPoolLabels::positions) ?: callChain.withIndex().associate { it.value to it.index }
                         val stored =
                             (0 until replications).map { replication ->
                                 val directory = "$runDirectory/series/$id/${point.id}/rep-$replication"
@@ -197,13 +203,15 @@ class ArtifactWriter(
                                 ) {
                                     "Unsupported replication format in '$path'"
                                 }
-                                artifact.result to saturationReader.read(directory, replication, callChain)
+                                artifact.result to saturationReader.read(directory, replication, callChain, labels, positions)
                             }
+                        val aggregate = MetricsAggregator.aggregate(stored.map { it.first })
                         PointSummary(
                             point.id,
                             point.coordinates,
-                            MetricsAggregator.aggregate(stored.map { it.first }),
+                            aggregate,
                             SaturationAnalyzer.aggregate(stored.map { it.second }),
+                            CapacityHeadroomAnalyzer.analyze(aggregate, labels),
                         )
                     }
                 VariantSummary(id, label, replications, summaries)

@@ -33,7 +33,7 @@ test("shows the retry-storm saturation conclusion from the real summary for each
         const insight = page.getByRole("region", { name: "Saturation insight" });
         await expect(insight.getByRole("heading")).toHaveText(variant.label);
         await expect(insight).not.toContainText(/Saturation rule:|minimumDurationMs\s*=/);
-        const rule = insight.getByText("A service counts as saturated", { exact: false });
+        const rule = insight.getByText("A slot set counts as saturated", { exact: false });
         await expect(rule).toBeHidden();
         await insight.getByText("How saturation is detected", { exact: true }).click();
         await expect(rule).toBeVisible();
@@ -50,7 +50,7 @@ test("shows the retry-storm saturation conclusion from the real summary for each
           await expect(insight).toContainText(`entry p99 (pooled) ${formatDuration(point.aggregate.pooledLatency.all?.p99Ms)}`);
         } else {
           expect(first).toBeDefined();
-          await expect(insight).toContainText(`${first.node} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
+          await expect(insight).toContainText(`${first.label.message} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
           await expect(insight).toContainText(`median start ${formatDuration(first.medianStartMs)}`);
           await expect(insight).toContainText(`range ${formatNumber(first.minStartMs, 1)}–${formatDuration(first.maxStartMs)}`);
           await expect(insight.getByText(/^Capacity headroom:/)).toHaveCount(0);

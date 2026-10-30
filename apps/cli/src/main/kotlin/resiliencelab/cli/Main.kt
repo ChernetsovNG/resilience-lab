@@ -14,6 +14,7 @@ import resiliencelab.core.lab.RunIds
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.RunCatalog
+import resiliencelab.core.results.SlotPoolPeak
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
@@ -254,11 +255,29 @@ private fun printOutcome(
             val suffix = if (coordinates.isEmpty()) "" else " [$coordinates]"
             stdout.appendLine(
                 "${variant.id}/${point.id}$suffix: success ${percent(aggregate.successRate)}, " +
-                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}",
+                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}; " +
+                    "capacity headroom: utilization ${headroom(point.headroom.utilization, true)}, " +
+                    "mean queue ${headroom(point.headroom.meanQueueLength, false)}",
             )
         }
     }
 }
+
+private fun headroom(
+    peak: SlotPoolPeak?,
+    utilization: Boolean,
+): String =
+    if (peak == null) {
+        "n/a"
+    } else {
+        val value =
+            if (utilization) {
+                "${String.format(Locale.ROOT, "%.2f", peak.value * 100)}%"
+            } else {
+                String.format(Locale.ROOT, "%.2f", peak.value)
+            }
+        "$value at ${peak.label.message}"
+    }
 
 private fun relativePath(
     root: Path,

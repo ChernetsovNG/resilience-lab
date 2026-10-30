@@ -347,6 +347,10 @@ export interface components {
             scenario?: components["schemas"]["ScenarioStep"][] | null;
             type: string;
         };
+        CapacityHeadroom: {
+            meanQueueLength?: components["schemas"]["SlotPoolPeak"] | null;
+            utilization?: components["schemas"]["SlotPoolPeak"] | null;
+        };
         Catalog: {
             assumptions: string[];
             /** Format: int32 */
@@ -525,6 +529,7 @@ export interface components {
             to: string;
         };
         FirstNodeSaturation: {
+            label: components["schemas"]["SlotPoolLabel"];
             /** Format: double */
             maxStartMs: number;
             /** Format: double */
@@ -534,6 +539,7 @@ export interface components {
             node: string;
             /** Format: int32 */
             replicationCount: number;
+            slotPool: string;
         };
         GridAxis: {
             path: string;
@@ -720,6 +726,7 @@ export interface components {
                     [key: string]: unknown;
                 } | string;
             };
+            headroom: components["schemas"]["CapacityHeadroom"];
             id: string;
             saturation: components["schemas"]["SaturationSummary"];
         };
@@ -822,19 +829,21 @@ export interface components {
             variants: components["schemas"]["VariantSummary"][];
         };
         SaturatedNode: {
+            label: components["schemas"]["SlotPoolLabel"];
             node: string;
+            slotPool: string;
             /** Format: double */
             startMs: number;
         };
         SaturationRule: {
             /** Format: double */
-            handlerUtilizationThreshold: number;
-            /** Format: double */
             meanQueueLengthThreshold: number;
             /** Format: double */
             minimumDurationMs: number;
             /** Format: int32 */
-            queueRejectionsThreshold: number;
+            rejectionsThreshold: number;
+            /** Format: double */
+            utilizationThreshold: number;
         };
         SaturationSummary: {
             firstNodes: components["schemas"]["FirstNodeSaturation"][];
@@ -921,6 +930,13 @@ export interface components {
             /** Format: int64 */
             timeouts: number;
         };
+        SlotPoolLabel: {
+            args: {
+                [key: string]: string | number;
+            };
+            code: string;
+            message: string;
+        };
         SlotPoolMetrics: {
             /** Format: double */
             busyIntegralMs: number;
@@ -937,6 +953,13 @@ export interface components {
             waitCount: number;
             /** Format: int64 */
             waitLimitCount: number;
+        };
+        SlotPoolPeak: {
+            label: components["schemas"]["SlotPoolLabel"];
+            node: string;
+            slotPool: string;
+            /** Format: double */
+            value: number;
         };
         TypeDescriptor: {
             assumptions: string[];

@@ -146,12 +146,12 @@ class ArtifactPipelineTest {
         assertThat(workspace.read("${first.runDirectory}/summary.json").text)
             .contains(
                 "\"minimumDurationMs\": 100.0",
-                "\"handlerUtilizationThreshold\": 0.95",
+                "\"utilizationThreshold\": 0.95",
                 "\"meanQueueLengthThreshold\": 0.5",
-                "\"queueRejectionsThreshold\": 0",
+                "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(12)
+        assertThat(first.manifest.schemaVersion).isEqualTo(13)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

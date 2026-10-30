@@ -62,7 +62,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   })).join(t("results.coordinateSeparator"));
   const variantLabel = activeVariant?.label ?? activeVariantId ?? t("results.variant");
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
-    && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate) : null;
+    && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
   const services = [...new Set(columns.flatMap(({ point }) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
   const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (

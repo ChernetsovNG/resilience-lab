@@ -973,7 +973,7 @@ class ModelCompiler(
         return if (handlers == null || queue == null || processing == null || failure == null) {
             null
         } else {
-            ServiceNode(id, handlers, queue, processing, failure, Origin(document, JsonPointer.of("blocks", id)))
+            ServiceNode(id, handlers, queue, processing, failure, Origin(document, JsonPointer.of("blocks", id)), type = type)
         }
     }
 
