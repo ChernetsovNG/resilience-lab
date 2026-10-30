@@ -12,8 +12,13 @@ test("checkout keeps its diagram while switching its two questions and remembers
   await model.selectOption("checkout/checkout.model.json");
   await expect(experiment.locator("option")).toHaveCount(2);
   await experiment.selectOption("checkout/checkout.experiment.json");
-  await expect(page.getByTestId("block-node")).toHaveCount(5);
-  const diagram = await page.getByTestId("block-node").allTextContents();
+  await expect(experiment).toHaveAttribute("title", "checkout/checkout.experiment.json");
+  let diagram: string[] = [];
+  // The canvas remounts on document changes: validate and capture the same DOM read.
+  await expect.poll(async () => {
+    diagram = await page.getByTestId("block-node").allTextContents();
+    return diagram;
+  }).toHaveLength(5);
   await experiment.selectOption("checkout/checkout-grid.experiment.json");
   await expect.poll(() => page.getByTestId("block-node").allTextContents()).toEqual(diagram);
   await expect(model).toHaveValue("checkout/checkout.model.json");
