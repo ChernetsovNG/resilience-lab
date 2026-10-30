@@ -22,6 +22,7 @@ import { ProblemList } from "./layout/ProblemList";
 import { ResultsWorkspace } from "./layout/ResultsWorkspace";
 import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
+import { FileMenu } from "./layout/FileMenu";
 import { StatusBar } from "./layout/StatusBar";
 import { useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
@@ -143,11 +144,13 @@ export function App() {
     documentValuesEqual(loaded.model, launchDocuments.model) && documentValuesEqual(loaded.experiment, launchDocuments.experiment);
   const currentRunDiagnostics = mergeDiagnostics(ownRun && !staleResults ? run.job?.diagnostics ?? [] : [],
     launchIsCurrent ? problemDiagnostics(run.problem) : []);
-  const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics);
+  const workspaceDiagnostics = problemDiagnostics(workspace.problem);
+  const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics, workspaceDiagnostics);
   const path = loaded?.experimentPath ?? null;
   const previousErrors = observedErrors.path === path ? observedErrors : { validation: "[]", run: "[]" };
   const validationResponse = validation.report?.diagnostics ?? (validation.problem === null ? null : problemDiagnostics(validation.problem));
-  const validationErrors = validationResponse === null ? previousErrors.validation : JSON.stringify(validationResponse.filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
+  const validationErrors = validationResponse === null && workspaceDiagnostics.length === 0 ? previousErrors.validation
+    : JSON.stringify(mergeDiagnostics(validationResponse ?? [], workspaceDiagnostics).filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
   const waitingForSubmission = ownRun && run.running && run.problem === null &&
     (run.job === null || (run.job.status !== "QUEUED" && run.job.status !== "RUNNING"));
   const runErrors = waitingForSubmission ? previousErrors.run
@@ -268,6 +271,19 @@ export function App() {
     return estimate.request();
   };
 
+  const resetExperimentView = () => {
+    setEstimatePanel(null);
+    setProblemsElement(null);
+    setResultsSize("collapsed");
+    setAnalysis(false);
+    setSelection([]);
+    setInspectorTarget("experiment");
+    setFieldFocus(null);
+    clipboard.current = null;
+    selectVariant(null);
+    run.reset();
+  };
+
   return (
     <div className={`app app--results-${resultsSize}`}>
       <TopBar
@@ -276,16 +292,7 @@ export function App() {
         onExperiment={(path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
-          setEstimatePanel(null);
-          setProblemsElement(null);
-          setResultsSize("collapsed");
-          setAnalysis(false);
-          setSelection([]);
-          setInspectorTarget("experiment");
-          setFieldFocus(null);
-          clipboard.current = null;
-          selectVariant(null);
-          run.reset();
+          resetExperimentView();
           void workspace.open(path, true);
         }}
         onInspectExperiment={() => {
@@ -299,6 +306,9 @@ export function App() {
         conflict={workspace.conflict}
         saving={workspace.saving}
         onSave={() => void workspace.save()}
+        fileMenu={<FileMenu workspace={workspace}
+          disabled={invalid || loading || workspace.saving || run.running || runPending || estimate.pending}
+          onOpened={resetExperimentView} />}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
         onUndo={workspace.undo}

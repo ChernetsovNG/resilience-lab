@@ -4,12 +4,13 @@ import { localizeCatalog } from "../i18n/catalog";
 import { useLanguage } from "../i18n/useLanguage";
 import { MessageError } from "../i18n/MessageError";
 import { ApiError, api } from "../api/apiClient";
-import type { ApiProblem, Catalog, DocumentEntry, LayoutFile, WorkspaceChangeView } from "../api/apiTypes";
+import type { ApiProblem, Catalog, DocumentEntry, DocumentDraft, LayoutFile, WorkspaceChangeView } from "../api/apiTypes";
 import {
   dirtyDocuments, editorReducer, initialEditorState, setModelParam,
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
+import { exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
 
 export interface ExternalDocumentChange {
   path: string;
@@ -39,6 +40,11 @@ export interface Workspace {
   open: (experimentPath: string, discardChanges?: boolean) => Promise<boolean>;
   setParam: (id: string, name: string, value: unknown) => void;
   save: () => Promise<void>;
+  /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
+  storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace) => Promise<boolean>;
+  /** Downloads saved canonical documents; a failed save never starts an export. */
+  exportFiles: (saveFirst?: boolean) => Promise<DownloadDocument[] | null>;
+  reportProblem: (error: unknown) => void;
   /** Rereads the open experiment from storage, discarding local edits. */
   reload: () => Promise<void>;
 }
@@ -265,7 +271,8 @@ export function useWorkspace(): Workspace {
   }, []);
 
   const save = useCallback(async () => {
-    if (loaded === null || !dirty || loadInFlight.current || conflictPath !== null || saveInFlight.current) return;
+    if (loaded === null || loadInFlight.current || conflictPath !== null || saveInFlight.current) return false;
+    if (!dirty) return true;
     const saved = loaded;
     const current = generation.current;
     saveInFlight.current = true;
@@ -278,7 +285,7 @@ export function useWorkspace(): Workspace {
         savingPaths.current.add(path);
         try {
           const entry = await api.saveDocument(path, { [kind]: saved[kind] }, saved.versions[kind]);
-          if (current !== generation.current) return;
+          if (current !== generation.current) return false;
           persistenceRevision.current += 1;
           const latest = loadedRef.current;
           if (latest !== null) {
@@ -290,19 +297,70 @@ export function useWorkspace(): Workspace {
           }
           dispatch({ type: "saved", kind, documents: saved, version: entry.version });
         } catch (error) {
-          if (current !== generation.current) return;
+          if (current !== generation.current) return false;
           if (error instanceof ApiError && error.status === 409) dispatch({ type: "conflict", path });
           else setProblem(problemOf(error));
-          break;
+          return false;
         } finally {
           flushChange(path);
         }
       }
+      return true;
     } finally {
       saveInFlight.current = false;
       setSaving(false);
     }
   }, [loaded, dirty, conflictPath, flushChange]);
+
+  const reportProblem = useCallback((error: unknown) => setProblem(problemOf(error)), []);
+
+  const storeDocuments = useCallback(async (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace) => {
+    if (loadInFlight.current || saveInFlight.current) return false;
+    saveInFlight.current = true;
+    loadInFlight.current = true;
+    setLoading(true);
+    setProblem(null);
+    for (const draft of drafts) savingPaths.current.add(draft.path);
+    try {
+      if (!await writeDocuments(drafts, confirmReplace)) return false;
+      const experiment = drafts.find(draft => draft.content.experiment != null)?.path;
+      const affectsOpen = loaded !== null && drafts.some(draft =>
+        [loaded.modelPath, loaded.layoutPath, loaded.experimentPath].includes(draft.path));
+      if (experiment !== undefined || affectsOpen) await load(experiment ?? loaded!.experimentPath);
+      return true;
+    } catch (error) {
+      reportProblem(error);
+      return false;
+    } finally {
+      // A partial multi-document operation is visible in storage and in the picker, even when a later write fails.
+      try {
+        const documents = await api.documents();
+        setExperiments(documents.filter(document => document.kind === "EXPERIMENT").map(document => document.path).sort());
+      } catch { /* A later workspace poll retries refreshing the picker. */ }
+      for (const draft of drafts) flushChange(draft.path);
+      saveInFlight.current = false;
+      loadInFlight.current = false;
+      setLoading(false);
+    }
+  }, [loaded, load, flushChange, reportProblem]);
+
+  const exportFiles = useCallback(async (saveFirst = false) => {
+    if (loaded === null || loadInFlight.current || saveInFlight.current || conflictPath !== null || externalChange !== null) return null;
+    setLoading(true);
+    setProblem(null);
+    try {
+      if (dirty && (!saveFirst || !await save())) return null;
+      saveInFlight.current = true;
+      loadInFlight.current = true;
+      return await exportDocuments(loaded);
+    }
+    catch (error) { reportProblem(error); return null; }
+    finally {
+      saveInFlight.current = false;
+      loadInFlight.current = false;
+      setLoading(false);
+    }
+  }, [loaded, dirty, save, conflictPath, externalChange, reportProblem]);
 
   const reload = useCallback(async () => {
     if (loaded !== null && !saveInFlight.current && externalChange?.deleted !== true) {
@@ -313,6 +371,6 @@ export function useWorkspace(): Workspace {
   return {
     catalog, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
     conflict: conflictPath !== null, conflictPath, externalChange, problem, open, setParam, execute,
-    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload,
+    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save: async () => { await save(); }, reload, storeDocuments, exportFiles, reportProblem,
   };
 }

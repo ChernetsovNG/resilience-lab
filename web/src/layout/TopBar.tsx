@@ -32,6 +32,7 @@ export interface TopBarProps {
   runBlockedReason?: string;
   job: JobView | null;
   estimatePanel?: ReactNode;
+  fileMenu?: ReactNode;
 }
 
 /**
@@ -73,6 +74,7 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={onSave} disabled={!dirty || invalid || conflict || saving || loading}>
         {t("app.topBar.save")}
       </button>
+      {props.fileMenu}
       <div className="run-actions">
       <button type="button" onClick={props.onEstimate}
         disabled={experiment === null || loading || saving || invalid || running || props.estimating}>

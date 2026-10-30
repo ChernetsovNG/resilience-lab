@@ -89,7 +89,7 @@ select {
 .top-bar {
   grid-area: top;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   min-width: 0;
   gap: clamp(0.25rem, 0.7vw, 0.75rem);
@@ -97,6 +97,10 @@ select {
   border-bottom: 1px solid #d5dbe3;
   background: #fff;
   white-space: nowrap;
+}
+
+@media (max-width: 1279px) {
+  .top-bar { flex-wrap: wrap; }
 }
 
 .top-bar h1 {
@@ -177,6 +181,44 @@ select {
   width: auto;
   padding: 0.25rem;
 }
+
+.file-menu > button { anchor-name: --file-menu; }
+
+.file-menu-panel {
+  inset: 3rem auto auto 0.75rem;
+  position-anchor: --file-menu;
+  top: calc(anchor(bottom) + 0.25rem);
+  left: anchor(left);
+  margin: 0;
+  padding: 0.35rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.35rem;
+  box-shadow: 0 4px 12px #1f293326;
+}
+
+.file-menu-panel button {
+  display: block;
+  width: 100%;
+  border: 0;
+  text-align: left;
+}
+
+.file-menu-panel button:hover:not(:disabled) { background: #eff6ff; }
+
+.file-dialog {
+  width: min(30rem, calc(100vw - 3rem));
+  padding: 1.25rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.5rem;
+  white-space: normal;
+}
+
+.file-dialog::backdrop { background: #1f29334d; }
+.file-dialog h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+.file-dialog p { color: #52606d; }
+.file-dialog label { display: grid; gap: 0.35rem; margin: 0.75rem 0; }
+.file-dialog input { width: 100%; min-width: 0; padding: 0.4rem; }
+.file-dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 
 .dirty-mark {
   min-width: 0;

@@ -89,6 +89,21 @@ class WorkspaceApiTest {
     }
 
     @Test
+    fun `exports canonical document text with its stored version`() {
+        val response = mockMvc.perform(get("/api/v1/workspace/document/text").param("path", layout)).andReturn().response
+        val current = (DocumentCodec.decodeLayout(read(layout), layout) as DecodeResult.Ok).value
+
+        assertThat(response.status).isEqualTo(200)
+        assertThat(response.getContentAsString(Charsets.UTF_8)).isEqualTo(DocumentCodec.encodeLayout(current))
+        assertThat(response.contentType).startsWith("text/plain")
+        assertThat(response.getHeader(HttpHeaders.ETAG)).isEqualTo("\"${version(layout)}\"")
+        for ((path, expected) in listOf("missing.model.json" to 404, "../outside.model.json" to 400, "notes.txt" to 400)) {
+            val rejected = mockMvc.perform(get("/api/v1/workspace/document/text").param("path", path)).andReturn().response
+            assertThat(rejected.status).isEqualTo(expected)
+        }
+    }
+
+    @Test
     fun `compares If-Match strongly`() {
         val current = (DocumentCodec.decodeLayout(read(layout), layout) as DecodeResult.Ok).value
         val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = current))

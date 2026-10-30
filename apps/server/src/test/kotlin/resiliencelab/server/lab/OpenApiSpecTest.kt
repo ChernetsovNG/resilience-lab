@@ -194,6 +194,7 @@ class OpenApiSpecTest {
             "/api/v1/validate",
             "/api/v1/workspace/changes",
             "/api/v1/workspace/document",
+            "/api/v1/workspace/document/text",
             "/api/v1/workspace/documents",
         )
         assertThat(schemas.keys)

@@ -328,6 +328,8 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await page.mouse.down();
   await page.mouse.move(bounds.x - 70, bounds.y + bounds.height - 280, { steps: 12 });
   await page.mouse.up();
+  // Let the pan finish rendering before sending native keyboard activation.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const expected = await canvas.evaluate((element) => {
     const viewport = element.querySelector(".react-flow__viewport")!;
     const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
@@ -393,6 +395,9 @@ test("measures a new Client before collision checks when required-field hints ma
     JSON.stringify({ ...sourceLayout, positions: { client: { x: 0, y: 200 } } }));
   await page.reload();
   await expect(page.getByTestId("block-node")).toHaveCount(1);
+  // Removing the services invalidates the experiment; wait for Problems to resize the canvas before panning.
+  await expect(page.getByRole("tab", { name: /^Problems/ })).toHaveAttribute("aria-selected", "true");
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = (await canvas.boundingBox())!;
   const delta = await canvas.evaluate((element) => {
