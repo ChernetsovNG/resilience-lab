@@ -5,7 +5,7 @@ import { useState } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { windowCanvasResults, type CanvasResults } from "../canvasResults";
-import type { ConnectionSeriesLoadRequest, NodeSeriesMetrics, SeriesLoadRequest, WindowMetricValues } from "../series";
+import type { ConnectionSeriesLoadRequest, DecodedConnection, NodeSeriesMetrics, SeriesLoadRequest, WindowMetricValues } from "../series";
 import { usePlayback } from "./usePlayback";
 
 const summary: CanvasResults = {
@@ -59,12 +59,12 @@ describe("windowCanvasResults", () => {
 });
 
 interface Context { variant: string | null; pointId: string; replication: number }
-function setup(loader: { load: (request: SeriesLoadRequest) => Promise<NodeSeriesMetrics[]> } = loaded, windowCount = 6, nodes = ["dependency"]) {
+function setup(loader: { load: (request: SeriesLoadRequest) => Promise<NodeSeriesMetrics[]> } = loaded, windowCount = 6, nodes = ["dependency"], results = summary) {
   return renderHook(({ variant, pointId, replication }: Context) => {
     const [window, onWindowChange] = useState<number | null>(null);
     return { window, ...usePlayback({
       runId: "run-1", variant, pointId, replication, window, windowCount,
-      nodes, results: summary, onWindowChange,
+      nodes, results, onWindowChange,
     }, loader) };
   }, { initialProps: { variant: "baseline", pointId: "p0", replication: 0 } as Context });
 }
@@ -302,7 +302,7 @@ it("prefetches the next node and connection ranges before the cursor reaches the
     nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
   }, loader), { initialProps: { window: 0 } });
   await waitFor(() => expect(result.current.frame?.window).toBe(0));
-  expect(requests).toHaveLength(1);
+  expect(requests.map(request => request.fromWindow)).toEqual([0, 32]);
   rerender({ window: 24 });
   await waitFor(() => expect(requests.some(request => request.fromWindow === 32 && request.untilWindow === 64)).toBe(true));
   expect(connectionRequests.some(request => request.fromWindow === 32 && request.untilWindow === 64)).toBe(true);
@@ -325,4 +325,123 @@ it("retries a failed prefetch in the foreground without interrupting the current
   await act(async () => result.current.seek(32));
   expect(result.current.frame?.window).toBe(32);
   expect(result.current.problem).toBeNull();
+});
+
+it("starts node and connection requests together before either has resolved", async () => {
+  const ownSummary = { ...summary, connections: new Map([["call", {
+    ...summary.connections.get("call")!, hasOwnSeries: true,
+  }]]) };
+  const load = vi.fn(() => new Promise<NodeSeriesMetrics[]>(() => {}));
+  const loadConnections = vi.fn(() => new Promise<never>(() => {}));
+  const loader = { load, loadConnections };
+  const { result } = renderHook(() => usePlayback({
+    runId: "run-1", variant: "baseline", pointId: "p0", replication: 0,
+    window: 0, windowCount: 70, nodes: ["dependency"], results: ownSummary, onWindowChange: vi.fn(),
+  }, loader));
+  expect(load.mock.calls.length).toBeGreaterThan(0);
+  expect(loadConnections).toHaveBeenCalled();
+  expect(result.current.loading).toBe(true);
+});
+
+function connectionRange(request: ConnectionSeriesLoadRequest): DecodedConnection[] {
+  return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, (_, offset) => ({
+    startMs: (request.fromWindow + offset) * 100, durationMs: 100,
+    sentAttempts: request.fromWindow + offset + 1, retries: 1, timeouts: 1, succeeded: 1, failed: 0, orphaned: 1,
+    inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,
+    latency: { count: 1, sumMs: 12, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 }, slotPools: {},
+  })) }];
+}
+
+it.each([
+  { speed: 1, beforeMs: 720, before: 31, crossMs: 80, after: 32, nextMs: 120 },
+  { speed: 4, beforeMs: 160, before: 30, crossMs: 40, after: 32, nextMs: 40 },
+])("keeps the clock running across a prepared chunk at $speed× without loading its metrics again", async ({ speed, beforeMs, before, crossMs, after, nextMs }) => {
+  vi.useFakeTimers();
+  const requests: SeriesLoadRequest[] = [];
+  const connectionRequests: ConnectionSeriesLoadRequest[] = [];
+  const ownSummary = { ...summary, connections: new Map([["call", {
+    ...summary.connections.get("call")!, hasOwnSeries: true,
+  }]]) };
+  const loader = {
+    load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); },
+    loadConnections: async (request: ConnectionSeriesLoadRequest) => { connectionRequests.push(request); return connectionRange(request); },
+  };
+  const { result } = setup(loader, 100, ["dependency"], ownSummary);
+  await act(async () => result.current.seek(24));
+  act(() => { result.current.setSpeed(speed); result.current.play(); });
+  await act(async () => vi.advanceTimersByTime(beforeMs));
+  expect(result.current.window).toBe(before);
+  const clearInterval = vi.spyOn(globalThis, "clearInterval");
+  await act(async () => vi.advanceTimersByTime(crossMs));
+  expect(result.current.window).toBe(after);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(32);
+  expect(result.current.frame?.connections.get("call")?.values.sentAttemptsPerSecond).toBe(330);
+  expect(clearInterval).not.toHaveBeenCalled();
+  expect(requests.filter(request => request.fromWindow === 32)).toHaveLength(1);
+  expect(connectionRequests.filter(request => request.fromWindow === 32)).toHaveLength(1);
+  act(() => vi.advanceTimersByTime(nextMs));
+  expect(result.current.window).toBe(33);
+  clearInterval.mockRestore();
+});
+
+it("retains only the current and next chunks, evicting older prepared metrics", async () => {
+  const requests: SeriesLoadRequest[] = [];
+  const loader = { load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); } };
+  const { result } = setup(loader, 160);
+  await act(async () => result.current.seek(24));
+  expect(requests.map(request => request.fromWindow)).toEqual([0, 32]);
+  await act(async () => result.current.seek(56));
+  expect(requests.map(request => request.fromWindow)).toEqual([0, 32, 64]);
+  await act(async () => result.current.seek(88));
+  expect(requests.map(request => request.fromWindow)).toEqual([0, 32, 64, 96]);
+  await act(async () => result.current.seek(56));
+  expect(requests.map(request => request.fromWindow)).toEqual([0, 32, 64, 96, 32]);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(56);
+  await act(async () => result.current.seek(120));
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(120);
+  await act(async () => result.current.seek(88));
+  expect(requests.filter(request => request.fromWindow === 64)).toHaveLength(2);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(88);
+});
+
+it("aborts obsolete speculative requests and does not retain their late replies after a far seek", async () => {
+  const pending: { request: SeriesLoadRequest; resolve: (nodes: NodeSeriesMetrics[]) => void }[] = [];
+  const loader = { load: (request: SeriesLoadRequest) => new Promise<NodeSeriesMetrics[]>(resolve => pending.push({ request, resolve })) };
+  const { result } = setup(loader, 160);
+  await act(async () => result.current.seek(24));
+  await act(async () => pending[0].resolve(range(pending[0].request)));
+  const speculative = pending.find(item => item.request.fromWindow === 32)!;
+  await act(async () => result.current.seek(96));
+  expect(speculative.request.signal?.aborted).toBe(true);
+  await act(async () => speculative.resolve(range(speculative.request)));
+  expect(result.current.loading).toBe(true);
+  expect(result.current.frame?.window).toBe(24);
+  await act(async () => result.current.seek(32));
+  const current = pending.filter(item => item.request.fromWindow === 32);
+  expect(current).toHaveLength(2);
+  expect(result.current.loading).toBe(true);
+  await act(async () => current[1].resolve(range(current[1].request)));
+  expect(result.current.frame?.window).toBe(32);
+  expect(result.current.frame?.pending).toBeUndefined();
+});
+
+it("does not redraw the current frame when the next chunk finishes preparing", async () => {
+  const pending: { request: SeriesLoadRequest; resolve: (nodes: NodeSeriesMetrics[]) => void }[] = [];
+  const loader = { load: (request: SeriesLoadRequest) => new Promise<NodeSeriesMetrics[]>(resolve => pending.push({ request, resolve })) };
+  let renders = 0;
+  const { result, rerender } = renderHook(({ window }) => {
+    renders++;
+    return usePlayback({
+      runId: "run-1", variant: "baseline", pointId: "p0", replication: 0,
+      window, windowCount: 100, nodes: ["dependency"], results: summary, onWindowChange: vi.fn(),
+    }, loader);
+  }, { initialProps: { window: 24 } });
+  await act(async () => pending[0].resolve(range(pending[0].request)));
+  const before = renders;
+  await act(async () => pending[1].resolve(range(pending[1].request)));
+  expect(renders).toBe(before);
+  rerender({ window: 32 });
+  expect(result.current.loading).toBe(false);
+  expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(32);
 });
