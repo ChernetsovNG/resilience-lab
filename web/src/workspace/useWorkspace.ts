@@ -10,8 +10,8 @@ import {
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
-import { defaultExperiment, exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
-import { experimentsForModel, preferredExperiment, readSelection, rememberSelection } from "./modelSelection";
+import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
+import { experimentsForModel, preferredExperiment, preferredModel, readSelection, rememberSelection } from "./modelSelection";
 
 export interface ExternalDocumentChange {
   path: string;
@@ -48,6 +48,8 @@ export interface Workspace {
   save: () => Promise<boolean>;
   /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
   storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate?: boolean) => Promise<boolean>;
+  /** Deletes a confirmed snapshot in order, stops at the first failure and reconciles the open documents. */
+  removeDocuments: (plan: DocumentEntry[], discardChanges?: boolean) => Promise<boolean>;
   /** Downloads saved canonical documents; a failed save never starts an export. */
   exportFiles: (saveFirst?: boolean) => Promise<DownloadDocument[] | null>;
   reportProblem: (error: unknown) => void;
@@ -194,8 +196,7 @@ export function useWorkspace(): Workspace {
         deferredChanges.current.clear();
         setExternalChanges({});
         setSelectedModel(next.modelPath);
-        preferences.current = { model: next.modelPath, experiments: { ...preferences.current?.experiments, [next.modelPath]: next.experimentPath } };
-        rememberSelection(next.modelPath, next.experimentPath);
+        preferences.current = rememberSelection(next.modelPath, next.experimentPath, preferences.current!);
         dispatch({ type: "open", loaded: next });
         return true;
       }
@@ -397,6 +398,76 @@ export function useWorkspace(): Workspace {
     }
   }, [loaded, load, flushChange, reportProblem]);
 
+  const removeDocuments = useCallback(async (plan: DocumentEntry[], discardChanges = false) => {
+    if (loaded === null || plan.length === 0 || loadInFlight.current || saveInFlight.current || (dirty && !discardChanges)) return false;
+    saveInFlight.current = true;
+    loadInFlight.current = true;
+    setLoading(true);
+    setProblem(null);
+    for (const entry of plan) savingPaths.current.add(entry.path);
+    let deleted: string[] = [];
+    let failure: ApiProblem | null = null;
+    let reason = "";
+    let verified = false;
+    try {
+      try {
+        if (plan.some(entry => entry.kind === "MODEL")) {
+          const latest = await documentsToDelete(loaded, "model");
+          if (latest.length !== plan.length || plan.some((entry, i) => entry.path !== latest[i].path || entry.version !== latest[i].version)) {
+            throw new MessageError("file.deletePlanChanged");
+          }
+        }
+        for (const entry of plan) {
+          if (entry.kind !== "EXPERIMENT") await checkDeletionReferences(entry);
+          await api.deleteDocument(entry.path, entry.version);
+          deleted.push(entry.path);
+          persistenceRevision.current += 1;
+        }
+      } catch (error) {
+        failure = problemOf(error);
+        reason = error instanceof Error ? error.message : t("app.workspace.requestFailed");
+      }
+      let remaining = documents.filter(entry => !deleted.includes(entry.path));
+      try {
+        remaining = await api.documents();
+        deleted = plan.filter(entry => !remaining.some(current => current.path === entry.path)).map(entry => entry.path);
+        verified = true;
+      } catch (error) {
+        failure ??= problemOf(error);
+        reason ||= error instanceof Error ? error.message : t("app.workspace.requestFailed");
+      }
+      const paths = new Set(remaining.map(entry => entry.path));
+      const modelDeleted = !paths.has(loaded.modelPath);
+      const reopen = modelDeleted || (loaded.versions.experiment !== null && !paths.has(loaded.experimentPath));
+      if (reopen) {
+        generation.current += 1;
+        loadedRef.current = null;
+        setSelectedModel(null);
+        setExternalChanges({});
+        dispatch({ type: "close" });
+      }
+      setDocuments(remaining);
+      if (reopen) {
+        const modelPath = modelDeleted ? preferredModel(remaining, preferences.current?.recentModels) : loaded.modelPath;
+        if (modelPath !== null) {
+          setSelectedModel(modelPath);
+          const experiment = preferredExperiment(remaining, modelPath, preferences.current?.experiments[modelPath]);
+          if (experiment === null) await load("", undefined, { path: modelPath, documents: remaining });
+          else await load(experiment);
+        }
+      }
+      return failure === null;
+    } finally {
+      for (const entry of plan) flushChange(entry.path);
+      saveInFlight.current = false;
+      loadInFlight.current = false;
+      setLoading(false);
+      if (failure !== null) setProblem({ ...failure, code: "FILE_PARTIAL_DELETE", message: t(verified ? "file.partialDelete" : "file.deleteUncertain", {
+        deleted: deleted.join(", ") || t("file.noFilesDeleted"), remaining: plan.filter(entry => !deleted.includes(entry.path)).map(entry => entry.path).join(", ") || t("file.noFilesDeleted"), reason,
+      }) });
+    }
+  }, [loaded, dirty, documents, load, flushChange]);
+
   const exportFiles = useCallback(async (saveFirst = false) => {
     if (loaded === null || loadInFlight.current || saveInFlight.current || conflictPath !== null || externalChange !== null) return null;
     setLoading(true);
@@ -425,6 +496,6 @@ export function useWorkspace(): Workspace {
   return {
     catalog, models, selectedModel, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
     conflict: conflictPath !== null, conflictPath, externalChange, problem, open, openModel, setParam, execute,
-    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload, storeDocuments, exportFiles, reportProblem,
+    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload, storeDocuments, removeDocuments, exportFiles, reportProblem,
   };
 }

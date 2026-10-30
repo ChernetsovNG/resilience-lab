@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { DocumentEntry } from "../api/apiTypes";
-import { experimentsForModel, preferredExperiment, readSelection, rememberSelection } from "./modelSelection";
+import { experimentsForModel, preferredExperiment, preferredModel, readSelection, rememberSelection } from "./modelSelection";
 
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
@@ -29,17 +29,29 @@ it("remembers the model and an independent last experiment per model", () => {
   rememberSelection("retry/retry.model.json", "retry/retry.experiment.json");
   expect(readSelection()).toEqual({ model: "retry/retry.model.json", experiments: {
     "checkout/checkout.model.json": "questions/compare.experiment.json", "retry/retry.model.json": "retry/retry.experiment.json",
-  } });
+  }, recentModels: ["retry/retry.model.json", "checkout/checkout.model.json"] });
+});
+
+it("chooses the most recently opened remaining model, then the first path, or an empty workspace", () => {
+  rememberSelection("checkout/checkout.model.json", "checkout/grid.experiment.json");
+  rememberSelection("z.model.json", "z.experiment.json");
+  rememberSelection("checkout/checkout.model.json", "questions/compare.experiment.json");
+  rememberSelection("deleted.model.json", "deleted.experiment.json");
+  const remaining = [...entries, { path: "z.model.json", kind: "MODEL" as const, version: "z", modelRef: null }];
+  expect(preferredModel(remaining, readSelection().recentModels)).toBe("checkout/checkout.model.json");
+  expect(preferredModel(remaining.filter(entry => entry.path !== "checkout/checkout.model.json"), readSelection().recentModels)).toBe("z.model.json");
+  expect(preferredModel(remaining, ["deleted.model.json"])).toBe("checkout/checkout.model.json");
+  expect(preferredModel([])).toBeNull();
 });
 
 it("ignores corrupt preferences", () => {
   localStorage.setItem("resilience-lab.workspace-selection", "{");
-  expect(readSelection()).toEqual({ model: null, experiments: {} });
+  expect(readSelection()).toEqual({ model: null, experiments: {}, recentModels: [] });
 });
 
 it("allows navigation when browser storage is unavailable", () => {
   vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Unavailable"); });
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Unavailable"); });
-  expect(readSelection()).toEqual({ model: null, experiments: {} });
+  expect(readSelection()).toEqual({ model: null, experiments: {}, recentModels: [] });
   expect(() => rememberSelection("model.model.json", "question.experiment.json")).not.toThrow();
 });

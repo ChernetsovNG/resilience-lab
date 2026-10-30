@@ -1,5 +1,5 @@
 import { ApiError, api } from "../api/apiClient";
-import type { DocumentDraft, ExperimentFile } from "../api/apiTypes";
+import type { DocumentDraft, DocumentEntry, ExperimentFile } from "../api/apiTypes";
 import { t } from "../i18n";
 import { backendMessage } from "../i18n/backendMessage";
 import { MessageError } from "../i18n/MessageError";
@@ -174,6 +174,54 @@ export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: C
     });
   }
   return true;
+}
+
+async function storedExperiments(entries: readonly DocumentEntry[]) {
+  return Promise.all(entries.filter(entry => entry.kind === "EXPERIMENT").map(async entry => {
+    const view = await api.document(entry.path);
+    const experiment = view.content.experiment;
+    if (experiment == null) throw new MessageError("app.workspace.notExperiment", { path: entry.path });
+    return { entry: { ...entry, version: view.version }, experiment };
+  }));
+}
+
+/** Checks surviving references immediately before removing a model or layout. */
+export async function checkDeletionReferences(entry: DocumentEntry): Promise<void> {
+  for (const { entry: source, experiment } of await storedExperiments(await api.documents())) {
+    const ref = entry.kind === "MODEL" ? experiment.modelRef : experiment.layoutRef;
+    if (ref != null && resolveRef(source.path, ref) === entry.path) throw new MessageError("file.deletePlanChanged");
+  }
+}
+
+/** Snapshots stored references and versions before confirmation; shared and unreferenced layouts stay on disk. */
+export async function documentsToDelete(loaded: LoadedExperiment, target: "model" | "experiment"): Promise<DocumentEntry[]> {
+  const currentExperiment: DocumentEntry = { path: loaded.experimentPath, kind: "EXPERIMENT", version: loaded.versions.experiment!, modelRef: loaded.saved.experiment.modelRef };
+  if (target === "experiment") return loaded.versions.experiment === null ? [] : [currentExperiment];
+  const entries = await api.documents();
+  const experiments = await storedExperiments(entries);
+  const owned = experiments.filter(({ entry, experiment }) => resolveRef(entry.path, experiment.modelRef) === loaded.modelPath);
+  const layouts = new Set<string>();
+  for (const { entry, experiment } of owned) {
+    if (experiment.layoutRef != null) {
+      const path = resolveRef(entry.path, experiment.layoutRef);
+      if (path === null) throw new MessageError("app.workspace.layoutRefOutside", { path: entry.path });
+      layouts.add(path);
+    }
+  }
+  for (const { entry, experiment } of experiments) {
+    if (resolveRef(entry.path, experiment.modelRef) === loaded.modelPath || experiment.layoutRef == null) continue;
+    const path = resolveRef(entry.path, experiment.layoutRef);
+    if (path !== null) layouts.delete(path);
+  }
+  const ordered = [
+    ...owned.map(({ entry }) => entry).sort((a, b) => a.path.localeCompare(b.path)),
+    ...entries.filter(entry => entry.kind === "LAYOUT" && layouts.has(entry.path)).sort((a, b) => a.path.localeCompare(b.path)),
+    { path: loaded.modelPath, kind: "MODEL" as const, version: loaded.versions.model!, modelRef: null },
+  ];
+  return ordered.map(entry => {
+    const kind = (["model", "layout", "experiment"] as const).find(kind => loaded[`${kind}Path`] === entry.path);
+    return kind === undefined || loaded.versions[kind] === null ? entry : { ...entry, version: loaded.versions[kind]! };
+  });
 }
 
 /** Fetches canonical server text without reserializing numbers, defaults or key order in the browser. */

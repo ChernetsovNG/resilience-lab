@@ -2,9 +2,9 @@ import { File } from "node:buffer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/apiClient";
 import { documentViews, experiment, experimentPath, layout, layoutPath, model, modelPath } from "../test/fixtures";
-import type { DocumentDraft } from "../api/apiTypes";
+import type { DocumentDraft, DocumentView } from "../api/apiTypes";
 import type { LoadedExperiment } from "./editor";
-import { copyModel, exportDocuments, newExperiment, newModel, readImports, writeDocuments } from "./fileActions";
+import { copyModel, documentsToDelete, exportDocuments, newExperiment, newModel, readImports, writeDocuments } from "./fileActions";
 
 const loaded: LoadedExperiment = {
   experimentPath, modelPath, layoutPath, model, layout, experiment,
@@ -13,6 +13,35 @@ const loaded: LoadedExperiment = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("workspace file actions", () => {
+  it("plans experiments before exclusive referenced layouts and the model, preserving shared and unreferenced files", async () => {
+    const secondPath = "questions/second.experiment.json", otherPath = "other/question.experiment.json";
+    const exclusive = "questions/exclusive.layout.json", orphan = "retry-storm/orphan.layout.json";
+    const views: Record<string, DocumentView> = {
+      ...documentViews,
+      [secondPath]: { path: secondPath, kind: "EXPERIMENT" as const, version: "second", content: { experiment: {
+        ...experiment, modelRef: "../retry-storm/retry-storm.model.json", layoutRef: "./exclusive.layout.json",
+      } } },
+      [otherPath]: { path: otherPath, kind: "EXPERIMENT" as const, version: "other", content: { experiment: {
+        ...experiment, modelRef: "other.model.json", layoutRef: "../retry-storm/retry-storm.layout.json",
+      } } },
+      [exclusive]: { path: exclusive, kind: "LAYOUT" as const, version: "exclusive", content: { layout } },
+      [orphan]: { path: orphan, kind: "LAYOUT" as const, version: "orphan", content: { layout } },
+    };
+    vi.spyOn(api, "documents").mockResolvedValue(Object.values(views).map(view => ({ ...view, modelRef: view.content.experiment?.modelRef ?? null })));
+    vi.spyOn(api, "document").mockImplementation(async path => views[path as keyof typeof views]);
+    expect((await documentsToDelete(loaded, "model")).map(({ path, version }) => ({ path, version }))).toEqual([
+      { path: secondPath, version: "second" }, { path: experimentPath, version: "v-experiment" },
+      { path: exclusive, version: "exclusive" }, { path: modelPath, version: "v-model" },
+    ]);
+  });
+
+  it("deletes only the current saved experiment, with the version it was opened with", async () => {
+    expect((await documentsToDelete(loaded, "experiment")).map(({ path, version }) => ({ path, version }))).toEqual([
+      { path: experimentPath, version: "v-experiment" },
+    ]);
+    expect(await documentsToDelete({ ...loaded, versions: { ...loaded.versions, experiment: null } }, "experiment")).toEqual([]);
+  });
+
   it("creates a baseline question referring to the current model and layout", () => {
     const before = structuredClone(loaded);
     expect(newExperiment(loaded, "capacity")).toEqual([{ path: "retry-storm/capacity.experiment.json", content: { experiment: {

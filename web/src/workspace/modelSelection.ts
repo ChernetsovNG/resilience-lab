@@ -13,21 +13,30 @@ export function preferredExperiment(entries: readonly DocumentEntry[], modelPath
   return last !== undefined && paths.includes(last) ? last : paths[0] ?? null;
 }
 
+/** After deletion, prefer the most recently opened surviving model, then the first path. */
+export function preferredModel(entries: readonly DocumentEntry[], recent: readonly string[] = []): string | null {
+  const paths = entries.filter(entry => entry.kind === "MODEL").map(entry => entry.path).sort();
+  return recent.find(path => paths.includes(path)) ?? paths[0] ?? null;
+}
+
 const key = "resilience-lab.workspace-selection";
-interface Selection { model: string | null; experiments: Record<string, string> }
+interface Selection { model: string | null; experiments: Record<string, string>; recentModels: string[] }
 
 /** Browser preferences are optional: unavailable storage and malformed values do not prevent opening a model. */
 export function readSelection(): Selection {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
     if (isObject(value) && typeof value.model === "string" && isObject(value.experiments)) {
-      return { model: value.model, experiments: Object.fromEntries(Object.entries(value.experiments).filter((entry): entry is [string, string] => typeof entry[1] === "string")) };
+      return { model: value.model, experiments: Object.fromEntries(Object.entries(value.experiments).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
+        recentModels: Array.isArray(value.recentModels) ? value.recentModels.filter((path): path is string => typeof path === "string") : [value.model] };
     }
   } catch { /* Storage may be unavailable. */ }
-  return { model: null, experiments: {} };
+  return { model: null, experiments: {}, recentModels: [] };
 }
 
-export function rememberSelection(model: string, experiment: string): void {
-  try { localStorage.setItem(key, JSON.stringify({ model, experiments: { ...readSelection().experiments, [model]: experiment } })); }
+export function rememberSelection(model: string, experiment: string, previous = readSelection()): Selection {
+  const selection = { model, experiments: { ...previous.experiments, [model]: experiment }, recentModels: [model, ...previous.recentModels.filter(path => path !== model)] };
+  try { localStorage.setItem(key, JSON.stringify(selection)); }
   catch { /* Selection still works for this browser session. */ }
+  return selection;
 }
