@@ -13,23 +13,23 @@ import kotlin.test.Test
 
 class Stage1CatalogTest {
     private val catalog = Stage1Catalog.catalog
+    private val json = Json { encodeDefaults = true }
 
     @Test
     fun `every type declares its outputs in the serialized catalog`() {
         val types =
-            Json
+            json
                 .encodeToJsonElement(Catalog.serializer(), catalog)
                 .jsonObject
                 .getValue("types")
                 .jsonArray
         assertThat(types).allSatisfy { type ->
-            assertThat(type.jsonObject["outputs"]?.jsonArray).isNotNull().isNotEmpty()
+            assertThat(type.jsonObject["outputs"]?.jsonArray).isNotNull()
         }
     }
 
     @Test
     fun `output identifiers are unique and calculations reference existing fields`() {
-        val json = Json { encodeDefaults = true }
         val node = json.encodeToJsonElement(WindowMetrics.serializer(), WindowMetrics(0.0, 100.0)).jsonObject
         val connection = json.encodeToJsonElement(ConnectionWindowMetrics.serializer(), ConnectionWindowMetrics(0.0, 100.0)).jsonObject
         catalog.types.forEach { type ->
@@ -70,10 +70,10 @@ class Stage1CatalogTest {
 
     @Test
     fun `contains the stage 1 block and connection types`() {
-        assertThat(catalog.types.map { it.id }).containsExactly("client", "service", "request", "call")
+        assertThat(catalog.types.map { it.id }).containsExactly("client", "service", "request", "call", "router", "route")
         assertThat(catalog.type("client")!!.category).isEqualTo(TypeCategory.BLOCK)
-        assertThat(catalog.type("call")!!.connects).isEqualTo(ConnectionRule("service", "service"))
-        assertThat(catalog.type("request")!!.connects).isEqualTo(ConnectionRule("client", "service"))
+        assertThat(catalog.type("call")!!.connects).isEqualTo(ConnectionRule("service", listOf("service", "router")))
+        assertThat(catalog.type("request")!!.connects).isEqualTo(ConnectionRule("client", listOf("service")))
         assertThat(catalog.type("unknown")).isNull()
     }
 

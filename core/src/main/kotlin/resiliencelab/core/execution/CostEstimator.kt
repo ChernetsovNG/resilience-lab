@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.results.SeriesWriter
@@ -134,9 +135,23 @@ internal object CostEstimator {
     private fun expectedEvents(graph: GraphIr): Double {
         val arrivals = graph.client.arrivalRatePerMs * (graph.run.warmupMs + graph.run.measurementMs)
         val visits = mutableMapOf(graph.entry to 1.0)
+        val services = graph.services.associateBy { it.path }
+        val routers = graph.routers.associateBy { it.path }
         var perOriginalRequest = 2.0
-        graph.topologicalServices.forEach { service ->
-            val count = visits[service.path] ?: 0.0
+        graph.topologicalPaths.forEach { path ->
+            val count = visits[path] ?: 0.0
+            val router = routers[path]
+            if (router != null) {
+                val outputs = graph.outgoingRoutes(path)
+                val scale = outputs.maxOf { it.weight }
+                val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
+                val total = weights.sum()
+                outputs.zip(weights).forEach { (route, weight) ->
+                    visits[route.to] = (visits[route.to] ?: 0.0) + count * (weight / total)
+                }
+                return@forEach
+            }
+            val service = services.getValue(path)
             if (service.path != graph.entry) perOriginalRequest += 2.0 * count
             graph.scenario(service).forEach { step ->
                 when (step) {

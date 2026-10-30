@@ -98,6 +98,60 @@
         },
         {
           "additionalProperties": false,
+          "description": "Selects a service or another router without queueing or delay; outputs are measured on route connections.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "policy": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "roundRobin",
+                        "random",
+                        "leastInFlight"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": "roundRobin",
+                  "description": "Round robin, weighted random, or fewest unfinished attempts; ties use route path order.",
+                  "title": "Policy"
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
+            "scenario": {
+              "type": "null"
+            },
+            "type": {
+              "const": "router"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "Router",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Blocking service: a handler is held through local work, downstream calls and backoff.",
           "properties": {
             "description": {
@@ -524,6 +578,23 @@
                   "description": "One-way network delay, drawn separately for the request and the response.",
                   "title": "Network delay"
                 },
+                "retryTarget": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "any",
+                        "other"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": "any",
+                  "description": "With other, prefer router outputs not yet tried by this invocation; reuse all after exhaustion.",
+                  "title": "Retry target"
+                },
                 "timeout": {
                   "description": "Per-attempt timeout, also bounded by the remaining deadline. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
@@ -616,6 +687,65 @@
             "to"
           ],
           "title": "Request",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One router output to a service or another router.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "weight": {
+                  "anyOf": [
+                    {
+                      "exclusiveMinimum": 0.0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 1,
+                  "description": "Positive output weight used only by random routing.",
+                  "title": "Weight"
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
+            "to": {
+              "type": "string"
+            },
+            "type": {
+              "const": "route"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "from",
+            "to"
+          ],
+          "title": "Route",
           "type": "object"
         }
       ]

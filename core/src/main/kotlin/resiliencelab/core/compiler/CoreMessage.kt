@@ -39,6 +39,8 @@ internal enum class CoreMessage(
         null,
         "Outgoing connection '{connection}' is not used in the scenario of service '{service}'",
     ),
+    ROUTER_OUTPUT("ROUTER_OUTPUT", null, "Router '{router}' must have at least one route output"),
+    ROUTER_INPUT("ROUTER_INPUT", null, "Router '{router}' must have exactly one incoming call or route"),
     GRAPH_ENTRY("TOPOLOGY_GRAPH", "entry", "Entry service '{service}' must not receive calls"),
     GRAPH_CYCLE("TOPOLOGY_GRAPH", "cycle", "Calls form a cycle: {cycle} (connections: {connections})"),
     GRAPH_UNREACHABLE("TOPOLOGY_GRAPH", "unreachable", "Service '{service}' is not reachable from the client"),

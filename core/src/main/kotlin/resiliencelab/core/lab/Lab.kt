@@ -9,6 +9,7 @@ import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.compiler.ModelLinter
 import resiliencelab.core.compiler.Severity
+import resiliencelab.core.document.ConnectionInstance
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.PathStreams
@@ -433,18 +434,25 @@ class Lab(
         val versions = sortedMapOf(experimentPath to experimentDocument.version, modelDocument.path to modelDocument.version)
         // Connection array order is not model semantics. Keep source revisions strict for queued jobs,
         // while the artifact identity follows the graph order and remains stable under document permutations.
-        val callPositions =
+        val nodePositions =
             result.experiment
                 ?.variants
                 ?.first()
                 ?.points
                 ?.first()
                 ?.graph
-                ?.calls
-                ?.mapIndexed { index, call -> call.path to index }
+                ?.topologicalPaths
+                ?.mapIndexed { index, path -> path to index }
                 ?.toMap()
                 .orEmpty()
-        val artifactModel = model.copy(connections = model.connections.sortedBy { callPositions[it.id] ?: -1 })
+        val artifactModel =
+            model.copy(
+                connections =
+                    model.connections.sortedWith(
+                        compareBy<ConnectionInstance> { if (it.type == "request") -1 else nodePositions[it.from] ?: Int.MAX_VALUE }
+                            .thenBy { it.id },
+                    ),
+            )
         val artifactVersions =
             sortedMapOf(
                 experimentPath to DocumentVersion.of(DocumentCodec.encodeExperiment(experiment)),

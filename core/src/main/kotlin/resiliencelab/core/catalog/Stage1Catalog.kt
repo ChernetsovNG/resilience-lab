@@ -29,13 +29,15 @@ object Stage1Catalog {
                     "Late responses are discarded after timeout or deadline.",
                     "Cancellation does not propagate along the call chain.",
                 ),
+            "router" to listOf("Selection has no queue or delay; a new output is selected for each calling attempt."),
+            "route" to listOf("Output weight affects random selection only; timeout and retries belong to the incoming call."),
         )
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 1,
+            schemaVersion = 2,
             types =
-                listOf(client(), service(), request(), call()).map { type ->
+                listOf(client(), service(), request(), call(), router(), route()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
                 },
             assumptions =
@@ -145,7 +147,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Request",
             description = "Delivers original requests from the client to the entry service without delay or retries.",
-            connects = ConnectionRule("client", "service"),
+            connects = ConnectionRule("client", listOf("service")),
         )
 
     private fun call() =
@@ -156,7 +158,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
-            connects = ConnectionRule("service", "service"),
+            connects = ConnectionRule("service", listOf("service", "router")),
             params =
                 listOf(
                     distribution(
@@ -187,6 +189,14 @@ object Stage1Catalog {
                         default = JsonPrimitive(1),
                         minimum = 1.0,
                         sweepable = true,
+                    ),
+                    ParamDescriptor(
+                        name = "retryTarget",
+                        kind = ParamKind.CHOICE,
+                        title = "Retry target",
+                        description = "With other, prefer router outputs not yet tried by this invocation; reuse all after exhaustion.",
+                        default = JsonPrimitive("any"),
+                        options = listOf("any", "other"),
                     ),
                     ParamDescriptor(
                         name = "backoff",
@@ -232,6 +242,69 @@ object Stage1Catalog {
                                     exclusiveMinimum = 0.0,
                                 ),
                             ),
+                    ),
+                ),
+        )
+
+    private fun router() =
+        TypeDescriptor(
+            id = "router",
+            version = 1,
+            category = TypeCategory.BLOCK,
+            title = "Router",
+            description = "Selects a service or another router without queueing or delay; outputs are measured on route connections.",
+            ports = listOf(PortDescriptor("in", PortDirection.IN), PortDescriptor("out", PortDirection.OUT)),
+            params =
+                listOf(
+                    ParamDescriptor(
+                        name = "policy",
+                        kind = ParamKind.CHOICE,
+                        title = "Policy",
+                        description = "Round robin, weighted random, or fewest unfinished attempts; ties use route path order.",
+                        default = JsonPrimitive("roundRobin"),
+                        options = listOf("roundRobin", "random", "leastInFlight"),
+                    ),
+                ),
+        )
+
+    private fun route() =
+        TypeDescriptor(
+            id = "route",
+            version = 1,
+            category = TypeCategory.CONNECTION,
+            title = "Route",
+            description = "One router output to a service or another router.",
+            connects = ConnectionRule("router", listOf("service", "router")),
+            params =
+                listOf(
+                    ParamDescriptor(
+                        name = "weight",
+                        kind = ParamKind.NUMBER,
+                        title = "Weight",
+                        description = "Positive output weight used only by random routing.",
+                        default = JsonPrimitive(1),
+                        exclusiveMinimum = 0.0,
+                        sweepable = true,
+                    ),
+                ),
+            outputs =
+                listOf(
+                    OutputDescriptor(
+                        id = "sentAttempts",
+                        title = "Routed attempts",
+                        description =
+                            "Attempts selected for this output, including retries; " +
+                                "windows use event time, totals use the arrival cohort.",
+                        unit = OutputUnit.REQUESTS,
+                        kind = OutputKind.COUNT,
+                        calculation = OutputCalculation(OutputCalculationKind.VALUE, "sentAttempts"),
+                        summary =
+                            OutputSummary(
+                                OutputCalculation(OutputCalculationKind.RATIO, "totals.sentAttempts", "replications"),
+                                OutputSummarySource.PER_REPLICATION,
+                            ),
+                        timeline = OutputTimeline("routing", "Routing", 0, 0),
+                        inspector = OutputInspector("Routed attempts", 0, chartOrder = 0),
                     ),
                 ),
         )

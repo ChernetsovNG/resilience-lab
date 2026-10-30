@@ -71,7 +71,7 @@ export function connectionRule(catalog: Catalog, model: ModelFile, from: string,
     .some((port) => port.id === targetPort && port.direction === "IN");
   if (!output || !input) return { type: null, error: t("app.structure.connectPorts") };
   const type = catalog.types.find((type) => type.category === "CONNECTION"
-    && type.connects?.fromType === source?.type && type.connects?.toType === target?.type);
+    && type.connects?.fromType === source?.type && target !== undefined && type.connects?.toTypes.includes(target.type));
   return type === undefined
     ? { type: null, error: t("app.structure.connectionNotAllowed", { from: String(source?.type), to: String(target?.type) }) }
     : { type: type.id, error: null };

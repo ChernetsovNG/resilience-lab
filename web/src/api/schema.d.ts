@@ -323,7 +323,7 @@ export interface components {
         };
         ConnectionRule: {
             fromType: string;
-            toType: string;
+            toTypes: string[];
         };
         ConnectionSeries: {
             id: string;
