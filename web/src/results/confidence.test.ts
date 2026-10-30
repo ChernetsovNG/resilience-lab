@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import retryStorm from "../../../research/latency-sketch/results/2026-10-28/retry-storm.json";
+import retryStorm from "./fixtures/retry-storm-ci95.json";
 import { confidenceInterval, studentTQuantile } from "./confidence";
 
 describe("Student confidence intervals", () => {
