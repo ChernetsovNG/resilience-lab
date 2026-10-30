@@ -74,6 +74,9 @@ class Lab(
     private val ownsExecutor = executor == null
     private val executor = executor ?: ExperimentExecutor()
 
+    /** Workspace-relative identity shared by path aliases; paths outside the workspace are rejected. */
+    fun canonicalPath(path: String): String = workspace.canonicalPath(path)
+
     /** Closes the default-owned executor. An injected executor remains open for its caller to reuse or close. */
     override fun close() {
         if (ownsExecutor) executor.close()

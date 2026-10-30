@@ -48,7 +48,8 @@ export function server(override?: (url: string, init?: RequestInit) => StubRespo
       return { body: documents[path] };
     }
     if (url === "/api/v1/estimate") return { body: costEstimate };
-    if (url === "/api/v1/jobs") return { status: 202, body: completed };
+    if (url === "/api/v1/jobs") return init?.method === "POST" ? { status: 202, body: completed } : { body: [] };
+    if (url === "/api/v1/runs" || url === "/api/v1/runs/obsolete") return { body: [] };
     if (url === "/api/v1/runs/run-1/summary") return { body: summary };
     if (url === "/api/v1/runs/run-1/manifest") return { body: manifest };
     throw new Error(`Unexpected request: ${url}`);

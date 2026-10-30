@@ -3,6 +3,7 @@ package resiliencelab.core.results
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -17,7 +18,22 @@ data class RunEntry(
     val experiment: String,
     val directory: String,
     val complete: Boolean,
+    val sizeBytes: Long = 0,
 )
+
+/** A stored directory, including artifacts whose manifest cannot be decoded by this version. */
+@Serializable
+data class RunStorageEntry(
+    val id: String,
+    val experiment: String?,
+    val directory: String,
+    val sizeBytes: Long,
+)
+
+/** Run deletion accepts only a canonical `.results/<experiment>/<run>` directory. */
+class InvalidRunPathException(
+    val path: String,
+) : IllegalArgumentException("Invalid run directory '$path'")
 
 /** Original gzip bytes and their SHA-256 from the task index. */
 data class StoredSeriesPart(
@@ -50,10 +66,74 @@ class RunCatalog(
                 val directory = path.removeSuffix("/$MANIFEST_FILE")
                 runCatching { readManifest(directory) }
                     .getOrNull()
-                    ?.let { RunEntry(directory.substringAfterLast('/'), it.experiment, directory, it.complete) }
+                    ?.let {
+                        RunEntry(
+                            directory.substringAfterLast('/'),
+                            canonicalExperiment(it.experiment),
+                            directory,
+                            it.complete,
+                            workspace.directorySize(directory),
+                        )
+                    }
             }.sortedWith(compareByDescending<RunEntry> { it.id }.thenBy { it.directory })
 
     fun entry(id: String): RunEntry? = find(id)
+
+    /** Directories with unsupported, malformed or absent manifests; empty directories are included. */
+    fun obsolete(): List<RunStorageEntry> = directories().filter(::isObsolete).map(::storageEntry)
+
+    /** Rechecks readability after an active-writer snapshot, since a manifest may have just been published. */
+    fun isObsolete(directory: String): Boolean {
+        checkDirectory(directory)
+        return runCatching { readManifest(directory) }.isFailure
+    }
+
+    /** Finds a run without decoding its versioned manifest, so obsolete artifacts remain deletable. */
+    fun stored(id: String): RunStorageEntry? = directories().firstOrNull { it.substringAfterLast('/') == id }?.let(::storageEntry)
+
+    fun storedDirectory(directory: String): RunStorageEntry? {
+        checkDirectory(directory)
+        return directory.takeIf { it in directories() }?.let(::storageEntry)
+    }
+
+    /** Deletes only a physical run directory, never `.results`, an experiment group or a symbolic-link target. */
+    fun deleteDirectory(directory: String): Boolean {
+        checkDirectory(directory)
+        return directory in directories() && workspace.deleteDirectory(directory)
+    }
+
+    private fun directories(): List<String> = workspace.listDirectories(RESULTS).flatMap(workspace::listDirectories)
+
+    private fun storageEntry(directory: String): RunStorageEntry {
+        val experiment =
+            runCatching {
+                json
+                    .parseToJsonElement(
+                        workspace.read("$directory/$MANIFEST_FILE").text,
+                    ).jsonObject["experiment"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+            }.getOrNull()
+        return RunStorageEntry(
+            directory.substringAfterLast('/'),
+            experiment?.let(::canonicalExperiment),
+            directory,
+            workspace.directorySize(directory),
+        )
+    }
+
+    private fun canonicalExperiment(path: String): String = runCatching { workspace.canonicalPath(path) }.getOrDefault(path)
+
+    private fun checkDirectory(directory: String) {
+        val parts = directory.split('/')
+        if (parts.size != 3 ||
+            parts.first() != RESULTS ||
+            parts.drop(1).any { it.isEmpty() || it == "." || it == ".." } ||
+            '\\' in directory
+        ) {
+            throw InvalidRunPathException(directory)
+        }
+    }
 
     fun manifest(id: String): RunManifest? = find(id)?.let { readManifest(it.directory) }
 
@@ -130,7 +210,7 @@ class RunCatalog(
                 } catch (_: Exception) {
                     continue
                 }
-            return RunEntry(id, manifest.experiment, directory, manifest.complete)
+            return RunEntry(id, canonicalExperiment(manifest.experiment), directory, manifest.complete, workspace.directorySize(directory))
         }
         return null
     }

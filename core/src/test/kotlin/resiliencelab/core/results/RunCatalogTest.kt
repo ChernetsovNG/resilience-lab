@@ -40,7 +40,7 @@ class RunCatalogTest {
         workspace.write(".results/a/20261027-110000-000-0003/summary.json", "{}\n")
 
         assertThat(catalog.list().map { it.id }).containsExactly("20261027-100000-000-0002", "20261027-090000-000-0001")
-        assertThat(catalog.list().first())
+        assertThat(catalog.list().first().copy(sizeBytes = 0))
             .isEqualTo(RunEntry("20261027-100000-000-0002", "b.experiment.json", ".results/b/20261027-100000-000-0002", true))
         assertThat(catalog.entry("20261027-090000-000-0001")?.complete).isTrue()
         assertThat(catalog.manifest("20261027-090000-000-0001")!!.experiment).isEqualTo("a.experiment.json")
@@ -62,8 +62,8 @@ class RunCatalogTest {
         finish(".results/a/r1", "a.experiment.json", complete = false)
         val entry = RunEntry("r1", "a.experiment.json", ".results/a/r1", false)
 
-        assertThat(catalog.list()).containsExactly(entry)
-        assertThat(catalog.entry("r1")).isEqualTo(entry)
+        assertThat(catalog.list().map { it.copy(sizeBytes = 0) }).containsExactly(entry)
+        assertThat(catalog.entry("r1")?.copy(sizeBytes = 0)).isEqualTo(entry)
         assertThat(catalog.manifest("r1")?.complete).isFalse()
         assertThatThrownBy { catalog.summary("r1") }
             .isInstanceOf(RunIncompleteException::class.java)

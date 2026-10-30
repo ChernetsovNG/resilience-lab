@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { button, editHandlers, selectGateway, server, setupAppTests } from "./test/app";
 import { documentViews, experimentPath, layoutPath, modelPath } from "./test/fixtures";
+import type { RunEntry, RunStorageEntry } from "./api/apiTypes";
 
 setupAppTests();
 beforeEach(() => {
@@ -12,10 +13,12 @@ beforeEach(() => {
   });
 });
 
-function storage(modelOnly = false) {
+function storage(modelOnly = false, runs: RunEntry[] = [], obsolete: RunStorageEntry[] = []) {
   const views = structuredClone(documentViews);
   if (modelOnly) { delete views[experimentPath]; delete views[layoutPath]; }
   server((url, init) => {
+    if (url === "/api/v1/runs") return { body: runs };
+    if (url === "/api/v1/runs/obsolete") return { body: obsolete };
     if (url === "/api/v1/workspace/documents") return { body: Object.values(views).map(view => ({ ...view, modelRef: view.content.experiment?.modelRef ?? null })) };
     if (!url.startsWith("/api/v1/workspace/document?")) return;
     const path = new URL(url, "http://test").searchParams.get("path")!;
@@ -32,6 +35,7 @@ function storage(modelOnly = false) {
 async function choose(name: string) {
   await waitFor(() => expect(button("File").disabled).toBe(false));
   fireEvent.click(button("File"));
+  await waitFor(() => expect(screen.getByRole("button", { name, hidden: true })).toHaveProperty("disabled", false));
   fireEvent.click(screen.getByRole("button", { name, hidden: true }));
 }
 
@@ -94,6 +98,56 @@ it("lists every deletion target, permits cancellation and guides the empty works
   expect(views).toEqual({});
   expect(button("Undo").disabled).toBe(true);
   expect(button("File").disabled).toBe(false);
+});
+
+it("shows the run count and total size before confirming experiment deletion", async () => {
+  storage(false, [
+    { id: "one", experiment: experimentPath, directory: ".results/retry-storm/one", complete: true, sizeBytes: 1024 },
+    { id: "two", experiment: experimentPath, directory: ".results/retry-storm/two", complete: true, sizeBytes: 2048 },
+  ]);
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  await choose("Delete experiment…");
+  const dialog = await screen.findByRole("dialog", { name: "Delete experiment…" });
+  await within(dialog).findByText("Runs: 2, total: 3 KiB.");
+});
+
+it("disables cleanup with a hint when there are no obsolete runs", async () => {
+  storage();
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  const cleanup = screen.getByRole("button", { name: "Clean up obsolete runs…", hidden: true });
+  expect(cleanup).toHaveProperty("disabled", true);
+  expect(cleanup.getAttribute("title")).toBe("No obsolete runs to delete.");
+});
+
+it("lists an obsolete manifestless directory and its size for confirmation", async () => {
+  storage(false, [], [{ id: "broken", experiment: null, directory: ".results/old/broken", sizeBytes: 2048 }]);
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  await choose("Clean up obsolete runs…");
+  const dialog = await screen.findByRole("dialog", { name: "Clean up obsolete runs…" });
+  await within(dialog).findByText(".results/old/broken (2 KiB)");
+  await within(dialog).findByText("Runs: 1, total: 2 KiB.");
+});
+
+it("reconciles obsolete cleanup after a lost deletion response", async () => {
+  const directory = ".results/old/broken";
+  let obsolete: RunStorageEntry[] = [{ id: "broken", experiment: null, directory, sizeBytes: 2048 }];
+  server((url, init) => {
+    if (url === "/api/v1/runs/obsolete") return { body: obsolete };
+    if (url.startsWith("/api/v1/runs?directory=") && init?.method === "DELETE") {
+      obsolete = [];
+      throw new Error("Connection lost");
+    }
+  });
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  await choose("Clean up obsolete runs…");
+  const dialog = await screen.findByRole("dialog", { name: "Clean up obsolete runs…" });
+  await within(dialog).findByText("Runs: 1, total: 2 KiB.");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+  await screen.findAllByText(`The operation stopped. Deleted: ${directory}. Not deleted: none. Connection lost`);
 });
 
 it("asks to discard unsaved changes before preparing deletion and preserves them when canceled", async () => {

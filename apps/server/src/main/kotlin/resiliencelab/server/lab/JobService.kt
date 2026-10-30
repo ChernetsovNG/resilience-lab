@@ -32,13 +32,15 @@ class JobService(
 
     /** Queues a run of [experiment]; throws [InvalidExperimentException] when the experiment has errors. */
     fun submit(experiment: String): JobView {
-        val report = lab.validate(experiment)
-        if (!report.valid) throw InvalidExperimentException(report.diagnostics)
-        val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, 0)
-        synchronized(lock) {
-            jobs[job.id] = job
-            if (stopping) return cancel(job.id)!!
-        }
+        val (report, job) =
+            synchronized(lock) {
+                val report = lab.validate(experiment)
+                if (!report.valid) throw InvalidExperimentException(report.diagnostics)
+                val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, 0)
+                jobs[job.id] = job
+                if (stopping) return cancel(job.id)!!
+                report to job
+            }
         try {
             executor.execute { execute(job.id, report.documentVersions) }
         } catch (exception: RejectedExecutionException) {
@@ -56,24 +58,27 @@ class JobService(
 
     /** Validates and queues an in-place resume of [run]; execution repeats every core check. */
     fun resume(run: RunEntry): JobView {
-        try {
-            lab.validateResume(run.directory)
-        } catch (exception: InvalidExperimentException) {
-            if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
-                throw Conflict(
-                    ServerMessage.RUN_COMPLETE,
-                    "Run '${run.id}' is already complete",
-                    exception.diagnostics,
-                    mapOf("id" to JsonPrimitive(run.id)),
-                )
+        val job =
+            synchronized(lock) {
+                requireIdleRun(run.id)
+                try {
+                    lab.validateResume(run.directory)
+                } catch (exception: InvalidExperimentException) {
+                    if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
+                        throw Conflict(
+                            ServerMessage.RUN_COMPLETE,
+                            "Run '${run.id}' is already complete",
+                            exception.diagnostics,
+                            mapOf("id" to JsonPrimitive(run.id)),
+                        )
+                    }
+                    throw exception
+                }
+                val job = JobView(UUID.randomUUID().toString(), experimentIdentity(run.experiment), run.id, JobStatus.QUEUED, 0, 0)
+                jobs[job.id] = job
+                if (stopping) return cancel(job.id)!!
+                job
             }
-            throw exception
-        }
-        val job = JobView(UUID.randomUUID().toString(), run.experiment, run.id, JobStatus.QUEUED, 0, 0)
-        synchronized(lock) {
-            jobs[job.id] = job
-            if (stopping) return cancel(job.id)!!
-        }
         try {
             executor.execute { executeResume(job.id, run.directory) }
         } catch (exception: RejectedExecutionException) {
@@ -132,7 +137,66 @@ class JobService(
     fun get(id: String): JobView? = synchronized(lock) { jobs[id] }
 
     /** Jobs, newest first. */
-    fun list(): List<JobView> = synchronized(lock) { jobs.values.reversed() }
+    fun list(): List<JobView> =
+        synchronized(lock) { jobs.values.reversed().map { it.copy(experiment = experimentIdentity(it.experiment)) } }
+
+    /** Serializes deletion with Run/Resume registration; cancellation remains active until writes have stopped. */
+    fun <T> withIdleRun(
+        id: String,
+        experiment: String? = null,
+        action: () -> T,
+    ): T =
+        synchronized(lock) {
+            requireIdleRun(id, experiment)
+            action()
+        }
+
+    private fun requireIdleRun(
+        id: String,
+        experiment: String? = null,
+    ) {
+        val identity = experiment?.let(::experimentIdentity)
+        val active =
+            jobs.values.firstOrNull {
+                (it.status == JobStatus.QUEUED || it.status == JobStatus.RUNNING) &&
+                    (it.runId == id || (identity != null && experimentIdentity(it.experiment) == identity))
+            }
+        if (active != null) {
+            throw Conflict(
+                ServerMessage.RUN_ACTIVE,
+                "Run '$id' has active job '${active.id}' for '${active.experiment}'",
+                args =
+                    mapOf(
+                        "id" to JsonPrimitive(id),
+                        "job" to JsonPrimitive(active.id),
+                        "experiment" to JsonPrimitive(active.experiment),
+                    ),
+            )
+        }
+    }
+
+    private fun experimentIdentity(path: String): String = runCatching { lab.canonicalPath(path) }.getOrDefault(path)
+
+    /** Prevents document removal racing with a queued or running experiment, including before its first write. */
+    fun <T> withIdleExperiment(
+        experiment: String,
+        action: () -> T,
+    ): T =
+        synchronized(lock) {
+            val active =
+                jobs.values.firstOrNull {
+                    (it.status == JobStatus.QUEUED || it.status == JobStatus.RUNNING) &&
+                        experimentIdentity(it.experiment) == experimentIdentity(experiment)
+                }
+            if (active != null) {
+                throw Conflict(
+                    ServerMessage.EXPERIMENT_ACTIVE,
+                    "Experiment '$experiment' cannot be deleted while job '${active.id}' is active",
+                    args = mapOf("experiment" to JsonPrimitive(experiment), "job" to JsonPrimitive(active.id)),
+                )
+            }
+            action()
+        }
 
     /**
      * Cancels every active job before Spring closes the calling executor and then the core pool.

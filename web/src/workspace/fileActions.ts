@@ -1,5 +1,5 @@
 import { ApiError, api } from "../api/apiClient";
-import type { DocumentDraft, DocumentEntry, ExperimentFile } from "../api/apiTypes";
+import type { DocumentDraft, DocumentEntry, ExperimentFile, RunStorageEntry } from "../api/apiTypes";
 import { t } from "../i18n";
 import { backendMessage } from "../i18n/backendMessage";
 import { MessageError } from "../i18n/MessageError";
@@ -222,6 +222,15 @@ export async function documentsToDelete(loaded: LoadedExperiment, target: "model
     const kind = (["model", "layout", "experiment"] as const).find(kind => loaded[`${kind}Path`] === entry.path);
     return kind === undefined || loaded.versions[kind] === null ? entry : { ...entry, version: loaded.versions[kind]! };
   });
+}
+
+/** Manifest paths identify ownership even when equal experiment filenames share a results directory. */
+export async function runsToDelete(documents: DocumentEntry[]): Promise<RunStorageEntry[]> {
+  const experiments = new Set(documents.filter(entry => entry.kind === "EXPERIMENT").map(entry => entry.path));
+  const [runs, obsolete, jobs] = await Promise.all([api.runs(), api.obsoleteRuns(), api.jobs()]);
+  const active = jobs.find(job => experiments.has(job.experiment) && (job.status === "QUEUED" || job.status === "RUNNING"));
+  if (active !== undefined) throw new MessageError("file.activeExperiment", { experiment: active.experiment, job: active.id });
+  return [...runs, ...obsolete].filter(run => run.experiment != null && experiments.has(run.experiment));
 }
 
 /** Fetches canonical server text without reserializing numbers, defaults or key order in the browser. */

@@ -1,7 +1,7 @@
 import { selectExperiment } from "./fixtures";
 import { expect, test as base, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve("../apps/server/build/e2e-workspace");
@@ -60,6 +60,46 @@ for (const [label, title] of [["Model", "New model"], ["Experiment", "New experi
     expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model.blocks.gateway.params.handlers).not.toBe(7);
   });
 }
+
+test("deleting an experiment removes its completed run from the API and disk", async ({ page, directory }) => {
+  const experiment = `${directory}/retry-storm.experiment.json`;
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  const runs: { experiment: string; directory: string }[] = await (await page.request.get("/api/v1/runs")).json();
+  const owned = runs.filter(run => run.experiment === experiment);
+  expect(owned).toHaveLength(1);
+  await action(page, "Delete experiment…");
+  const dialog = page.getByRole("dialog", { name: "Delete experiment…", exact: true });
+  await expect(dialog.getByText(/Runs: 1, total:/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(async () => (await (await page.request.get("/api/v1/runs")).json() as typeof runs)
+    .filter(run => run.experiment === experiment)).toEqual([]);
+  for (const run of owned) await expect(stat(resolve(root, run.directory))).rejects.toMatchObject({ code: "ENOENT" });
+  expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model).toBeDefined();
+});
+
+test("cleans up an old artifact through the file menu and removes its directory", async ({ page }) => {
+  const directory = `.results/obsolete-${randomUUID()}/old-run`;
+  const experiment = "deleted/old.experiment.json";
+  await mkdir(resolve(root, directory), { recursive: true });
+  await writeFile(resolve(root, directory, "manifest.json"), JSON.stringify({ schemaVersion: 1, experiment }));
+  try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    const cleanup = page.getByRole("button", { name: "Clean up obsolete runs…", exact: true });
+    await expect(cleanup).toBeEnabled();
+    await cleanup.click();
+    const dialog = page.getByRole("dialog", { name: "Clean up obsolete runs…", exact: true });
+    await expect(dialog.getByText(new RegExp(experiment))).toBeVisible();
+    await expect(dialog.getByText(/Runs: 1, total:/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(stat(resolve(root, directory))).rejects.toMatchObject({ code: "ENOENT" });
+    const remaining: { directory: string }[] = await (await page.request.get("/api/v1/runs/obsolete")).json();
+    expect(remaining.map(run => run.directory)).not.toContain(directory);
+  } finally { await rm(resolve(root, directory), { recursive: true, force: true }); }
+});
 
 test("deletes a newly created model and its files, then returns to the last model", async ({ page, directory }) => {
   const target = `file-delete-${randomUUID()}`;
