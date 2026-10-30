@@ -297,7 +297,7 @@ class Lab(
         }
         val loaded = load(manifest.experiment)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
-        if (loaded.artifactVersions != manifest.documents) {
+        if (loaded.artifactVersions != manifest.documents && loaded.legacyArtifactVersions != manifest.documents) {
             throw resumeFailure(CoreMessage.RUN_DOCUMENT_CHANGED, "Run documents changed; run again", manifest.experiment)
         }
         val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
@@ -378,6 +378,7 @@ class Lab(
         val diagnostics: List<Diagnostic>,
         val versions: Map<String, String>,
         val artifactVersions: Map<String, String> = versions,
+        val legacyArtifactVersions: Map<String, String> = artifactVersions,
     )
 
     private fun load(
@@ -445,12 +446,21 @@ class Lab(
                 ?.toMap()
                 .orEmpty()
         val artifactModel = model.copy(connections = model.connections.sortedBy { callPositions[it.id] ?: -1 })
-        val artifactVersions =
+        val legacyArtifactVersions =
             sortedMapOf(
                 experimentPath to DocumentVersion.of(DocumentCodec.encodeExperiment(experiment)),
-                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(artifactModel)),
+                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(model)),
             )
-        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions, artifactVersions)
+        val artifactVersions =
+            legacyArtifactVersions +
+                (modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(artifactModel)))
+        return Loaded(
+            result.experiment.takeIf { layout.isEmpty() },
+            result.diagnostics + layout,
+            versions,
+            artifactVersions,
+            legacyArtifactVersions,
+        )
     }
 
     /** The optional layout must be a readable layout document inside the workspace (ADR 0005, item 3). */
