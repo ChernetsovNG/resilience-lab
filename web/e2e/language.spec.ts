@@ -141,3 +141,46 @@ test("an existing canvas notice follows the selected language", async ({ page })
   await expect(notice).toContainText("порт");
   await expect(page.getByRole("button", { name: "Сохранить", exact: true })).toBeDisabled();
 });
+
+
+test("View settings stay open while changing preferences and persist without editing documents", async ({ page, request }) => {
+  const modelURL = "/api/v1/workspace/document?path=retry-storm/retry-storm.model.json";
+  const original = await (await request.get(modelURL)).json();
+  await page.goto("/");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+  const menu = page.locator("#view-menu");
+  await page.getByRole("button", { name: "Вид", exact: true }).click();
+  await page.getByLabel("Шаг сетки", { exact: true }).selectOption("40");
+  await expect(menu).toBeVisible();
+  await expect(page.getByLabel("Шаг сетки", { exact: true })).toHaveValue("40");
+  await page.getByLabel("Привязка к сетке", { exact: true }).uncheck();
+  await expect(menu).toBeVisible();
+  await page.getByLabel("Показывать сетку", { exact: true }).uncheck();
+  await expect(menu).toBeVisible();
+  await page.getByLabel("Размер текста интерфейса", { exact: true }).selectOption("110");
+  await expect(menu).toBeVisible();
+  await page.getByLabel("Язык", { exact: true }).selectOption("en");
+  await expect(menu).toBeVisible();
+  await page.getByLabel("Confidence level", { exact: true }).selectOption("99");
+  await expect(menu).toBeVisible();
+  await expect(page.getByLabel("Confidence level", { exact: true })).toHaveValue("99");
+  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 100 } });
+  await expect(menu).toBeHidden();
+  await expect(page.getByRole("button", { name: "View", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  expect(await (await request.get(modelURL)).json()).toEqual(original);
+
+  await page.reload();
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(page.getByLabel("Grid step", { exact: true })).toHaveValue("40");
+  await expect(page.getByLabel("Snap to grid", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("Show grid", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("Interface text size", { exact: true })).toHaveValue("110");
+  await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
+  await expect(page.getByLabel("Confidence level", { exact: true })).toHaveValue("99");
+  await page.getByLabel("Grid step", { exact: true }).focus();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(page.getByRole("button", { name: "View", exact: true })).toBeFocused();
+});
