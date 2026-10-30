@@ -27,7 +27,7 @@ sealed interface DecodeResult<out T> {
 /** Strict reading and deterministic writing of workspace documents (ADR 0005, items 4 and 7). */
 object DocumentCodec {
     const val SCHEMA_VERSION = 1
-    const val MODEL_SCHEMA_VERSION = 2
+    const val MODEL_SCHEMA_VERSION = 3
 
     @OptIn(ExperimentalSerializationApi::class)
     private val reader =

@@ -105,6 +105,7 @@ class ReliabilityModel(
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
         runtimes.values.forEach { it.resetFaults() }
+        callRuntimes.values.forEach { it.resetFaults() }
         routerRuntimes.values.forEach { it.reset() }
         scheduleWindowClose(1)
         schedule(
@@ -131,14 +132,16 @@ class ReliabilityModel(
             priority = KSLEvent.DEFAULT_PRIORITY - 1,
         )
         graph.faults.forEach { fault ->
-            val runtime = runtimes.getValue(fault.target)
+            val runtime = runtimes[fault.target]
+            val call = callRuntimes[fault.target]
+            require(runtime != null || call != null) { "Unknown fault target '${fault.target}'" }
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.startFault(fault) },
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime?.startFault(fault) ?: call!!.startFault(fault) },
                 timeToEvent = fault.fromMs,
                 priority = KSLEvent.DEFAULT_PRIORITY - 1,
             )
             schedule(
-                eventAction = ModelElement.EventActionIfc<Nothing> { runtime.endFault(fault) },
+                eventAction = ModelElement.EventActionIfc<Nothing> { runtime?.endFault(fault) ?: call!!.endFault(fault) },
                 timeToEvent = fault.toMs,
                 priority = KSLEvent.DEFAULT_PRIORITY - 1,
             )
@@ -243,16 +246,16 @@ class ReliabilityModel(
         incomingNetwork: CallRuntime?,
         selectedRoutes: List<RouteEdge> = emptyList(),
     ): ServiceInvocation {
-        val runtime = requireNotNull(runtimes[serviceId]) { "Unknown service '$serviceId'" }
+        require(serviceId in runtimes || serviceId in routerRuntimes) { "Unknown service '$serviceId'" }
         val invocation =
             ServiceInvocation(
-                runtime = runtime,
+                target = serviceId,
                 originalRequest = originalRequest,
                 measurementCohort = measurementCohort,
                 arrivalTimeMs = time + timeUntilActivation,
                 originalDeadlineMs = originalDeadlineMs,
                 incomingNetwork = incomingNetwork,
-                selectedRoutes = selectedRoutes,
+                initialRoutes = selectedRoutes,
             )
         activate(invocation.work, timeUntilActivation)
         if (incomingNetwork != null) {
@@ -317,14 +320,16 @@ class ReliabilityModel(
     }
 
     inner class ServiceInvocation internal constructor(
-        private val runtime: ServiceRuntime,
+        private val target: String,
         private val originalRequest: Boolean,
         internal val measurementCohort: Boolean,
         private val arrivalTimeMs: Double,
         private val originalDeadlineMs: Double,
         private val incomingNetwork: CallRuntime?,
-        private val selectedRoutes: List<RouteEdge>,
+        initialRoutes: List<RouteEdge>,
     ) : Entity() {
+        private lateinit var runtime: ServiceRuntime
+        private val selectedRoutes = initialRoutes.toMutableList()
         private var currentOutcome: AttemptOutcome = AttemptOutcome.PENDING
         private var originalOutcome: AttemptOutcome? = null
         private var originalClientActive = false
@@ -465,7 +470,9 @@ class ReliabilityModel(
                     while (true) {
                         val router = routerRuntimes[selectedTarget] ?: break
                         val tried = triedOutputs.getOrPut(selectedTarget) { mutableSetOf() }
-                        val route = router.select(if (call.retryTarget == RetryTarget.OTHER) tried else emptySet())
+                        val eligible = if (call.retryTarget == RetryTarget.OTHER) tried else emptySet()
+                        val policy = call.balancing?.takeIf { router.isReplicaGroup && selectedTarget == call.to }
+                        val route = if (policy == null) router.select(eligible) else router.select(eligible, policy)
                         tried.add(route.path)
                         add(route)
                         selectedTarget = route.to
@@ -493,10 +500,23 @@ class ReliabilityModel(
         }
 
         internal val work: KSLProcess =
-            process("service:${runtime.serviceId}") {
+            process("service:$target") {
                 try {
+                    var selectedTarget = target
+                    while (selectedTarget in routerRuntimes) {
+                        val route = routerRuntimes.getValue(selectedTarget).select(emptySet())
+                        selectedRoutes.add(route)
+                        metrics.recordConnection(route.path, ConnectionEvent.SENT, measurementCohort)
+                        selectedTarget = route.to
+                    }
+                    runtime = runtimes.getValue(selectedTarget)
                     if (incomingNetwork != null) {
+                        val transmissionFailed = incomingNetwork.nextTransmissionFailed()
                         delay(incomingNetwork.nextNetworkDelayMs())
+                        if (transmissionFailed) {
+                            currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
+                            return@process
+                        }
                     }
                     val serviceArrivalMs = time
                     metrics.recordOffered(runtime.serviceId, measurementCohort)
@@ -528,6 +548,22 @@ class ReliabilityModel(
                         delay(incomingNetwork.nextNetworkDelayMs())
                     }
                 } finally {
+                    if (originalRequest) {
+                        selectedRoutes.forEach { route ->
+                            metrics.recordConnection(
+                                route.path,
+                                if ((originalOutcome ?: currentOutcome) ==
+                                    AttemptOutcome.SUCCEEDED
+                                ) {
+                                    ConnectionEvent.SUCCEEDED
+                                } else {
+                                    ConnectionEvent.FAILED
+                                },
+                                measurementCohort,
+                                time - arrivalTimeMs,
+                            )
+                        }
+                    }
                     selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
                     incomingAttempt?.onChildProcessEnded()
                     if (incomingNetwork != null) {

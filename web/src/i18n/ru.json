@@ -661,7 +661,7 @@
   "messages.EXECUTION_RANGE.windowCount": "Превышено максимальное число окон: {maximum}",
   "messages.EXECUTION_RANGE.duration": "Длительность должна быть больше нуля",
   "messages.SEED_RANGE": "Начальное значение генератора должно быть целым числом от {minimum} до {maximum}",
-  "messages.FAULT_TARGET": "Цель сбоя «{target}» не является сервисом",
+  "messages.FAULT_TARGET": "Цель отказа «{target}» не является сервисом, репликой или вызовом",
   "messages.FAULT_INTERVAL": "Сбой должен заканчиваться после своего начала",
   "messages.FAULT_EMPTY": "Для сбоя нужно задать processingMultiplier или failureRate",
   "messages.FAULT_OVERLAP": "Сбои на сервисе «{target}» пересекаются во времени",
@@ -879,5 +879,14 @@
   "catalog.types.call.outputs.p99LatencyMs.description": "Длительность попыток с полученным ответом; попытки с таймаутом не входят в выборку задержки.",
   "catalog.types.call.outputs.p99LatencyMs.timeline.groupTitle": "Задержка",
   "results.units.×": "×",
-  "results.context.outputType": "{metric} ({types})"
+  "results.context.outputType": "{metric} ({types})",
+  "messages.REPLICA_BLOCK": "Поле replicaOverrides допустимо только у сервиса",
+  "messages.REPLICA_INDEX": "Номер реплики «{replica}» сервиса «{service}» должен быть целым числом от 1 до {replicas}",
+  "messages.REPLICA_PARAMETER": "В replicaOverrides нельзя менять параметр группы «{parameter}»",
+  "messages.LINT_BALANCING_IGNORED": "Балансировка на связи «{connection}» не используется: цель не является группой реплик",
+  "messages.replica": "Реплика {service}#{replica}: {message}",
+  "catalog.types.service.params.replicas.title": "Реплики",
+  "catalog.types.service.params.replicas.description": "Число экземпляров сервиса; при одном экземпляре исходный путь сохраняется.",
+  "catalog.types.call.params.balancing.title": "Балансировка",
+  "catalog.types.call.params.balancing.description": "Политика выбора реплики целевой группы; для других целей не используется."
 }

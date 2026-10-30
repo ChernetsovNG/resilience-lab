@@ -158,6 +158,26 @@ class DocumentSchemas(
                     val withScenario =
                         if (category == TypeCategory.BLOCK) {
                             specialized.properties(
+                                "replicaOverrides" to
+                                    buildJsonObject {
+                                        put("type", JsonArray(listOf(JsonPrimitive("object"), JsonPrimitive("null"))))
+                                        if (type.id == "service") {
+                                            put("propertyNames", buildJsonObject { put("pattern", "^[1-9][0-9]*$") })
+                                            put(
+                                                "additionalProperties",
+                                                parameters(
+                                                    partialParameters(
+                                                        type.params.filter {
+                                                            it.name !=
+                                                                "replicas"
+                                                        },
+                                                    ),
+                                                ),
+                                            )
+                                        } else {
+                                            put("maxProperties", 0)
+                                        }
+                                    },
                                 "scenario" to
                                     buildJsonObject {
                                         if (type.id == "service") {
@@ -193,6 +213,9 @@ class DocumentSchemas(
             put("additionalProperties", false)
             put("required", JsonArray(descriptors.filter { it.required }.map { JsonPrimitive(it.name) }.sortedBy { it.content }))
         }
+
+    private fun partialParameters(descriptors: List<ParamDescriptor>): List<ParamDescriptor> =
+        descriptors.map { it.copy(required = false, fields = partialParameters(it.fields)) }
 
     private fun parameter(descriptor: ParamDescriptor): JsonObject {
         val value =

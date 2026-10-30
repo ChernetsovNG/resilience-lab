@@ -16,6 +16,12 @@ afterEach(() => {
 });
 
 describe("backend messages", () => {
+  it("keeps the replica number when translating a parameter diagnostic", () => {
+    expect(backendMessage({ code: "PARAM_RANGE", message: "legacy", args: {
+      reason: "minimum", parameter: "handlers", minimum: 1, service: "worker", replica: 2,
+    } })).toBe("Replica worker#2: Parameter 'handlers' is out of range: >= 1");
+  });
+
   it("formats raw numbers with the shared formatter and keeps user strings intact", () => {
     Object.assign(catalog, additions);
     expect(backendMessage({ code: "TEST_MESSAGE", message: "legacy", args: { count: 1234.5, name: "$& {count}" } }))

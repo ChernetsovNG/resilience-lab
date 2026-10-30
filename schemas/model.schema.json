@@ -82,6 +82,13 @@
               ],
               "type": "object"
             },
+            "replicaOverrides": {
+              "maxProperties": 0,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
             "scenario": {
               "type": "null"
             },
@@ -136,6 +143,13 @@
               },
               "required": [],
               "type": "object"
+            },
+            "replicaOverrides": {
+              "maxProperties": 0,
+              "type": [
+                "object",
+                "null"
+              ]
             },
             "scenario": {
               "type": "null"
@@ -297,6 +311,20 @@
                   "default": 0,
                   "description": "Waiting places in the FIFO queue; zero disables queueing.",
                   "title": "Queue capacity"
+                },
+                "replicas": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 1,
+                  "description": "Service instances; one keeps the original service path.",
+                  "title": "Replicas"
                 }
               },
               "required": [
@@ -304,6 +332,176 @@
                 "processing"
               ],
               "type": "object"
+            },
+            "replicaOverrides": {
+              "additionalProperties": {
+                "additionalProperties": false,
+                "properties": {
+                  "failureRate": {
+                    "anyOf": [
+                      {
+                        "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                        "type": "string",
+                        "x-quantity": {
+                          "dimension": "PROBABILITY",
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "units": [
+                            {
+                              "denominator": 100.0,
+                              "numerator": 1.0,
+                              "symbol": "%"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": "0%",
+                    "description": "Probability that one local attempt fails. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                    "title": "Failure rate"
+                  },
+                  "handlers": {
+                    "anyOf": [
+                      {
+                        "minimum": 1.0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Concurrent handlers.",
+                    "title": "Handlers"
+                  },
+                  "processing": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "fixed",
+                                  "exponential",
+                                  "lognormal"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Distribution of the duration.",
+                            "title": "Distribution"
+                          },
+                          "mean": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "minimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Mean duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                            "title": "Mean"
+                          },
+                          "stdDev": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "exclusiveMinimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Required for lognormal only. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                            "title": "Standard deviation"
+                          }
+                        },
+                        "required": [],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Local processing time of one attempt.",
+                    "title": "Processing time"
+                  },
+                  "queue": {
+                    "anyOf": [
+                      {
+                        "minimum": 0.0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": 0,
+                    "description": "Waiting places in the FIFO queue; zero disables queueing.",
+                    "title": "Queue capacity"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              },
+              "propertyNames": {
+                "pattern": "^[1-9][0-9]*$"
+              },
+              "type": [
+                "object",
+                "null"
+              ]
             },
             "scenario": {
               "items": {
@@ -483,6 +681,23 @@
                   },
                   "description": "Delay between attempts.",
                   "title": "Backoff"
+                },
+                "balancing": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "roundRobin",
+                        "random",
+                        "leastInFlight"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Selection policy for the target replica group; ignored for other targets.",
+                  "title": "Balancing"
                 },
                 "network": {
                   "anyOf": [
@@ -940,7 +1155,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 2,
+          "const": 3,
           "type": "integer"
         },
         {

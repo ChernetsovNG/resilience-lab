@@ -12,7 +12,7 @@ class GraphCompilerTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":2,"blocks":{
+                """{"schemaVersion":3,"blocks":{
           "client":{"type":"client","params":{"rate":"10/s","deadline":"1s"}},
           "z-entry":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}},
           "a-leaf":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}}

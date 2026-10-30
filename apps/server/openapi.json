@@ -1528,6 +1528,13 @@
             "type" : "object",
             "additionalProperties" : true
           },
+          "replicaOverrides" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : "object",
+              "additionalProperties" : true
+            }
+          },
           "scenario" : {
             "type" : [ "array", "null" ],
             "items" : {

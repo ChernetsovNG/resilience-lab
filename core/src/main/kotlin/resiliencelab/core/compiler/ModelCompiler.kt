@@ -84,7 +84,7 @@ class ModelCompiler(
         val sink = Diagnostics()
         val structureOk = checkStructure(model, modelDocument, sink)
         val run = runSettings(experiment, experimentDocument, sink)
-        val faults = faults(experiment, model, experimentDocument, sink)
+        val faultSpans = faults(experiment, model, experimentDocument, sink)
         checkVariants(experiment, experimentDocument, sink)
         val points = gridPoints(experiment, experimentDocument, sink)
         val variants =
@@ -100,30 +100,28 @@ class ModelCompiler(
                             buildGraph(patched.model, modelDocument, patched.origins, sink, structureOk)
                                 ?: return@mapIndexedNotNull null
                         run?.let {
-                            CompiledPoint(
-                                "p$pointIndex",
-                                point.associate { it.path to it.value },
+                            val expanded =
                                 GraphIr(
                                     parts.client,
                                     parts.entry,
                                     parts.services,
                                     parts.calls,
-                                    faults,
+                                    emptyList(),
                                     it,
                                     parts.routers,
                                     parts.routes,
-                                ).let { graph ->
-                                    graph.copy(
-                                        services = graph.topologicalServices.map { node -> node.copy(scenario = graph.scenario(node)) },
-                                        calls = graph.topologicalCalls,
-                                    )
-                                },
-                                patched.origins
-                                    .flatMap { (path, origins) ->
-                                        origins.pointers.map { (parameter, pointer) ->
-                                            "$path.$parameter" to Origin(origins.document, pointer)
-                                        }
-                                    }.toMap(),
+                                ).let { graph -> expandReplicas(graph, patched.model, modelDocument, patched.origins, sink) }
+                            val graph =
+                                expanded.copy(
+                                    services = expanded.topologicalServices.map { node -> node.copy(scenario = expanded.scenario(node)) },
+                                    calls = expanded.topologicalCalls,
+                                    faults = bindFaults(faultSpans, expanded, sink, variant.id),
+                                )
+                            CompiledPoint(
+                                "p$pointIndex",
+                                point.associate { it.path to it.value },
+                                graph,
+                                parameterOrigins(graph, patched, modelDocument),
                             )
                         }
                     }
@@ -142,6 +140,48 @@ class ModelCompiler(
         val model: ModelFile,
         val origins: Map<String, OverrideOrigins>,
     )
+
+    /** Instance paths inherit variant/grid locations; replica patches take precedence over inherited values. */
+    private fun parameterOrigins(
+        graph: GraphIr,
+        patched: Patched,
+        document: String,
+    ): Map<String, Origin> =
+        buildMap {
+            val elements =
+                graph.services.map { it.pathSegments.first() to it.path } + graph.calls.map { it.pathSegments.first() to it.path }
+            patched.origins.forEach { (path, origins) ->
+                val paths = (listOf(path) + elements.filter { it.first == path }.map { it.second }).distinct()
+                origins.pointers.forEach { (parameter, pointer) ->
+                    paths.forEach { put("$it.$parameter", Origin(origins.document, pointer)) }
+                }
+            }
+
+            fun replicaParameters(
+                path: String,
+                values: JsonObject,
+                pointer: String,
+                prefix: String = "",
+            ) {
+                values.forEach { (name, value) ->
+                    val parameter = if (prefix.isEmpty()) name else "$prefix.$name"
+                    val source = JsonPointer.child(pointer, name)
+                    put("$path.$parameter", Origin(document, source))
+                    if (value is JsonObject) replicaParameters(path, value, source, parameter)
+                }
+            }
+            graph.services.forEach { instance ->
+                val group = instance.pathSegments.first()
+                val number =
+                    instance.pathSegments
+                        .last()
+                        .removePrefix("#")
+                        .toIntOrNull() ?: 1
+                patched.model.blocks[group]?.replicaOverrides?.get(number.toString())?.let { params ->
+                    replicaParameters(instance.path, params, JsonPointer.of("blocks", group, "replicaOverrides", number))
+                }
+            }
+        }
 
     private data class ParameterPatch(
         val path: String,
@@ -213,6 +253,15 @@ class ModelCompiler(
             val type = catalog.type(block.type)
             if (block.scenario != null && block.type != "service") {
                 sink.error(CoreMessage.SCENARIO_BLOCK, "Only service blocks may define a scenario", document, "$pointer/scenario", id)
+            }
+            if (block.replicaOverrides.orEmpty().isNotEmpty() && block.type != "service") {
+                sink.error(
+                    CoreMessage.REPLICA_BLOCK,
+                    "Only service blocks may define replicaOverrides",
+                    document,
+                    "$pointer/replicaOverrides",
+                    id,
+                )
             }
             if (type == null || type.category != TypeCategory.BLOCK) {
                 sink.error(
@@ -688,6 +737,95 @@ class ModelCompiler(
         return ClientNode(id, rate, deadline, Origin(document, JsonPointer.of("blocks", id)))
     }
 
+    private fun routingPolicy(value: String): RoutingPolicy =
+        when (value) {
+            "roundRobin" -> RoutingPolicy.ROUND_ROBIN
+            "random" -> RoutingPolicy.RANDOM
+            else -> RoutingPolicy.LEAST_IN_FLIGHT
+        }
+
+    private fun expandReplicas(
+        graph: GraphIr,
+        model: ModelFile,
+        document: String,
+        origins: Map<String, OverrideOrigins>,
+        sink: Diagnostics,
+    ): GraphIr {
+        val before = sink.errorCount()
+        val instances =
+            graph.services.associate { service ->
+                val id = service.path
+                val block = model.blocks.getValue(id)
+                val pointer = JsonPointer.of("blocks", id)
+                val reader = reader("service", TypeCategory.BLOCK, block.params, document, "$pointer/params", id, sink, origins[id])!!
+                val count = reader.int("replicas") ?: 1
+                val overrides = mutableMapOf<Int, JsonObject>()
+                block.replicaOverrides.orEmpty().toSortedMap().forEach { (number, params) ->
+                    val replica = number.toIntOrNull()
+                    if (replica == null || replica !in 1..count || replica.toString() != number) {
+                        sink.error(
+                            CoreMessage.REPLICA_INDEX,
+                            "Replica '$number' of service '$id' must be an integer from 1 to $count",
+                            document,
+                            JsonPointer.of("blocks", id, "replicaOverrides", number),
+                            id,
+                            origins[id]?.variant,
+                            args =
+                                mapOf(
+                                    "replica" to JsonPrimitive(number),
+                                    "service" to JsonPrimitive(id),
+                                    "replicas" to JsonPrimitive(count),
+                                ),
+                        )
+                    } else {
+                        overrides[replica] = params
+                    }
+                }
+                id to
+                    (1..count).map { number ->
+                        val params = overrides[number] ?: return@map service
+                        val start = sink.items.size
+                        if ("replicas" in params) {
+                            sink.error(
+                                CoreMessage.REPLICA_PARAMETER,
+                                "replicaOverrides cannot change the group parameter 'replicas'",
+                                document,
+                                "$pointer/params/replicas",
+                                id,
+                                args = mapOf("parameter" to JsonPrimitive("replicas")),
+                            )
+                        }
+                        val instance = readService(id, mergeParameters(block.params, params), document, null, sink)
+                        for (index in start until sink.items.size) {
+                            val diagnostic = sink.items[index]
+                            sink.items[index] =
+                                diagnostic.copy(
+                                    pointer = diagnostic.pointer?.replace("$pointer/params", "$pointer/replicaOverrides/$number"),
+                                    path = "$id#$number",
+                                    message = "Replica '$id#$number': ${diagnostic.message}",
+                                    args =
+                                        diagnostic.args.orEmpty() +
+                                            mapOf("replica" to JsonPrimitive(number), "service" to JsonPrimitive(id)),
+                                )
+                        }
+                        (instance ?: service).copy(scenario = service.scenario)
+                    }
+            }
+        return if (sink.errorCount() > before) graph else graph.expandReplicaGroups(instances)
+    }
+
+    private fun mergeParameters(
+        base: JsonObject,
+        patch: JsonObject,
+    ): JsonObject =
+        JsonObject(
+            base +
+                patch.mapValues { (name, value) ->
+                    val previous = base[name]
+                    if (previous is JsonObject && value is JsonObject) mergeParameters(previous, value) else value
+                },
+        )
+
     private fun readService(
         id: String,
         params: JsonObject,
@@ -724,6 +862,7 @@ class ModelCompiler(
         val attempts = reader.int("attempts")
         val backoff = reader.obj("backoff")?.let(::backoff)
         val retryTarget = reader.choice("retryTarget")
+        val balancing = if (reader.has("balancing")) reader.choice("balancing")?.let(::routingPolicy) else null
         return if (network == null || timeout == null || attempts == null || backoff == null || retryTarget == null) {
             null
         } else {
@@ -738,6 +877,7 @@ class ModelCompiler(
                 backoff,
                 origin,
                 if (retryTarget == "other") RetryTarget.OTHER else RetryTarget.ANY,
+                balancing,
             )
         }
     }
@@ -752,12 +892,7 @@ class ModelCompiler(
         val reader =
             reader("router", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
                 ?: return null
-        val policy =
-            when (reader.choice("policy") ?: return null) {
-                "roundRobin" -> RoutingPolicy.ROUND_ROBIN
-                "random" -> RoutingPolicy.RANDOM
-                else -> RoutingPolicy.LEAST_IN_FLIGHT
-            }
+        val policy = routingPolicy(reader.choice("policy") ?: return null)
         return RouterNode(id, policy, Origin(document, JsonPointer.of("blocks", id)))
     }
 
@@ -935,10 +1070,11 @@ class ModelCompiler(
             experiment.faults.mapIndexedNotNull { index, fault ->
                 val pointer = JsonPointer.of("faults", index)
                 val before = sink.errorCount()
-                if (model.blocks[fault.target]?.type != "service") {
+                val base = fault.target.substringBefore('#')
+                if (model.blocks[base]?.type != "service" && model.connections.none { it.id == base && it.type == "call" }) {
                     sink.error(
                         CoreMessage.FAULT_TARGET,
-                        "Fault target '${fault.target}' is not a service",
+                        "Fault target '${fault.target}' is not a service, replica or call",
                         document,
                         "$pointer/target",
                         fault.target,
@@ -993,6 +1129,45 @@ class ModelCompiler(
                     FaultSpan(fault.target, from!!, to!!, multiplier, failure, Origin(document, pointer))
                 }
             }
+        checkFaultOverlaps(spans, document, sink)
+        return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
+    }
+
+    private fun bindFaults(
+        faults: List<FaultSpan>,
+        graph: GraphIr,
+        sink: Diagnostics,
+        variant: String,
+    ): List<FaultSpan> {
+        val elements = graph.services.map { it.path to it.pathSegments } + graph.calls.map { it.path to it.pathSegments }
+        val spans =
+            faults.flatMap { fault ->
+                val targets =
+                    elements.filter { (path, segments) ->
+                        path == fault.target || segments.dropLast(1).singleOrNull() == fault.target
+                    }
+                if (targets.isEmpty()) {
+                    sink.error(
+                        CoreMessage.FAULT_TARGET,
+                        "Fault target '${fault.target}' is not a service, replica or call",
+                        fault.origin.document,
+                        fault.origin.pointer + "/target",
+                        fault.target,
+                        variant,
+                        args = mapOf("target" to JsonPrimitive(fault.target)),
+                    )
+                }
+                targets.map { (_, segments) -> fault.copy(targetSegments = segments) }
+            }
+        faults.firstOrNull()?.let { checkFaultOverlaps(spans, it.origin.document, sink) }
+        return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
+    }
+
+    private fun checkFaultOverlaps(
+        spans: List<FaultSpan>,
+        document: String,
+        sink: Diagnostics,
+    ) {
         spans.groupBy { it.target }.forEach { (target, list) ->
             val overlap = list.sortedBy { it.fromMs }.zipWithNext().any { (first, second) -> second.fromMs < first.toMs }
             if (overlap) {
@@ -1009,7 +1184,6 @@ class ModelCompiler(
                 )
             }
         }
-        return spans.sortedWith(compareBy({ it.target }, { it.fromMs }))
     }
 
     private fun checkVariants(

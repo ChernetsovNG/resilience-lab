@@ -26,10 +26,31 @@ const test = base.extend<{ files: Files }>({
 });
 test.use({ actionTimeout: 10_000 });
 
+test("opens saves and runs replica groups without losing per-replica parameters", async ({ page, files }) => {
+  const grouped = (await stored(page, files.model)).content.model as ModelFile;
+  grouped.blocks.middle.params.replicas = 3;
+  grouped.blocks.middle.replicaOverrides = { "2": { handlers: 7, processing: { mean: "9ms" } } };
+  grouped.connections.find(edge => edge.id === "gateway-to-middle")!.params.balancing = "leastInFlight";
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(grouped));
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+  await page.getByLabel("Handlers", { exact: true }).fill("5");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await save(page);
+  grouped.blocks.gateway.params.handlers = 5;
+  expect((await stored(page, files.model)).content.model).toEqual(grouped);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect((await stored(page, files.model)).content.model).toEqual(grouped);
+});
+
 test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
   const routed = (await stored(page, files.model)).content.model as ModelFile;
-  expect(routed.schemaVersion).toBe(2);
-  routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null };
+  expect(routed.schemaVersion).toBe(3);
+  routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null, replicaOverrides: null };
   routed.blocks.gateway.scenario = [
     { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null },
     { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },

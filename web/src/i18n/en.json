@@ -661,7 +661,7 @@
   "messages.EXECUTION_RANGE.windowCount": "Window count exceeds {maximum}",
   "messages.EXECUTION_RANGE.duration": "Duration must be greater than zero",
   "messages.SEED_RANGE": "seed must be an integer from {minimum} to {maximum}",
-  "messages.FAULT_TARGET": "Fault target '{target}' is not a service",
+  "messages.FAULT_TARGET": "Fault target '{target}' is not a service, replica or call",
   "messages.FAULT_INTERVAL": "Fault must end after it starts",
   "messages.FAULT_EMPTY": "Fault must set processingMultiplier or failureRate",
   "messages.FAULT_OVERLAP": "Faults on '{target}' overlap in time",
@@ -879,5 +879,14 @@
   "catalog.types.call.outputs.p99LatencyMs.description": "Received-response duration; timed out attempts have no latency sample.",
   "catalog.types.call.outputs.p99LatencyMs.timeline.groupTitle": "Latency",
   "results.units.×": "×",
-  "results.context.outputType": "{metric} ({types})"
+  "results.context.outputType": "{metric} ({types})",
+  "messages.REPLICA_BLOCK": "Only service blocks may define replicaOverrides",
+  "messages.REPLICA_INDEX": "Replica '{replica}' of service '{service}' must be an integer from 1 to {replicas}",
+  "messages.REPLICA_PARAMETER": "replicaOverrides cannot change the group parameter '{parameter}'",
+  "messages.LINT_BALANCING_IGNORED": "Balancing on connection '{connection}' is ignored: the target has no replica group",
+  "messages.replica": "Replica {service}#{replica}: {message}",
+  "catalog.types.service.params.replicas.title": "Replicas",
+  "catalog.types.service.params.replicas.description": "Service instances; one keeps the original service path.",
+  "catalog.types.call.params.balancing.title": "Balancing",
+  "catalog.types.call.params.balancing.description": "Selection policy for the target replica group; ignored for other targets."
 }

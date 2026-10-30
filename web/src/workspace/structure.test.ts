@@ -26,6 +26,26 @@ function roundTrip(before: EditorDocuments, command: EditorCommand) {
 }
 
 describe("structure commands", () => {
+  it("renames and deletes group and copied connection fault references including replica suffixes", () => {
+    const before = documents();
+    before.experiment.faults = ["middle#2", "gateway-to-middle#2", "dependency"].map(target => ({ target, from: "0ms", to: "1s", processingMultiplier: 2 }));
+    const renamed = renameElement("middle", "worker")(before);
+    expect(renamed.experiment.faults.map(fault => fault.target)).toEqual(["worker#2", "gateway-to-middle#2", "dependency"]);
+    const deleted = deleteElements(["worker"])(renamed);
+    expect(deleted.experiment.faults.map(fault => fault.target)).toEqual(["dependency"]);
+  });
+
+  it("preserves replicas and partial replicaOverrides while editing and saving", () => {
+    const before = documents();
+    before.model.blocks.middle.params.replicas = 3;
+    before.model.blocks.middle.replicaOverrides = { "2": { handlers: 7, processing: { mean: "9ms" } } };
+    before.model.connections[1].params.balancing = "leastInFlight";
+    const after = roundTrip(before, setModelParam("gateway", "handlers", 8));
+    const saved = JSON.parse(JSON.stringify(documentDrafts(after)[0])).content.model;
+    expect(saved.blocks.middle).toEqual(before.model.blocks.middle);
+    expect(saved.connections).toEqual(before.model.connections);
+  });
+
   it("adds a router and permits calls and nested routes using catalog target types", () => {
     const fullCatalog = outputCatalog as Catalog;
     const after = roundTrip(documents(), addBlock(fullCatalog, "router", { x: 20, y: 40 }));

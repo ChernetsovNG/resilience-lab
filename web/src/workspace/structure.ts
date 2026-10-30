@@ -110,8 +110,10 @@ function references(experiment: ExperimentFile, mapId: (id: string) => string | 
       })),
     }),
     faults: experiment.faults.flatMap((fault) => {
-      const target = mapId(fault.target);
-      return target === null ? [] : [{ ...fault, target }];
+      const suffix = fault.target.indexOf("#");
+      const id = suffix < 0 ? fault.target : fault.target.slice(0, suffix);
+      const target = mapId(id);
+      return target === null ? [] : [{ ...fault, target: target + fault.target.slice(id.length) }];
     }),
     ...(grid == null ? {} : { grid: grid.flatMap((axis) => {
       const path = mapPath(axis.path);
