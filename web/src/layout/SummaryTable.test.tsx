@@ -1,13 +1,37 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { noSaturation, summary } from "../test/fixtures";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
+import { ViewMenu } from "./ViewMenu";
+import { setConfidenceLevel } from "./confidenceLevel";
 
 const comparison = () => screen.getByRole("table", { name: "Answer" });
 const cells = (name: string, table = comparison()) => within(within(table).getByRole("row", { name: new RegExp(name) })).getAllByRole("cell");
+afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it("updates interval separation through View using each variant's replication count", () => {
+    const run = structuredClone(summary);
+    run.variants[0].replications = 5;
+    run.variants[1].replications = 10;
+    run.variants[0].points[0].aggregate.successRate = { mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
+    run.variants[1].points[0].aggregate.successRate = { mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
+    const original = structuredClone(run);
+    render(<><ViewMenu /><SummaryTable summary={run} /></>);
+    const choice = screen.getByLabelText("Confidence level");
+    expect((choice as HTMLSelectElement).value).toBe("95");
+    expect(cells("Success rate")[0].textContent).toContain("95% CI 27.6%–52.4%");
+    expect(cells("Success rate")[1].textContent).not.toContain("Intervals do not overlap");
+    fireEvent.change(choice, { target: { value: "80" } });
+    expect(cells("Success rate")[0].textContent).toContain("80% CI 33.1%–46.9%");
+    expect(cells("Success rate")[1].textContent).toContain("Intervals do not overlap");
+    fireEvent.change(choice, { target: { value: "99" } });
+    expect(cells("Success rate")[1].textContent).toContain("99% CI");
+    expect(cells("Success rate")[1].textContent).not.toContain("Intervals do not overlap");
+    expect(run).toEqual(original);
+  });
+
   it("orders baseline first without mutating the document and compares means in matching units", () => {
     const run = structuredClone(summary);
     run.variants[1].points[0].aggregate = {
@@ -20,7 +44,7 @@ describe("SummaryTable", () => {
     expect(headers[1].textContent).toContain("Baseline");
     expect(headers[2].textContent).toContain("No retries");
     expect(headers[1].className).toContain("summary-column--active-variant");
-    expect(cells("Success rate")[0].textContent).toContain("97.5% (95% CI 95%–100%)");
+    expect(cells("Success rate")[0].textContent).toContain("97.5% (95% CI 88.5%–106.5%)");
     expect(cells("Success rate")[1].textContent).toContain("+2 pp");
     expect(cells("p95 latency")[1].textContent).toContain("-10 ms");
     expect(cells("p99 latency")[1].textContent).toContain("+10 ms");
@@ -40,13 +64,13 @@ describe("SummaryTable", () => {
   });
 
   it.each([
-    [0.1, 0.2, 0.3, 0.4, true], [0.3, 0.4, 0.1, 0.2, true],
-    [0.1, 0.3, 0.2, 0.4, false], [0.1, 0.3, 0.3, 0.4, false],
-    [-0.2, 1.2, 0.3, 0.4, false], [null, null, 0.3, 0.4, false], [0.1, 0.2, null, null, false],
-  ])("marks separation only for disjoint complete intervals (%s, %s; %s, %s)", (low, high, otherLow, otherHigh, separate) => {
+    [0.15, 0.005, 0.35, 0.005, true], [0.35, 0.005, 0.15, 0.005, true],
+    [0.2, 0.05, 0.3, 0.05, false], [0.3, 0, 0.3, 0, false],
+    [0.5, 0.2, 0.35, 0.005, false], [0.15, null, 0.35, 0.005, false], [0.15, 0.005, 0.35, null, false],
+  ])("marks separation only for disjoint complete intervals (means/spreads: %s, %s; %s, %s)", (mean, stdDev, otherMean, otherStdDev, separate) => {
     const run = structuredClone(summary);
-    run.variants[0].points[0].aggregate.successRate = { mean: 0.15, min: 0.1, max: 0.2, ci95Low: low, ci95High: high };
-    run.variants[1].points[0].aggregate.successRate = { mean: 0.35, min: 0.3, max: 0.4, ci95Low: otherLow, ci95High: otherHigh };
+    run.variants[0].points[0].aggregate.successRate = { mean, stdDev, min: 0.1, max: 0.2 };
+    run.variants[1].points[0].aggregate.successRate = { mean: otherMean, stdDev: otherStdDev, min: 0.3, max: 0.4 };
     render(<SummaryTable summary={run} />);
     expect(within(cells("Success rate")[1]).queryByText("Intervals do not overlap") !== null).toBe(separate);
     expect(within(cells("Success rate")[0]).queryByText("Intervals do not overlap")).toBeNull();
@@ -56,27 +80,30 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     run.variants = [run.variants[0]];
     run.variants[0].replications = replications;
-    run.variants[0].points[0].aggregate.successRate = { mean: 0.5, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
+    run.variants[0].points[0].aggregate.successRate = { mean: 0.5, stdDev: 2, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
     render(<SummaryTable summary={run} />);
     expect(screen.queryByText("Unreliable interval: increase Replications.") !== null).toBe(replications < 5);
-    const interval = cells("Success rate")[0].querySelector(".summary-interval")!;
-    expect(interval.textContent).toContain("95% CI -20%–120%");
-    expect(interval.classList.contains("summary-interval--unreliable")).toBe(replications < 5);
+    const interval = cells("Success rate")[0].querySelector(".summary-interval");
+    if (replications < 2) expect(interval).toBeNull();
+    else {
+      expect(interval!.textContent).toMatch(/95% CI -/);
+      expect(interval!.classList.contains("summary-interval--unreliable")).toBe(replications < 5);
+    }
   });
 
   it("compares service amplification and pooled utilization without inventing pooled confidence intervals", () => {
     const run = structuredClone(summary);
     run.variants[0].points[0].aggregate.services.gateway.admittedAmplification = {
-      mean: 1.2, min: 1.1, max: 1.3, ci95Low: 1, ci95High: 1.4,
+      mean: 1.2, stdDev: 0.02, min: 1.1, max: 1.3, ci95Low: 1, ci95High: 1.4,
     };
     const alternative = structuredClone(run.variants[0].points[0].aggregate.services.gateway);
-    alternative.admittedAmplification = { mean: 1.7, min: 1.6, max: 1.8, ci95Low: 1.6, ci95High: 1.8 };
+    alternative.admittedAmplification = { mean: 1.7, stdDev: 0.01, min: 1.6, max: 1.8, ci95Low: 1.6, ci95High: 1.8 };
     alternative.totals.busyHandlerTimeMs = 1500;
     run.variants[1].points[0].aggregate.services.gateway = alternative;
     render(<SummaryTable summary={run} />);
     fireEvent.click(screen.getByText("gateway metrics"));
     const table = screen.getByRole("table", { name: "Service metrics: gateway" });
-    expect(cells("Admitted amplification", table)[0].textContent).toContain("95% CI 1×–1.4×");
+    expect(cells("Admitted amplification", table)[0].textContent).toContain("95% CI 1.02×–1.38×");
     expect(cells("Admitted amplification", table)[1].textContent).toContain("+0.5×");
     expect(cells("Admitted amplification", table)[1].textContent).toContain("Intervals do not overlap");
     const utilization = cells("Handler utilization", table);

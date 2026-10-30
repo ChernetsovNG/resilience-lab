@@ -4,20 +4,23 @@ import type { ReactNode } from "react";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
+import { confidenceInterval, type ConfidenceLevel } from "../results/confidence";
+import { useConfidenceLevel } from "./confidenceLevel";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
-type Metric = Pick<MetricSummary, "mean" | "ci95Low" | "ci95High">;
+type Metric = Pick<MetricSummary, "mean" | "stdDev">;
 type Point = RunSummary["variants"][number]["points"][number];
 type Format = (value: number) => string;
 
 const percentagePoints: Format = value => t("results.answer.percentagePoints", { value: formatNumber(value * 100, 1) });
 
 /** Mean and unmodified Student bounds; interval overlap is descriptive, not a significance test. */
-function metric(value: Metric | null | undefined, baseline: Metric | null | undefined, replications: number, format: Format, formatDifference: Format): ReactNode {
+function metric(value: Metric | null | undefined, baseline: Metric | null | undefined, replications: number,
+  baselineReplications: number, level: ConfidenceLevel, format: Format, formatDifference: Format): ReactNode {
   if (value == null) return formatNumber(null);
-  const separate = baseline != null && value.ci95Low != null && value.ci95High != null
-    && baseline.ci95Low != null && baseline.ci95High != null
-    && (value.ci95High < baseline.ci95Low || baseline.ci95High < value.ci95Low);
+  const interval = confidenceInterval(value, replications, level);
+  const reference = confidenceInterval(baseline, baselineReplications, level);
+  const separate = interval !== null && reference !== null && (interval[1] < reference[0] || reference[1] < interval[0]);
   const difference = baseline == null ? null : value.mean - baseline.mean;
   const formattedDifference = difference === null ? null : formatDifference(difference);
   return <>
@@ -26,9 +29,9 @@ function metric(value: Metric | null | undefined, baseline: Metric | null | unde
       {difference > 0 && formattedDifference !== formatDifference(0)
         ? t("results.answer.positiveDifference", { value: formattedDifference! }) : formattedDifference}
     </span>}
-    {value.ci95Low == null || value.ci95High == null ? null :
+    {interval === null ? null :
       <span className={`summary-interval${replications < MIN_RELIABLE_REPLICATIONS ? " summary-interval--unreliable" : ""}`}>
-        {t("results.intervalInParens", { interval: formatInterval(value.ci95Low, value.ci95High, format) })}
+        {t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) })}
       </span>}
     {separate ? <span className="summary-intervals-separate">{t("results.answer.intervalsSeparate")}</span> : null}
   </>;
@@ -43,6 +46,7 @@ interface SummaryTableProps {
 
 /** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
 export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement }: SummaryTableProps) {
+  const level = useConfidenceLevel();
   const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
   const ordered = baseline === undefined ? [] : [baseline, ...summary.variants.filter(variant => variant !== baseline)];
   const columns = ordered.flatMap(variant => {
@@ -64,7 +68,8 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     <tr>
       <th scope="row">{label}</th>
       {columns.map(({ variant, point }) => <td key={variant.id} className={columnClass(variant.id)}>
-        {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference), variant.replications, format, difference)}
+        {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
+          variant.replications, baseline?.replications ?? 0, level, format, difference)}
       </td>)}
     </tr>
   );

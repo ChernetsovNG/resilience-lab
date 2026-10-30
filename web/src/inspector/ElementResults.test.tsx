@@ -5,6 +5,7 @@ import { seriesLoader } from "../results/series";
 import { decodeSeriesPart } from "../results/series/decode";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
 import { ElementResults, type ElementResultsProps } from "./ElementResults";
+import { setConfidenceLevel } from "../layout/confidenceLevel";
 
 const raw: SeriesPart = {
   schemaVersion: 2, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
@@ -32,8 +33,8 @@ function props(): ElementResultsProps {
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
       orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
-    timeoutRate: { mean: 0.25, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
-    meanInFlight: { mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
+    timeoutRate: { mean: 0.25, stdDev: 0.05, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
+    meanInFlight: { mean: 3, stdDev: 0.2, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
     pooledLatency: { meanMs: 22, p95Ms: 30, p99Ms: 40, statistics: { count: 24, sumMs: 528, sketch: [24] } },
   };
   return { runId: "run", summary: run, manifest: { ...manifest, series: { ...manifest.series!, warmupMs: 100, measurementMs: 200, windowMs: 100 } },
@@ -45,9 +46,22 @@ function loadSeries() {
   vi.spyOn(seriesLoader, "loadConnections").mockResolvedValue(decoded.connections);
 }
 const row = (name: string) => within(screen.getByRole("table", { name: "Results" })).getByRole("rowheader", { name }).closest("tr")!;
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("ElementResults", () => {
+  it("recalculates the selected confidence interval for call results", async () => {
+    loadSeries();
+    const options = { ...props(), selected: "gateway-to-middle" };
+    options.summary.variants[0].replications = 10;
+    options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].timeoutRate!.stdDev = 0.1;
+    render(<ElementResults {...options} />);
+    await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
+    expect(row("Timeout share").textContent).toContain("95% CI 17.8%–32.2%");
+    act(() => setConfidenceLevel(99));
+    expect(row("Timeout share").textContent).toContain("99% CI 14.7%–35.3%");
+    expect(row("Sent attempts").textContent).not.toContain("CI");
+  });
+
   it("renders an additional catalog output for an otherwise unknown block type", async () => {
     loadSeries();
     const options = props();
@@ -89,7 +103,7 @@ describe("ElementResults", () => {
     await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
     expect(row("Sent attempts").textContent).toContain("15 RPSPooled");
     expect(row("Orphaned attempts").textContent).toBe("Orphaned attempts2per replication");
-    expect(row("Timeout share").textContent).toContain("25% (95% CI -10%–70%)");
+    expect(row("Timeout share").textContent).toContain("25% (95% CI -19.9%–69.9%)");
     expect(row("Timeout share").querySelector(".summary-interval--unreliable")).toBeTruthy();
     expect(screen.getByText("Unreliable interval: increase Replications.")).toBeTruthy();
     expect(row("Mean call duration").textContent).toContain("22 msPooled");
