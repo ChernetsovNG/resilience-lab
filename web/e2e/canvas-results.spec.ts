@@ -46,7 +46,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           const metrics = page.getByTestId(`canvas-results-${id}`);
           await expect(metrics).toContainText(`Utilization ${utilization}`);
           await expect(metrics).toContainText(`Mean queue ${formatNumber(totals.slotPools.handlers.queueIntegralMs / totals.measurementMs)}`);
-          await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.queueRejections / totals.offeredAttempts)}`);
+          await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.slotPools.handlers.queueFullCount / totals.offeredAttempts)}`);
           const disclosure = page.locator("details.summary-services").filter({ has: page.getByText(`${id} metrics`, { exact: true }) });
           if (await disclosure.getAttribute("open") === null) await disclosure.locator("summary").click();
           const services = page.getByRole("table", { name: `Service metrics: ${id}`, exact: true });

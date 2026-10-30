@@ -56,9 +56,9 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   const before = baseline.filter((window) => window.startMs < 200).sort((a, b) => a.slotPools.handlers.queueIntegralMs - b.slotPools.handlers.queueIntegralMs)[0];
   const during = baseline.filter((window) => window.startMs >= 200 && window.startMs < 700);
   const queuePeak = during.toSorted((a, b) => b.slotPools.handlers.queueIntegralMs / b.durationMs - a.slotPools.handlers.queueIntegralMs / a.durationMs)[0];
-  const errorPeak = during.toSorted((a, b) => b.queueRejections / b.durationMs - a.queueRejections / a.durationMs)[0];
+  const errorPeak = during.toSorted((a, b) => b.slotPools.handlers.queueFullCount / b.durationMs - a.slotPools.handlers.queueFullCount / a.durationMs)[0];
   expect(queuePeak.slotPools.handlers.queueIntegralMs / queuePeak.durationMs).toBeGreaterThan(before.slotPools.handlers.queueIntegralMs / before.durationMs);
-  expect(errorPeak.queueRejections).toBeGreaterThan(0);
+  expect(errorPeak.slotPools.handlers.queueFullCount).toBeGreaterThan(0);
 
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
   await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
@@ -73,7 +73,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   expect(await value(queue, "Mean queue")).toBeCloseTo(queuePeak.slotPools.handlers.queueIntegralMs / queuePeak.durationMs, 2);
   expect(await value(queue, "Mean queue")).toBeGreaterThan(queueBefore);
   await inspect(page, queueSlider, errorPeak, endMs);
-  expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.queueRejections * 1000 / errorPeak.durationMs, 2);
+  expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.slotPools.handlers.queueFullCount * 1000 / errorPeak.durationMs, 2);
 
   await page.getByLabel("Compare variant").selectOption("no-retries");
   await expect(queue.locator('path.recharts-line-curve[stroke-dasharray="6 4"]')).toBeVisible();
