@@ -1,27 +1,58 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
-import { api } from "../api/apiClient";
+import { api, ApiError } from "../api/apiClient";
 import type { HealthView } from "../api/apiTypes";
 
-/** Backend health, read once on start. */
-export function useHealth(): { health: HealthView | null; error: string | null } {
-  const [health, setHealth] = useState<HealthView | null>(null);
-  const [error, setError] = useState<{ error: unknown } | null>(null);
+interface HealthState {
+  health: HealthView | null;
+  error: { error: unknown } | null;
+}
+
+/** Backend health, read once on start; retries only while unavailable. */
+export function useHealth() {
+  const [state, setState] = useState<HealthState>({ health: null, error: null });
+  const reportFailure = useCallback((reason: unknown) => {
+    if (reason instanceof ApiError && reason.status < 500) return;
+    setState(current => current.error === null ? { health: null, error: { error: reason } } : current);
+  }, []);
 
   useEffect(() => {
     let active = true;
     void api
       .health()
       .then((value) => {
-        if (active) setHealth(value);
+        if (active) setState(current => current.health === null && current.error === null ? { health: value, error: null } : current);
       })
       .catch((reason: unknown) => {
-        if (active) setError({ error: reason });
+        if (active) setState(current => current.health === null && current.error === null ? { health: null, error: { error: reason } } : current);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  return { health, error: error === null ? null : error.error instanceof Error ? error.error.message : t("app.health.failed") };
+  // The failure object identifies an outage even if recovery and a new failure are batched.
+  useEffect(() => {
+    if (state.error === null) return;
+    let active = true;
+    const delays = [1000, 2000, 5000, 10_000];
+    let attempt = 1;
+    const retry = async () => {
+      try {
+        const health = await api.health();
+        if (active) setState({ health, error: null });
+      } catch {
+        if (!active) return;
+        timer = setTimeout(() => void retry(), delays[Math.min(attempt++, delays.length - 1)]);
+      }
+    };
+    let timer = setTimeout(() => void retry(), delays[0]);
+    return () => { active = false; clearTimeout(timer); };
+  }, [state.error]);
+
+  return {
+    health: state.health,
+    error: state.error === null ? null : state.error.error instanceof Error ? state.error.error.message : t("app.health.failed"),
+    reportFailure,
+  };
 }

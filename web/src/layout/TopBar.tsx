@@ -24,6 +24,8 @@ export interface TopBarProps {
   /** A version conflict requires reloading before another save. */
   conflict: boolean;
   saving: boolean;
+  /** A server outage blocks commands that need the API, with the shared status reason. */
+  backendError?: string;
   onSave: () => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -94,20 +96,22 @@ export function TopBar(props: TopBarProps) {
         {t("app.topBar.redo")}
       </button>
       {dirty ? <span className="dirty-mark" title={t("app.topBar.unsavedChanges")}>{t("app.topBar.unsavedChanges")}</span> : null}
-      <button type="button" onClick={onSave} disabled={(!dirty && !props.savePending) || invalid || conflict || saving || loading}>
+      <button type="button" onClick={onSave} disabled={(!dirty && !props.savePending) || invalid || conflict || saving || loading || props.backendError !== undefined}
+        title={props.backendError}>
         {t("app.topBar.save")}
       </button>
       <div className="run-actions">
       <button type="button" onClick={props.onEstimate}
-        disabled={experiment === null || loading || saving || invalid || running || props.estimating}>
+        disabled={experiment === null || loading || saving || invalid || running || props.estimating || props.backendError !== undefined}
+        title={props.backendError}>
         {t("app.estimate.label")}
       </button>
       <button
         type="button"
         className="primary"
         onClick={onRun}
-        disabled={experiment === null || loading || saving || dirty || invalid || running || props.estimating || props.runBlockedReason !== undefined}
-        title={props.runBlockedReason ?? (invalid ? t("app.topBar.fixInvalid") : dirty ? t("app.topBar.saveBeforeRun") : undefined)}
+        disabled={experiment === null || loading || saving || dirty || invalid || running || props.estimating || props.runBlockedReason !== undefined || props.backendError !== undefined}
+        title={props.backendError ?? props.runBlockedReason ?? (invalid ? t("app.topBar.fixInvalid") : dirty ? t("app.topBar.saveBeforeRun") : undefined)}
       >
         {t("app.topBar.run")}
       </button>

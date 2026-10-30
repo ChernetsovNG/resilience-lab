@@ -1,9 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../api/apiClient";
 import { stubFetch } from "../test/stubFetch";
 import { useHealth } from "./useHealth";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const health = { status: "ok", applicationVersion: "0.1.0", kslVersion: "R1.8.1" };
 
@@ -25,6 +26,76 @@ describe("useHealth", () => {
     expect(result.current.health).toBeNull();
   });
 
+  it("retries an initial failure and stops retrying after recovery", async () => {
+    vi.useFakeTimers();
+    let unavailable = true;
+    const fetch = stubFetch(() => {
+      if (unavailable) throw new TypeError("offline");
+      return { body: health };
+    });
+    const { result } = renderHook(useHealth);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.error).toBe("offline");
+    unavailable = false;
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.health).toEqual(health);
+    expect(result.current.error).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears retry timers on unmount", async () => {
+    vi.useFakeTimers();
+    const fetch = stubFetch(() => { throw new TypeError("offline"); });
+    const { unmount } = renderHook(useHealth);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("keeps recovering when a successful retry and a new poll failure are batched", async () => {
+    vi.useFakeTimers();
+    let resolveRetry!: (value: typeof health) => void;
+    const pendingRetry = new Promise<typeof health>(resolve => { resolveRetry = resolve; });
+    const check = vi.spyOn(api, "health").mockResolvedValueOnce(health).mockReturnValueOnce(pendingRetry).mockResolvedValue(health);
+    const { result } = renderHook(useHealth);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    act(() => result.current.reportFailure(new TypeError("first outage")));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => {
+      resolveRetry(health);
+      await Promise.resolve();
+      result.current.reportFailure(new TypeError("new failed poll"));
+    });
+    expect(result.current.error).toBe("new failed poll");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.error).toBeNull();
+    expect(result.current.health).toEqual(health);
+    expect(check).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not let a late initial health response erase a reported outage", async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    let initial = true;
+    stubFetch(async () => {
+      if (initial) {
+        initial = false;
+        await new Promise<void>(resolve => { release = resolve; });
+      }
+      return { body: health };
+    });
+    const { result } = renderHook(useHealth);
+    act(() => result.current.reportFailure(new TypeError("offline")));
+    await act(async () => { release(); });
+    expect(result.current.error).toBe("offline");
+    expect(result.current.health).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(result.current.error).toBeNull();
+    expect(result.current.health).toEqual(health);
+  });
+
   it("ignores health arriving after unmount", async () => {
     let release!: () => void;
     stubFetch(async () => {
@@ -34,6 +105,6 @@ describe("useHealth", () => {
     const { result, unmount } = renderHook(useHealth);
     unmount();
     await act(async () => { release(); });
-    expect(result.current).toEqual({ health: null, error: null });
+    expect(result.current).toMatchObject({ health: null, error: null });
   });
 });

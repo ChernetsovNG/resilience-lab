@@ -112,7 +112,7 @@ async function loadModel(modelPath: string, documents: readonly DocumentEntry[])
 }
 
 /** Loads workspace documents, tracks external changes and saves command edits with conditional versions (stage 1 design §6.2). */
-export function useWorkspace(): Workspace {
+export function useWorkspace(onRequestFailure?: (reason: unknown) => void): Workspace {
   const language = useLanguage();
   const [sourceCatalog, setCatalog] = useState<Catalog | null>(null);
   const catalog = useMemo(() => sourceCatalog === null ? null : localizeCatalog(sourceCatalog, language), [sourceCatalog, language]);
@@ -268,8 +268,9 @@ export function useWorkspace(): Workspace {
         if (loadInFlight.current || revision !== persistenceRevision.current) return;
         classifyChanges(changes);
         cursor.current = response.cursor;
-      } catch {
+      } catch (error) {
         // A failed poll keeps both the cursor and editor state untouched; the next attempt retries it.
+        if (active) onRequestFailure?.(error);
       } finally {
         if (active) timer = setTimeout(() => void poll(), 1000);
       }
@@ -278,8 +279,9 @@ export function useWorkspace(): Workspace {
       try {
         const initial = await api.changes();
         if (active) cursor.current = initial.cursor;
-      } catch {
+      } catch (error) {
         // The first successful poll reconciles a workspace loaded without an initial cursor.
+        if (active) onRequestFailure?.(error);
       }
       if (!active) return;
       try {
@@ -306,7 +308,7 @@ export function useWorkspace(): Workspace {
       active = false;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [load, classifyChanges]);
+  }, [load, classifyChanges, onRequestFailure]);
 
   const execute = useCallback((command: EditorCommand) => {
     if (!loadInFlight.current) dispatch({ type: "command", command });

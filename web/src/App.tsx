@@ -42,12 +42,12 @@ import { useWorkspace } from "./workspace/useWorkspace";
  * only for the experiment they were computed for.
  */
 export function App() {
-  const workspace = useWorkspace();
+  const health = useHealth();
+  const workspace = useWorkspace(health.reportFailure);
   const canvas = useRef<CanvasHandle>(null);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
-  const health = useHealth();
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.job?.id ?? null);
@@ -350,6 +350,7 @@ export function App() {
         invalid={invalid}
         conflict={workspace.conflict}
         saving={workspace.saving}
+        backendError={health.error === null ? undefined : t("app.health.unavailable", { error: health.error })}
         onSave={() => void workspace.save()}
         fileMenu={<FileMenu ref={fileMenu} workspace={workspace}
           disabled={invalid || loading || workspace.saving || run.running || runPending || estimate.pending}
