@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
@@ -50,5 +50,32 @@ test("a model without experiment or layout creates its baseline on the first Run
       modelRef: "system.model.json", execution: { replications: 10 }, variants: [{ id: "baseline" }],
     });
     expect((await readdir(target)).sort()).toEqual(["system.experiment.json", "system.model.json"]);
+  } finally { await rm(target, { recursive: true, force: true }); }
+});
+
+test("deleting the only experiment keeps the model open with an in-memory default", async ({ page }) => {
+  const directory = `model-delete-question-${randomUUID()}`;
+  const target = resolve("../apps/server/build/e2e-workspace", directory);
+  await cp(resolve("../examples/retry-storm"), target, { recursive: true });
+  try {
+    await page.goto("/");
+    const modelPath = `${directory}/retry-storm.model.json`;
+    const experimentPath = `${directory}/retry-storm.experiment.json`;
+    await page.getByLabel("Model", { exact: true }).selectOption(modelPath);
+    await expect(page.getByTestId("block-node")).toHaveCount(4);
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("button", { name: "Delete experiment…", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete experiment…", exact: true });
+    await expect(dialog.getByRole("listitem")).toHaveText([experimentPath]);
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByLabel("Model", { exact: true })).toHaveValue(modelPath);
+    await expect(page.getByTestId("block-node")).toHaveCount(4);
+    await expect(page.getByLabel("Replications", { exact: true })).toHaveValue("10");
+    const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`);
+    expect(response.status()).toBe(404);
+    expect((await readdir(target)).sort()).toEqual(["retry-storm.layout.json", "retry-storm.model.json"]);
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Delete experiment…", exact: true })).toBeDisabled();
   } finally { await rm(target, { recursive: true, force: true }); }
 });

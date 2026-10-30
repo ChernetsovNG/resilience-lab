@@ -36,7 +36,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new ApiError(response.status, await problemOf(response));
   }
-  return (await response.json()) as T;
+  return response.status === 204 ? undefined as T : (await response.json()) as T;
 }
 
 async function requestText(path: string, init?: RequestInit): Promise<{ text: string; etag: string | null }> {
@@ -75,6 +75,9 @@ export const api = {
   /** Writes a document; [version] is the one it was read with, or null for a new document. */
   saveDocument: (path: string, content: DocumentContent, version: string | null) =>
     request<DocumentEntry>(documentUrl(path), json("PUT", content, version === null ? {} : { "If-Match": `"${version}"` })),
+  /** Removes only the version confirmed by the user; DELETE returns an empty 204 response. */
+  deleteDocument: (path: string, version: string) =>
+    request<void>(documentUrl(path), { method: "DELETE", headers: { "If-Match": `"${version}"` } }),
   validate: (experiment: string, drafts: DocumentDraft[] = []) =>
     request<ValidationView>("/api/v1/validate", json("POST", { experiment, drafts })),
   estimate: (experiment: string, drafts: DocumentDraft[] = []) =>

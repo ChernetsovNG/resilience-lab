@@ -35,6 +35,28 @@ async function stored(page: Page, path: string) {
   return response.json();
 }
 
+test("deletes a newly created model and its files, then returns to the last model", async ({ page, directory }) => {
+  const target = `file-delete-${randomUUID()}`;
+  try {
+    await createIn(page, "New model", target);
+    await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${target}/${target}.model.json`);
+    await action(page, "Delete model…");
+    const dialog = page.getByRole("dialog", { name: "Delete model…", exact: true });
+    for (const kind of ["experiment", "layout", "model"]) {
+      await expect(dialog.getByText(`${target}/${target}.${kind}.json`, { exact: true })).toBeVisible();
+    }
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${directory}/retry-storm.model.json`);
+    await expect(page.getByLabel("Model", { exact: true }).locator(`option[value="${target}/${target}.model.json"]`)).toHaveCount(0);
+    for (const kind of ["experiment", "layout", "model"]) {
+      const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${target}/${target}.${kind}.json`)}`);
+      expect(response.status()).toBe(404);
+    }
+    expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model).toBeDefined();
+  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+});
+
 test("creates an empty model and runs a system built from the palette", async ({ page, directory }, testInfo) => {
   const target = `file-new-${randomUUID()}`;
   try {

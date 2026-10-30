@@ -494,7 +494,7 @@ export function App() {
           setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1, focus: false }));
         }}>
           {model === null || loaded === null || catalog === null ? (
-            <p className="canvas-empty">{t("app.canvas.loading")}</p>
+            <p className="canvas-empty">{t(catalog !== null && !workspace.loading && workspace.models.length === 0 ? "file.emptyWorkspace" : "app.canvas.loading")}</p>
           ) : (
             <Canvas
               ref={canvas}
