@@ -118,7 +118,7 @@ select {
 }
 
 .top-bar select {
-  flex: 1 1 18rem;
+  flex: 1 1 12rem;
   width: 0;
   max-width: 32rem;
   min-width: 0;
@@ -346,6 +346,7 @@ select {
 }
 
 .canvas {
+  position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
@@ -370,6 +371,17 @@ select {
 .results-empty {
   margin: 1rem;
   color: #52606d;
+}
+
+.canvas-client-hint {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  pointer-events: none;
+  text-align: center;
+  z-index: 1;
 }
 
 .banner {

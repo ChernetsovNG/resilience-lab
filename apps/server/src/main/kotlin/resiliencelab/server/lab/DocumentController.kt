@@ -34,7 +34,16 @@ class DocumentController(
     @Throws(IOException::class)
     fun listDocuments(): List<DocumentEntry> =
         workspace.list().mapNotNull { path ->
-            DocumentKind.of(path)?.let { kind -> DocumentEntry(path, kind, workspace.read(path).version) }
+            DocumentKind.of(path)?.let { kind ->
+                val document = workspace.read(path)
+                val modelRef =
+                    if (kind == DocumentKind.EXPERIMENT) {
+                        (Documents.decode(kind, document.text, path) as? DecodeResult.Ok)?.value?.experiment?.modelRef
+                    } else {
+                        null
+                    }
+                DocumentEntry(path, kind, document.version, modelRef)
+            }
         }
 
     @GetMapping("/document")
@@ -92,7 +101,7 @@ class DocumentController(
             )
         }
         val version = if (ifMatch == null) workspace.create(path, text) else replace(path, text, ifMatch)
-        return ResponseEntity.ok().eTag(version).body(DocumentEntry(path, kind, version))
+        return ResponseEntity.ok().eTag(version).body(DocumentEntry(path, kind, version, content.experiment?.modelRef))
     }
 
     @DeleteMapping("/document")

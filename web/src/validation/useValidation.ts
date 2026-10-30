@@ -11,7 +11,7 @@ interface ValidationState {
 }
 
 /** Validates a document snapshot after 500 ms of inactivity; obsolete successes and failures are discarded. */
-export function useValidation(loaded: LoadedExperiment | null) {
+export function useValidation(loaded: LoadedExperiment | null, hasClient = true) {
   const [state, setState] = useState<ValidationState | null>(null);
 
   useEffect(() => {
@@ -27,8 +27,9 @@ export function useValidation(loaded: LoadedExperiment | null) {
   }, [loaded]);
 
   const current = state?.snapshot === loaded ? state : null;
+  const report = current?.report ?? null;
   return {
-    report: current?.report ?? null,
+    report: report === null || hasClient ? report : { ...report, diagnostics: report.diagnostics.filter(diagnostic => !diagnostic.code.startsWith("TOPOLOGY_")) },
     problem: current?.problem ?? null,
     pending: loaded !== null && current === null,
   };

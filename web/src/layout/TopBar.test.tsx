@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { TopBar, type TopBarProps } from "./TopBar";
 
 function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
-  return { experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
+  return { models: ["first.model.json", "second.model.json"], model: "first.model.json", onModel: vi.fn(),
+    experiments: ["first.experiment.json", "second.experiment.json"], experiment: "first.experiment.json",
     onExperiment: vi.fn(), onInspectExperiment: vi.fn(), loading: false, dirty: false, invalid: false, conflict: false, saving: false,
     canUndo: false, canRedo: false, onUndo: vi.fn(), onRedo: vi.fn(), onSave: vi.fn(), running: false, onRun: vi.fn(), estimating: false, onEstimate: vi.fn(), canResume: false, onResume: vi.fn(), onCancel: vi.fn(), job: null, ...overrides };
 }
@@ -22,6 +23,7 @@ describe("TopBar", () => {
   it.each(["loading", "saving", "running", "invalid"] as const)("prevents experiment switching while %s", (flag) => {
     render(<TopBar {...props({ [flag]: true })} />);
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Experiment" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Model" }).disabled).toBe(true);
   });
 
   it.each(["invalid", "saving", "loading", "conflict"] as const)("prevents saving dirty edits while %s", (flag) => {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { copySmallExperiment } from "./fixtures";
+import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
@@ -12,7 +12,7 @@ async function commit(page: Page, label: string, value: string) {
 }
 
 async function settings(page: Page) {
-  await page.getByRole("button", { name: "Experiment", exact: true }).click();
+  await page.getByRole("button", { name: "Run settings", exact: true }).click();
 }
 
 async function saveAndRun(page: Page) {
@@ -34,7 +34,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const documents = () => Promise.all(names.map(async (name) =>
       (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`grid-map/${name}`)}`)).json()));
     await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("grid-map/retry-storm.experiment.json");
+    await selectExperiment(page, "grid-map/retry-storm.experiment.json");
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
     await commit(page, "Handlers", "6");

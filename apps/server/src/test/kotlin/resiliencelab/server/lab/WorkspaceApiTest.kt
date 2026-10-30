@@ -67,9 +67,29 @@ class WorkspaceApiTest {
         assertThat(entries).contains(
             DocumentEntry(model, DocumentKind.MODEL, version(model)),
             DocumentEntry(layout, DocumentKind.LAYOUT, version(layout)),
-            DocumentEntry(experiment, DocumentKind.EXPERIMENT, version(experiment)),
+            DocumentEntry(experiment, DocumentKind.EXPERIMENT, version(experiment), "retry-storm.model.json"),
         )
+        val references =
+            JsonPath.read<List<String>>(response.contentAsString, "$[?(@.path == 'retry-storm/retry-storm.experiment.json')].modelRef")
+        assertThat(references)
+            .containsExactly("retry-storm.model.json")
         openApi.assertResponse("get", "/api/v1/workspace/documents", response)
+    }
+
+    @Test
+    fun `a malformed experiment stays listed without a model reference`() {
+        val path = "malformed-list.experiment.json"
+        val file = root.resolve(path)
+        Files.writeString(file, "{")
+        try {
+            val response = mockMvc.perform(get("/api/v1/workspace/documents")).andReturn().response
+            assertThat(response.status).isEqualTo(200)
+            val entries = apiJson.decodeFromString(ListSerializer(DocumentEntry.serializer()), response.contentAsString)
+            assertThat(entries.single { it.path == path }.modelRef).isNull()
+            openApi.assertResponse("get", "/api/v1/workspace/documents", response)
+        } finally {
+            Files.deleteIfExists(file)
+        }
     }
 
     @Test

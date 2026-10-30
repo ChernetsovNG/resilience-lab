@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { selectExperiment } from "./fixtures";
 
 // Exercise every supported language; #184 adds ru.json and the browser-language selection.
 const locales = ["en-US", ...(existsSync(resolve("src/i18n/ru.json")) ? ["ru-RU"] : [])];
@@ -13,7 +14,7 @@ for (const locale of locales) {
 
     test("localizes linter, inspector validation and estimate warnings from the real API", async ({ page }, testInfo) => {
       await page.goto("/");
-      await page.getByLabel(label("app.topBar.experiment"), { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+      await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
       await page.getByRole("button", { name: label("results.restore"), exact: true }).click();
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
       const lint = page.getByRole("tabpanel").getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });

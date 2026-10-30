@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -18,7 +19,7 @@ test("shows the retry-storm saturation conclusion from the real summary for each
     } });
     await writeFile(experimentPath, JSON.stringify(experiment));
     await page.goto("/");
-    await page.getByLabel("Experiment").selectOption("saturation-insight/retry-storm.experiment.json");
+    await selectExperiment(page, "saturation-insight/retry-storm.experiment.json");
     const response = page.waitForResponse((response) => /\/api\/v1\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const summary: RunSummary = await (await response).json();

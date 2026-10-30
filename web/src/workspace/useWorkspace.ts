@@ -10,7 +10,8 @@ import {
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
-import { exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
+import { defaultExperiment, exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
+import { experimentsForModel, preferredExperiment, readSelection, rememberSelection } from "./modelSelection";
 
 export interface ExternalDocumentChange {
   path: string;
@@ -19,6 +20,9 @@ export interface ExternalDocumentChange {
 
 export interface Workspace {
   catalog: Catalog | null;
+  models: string[];
+  /** Model selection survives a failed question load so another question remains accessible. */
+  selectedModel: string | null;
   experiments: string[];
   loaded: LoadedExperiment | null;
   /** An experiment is being opened; editing, saving and running wait for it. */
@@ -38,10 +42,12 @@ export interface Workspace {
   execute: (command: EditorCommand) => void;
   /** Opens a document unless saving or unsaved edits prevent it; discardChanges allows discarding edits. */
   open: (experimentPath: string, discardChanges?: boolean) => Promise<boolean>;
+  /** Opens the model's remembered question, or an in-memory default until the first Save or Run. */
+  openModel: (modelPath: string, discardChanges?: boolean) => Promise<boolean>;
   setParam: (id: string, name: string, value: unknown) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
-  storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace) => Promise<boolean>;
+  storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate?: boolean) => Promise<boolean>;
   /** Downloads saved canonical documents; a failed save never starts an export. */
   exportFiles: (saveFirst?: boolean) => Promise<DownloadDocument[] | null>;
   reportProblem: (error: unknown) => void;
@@ -87,14 +93,36 @@ async function loadExperiment(experimentPath: string, recoveryLayoutPath?: strin
   };
 }
 
+async function loadModel(modelPath: string, documents: readonly DocumentEntry[]): Promise<LoadedExperiment> {
+  const view = await api.document(modelPath);
+  const model = view.content.model;
+  if (model == null) throw new MessageError("app.workspace.notModel", { path: modelPath });
+  const layoutPath = modelPath.replace(/\.model\.json$/, ".layout.json");
+  const layoutView = documents.some(document => document.path === layoutPath) ? await api.document(layoutPath) : null;
+  const layout = layoutView?.content.layout ?? { schemaVersion: 1, positions: {} };
+  let experimentPath = modelPath.replace(/\.model\.json$/, ".experiment.json");
+  for (let suffix = 2; documents.some(document => document.path === experimentPath); suffix++) {
+    experimentPath = modelPath.replace(/\.model\.json$/, `-${suffix}.experiment.json`);
+  }
+  const experiment = defaultExperiment(modelPath.split("/").at(-1)!, layoutView === null ? null : layoutPath.split("/").at(-1)!);
+  return { modelPath, model, layoutPath, layout, experimentPath, experiment,
+    saved: { model, layout, experiment }, versions: { model: view.version, layout: layoutView?.version ?? null, experiment: null } };
+}
+
 /** Loads workspace documents, tracks external changes and saves command edits with conditional versions (stage 1 design §6.2). */
 export function useWorkspace(): Workspace {
   const language = useLanguage();
   const [sourceCatalog, setCatalog] = useState<Catalog | null>(null);
   const catalog = useMemo(() => sourceCatalog === null ? null : localizeCatalog(sourceCatalog, language), [sourceCatalog, language]);
-  const [experiments, setExperiments] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<DocumentEntry[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const preferences = useRef<ReturnType<typeof readSelection> | null>(null);
+  if (preferences.current === null) preferences.current = readSelection();
   const [editor, dispatch] = useReducer(editorReducer, initialEditorState);
   const { loaded, conflictPath } = editor;
+  const models = documents.filter(document => document.kind === "MODEL").map(document => document.path).sort();
+  const experiments = selectedModel === null ? [] : experimentsForModel(documents, selectedModel);
+  if (loaded?.modelPath === selectedModel && loaded?.versions.experiment === null && !experiments.includes(loaded.experimentPath)) experiments.push(loaded.experimentPath);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ApiProblem | null>(null);
@@ -153,19 +181,23 @@ export function useWorkspace(): Workspace {
     classifyChanges([change]);
   }, [classifyChanges]);
 
-  const load = useCallback(async (experimentPath: string, recoveryLayoutPath?: string) => {
+  const load = useCallback(async (experimentPath: string, recoveryLayoutPath?: string, model?: { path: string; documents: DocumentEntry[] }) => {
     const current = ++generation.current;
     loadInFlight.current = true;
     setLoading(true);
     setProblem(null);
     try {
-      const next = await loadExperiment(experimentPath, recoveryLayoutPath);
+      const next = model === undefined ? await loadExperiment(experimentPath, recoveryLayoutPath) : await loadModel(model.path, model.documents);
       if (current === generation.current) {
         persistenceRevision.current += 1;
         loadedRef.current = next;
         deferredChanges.current.clear();
         setExternalChanges({});
+        setSelectedModel(next.modelPath);
+        preferences.current = { model: next.modelPath, experiments: { ...preferences.current?.experiments, [next.modelPath]: next.experimentPath } };
+        rememberSelection(next.modelPath, next.experimentPath);
         dispatch({ type: "open", loaded: next });
+        return true;
       }
     } catch (error) {
       if (current === generation.current) setProblem(problemOf(error));
@@ -175,16 +207,28 @@ export function useWorkspace(): Workspace {
         setLoading(false);
       }
     }
+    return false;
   }, []);
 
   const open = useCallback(
     async (experimentPath: string, discardChanges = false) => {
       if (saveInFlight.current || (dirty && !discardChanges)) return false;
-      await load(experimentPath, experimentPath === openedExperimentPath ? recoveryLayoutPath : undefined);
-      return true;
+      return load(experimentPath, experimentPath === openedExperimentPath ? recoveryLayoutPath : undefined);
     },
     [dirty, load, openedExperimentPath, recoveryLayoutPath],
   );
+
+  const openModel = useCallback(async (modelPath: string, discardChanges = false) => {
+    if (loadInFlight.current || saveInFlight.current || (dirty && !discardChanges)) return false;
+    const experiment = preferredExperiment(documents, modelPath, preferences.current?.experiments[modelPath]);
+    setSelectedModel(modelPath);
+    if (loadedRef.current?.modelPath !== modelPath) {
+      loadedRef.current = null;
+      setExternalChanges({});
+      dispatch({ type: "close" });
+    }
+    return experiment === null ? load("", undefined, { path: modelPath, documents }) : load(experiment);
+  }, [dirty, documents, load]);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +236,7 @@ export function useWorkspace(): Workspace {
     const refreshDocuments = async (): Promise<DocumentEntry[] | null> => {
       const documents = await api.documents();
       if (!active) return null;
-      setExperiments(documents.filter((document) => document.kind === "EXPERIMENT").map((document) => document.path).sort());
+      setDocuments(documents);
       return documents;
     };
     const poll = async (): Promise<void> => {
@@ -208,7 +252,7 @@ export function useWorkspace(): Workspace {
           if (documents === null) return;
           const current = loadedRef.current;
           const versions = new Map(documents.map((document) => [document.path, document.version]));
-          changes = current === null ? [] : (["model", "layout", "experiment"] as const).map((kind) => {
+          changes = current === null ? [] : (["model", "layout", "experiment"] as const).filter(kind => current.versions[kind] !== null).map((kind) => {
             const path = current[`${kind}Path`];
             return {
               path,
@@ -216,7 +260,7 @@ export function useWorkspace(): Workspace {
               version: versions.get(path) ?? null,
             };
           });
-        } else if (response.changes.some((change) => change.kind === "EXPERIMENT")) {
+        } else if (response.changes.some((change) => change.kind === "EXPERIMENT" || change.kind === "MODEL")) {
           if (await refreshDocuments() === null) return;
         }
         // A response consumed against a newer open/save snapshot would be classified against the wrong versions.
@@ -240,10 +284,16 @@ export function useWorkspace(): Workspace {
       try {
         const [nextCatalog, documents] = await Promise.all([api.catalog(), api.documents()]);
         if (!active) return;
-        const paths = documents.filter((document) => document.kind === "EXPERIMENT").map((document) => document.path).sort();
+        const paths = documents.filter((document) => document.kind === "MODEL").map((document) => document.path).sort();
         setCatalog(nextCatalog);
-        setExperiments(paths);
-        if (paths.length > 0) await load(paths[0]);
+        setDocuments(documents);
+        const modelPath = paths.find(path => path === preferences.current?.model) ?? paths[0];
+        if (modelPath !== undefined) {
+          setSelectedModel(modelPath);
+          const experiment = preferredExperiment(documents, modelPath, preferences.current?.experiments[modelPath]);
+          if (experiment === null) await load("", undefined, { path: modelPath, documents });
+          else await load(experiment);
+        }
       } catch (error) {
         if (active) setProblem(problemOf(error));
       } finally {
@@ -272,7 +322,7 @@ export function useWorkspace(): Workspace {
 
   const save = useCallback(async () => {
     if (loaded === null || loadInFlight.current || conflictPath !== null || saveInFlight.current) return false;
-    if (!dirty) return true;
+    if (!dirty && loaded.versions.experiment !== null) return true;
     const saved = loaded;
     const current = generation.current;
     saveInFlight.current = true;
@@ -280,7 +330,7 @@ export function useWorkspace(): Workspace {
     setProblem(null);
     try {
       for (const kind of ["layout", "model", "experiment"] as const) {
-        if (!dirtyDocuments(saved)[kind]) continue;
+        if (!dirtyDocuments(saved)[kind] && !(kind === "experiment" && saved.versions.experiment === null)) continue;
         const path = saved[`${kind}Path`];
         savingPaths.current.add(path);
         try {
@@ -296,6 +346,9 @@ export function useWorkspace(): Workspace {
             };
           }
           dispatch({ type: "saved", kind, documents: saved, version: entry.version });
+          if (kind === "experiment") setDocuments(previous => [...previous.filter(document => document.path !== path), {
+            path, kind: "EXPERIMENT", version: entry.version, modelRef: saved.experiment.modelRef,
+          }]);
         } catch (error) {
           if (current !== generation.current) return false;
           if (error instanceof ApiError && error.status === 409) dispatch({ type: "conflict", path });
@@ -314,7 +367,7 @@ export function useWorkspace(): Workspace {
 
   const reportProblem = useCallback((error: unknown) => setProblem(problemOf(error)), []);
 
-  const storeDocuments = useCallback(async (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace) => {
+  const storeDocuments = useCallback(async (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate = true) => {
     if (loadInFlight.current || saveInFlight.current) return false;
     saveInFlight.current = true;
     loadInFlight.current = true;
@@ -322,7 +375,7 @@ export function useWorkspace(): Workspace {
     setProblem(null);
     for (const draft of drafts) savingPaths.current.add(draft.path);
     try {
-      if (!await writeDocuments(drafts, confirmReplace)) return false;
+      if (!await writeDocuments(drafts, confirmReplace, validate)) return false;
       const experiment = drafts.find(draft => draft.content.experiment != null)?.path;
       const affectsOpen = loaded !== null && drafts.some(draft =>
         [loaded.modelPath, loaded.layoutPath, loaded.experimentPath].includes(draft.path));
@@ -335,7 +388,7 @@ export function useWorkspace(): Workspace {
       // A partial multi-document operation is visible in storage and in the picker, even when a later write fails.
       try {
         const documents = await api.documents();
-        setExperiments(documents.filter(document => document.kind === "EXPERIMENT").map(document => document.path).sort());
+        setDocuments(documents);
       } catch { /* A later workspace poll retries refreshing the picker. */ }
       for (const draft of drafts) flushChange(draft.path);
       saveInFlight.current = false;
@@ -349,7 +402,7 @@ export function useWorkspace(): Workspace {
     setLoading(true);
     setProblem(null);
     try {
-      if (dirty && (!saveFirst || !await save())) return null;
+      if ((dirty || loaded.versions.experiment === null) && (!saveFirst || !await save())) return null;
       saveInFlight.current = true;
       loadInFlight.current = true;
       return await exportDocuments(loaded);
@@ -364,13 +417,14 @@ export function useWorkspace(): Workspace {
 
   const reload = useCallback(async () => {
     if (loaded !== null && !saveInFlight.current && externalChange?.deleted !== true) {
-      await load(loaded.experimentPath, recoveryLayoutPath);
+      if (loaded.versions.experiment === null) await load("", undefined, { path: loaded.modelPath, documents });
+      else await load(loaded.experimentPath, recoveryLayoutPath);
     }
-  }, [loaded, load, recoveryLayoutPath, externalChange]);
+  }, [loaded, load, recoveryLayoutPath, externalChange, documents]);
 
   return {
-    catalog, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
-    conflict: conflictPath !== null, conflictPath, externalChange, problem, open, setParam, execute,
-    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save: async () => { await save(); }, reload, storeDocuments, exportFiles, reportProblem,
+    catalog, models, selectedModel, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
+    conflict: conflictPath !== null, conflictPath, externalChange, problem, open, openModel, setParam, execute,
+    canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload, storeDocuments, exportFiles, reportProblem,
   };
 }

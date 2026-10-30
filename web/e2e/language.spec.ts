@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test, type Page } from "@playwright/test";
 import catalogSnapshot from "../src/test/catalog.json" with { type: "json" };
 
@@ -14,7 +15,7 @@ test("Russian browser gets translated controls, catalog and results; language pr
   const original = await (await request.get(modelURL)).json();
   expect(await (await request.get("/api/v1/catalog")).json()).toEqual(catalogSnapshot);
   await page.goto("/");
-  await page.getByLabel("Эксперимент", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Сохранить", exact: true })).toBeDisabled();
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
@@ -43,7 +44,7 @@ test("Russian browser gets translated controls, catalog and results; language pr
   await page.reload();
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await chooseLanguage(page, "ru", "en");
   await page.getByTestId("block-node").filter({ hasText: "gateway" }).click();
   await expect(inspector.getByRole("option", { name: "Фиксированное значение", exact: true })).toHaveJSProperty("selected", true);
@@ -101,7 +102,7 @@ test("View remains accessible on narrow screens during a run", async ({ page }) 
     await route.fulfill({ response, json: hold ? { ...job, status: "RUNNING" } : job });
   });
   await page.goto("/");
-  await page.getByLabel("Эксперимент", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await page.getByRole("button", { name: "Запустить", exact: true }).click();
   await expect(page.locator(".run-actions > button")).toHaveCount(3);
   for (const width of [1024, 768]) {
@@ -119,7 +120,7 @@ test("View remains accessible on narrow screens during a run", async ({ page }) 
 
 test("an existing canvas notice follows the selected language", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Эксперимент", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await chooseLanguage(page, "en", "ru");
   const port = page.getByTestId("rf__node-gateway").locator(".react-flow__handle.source");
   await expect(port).toBeVisible();

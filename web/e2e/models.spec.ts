@@ -1,0 +1,49 @@
+import { expect, test } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
+
+test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
+
+test("checkout keeps its diagram while switching its two questions and remembers the last one", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const model = page.getByLabel("Model", { exact: true });
+  const experiment = page.getByLabel("Experiment", { exact: true });
+  await model.selectOption("checkout/checkout.model.json");
+  await expect(experiment.locator("option")).toHaveCount(2);
+  await experiment.selectOption("checkout/checkout.experiment.json");
+  await expect(page.getByTestId("block-node")).toHaveCount(5);
+  const diagram = await page.getByTestId("block-node").allTextContents();
+  await experiment.selectOption("checkout/checkout-grid.experiment.json");
+  await expect.poll(() => page.getByTestId("block-node").allTextContents()).toEqual(diagram);
+  await expect(model).toHaveValue("checkout/checkout.model.json");
+  await page.screenshot({ path: testInfo.outputPath("model-experiments.png") });
+  await model.selectOption("retry-storm/retry-storm.model.json");
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await model.selectOption("checkout/checkout.model.json");
+  await expect(experiment).toHaveValue("checkout/checkout-grid.experiment.json");
+  await page.reload();
+  await expect(model).toHaveValue("checkout/checkout.model.json");
+  await expect(experiment).toHaveValue("checkout/checkout-grid.experiment.json");
+});
+
+test("a model without experiment or layout creates its baseline on the first Run", async ({ page }) => {
+  const directory = `model-only-${randomUUID()}`;
+  const target = resolve("../apps/server/build/e2e-workspace", directory);
+  await mkdir(target);
+  try {
+    await copyFile(resolve("../examples/retry-storm/retry-storm.model.json"), resolve(target, "system.model.json"));
+    await page.goto("/");
+    await page.getByLabel("Model", { exact: true }).selectOption(`${directory}/system.model.json`);
+    await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${directory}/system.experiment.json`);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+    expect(await readdir(target)).toEqual(["system.model.json"]);
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+    const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/system.experiment.json`)}`);
+    expect((await response.json()).content.experiment).toMatchObject({
+      modelRef: "system.model.json", execution: { replications: 10 }, variants: [{ id: "baseline" }],
+    });
+    expect((await readdir(target)).sort()).toEqual(["system.experiment.json", "system.model.json"]);
+  } finally { await rm(target, { recursive: true, force: true }); }
+});

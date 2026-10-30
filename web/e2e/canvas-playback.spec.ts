@@ -1,4 +1,4 @@
-import { copySmallExperiment } from "./fixtures";
+import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -34,7 +34,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
       (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`playback/${name}`)}`)).json()));
     const beforeDocuments = await documents();
     await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("playback/retry-storm.experiment.json");
+    await selectExperiment(page, "playback/retry-storm.experiment.json");
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));
@@ -140,7 +140,7 @@ test("retry-storm nodes and edge labels retain their geometry while playback ran
   try {
     await copySmallExperiment(directory, "retry-storm.experiment.json", "3ms");
     await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("playback-layout/retry-storm.experiment.json");
+    await selectExperiment(page, "playback-layout/retry-storm.experiment.json");
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();

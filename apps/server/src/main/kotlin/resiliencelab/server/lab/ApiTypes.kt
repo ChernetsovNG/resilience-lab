@@ -39,6 +39,8 @@ data class DocumentEntry(
     val path: String,
     val kind: DocumentKind,
     val version: String,
+    /** Raw relative model reference for a decodable experiment; null for other or malformed documents. */
+    val modelRef: String? = null,
 )
 
 /** Document content: exactly the property of the document kind is set. */

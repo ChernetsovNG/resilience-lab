@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
-import { copyExperiment, downloadDocuments, newExperiment, readImports } from "../workspace/fileActions";
+import { copyModel, downloadDocuments, newExperiment, newModel, readImports } from "../workspace/fileActions";
 import type { Workspace } from "../workspace/useWorkspace";
 
-type FileAction = "new" | "saveAs" | "import";
+type FileAction = "new" | "newExperiment" | "saveAs" | "import";
 
 /** File commands use server workspace documents; native File/Blob transfer copies to and from the browser. */
 export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspace; disabled: boolean; onOpened: () => void }) {
@@ -22,7 +22,7 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
 
   const start = (next: FileAction) => {
     menu.current?.hidePopover?.();
-    if (next === "new" && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+    if ((next === "new" || next === "newExperiment") && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
     setDirectory(""); setFiles([]); setAction(next);
   };
   const submit = async () => {
@@ -30,18 +30,20 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
     if (action === "import" && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
     setWorking(true);
     try {
-      const drafts = action === "new" ? newExperiment(directory)
-        : action === "saveAs" && workspace.loaded !== null ? copyExperiment(workspace.loaded, directory)
+      const drafts = action === "new" ? newModel(directory)
+        : action === "newExperiment" && workspace.loaded !== null ? newExperiment(workspace.loaded, directory)
+        : action === "saveAs" && workspace.loaded !== null ? await copyModel(workspace.loaded, directory)
         : await readImports(files, directory);
       const replaced = action === "import" ? (paths: string[]) => window.confirm(t("file.replaceConfirm", { paths: paths.join("\n") })) : undefined;
-      if (await workspace.storeDocuments(drafts, replaced)) onOpened();
+      if (await workspace.storeDocuments(drafts, replaced, action === "import")) onOpened();
     } catch (error) { workspace.reportProblem(error); }
     finally { setWorking(false); setAction(null); }
   };
   const download = async () => {
     menu.current?.hidePopover?.();
-    if (workspace.dirty && !window.confirm(t("file.saveBeforeExport"))) return;
-    const documents = await workspace.exportFiles(workspace.dirty);
+    const needsSave = workspace.dirty || workspace.loaded?.versions.experiment === null;
+    if (needsSave && !window.confirm(t("file.saveBeforeExport"))) return;
+    const documents = await workspace.exportFiles(needsSave);
     if (documents !== null) downloadDocuments(documents);
   };
 
@@ -51,6 +53,7 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
     <button type="button" popoverTarget="file-menu" disabled={disabled || working}>{t("file.menu")}</button>
     <div id="file-menu" ref={menu} popover="auto" className="file-menu-panel">
       <button type="button" disabled={disabled} onClick={() => start("new")}>{t("file.new")}</button>
+      <button type="button" disabled={disabled || workspace.loaded === null} onClick={() => start("newExperiment")}>{t("file.newExperiment")}</button>
       <button type="button" disabled={disabled || workspace.loaded === null} onClick={() => start("saveAs")}>{t("file.saveAs")}</button>
       <button type="button" disabled={disabled} onClick={() => start("import")}>{t("file.import")}</button>
       <button type="button" disabled={disabled || workspace.loaded === null || workspace.conflict || workspace.externalChange !== null}
@@ -62,7 +65,7 @@ export function FileMenu({ workspace, disabled, onOpened }: { workspace: Workspa
       {action === null ? null : <form onSubmit={event => { event.preventDefault(); void submit(); }}>
         <h2>{title}</h2>
         <p>{t("file.locationHint")}</p>
-        <label>{t("file.directory")}<input autoFocus required value={directory} disabled={working}
+        <label>{t(action === "new" ? "file.modelName" : action === "newExperiment" ? "file.experimentName" : "file.directory")}<input autoFocus required value={directory} disabled={working}
           onChange={event => setDirectory(event.target.value)} /></label>
         {action !== "import" ? null : <label>{t("file.files")}<input type="file" multiple required
           accept=".model.json,.layout.json,.experiment.json" disabled={working}

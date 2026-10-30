@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { DocumentView } from "../api/apiTypes";
 import { catalog, documentViews, experimentPath, modelPath } from "../test/fixtures";
-import { copyExperiment, newExperiment } from "./fileActions";
+import { copyModel, newModel } from "./fileActions";
 import { useWorkspace } from "./useWorkspace";
 
 function server(failSave = false) {
@@ -11,7 +11,7 @@ function server(failSave = false) {
     let body: unknown;
     let status = 200;
     if (url === "/api/v1/catalog") body = catalog;
-    else if (url === "/api/v1/workspace/documents") body = Object.values(views).map(({ path, kind, version }) => ({ path, kind, version }));
+    else if (url === "/api/v1/workspace/documents") body = Object.values(views).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null }));
     else if (url.startsWith("/api/v1/workspace/changes")) body = { cursor: "test:0", reset: false, changes: [] };
     else if (url === "/api/v1/validate") body = { experiment: JSON.parse(String(init?.body)).experiment, valid: true, diagnostics: [] };
     else {
@@ -31,15 +31,16 @@ function server(failSave = false) {
   }));
   return views;
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
-it("creates and opens a new experiment and refreshes the picker immediately", async () => {
+it("creates and opens an empty new model and refreshes the picker immediately", async () => {
   const views = server();
   const { result } = renderHook(() => useWorkspace());
   await waitFor(() => expect(result.current.loaded?.experimentPath).toBe(experimentPath));
-  await act(async () => { expect(await result.current.storeDocuments(newExperiment("created"))).toBe(true); });
+  await act(async () => { expect(await result.current.storeDocuments(newModel("created"), undefined, false)).toBe(true); });
   expect(result.current.loaded?.experimentPath).toBe("created/created.experiment.json");
-  expect(result.current.loaded?.model.blocks.service.type).toBe("service");
+  expect(result.current.loaded?.model.blocks).toEqual({});
+  expect(result.current.models).toContain("created/created.model.json");
   expect(result.current.experiments).toContain("created/created.experiment.json");
   expect(result.current.dirty).toBe(false);
   expect(result.current.loading).toBe(false);
@@ -51,7 +52,7 @@ it("save as opens unsaved edits in the copy and leaves the source intact", async
   const { result } = renderHook(() => useWorkspace());
   await waitFor(() => expect(result.current.loaded).not.toBeNull());
   act(() => result.current.setParam("gateway", "handlers", 7));
-  const copy = copyExperiment(result.current.loaded!, "copy");
+  const copy = await copyModel(result.current.loaded!, "copy");
   await act(async () => { await result.current.storeDocuments(copy); });
   expect(result.current.loaded?.experimentPath).toBe("copy/retry-storm.experiment.json");
   expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(7);

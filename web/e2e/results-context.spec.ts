@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { copySmallExperiment } from "./fixtures";
+import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -11,7 +11,7 @@ test("one context row gives the diagram more height and shares time with Timelin
   try {
     await copySmallExperiment(directory, "retry-storm.experiment.json", "3ms");
     await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("results-context/retry-storm.experiment.json");
+    await selectExperiment(page, "results-context/retry-storm.experiment.json");
     const row = page.getByRole("region", { name: "Results context", exact: true });
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await expect(row).toHaveCount(0);

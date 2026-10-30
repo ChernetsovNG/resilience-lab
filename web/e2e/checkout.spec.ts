@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 
 const experiments = ["checkout/checkout.experiment.json", "checkout/checkout-grid.experiment.json"];
@@ -7,6 +8,7 @@ test.use({ viewport: { width: 1440, height: 900 } });
 for (const experiment of experiments) {
   test(`${experiment} opens and validates without running the full experiment`, async ({ page, request }) => {
     await page.goto("/");
+    await page.getByLabel("Model", { exact: true }).selectOption("checkout/checkout.model.json");
     const selector = page.getByLabel("Experiment", { exact: true });
     await expect(selector.locator("option", { hasText: experiment })).toHaveCount(1);
     await selector.selectOption(experiment);
@@ -29,7 +31,7 @@ test("opens Problems from a collapsed example and restores each tab's saved heig
     "normal:answer": 200, "normal:problems": 320,
   })));
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("checkout/checkout-grid.experiment.json");
+  await selectExperiment(page, "checkout/checkout-grid.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const panel = page.getByRole("tabpanel");
   await expect(panel).toBeHidden();

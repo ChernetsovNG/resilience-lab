@@ -1,9 +1,10 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 
 test("service parameters stay together at the same node height in English and Russian", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const node = page.getByTestId("rf__node-gateway").locator(".block-node");
   const height = () => node.evaluate(element => (element as HTMLElement).offsetHeight);
@@ -46,7 +47,7 @@ test("service parameters stay together at the same node height in English and Ru
 test("compact inspector and canvas overlays give the model more space", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
   expect((await canvas.boundingBox())!.height).toBeGreaterThan(740);
@@ -73,7 +74,7 @@ test("compact inspector and canvas overlays give the model more space", async ({
   await faults.locator(":scope > summary").click();
   await expect(faults).not.toHaveAttribute("open");
   await page.reload();
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(faults).not.toHaveAttribute("open");
   await expect(inspector.getByLabel("Replications", { exact: true })).toBeVisible();
 });
@@ -92,7 +93,7 @@ test("large queue values keep the node height and expose their full text", async
     await route.fulfill({ response, json: summary });
   });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");

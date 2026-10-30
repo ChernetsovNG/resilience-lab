@@ -24,7 +24,7 @@ function stubWorkspace(options: { putStatus?: number; conflictPath?: string; put
   return stubFetch(async (url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
-      return { body: Object.values(documentViews).map(({ path, kind, version }) => ({ path, kind, version })) };
+      return { body: Object.values(documentViews).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null })) };
     }
     const path = decodeURIComponent(url.split("path=")[1] ?? "");
     if (init?.method === "PUT") {
@@ -221,7 +221,7 @@ describe("useWorkspace", () => {
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
 
-    let saving: Promise<void> = Promise.resolve();
+    let saving: Promise<boolean> = Promise.resolve(true);
     act(() => {
       saving = result.current.save();
     });
@@ -262,7 +262,7 @@ describe("useWorkspace", () => {
     const fetchMock = stubWorkspace({ putGate: gate.promise });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => {
       saving = result.current.save();
       void result.current.save();
@@ -280,7 +280,7 @@ describe("useWorkspace", () => {
     const fetchMock = stubWorkspace({ putGate: gate.promise });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => { saving = result.current.save(); });
     act(() => result.current.setParam("gateway", "handlers", 8));
 
@@ -372,7 +372,7 @@ describe("useWorkspace", () => {
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
     let opening!: Promise<boolean>;
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => {
       opening = result.current.open(newerPath, true);
       saving = result.current.save();
@@ -595,7 +595,7 @@ function storedWorkspace() {
   const conflict = () => ({ status: 409, body: { code: "VERSION_CONFLICT", message: "changed", diagnostics: [] } });
   const fetchMock = stubFetch((url, init) => {
     if (url === "/api/v1/catalog") return { body: catalog };
-    if (url === "/api/v1/workspace/documents") return { body: Object.values(documents) };
+    if (url === "/api/v1/workspace/documents") return { body: Object.values(documents).map(view => ({ ...view, modelRef: view.content.experiment?.modelRef ?? null })) };
     const path = new URL(url, "http://localhost").searchParams.get("path")!;
     if (init?.method === "PUT") {
       if (path === conflictNext) { conflictNext = null; return conflict(); }

@@ -36,7 +36,7 @@ function harness(options: {
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/workspace/documents") {
       if (options.documents !== undefined) return options.documents();
-      return { body: Object.values(views).map(({ path, kind, version }) => ({ path, kind, version })) };
+      return { body: Object.values(views).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null })) };
     }
     if (url.startsWith("/api/v1/workspace/changes")) {
       const since = new URL(url, "http://localhost").searchParams.get("since");
@@ -124,7 +124,7 @@ describe("workspace change polling", () => {
     });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => { saving = result.current.save(); });
 
     await poll();
@@ -152,7 +152,7 @@ describe("workspace change polling", () => {
     });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => { saving = result.current.save(); });
 
     await poll();
@@ -280,7 +280,7 @@ describe("workspace change polling", () => {
     });
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => { saving = result.current.save(); });
 
     await poll();
@@ -309,7 +309,7 @@ describe("workspace change polling", () => {
       ...documents,
       layout: { ...documents.layout, positions: { gateway: { x: 10, y: 20 } } },
     })));
-    let saving!: Promise<void>;
+    let saving!: Promise<boolean>;
     act(() => { saving = result.current.save(); });
 
     await poll();
@@ -360,7 +360,7 @@ describe("workspace change polling", () => {
         return { body: since === "g:0" ? { cursor: "h:0", reset: true, changes: [] } : emptyChanges("h:0") };
       },
       documents: async () => {
-        const body = Object.values(views).map(({ path, kind, version }) => ({ path, kind, version }));
+        const body = Object.values(views).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null }));
         if (pauseList) {
           pauseList = false;
           listStarted.release();

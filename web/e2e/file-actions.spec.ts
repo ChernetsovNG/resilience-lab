@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test as base, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { cp, readFile, rm } from "node:fs/promises";
@@ -10,7 +11,7 @@ const test = base.extend<{ directory: string }>({
     await cp(resolve("../examples/retry-storm"), resolve(root, directory), { recursive: true });
     try {
       await page.goto("/");
-      await page.getByLabel("Experiment", { exact: true }).selectOption(`${directory}/retry-storm.experiment.json`);
+      await selectExperiment(page, `${directory}/retry-storm.experiment.json`);
       await expect(page.getByTestId("block-node")).toHaveCount(4);
       await provide(directory);
     } finally { await rm(resolve(root, directory), { recursive: true, force: true }); }
@@ -25,7 +26,7 @@ async function action(page: Page, name: string) {
 async function createIn(page: Page, name: string, directory: string) {
   await action(page, name);
   const dialog = page.getByRole("dialog", { name, exact: true });
-  await dialog.getByLabel("Destination directory").fill(directory);
+  await dialog.getByLabel(name === "New model" ? "Model name" : name === "New experiment" ? "Experiment name" : "Destination directory").fill(directory);
   await dialog.getByRole("button", { name, exact: true }).click();
 }
 async function stored(page: Page, path: string) {
@@ -34,21 +35,54 @@ async function stored(page: Page, path: string) {
   return response.json();
 }
 
-test("creates a runnable experiment with ten replications", async ({ page, directory }) => {
+test("creates an empty model and runs a system built from the palette", async ({ page, directory }, testInfo) => {
   const target = `file-new-${randomUUID()}`;
   try {
-    await createIn(page, "New experiment", target);
+    await createIn(page, "New model", target);
     const path = `${target}/${target}.experiment.json`;
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(path);
-    await expect(page.getByTestId("block-node")).toHaveCount(2);
+    await expect(page.getByTestId("block-node")).toHaveCount(0);
+    await expect(page.getByText("Add a client from the palette", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${target}/${target}.model.json`);
     expect((await stored(page, path)).content.experiment.execution.replications).toBe(10);
-    const validation = await page.request.post("/api/v1/validate", { data: { experiment: path } });
-    expect((await validation.json()).valid).toBe(true);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toHaveAttribute("title", "Add a client from the palette");
+    await page.getByRole("tab", { name: "Problems", exact: true }).click();
+    await expect(page.locator(".validation-problems li")).toHaveCount(0);
+    await page.getByRole("button", { name: "Collapse results", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("empty-model.png") });
+    const palette = page.getByRole("complementary", { name: "Palette" });
+    await palette.getByRole("button", { name: "Client", exact: true }).click();
+    await palette.getByRole("button", { name: "Service", exact: true }).click();
+    await page.locator(".react-flow__controls-fitview").click();
+    await page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]').dragTo(
+      page.getByTestId("rf__node-service-1").locator('[data-handleid="in"]'));
+    await expect(page.getByTestId("rf__edge-client-1-to-service-1")).toBeAttached();
+    await expect(page.getByText("Add a client from the palette", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    const report = await (await page.request.post("/api/v1/validate", { data: { experiment: path } })).json();
+    expect(report.valid).toBe(true);
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     expect(directory).not.toBe(target);
   } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+});
+
+test("creates a new question for the current model without changing its source experiment", async ({ page, directory }) => {
+  const source = resolve(root, directory, "retry-storm.experiment.json");
+  const before = await readFile(source, "utf8");
+  await createIn(page, "New experiment", "capacity");
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${directory}/retry-storm.model.json`);
+  await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${directory}/capacity.experiment.json`);
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  expect((await stored(page, `${directory}/capacity.experiment.json`)).content.experiment).toMatchObject({
+    modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json", execution: { replications: 10 },
+    faults: [], grid: [], variants: [{ id: "baseline", overrides: {} }],
+  });
+  expect(await readFile(source, "utf8")).toBe(before);
 });
 
 test("save as copies unsaved edits and leaves every source file unchanged", async ({ page, directory }) => {
@@ -59,7 +93,7 @@ test("save as copies unsaved edits and leaves every source file unchanged", asyn
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
     await page.getByLabel("Handlers", { exact: true }).fill("7");
     await page.getByLabel("Handlers", { exact: true }).press("Enter");
-    await createIn(page, "Save as", target);
+    await createIn(page, "Save model as", target);
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${target}/retry-storm.experiment.json`);
     expect((await stored(page, `${target}/retry-storm.model.json`)).content.model.blocks.gateway.params.handlers).toBe(7);
     expect((await stored(page, `${target}/retry-storm.experiment.json`)).content.experiment.modelRef).toBe("retry-storm.model.json");
@@ -159,8 +193,8 @@ test("file dialogs isolate document editing shortcuts", async ({ page, directory
   await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
   await page.getByLabel("Handlers", { exact: true }).fill("7");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
-  await action(page, "Save as");
-  const dialog = page.getByRole("dialog", { name: "Save as", exact: true });
+  await action(page, "Save model as");
+  const dialog = page.getByRole("dialog", { name: "Save model as", exact: true });
   const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
   await cancel.focus();
   await cancel.press("Delete");
