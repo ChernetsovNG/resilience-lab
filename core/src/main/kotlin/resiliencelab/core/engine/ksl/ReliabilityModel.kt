@@ -55,6 +55,7 @@ class ReliabilityModel(
             clientId = graph.client.path,
             windowMs = graph.run.windowMs,
             connectionIds = graph.topologicalCalls.map { it.path } + graph.routes.map { it.path },
+            connectionPoolSizes = graph.topologicalCalls.mapNotNull { call -> call.pool?.let { call.path to it.size } }.toMap(),
             onWindow = onWindow,
         )
     private val runtimes =
@@ -76,6 +77,22 @@ class ReliabilityModel(
             }.associateBy { it.serviceId }
 
     private val callRuntimes = graph.topologicalCalls.associate { it.path to CallRuntime(it, streams) }
+    private val connectionPools =
+        graph.topologicalCalls
+            .mapNotNull { call ->
+                call.pool?.let { pool ->
+                    call.path to
+                        SlotPool(
+                            this,
+                            "${call.path}:pool",
+                            pool.size,
+                            Int.MAX_VALUE,
+                            pool.acquireTimeoutMs,
+                            onQueueLengthChanged = { metrics.recordPoolState(call.path, queueLength = it) },
+                            onBusyChanged = { metrics.recordPoolState(call.path, busy = it) },
+                        )
+                }
+            }.toMap()
     private val routerRuntimes = graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams) }
 
     var activeInvocations: Int = 0
@@ -435,6 +452,7 @@ class ReliabilityModel(
 
         private suspend fun KSLProcessBuilder.executeCall(callRuntime: CallRuntime): AttemptOutcome {
             val call = callRuntime.edge
+            val pool = connectionPools[call.path]
             var attemptNumber = 1
             val triedOutputs = mutableMapOf<String, MutableSet<String>>()
             while (true) {
@@ -442,13 +460,39 @@ class ReliabilityModel(
                 if (attemptNumber > 1) {
                     metrics.recordRetry(runtime.serviceId, measurementCohort)
                 }
-                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
-                callAttempt = attempt
-                blockUntilCompleted(attempt.child.work)
-                if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
-                if (attempt.status == AttemptOutcome.SUCCEEDED) return AttemptOutcome.SUCCEEDED
+                val acquisition =
+                    pool?.let { slots ->
+                        with(slots) { acquire(minOf(requireNotNull(call.pool).acquireTimeoutMs, originalDeadlineMs - time)) }
+                    }
+                if (acquisition?.outcome in listOf(SlotAcquisitionOutcome.WAITED, SlotAcquisitionOutcome.WAIT_LIMIT)) {
+                    metrics.recordPoolWait(
+                        call.path,
+                        measurementCohort,
+                        requireNotNull(acquisition).waitMs,
+                        acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT && time < originalDeadlineMs,
+                    )
+                }
+                val outcome =
+                    if (pool != null && acquisition?.allocation == null) {
+                        if (time >= originalDeadlineMs) AttemptOutcome.DEADLINE_EXCEEDED else AttemptOutcome.ACQUIRE_TIMED_OUT
+                    } else {
+                        try {
+                            if (time >= originalDeadlineMs) {
+                                AttemptOutcome.DEADLINE_EXCEEDED
+                            } else {
+                                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
+                                callAttempt = attempt
+                                blockUntilCompleted(attempt.child.work)
+                                if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
+                                attempt.status
+                            }
+                        } finally {
+                            acquisition?.allocation?.let { release(it) }
+                        }
+                    }
+                if (outcome == AttemptOutcome.SUCCEEDED) return outcome
                 if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
-                if (attemptNumber == call.attempts) return attempt.status
+                if (attemptNumber == call.attempts) return outcome
                 val backoffMs =
                     RetryPolicyEvaluator.backoffMs(
                         backoff = call.backoff,

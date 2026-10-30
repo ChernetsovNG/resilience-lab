@@ -99,6 +99,7 @@ it("loads a target dependency for a catalog-defined call chart and formats its m
     ? [{ id: "middle", windows: [recordedWindow({ admittedAttempts: 6, client: { originalArrivals: 3 } })] }] : []);
   vi.spyOn(seriesLoader, "loadConnections").mockResolvedValue([{ id: "gateway-to-middle", windows: [{
     startMs: 0, durationMs: 100, sentAttempts: 6, retries: 0, succeeded: 6, failed: 0, timeouts: 0, orphaned: 0,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     inFlightIntegralMs: 0, orphanedIntegralMs: 0, backoffIntegralMs: 0,
     latency: { count: 6, sumMs: 60, meanMs: 10, p50Ms: 10, p95Ms: 10, p99Ms: 10 },
   }] }]);

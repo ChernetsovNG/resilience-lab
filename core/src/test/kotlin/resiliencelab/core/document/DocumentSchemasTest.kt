@@ -106,8 +106,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":4", "\"schemaVersion\":4,\"extra\":1"),
-                model.replace("\"schemaVersion\":4", "\"schemaVersion\":1"),
+                model.replace("\"schemaVersion\":5", "\"schemaVersion\":5,\"extra\":1"),
+                model.replace("\"schemaVersion\":5", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -286,5 +286,5 @@ class DocumentSchemasTest {
         """{"schemaVersion":1,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":4,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":5,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

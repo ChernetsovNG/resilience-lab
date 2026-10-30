@@ -18,6 +18,7 @@ import resiliencelab.core.document.ScenarioStep
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.CallPool
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
@@ -907,6 +908,16 @@ class ModelCompiler(
         val timeout = reader.quantity("timeout")
         val attempts = reader.int("attempts")
         val backoff = reader.obj("backoff")?.let(::backoff)
+        val pool =
+            if (reader.has("pool")) {
+                reader.obj("pool")?.let { fields ->
+                    val size = fields.int("size")
+                    val acquireTimeout = fields.quantity("acquireTimeout")
+                    if (size == null || acquireTimeout == null) null else CallPool(size, acquireTimeout)
+                }
+            } else {
+                null
+            }
         val retryTarget = reader.choice("retryTarget")
         val balancing = if (reader.has("balancing")) reader.choice("balancing")?.let(::routingPolicy) else null
         return if (network == null || timeout == null || attempts == null || backoff == null || retryTarget == null) {
@@ -924,6 +935,7 @@ class ModelCompiler(
                 origin,
                 if (retryTarget == "other") RetryTarget.OTHER else RetryTarget.ANY,
                 balancing,
+                pool,
             )
         }
     }

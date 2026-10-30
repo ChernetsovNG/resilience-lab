@@ -79,6 +79,12 @@ object MetricsAggregator {
                         orphanedIntegralMs = values.sumOf { it.orphanedIntegralMs },
                         backoffIntegralMs = values.sumOf { it.backoffIntegralMs },
                         measurementMs = values.sumOf { it.measurementMs },
+                        poolBusyTimeMs = values.sumOf { it.poolBusyTimeMs },
+                        poolCapacityTimeMs = values.sumOf { it.poolCapacityTimeMs },
+                        poolQueueIntegralMs = values.sumOf { it.poolQueueIntegralMs },
+                        poolWaitCount = values.sumOf { it.poolWaitCount.toLong() },
+                        poolWaitTimeMs = values.sumOf { it.poolWaitTimeMs },
+                        poolAcquireTimeouts = values.sumOf { it.poolAcquireTimeouts.toLong() },
                     ),
             )
         }

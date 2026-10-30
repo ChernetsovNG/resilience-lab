@@ -149,8 +149,11 @@ internal class SlotPool(
         waitRejections = 0L
     }
 
-    /** Requests one slot. Allocations/releases retain native KSL priorities, ahead of wait expiry. */
-    suspend fun KSLProcessBuilder.acquire(): SlotAcquisition {
+    /**
+     * Requests one slot, optionally shortening this acquisition's wait for a caller deadline.
+     * Allocations/releases retain native KSL priorities, ahead of wait expiry.
+     */
+    suspend fun KSLProcessBuilder.acquire(waitLimitMs: Double? = this@SlotPool.waitLimitMs): SlotAcquisition {
         val startedAt = time
         acquiringEntities += entity
         return try {
@@ -158,7 +161,7 @@ internal class SlotPool(
                 try {
                     seize(resource)
                 } catch (waiting: Waiting) {
-                    awaitSlot(waiting.request)
+                    awaitSlot(waiting.request, waitLimitMs)
                 }
             val waitedMs = time - startedAt
             if (allocation == null) {
@@ -189,6 +192,7 @@ internal class SlotPool(
     @Suppress("DEPRECATION") // KSL's native seize also uses general suspension for resource queue wakeups.
     private suspend fun KSLProcessBuilder.awaitSlot(
         request: ProcessModel.Entity.Request,
+        waitLimitMs: Double?,
     ): Allocation? {
         var expired = false
         var observedCapacityRevision = capacityRevision

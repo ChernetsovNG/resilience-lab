@@ -22,14 +22,15 @@ class MetricsCollector(
     private val clientId: String = "client",
     private val windowMs: Double = (measurementEndMs - measurementStartMs) / 100.0,
     private val connectionIds: List<String> = emptyList(),
+    private val connectionPoolSizes: Map<String, Int> = emptyMap(),
     private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { _, _, _ -> },
 ) {
     private val arrivalTimesMs = mutableListOf<Double>()
     private var allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
     private var successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
     private var failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, onWindow)
-    private var connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs)
+    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, onWindow)
+    private var connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
@@ -61,8 +62,8 @@ class MetricsCollector(
         allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
         successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
         failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, onWindow)
-        connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs)
+        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, onWindow)
+        connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
         originalArrivals = 0
         successes = 0
         failures = 0
@@ -116,6 +117,26 @@ class MetricsCollector(
         val timeMs = currentTimeMs()
         windows.connectionEvent(id, timeMs, event, latencyMs)
         connections.record(id, timeMs, event, measured, latencyMs)
+    }
+
+    internal fun recordPoolState(
+        id: String,
+        busy: Int? = null,
+        queueLength: Int? = null,
+    ) {
+        val timeMs = currentTimeMs()
+        windows.poolState(id, timeMs, busy, queueLength)
+        connections.poolState(id, timeMs, busy, queueLength)
+    }
+
+    internal fun recordPoolWait(
+        id: String,
+        measured: Boolean,
+        waitMs: Double,
+        expired: Boolean,
+    ) {
+        windows.poolWait(id, currentTimeMs(), waitMs, expired)
+        connections.poolWait(id, measured, waitMs, expired)
     }
 
     internal fun verifyConnectionsDrained() {

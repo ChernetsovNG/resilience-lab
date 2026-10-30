@@ -17,6 +17,7 @@ function window(values: Partial<RawWindow> = {}): RawWindow {
     orphaned: 0,
     inFlightIntegralMs: 0,
     orphanedIntegralMs: 0,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     backoffIntegralMs: 0,
     latency: { count: 0, sumMs: 0, sketch: [0] },
     ...values,
@@ -25,7 +26,7 @@ function window(values: Partial<RawWindow> = {}): RawWindow {
 
 function part(windows: RawWindow[] = [window()]): RawPart {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     profile: "ddsketch-bitwise6-rational-v1",
     fromWindow: 0,
     untilWindow: windows.length,
@@ -45,6 +46,7 @@ describe("connection window decoding", () => {
       orphaned: 1,
       inFlightIntegralMs: 24,
       orphanedIntegralMs: 4,
+      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       backoffIntegralMs: 3,
       latency: { count: 3, sumMs: 3, sketch: [1, 0, 1, 64, 1] },
     })]);
@@ -65,6 +67,7 @@ describe("connection window decoding", () => {
         orphaned: 1,
         inFlightIntegralMs: 24,
         orphanedIntegralMs: 4,
+        poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
         backoffIntegralMs: 3,
         latency: { count: 3, sumMs: 3, meanMs: 1, p50Ms: 1.0078125, p95Ms: 2.015625, p99Ms: 2.015625 },
       }],
@@ -96,7 +99,7 @@ describe("connection window decoding", () => {
     expect(decoded.connections[0].id).toBe("client-to-service");
   });
 
-  it.each([1, 3])("rejects unsupported part schema version %s", (schemaVersion) => {
+  it.each([1, 2, 4])("rejects unsupported part schema version %s", (schemaVersion) => {
     expect(() => decodeSeriesPart(JSON.stringify({ ...part(), schemaVersion }))).toThrow(/schema version/i);
   });
 

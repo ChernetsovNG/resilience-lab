@@ -125,6 +125,9 @@ data class ServiceTotals(
  * Call-attempt counters and response-only latency for the measured arrival cohort, including run-out.
  * Occupancy integrals cover the fixed measurement interval and include all work present, including warm-up.
  * Timeout durations never enter [latency]; orphaned work lasts through the child's response network delay.
+ * Pool integrals cover the same fixed interval; wait counts/durations belong to completed waits of the measured
+ * cohort, including run-out. Pool acquisition expiry excludes deadline expiry and does not count as a sent attempt.
+ * All pool fields default to zero when no pool exists.
  */
 @Serializable
 data class ConnectionMetrics(
@@ -139,6 +142,12 @@ data class ConnectionMetrics(
     val backoffIntegralMs: Double,
     val measurementMs: Double,
     val latency: LatencyStatistics,
+    val poolBusyTimeMs: Double = 0.0,
+    val poolCapacityTimeMs: Double = 0.0,
+    val poolQueueIntegralMs: Double = 0.0,
+    val poolWaitCount: Int = 0,
+    val poolWaitTimeMs: Double = 0.0,
+    val poolAcquireTimeouts: Int = 0,
 )
 
 /** Replication-level timeout fraction and mean in-flight occupancy, plus pooled response latency and totals. */
@@ -163,4 +172,10 @@ data class ConnectionTotals(
     val orphanedIntegralMs: Double,
     val backoffIntegralMs: Double,
     val measurementMs: Double,
+    val poolBusyTimeMs: Double = 0.0,
+    val poolCapacityTimeMs: Double = 0.0,
+    val poolQueueIntegralMs: Double = 0.0,
+    val poolWaitCount: Long = 0L,
+    val poolWaitTimeMs: Double = 0.0,
+    val poolAcquireTimeouts: Long = 0L,
 )

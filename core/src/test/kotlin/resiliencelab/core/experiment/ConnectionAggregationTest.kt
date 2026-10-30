@@ -43,6 +43,32 @@ class ConnectionAggregationTest {
         assertThat(result.meanInFlight.ci95High).isNull()
     }
 
+    @Test
+    fun `pool totals retain capacity weights and sum waits across replications`() {
+        val first =
+            connection(0, 0, 0, 0, 0.0, 0.0, 0.0, 100.0, emptyList(), timeouts = 0).copy(
+                poolBusyTimeMs = 20.0,
+                poolCapacityTimeMs = 100.0,
+                poolQueueIntegralMs = 30.0,
+                poolWaitCount = 2,
+                poolWaitTimeMs = 40.0,
+                poolAcquireTimeouts = 1,
+            )
+        val second = first.copy(poolBusyTimeMs = 50.0, poolCapacityTimeMs = 400.0, poolWaitCount = 3)
+        val totals =
+            MetricsAggregator
+                .aggregate(listOf(replication(first), replication(second)))
+                .connections
+                .getValue("call")
+                .totals
+        assertThat(totals.poolBusyTimeMs).isEqualTo(70.0)
+        assertThat(totals.poolCapacityTimeMs).isEqualTo(500.0)
+        assertThat(totals.poolQueueIntegralMs).isEqualTo(60.0)
+        assertThat(totals.poolWaitCount).isEqualTo(5L)
+        assertThat(totals.poolWaitTimeMs).isEqualTo(80.0)
+        assertThat(totals.poolAcquireTimeouts).isEqualTo(2L)
+    }
+
     private fun connection(
         sent: Int,
         retries: Int,

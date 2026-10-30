@@ -97,6 +97,12 @@ sealed interface ServiceStep {
     ) : ServiceStep
 }
 
+/** Per-caller connection slots; acquisition consumes deadline time, before the attempt timeout starts. */
+data class CallPool(
+    val size: Int,
+    val acquireTimeoutMs: Double = 30_000.0,
+)
+
 /** Synchronous call from [from] to [to], addressed by its instance path. */
 data class CallEdge(
     val pathSegments: List<String>,
@@ -110,6 +116,7 @@ data class CallEdge(
     val retryTarget: RetryTarget = RetryTarget.ANY,
     /** Explicit incoming policy, applied only when the target is a generated replica router. */
     val balancing: RoutingPolicy? = null,
+    val pool: CallPool? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -123,7 +130,8 @@ data class CallEdge(
         origin: Origin = Origin.UNSPECIFIED,
         retryTarget: RetryTarget = RetryTarget.ANY,
         balancing: RoutingPolicy? = null,
-    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget, balancing)
+        pool: CallPool? = null,
+    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget, balancing, pool)
 
     val path: String get() = displayPath(pathSegments)
 }

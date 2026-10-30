@@ -165,6 +165,7 @@ it("projects connection totals independently of the target service", () => {
   const run = fixture();
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { sentAttempts: 40, retries: 10, succeeded: 20, failed: 10, timeouts: 10, orphaned: 8,
+      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       inFlightIntegralMs: 600, orphanedIntegralMs: 250, backoffIntegralMs: 100, measurementMs: 2000 },
     timeoutRate: { mean: 0.3, min: 0.2, max: 0.4 },
   };
@@ -182,6 +183,7 @@ it("projects connection totals independently of the target service", () => {
       admittedAttempts: 77, client: { originalArrivals: 1 } })] },
   ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
     startMs: 0, durationMs: 100, sentAttempts: 2, retries: 1, succeeded: 0, failed: 0, timeouts: 1,
+    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
     orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 0,
     latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
   }] }])!;

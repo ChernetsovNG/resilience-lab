@@ -64,7 +64,9 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
-      {descriptor.fields.map((field) => (
+      {value == null && descriptor.default == null && !descriptor.required
+        ? <p className="param-description">{t("editor.param.notSet")}</p>
+        : descriptor.fields.map((field) => (
         <ParamField
           key={`${field.name}-${resetCount}`}
           descriptor={field}

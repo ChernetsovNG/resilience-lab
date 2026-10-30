@@ -364,6 +364,18 @@ export interface components {
             /** Format: double */
             orphanedIntegralMs: number;
             /** Format: int64 */
+            poolAcquireTimeouts: number;
+            /** Format: double */
+            poolBusyTimeMs: number;
+            /** Format: double */
+            poolCapacityTimeMs: number;
+            /** Format: double */
+            poolQueueIntegralMs: number;
+            /** Format: int64 */
+            poolWaitCount: number;
+            /** Format: double */
+            poolWaitTimeMs: number;
+            /** Format: int64 */
             retries: number;
             /** Format: int64 */
             sentAttempts: number;
@@ -386,6 +398,18 @@ export interface components {
             orphaned: number;
             /** Format: double */
             orphanedIntegralMs: number;
+            /** Format: int32 */
+            poolAcquireTimeouts: number;
+            /** Format: double */
+            poolBusyTimeMs: number;
+            /** Format: double */
+            poolCapacityTimeMs: number;
+            /** Format: double */
+            poolQueueIntegralMs: number;
+            /** Format: int32 */
+            poolWaitCount: number;
+            /** Format: double */
+            poolWaitTimeMs: number;
             /** Format: int32 */
             retries: number;
             /** Format: int32 */

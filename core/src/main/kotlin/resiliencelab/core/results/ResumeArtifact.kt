@@ -42,13 +42,16 @@ internal class ResumeArtifact(
             val replicationPath = "$directory/replication.json"
             val indexPath = "$directory/index.json"
             val replication = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(replicationPath).text)
-            if (replication.schemaVersion != 1 || replication.profile != LatencySketch.PROFILE || replication.unit != "ms") {
+            if (replication.schemaVersion != Versions.REPLICATION_SCHEMA ||
+                replication.profile != LatencySketch.PROFILE ||
+                replication.unit != "ms"
+            ) {
                 return false
             }
             val index = json.decodeFromString(SeriesIndex.serializer(), workspace.read(indexPath).text)
             val series = manifest.series ?: return false
             if (
-                index.schemaVersion != 2 ||
+                index.schemaVersion != Versions.SERIES_SCHEMA ||
                 index.endMs != series.warmupMs + series.measurementMs ||
                 index.windowMs != series.windowMs ||
                 index.parts.isEmpty()

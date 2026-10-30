@@ -129,7 +129,7 @@ const service = (handlers: number, queue: number, mean: string) => ({
 });
 
 export const model: ModelFile = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   blocks: {
     client: { type: "client", params: { deadline: "250ms", load: { points: [{ time: "0s", rate: "120/s" }] } } },
     dependency: service(2, 8, "8ms"),
@@ -200,7 +200,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 7,
+  schemaVersion: 8,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -237,7 +237,7 @@ export const summary: RunSummary = {
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 7,
+  schemaVersion: 8,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",
