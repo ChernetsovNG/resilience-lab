@@ -3,7 +3,7 @@ import type { RunSummary } from "../src/api/apiTypes";
 
 test.use({ viewport: { width: 1280, height: 720 } });
 
-test("confidence updates retry-storm success intervals without another run and survives reload", async ({ page, request }) => {
+test("confidence updates retry-storm success intervals without another run and survives reload", async ({ page, request }, testInfo) => {
   let jobs = 0;
   page.on("request", request => {
     if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1;
@@ -39,6 +39,13 @@ test("confidence updates retry-storm success intervals without another run and s
   await page.getByRole("button", { name: "View", exact: true }).click();
   await page.getByLabel("Language", { exact: true }).selectOption("ru");
   await expect(page.getByLabel("Уровень доверия", { exact: true })).toHaveValue("99");
+  const menu = (await page.locator(".view-menu-panel").boundingBox())!;
+  const button = (await page.getByRole("button", { name: "Вид", exact: true }).boundingBox())!;
+  expect(menu.y).toBeGreaterThanOrEqual(button.y + button.height);
+  expect(menu.x).toBeGreaterThanOrEqual(0);
+  expect(menu.x + menu.width).toBeLessThanOrEqual(1280);
+  expect(menu.y + menu.height).toBeLessThanOrEqual(720);
+  await page.screenshot({ path: testInfo.outputPath("view-menu-ru-1280x720.png") });
   await page.getByLabel("Уровень доверия", { exact: true }).selectOption("90");
   await page.getByRole("button", { name: "Вид", exact: true }).click();
   await expect(page.getByRole("table", { name: "Ответ", exact: true }).getByRole("row", { name: /Доля успешных/ })

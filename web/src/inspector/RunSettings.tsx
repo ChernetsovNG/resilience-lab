@@ -7,6 +7,7 @@ import { addFault, removeFault, setExecutionParam, setFaultParam } from "../work
 import { canonicalOf } from "../workspace/quantities";
 import { ParamField } from "./ParamField";
 import { GridSettings } from "./GridSettings";
+import { InspectorSection } from "./InspectorSection";
 
 interface Props {
   catalog: Catalog;
@@ -58,7 +59,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
   ).map(([id]) => id);
   return (
     <>
-      <h2>{t("editor.run.title")}</h2>
+      <InspectorSection name="execution" title={<h2>{t("editor.run.title")}</h2>}>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("execution")} />
       <p className="inspector-type">{t("editor.run.shared")}</p>
       {executionFields.map((field) => (
@@ -67,9 +68,11 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
           fieldDiagnostics={fieldDiagnostics}
           onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number | undefined))} />
       ))}
+      </InspectorSection>
       <GridSettings catalog={catalog} model={model} experiment={experiment} editable={editable} invalid={invalid}
         onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
-      <h3>{t("editor.fault.title")}</h3>
+      <InspectorSection name="faults" title={<h3>{t("editor.fault.title")}</h3>}>
+      <div data-inspector-field="faults">
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />
       {experiment.faults.length === 0 ? <p>{t("editor.fault.none")}</p> : null}
       {experiment.faults.map((fault, index) => (
@@ -97,6 +100,8 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
         target: targets[0], from: `0${duration("from", "").units[0]?.symbol ?? ""}`,
         to: experiment.execution.measurement, processingMultiplier: 2,
       }))}>{t("editor.fault.add")}</button>
+      </div>
+      </InspectorSection>
     </>
   );
 }
