@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.lab.InvalidExperimentException
+import resiliencelab.core.results.InvalidRunPathException
 import resiliencelab.core.results.InvalidSeriesPathException
 import resiliencelab.core.results.RunIncompleteException
 import resiliencelab.core.results.UnsupportedArtifactVersionException
@@ -65,10 +66,17 @@ class Conflict(
  * Job cancellation uses `JOB_NOT_FOUND` (404) and `JOB_FINISHED` (409).
  * Workspace deletion uses `VERSION_REQUIRED` (428); malformed change cursors use `CURSOR_INVALID` (400).
  * Resume uses `RUN_NOT_FOUND` (404), `RUN_INCOMPLETE` (404), `RUN_COMPLETE` (409), and core diagnostics (400).
+ * Run deletion uses `RUN_NOT_FOUND` (404), `RUN_ACTIVE` (409) and `RUN_PATH` (400).
+ * Experiment document deletion uses `EXPERIMENT_ACTIVE` (409) while its Run/Resume is queued or running.
  * Job failures use `JOB_QUEUE_FULL`, `EXPERIMENT_INVALID`, and `EXPERIMENT_EXECUTION_FAILED` in [JobView.errorCode].
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {
+    @ExceptionHandler(InvalidRunPathException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun invalidRunPath(exception: InvalidRunPathException): ApiProblem =
+        ServerMessage.RUN_PATH.problem(exception.message!!, args = mapOf("path" to JsonPrimitive(exception.path)))
+
     @ExceptionHandler(InvalidSeriesPathException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun invalidSeriesPath(exception: InvalidSeriesPathException): ApiProblem =

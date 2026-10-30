@@ -29,6 +29,7 @@ import java.io.IOException
 @RequestMapping("/api/v1/workspace")
 class DocumentController(
     private val workspace: Workspace,
+    private val jobs: JobService,
 ) {
     @GetMapping("/documents")
     @Throws(IOException::class)
@@ -112,7 +113,7 @@ class DocumentController(
         @Parameter(required = true)
         @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
     ): ResponseEntity<Void> {
-        kindOf(path)
+        val kind = kindOf(path)
         if (ifMatch == null) {
             throw PreconditionRequired(
                 ServerMessage.VERSION_REQUIRED_DELETE,
@@ -128,7 +129,11 @@ class DocumentController(
                 args = mapOf("path" to JsonPrimitive(path)),
             )
         }
-        workspace.delete(path, expectedVersion = current)
+        if (kind == DocumentKind.EXPERIMENT) {
+            jobs.withIdleExperiment(path) { workspace.delete(path, expectedVersion = current) }
+        } else {
+            workspace.delete(path, expectedVersion = current)
+        }
         return ResponseEntity.noContent().build()
     }
 

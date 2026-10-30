@@ -58,11 +58,23 @@ object DocumentVersion {
 
 /** Storage of workspace documents addressed by relative paths with `/` separators (ADR 0003). */
 interface Workspace {
+    /** Canonical workspace-relative identity, resolving existing internal symlinks and lexical aliases. */
+    fun canonicalPath(path: String): String
+
     /** Relative paths of `.json` documents outside hidden directories, sorted. */
     fun list(): List<String>
 
     /** Relative paths of all files under [directory], hidden ones included, sorted; empty when it does not exist. */
     fun listFiles(directory: String): List<String>
+
+    /** Immediate physical subdirectories, sorted; symbolic links are excluded. */
+    fun listDirectories(directory: String): List<String>
+
+    /** Stored bytes of regular files below [directory], without following symbolic links. */
+    fun directorySize(directory: String): Long
+
+    /** Removes a physical directory tree under the workspace lock; returns false if it is missing. */
+    fun deleteDirectory(directory: String): Boolean
 
     fun read(path: String): VersionedDocument
 
@@ -128,6 +140,14 @@ class FileWorkspace(
     private val lockFile: Path = this.root.resolve(".workspace.lock")
     private val journal = WorkspaceChangeJournal(this.root, scanInterval, historyLimit, mutationMonitor)
 
+    override fun canonicalPath(path: String): String {
+        val file = resolve(path)
+        var existing = file
+        while (!Files.exists(existing, NOFOLLOW_LINKS)) existing = existing.parent
+        val physical = existing.toRealPath().resolve(existing.relativize(file))
+        return root.relativize(physical).joinToString("/")
+    }
+
     override fun list(): List<String> {
         val result = mutableListOf<String>()
         walkVisibleWorkspace(
@@ -165,6 +185,56 @@ class FileWorkspace(
         val text = Files.readString(file)
         return VersionedDocument(path, text, DocumentVersion.of(text))
     }
+
+    override fun listDirectories(directory: String): List<String> {
+        val start = resolve(directory)
+        if (!start.isDirectory(NOFOLLOW_LINKS)) return emptyList()
+        return Files.list(start).use { paths ->
+            paths
+                .filter { it.isDirectory(NOFOLLOW_LINKS) }
+                .map { root.relativize(it).joinToString("/") }
+                .sorted()
+                .toList()
+        }
+    }
+
+    override fun directorySize(directory: String): Long =
+        Files.walk(resolve(directory)).use { paths ->
+            paths.filter { it.isRegularFile(NOFOLLOW_LINKS) }.mapToLong { Files.size(it) }.sum()
+        }
+
+    override fun deleteDirectory(directory: String): Boolean =
+        mutate(directory, version = { null }) { start ->
+            var component = root
+            for (part in root.relativize(start)) {
+                component = component.resolve(part)
+                if (Files.isSymbolicLink(component)) throw InvalidDocumentPathException(directory)
+            }
+            if (!Files.exists(start, NOFOLLOW_LINKS)) return@mutate false
+            if (!start.isDirectory(NOFOLLOW_LINKS)) throw InvalidDocumentPathException(directory)
+            Files.walkFileTree(
+                start,
+                object : SimpleFileVisitor<Path>() {
+                    override fun visitFile(
+                        file: Path,
+                        attrs: BasicFileAttributes,
+                    ): FileVisitResult {
+                        Files.delete(file)
+                        return FileVisitResult.CONTINUE
+                    }
+
+                    override fun postVisitDirectory(
+                        directory: Path,
+                        failure: java.io.IOException?,
+                    ): FileVisitResult {
+                        if (failure != null) throw failure
+                        Files.delete(directory)
+                        return FileVisitResult.CONTINUE
+                    }
+                },
+            )
+            true
+        }
 
     override fun readBytes(path: String): ByteArray {
         val file = resolve(path)

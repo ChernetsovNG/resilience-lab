@@ -4,13 +4,13 @@ import { localizeCatalog } from "../i18n/catalog";
 import { useLanguage } from "../i18n/useLanguage";
 import { MessageError } from "../i18n/MessageError";
 import { ApiError, api } from "../api/apiClient";
-import type { ApiProblem, Catalog, DocumentEntry, DocumentDraft, LayoutFile, WorkspaceChangeView } from "../api/apiTypes";
+import type { ApiProblem, Catalog, DocumentEntry, DocumentDraft, LayoutFile, RunStorageEntry, WorkspaceChangeView } from "../api/apiTypes";
 import {
   dirtyDocuments, editorReducer, initialEditorState, setModelParam,
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
-import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
+import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, runsToDelete, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
 import { experimentsForModel, preferredExperiment, preferredModel, readSelection, rememberSelection } from "./modelSelection";
 
 export interface ExternalDocumentChange {
@@ -49,7 +49,7 @@ export interface Workspace {
   /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
   storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate?: boolean) => Promise<boolean>;
   /** Deletes a confirmed snapshot in order, stops at the first failure and reconciles the open documents. */
-  removeDocuments: (plan: DocumentEntry[], discardChanges?: boolean) => Promise<boolean>;
+  removeDocuments: (plan: DocumentEntry[], discardChanges?: boolean, runs?: RunStorageEntry[]) => Promise<boolean>;
   /** Downloads saved canonical documents; a failed save never starts an export. */
   exportFiles: (saveFirst?: boolean) => Promise<DownloadDocument[] | null>;
   reportProblem: (error: unknown) => void;
@@ -398,7 +398,7 @@ export function useWorkspace(): Workspace {
     }
   }, [loaded, load, flushChange, reportProblem]);
 
-  const removeDocuments = useCallback(async (plan: DocumentEntry[], discardChanges = false) => {
+  const removeDocuments = useCallback(async (plan: DocumentEntry[], discardChanges = false, runs: RunStorageEntry[] = []) => {
     if (loaded === null || plan.length === 0 || loadInFlight.current || saveInFlight.current || (dirty && !discardChanges)) return false;
     saveInFlight.current = true;
     loadInFlight.current = true;
@@ -406,6 +406,7 @@ export function useWorkspace(): Workspace {
     setProblem(null);
     for (const entry of plan) savingPaths.current.add(entry.path);
     let deleted: string[] = [];
+    let deletedRuns: string[] = [];
     let failure: ApiProblem | null = null;
     let reason = "";
     let verified = false;
@@ -416,6 +417,21 @@ export function useWorkspace(): Workspace {
           if (latest.length !== plan.length || plan.some((entry, i) => entry.path !== latest[i].path || entry.version !== latest[i].version)) {
             throw new MessageError("file.deletePlanChanged");
           }
+        }
+        if (runs.length > 0) {
+          const current = await api.documents();
+          if (plan.some(entry => !current.some(stored => stored.path === entry.path && stored.version === entry.version))) {
+            throw new MessageError("file.deletePlanChanged");
+          }
+        }
+        const latestRuns = await runsToDelete(plan);
+        if (latestRuns.length !== runs.length || runs.some(run => !latestRuns.some(latest =>
+          latest.directory === run.directory && latest.experiment === run.experiment && latest.sizeBytes === run.sizeBytes))) {
+          throw new MessageError("file.runDeletePlanChanged");
+        }
+        for (const run of runs) {
+          await api.deleteRunDirectory(run.directory);
+          deletedRuns.push(run.directory);
         }
         for (const entry of plan) {
           if (entry.kind !== "EXPERIMENT") await checkDeletionReferences(entry);
@@ -431,6 +447,11 @@ export function useWorkspace(): Workspace {
       try {
         remaining = await api.documents();
         deleted = plan.filter(entry => !remaining.some(current => current.path === entry.path)).map(entry => entry.path);
+        if (failure !== null && runs.length > 0) {
+          const [readable, obsolete] = await Promise.all([api.runs(), api.obsoleteRuns()]);
+          const stored = new Set([...readable, ...obsolete].map(run => run.directory));
+          deletedRuns = runs.filter(run => !stored.has(run.directory)).map(run => run.directory);
+        }
         verified = true;
       } catch (error) {
         failure ??= problemOf(error);
@@ -463,7 +484,8 @@ export function useWorkspace(): Workspace {
       loadInFlight.current = false;
       setLoading(false);
       if (failure !== null) setProblem({ ...failure, code: "FILE_PARTIAL_DELETE", message: t(verified ? "file.partialDelete" : "file.deleteUncertain", {
-        deleted: deleted.join(", ") || t("file.noFilesDeleted"), remaining: plan.filter(entry => !deleted.includes(entry.path)).map(entry => entry.path).join(", ") || t("file.noFilesDeleted"), reason,
+        deleted: [...deletedRuns, ...deleted].join(", ") || t("file.noFilesDeleted"),
+        remaining: [...runs.filter(run => !deletedRuns.includes(run.directory)).map(run => run.directory), ...plan.filter(entry => !deleted.includes(entry.path)).map(entry => entry.path)].join(", ") || t("file.noFilesDeleted"), reason,
       }) });
     }
   }, [loaded, dirty, documents, load, flushChange]);

@@ -4,7 +4,7 @@ import { ApiError, api } from "../api/apiClient";
 import { documentViews, experiment, experimentPath, layout, layoutPath, model, modelPath } from "../test/fixtures";
 import type { DocumentDraft, DocumentView } from "../api/apiTypes";
 import type { LoadedExperiment } from "./editor";
-import { copyModel, documentsToDelete, exportDocuments, newExperiment, newModel, readImports, writeDocuments } from "./fileActions";
+import { copyModel, documentsToDelete, exportDocuments, newExperiment, newModel, readImports, runsToDelete, writeDocuments } from "./fileActions";
 
 const loaded: LoadedExperiment = {
   experimentPath, modelPath, layoutPath, model, layout, experiment,
@@ -13,6 +13,25 @@ const loaded: LoadedExperiment = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("workspace file actions", () => {
+  it("selects current and obsolete runs by the full manifest experiment path, not the shared directory name", async () => {
+    const current = { id: "one", experiment: experimentPath, directory: ".results/retry-storm/one", complete: true, sizeBytes: 1024 };
+    const other = { ...current, id: "two", experiment: "other/retry-storm.experiment.json", directory: ".results/retry-storm/two" };
+    const obsolete = { id: "old", experiment: experimentPath, directory: ".results/retry-storm/old", sizeBytes: 2048 };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => new Response(JSON.stringify(
+      String(url).endsWith("/obsolete") ? [obsolete, { ...obsolete, id: "broken", experiment: null }]
+        : String(url).endsWith("/runs") ? [current, other] : [],
+    )));
+    const plan = await documentsToDelete(loaded, "experiment");
+    expect(await runsToDelete(plan)).toEqual([current, obsolete]);
+  });
+
+  it.each(["QUEUED", "RUNNING"])("refuses deletion for an experiment with a %s job even before its run has files", async status => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => new Response(JSON.stringify(
+      String(url).endsWith("/jobs") ? [{ id: "job-active", experiment: experimentPath, runId: "new", status }] : [],
+    )));
+    await expect(runsToDelete(await documentsToDelete(loaded, "experiment"))).rejects.toThrow(experimentPath);
+  });
+
   it("plans experiments before exclusive referenced layouts and the model, preserving shared and unreferenced files", async () => {
     const secondPath = "questions/second.experiment.json", otherPath = "other/question.experiment.json";
     const exclusive = "questions/exclusive.layout.json", orphan = "retry-storm/orphan.layout.json";

@@ -10,15 +10,18 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import resiliencelab.core.results.RunCatalog
 import resiliencelab.core.results.RunEntry
 import resiliencelab.core.results.RunManifest
+import resiliencelab.core.results.RunStorageEntry
 import resiliencelab.core.results.RunSummary
 import resiliencelab.core.results.SeriesIndex
 import resiliencelab.core.results.SeriesPart
@@ -35,6 +38,46 @@ class RunController(
     @GetMapping
     @Throws(IOException::class)
     fun listRuns(): List<RunEntry> = runs.list()
+
+    @GetMapping("/obsolete")
+    @Throws(IOException::class)
+    fun listObsoleteRuns(): List<RunStorageEntry> {
+        val obsolete = runs.obsolete()
+        val active =
+            jobs
+                .list()
+                .filter { it.status == JobStatus.QUEUED || it.status == JobStatus.RUNNING }
+                .map { it.runId }
+                .toSet()
+        return obsolete.filter { it.id !in active && runs.isObsolete(it.directory) }
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Throws(IOException::class)
+    fun deleteRun(
+        @PathVariable id: String,
+    ) {
+        jobs.withIdleRun(id) { deleteStoredRun(runs.stored(id) ?: throw notFound(id)) }
+    }
+
+    /** Directory addressing also covers runs without a readable manifest and equal IDs in different groups. */
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Throws(IOException::class)
+    fun deleteRunDirectory(
+        @RequestParam directory: String,
+    ) {
+        jobs.withIdleRun(directory.substringAfterLast('/')) {
+            deleteStoredRun(runs.storedDirectory(directory) ?: throw notFound(directory))
+        }
+    }
+
+    private fun deleteStoredRun(entry: RunStorageEntry) {
+        jobs.withIdleRun(entry.id, entry.experiment) {
+            if (!runs.deleteDirectory(entry.directory)) throw notFound(entry.id)
+        }
+    }
 
     @GetMapping("/{id}/manifest")
     @Throws(IOException::class)

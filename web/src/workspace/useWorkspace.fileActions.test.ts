@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { DocumentView } from "../api/apiTypes";
+import type { DocumentView, RunStorageEntry } from "../api/apiTypes";
 import { catalog, documentViews, experiment, experimentPath, layoutPath, modelPath } from "../test/fixtures";
-import { copyModel, documentsToDelete, newModel } from "./fileActions";
+import { copyModel, documentsToDelete, newModel, runsToDelete } from "./fileActions";
 import { useWorkspace } from "./useWorkspace";
 
 function server(failSave = false, failDelete?: string, afterDelete?: (path: string, views: Record<string, DocumentView>) => void) {
@@ -11,6 +11,7 @@ function server(failSave = false, failDelete?: string, afterDelete?: (path: stri
     let body: unknown;
     let status = 200;
     if (url === "/api/v1/catalog") body = catalog;
+    else if (["/api/v1/runs", "/api/v1/runs/obsolete", "/api/v1/jobs"].includes(url)) body = [];
     else if (url === "/api/v1/workspace/documents") body = Object.values(views).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null }));
     else if (url.startsWith("/api/v1/workspace/changes")) body = { cursor: "test:0", reset: false, changes: [] };
     else if (url === "/api/v1/validate") body = { experiment: JSON.parse(String(init?.body)).experiment, valid: true, diagnostics: [] };
@@ -42,6 +43,85 @@ function server(failSave = false, failDelete?: string, afterDelete?: (path: stri
   return views;
 }
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
+
+function runStorage(runs: RunStorageEntry[], fail?: string, active = false) {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    const path = String(url);
+    if (path === "/api/v1/runs" && init?.method !== "DELETE") return Response.json(runs.map(run => ({ ...run, complete: true })));
+    if (path === "/api/v1/jobs") return Response.json(active ? [{ id: "active", experiment: experimentPath, runId: "new", status: "QUEUED" }] : []);
+    if (path.startsWith("/api/v1/runs?directory=") && init?.method === "DELETE") {
+      const directory = new URL(path, "http://test").searchParams.get("directory")!;
+      if (directory === fail) return Response.json({ code: "STORAGE_ERROR", message: "Storage failed", diagnostics: [] }, { status: 500 });
+      runs.splice(runs.findIndex(run => run.directory === directory), 1);
+      return new Response(null, { status: 204 });
+    }
+    return original(url, init);
+  });
+}
+
+it("deletes the confirmed runs before documents and preserves another experiment with the same filename", async () => {
+  const views = server();
+  const own = { id: "one", experiment: experimentPath, directory: ".results/retry-storm/one", sizeBytes: 1024 };
+  const other = { ...own, id: "two", experiment: "other/retry-storm.experiment.json", directory: ".results/retry-storm/two" };
+  const runs = [own, other];
+  runStorage(runs);
+  const { result } = renderHook(() => useWorkspace());
+  await waitFor(() => expect(result.current.loaded).not.toBeNull());
+  const plan = await documentsToDelete(result.current.loaded!, "experiment");
+  const runPlan = await runsToDelete(plan);
+  await act(async () => { expect(await result.current.removeDocuments(plan, false, runPlan)).toBe(true); });
+  expect(runs).toEqual([other]);
+  expect(views[experimentPath]).toBeUndefined();
+  const deletions = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "DELETE").map(([url]) => decodeURIComponent(String(url)));
+  expect(deletions).toEqual([
+    "/api/v1/runs?directory=.results/retry-storm/one",
+    `/api/v1/workspace/document?path=${experimentPath}`,
+  ]);
+});
+
+it("reports deleted and remaining runs and keeps every document after a partial run deletion", async () => {
+  const views = server();
+  const runs = ["one", "two"].map(id => ({ id, experiment: experimentPath, directory: `.results/retry-storm/${id}`, sizeBytes: 1024 }));
+  runStorage(runs, ".results/retry-storm/two");
+  const { result } = renderHook(() => useWorkspace());
+  await waitFor(() => expect(result.current.loaded).not.toBeNull());
+  const plan = await documentsToDelete(result.current.loaded!, "experiment");
+  const runPlan = await runsToDelete(plan);
+  await act(async () => { expect(await result.current.removeDocuments(plan, false, runPlan)).toBe(false); });
+  expect(runs.map(run => run.id)).toEqual(["two"]);
+  expect(views[experimentPath]).toBeDefined();
+  expect(result.current.problem?.message).toContain("Deleted: .results/retry-storm/one.");
+  expect(result.current.problem?.message).toContain(`Not deleted: .results/retry-storm/two, ${experimentPath}.`);
+});
+
+it("does not begin document deletion when a job appeared after confirmation", async () => {
+  const views = server();
+  runStorage([], undefined, true);
+  const { result } = renderHook(() => useWorkspace());
+  await waitFor(() => expect(result.current.loaded).not.toBeNull());
+  const plan = await documentsToDelete(result.current.loaded!, "experiment");
+  await act(async () => { expect(await result.current.removeDocuments(plan)).toBe(false); });
+  expect(views[experimentPath]).toBeDefined();
+  expect(result.current.problem?.message).toContain("queued or running");
+  expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "DELETE")).toEqual([]);
+});
+
+it.each(["experiment", "model"] as const)("keeps all runs and documents when the confirmed %s version is stale", async target => {
+  const views = server();
+  const run = { id: "one", experiment: experimentPath, directory: ".results/retry-storm/one", sizeBytes: 1024 };
+  const runs = [run];
+  runStorage(runs);
+  const { result } = renderHook(() => useWorkspace());
+  await waitFor(() => expect(result.current.loaded).not.toBeNull());
+  const plan = await documentsToDelete(result.current.loaded!, target);
+  const runPlan = await runsToDelete(plan);
+  views[target === "model" ? modelPath : experimentPath].version = "changed-on-disk";
+  await act(async () => { expect(await result.current.removeDocuments(plan, false, runPlan)).toBe(false); });
+  expect(runs).toEqual([run]);
+  expect(Object.keys(views).sort()).toEqual(Object.keys(documentViews).sort());
+  expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "DELETE")).toEqual([]);
+});
 
 it("deletes the only experiment and opens an unsaved default without deleting its model or layout", async () => {
   const views = server();
