@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Catalog, ParamDescriptor } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatParameterValue } from "../workspace/parameterValues";
@@ -22,15 +22,15 @@ function bounds(descriptor: ParamDescriptor): string {
 }
 
 /** Catalog-backed help for any block or connection, including nested object and array parameters. */
-export function TypeHelp({ catalog, typeId }: { catalog: Catalog; typeId: string }) {
+export function TypeHelp({ catalog, typeId, children }: { catalog: Catalog; typeId: string; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const type = catalog.types.find(candidate => candidate.id === typeId);
   const label = t("help.type.open", { type: type?.title ?? typeId });
   const close = () => { setOpen(false); button.current?.focus(); };
   return <>
-    <button ref={button} type="button" className="help-hint-button type-help-button" aria-label={label}
-      title={label} onClick={() => setOpen(true)}>{t("help.symbol")}</button>
+    <button ref={button} type="button" className="help-hint-button type-help-button" aria-label={children == null ? label : undefined}
+      title={label} onClick={() => setOpen(true)}>{children ?? t("help.symbol")}</button>
     {open ? <TypeHelpDialog catalog={catalog} typeId={typeId} onClose={close} /> : null}
   </>;
 }

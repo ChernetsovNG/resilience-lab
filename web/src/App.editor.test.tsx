@@ -125,7 +125,7 @@ it("copies multi-selected blocks and internal connections; variant pages reject 
   expect(screen.getAllByTestId("block-node")).toHaveLength(4);
   expect(button("Save").disabled).toBe(true);
   fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
-  expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
+  expect((within(screen.getByRole("dialog", { name: "About Service" })).getByRole("button", { name: "Add" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getAllByTestId("block-node")).toHaveLength(4);
 });
 

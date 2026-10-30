@@ -138,7 +138,7 @@ it("follows a selected element through rename, undo and redo, then forgets a del
 
 it("falls back to the experiment when undo removes a newly selected block or variant", async () => {
   server(); await open();
-  fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
+  fireEvent.doubleClick(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
   await screen.findByRole("heading", { name: "service-1" });
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
@@ -171,7 +171,7 @@ it("selects an Answer service in the Inspector", async () => {
 
 it("falls back to the experiment when the last multi-selected target disappears on Undo", async () => {
   server(); await open();
-  fireEvent.click(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
+  fireEvent.doubleClick(within(screen.getByRole("complementary", { name: "Palette" })).getByRole("button", { name: "Service" }));
   await screen.findByRole("heading", { name: "service-1" });
   fireEvent.click(screen.getByTestId("rf__node-gateway"), { ctrlKey: true });
   const added = await screen.findByTestId("rf__node-service-1");
