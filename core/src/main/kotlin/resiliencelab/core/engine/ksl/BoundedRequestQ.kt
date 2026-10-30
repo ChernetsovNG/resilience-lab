@@ -50,16 +50,20 @@ private class AdmissionListener(
 /**
  * Preserves FIFO handler allocation by preventing later requests from bypassing an earlier unsatisfied request.
  * The allocation-pending state permits the selected head request to complete its handoff without blocking itself.
+ * Timed pools defer release notification to the native release priority at the same instant: a releasing
+ * process can finish synchronous capacity changes before KSL promises units. This still precedes expiry.
  */
 class FifoResourceWithQ(
     parent: ModelElement,
     name: String?,
     capacity: Int,
     queue: RequestQ,
+    private val deferReleaseNotifications: Boolean = false,
 ) : ResourceWithQ(parent, name, capacity, queue) {
     private val requestQ = queue
     private var allocationPending = false
     private var queryingNonPendingRequests = false
+    private var notificationPending = false
 
     init {
         waitingQ.addQueueListener(
@@ -79,13 +83,48 @@ class FifoResourceWithQ(
                     allocationPending = false
                 }
 
-                override fun deallocate(allocation: Allocation) = Unit
+                override fun deallocate(allocation: Allocation) {
+                    if (deferReleaseNotifications && requestQ.isNotEmpty) scheduleQueueNotification()
+                }
             },
         )
     }
 
+    /**
+     * Applies slot capacity without preemption. Only the notification of queued requests is deferred
+     * to a KSL event at the same instant, so synchronous changes settle before units are promised.
+     * Unchanged pools retain native seize/release scheduling without additional events.
+     */
+    internal fun changeSlotCapacity(newCapacity: Int) {
+        require(newCapacity >= 0)
+        val grew = newCapacity > capacity
+        capacity = newCapacity
+        if (grew && requestQ.isNotEmpty) scheduleQueueNotification()
+    }
+
+    private fun scheduleQueueNotification() {
+        if (notificationPending) return
+        notificationPending = true
+        schedule(
+            EventActionIfc<Nothing> {
+                notificationPending = false
+                notifyWaitingRequestsOfCapacityIncrease(numAvailableUnits, ProcessModel.RELEASE_PRIORITY)
+            },
+            0.0,
+            priority = ProcessModel.RELEASE_PRIORITY,
+        )
+    }
+
+    override fun initialize() {
+        super.initialize()
+        allocationPending = false
+        queryingNonPendingRequests = false
+        notificationPending = false
+    }
+
     override val numAvailableUnits: Int
         get() {
+            if (notificationPending) return 0
             if (queryingNonPendingRequests) return Int.MAX_VALUE
             val available = super.numAvailableUnits
             if (allocationPending) return available

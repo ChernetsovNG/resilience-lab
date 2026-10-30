@@ -394,7 +394,8 @@ class ReliabilityModel(
                         metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
                     }
                     try {
-                        val allocation = seize(runtime.resource)
+                        val acquisition = with(runtime.slots) { acquire() }
+                        val allocation = acquisition.allocation ?: throw QueueFullException(runtime.serviceId)
                         try {
                             val durationMs = runtime.nextDurationMs()
                             val localFailure = runtime.nextLocalFailure()
