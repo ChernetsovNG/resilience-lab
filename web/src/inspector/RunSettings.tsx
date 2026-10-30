@@ -14,7 +14,6 @@ interface Props {
   model: ModelFile;
   experiment: ExperimentFile;
   editable: boolean;
-  variantPage?: boolean;
   invalid: boolean;
   onCommand: (command: EditorCommand) => void;
   onValidity: (path: string, valid: boolean) => void;
@@ -33,7 +32,7 @@ function descriptor(catalog: Catalog, name: string, title: string, kind: ParamDe
 }
 
 /** Shared experiment settings are editable on every model or variant page. */
-export function RunSettings({ catalog, model, experiment, editable, variantPage = false, invalid, onCommand, onValidity, fieldDiagnostics }: Props) {
+export function RunSettings({ catalog, model, experiment, editable, invalid, onCommand, onValidity, fieldDiagnostics }: Props) {
   const duration = (name: string, title: string, positive = false) => descriptor(catalog, name, title, "QUANTITY", {
     dimension: "DURATION", ...(positive ? { exclusiveMinimum: 0 } : { minimum: 0 }),
   });
@@ -76,7 +75,7 @@ export function RunSettings({ catalog, model, experiment, editable, variantPage 
           path={`execution.${field.name}`} editable={editable} isOverridden={() => false} onValidity={onValidity}
           fieldDiagnostics={fieldDiagnostics}
           inputAction={field.name === "seed" ? <button type="button" className="seed-random"
-            aria-label={t("editor.run.randomSeed")} title={t("editor.run.randomSeed")} disabled={!editable || variantPage}
+            aria-label={t("editor.run.randomSeed")} title={t("editor.run.randomSeed")} disabled={!editable}
             onMouseDown={event => event.preventDefault()}
             onClick={() => {
               const words = crypto.getRandomValues(new Uint32Array(2));

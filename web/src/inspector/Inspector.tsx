@@ -107,7 +107,7 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
         </>
       ) : null}
       {target === "experiment" ? <section className="experiment-settings">
-        <RunSettings catalog={catalog} model={model} experiment={experiment} editable={editable && onCommand !== undefined} variantPage={variantId !== null}
+        <RunSettings catalog={catalog} model={model} experiment={experiment} editable={editable && onCommand !== undefined}
           invalid={invalid} fieldDiagnostics={fieldDiagnostics} onCommand={(command) => onCommand?.(command)} onValidity={onValidity} />
       </section> : null}
       </div>
