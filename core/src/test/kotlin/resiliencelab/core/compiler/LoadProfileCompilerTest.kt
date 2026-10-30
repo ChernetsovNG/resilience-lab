@@ -1,6 +1,5 @@
 package resiliencelab.core.compiler
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.document.DecodeResult
@@ -11,6 +10,7 @@ class LoadProfileCompilerTest {
     private fun compile(
         load: String,
         extra: String = "",
+        variants: String = """[{"id":"baseline"}]""",
     ): CompileResult {
         val model =
             """
@@ -23,7 +23,7 @@ class LoadProfileCompilerTest {
             """
             {"schemaVersion": 1, "modelRef": "m.model.json",
              "execution": {"replications": 5, "warmup": "0s", "measurement": "1s", "seed": 42},
-             "variants": [{"id": "baseline"}] $extra}
+             "variants": $variants $extra}
             """.trimIndent()
         return ModelCompiler().compile(
             (DocumentCodec.decodeModel(model, "m.model.json") as DecodeResult.Ok).value,
@@ -48,8 +48,9 @@ class LoadProfileCompilerTest {
             """{"points":[{"time":"1s","rate":"2/s"},{"time":"0s","rate":"2/s"}]}""" to
                 "/blocks/client/params/load/points/1/time",
             """{"points":[{"time":"0s","rate":"-2/s"}]}""" to "/blocks/client/params/load/points/0/rate",
-            """{"points":[{"time":"0s","rate":"1/s"}],"sinusoid":{"amplitude":"2/s","period":"1s"}}""" to
-                "/blocks/client/params/load",
+            """{"points":[{"time":"-1ms","rate":"2/s"}]}""" to "/blocks/client/params/load/points/0/time",
+            """{"points":[{"time":"0s","rate":"1/s"},{"time":"0s","rate":"2/s"}]}""" to
+                "/blocks/client/params/load/points/1/time",
         ).forEach { (load, pointer) ->
             val result = compile(load)
             assertThat(result.experiment).describedAs(load).isNull()
@@ -61,34 +62,42 @@ class LoadProfileCompilerTest {
     }
 
     @Test
-    fun `sinusoid amplitude is sweepable`() {
-        val result =
-            compile(
-                """{"points":[{"time":"0s","rate":"20/s"}],"sinusoid":{"amplitude":"1/s","period":"1s"}}""",
-                """, "grid":[{"path":"client.load.sinusoid.amplitude","values":["2/s","4/s"]}]""",
-            )
-
-        assertThat(result.diagnostics).isEmpty()
-        assertThat(
-            result.experiment!!
-                .variants
-                .single()
-                .points
-                .map { it.coordinates.values.single() },
-        ).containsExactly(Json.parseToJsonElement("\"2/s\""), Json.parseToJsonElement("\"4/s\""))
+    fun `load profiles cannot be swept in a grid`() {
+        listOf(
+            "client.load" to """{"points":[{"time":"0s","rate":"30/s"}]}""",
+            "client.load.points" to """[{"time":"0s","rate":"30/s"}]""",
+        ).forEach { (path, value) ->
+            val result =
+                compile(
+                    """{"points":[{"time":"0s","rate":"20/s"}]}""",
+                    """, "grid":[{"path":"$path","values":[$value]}]""",
+                )
+            assertThat(result.experiment).isNull()
+            val diagnostic = result.diagnostics.single { it.code == "GRID_PATH" }
+            assertThat(diagnostic.document).isEqualTo("e.experiment.json")
+            assertThat(diagnostic.pointer).isEqualTo("/grid/0/path")
+            assertThat(diagnostic.args).containsEntry("path", JsonPrimitive(path))
+        }
     }
 
     @Test
-    fun `negative sum caused by an amplitude grid value points to that value`() {
+    fun `different profiles are compared by variant overrides`() {
         val result =
             compile(
-                """{"points":[{"time":"0s","rate":"20/s"}],"sinusoid":{"amplitude":"1/s","period":"1s"}}""",
-                """, "grid":[{"path":"client.load.sinusoid.amplitude","values":["30/s"]}]""",
+                """{"points":[{"time":"0s","rate":"20/s"}]}""",
+                variants = """[{"id":"baseline"},{"id":"ramp","overrides":{
+                "client.load":{"points":[{"time":"0s","rate":"0/s"},{"time":"1s","rate":"100/s"}]}
+            }}]""",
             )
-
-        val diagnostic = result.diagnostics.single { it.code == "LOAD_NEGATIVE" }
-        assertThat(diagnostic.document).isEqualTo("e.experiment.json")
-        assertThat(diagnostic.pointer).isEqualTo("/grid/0/values/0")
+        assertThat(result.diagnostics).isEmpty()
+        val profiles =
+            result.experiment!!.variants.map {
+                it.points
+                    .single()
+                    .graph.client.load
+            }
+        assertThat(profiles.map { it.rateAt(500.0) }).containsExactly(0.02, 0.05)
+        assertThat(profiles.map { it.average(1_000.0) }).containsExactly(0.02, 0.05)
     }
 
     @Test

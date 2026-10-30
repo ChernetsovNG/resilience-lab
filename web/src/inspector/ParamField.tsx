@@ -51,7 +51,6 @@ function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDia
 function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
-  const fields = !descriptor.required && value == null && descriptor.default == null ? [] : descriptor.fields;
   const [resetCount, setResetCount] = useState(0);
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}
@@ -65,7 +64,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
-      {fields.map((field) => (
+      {descriptor.fields.map((field) => (
         <ParamField
           key={`${field.name}-${resetCount}`}
           descriptor={field}

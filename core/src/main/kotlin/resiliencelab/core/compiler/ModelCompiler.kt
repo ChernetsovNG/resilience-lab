@@ -25,7 +25,6 @@ import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
-import resiliencelab.core.ir.LoadSinusoid
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
@@ -406,6 +405,18 @@ class ModelCompiler(
                 )
                 return@forEach
             }
+            if (patch.pathPointer.startsWith("/grid/") && typeId == "client" && paramPath.first() == "load") {
+                sink.error(
+                    CoreMessage.GRID_LOAD_PROFILE,
+                    "Load profile '$path' does not support grid sweeps; compare profiles in variants",
+                    document,
+                    patch.pathPointer,
+                    target,
+                    variantId,
+                    args = mapOf("path" to JsonPrimitive(path)),
+                )
+                return@forEach
+            }
             if (block != null) {
                 blocks = blocks + (target to block.copy(params = setIn(block.params, descriptors, paramPath, value)))
             } else {
@@ -751,42 +762,19 @@ class ModelCompiler(
                 point.fail<Unit>(CoreMessage.LOAD_POINT_ORDER, "time", "Load point times must be strictly increasing")
             }
         }
-        val wave =
-            loadReader?.obj("sinusoid")?.let { sine ->
-                val amplitude = sine.quantity("amplitude")
-                val period = sine.quantity("period")
-                val phase = sine.number("phase")
-                if (amplitude == null || period == null || phase == null) null else LoadSinusoid(amplitude, period, phase)
-            }
         val deadline = reader.quantity("deadline")
         if (points == null || points.any { it == null } || deadline == null) return null
         if (points.filterNotNull().zipWithNext().any { (a, b) -> a.timeMs >= b.timeMs }) return null
-        val load = LoadProfile(points.filterNotNull(), wave)
+        val load = LoadProfile(points.filterNotNull())
         if (run != null) {
             val end = run.warmupMs + run.measurementMs
-            val minimum = load.minimum(end)
             val maximum = load.maximum(end)
-            val dependency =
-                overrides
-                    ?.pointers
-                    ?.entries
-                    ?.filter { it.key.startsWith("load.") }
-                    ?.maxByOrNull { if (it.value.startsWith("/grid/")) 1 else 0 }
-                    ?.key
-            if (!minimum.isFinite() || !maximum.isFinite() || (maximum > 0.0 && !(1.0 / maximum).isFinite())) {
+            if (!maximum.isFinite() || (maximum > 0.0 && !(1.0 / maximum).isFinite())) {
                 return reader.fail(
                     CoreMessage.LOAD_RANGE,
                     "load",
                     "Load intensity and its positive mean inter-arrival interval must be finite",
-                    dependsOn = dependency,
-                )
-            }
-            if (minimum < 0.0) {
-                return reader.fail(
-                    CoreMessage.LOAD_NEGATIVE,
-                    "load",
-                    "Load intensity must not become negative during the arrival interval",
-                    dependsOn = dependency,
+                    dependsOn = "load.points",
                 )
             }
         }

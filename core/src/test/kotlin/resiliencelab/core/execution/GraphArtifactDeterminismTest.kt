@@ -12,7 +12,6 @@ import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
-import resiliencelab.core.ir.LoadSinusoid
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
@@ -43,7 +42,6 @@ class GraphArtifactDeterminismTest {
                         load =
                             LoadProfile(
                                 listOf(LoadPoint(0.0, 0.05), LoadPoint(50.0, 0.2)),
-                                LoadSinusoid(0.01, 30.0),
                             ),
                     ),
             )

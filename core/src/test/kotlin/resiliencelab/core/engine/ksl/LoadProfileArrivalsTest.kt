@@ -5,7 +5,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
-import resiliencelab.core.ir.LoadSinusoid
 import kotlin.math.sqrt
 import kotlin.test.Test
 
@@ -29,7 +28,7 @@ class LoadProfileArrivalsTest {
     }
 
     @Test
-    fun `step ramp and sine window counts converge within Poisson uncertainty`() {
+    fun `step and ramp window counts converge within Poisson uncertainty`() {
         val step =
             LoadProfile(
                 listOf(
@@ -39,11 +38,9 @@ class LoadProfileArrivalsTest {
                 ),
             )
         val ramp = LoadProfile(listOf(LoadPoint(0.0, 0.0), LoadPoint(4_000.0, 2.0)))
-        val sine = LoadProfile(listOf(LoadPoint(0.0, 1.0)), LoadSinusoid(0.5, 4_000.0))
         listOf(
             step to listOf(500.0, 500.0, 1_500.0, 1_500.0),
             ramp to listOf(250.0, 750.0, 1_250.0, 1_750.0),
-            sine to listOf(1_318.30988618379, 1_318.30988618379, 681.690113816209, 681.690113816209),
         ).forEach { (profile, expectations) ->
             val arrivals = (0 until 8).flatMap { run(profile, it) }
             expectations.forEachIndexed { window, expected ->
@@ -59,6 +56,8 @@ class LoadProfileArrivalsTest {
     fun `constant arrival times remain bitwise identical and zero load drains`() {
         assertThat(run(LoadProfile.constant(0.1)))
             .isEqualTo(TestChains.expectedArrivals(42, 0.1, 4_000.0))
+        assertThat(run(LoadProfile(listOf(LoadPoint(0.0, 0.1), LoadPoint(1_000.0, 0.1)))))
+            .isEqualTo(TestChains.expectedArrivals(42, 0.1, 4_000.0))
         assertThat(run(LoadProfile.constant(0.0))).isEmpty()
     }
 
@@ -69,7 +68,7 @@ class LoadProfileArrivalsTest {
                 it.copy(
                     client =
                         it.client.copy(
-                            load = LoadProfile(listOf(LoadPoint(0.0, 0.1)), LoadSinusoid(0.05, 1_000.0)),
+                            load = LoadProfile(listOf(LoadPoint(0.0, 0.1), LoadPoint(1_000.0, 0.2))),
                         ),
                 )
             }

@@ -9,6 +9,11 @@ internal enum class CoreMessage(
     val template: String,
 ) {
     GRID_AXES("GRID_AXES", null, "A grid must contain one or two axes"),
+    GRID_LOAD_PROFILE(
+        "GRID_PATH",
+        "loadProfile",
+        "Load profile '{path}' does not support grid sweeps; compare profiles in variants",
+    ),
     GRID_VALUES("GRID_VALUES", null, "A grid axis must contain at least one value"),
     GRID_PATH_OVERLAP("GRID_PATH", "overlap", "Grid axis paths must not overlap"),
     GRID_PATH_PARAMETER("GRID_PATH", "parameter", "Override '{path}' does not name a parameter of a block or connection"),
@@ -59,7 +64,6 @@ internal enum class CoreMessage(
     PARAM_OBJECT("PARAM_TYPE", "object", "Parameter '{parameter}' must be an object"),
     PARAM_ARRAY("PARAM_TYPE", "array", "Parameter '{parameter}' must be a non-empty array of objects"),
     LOAD_POINT_ORDER("LOAD_POINT_ORDER", null, "Load point times must be strictly increasing"),
-    LOAD_NEGATIVE("LOAD_NEGATIVE", null, "Load intensity must not become negative during the arrival interval"),
     LOAD_RANGE("LOAD_RANGE", null, "Load intensity and its positive mean inter-arrival interval must be finite"),
     PARAM_MISSING("PARAM_MISSING", null, "Required parameter '{parameter}' is missing"),
     PARAM_LOGNORMAL("PARAM_MISSING", "lognormal", "lognormal requires {parameter}"),

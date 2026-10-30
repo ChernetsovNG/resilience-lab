@@ -33,7 +33,7 @@ function summaryOf(block: BlockInstance): string {
   if (block.type === "client") {
     const load = isObject(params.load) ? params.load : {};
     const points = Array.isArray(load.points) ? load.points : [];
-    const rate = points.length === 1 && load.sinusoid == null && isObject(points[0])
+    const rate = points.length === 1 && isObject(points[0])
       ? String(points[0].rate) : t("editor.canvas.loadProfile");
     return t("editor.canvas.clientSummary", { rate, deadline: String(params.deadline ?? t("editor.canvas.deadlineRequired")) });
   }

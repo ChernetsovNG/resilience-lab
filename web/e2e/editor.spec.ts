@@ -26,10 +26,9 @@ const test = base.extend<{ files: Files }>({
 });
 test.use({ actionTimeout: 10_000 });
 
-test("opens saves and runs a load profile without losing points or sinusoid fields", async ({ page, files }) => {
+test("opens saves and runs a load profile without losing points", async ({ page, files }) => {
   const profiled = (await stored(page, files.model)).content.model as ModelFile;
-  const load = { points: [{ time: "0s", rate: "120/s" }, { time: "1s", rate: "180/s" }],
-    sinusoid: { amplitude: "20/s", period: "1s", phase: -0.5 } };
+  const load = { points: [{ time: "0s", rate: "120/s" }, { time: "1s", rate: "180/s" }] };
   profiled.blocks.client.params.load = load;
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(profiled));
   await page.reload();
