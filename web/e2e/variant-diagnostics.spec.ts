@@ -25,6 +25,18 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
     await expect(badge).toHaveAttribute("title", "Warnings in variants: baseline");
     await expect(badge).toHaveCSS("border-top-style", "dashed");
   }
+  const badgeSize = () => edgeBadge.evaluate(element => ({
+    width: (element as HTMLElement).offsetWidth, height: (element as HTMLElement).offsetHeight,
+  }));
+  const originalBadgeSize = await badgeSize();
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await page.getByLabel("Interface text size", { exact: true }).selectOption("125");
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(page.locator("html")).toHaveCSS("font-size", "20px");
+  expect(await badgeSize()).toEqual(originalBadgeSize);
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await page.getByLabel("Interface text size", { exact: true }).selectOption("100");
+  await page.getByRole("button", { name: "View", exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("model-variant-warnings.png") });
   await expect(page.getByRole("tabpanel")).toBeHidden();
   await edgeBadge.focus();

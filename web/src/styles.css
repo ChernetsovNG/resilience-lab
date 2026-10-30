@@ -939,7 +939,8 @@ select {
   background: #fff;
 }
 
-.block-node .diagnostic-badge { padding: 1.6px 6.4px; }
+.block-node .diagnostic-badge,
+.canvas-edge-label .diagnostic-badge { padding: 1.6px 6.4px; }
 
 .react-flow__edgelabel-renderer {
   z-index: 1001;
