@@ -1,6 +1,36 @@
 import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 
+test("detects a server outage and recovers without reloading or losing edits", async ({ page }) => {
+  await page.goto("/");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+  const status = page.getByRole("region", { name: "Status bar" });
+  const run = page.getByRole("button", { name: "Run", exact: true });
+  const estimate = page.getByRole("button", { name: "Estimate", exact: true });
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  await expect(run).toBeEnabled();
+  await expect(status).toContainText("Backend healthy");
+
+  await page.route("**/api/v1/**", route => route.abort("connectionrefused"));
+  await expect(status).toContainText("Backend unavailable");
+  await expect(run).toBeDisabled();
+  await expect(estimate).toBeDisabled();
+  await page.getByTestId("rf__node-gateway").click();
+  const handlers = page.getByLabel("Handlers", { exact: true });
+  await handlers.fill("8");
+  await handlers.press("Enter");
+  await expect(save).toBeDisabled();
+
+  await page.unroute("**/api/v1/**");
+  await expect(status).toContainText("Backend healthy", { timeout: 15_000 });
+  await expect(handlers).toHaveValue("8");
+  await expect(save).toBeEnabled();
+  await expect(estimate).toBeEnabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(handlers).toHaveValue("4");
+  await expect(run).toBeEnabled();
+});
+
 test("keeps status in one place and reveals warnings and new errors without page scrolling", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
