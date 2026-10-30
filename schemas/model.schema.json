@@ -22,7 +22,7 @@
               "additionalProperties": false,
               "properties": {
                 "deadline": {
-                  "description": "End-to-end deadline of each original request. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "description": "End-to-end deadline of each original request. Initially 10s. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
                   "title": "Deadline",
                   "type": "string",
@@ -50,7 +50,7 @@
                 },
                 "load": {
                   "additionalProperties": false,
-                  "description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants.",
+                  "description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants. Initially one point at 0s with 10/s.",
                   "properties": {
                     "points": {
                       "description": "Increasing times with linear interpolation; the nearest rate is held outside the points.",
@@ -203,14 +203,14 @@
                   "title": "Query failure rate"
                 },
                 "maxConnections": {
-                  "description": "Maximum concurrent database queries (max_connections).",
+                  "description": "Maximum concurrent database queries (max_connections). Initially 100.",
                   "minimum": 1.0,
                   "title": "Maximum connections",
                   "type": "integer"
                 },
                 "processing": {
                   "additionalProperties": false,
-                  "description": "Execution time of one database query.",
+                  "description": "Execution time of one database query. Initially exponential with a mean of 5ms.",
                   "properties": {
                     "kind": {
                       "description": "Distribution of the duration.",
@@ -302,7 +302,7 @@
                     }
                   ],
                   "default": 0,
-                  "description": "Waiting queries; zero disables queueing.",
+                  "description": "Waiting queries; zero disables queueing. Initially 0.",
                   "title": "Query queue capacity"
                 }
               },
@@ -353,13 +353,13 @@
               "additionalProperties": false,
               "properties": {
                 "maxClientConnections": {
-                  "description": "Concurrent client connections; excess attempts are rejected immediately.",
+                  "description": "Concurrent client connections; excess attempts are rejected immediately. Initially 1000.",
                   "minimum": 1.0,
                   "title": "Maximum client connections",
                   "type": "integer"
                 },
                 "poolSize": {
-                  "description": "Concurrent server connections held through local delay and the outgoing call.",
+                  "description": "Concurrent server connections held through local delay and the outgoing call. Initially 20.",
                   "minimum": 1.0,
                   "title": "Server pool size",
                   "type": "integer"
@@ -455,11 +455,11 @@
                     "kind": "fixed",
                     "mean": "0ms"
                   },
-                  "description": "Local delay after acquiring a server connection, before the outgoing call.",
+                  "description": "Local delay after acquiring a server connection, before the outgoing call. Initially fixed at 0.1ms.",
                   "title": "Pooler delay"
                 },
                 "waitTimeout": {
-                  "description": "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                  "description": "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Initially 5s. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
                   "title": "Server connection wait timeout",
                   "type": "string",
@@ -621,14 +621,14 @@
                   "title": "Failure rate"
                 },
                 "handlers": {
-                  "description": "Concurrent handlers.",
+                  "description": "Concurrent handlers. Initially 200.",
                   "minimum": 1.0,
                   "title": "Handlers",
                   "type": "integer"
                 },
                 "processing": {
                   "additionalProperties": false,
-                  "description": "Local processing time of one attempt.",
+                  "description": "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
                   "properties": {
                     "kind": {
                       "description": "Distribution of the duration.",
@@ -720,7 +720,7 @@
                     }
                   ],
                   "default": 0,
-                  "description": "Waiting places in the FIFO queue; zero disables queueing.",
+                  "description": "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
                   "title": "Queue capacity"
                 },
                 "replicas": {
@@ -784,7 +784,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "Concurrent handlers.",
+                    "description": "Concurrent handlers. Initially 200.",
                     "title": "Handlers"
                   },
                   "processing": {
@@ -885,7 +885,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "Local processing time of one attempt.",
+                    "description": "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
                     "title": "Processing time"
                   },
                   "queue": {
@@ -899,7 +899,7 @@
                       }
                     ],
                     "default": 0,
-                    "description": "Waiting places in the FIFO queue; zero disables queueing.",
+                    "description": "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
                     "title": "Queue capacity"
                   }
                 },
@@ -1201,7 +1201,7 @@
                     "kind": "fixed",
                     "mean": "0ms"
                   },
-                  "description": "One-way network delay, drawn separately for the request and the response.",
+                  "description": "One-way network delay, drawn separately for the request and the response. Initially fixed at 1ms.",
                   "title": "Network delay"
                 },
                 "pool": {
@@ -1245,7 +1245,7 @@
                           "title": "Acquisition timeout"
                         },
                         "size": {
-                          "description": "Maximum simultaneous connections for this call on each caller instance.",
+                          "description": "Maximum simultaneous connections for this call on each caller instance. Initially 10 when the pool is enabled.",
                           "minimum": 1.0,
                           "title": "Pool size",
                           "type": "integer"
@@ -1281,7 +1281,7 @@
                   "title": "Retry target"
                 },
                 "timeout": {
-                  "description": "Per-attempt timeout, also bounded by the remaining deadline. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "description": "Per-attempt timeout, also bounded by the remaining deadline. Initially 1s. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
                   "title": "Timeout",
                   "type": "string",
@@ -1556,7 +1556,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Local processing time of one attempt.",
+              "description": "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
               "title": "Processing time"
             },
             "type": {

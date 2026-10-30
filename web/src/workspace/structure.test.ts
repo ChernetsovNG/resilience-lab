@@ -140,7 +140,7 @@ describe("structure commands", () => {
   it("adds a database leaf and preserves its query parameters when editing and saving", () => {
     const fullCatalog = outputCatalog as Catalog;
     const added = roundTrip(documents(), addBlock(fullCatalog, "database", { x: 20, y: 40 }));
-    expect(added.model.blocks["database-1"]).toEqual({ type: "database", params: {} });
+    expect(added.model.blocks["database-1"]).toEqual({ type: "database", params: { maxConnections: 100, queue: 0, processing: { kind: "exponential", mean: "5ms" }, failureRate: "0%" } });
     added.model.blocks["database-1"].params = {
       maxConnections: 3, queue: 12, processing: { kind: "lognormal", mean: "7ms", stdDev: "2ms" }, failureRate: "2%",
     };
@@ -176,7 +176,7 @@ describe("structure commands", () => {
   it("adds a router and permits calls and nested routes using catalog target types", () => {
     const fullCatalog = outputCatalog as Catalog;
     const after = roundTrip(documents(), addBlock(fullCatalog, "router", { x: 20, y: 40 }));
-    expect(after.model.blocks["router-1"]).toEqual({ type: "router", params: {} });
+    expect(after.model.blocks["router-1"]).toEqual({ type: "router", params: { policy: "roundRobin" } });
     after.model.blocks["router-2"] = { type: "router", params: { policy: "random" } };
     expect(connectionRule(fullCatalog, after.model, "gateway", "router-1", "out", "in").type).toBe("call");
     expect(connectionRule(fullCatalog, after.model, "router-1", "dependency", "out", "in").type).toBe("route");
@@ -204,13 +204,13 @@ describe("structure commands", () => {
     expect(saved.blocks.gateway.scenario).toEqual(before.model.blocks.gateway.scenario);
   });
 
-  it("adds a catalog block with the smallest globally free id and no parameter defaults", () => {
+  it("adds a catalog block with the smallest globally free id and explicit catalog values", () => {
     const before = documents();
     before.model.blocks["service-3"] = { type: "service", params: {} };
     before.model.connections.push({ id: "service-1", type: "call", from: "middle", to: "dependency", params: {} });
     const snapshot = structuredClone(before);
     const after = roundTrip(before, addBlock(catalog, "service", { x: 40, y: 80 }));
-    expect(after.model.blocks["service-2"]).toEqual({ type: "service", params: {} });
+    expect(after.model.blocks["service-2"]).toEqual({ type: "service", params: { queue: 0, failureRate: "0%" } });
     expect(after.layout.positions["service-2"]).toEqual({ x: 40, y: 80 });
     expect(before).toEqual(snapshot);
     expect(addBlock(catalog, "call", { x: 0, y: 0 })(before)).toEqual(before);
@@ -241,7 +241,8 @@ describe("structure commands", () => {
     const before = documents();
     const after = roundTrip(before, addConnection(catalog, "gateway", "middle", "out", "in"));
     expect(after.model.connections.at(-1)).toEqual({
-      id: "gateway-to-middle-1", type: "call", from: "gateway", to: "middle", params: {},
+      id: "gateway-to-middle-1", type: "call", from: "gateway", to: "middle",
+      params: { network: { kind: "fixed", mean: "0ms" }, attempts: 1, backoff: { kind: "none" } },
     });
     expect(after.layout).toBe(before.layout);
     expect(after.experiment).toBe(before.experiment);
@@ -372,4 +373,34 @@ describe("block insertion position", () => {
 it("reserves the incoming client footprint when it is wider than every existing node", () => {
   expect(insertionPosition({ x: -180, y: 200 }, [{ x: 0, y: 200, width: 176, height: 57.375 }],
     { width: 222.984, height: 57.375 })).toEqual({ x: -100, y: 280 });
+});
+
+
+describe("catalog initial values", () => {
+  it.each([
+    ["client", { load: { points: [{ time: "0s", rate: "10/s" }] }, deadline: "10s" }],
+    ["service", { handlers: 200, queue: 100, processing: { kind: "exponential", mean: "10ms" }, failureRate: "0%", replicas: 1 }],
+    ["database", { maxConnections: 100, queue: 0, processing: { kind: "exponential", mean: "5ms" }, failureRate: "0%" }],
+    ["router", { policy: "roundRobin" }],
+    ["pooler", { maxClientConnections: 1000, poolSize: 20, waitTimeout: "5s", processing: { kind: "fixed", mean: "0.1ms" } }],
+  ])("writes valid %s parameters in a single undoable insertion", (type, params) => {
+    const after = roundTrip(documents(), addBlock(outputCatalog as Catalog, type as string, { x: 20, y: 40 }));
+    expect(after.model.blocks[`${type}-1`]).toEqual({ type, params });
+  });
+
+  it("writes call parameters without enabling an optional pool in one undo step", () => {
+    const after = roundTrip(documents(), addConnection(outputCatalog as Catalog, "gateway", "middle", "out", "in"));
+    expect(after.model.connections.at(-1)?.params).toEqual({
+      network: { kind: "fixed", mean: "1ms" }, timeout: "1s", attempts: 1, retryTarget: "any", backoff: { kind: "none" },
+    });
+  });
+
+  it("keeps inserted object parameters independent of the catalog and subsequent insertions", () => {
+    const source = structuredClone(outputCatalog) as Catalog;
+    const first = addBlock(source, "database", { x: 0, y: 0 })(documents());
+    (first.model.blocks["database-1"].params.processing as Record<string, unknown>).mean = "9ms";
+    const second = addBlock(source, "database", { x: 0, y: 0 })(documents());
+    expect(second.model.blocks["database-1"].params.processing).toEqual({ kind: "exponential", mean: "5ms" });
+    expect(source).toEqual(outputCatalog);
+  });
 });

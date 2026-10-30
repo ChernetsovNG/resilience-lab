@@ -45,7 +45,7 @@ data class ConnectionRule(
 /**
  * One parameter of a type. Ranges of [ParamKind.QUANTITY] are in canonical units of [dimension], and [units] lists the
  * units a document may write with their scales, so UI checks ranges as the core does; [default] is used when a
- * document omits the parameter.
+ * document omits the parameter. [initial] is written explicitly when creating an element; readers never apply it.
  */
 @Serializable
 data class ParamDescriptor(
@@ -55,6 +55,7 @@ data class ParamDescriptor(
     val description: String,
     val required: Boolean = false,
     val default: JsonElement? = null,
+    val initial: JsonElement? = default,
     val dimension: Dimension? = null,
     val units: List<QuantityUnit> = emptyList(),
     val minimum: Double? = null,

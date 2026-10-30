@@ -7,6 +7,7 @@ import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes
 import type { CanvasResults, ConnectionOverlayMetric, NodeOverlayMetric } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import { ownEntry } from "../workspace/params";
+import { initialParams } from "../workspace/initialParams";
 import type { EditorCommand } from "../workspace/editor";
 import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf } from "../workspace/structure";
 import { BlockNode } from "./BlockNode";
@@ -120,9 +121,18 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   const [notice, setNotice] = useState<{ readonly message: string | null } | null>(null);
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
-  if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: {} }]);
+  if (pending !== undefined && pendingId !== null) blocks.push([pendingId, { type: pending.type, params: initialParams(catalog.types.find(type => type.id === pending.type)?.params ?? []) }]);
   const connected = new Set(model.connections.filter(connection => selected.includes(connection.id))
     .flatMap(connection => [connection.from, connection.to]));
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, string[]>();
+  for (const connection of model.connections) {
+    incoming.set(connection.to, (incoming.get(connection.to) ?? 0) + 1);
+    outgoing.set(connection.from, [...(outgoing.get(connection.from) ?? []), connection.to]);
+  }
+  // A missing request is a global diagnostic, so disconnected-node hints also follow the draft's structure.
+  const reachable = new Set(blocks.filter(([, block]) => block.type === "client").map(([id]) => id));
+  for (const id of reachable) for (const target of outgoing.get(id) ?? []) reachable.add(target);
   const nodes: BlockNodeType[] = blocks.map(([id, block]) => ({
     id,
     type: "block",
@@ -137,6 +147,10 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       result: results?.services.get(id),
       resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
       nodeMetric,
+      incomingConnections: incoming.get(id) ?? 0,
+      outgoingConnections: outgoing.get(id)?.length ?? 0,
+      needsConnection: block.type === "client"
+        ? !model.connections.some(connection => connection.from === id && connection.type === "request") : !reachable.has(id),
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],

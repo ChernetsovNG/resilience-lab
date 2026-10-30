@@ -2612,6 +2612,10 @@
               "$ref" : "#/components/schemas/ParamDescriptor"
             }
           },
+          "initial" : {
+            "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
+            "additionalProperties" : true
+          },
           "kind" : {
             "type" : "string",
             "enum" : [ "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT", "ARRAY" ]

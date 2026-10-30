@@ -115,7 +115,7 @@ it("keeps edited elements associated but excludes a replacement with a reused ID
   state = editorReducer(state, { type: "command", command: addBlock(catalog, "service", { x: 260, y: 100 }) });
   const added = Object.keys(state.loaded!.model.blocks).find((id) => !Object.hasOwn(snapshot.blocks, id))!;
   state = editorReducer(state, { type: "command", command: renameElement(added, "gateway") });
-  expect(state.loaded!.model.blocks.gateway.params).toEqual({});
+  expect(state.loaded!.model.blocks.gateway.params).toEqual({ queue: 0, failureRate: "0%" });
   expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.has("gateway")).toBe(false);
   for (let count = 0; count < 3; count++) state = editorReducer(state, { type: "undo" });
   expect(canvasResults(summary, snapshot, "baseline", "p0", catalog, state.loaded!.model)?.services.get("gateway")?.values.utilization).toBe(0.5);
