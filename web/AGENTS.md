@@ -17,10 +17,13 @@
 - `npx playwright install chromium` — локальный Chromium для E2E; в CI он уже есть в образе Playwright.
 - `npm run test:e2e` — E2E Playwright с настоящим backend (см. ниже).
 
-Проверки web-изменений перед PR: `npm ci`, `npm run lint`, `npm test -- --run`, `npm run build`; при изменении API — ещё `npm run api:check`; для UI и пользовательских сценариев — `npm run test:e2e`.
+Проверки web-изменений перед PR: `npm ci`, `npm run lint`, `npm test -- --run`, `npm run build`; при изменении API — ещё `npm run api:check`; для UI и пользовательских сценариев — затронутые сценарии E2E (раздел «E2E»).
 
 ## E2E
 
+- **Что запускать перед PR.** Локально — затронутые сценарии: новые и изменённые файлы `e2e/*.spec.ts` и файлы, которые проверяют изменённую область, например `npx playwright test e2e/language.spec.ts e2e/editor.spec.ts`. Полный набор выполняет job `e2e` в CI на каждом pull request с кодом. Правило действует и тогда, когда в issue указан `npm run test:e2e`.
+- **Когда нужен полный `npm run test:e2e` локально:** изменены API или его клиент в `web/src/api/`, общая раскладка (`App.tsx`, `web/src/layout/`), конфигурация или общие помощники E2E (`playwright.config.ts`, `playwright.global-setup.ts`), или job `e2e` в CI упал.
+- **В описании PR** перечисли запущенные файлы E2E. Если job `e2e` в CI упал — исправь причину, повтори упавшие и затронутые сценарии локально.
 - Playwright сам запускает свои серверы: `./gradlew :apps:server:bootRunE2e` на свежей копии `examples/` в `apps/server/build/e2e-workspace/` и Vite в режиме `e2e` с `--strictPort`. Уже запущенные серверы не используются, файлы репозитория не меняются.
 - Порты — `E2E_BACKEND_PORT` (по умолчанию `8080`) и `E2E_WEB_PORT` (по умолчанию `5173`), разные. Если порт занят, прогон останавливается до тестов с именем переменной для замены. Проверка портов выполняется один раз за запуск, поэтому работает и UI mode (`--ui`).
 - Одновременные прогоны — в отдельных worktree и на разных парах портов: `E2E_BACKEND_PORT=18080 E2E_WEB_PORT=15173 npm run test:e2e`.
