@@ -97,6 +97,8 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
               path={descriptor.name}
               editable={editable}
               isOverridden={(path) => isOverridden(overrides, selected, path)}
+              isSwept={(path) => variantId !== null && (experiment.grid ?? []).some(axis =>
+                axis.path === `${selected}.${path}` || axis.path.startsWith(`${selected}.${path}.`))}
               onCommit={(value) => onParam(selected, descriptor.name, value)}
               onFieldCommit={variantId === null ? undefined : (path, value) => onCommand?.(setVariantParam(variantId, selected, path, value ?? null, catalog))}
               onReset={variantId === null ? undefined : (path) => {

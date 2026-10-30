@@ -78,7 +78,7 @@ it.each([
   setLanguage(language);
   render(<Settings />);
   expect(screen.getAllByRole("heading").map(heading => heading.textContent)).toEqual(language === "ru"
-    ? ["Прогон", "Отказы", "Перебор"] : ["Run", "Faults", "Parameter grid"]);
+    ? ["Прогон", "Отказы", "Перебор параметров"] : ["Run", "Faults", "Parameter sweep"]);
   for (const [label, description] of fields) {
     const input = screen.getByRole("textbox", { name: label });
     fireEvent.focus(screen.getByRole("button", { name: prefix + label }));

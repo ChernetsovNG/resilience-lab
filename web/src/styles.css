@@ -809,12 +809,20 @@ select {
 .timeline-line-key { display: inline-block; width: 1.25rem; margin-right: 0.35rem; border-top: 2px solid; vertical-align: middle; }
 .timeline-line-key--comparison { border-top-style: dashed; }
 
-.grid-value { display: flex; align-items: start; gap: 0.4rem; }
+.grid-explanation, .param-sweep { color: #52606d; font-size: var(--font-secondary); }
+.grid-explanation { margin: 0.375rem 0; }
+.grid-cost { display: block; margin: 0.375rem 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .grid-settings .param-group { min-width: 0; }
-.grid-settings select, .grid-value input { width: 100%; min-width: 0; }
-.grid-settings .param-group > button { margin-right: 0.3rem; }
-.grid-value .param-field { flex: 1; min-width: 0; }
-.grid-value > button { margin-top: 1.5rem; }
+.grid-settings legend { font-weight: 600; }
+.grid-settings select { width: 100%; min-width: 0; }
+.grid-settings .param-group > button { margin-top: 0.375rem; }
+.grid-values { display: flex; flex-wrap: wrap; align-items: start; gap: 0.375rem; }
+.grid-values > .field-diagnostics { flex-basis: 100%; }
+.grid-value { display: flex; align-items: start; gap: 0.125rem; padding: 0.125rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: #f1f4f8; min-width: 0; max-width: 100%; }
+.grid-value .param-field { position: relative; margin: 0; min-width: 0; width: 5rem; }
+.grid-value .param-field-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.grid-value input { width: 100%; min-width: 0; }
+.grid-value > button { border: 0; background: transparent; padding: 0.125rem 0.25rem; }
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
 .map-toolbar label { display: flex; align-items: center; gap: 0.4rem; }
 .map-note, .map-axis { color: #52606d; font-size: var(--font-secondary); }
