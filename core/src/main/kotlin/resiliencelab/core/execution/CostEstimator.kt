@@ -54,6 +54,7 @@ internal object CostEstimator {
         val rows: Long,
         val rawBytes: Long,
         val artifactBytes: Long,
+        val summaryBytes: Long,
         val parts: Long,
         val seconds: Double,
         val storageSource: StorageSource,
@@ -150,6 +151,7 @@ internal object CostEstimator {
                 events += perReplication.events * count
                 rows = Math.addExact(rows, Math.multiplyExact(perReplication.rows, count.toLong()))
                 rawBytes = Math.addExact(rawBytes, Math.multiplyExact(perReplication.rawBytes, count.toLong()))
+                artifactBytes = Math.addExact(artifactBytes, perReplication.summaryBytes)
                 artifactBytes = Math.addExact(artifactBytes, Math.multiplyExact(perReplication.artifactBytes, count.toLong()))
                 parts = Math.addExact(parts, Math.multiplyExact(perReplication.parts, count.toLong()))
             }
@@ -282,7 +284,9 @@ internal object CostEstimator {
                 (graph.run.warmupMs + graph.run.measurementMs)
         val bytesPerElement = METADATA_BYTES_PER_ELEMENT + ceil(minOf(arrivals, 2_000.0) * 4).toLong()
         val metadataBytes = Math.multiplyExact(rowKinds.size.toLong(), bytesPerElement)
-        val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, PART_OVERHEAD_BYTES)), metadataBytes)
+        // Totals are gzip per replication; each point's aggregate summary remains plain JSON and is counted once.
+        val replicationBytes = ceil(metadataBytes * GZIP_RATIO).toLong()
+        val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, PART_OVERHEAD_BYTES)), replicationBytes)
         val source = StorageSource.entries.maxBy { source -> rowKinds.filter { it.source == source }.sumOf { it.bytes } }
         val sourceRows = Math.multiplyExact(rowKinds.count { it.source == source }.toLong(), windows.toLong())
         val anchor = timingAnchor(graph.services.size)
@@ -290,7 +294,7 @@ internal object CostEstimator {
             anchor.interceptSeconds +
                 anchor.secondsPerMillionEvents * events / 1_000_000 +
                 rows * WRITE_SECONDS_PER_ROW
-        return TaskEstimate(events, rows, rawBytes, artifactBytes, parts, seconds, source, sourceRows)
+        return TaskEstimate(events, rows, rawBytes, artifactBytes, metadataBytes, parts, seconds, source, sourceRows)
     }
 
     private fun timingAnchor(services: Int): TimingAnchor {

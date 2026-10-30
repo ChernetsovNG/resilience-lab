@@ -13,8 +13,11 @@ import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 /**
  * Lets an in-flight artifact operation finish despite cancellation of its caller. FileChannel.lock is interruptible,
@@ -44,7 +47,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 13
+    const val ARTIFACT_SCHEMA = 14
     const val SERIES_SCHEMA = 6
     const val REPLICATION_SCHEMA = 5
 }
@@ -165,7 +168,9 @@ class ArtifactWriter(
     ) {
         uninterruptedArtifactWrite {
             val artifact = ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result)
-            workspace.create("$taskDirectory/replication.json", DocumentCodec.encode(ReplicationArtifact.serializer(), artifact))
+            val bytes = DocumentCodec.encode(ReplicationArtifact.serializer(), artifact).toByteArray(Charsets.UTF_8)
+            val compressed = ByteArrayOutputStream().also { buffer -> GZIPOutputStream(buffer).use { it.write(bytes) } }.toByteArray()
+            workspace.createBytes("$taskDirectory/replication.json.gz", compressed)
         }
     }
 
@@ -194,8 +199,12 @@ class ArtifactWriter(
                         val stored =
                             (0 until replications).map { replication ->
                                 val directory = "$runDirectory/series/$id/${point.id}/rep-$replication"
-                                val path = "$directory/replication.json"
-                                val artifact = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(path).text)
+                                val path = "$directory/replication.json.gz"
+                                val text =
+                                    GZIPInputStream(workspace.readBytes(path).inputStream())
+                                        .bufferedReader(Charsets.UTF_8)
+                                        .use { it.readText() }
+                                val artifact = json.decodeFromString(ReplicationArtifact.serializer(), text)
                                 require(
                                     artifact.schemaVersion == Versions.REPLICATION_SCHEMA &&
                                         artifact.profile == LatencySketch.PROFILE &&

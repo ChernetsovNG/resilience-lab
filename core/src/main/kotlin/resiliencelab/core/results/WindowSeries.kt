@@ -21,7 +21,7 @@ import java.util.zip.GZIPOutputStream
  * Event-time sufficient statistics for [startMs, startMs + durationMs). Includes warm-up, excludes run-out.
  * Client latencies belong to the completion window; service latencies cover queueing plus handler holding.
  * Queue rejections contribute only to their counter, never to the service residence sketch.
- * These populations differ from the measured-arrival cohort in replication.json, whose outcomes include run-out.
+ * These populations differ from the measured-arrival cohort in replication.json.gz, whose outcomes include run-out.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
