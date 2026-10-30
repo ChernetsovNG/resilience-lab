@@ -241,6 +241,47 @@ test("saves variant field overrides without changing the model and restores mode
   });
 });
 
+test("randomizes and saves the seed as one undoable experiment edit", async ({ page, request }) => {
+  const path = "random-seed/seed.experiment.json";
+  await withExperimentFixture(path, document => { document.execution.seed = 42; }, async () => {
+    await page.reload();
+    await selectExperiment(page, path);
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
+    const seed = page.getByLabel("Seed", { exact: true });
+    await seed.fill("43");
+    await page.getByRole("button", { name: "Random seed", exact: true }).click();
+    const randomSeed = await seed.inputValue();
+    expect(Number.isSafeInteger(Number(randomSeed))).toBe(true);
+    expect(Number(randomSeed)).toBeGreaterThanOrEqual(0);
+    await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(seed).toHaveValue("42");
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect(seed).toHaveValue(randomSeed);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
+    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    expect(saved.content.experiment.execution.seed).toBe(Number(randomSeed));
+    await page.reload();
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
+    await expect(seed).toHaveValue(randomSeed);
+    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+    const random = page.getByRole("button", { name: "Random seed", exact: true });
+    await expect(random).toBeEnabled();
+    await random.click();
+    await expect(seed).not.toHaveValue(randomSeed);
+    await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(seed).toHaveValue(randomSeed);
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expectNoPageScroll(page);
+  });
+});
+
 test("adds a variant, edits shared run settings and faults, and runs three variants", async ({ page, request }) => {
   const path = "variant-run/three.experiment.json";
   await withExperimentFixture(path, () => {}, async () => {

@@ -235,6 +235,7 @@
   "editor.param.useUnit": "Use a value with a unit: {units}",
   "editor.param.valueLabel": "{title}: {value}",
   "editor.run.measurement": "Measurement",
+  "editor.run.randomSeed": "Random seed",
   "editor.run.realTimeLimit": "Real-time limit",
   "editor.run.replications": "Replications",
   "editor.run.seed": "Seed",

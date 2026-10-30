@@ -74,6 +74,19 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
         <ParamField key={field.name} descriptor={field} value={experiment.execution[field.name as keyof ExperimentFile["execution"]]}
           path={`execution.${field.name}`} editable={editable} isOverridden={() => false} onValidity={onValidity}
           fieldDiagnostics={fieldDiagnostics}
+          inputAction={field.name === "seed" ? <button type="button" className="seed-random"
+            aria-label={t("editor.run.randomSeed")} title={t("editor.run.randomSeed")} disabled={!editable}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => {
+              const words = crypto.getRandomValues(new Uint32Array(2));
+              // Keep 21 + 32 independent random bits: every safe nonnegative integer has equal probability.
+              onCommand(setExecutionParam("seed", (words[0] & 0x1f_ffff) * 2 ** 32 + words[1]));
+            }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <path strokeLinecap="round" d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01" />
+            </svg>
+          </button> : undefined}
           onCommit={(value) => onCommand(setExecutionParam(field.name as keyof ExperimentFile["execution"], value as string | number | undefined))} />
       ))}
       </InspectorSection>

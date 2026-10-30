@@ -235,6 +235,7 @@
   "editor.param.useUnit": "Укажите значение с единицей измерения: {units}",
   "editor.param.valueLabel": "{title}: {value}",
   "editor.run.measurement": "Измерение",
+  "editor.run.randomSeed": "Случайное начальное значение генератора",
   "editor.run.realTimeLimit": "Ограничение реального времени",
   "editor.run.replications": "Повторения",
   "editor.run.seed": "Начальное значение генератора",
