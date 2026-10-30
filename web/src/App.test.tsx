@@ -174,7 +174,7 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
   await open();
   expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  fireEvent.click(button("Errors: 0 · Warnings: 1"));
+  fireEvent.click(await screen.findByRole("button", { name: "Errors: 0 · Warnings: 1" }));
   expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
   fireEvent.click(button("Collapse results"));
@@ -2079,9 +2079,9 @@ it("shows variant warnings on Model, filters Problems by badge and links fields 
   ] } } : undefined);
   await open();
   const client = within(screen.getByTestId("rf__node-client"));
-  expect(client.getByRole("button", { name: "Warnings in variants: baseline" }).classList.contains("diagnostic-badge--variants")).toBe(true);
+  expect((await client.findByRole("button", { name: "Warnings in variants: baseline" })).classList.contains("diagnostic-badge--variants")).toBe(true);
   const edge = within(screen.getByTestId("canvas-edge-label-gateway-to-middle"));
-  const badge = edge.getByRole("button", { name: "Warnings in variants: baseline, no-retries" });
+  const badge = await edge.findByRole("button", { name: "Warnings in variants: baseline, no-retries" });
   expect(badge.title).toBe("Warnings in variants: baseline, no-retries");
   expect(badge.textContent).toContain("3");
   expect(within(screen.getByTestId("rf__node-gateway")).getByRole("img", { name: "1 problems: warning" })
@@ -2143,12 +2143,13 @@ it("does not navigate away from an invalid draft through variant diagnostic link
       pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" },
   ] } } : undefined);
   await open(); await selectGateway();
+  await screen.findByRole("link", { name: "In variants: baseline — 1 warning" });
   const handlers = screen.getByLabelText("Handlers") as HTMLInputElement;
   fireEvent.change(handlers, { target: { value: "unparseable" } });
   fireEvent.click(screen.getByRole("link", { name: "In variants: baseline — 1 warning" }));
   expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
   expect(handlers.value).toBe("unparseable");
-  expect((within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: baseline" }) as HTMLButtonElement).disabled).toBe(true);
+  await waitFor(() => expect((within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: baseline" }) as HTMLButtonElement).disabled).toBe(true));
 });
 
 
@@ -2159,7 +2160,7 @@ it("reveals a new error outside the element filter opened by a variant badge", a
   server((url) => url === "/api/v1/validate" ? { body: { experiment: experimentPath,
     valid: !findings.some(finding => finding.severity === "ERROR"), diagnostics: findings } } : undefined);
   await open();
-  fireEvent.click(within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: baseline" }));
+  fireEvent.click(await within(screen.getByTestId("rf__node-gateway")).findByRole("button", { name: "Warnings in variants: baseline" }));
   expect(within(screen.getByRole("tabpanel")).getByText("Problems for gateway")).toBeTruthy();
   findings = [warning, { ...warning, code: "PARAM_RANGE", severity: "ERROR", message: "Dependency handler error",
     pointer: "/blocks/dependency/params/handlers", path: "dependency", variant: "baseline" }];
