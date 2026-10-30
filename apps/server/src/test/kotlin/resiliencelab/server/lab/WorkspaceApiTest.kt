@@ -207,20 +207,22 @@ class WorkspaceApiTest {
         val api = awaitChange(initial.cursor, apiPath, version(apiPath))
         assertThat(api.reset).isFalse()
         assertThat(api.cursor).isNotEqualTo(initial.cursor)
-        assertThat(api.changes.single { it.path == apiPath }.kind).isEqualTo(DocumentKind.LAYOUT)
+        assertThat(api.changes.filter { it.path == apiPath }.map { it.kind }).containsOnly(DocumentKind.LAYOUT)
 
+        // A file write can be observed as creation of an empty file and a later modification, so one batch may
+        // report the same path more than once.
         val externalPath = "changes-external.model.json"
         val external = root.resolve(externalPath)
         Files.writeString(external, "one\n")
         val created = awaitChange(api.cursor, externalPath, DocumentVersion.of("one\n"))
-        assertThat(created.changes.single { it.path == externalPath }.kind).isEqualTo(DocumentKind.MODEL)
+        assertThat(created.changes.filter { it.path == externalPath }.map { it.kind }).containsOnly(DocumentKind.MODEL)
 
         Files.writeString(external, "two\n")
         val updated = awaitChange(created.cursor, externalPath, DocumentVersion.of("two\n"))
 
         Files.delete(external)
         val deleted = awaitChange(updated.cursor, externalPath, version = null)
-        assertThat(deleted.changes.single { it.path == externalPath }.kind).isEqualTo(DocumentKind.MODEL)
+        assertThat(deleted.changes.filter { it.path == externalPath }.map { it.kind }).containsOnly(DocumentKind.MODEL)
     }
 
     @Test
