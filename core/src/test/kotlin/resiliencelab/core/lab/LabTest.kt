@@ -547,7 +547,7 @@ class LabTest {
         assertThat(calls.get()).isZero()
         assertThat(estimate.tasks).isEqualTo(20)
         assertThat(estimate.expectedEvents).isPositive()
-        assertThat(estimate.expectedRows).isEqualTo(8_000)
+        assertThat(estimate.expectedRows).isEqualTo(12_000)
         assertThat(estimate.estimatedParts).isEqualTo(20)
         assertThat(estimate.estimatedSeconds).isPositive()
         assertThat(estimate.estimatedArtifactBytes).isPositive()

@@ -25,6 +25,7 @@ function translate({ code, message, args }: BackendMessage): string {
     if (typeof value !== "string" && (typeof value !== "number" || !Number.isFinite(value))) return message;
     params[name] = typeof value === "number" ? formatNumber(value)
       : name === "amplification" && /^\d+$/.test(value) ? formatNumber(BigInt(value))
+      : name === "storageSource" ? messages[`messages.storageSource.${value}`] ?? value
       : name === "unit" ? messages[`messages.unit.${value}`] ?? value : value;
   }
   const base = t(key, params);
