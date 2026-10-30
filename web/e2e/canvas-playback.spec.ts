@@ -177,14 +177,15 @@ test("retry-storm nodes and edge labels retain their geometry while playback ran
     release();
     await expect(metrics).not.toHaveAttribute("aria-busy", "true");
     const slider = page.getByRole("slider", { name: "Playback window", exact: true });
-    for (const start of [30, 62]) {
+    for (const [start, target] of [[30, 80], [62, 0]]) {
       await seek(slider, start);
       await expect(metrics).not.toHaveAttribute("aria-busy", "true");
       hold = true;
-      for (let window = start; window <= start + 4; window++) {
-        if (window > start) await page.getByRole("button", { name: "Next window", exact: true }).click();
+      await seek(slider, target);
+      for (let window = target; window <= target + 4; window++) {
+        if (window > target) await page.getByRole("button", { name: "Next window", exact: true }).click();
         await expect(slider).toHaveValue(String(window));
-        if (window >= start + 2) await expect(metrics).toHaveAttribute("aria-busy", "true");
+        await expect(metrics).toHaveAttribute("aria-busy", "true");
         await checkGeometry();
       }
       release();
