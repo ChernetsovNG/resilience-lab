@@ -6,6 +6,8 @@ import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
+import resiliencelab.core.document.DecodeResult
+import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.FileWorkspace
@@ -171,6 +173,21 @@ class LabTest {
             assertThat(Files.readAllBytes(actualRoot.resolve("$runDirectory/$relative")))
                 .describedAs(relative)
                 .containsExactly(*Files.readAllBytes(expectedRoot.resolve("$expectedDirectory/$relative")))
+        }
+    }
+
+    @Test
+    fun `resume accepts a current run after connections are reordered`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val modelPath = root.resolve(model)
+        val decoded = (DocumentCodec.decodeModel(Files.readString(modelPath), model) as DecodeResult.Ok).value
+        Files.writeString(modelPath, DocumentCodec.encodeModel(decoded.copy(connections = decoded.connections.reversed())))
+        val runDirectory = ".results/retry-storm/cancelled"
+
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThat(lab.validateResume(runDirectory).complete).isFalse()
+            assertThat(lab.resume(runDirectory).manifest.complete).isTrue()
         }
     }
 

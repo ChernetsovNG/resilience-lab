@@ -6,10 +6,10 @@ import ksl.utilities.random.rvariable.KSLRandom
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 
@@ -44,8 +44,8 @@ object TestChains {
     ): RunSettings = RunSettings(replications, warmupMs, measurementMs, seed, maxRealTimeSeconds)
 
     /** `client` → `entry` → `backend`: one handler and two queue places each, 20 ms fixed processing, no retries delay. */
-    fun simple(): ChainIr =
-        ChainIr(
+    fun simple(): GraphIr =
+        GraphIr(
             client = ClientNode(CLIENT, arrivalRatePerMs = 0.01, deadlineMs = 500.0),
             entry = "entry",
             services =
@@ -72,7 +72,7 @@ object TestChains {
     /** Engine model of one replication of [chain] with path-based streams. */
     fun reliabilityModel(
         model: Model,
-        chain: ChainIr,
+        chain: GraphIr,
         replication: Int = 0,
     ): ReliabilityModel {
         val plan = StreamPlan(PathStreams.keys(chain, replication))

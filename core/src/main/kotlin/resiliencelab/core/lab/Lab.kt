@@ -186,7 +186,7 @@ class Lab(
                         compiled.run.replications,
                         requireNotNull(manifest.series).points,
                         manifest.grid,
-                        callChain(compiled),
+                        callOrder(compiled),
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
             }
@@ -257,7 +257,7 @@ class Lab(
                             compiled.run.replications,
                             requireNotNull(manifest.series).points,
                             manifest.grid,
-                            callChain(compiled),
+                            callOrder(compiled),
                         )
                     RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
                 }
@@ -431,10 +431,24 @@ class Lab(
         val result = compiler.compile(model, modelDocument.path, experiment, experimentPath)
         val layout = experiment.layoutRef?.let { checkLayout(experimentPath, it, drafts) }.orEmpty()
         val versions = sortedMapOf(experimentPath to experimentDocument.version, modelDocument.path to modelDocument.version)
+        // Connection array order is not model semantics. Keep source revisions strict for queued jobs,
+        // while the artifact identity follows the graph order and remains stable under document permutations.
+        val callPositions =
+            result.experiment
+                ?.variants
+                ?.first()
+                ?.points
+                ?.first()
+                ?.graph
+                ?.calls
+                ?.mapIndexed { index, call -> call.path to index }
+                ?.toMap()
+                .orEmpty()
+        val artifactModel = model.copy(connections = model.connections.sortedBy { callPositions[it.id] ?: -1 })
         val artifactVersions =
             sortedMapOf(
                 experimentPath to DocumentVersion.of(DocumentCodec.encodeExperiment(experiment)),
-                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(model)),
+                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(artifactModel)),
             )
         return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions, artifactVersions)
     }
@@ -549,13 +563,10 @@ class Lab(
 }
 
 /** Variants and grid points override parameters only, so the validated call topology is shared. */
-private fun callChain(compiled: CompiledExperiment): List<String> {
-    val chain =
-        compiled.variants
-            .first()
-            .points
-            .first()
-            .chain
-    val targets = chain.calls.associate { it.from to it.to }
-    return generateSequence(chain.entry) { targets[it] }.toList()
-}
+private fun callOrder(compiled: CompiledExperiment): List<String> =
+    compiled.variants
+        .first()
+        .points
+        .first()
+        .graph.topologicalServices
+        .map { it.path }

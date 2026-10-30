@@ -2,7 +2,7 @@ package resiliencelab.core.engine.ksl
 
 import ksl.utilities.random.rng.RNStreamFactory
 import ksl.utilities.random.rng.RNStreamIfc
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
@@ -25,9 +25,15 @@ enum class StreamRole(
 /** Resolves the stream of one random source of one model. */
 fun interface StreamSource {
     fun stream(
-        path: String,
+        path: List<String>,
         role: StreamRole,
     ): RNStreamIfc
+
+    /** Stage-1 string paths remain convenient for direct engine tests and callers. */
+    fun stream(
+        path: String,
+        role: StreamRole,
+    ): RNStreamIfc = stream(path.split('/'), role)
 }
 
 /** Full identity of a random source; [path] lists the segments of the block instance path. */
@@ -79,25 +85,25 @@ object PathStreams {
      */
     fun streamAt(address: Long): RNStreamIfc = RNStreamFactory().nextStream().apply { advanceSubStreams(address) }
 
-    /** Random sources the engine reads for [chain]. */
-    fun sources(chain: ChainIr): List<Pair<String, StreamRole>> =
+    /** Random sources the engine reads for [graph]. */
+    fun sources(graph: GraphIr): List<Pair<List<String>, StreamRole>> =
         buildList {
-            add(chain.client.path to StreamRole.ARRIVALS)
-            chain.services.forEach {
-                add(it.path to StreamRole.PROCESSING)
-                add(it.path to StreamRole.OUTCOME)
+            add(graph.client.pathSegments to StreamRole.ARRIVALS)
+            graph.services.forEach {
+                add(it.pathSegments to StreamRole.PROCESSING)
+                add(it.pathSegments to StreamRole.OUTCOME)
             }
-            chain.calls.forEach {
-                add(it.path to StreamRole.NETWORK)
-                add(it.path to StreamRole.JITTER)
+            graph.calls.forEach {
+                add(it.pathSegments to StreamRole.NETWORK)
+                add(it.pathSegments to StreamRole.JITTER)
             }
         }
 
-    /** Keys of all sources of [chain] for one replication. */
+    /** Keys of all sources of [graph] for one replication. */
     fun keys(
-        chain: ChainIr,
+        graph: GraphIr,
         replication: Int,
-    ): List<StreamKey> = sources(chain).map { (path, role) -> StreamKey(chain.run.seed, replication.toLong(), path.split('/'), role.id) }
+    ): List<StreamKey> = sources(graph).map { (path, role) -> StreamKey(graph.run.seed, replication.toLong(), path, role.id) }
 }
 
 /**
@@ -138,10 +144,10 @@ class PathStreamSource(
     private val opened = HashMap<StreamKey, RNStreamIfc>()
 
     override fun stream(
-        path: String,
+        path: List<String>,
         role: StreamRole,
     ): RNStreamIfc {
-        val key = StreamKey(seed, replication, path.split('/'), role.id)
+        val key = StreamKey(seed, replication, path, role.id)
         return opened.getOrPut(key) { PathStreams.streamAt(plan.address(key)) }
     }
 }

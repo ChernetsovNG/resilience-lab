@@ -4,7 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CoreMessage
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.results.SeriesWriter
 import kotlin.math.ceil
@@ -84,8 +85,8 @@ internal object CostEstimator {
         var parts = 0L
         experiment.variants.forEach { variant ->
             variant.points.forEach { point ->
-                val chain = point.chain
-                if (chain.services.size > 5000) {
+                val graph = point.graph
+                if (graph.services.size > 5000) {
                     warnings[CoreMessage.ESTIMATE_EXTRAPOLATION] =
                         EstimateWarning(
                             CoreMessage.ESTIMATE_EXTRAPOLATION,
@@ -93,7 +94,7 @@ internal object CostEstimator {
                             mapOf("minServices" to JsonPrimitive(50), "maxServices" to JsonPrimitive(5000)),
                         )
                 }
-                val perReplication = estimateTask(chain)
+                val perReplication = estimateTask(graph)
                 if (perReplication.rawBytes > UI_CACHE_BYTES) {
                     warnings[CoreMessage.ESTIMATE_UI_CACHE] =
                         EstimateWarning(
@@ -130,36 +131,42 @@ internal object CostEstimator {
     }
 
     /** Configured attempts give a conservative event estimate; stochastic queue wakeups are not predicted exactly. */
-    private fun expectedEvents(chain: ChainIr): Double {
-        val arrivals = chain.client.arrivalRatePerMs * (chain.run.warmupMs + chain.run.measurementMs)
-        var visits = 1.0
+    private fun expectedEvents(graph: GraphIr): Double {
+        val arrivals = graph.client.arrivalRatePerMs * (graph.run.warmupMs + graph.run.measurementMs)
+        val visits = mutableMapOf(graph.entry to 1.0)
         var perOriginalRequest = 2.0
-        chain.services.forEachIndexed { index, service ->
-            perOriginalRequest += 3.0 * visits
-            if (index > 0) perOriginalRequest += 2.0 * visits
-            val call = chain.outgoingCall(service.path)
-            if (call != null) {
-                perOriginalRequest += 2.0 * visits * call.attempts
-                visits *= call.attempts
+        graph.topologicalServices.forEach { service ->
+            val count = visits[service.path] ?: 0.0
+            if (service.path != graph.entry) perOriginalRequest += 2.0 * count
+            graph.scenario(service).forEach { step ->
+                when (step) {
+                    ServiceStep.Process -> perOriginalRequest += 3.0 * count
+                    is ServiceStep.Call -> {
+                        val call = graph.call(step.edge)
+                        val attempts = count * call.attempts
+                        perOriginalRequest += 2.0 * attempts
+                        visits[call.to] = (visits[call.to] ?: 0.0) + attempts
+                    }
+                }
             }
         }
         val fixedEvents =
-            windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs).toDouble() +
-                3.0 + 2.0 * chain.faults.size
+            windowCount(graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs).toDouble() +
+                3.0 + 2.0 * graph.faults.size
         return arrivals * perOriginalRequest + fixedEvents
     }
 
-    private fun estimateTask(chain: ChainIr): TaskEstimate {
-        val events = expectedEvents(chain)
+    private fun estimateTask(graph: GraphIr): TaskEstimate {
+        val events = expectedEvents(graph)
         require(events.isFinite() && events >= 0.0) { "Experiment event estimate exceeds numeric range" }
-        val windows = windowCount(chain.run.warmupMs + chain.run.measurementMs, chain.run.windowMs)
-        val rows = Math.multiplyExact((chain.services.size + 1).toLong(), windows.toLong())
+        val windows = windowCount(graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs)
+        val rows = Math.multiplyExact((graph.services.size + 1).toLong(), windows.toLong())
         val rawBytes = Math.multiplyExact(rows, BYTES_PER_NODE_WINDOW)
         val parts = ceil(rawBytes.toDouble() / SeriesWriter.MAX_PART_BYTES).toLong().coerceAtLeast(1)
         val compressedBytes = ceil(rawBytes * GZIP_RATIO).toLong()
-        val metadataBytes = Math.multiplyExact((chain.services.size + 1).toLong(), 1024)
+        val metadataBytes = Math.multiplyExact((graph.services.size + 1).toLong(), 1024)
         val artifactBytes = Math.addExact(Math.addExact(compressedBytes, Math.multiplyExact(parts, 512)), metadataBytes)
-        val anchor = timingAnchor(chain.services.size)
+        val anchor = timingAnchor(graph.services.size)
         val seconds =
             anchor.interceptSeconds +
                 anchor.secondsPerMillionEvents * events / 1_000_000 +

@@ -58,8 +58,8 @@ data class SaturationSummary(
 /** Applies the stage 1 saturation rule and aggregates independent replications without hiding empty paths. */
 object SaturationAnalyzer {
     /**
-     * Reads [windows] chronologically for each node. [callChain] lists nodes upstream to downstream; equal onsets
-     * put downstream nodes first, with node id as the fallback for nodes outside the chain.
+     * Reads [windows] chronologically for each node. [callChain] is the graph's topological node order; equal onsets
+     * put downstream nodes first, with node id as the fallback for nodes outside that order.
      */
     fun detect(
         replication: Int,

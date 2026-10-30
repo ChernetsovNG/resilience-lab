@@ -11,10 +11,10 @@ import resiliencelab.core.document.GridAxis
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
@@ -25,13 +25,13 @@ class ModelLinterTest {
     private fun variant(
         id: String,
         label: String,
-        chain: ChainIr,
+        chain: GraphIr,
     ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
 
     private val linter = ModelLinter()
     private val noBackoff = Backoff(BackoffKind.NONE, 0.0, 0.0, 2.0)
     private val chain =
-        ChainIr(
+        GraphIr(
             ClientNode("client", 0.001, 1_000.0, Origin("m.model.json", "/blocks/client")),
             "a",
             listOf(service("a", 1.0), service("b", 2.0), service("c", 8.0)),
@@ -392,11 +392,11 @@ class ModelLinterTest {
     }
 
     private fun warnings(
-        chain: ChainIr,
+        chain: GraphIr,
         code: String,
     ): List<Diagnostic> = linter.lint(experiment(chain)).filter { it.code == code }
 
-    private fun experiment(chain: ChainIr) = CompiledExperiment(listOf(variant("base", "Base", chain)), chain.run)
+    private fun experiment(chain: GraphIr) = CompiledExperiment(listOf(variant("base", "Base", chain)), chain.run)
 
     private fun fixed(meanMs: Double) = Distribution(DistributionShape.FIXED, meanMs)
 

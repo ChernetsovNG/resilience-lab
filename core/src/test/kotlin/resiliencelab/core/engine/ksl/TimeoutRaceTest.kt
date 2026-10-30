@@ -9,9 +9,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.assertLatencies
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
@@ -434,7 +434,7 @@ class TimeoutRaceTest {
         network: Distribution = fixed(0.0),
         timeoutMs: Double,
         backendQueueCapacity: Int? = null,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             services =
@@ -455,7 +455,7 @@ class TimeoutRaceTest {
     private fun fixed(durationMs: Double): Distribution = TestChains.fixed(durationMs)
 
     private fun simulate(
-        chain: ChainIr,
+        chain: GraphIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
         replicationLengthMs: Double = 100.0,

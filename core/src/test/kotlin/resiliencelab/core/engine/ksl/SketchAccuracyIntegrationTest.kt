@@ -10,10 +10,10 @@ import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.LatencyStatistics
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.results.NodeWindow
@@ -37,7 +37,7 @@ class SketchAccuracyIntegrationTest {
         val plan =
             StreamPlan(
                 compiled.variants.flatMap { variant ->
-                    (0 until compiled.run.replications).flatMap { PathStreams.keys(variant.points.single().chain, it) }
+                    (0 until compiled.run.replications).flatMap { PathStreams.keys(variant.points.single().graph, it) }
                 },
             )
         compiled.variants.forEach { variant ->
@@ -48,7 +48,7 @@ class SketchAccuracyIntegrationTest {
                 val result =
                     ReliabilityModel(
                         Model("sketch-accuracy", autoCSVReports = false),
-                        variant.points.single().chain,
+                        variant.points.single().graph,
                         PathStreamSource(plan, compiled.run.seed, replication.toLong()),
                         onOriginalCompletion = { latency, succeeded ->
                             all += latency
@@ -65,7 +65,7 @@ class SketchAccuracyIntegrationTest {
     fun `windows include warmup completions while cohort totals include runout completions`() {
         val settings = RunSettings(1, 10.0, 15.0, 42L, 30L, windowMs = 10.0)
         val chain =
-            ChainIr(
+            GraphIr(
                 ClientNode("client", 0.1, 1000.0),
                 "service",
                 listOf(ServiceNode("service", 1, 10, Distribution(DistributionShape.FIXED, 20.0), 0.0)),

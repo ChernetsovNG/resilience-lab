@@ -84,7 +84,7 @@ class ArtifactPipelineTest {
     }
 
     @Test
-    fun `artifact is byte identical across workers and block order and summary rebuilds from replication files`() {
+    fun `artifact is byte identical across workers and document order and summary rebuilds from replication files`() {
         val sequential = example("one")
         val parallel = example("three")
         val reordered = example("reordered")
@@ -99,6 +99,7 @@ class ArtifactPipelineTest {
                             .toList()
                             .reversed()
                             .toMap(),
+                    connections = model.connections.reversed(),
                 ),
             ),
         )

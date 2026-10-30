@@ -14,7 +14,7 @@ import resiliencelab.core.engine.ksl.ReliabilityModel
 import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
@@ -30,7 +30,7 @@ class ExperimentSchedulingTest {
     private fun variant(
         id: String,
         label: String,
-        chain: ChainIr,
+        chain: GraphIr,
     ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
 
     @Test

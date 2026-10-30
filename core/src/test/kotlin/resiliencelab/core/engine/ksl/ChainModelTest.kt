@@ -7,18 +7,18 @@ import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import kotlin.test.Test
 
 class ChainModelTest {
     private fun chain(faults: List<FaultSpan> = emptyList()) =
-        ChainIr(
+        GraphIr(
             client = ClientNode("client", arrivalRatePerMs = 0.05, deadlineMs = 200.0),
             entry = "front",
             services =
@@ -43,7 +43,7 @@ class ChainModelTest {
         )
 
     private fun run(
-        chain: ChainIr,
+        chain: GraphIr,
         replication: Int,
     ): ReplicationResult {
         val plan = StreamPlan(PathStreams.keys(chain, replication))
@@ -59,7 +59,7 @@ class ChainModelTest {
 
         assertThat(first.originalArrivals).isGreaterThan(0)
         assertThat(first.successes + first.failures).isEqualTo(first.originalArrivals)
-        assertThat(first.services.keys).containsExactly("back", "front")
+        assertThat(first.services.keys).containsExactly("front", "back")
         assertThat(run(chain, replication = 0)).isEqualTo(first)
         assertThat(run(chain, replication = 1).arrivalTimesMs).isNotEqualTo(first.arrivalTimesMs)
     }

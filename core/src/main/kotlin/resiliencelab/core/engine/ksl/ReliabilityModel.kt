@@ -8,12 +8,12 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Builds and runs the KSL process model for one chain of the IR.
+ * Builds and runs the KSL process model for one graph of the IR.
  * Original requests receive an absolute deadline at arrival, and service handlers remain seized through local
  * processing, synchronous downstream waits, retries, and backoff. A caller timeout or deadline ends only that
  * client's wait: admitted descendants continue, late responses are ignored, and no retry starts after the deadline.
@@ -25,7 +25,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 class ReliabilityModel(
     model: Model,
-    private val chain: ChainIr,
+    private val graph: GraphIr,
     private val streams: StreamSource,
     private val onReplicationCompleted: ((Int, ReplicationResult) -> Unit)? = null,
     onWindow: (
@@ -35,28 +35,34 @@ class ReliabilityModel(
     ) -> Unit = { _, _, _ -> },
     private val onOriginalCompletion: ((Double, Boolean) -> Unit)? = null,
 ) : ProcessModel(model) {
-    private val measurementStartMs = chain.run.warmupMs
-    private val measurementEndMs = chain.run.warmupMs + chain.run.measurementMs
+    init {
+        require(graph.topologicalServices.all { graph.scenario(it) == graph.defaultScenario(it) }) {
+            "The stage-1 engine adapter supports only default process/call scenarios"
+        }
+    }
+
+    private val measurementStartMs = graph.run.warmupMs
+    private val measurementEndMs = graph.run.warmupMs + graph.run.measurementMs
 
     val metrics =
         MetricsCollector(
-            services = chain.services,
+            services = graph.topologicalServices,
             measurementStartMs = measurementStartMs,
             measurementEndMs = measurementEndMs,
             currentTimeMs = { time },
-            clientId = chain.client.path,
-            windowMs = chain.run.windowMs,
-            connectionIds = chain.calls.map { it.path },
+            clientId = graph.client.path,
+            windowMs = graph.run.windowMs,
+            connectionIds = graph.topologicalCalls.map { it.path },
             onWindow = onWindow,
         )
     private val runtimes =
-        chain.services
+        graph.topologicalServices
             .map { service ->
                 ServiceRuntime(
                     parent = this,
                     node = service,
                     streams = streams,
-                    outgoingCall = chain.outgoingCall(service.path),
+                    outgoingCall = graph.outgoingCalls(service.path).singleOrNull(),
                     onAdmitted = ::recordAdmission,
                     onQueueLengthChanged = { queueLength ->
                         metrics.recordQueueLength(service.path, this@ReliabilityModel.time, queueLength)
@@ -76,7 +82,7 @@ class ReliabilityModel(
 
     init {
         model.lengthOfReplication = Double.POSITIVE_INFINITY
-        model.maximumAllowedExecutionTimePerReplication = chain.run.maxRealTimeSeconds.seconds
+        model.maximumAllowedExecutionTimePerReplication = graph.run.maxRealTimeSeconds.seconds
         executive.attachObserver(
             object : ObserverIfc<KSLEvent<*>?> {
                 override fun onChange(newValue: KSLEvent<*>?) {
@@ -118,7 +124,7 @@ class ReliabilityModel(
             timeToEvent = measurementEndMs,
             priority = KSLEvent.DEFAULT_PRIORITY - 1,
         )
-        chain.faults.forEach { fault ->
+        graph.faults.forEach { fault ->
             val runtime = runtimes.getValue(fault.target)
             schedule(
                 eventAction = ModelElement.EventActionIfc<Nothing> { runtime.startFault(fault) },
@@ -134,7 +140,7 @@ class ReliabilityModel(
     }
 
     private fun scheduleWindowClose(number: Int) {
-        val boundary = minOf(measurementEndMs, number.toDouble() * chain.run.windowMs)
+        val boundary = minOf(measurementEndMs, number.toDouble() * graph.run.windowMs)
         schedule(
             eventAction =
                 ModelElement.EventActionIfc<Nothing> {
@@ -152,11 +158,11 @@ class ReliabilityModel(
         if (workloadPrepared) return
         ArrivalGenerator(
             reliabilityModel = this,
-            entryServiceId = chain.entry,
-            arrivalRate = chain.client.arrivalRatePerMs,
-            warmupMs = chain.run.warmupMs,
-            measurementMs = chain.run.measurementMs,
-            stream = streams.stream(chain.client.path, StreamRole.ARRIVALS),
+            entryServiceId = graph.entry,
+            arrivalRate = graph.client.arrivalRatePerMs,
+            warmupMs = graph.run.warmupMs,
+            measurementMs = graph.run.measurementMs,
+            stream = streams.stream(graph.client.pathSegments, StreamRole.ARRIVALS),
         )
         CompletionMonitor(
             reliabilityModel = this,
@@ -204,7 +210,7 @@ class ReliabilityModel(
         }
         val originalDeadlineMs =
             if (originalRequest) {
-                (arrivalTimeMs + chain.client.deadlineMs).also { deadline ->
+                (arrivalTimeMs + graph.client.deadlineMs).also { deadline ->
                     if (!deadline.isFinite()) {
                         throw ExperimentExecutionException("Original request deadline must be finite")
                     }

@@ -13,10 +13,10 @@ import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import java.util.Collections
@@ -33,13 +33,13 @@ class ExperimentExecutorTest {
     private fun variant(
         id: String,
         label: String,
-        chain: ChainIr,
+        chain: GraphIr,
     ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
 
     private val run = RunSettings(replications = 3, warmupMs = 0.0, measurementMs = 300.0, seed = 11, maxRealTimeSeconds = 30)
 
     private fun chain(attempts: Int) =
-        ChainIr(
+        GraphIr(
             client = ClientNode("client", 0.05, 200.0),
             entry = "front",
             services =
@@ -353,7 +353,7 @@ class ExperimentExecutorTest {
         processing: Distribution = TestChains.fixed(1.0),
         queueCapacity: Int = 1_000,
         deadlineMs: Double = 10_000.0,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             client = base.client.copy(arrivalRatePerMs = arrivalRatePerMs, deadlineMs = deadlineMs),
@@ -372,10 +372,19 @@ class ExperimentExecutorTest {
 
     private fun experimentOf(
         settings: RunSettings,
-        vararg variants: Pair<String, ChainIr>,
+        vararg variants: Pair<String, GraphIr>,
     ): CompiledExperiment =
         CompiledExperiment(
             variants = variants.map { (id, chain) -> variant(id, id, chain.copy(run = settings)) },
             run = settings,
         )
+
+    @Test
+    fun `task submission order does not change variant results`() {
+        ExperimentExecutor(workers = 2).use { executor ->
+            val original = executor.run(experiment).variants.associateBy { it.id }
+            val reversed = executor.run(experiment.copy(variants = experiment.variants.reversed())).variants.associateBy { it.id }
+            assertThat(reversed).isEqualTo(original)
+        }
+    }
 }
