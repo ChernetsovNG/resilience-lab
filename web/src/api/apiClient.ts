@@ -71,6 +71,7 @@ export const api = {
   documents: () => request<DocumentEntry[]>("/api/v1/workspace/documents"),
   changes: (since?: string) => request<WorkspaceChangesView>(`/api/v1/workspace/changes${since === undefined ? "" : `?since=${encodeURIComponent(since)}`}`),
   document: (path: string) => request<DocumentView>(documentUrl(path)),
+  documentText: (path: string) => requestText(`/api/v1/workspace/document/text?path=${encodeURIComponent(path)}`),
   /** Writes a document; [version] is the one it was read with, or null for a new document. */
   saveDocument: (path: string, content: DocumentContent, version: string | null) =>
     request<DocumentEntry>(documentUrl(path), json("PUT", content, version === null ? {} : { "If-Match": `"${version}"` })),

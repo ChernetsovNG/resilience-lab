@@ -57,6 +57,16 @@ class DocumentController(
         return ResponseEntity.ok().eTag(document.version).body(DocumentView(path, kind, document.version, content))
     }
 
+    /** Downloads canonical document JSON as UTF-8 text; the ETag identifies the stored source version. */
+    @GetMapping("/document/text", produces = ["text/plain;charset=UTF-8"])
+    @Throws(IOException::class)
+    fun getDocumentText(
+        @RequestParam path: String,
+    ): ResponseEntity<String> {
+        val view = requireNotNull(getDocument(path).body)
+        return ResponseEntity.ok().eTag(view.version).body(requireNotNull(Documents.encode(view.kind, view.content)))
+    }
+
     @PutMapping("/document")
     @Throws(IOException::class)
     fun putDocument(
