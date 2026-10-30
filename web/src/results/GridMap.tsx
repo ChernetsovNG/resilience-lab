@@ -1,3 +1,4 @@
+import { instanceServiceEntries } from "./instances";
 import { t } from "../i18n";
 import { formatInterval, formatNumber, formatPercent } from "../i18n/format";
 import { useState } from "react";
@@ -30,7 +31,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
   const variant = summary.variants.find((candidate) => candidate.id === activeVariantId);
   if (variant === undefined) return <p className="results-empty">{t("results.map.selectVariant")}</p>;
   const grid = summary.grid;
-  const services = [...new Set(variant.points.flatMap((point) => Object.keys(point.aggregate.services)))].sort();
+  const services = [...new Set(variant.points.flatMap((point) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
   const service = services.includes(chosenService) ? chosenService : services[0] ?? "";
   const serviceMetric = metric === "admittedAmplification" || metric === "handlerUtilization";
   const cells = gridCells(grid, variant.points).map((cell) => {

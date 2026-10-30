@@ -1482,12 +1482,25 @@
               "type" : "null"
             } ]
           },
+          "meanLatencyMs" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "pooledLatency" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/LatencyDistribution"
             }, {
               "type" : "null"
             } ]
+          },
+          "slotPoolSummaries" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateSlotPoolMetrics"
+            }
           },
           "timeoutRate" : {
             "oneOf" : [ {
@@ -1500,7 +1513,7 @@
             "$ref" : "#/components/schemas/ConnectionTotals"
           }
         },
-        "required" : [ "totals" ]
+        "required" : [ "slotPoolSummaries", "totals" ]
       },
       "AggregateMetrics" : {
         "type" : "object",
@@ -1509,6 +1522,12 @@
             "type" : "object",
             "additionalProperties" : {
               "$ref" : "#/components/schemas/AggregateConnectionMetrics"
+            }
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicaGroup"
             }
           },
           "p95LatencyMs" : {
@@ -1548,7 +1567,7 @@
             } ]
           }
         },
-        "required" : [ "connections", "pooledLatency", "poolers", "services" ]
+        "required" : [ "connections", "groups", "pooledLatency", "poolers", "services" ]
       },
       "AggregatePoolerMetrics" : {
         "type" : "object",
@@ -1576,6 +1595,13 @@
               "type" : "null"
             } ]
           },
+          "meanLatencyMs" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "offeredAmplification" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/MetricSummary"
@@ -1583,11 +1609,50 @@
               "type" : "null"
             } ]
           },
+          "pooledLatency" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "slotPoolSummaries" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateSlotPoolMetrics"
+            }
+          },
           "totals" : {
             "$ref" : "#/components/schemas/ServiceTotals"
           }
         },
-        "required" : [ "totals" ]
+        "required" : [ "slotPoolSummaries", "totals" ]
+      },
+      "AggregateSlotPoolMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "meanQueueLength" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "meanWaitMs" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "utilization" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
       },
       "ApiProblem" : {
         "type" : "object",
@@ -2734,6 +2799,68 @@
         },
         "required" : [ "denominator", "numerator", "symbol" ]
       },
+      "ReplicaGroup" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "instances" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicaMember"
+            }
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "NODE", "CONNECTION" ]
+          }
+        },
+        "required" : [ "id", "instances", "kind" ]
+      },
+      "ReplicaMember" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "replica" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "id", "replica" ]
+      },
+      "ReplicaSlotExtrema" : {
+        "type" : "object",
+        "properties" : {
+          "maxMeanQueueLength" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "maxMeanQueueLengthReplica" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxUtilization" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "maxUtilizationReplica" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "minMeanQueueLength" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "minUtilization" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          }
+        },
+        "required" : [ "maxMeanQueueLength", "maxMeanQueueLengthReplica", "minMeanQueueLength" ]
+      },
       "ReplicationSaturation" : {
         "type" : "object",
         "properties" : {
@@ -2943,6 +3070,12 @@
             "type" : "number",
             "format" : "double"
           },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicaGroup"
+            }
+          },
           "parts" : {
             "type" : "array",
             "items" : {
@@ -2958,7 +3091,7 @@
             "format" : "double"
           }
         },
-        "required" : [ "endMs", "parts", "schemaVersion", "windowMs" ]
+        "required" : [ "endMs", "groups", "parts", "schemaVersion", "windowMs" ]
       },
       "SeriesMetadata" : {
         "type" : "object",
@@ -3012,6 +3145,10 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "INSTANCE", "GROUP" ]
+          },
           "nodes" : {
             "type" : "array",
             "items" : {
@@ -3030,7 +3167,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "connections", "fromWindow", "nodes", "profile", "schemaVersion", "untilWindow" ]
+        "required" : [ "connections", "fromWindow", "kind", "nodes", "profile", "schemaVersion", "untilWindow" ]
       },
       "SeriesPartReference" : {
         "type" : "object",
@@ -3047,6 +3184,10 @@
           "fromWindow" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "INSTANCE", "GROUP" ]
           },
           "nodes" : {
             "type" : "array",
@@ -3066,7 +3207,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "connections", "file", "fromWindow", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
+        "required" : [ "connections", "file", "fromWindow", "kind", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
       },
       "ServiceTotals" : {
         "type" : "object",
@@ -3126,6 +3267,13 @@
           "queueIntegralMs" : {
             "type" : "number",
             "format" : "double"
+          },
+          "replicaExtrema" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ReplicaSlotExtrema"
+            }, {
+              "type" : "null"
+            } ]
           },
           "totalWaitMs" : {
             "type" : "number",
@@ -3275,6 +3423,10 @@
         "properties" : {
           "admittedAttempts" : {
             "type" : "integer",
+            "format" : "int32"
+          },
+          "clientOriginalArrivals" : {
+            "type" : [ "integer", "null" ],
             "format" : "int32"
           },
           "durationMs" : {

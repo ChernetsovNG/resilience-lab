@@ -153,7 +153,7 @@ object Stage1Catalog {
     private fun service() =
         TypeDescriptor(
             id = "service",
-            outputs = Stage1Outputs.service,
+            outputs = Stage1Outputs.service + ReplicaGroupOutputs.outputs("handlers"),
             version = 1,
             category = TypeCategory.BLOCK,
             title = "Service",
@@ -283,7 +283,7 @@ object Stage1Catalog {
     private fun call() =
         TypeDescriptor(
             id = "call",
-            outputs = Stage1Outputs.call,
+            outputs = Stage1Outputs.call + ReplicaGroupOutputs.outputs("pool"),
             version = 1,
             category = TypeCategory.CONNECTION,
             title = "Call",

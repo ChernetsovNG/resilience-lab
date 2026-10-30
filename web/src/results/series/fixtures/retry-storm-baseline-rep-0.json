@@ -4559,6 +4559,7 @@
       }
     ],
     "fromWindow": 0,
+    "kind": "INSTANCE",
     "nodes": [
       {
         "id": "client",
@@ -15922,7 +15923,7 @@
       }
     ],
     "profile": "ddsketch-bitwise6-rational-v1",
-    "schemaVersion": 5,
+    "schemaVersion": 6,
     "untilWindow": 100
   },
   "quantiles": [

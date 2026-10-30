@@ -5,6 +5,7 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
+import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.assertLatencies
@@ -44,6 +45,7 @@ class SingleServiceInvocationTest {
                 failures = 0,
                 measurementMs = 100.0,
                 queueDurationsMs = mapOf(0.0 to 100.0),
+                latency = LatencyStatistics(count = 1, sumMs = 20.0, sketch = listOf(0, 272, 1)),
                 slotPools =
                     mapOf(
                         "handlers" to

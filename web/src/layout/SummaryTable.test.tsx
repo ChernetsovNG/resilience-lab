@@ -47,7 +47,7 @@ describe("SummaryTable", () => {
 
   it("orders baseline first without mutating the document and compares means in matching units", () => {
     const run = structuredClone(summary);
-    run.variants[1].points[0].aggregate = {
+    run.variants[1].points[0].aggregate = { groups: [],
       pooledLatency: {}, services: {}, connections: {}, poolers: {}, successRate: { count: 2, mean: 0.995, min: 0.99, max: 1 },
       p95LatencyMs: { count: 2, mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { count: 2, mean: 90, min: 89, max: 91 },
     };
@@ -252,4 +252,16 @@ describe("ProblemList", () => {
     }} />);
     expect(screen.getByRole("alert").textContent).toContain("EMPTY experiment: No variants");
   });
+});
+
+it("keeps replica group aggregates out of the existing instance comparison tables", () => {
+  const run = structuredClone(summary);
+  const aggregate = run.variants[0].points[0].aggregate;
+  const base = aggregate.services.gateway;
+  aggregate.groups = [{ id: "workers", kind: "NODE", instances: [1, 2, 3].map(replica => ({ id: `workers#${replica}`, replica })) }];
+  aggregate.services.workers = base;
+  for (const replica of [1, 2, 3]) aggregate.services[`workers#${replica}`] = base;
+  render(<SummaryTable summary={run} activeVariantId="baseline" />);
+  expect(screen.queryByRole("table", { name: /workers$/ })).toBeNull();
+  expect(screen.getByRole("table", { name: /workers#1$/ })).toBeTruthy();
 });

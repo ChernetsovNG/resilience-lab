@@ -18,7 +18,7 @@ class SaturationArtifactReader(
         val index = json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         val windows =
             sequence {
-                index.parts.forEach { reference ->
+                index.parts.filter { it.kind == SeriesPartKind.INSTANCE }.forEach { reference ->
                     val compressed = workspace.readBytes("$directory/${reference.file}")
                     val bytes = GZIPInputStream(compressed.inputStream()).use { it.readAllBytes() }
                     val part = json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))

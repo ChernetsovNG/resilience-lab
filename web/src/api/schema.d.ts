@@ -282,7 +282,11 @@ export interface components {
     schemas: {
         AggregateConnectionMetrics: {
             meanInFlight?: components["schemas"]["MetricSummary"] | null;
+            meanLatencyMs?: components["schemas"]["MetricSummary"] | null;
             pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
+            slotPoolSummaries: {
+                [key: string]: components["schemas"]["AggregateSlotPoolMetrics"];
+            };
             timeoutRate?: components["schemas"]["MetricSummary"] | null;
             totals: components["schemas"]["ConnectionTotals"];
         };
@@ -290,6 +294,7 @@ export interface components {
             connections: {
                 [key: string]: components["schemas"]["AggregateConnectionMetrics"];
             };
+            groups: components["schemas"]["ReplicaGroup"][];
             p95LatencyMs?: components["schemas"]["MetricSummary"] | null;
             p99LatencyMs?: components["schemas"]["MetricSummary"] | null;
             pooledLatency: components["schemas"]["LatencySummary"];
@@ -307,8 +312,18 @@ export interface components {
         };
         AggregateServiceMetrics: {
             admittedAmplification?: components["schemas"]["MetricSummary"] | null;
+            meanLatencyMs?: components["schemas"]["MetricSummary"] | null;
             offeredAmplification?: components["schemas"]["MetricSummary"] | null;
+            pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
+            slotPoolSummaries: {
+                [key: string]: components["schemas"]["AggregateSlotPoolMetrics"];
+            };
             totals: components["schemas"]["ServiceTotals"];
+        };
+        AggregateSlotPoolMetrics: {
+            meanQueueLength?: components["schemas"]["MetricSummary"] | null;
+            meanWaitMs?: components["schemas"]["MetricSummary"] | null;
+            utilization?: components["schemas"]["MetricSummary"] | null;
         };
         ApiProblem: {
             args?: {
@@ -741,6 +756,31 @@ export interface components {
             numerator: number;
             symbol: string;
         };
+        ReplicaGroup: {
+            id: string;
+            instances: components["schemas"]["ReplicaMember"][];
+            /** @enum {string} */
+            kind: "NODE" | "CONNECTION";
+        };
+        ReplicaMember: {
+            id: string;
+            /** Format: int32 */
+            replica: number;
+        };
+        ReplicaSlotExtrema: {
+            /** Format: double */
+            maxMeanQueueLength: number;
+            /** Format: int32 */
+            maxMeanQueueLengthReplica: number;
+            /** Format: double */
+            maxUtilization?: number | null;
+            /** Format: int32 */
+            maxUtilizationReplica?: number | null;
+            /** Format: double */
+            minMeanQueueLength: number;
+            /** Format: double */
+            minUtilization?: number | null;
+        };
         ReplicationSaturation: {
             degradationPath: components["schemas"]["SaturatedNode"][];
             /** Format: int32 */
@@ -814,6 +854,7 @@ export interface components {
         SeriesIndex: {
             /** Format: double */
             endMs: number;
+            groups: components["schemas"]["ReplicaGroup"][];
             parts: components["schemas"]["SeriesPartReference"][];
             /** Format: int32 */
             schemaVersion: number;
@@ -838,6 +879,8 @@ export interface components {
             connections: components["schemas"]["ConnectionSeries"][];
             /** Format: int32 */
             fromWindow: number;
+            /** @enum {string} */
+            kind: "INSTANCE" | "GROUP";
             nodes: components["schemas"]["NodeSeries"][];
             profile: string;
             /** Format: int32 */
@@ -850,6 +893,8 @@ export interface components {
             file: string;
             /** Format: int32 */
             fromWindow: number;
+            /** @enum {string} */
+            kind: "INSTANCE" | "GROUP";
             nodes: string[];
             sha256: string;
             /** Format: int32 */
@@ -885,6 +930,7 @@ export interface components {
             queueFullCount: number;
             /** Format: double */
             queueIntegralMs: number;
+            replicaExtrema?: components["schemas"]["ReplicaSlotExtrema"] | null;
             /** Format: double */
             totalWaitMs: number;
             /** Format: int64 */
@@ -934,6 +980,8 @@ export interface components {
         WindowMetrics: {
             /** Format: int32 */
             admittedAttempts: number;
+            /** Format: int32 */
+            clientOriginalArrivals?: number | null;
             /** Format: double */
             durationMs: number;
             /** Format: int32 */

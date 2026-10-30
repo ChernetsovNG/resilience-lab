@@ -40,7 +40,9 @@ class Stage1CatalogTest {
                         100.0,
                         slotPools =
                             listOf("handlers", "clientConnections", "serverConnections").associateWith {
-                                resiliencelab.core.experiment.SlotPoolMetrics()
+                                resiliencelab.core.experiment.SlotPoolMetrics(
+                                    replicaExtrema = resiliencelab.core.experiment.ReplicaSlotExtrema(0.0, 0.0, 1, 0.0, 0.0, 1),
+                                )
                             },
                     ),
                 ).jsonObject
@@ -53,7 +55,10 @@ class Stage1CatalogTest {
                         100.0,
                         slotPools =
                             mapOf(
-                                "pool" to resiliencelab.core.experiment.SlotPoolMetrics(),
+                                "pool" to
+                                    resiliencelab.core.experiment.SlotPoolMetrics(
+                                        replicaExtrema = resiliencelab.core.experiment.ReplicaSlotExtrema(0.0, 0.0, 1, 0.0, 0.0, 1),
+                                    ),
                             ),
                     ),
                 ).jsonObject

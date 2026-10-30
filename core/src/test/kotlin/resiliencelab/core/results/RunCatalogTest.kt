@@ -77,13 +77,13 @@ class RunCatalogTest {
 
     @Test
     fun `explicit reads of old artifacts report unsupported versions before decoding`() {
-        listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10).forEach { version ->
+        (1..11).forEach { version ->
             workspace.create(".results/old/r-old-$version/manifest.json", "{\"schemaVersion\":$version}")
             assertThat(catalog.list()).isEmpty()
             assertThatThrownBy { catalog.manifest("r-old-$version") }
                 .isInstanceOf(UnsupportedArtifactVersionException::class.java)
                 .hasMessageContaining("schemaVersion $version")
-                .hasMessageContaining("expected 11")
+                .hasMessageContaining("expected 12")
         }
     }
 }

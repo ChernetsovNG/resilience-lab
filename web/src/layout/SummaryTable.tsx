@@ -1,3 +1,4 @@
+import { instanceServiceEntries } from "../results/instances";
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent } from "../i18n/format";
 import type { ReactNode } from "react";
@@ -62,7 +63,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const variantLabel = activeVariant?.label ?? activeVariantId ?? t("results.variant");
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
     && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate) : null;
-  const services = [...new Set(columns.flatMap(({ point }) => Object.keys(point.aggregate.services)))].sort();
+  const services = [...new Set(columns.flatMap(({ point }) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
   const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (
     <tr>
@@ -89,7 +90,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
           {variant.label}
           <span className="summary-replications">{t("results.answer.replications", { count: formatNumber(variant.replications) })}</span>
           {[point.aggregate.successRate, point.aggregate.p95LatencyMs, point.aggregate.p99LatencyMs,
-            ...Object.values(point.aggregate.services).map(service => service.admittedAmplification)]
+            ...instanceServiceEntries(point.aggregate).map(([, service]) => service.admittedAmplification)]
             .some(value => value != null && value.count < MIN_RELIABLE_REPLICATIONS) ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
         </th>)}
       </tr></thead>

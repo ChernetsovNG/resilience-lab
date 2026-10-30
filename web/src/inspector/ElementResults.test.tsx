@@ -8,7 +8,7 @@ import { ElementResults, type ElementResultsProps } from "./ElementResults";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
 
 const raw: SeriesPart = {
-  schemaVersion: 5, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
+  schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
   nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({ startMs,
       durationMs: 100,
       originalArrivals: 0,
@@ -45,6 +45,7 @@ function props(): ElementResultsProps {
     admittedAmplification: { count: 2, mean: 2, min: 1, max: 3, ci95Low: 1, ci95High: 3 },
   };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
+    slotPoolSummaries: {},
     totals: { measurementMs: 2000,
       sentAttempts: 30,
       retries: 10,

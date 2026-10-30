@@ -85,3 +85,23 @@ describe("formatSaturation", () => {
     expect(saturation).toEqual(original);
   });
 });
+
+describe("headroom with replica groups", () => {
+  it("compares instance queues without competing against their group sum", async () => {
+    const { summary } = await import("../test/fixtures");
+    const { formatHeadroom } = await import("./saturation");
+    const aggregate = structuredClone(summary.variants[0].points[0].aggregate);
+    const base = aggregate.services.gateway;
+    aggregate.services = {};
+    aggregate.groups = [{ id: "workers", kind: "NODE", instances: [1, 2, 3].map(replica => ({ id: `workers#${replica}`, replica })) }];
+    for (const replica of [1, 2, 3]) aggregate.services[`workers#${replica}`] = { ...base, totals: { ...base.totals,
+      measurementMs: 100, slotPools: { handlers: { busyIntegralMs: 20, capacityIntegralMs: 100, queueIntegralMs: 40,
+        waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } } };
+    aggregate.services.workers = { ...base, totals: { ...base.totals, measurementMs: 100,
+      slotPools: { handlers: { busyIntegralMs: 60, capacityIntegralMs: 300, queueIntegralMs: 120,
+        waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } } };
+    const text = formatHeadroom(aggregate);
+    expect(text).toContain("0.4 requests at workers#1");
+    expect(text).not.toContain("1.2 requests");
+  });
+});

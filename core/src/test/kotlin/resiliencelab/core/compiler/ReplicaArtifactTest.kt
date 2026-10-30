@@ -64,7 +64,16 @@ class ReplicaArtifactTest {
         ): Map<String, ByteArray> {
             val directory = Files.createDirectories(root.resolve(name))
             FileWorkspace(directory).use { workspace ->
-                val writer = SeriesWriter(workspace, "series", graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs)
+                val writer =
+                    SeriesWriter(
+                        workspace,
+                        "series",
+                        graph.run.warmupMs + graph.run.measurementMs,
+                        graph.run.windowMs,
+                        groups =
+                            resiliencelab.core.experiment.ReplicaGroups
+                                .membership(graph),
+                    )
                 val streams = PathStreamSource(StreamPlan(PathStreams.keys(graph, 0)), graph.run.seed, 0)
                 val result =
                     ReliabilityModel(

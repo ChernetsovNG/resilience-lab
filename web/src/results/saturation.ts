@@ -1,3 +1,4 @@
+import { instanceServiceEntries } from "./instances";
 import type { RunSummary, SaturationSummary } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
@@ -29,7 +30,7 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
 
 /** Summary-only capacity context; the two maxima may belong to different services. */
 export function formatHeadroom(aggregate: RunSummary["variants"][number]["points"][number]["aggregate"]): string {
-  const services = Object.entries(aggregate.services);
+  const services = instanceServiceEntries(aggregate);
   const busiest = services.filter(([, { totals }]) => totals.slotPools.handlers.capacityIntegralMs > 0)
     .map(([service, { totals }]) => ({ service, value: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs }))
     .sort((left, right) => right.value - left.value)[0];

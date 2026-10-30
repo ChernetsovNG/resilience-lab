@@ -4,15 +4,15 @@ import { selectSeriesParts } from "./selection";
 
 type SeriesIndex = components["schemas"]["SeriesIndex"];
 
-const index: SeriesIndex = {
-  schemaVersion: 5,
+const index: SeriesIndex = { groups: [],
+  schemaVersion: 6,
   endMs: 1000,
   windowMs: 10,
   parts: [
-    { file: "part-0.json.gz", nodes: ["client", "gateway"], fromWindow: 0, untilWindow: 50, connections: [], uncompressedBytes: 100, sha256: "a" },
-    { file: "part-1.json.gz", nodes: ["middle", "dependency"], fromWindow: 0, untilWindow: 50, connections: [], uncompressedBytes: 100, sha256: "b" },
-    { file: "part-2.json.gz", nodes: ["client", "gateway"], fromWindow: 50, untilWindow: 100, connections: [], uncompressedBytes: 100, sha256: "c" },
-    { file: "part-3.json.gz", nodes: ["middle", "dependency"], fromWindow: 50, untilWindow: 100, connections: [], uncompressedBytes: 100, sha256: "d" },
+    { kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client", "gateway"], fromWindow: 0, untilWindow: 50, connections: [], uncompressedBytes: 100, sha256: "a" },
+    { kind: "INSTANCE", file: "part-1.json.gz", nodes: ["middle", "dependency"], fromWindow: 0, untilWindow: 50, connections: [], uncompressedBytes: 100, sha256: "b" },
+    { kind: "INSTANCE", file: "part-2.json.gz", nodes: ["client", "gateway"], fromWindow: 50, untilWindow: 100, connections: [], uncompressedBytes: 100, sha256: "c" },
+    { kind: "INSTANCE", file: "part-3.json.gz", nodes: ["middle", "dependency"], fromWindow: 50, untilWindow: 100, connections: [], uncompressedBytes: 100, sha256: "d" },
   ],
 };
 

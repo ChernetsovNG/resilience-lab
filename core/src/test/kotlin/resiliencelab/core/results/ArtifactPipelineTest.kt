@@ -123,7 +123,7 @@ class ArtifactPipelineTest {
             assertThat(index.parts).hasSize(1)
             assertThat(index.parts.single().fromWindow).isZero()
             assertThat(index.parts.single().untilWindow).isEqualTo(100)
-            assertThat(index.schemaVersion).isEqualTo(5)
+            assertThat(index.schemaVersion).isEqualTo(6)
             assertThat(index.parts.single().connections).containsExactly("gateway-to-middle", "middle-to-dependency")
         }
         for (path in files) {
@@ -151,7 +151,7 @@ class ArtifactPipelineTest {
                 "\"queueRejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(11)
+        assertThat(first.manifest.schemaVersion).isEqualTo(12)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

@@ -113,3 +113,19 @@ it("formats numeric grid axis values while preserving document quantities", () =
   expect(within(table).getAllByRole("rowheader")[0].textContent).toBe("80ms");
   expect(run.grid[1].values[0]).toBe(1000);
 });
+
+it("offers instances without adding group sums to the existing service selector", () => {
+  const run = gridSummary();
+  for (const point of run.variants[0].points) {
+    const aggregate = point.aggregate;
+    const base = aggregate.services.gateway;
+    aggregate.groups = [{ id: "workers", kind: "NODE", instances: [1, 2, 3].map(replica => ({ id: `workers#${replica}`, replica })) }];
+    aggregate.services.workers = base;
+    for (const replica of [1, 2, 3]) aggregate.services[`workers#${replica}`] = base;
+  }
+  render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
+  fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
+  const select = screen.getAllByRole("combobox")[1];
+  expect(within(select).getAllByRole("option").map(option => (option as HTMLOptionElement).value))
+    .toEqual(["gateway", "workers#1", "workers#2", "workers#3"]);
+});

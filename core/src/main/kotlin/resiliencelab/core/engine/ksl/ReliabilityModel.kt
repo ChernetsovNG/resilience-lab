@@ -8,6 +8,7 @@ import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
+import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.FaultKind
@@ -58,6 +59,8 @@ class ReliabilityModel(
             windowMs = graph.run.windowMs,
             connectionIds = graph.topologicalCalls.map { it.path } + graph.routes.map { it.path },
             connectionPoolSizes = graph.topologicalCalls.mapNotNull { call -> call.pool?.let { call.path to it.size } }.toMap(),
+            groups =
+                ReplicaGroups.membership(graph),
             onWindow = onWindow,
         )
     private val runtimes =
