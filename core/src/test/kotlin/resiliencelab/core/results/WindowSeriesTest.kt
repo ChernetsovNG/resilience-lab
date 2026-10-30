@@ -35,9 +35,9 @@ class WindowSeriesTest {
         )
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
-        assertThat(index.schemaVersion).isEqualTo(3)
+        assertThat(index.schemaVersion).isEqualTo(4)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(3)
+        assertThat(part.schemaVersion).isEqualTo(4)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")

@@ -34,6 +34,21 @@ data class WindowMetrics(
     val handlers: Int = 0,
     val queueLengthIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
+    val pooler: PoolerWindowMetrics? = null,
+)
+
+/** Pooler-only resource fields of a node row; counters and residence latency remain in [WindowMetrics]. */
+@Serializable
+data class PoolerWindowMetrics(
+    val maxClientConnections: Int,
+    val poolSize: Int,
+    val clientConnectionRejections: Int,
+    val waitTimeouts: Int,
+    val busyClientConnectionTimeMs: Double,
+    val busyServerConnectionTimeMs: Double,
+    val serverQueueLengthIntegralMs: Double,
+    val serverWaitCount: Int,
+    val serverWaitTimeMs: Double,
 )
 
 /** One node in a closed window, passed directly to the artifact writer. */

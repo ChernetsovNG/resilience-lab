@@ -73,6 +73,8 @@ class ReliabilityModel(
                     onBusyHandlersChanged = { busyHandlers ->
                         metrics.recordBusyHandlers(service.path, this@ReliabilityModel.time, busyHandlers)
                     },
+                    onServerQueueLengthChanged = { length -> metrics.recordPoolerQueue(service.path, length) },
+                    onBusyServerConnectionsChanged = { busy -> metrics.recordPoolerServerBusy(service.path, busy) },
                 )
             }.associateBy { it.serviceId }
 
@@ -135,6 +137,9 @@ class ReliabilityModel(
                             queueLength = runtime.queue.size,
                             busyHandlers = runtime.resource.numBusy,
                         )
+                        runtime.serverSlots?.let { server ->
+                            metrics.startPoolerMeasurement(runtime.serviceId, server.resource.numBusy, server.queue.size)
+                        }
                     }
                 },
             timeToEvent = measurementStartMs,
@@ -582,7 +587,24 @@ class ReliabilityModel(
                         val acquisition = with(runtime.slots) { acquire() }
                         val allocation = acquisition.allocation ?: throw QueueFullException(runtime.serviceId)
                         try {
-                            currentOutcome = executeScenario()
+                            val server = runtime.serverSlots
+                            if (server == null) {
+                                currentOutcome = executeScenario()
+                            } else {
+                                val acquired = with(server) { acquire() }
+                                metrics.recordPoolerWait(runtime.serviceId, acquired, measurementCohort)
+                                val serverAllocation = acquired.allocation
+                                if (serverAllocation == null) {
+                                    currentOutcome = AttemptOutcome.QUEUE_REJECTED
+                                } else {
+                                    try {
+                                        currentOutcome = executeScenario()
+                                    } finally {
+                                        release(serverAllocation)
+                                    }
+                                }
+                                if (incomingNetwork != null) delay(incomingNetwork.nextNetworkDelayMs())
+                            }
                         } finally {
                             release(allocation)
                             if (currentOutcome != AttemptOutcome.PENDING) {
@@ -590,14 +612,16 @@ class ReliabilityModel(
                                     runtime.serviceId,
                                     time - serviceArrivalMs,
                                     currentOutcome == AttemptOutcome.SUCCEEDED,
+                                    measurementCohort,
                                 )
                             }
                         }
                     } catch (exception: QueueFullException) {
                         currentOutcome = AttemptOutcome.QUEUE_REJECTED
                         metrics.recordQueueRejection(runtime.serviceId, measurementCohort)
+                        if (incomingNetwork != null && runtime.serverSlots != null) delay(incomingNetwork.nextNetworkDelayMs())
                     }
-                    if (incomingNetwork != null) {
+                    if (incomingNetwork != null && runtime.serverSlots == null) {
                         delay(incomingNetwork.nextNetworkDelayMs())
                     }
                 } finally {

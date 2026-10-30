@@ -35,7 +35,7 @@ describe("SummaryTable", () => {
   it("orders baseline first without mutating the document and compares means in matching units", () => {
     const run = structuredClone(summary);
     run.variants[1].points[0].aggregate = {
-      pooledLatency: {}, services: {}, connections: {}, successRate: { mean: 0.995, min: 0.99, max: 1 },
+      pooledLatency: {}, services: {}, connections: {}, poolers: {}, successRate: { mean: 0.995, min: 0.99, max: 1 },
       p95LatencyMs: { mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { mean: 90, min: 89, max: 91 },
     };
     run.variants.reverse();

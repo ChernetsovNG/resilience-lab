@@ -118,7 +118,7 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
-    if (index.schemaVersion !== 3) {
+    if (index.schemaVersion !== 4) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const connectionRequest = "connections" in request;

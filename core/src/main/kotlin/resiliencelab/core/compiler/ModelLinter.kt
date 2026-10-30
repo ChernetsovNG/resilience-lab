@@ -220,7 +220,7 @@ class ModelLinter(
             ordered.asReversed().forEach { service ->
                 holdingMs += service.processing.meanMs + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
                 val demand = maximumRate * holdingMs
-                if (service.handlers < demand) {
+                if (service.pooler == null && service.handlers < demand) {
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,

@@ -38,7 +38,7 @@ data class PortDescriptor(
 /** Block types a connection type may join, from its source to its target. */
 @Serializable
 data class ConnectionRule(
-    val fromType: String,
+    val fromTypes: List<String>,
     val toTypes: List<String>,
 )
 

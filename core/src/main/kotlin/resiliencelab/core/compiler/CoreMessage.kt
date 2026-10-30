@@ -44,6 +44,8 @@ internal enum class CoreMessage(
         null,
         "Outgoing connection '{connection}' is not used in the scenario of service '{service}'",
     ),
+    POOLER_OUTPUT("POOLER_OUTPUT", null, "Pooler '{pooler}' must have exactly one outgoing call"),
+    POOLER_TARGET("POOLER_TARGET", null, "Pooler '{pooler}' must call a database, service or router"),
     ROUTER_OUTPUT("ROUTER_OUTPUT", null, "Router '{router}' must have at least one route output"),
     ROUTER_INPUT("ROUTER_INPUT", null, "Router '{router}' must have exactly one incoming call or route"),
     REPLICA_BLOCK("REPLICA_BLOCK", null, "Only service blocks may define replicaOverrides"),

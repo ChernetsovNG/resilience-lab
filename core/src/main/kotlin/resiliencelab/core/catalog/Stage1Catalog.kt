@@ -34,15 +34,21 @@ object Stage1Catalog {
                     "Late responses are discarded after timeout or deadline.",
                     "Cancellation does not propagate along the call chain.",
                 ),
+            "pooler" to
+                listOf(
+                    "Transaction mode: client connections have no queue; server connections use a FIFO wait timeout.",
+                    "The server connection is held through local delay and the outgoing call; the client connection lasts through the reply.",
+                    "An upstream timeout does not cancel admitted pooler work.",
+                ),
             "router" to listOf("Selection has no queue or delay; a new output is selected for each calling attempt."),
             "route" to listOf("Output weight affects random selection only; timeout and retries belong to the incoming call."),
         )
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 2,
+            schemaVersion = 4,
             types =
-                listOf(client(), service(), request(), call(), router(), route(), database()).map { type ->
+                listOf(client(), service(), request(), call(), router(), route(), database(), pooler()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
                 },
             assumptions =
@@ -182,6 +188,58 @@ object Stage1Catalog {
                 ),
         )
 
+    private fun pooler() =
+        TypeDescriptor(
+            id = "pooler",
+            outputs = PoolerOutputs.outputs,
+            version = 1,
+            category = TypeCategory.BLOCK,
+            title = "Transaction pooler",
+            description = "Client admission and a bounded-wait server connection pool before one synchronous call.",
+            ports = listOf(PortDescriptor("in", PortDirection.IN), PortDescriptor("out", PortDirection.OUT)),
+            params =
+                listOf(
+                    ParamDescriptor(
+                        name = "maxClientConnections",
+                        kind = ParamKind.INTEGER,
+                        title = "Maximum client connections",
+                        description = "Concurrent client connections; excess attempts are rejected immediately.",
+                        required = true,
+                        minimum = 1.0,
+                        sweepable = true,
+                    ),
+                    ParamDescriptor(
+                        name = "poolSize",
+                        kind = ParamKind.INTEGER,
+                        title = "Server pool size",
+                        description = "Concurrent server connections held through local delay and the outgoing call.",
+                        required = true,
+                        minimum = 1.0,
+                        sweepable = true,
+                    ),
+                    ParamDescriptor(
+                        name = "waitTimeout",
+                        kind = ParamKind.QUANTITY,
+                        title = "Server connection wait timeout",
+                        description = "Maximum FIFO wait for a server connection; zero permits immediate acquisition only.",
+                        required = true,
+                        dimension = Dimension.DURATION,
+                        minimum = 0.0,
+                        sweepable = true,
+                    ),
+                    distribution(
+                        name = "processing",
+                        title = "Pooler delay",
+                        description = "Local delay after acquiring a server connection, before the outgoing call.",
+                        default =
+                            buildJsonObject {
+                                put("kind", "fixed")
+                                put("mean", "0ms")
+                            },
+                    ),
+                ),
+        )
+
     private fun request() =
         TypeDescriptor(
             id = "request",
@@ -190,7 +248,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Request",
             description = "Delivers original requests from the client to the entry service without delay or retries.",
-            connects = ConnectionRule("client", listOf("service")),
+            connects = ConnectionRule(listOf("client"), listOf("service")),
         )
 
     private fun call() =
@@ -201,7 +259,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
-            connects = ConnectionRule("service", listOf("service", "router", "database")),
+            connects = ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler")),
             params =
                 listOf(
                     distribution(
@@ -353,8 +411,8 @@ object Stage1Catalog {
             version = 1,
             category = TypeCategory.CONNECTION,
             title = "Route",
-            description = "One router output to a service, database or another router.",
-            connects = ConnectionRule("router", listOf("service", "router", "database")),
+            description = "One router output to a callable block.",
+            connects = ConnectionRule(listOf("router"), listOf("service", "router", "database", "pooler")),
             params =
                 listOf(
                     ParamDescriptor(

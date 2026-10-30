@@ -26,7 +26,7 @@ function window(values: Partial<RawWindow> = {}): RawWindow {
 
 function part(windows: RawWindow[] = [window()]): RawPart {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     profile: "ddsketch-bitwise6-rational-v1",
     fromWindow: 0,
     untilWindow: windows.length,
@@ -99,7 +99,7 @@ describe("connection window decoding", () => {
     expect(decoded.connections[0].id).toBe("client-to-service");
   });
 
-  it.each([1, 2, 4])("rejects unsupported part schema version %s", (schemaVersion) => {
+  it.each([1, 2, 3, 5])("rejects unsupported part schema version %s", (schemaVersion) => {
     expect(() => decodeSeriesPart(JSON.stringify({ ...part(), schemaVersion }))).toThrow(/schema version/i);
   });
 

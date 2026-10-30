@@ -94,7 +94,7 @@ object PathStreams {
             if (!graph.client.load.isConstant) add(graph.client.pathSegments to StreamRole.ARRIVAL_ACCEPTANCE)
             graph.services.forEach {
                 add(it.pathSegments to StreamRole.PROCESSING)
-                add(it.pathSegments to StreamRole.OUTCOME)
+                if (it.pooler == null) add(it.pathSegments to StreamRole.OUTCOME)
             }
             graph.calls.forEach {
                 add(it.pathSegments to StreamRole.NETWORK)

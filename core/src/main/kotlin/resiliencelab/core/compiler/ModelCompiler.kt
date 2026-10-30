@@ -27,6 +27,7 @@ import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.PoolerSettings
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
@@ -355,17 +356,19 @@ class ModelCompiler(
                 )
             }
             val rule = type.connects
-            if (from != null && to != null && rule != null && (from.type != rule.fromType || to.type !in rule.toTypes)) {
+            if (from != null && to != null && rule != null && (from.type !in rule.fromTypes || to.type !in rule.toTypes)) {
                 sink.error(
                     CoreMessage.CONNECTION_TYPE,
-                    "Connection type '${type.id}' must connect ${rule.fromType} to ${rule.toTypes.joinToString(" or ")}",
+                    "Connection type '${type.id}' must connect ${rule.fromTypes.joinToString(
+                        " or ",
+                    )} to ${rule.toTypes.joinToString(" or ")}",
                     document,
                     "$pointer/type",
                     connection.id,
                     args =
                         mapOf(
                             "type" to JsonPrimitive(type.id),
-                            "fromType" to JsonPrimitive(rule.fromType),
+                            "fromType" to JsonPrimitive(rule.fromTypes.joinToString(" or ")),
                             "toType" to JsonPrimitive(rule.toTypes.joinToString(" or ")),
                         ),
                 )
@@ -466,19 +469,39 @@ class ModelCompiler(
     ): GraphParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
-        val services = model.blocks.filterValues { it.type == "service" || it.type == "database" }.toSortedMap()
+        val services = model.blocks.filterValues { it.type in setOf("service", "database", "pooler") }.toSortedMap()
         val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink, run) }
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
             services.map { (id, block) ->
-                val steps =
-                    if (block.type == "service") {
-                        readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
-                    } else {
-                        null
+                if (block.type == "pooler") {
+                    val outputs = outgoing[id].orEmpty()
+                    if (outputs.size != 1) {
+                        sink.error(
+                            CoreMessage.POOLER_OUTPUT,
+                            "Pooler '$id' must have exactly one outgoing call",
+                            document,
+                            JsonPointer.of("blocks", id),
+                            id,
+                            args = mapOf("pooler" to JsonPrimitive(id)),
+                        )
                     }
-                readService(id, block.params, document, origins[id], sink, block.type)?.copy(scenario = steps)
+                    outputs.filter { model.blocks[it.to]?.type == "pooler" }.forEach { output ->
+                        sink.error(
+                            CoreMessage.POOLER_TARGET,
+                            "Pooler '$id' must call a database, service or router",
+                            document,
+                            JsonPointer.of("connections", model.connections.indexOf(output), "to"),
+                            id,
+                            args = mapOf("pooler" to JsonPrimitive(id)),
+                        )
+                    }
+                    readPooler(id, block.params, document, origins[id], sink)
+                } else {
+                    val steps = if (block.type == "service") readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink) else null
+                    readService(id, block.params, document, origins[id], sink, block.type)?.copy(scenario = steps)
+                }
             }
         val routerNodes = routers.map { (id, block) -> readRouter(id, block.params, document, origins[id], sink) }
         val indexed = model.connections.withIndex()
@@ -871,6 +894,32 @@ class ModelCompiler(
                     if (previous is JsonObject && value is JsonObject) mergeParameters(previous, value) else value
                 },
         )
+
+    private fun readPooler(
+        id: String,
+        params: JsonObject,
+        document: String,
+        overrides: OverrideOrigins?,
+        sink: Diagnostics,
+    ): ServiceNode? {
+        val reader =
+            reader("pooler", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+                ?: return null
+        val clients = reader.int("maxClientConnections")
+        val size = reader.int("poolSize")
+        val wait = reader.quantity("waitTimeout")
+        val processing = reader.obj("processing")?.let(::distribution)
+        if (clients == null || size == null || wait == null || processing == null) return null
+        return ServiceNode(
+            id,
+            clients,
+            0,
+            processing,
+            0.0,
+            Origin(document, JsonPointer.of("blocks", id)),
+            pooler = PoolerSettings(size, wait),
+        )
+    }
 
     private fun readService(
         id: String,
