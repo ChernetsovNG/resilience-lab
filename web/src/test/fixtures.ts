@@ -43,7 +43,7 @@ function distribution(name: string, title: string, fallback?: ParamDescriptor["d
 }
 
 export const catalog: Catalog = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   assumptions: ["Student 95% confidence intervals are not clipped."],
   types: [
     {
@@ -88,7 +88,7 @@ export const catalog: Catalog = {
       description: "Delivers original requests to the entry service.",
       assumptions: ["Requests have no network delay or retries."],
       ports: [],
-      connects: { fromType: "client", toType: "service" },
+      connects: { fromType: "client", toTypes: ["service"] },
       params: [],
     },
     {
@@ -100,7 +100,7 @@ export const catalog: Catalog = {
       description: "Synchronous call with timeout, retries and backoff.",
       assumptions: ["Late responses are discarded; orphaned work continues."],
       ports: [],
-      connects: { fromType: "service", toType: "service" },
+      connects: { fromType: "service", toTypes: ["service", "router"] },
       params: [
         distribution("network", "Network delay", { kind: "fixed", mean: "0ms" }),
         param({ name: "timeout", kind: "QUANTITY", title: "Timeout", required: true, dimension: "DURATION" }),

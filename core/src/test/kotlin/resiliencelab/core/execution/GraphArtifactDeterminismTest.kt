@@ -10,6 +10,10 @@ import resiliencelab.core.engine.ksl.TestChains
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.RetryTarget
+import resiliencelab.core.ir.RouteEdge
+import resiliencelab.core.ir.RouterNode
+import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.results.ArtifactWriter
@@ -24,6 +28,33 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test
 
 class GraphArtifactDeterminismTest {
+    @Test
+    fun `weighted routing and other retry artifacts match across workers and document task order`(
+        @TempDir root: Path,
+    ) {
+        val base = graph()
+        val routed =
+            base.copy(
+                routers = listOf(RouterNode("router", RoutingPolicy.RANDOM)),
+                routes = listOf(RouteEdge("route-left", "router", "left"), RouteEdge("route-shared", "router", "shared", 3.0)),
+                calls = base.calls.map { if (it.path == "entry-left") it.copy(to = "router", retryTarget = RetryTarget.OTHER) else it },
+            )
+        val expected = run(root.resolve("reference"), routed, 1, false)
+        assertThat(
+            expected.result.variants.first().points.single().replications.sumOf {
+                it.connections.getValue("route-left").sentAttempts + it.connections.getValue("route-shared").sentAttempts
+            },
+        ).isPositive()
+        for (workers in listOf(1, 2, 4, 8)) {
+            val actual = run(root.resolve("workers-$workers"), routed, workers, true)
+            assertThat(actual.result).isEqualTo(expected.result)
+            assertThat(actual.files.keys).containsExactlyInAnyOrderElementsOf(expected.files.keys)
+            expected.files.forEach { (path, bytes) ->
+                assertThat(actual.files.getValue(path)).describedAs("$workers/$path").isEqualTo(bytes)
+            }
+        }
+    }
+
     @Test
     fun `branching reconvergent artifacts match across workers and reversed nodes edges and task order`(
         @TempDir root: Path,
@@ -71,7 +102,17 @@ class GraphArtifactDeterminismTest {
         val directory = ".results/graph/run"
         val writer = ArtifactWriter(workspace)
         val variants = listOf("baseline" to "Baseline", "retry" to "Retry")
-        val effective = if (reverse) graph.copy(services = graph.services.reversed(), calls = graph.calls.reversed()) else graph
+        val effective =
+            if (reverse) {
+                graph.copy(
+                    services = graph.services.reversed(),
+                    calls = graph.calls.reversed(),
+                    routers = graph.routers.reversed(),
+                    routes = graph.routes.reversed(),
+                )
+            } else {
+                graph
+            }
         val compiled =
             variants.map { (id, label) ->
                 val variantGraph = if (id == "retry") effective.copy(calls = effective.calls.map { it.copy(attempts = 3) }) else effective

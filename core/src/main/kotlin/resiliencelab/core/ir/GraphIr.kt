@@ -103,6 +103,7 @@ data class CallEdge(
     val attempts: Int,
     val backoff: Backoff,
     val origin: Origin = Origin.UNSPECIFIED,
+    val retryTarget: RetryTarget = RetryTarget.ANY,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -114,7 +115,39 @@ data class CallEdge(
         attempts: Int,
         backoff: Backoff,
         origin: Origin = Origin.UNSPECIFIED,
-    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin)
+        retryTarget: RetryTarget = RetryTarget.ANY,
+    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget)
+
+    val path: String get() = displayPath(pathSegments)
+}
+
+/** Whether retries may reuse an output before the other outputs have been tried. */
+enum class RetryTarget { ANY, OTHER }
+
+/** Stateless routing policies; ties use route instance-path order. */
+enum class RoutingPolicy { ROUND_ROBIN, RANDOM, LEAST_IN_FLIGHT }
+
+/** A zero-delay selector with its own counter and path-addressed routing source. */
+data class RouterNode(
+    val pathSegments: List<String>,
+    val policy: RoutingPolicy,
+    val origin: Origin = Origin.UNSPECIFIED,
+) {
+    constructor(path: String, policy: RoutingPolicy, origin: Origin = Origin.UNSPECIFIED) : this(path.split('/'), policy, origin)
+
+    val path: String get() = displayPath(pathSegments)
+}
+
+/** An output of a router; weight affects only random selection, never adds delay or retries. */
+data class RouteEdge(
+    val pathSegments: List<String>,
+    val from: String,
+    val to: String,
+    val weight: Double = 1.0,
+    val origin: Origin = Origin.UNSPECIFIED,
+) {
+    constructor(path: String, from: String, to: String, weight: Double = 1.0, origin: Origin = Origin.UNSPECIFIED) :
+        this(path.split('/'), from, to, weight, origin)
 
     val path: String get() = displayPath(pathSegments)
 }
@@ -184,10 +217,17 @@ data class GraphIr(
     val calls: List<CallEdge>,
     val faults: List<FaultSpan>,
     val run: RunSettings,
+    val routers: List<RouterNode> = emptyList(),
+    val routes: List<RouteEdge> = emptyList(),
 ) {
     private val servicesByPath = services.associateBy { it.path }
     private val callsByPath = calls.associateBy { it.path }
     private val outgoing = calls.groupBy { it.from }
+    private val routing = routes.groupBy { it.from }
+
+    /** Router outputs in deterministic instance-path order. */
+    fun outgoingRoutes(from: String): List<RouteEdge> =
+        routing[from].orEmpty().sortedWith { left, right -> comparePaths(left.pathSegments, right.pathSegments) }
 
     /** All outgoing edges in path order; no single-successor assumption. */
     fun outgoingCalls(from: String): List<CallEdge> =
@@ -206,33 +246,39 @@ data class GraphIr(
     fun scenario(service: ServiceNode): List<ServiceStep> = service.scenario ?: defaultScenario(service)
 
     /** Kahn order uses path segments to break ties and does not recurse on deep graphs. */
-    val topologicalServices: List<ServiceNode> by lazy {
-        val indegree = services.associate { it.path to 0 }.toMutableMap()
-        calls.forEach { edge -> indegree[edge.to] = indegree.getValue(edge.to) + 1 }
+    val topologicalPaths: List<String> by lazy {
+        val paths = services.associate { it.path to it.pathSegments } + routers.associate { it.path to it.pathSegments }
+        val edges = calls.map { it.from to it.to } + routes.map { it.from to it.to }
+        val successors = edges.groupBy({ it.first }, { it.second })
+        val indegree = paths.keys.associateWith { 0 }.toMutableMap()
+        edges.forEach { (_, to) -> indegree[to] = indegree.getValue(to) + 1 }
         val ready =
             java.util.PriorityQueue<String> { left, right ->
-                comparePaths(servicesByPath.getValue(left).pathSegments, servicesByPath.getValue(right).pathSegments)
+                comparePaths(paths.getValue(left), paths.getValue(right))
             }
         indegree.filterValues { it == 0 }.keys.forEach(ready::add)
         val ordered =
             buildList {
                 while (ready.isNotEmpty()) {
                     val path = ready.remove()
-                    add(servicesByPath.getValue(path))
-                    outgoing[path].orEmpty().forEach { edge ->
-                        val remaining = indegree.getValue(edge.to) - 1
-                        indegree[edge.to] = remaining
-                        if (remaining == 0) ready.add(edge.to)
+                    add(path)
+                    successors[path].orEmpty().forEach { target ->
+                        val remaining = indegree.getValue(target) - 1
+                        indegree[target] = remaining
+                        if (remaining == 0) ready.add(target)
                     }
                 }
             }
-        require(ordered.size == services.size) { "Calls must form an acyclic graph" }
+        require(ordered.size == paths.size) { "Calls must form an acyclic graph" }
         ordered
     }
 
+    /** Service runtimes follow the same order as the complete graph. */
+    val topologicalServices: List<ServiceNode> by lazy { topologicalPaths.mapNotNull(servicesByPath::get) }
+
     /** Calls follow their source's topological position, then their instance path. */
     val topologicalCalls: List<CallEdge> by lazy {
-        val order = topologicalServices.mapIndexed { index, node -> node.path to index }.toMap()
+        val order = topologicalPaths.withIndex().associate { it.value to it.index }
         calls.sortedWith(
             compareBy<CallEdge> { order.getValue(it.from) }
                 .thenComparator { left, right -> comparePaths(left.pathSegments, right.pathSegments) },
@@ -246,7 +292,21 @@ data class GraphIr(
             val path = mutableListOf<CallEdge>()
 
             fun callsFrom(node: String): List<CallEdge> =
-                scenario(servicesByPath.getValue(node)).filterIsInstance<ServiceStep.Call>().map { call(it.edge) }
+                scenario(servicesByPath.getValue(node)).filterIsInstance<ServiceStep.Call>().flatMap { step ->
+                    val edge = call(step.edge)
+                    val targets = ArrayDeque<String>()
+                    targets.add(edge.to)
+                    buildList {
+                        while (targets.isNotEmpty()) {
+                            val target = targets.removeFirst()
+                            if (target in servicesByPath) {
+                                add(if (target == edge.to) edge else edge.copy(to = target))
+                            } else {
+                                outgoingRoutes(target).forEach { targets.addLast(it.to) }
+                            }
+                        }
+                    }
+                }
             pending.addLast(callsFrom(entry).iterator())
             if (!pending.last().hasNext()) yield(emptyList())
             while (pending.isNotEmpty()) {

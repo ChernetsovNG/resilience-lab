@@ -24,6 +24,10 @@ import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.RetryTarget
+import resiliencelab.core.ir.RouteEdge
+import resiliencelab.core.ir.RouterNode
+import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
@@ -99,7 +103,16 @@ class ModelCompiler(
                             CompiledPoint(
                                 "p$pointIndex",
                                 point.associate { it.path to it.value },
-                                GraphIr(parts.client, parts.entry, parts.services, parts.calls, faults, it).let { graph ->
+                                GraphIr(
+                                    parts.client,
+                                    parts.entry,
+                                    parts.services,
+                                    parts.calls,
+                                    faults,
+                                    it,
+                                    parts.routers,
+                                    parts.routes,
+                                ).let { graph ->
                                     graph.copy(
                                         services = graph.topologicalServices.map { node -> node.copy(scenario = graph.scenario(node)) },
                                         calls = graph.topologicalCalls,
@@ -171,6 +184,8 @@ class ModelCompiler(
         val entry: String,
         val services: List<ServiceNode>,
         val calls: List<CallEdge>,
+        val routers: List<RouterNode>,
+        val routes: List<RouteEdge>,
     )
 
     private fun checkStructure(
@@ -288,10 +303,10 @@ class ModelCompiler(
                 )
             }
             val rule = type.connects
-            if (from != null && to != null && rule != null && (from.type != rule.fromType || to.type != rule.toType)) {
+            if (from != null && to != null && rule != null && (from.type != rule.fromType || to.type !in rule.toTypes)) {
                 sink.error(
                     CoreMessage.CONNECTION_TYPE,
-                    "Connection type '${type.id}' must connect ${rule.fromType} to ${rule.toType}",
+                    "Connection type '${type.id}' must connect ${rule.fromType} to ${rule.toTypes.joinToString(" or ")}",
                     document,
                     "$pointer/type",
                     connection.id,
@@ -299,7 +314,7 @@ class ModelCompiler(
                         mapOf(
                             "type" to JsonPrimitive(type.id),
                             "fromType" to JsonPrimitive(rule.fromType),
-                            "toType" to JsonPrimitive(rule.toType),
+                            "toType" to JsonPrimitive(rule.toTypes.joinToString(" or ")),
                         ),
                 )
             }
@@ -387,6 +402,7 @@ class ModelCompiler(
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
         val services = model.blocks.filterValues { it.type == "service" }.toSortedMap()
+        val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink) }
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
@@ -394,6 +410,7 @@ class ModelCompiler(
                 val steps = readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
                 readService(id, block.params, document, origins[id], sink)?.copy(scenario = steps)
             }
+        val routerNodes = routers.map { (id, block) -> readRouter(id, block.params, document, origins[id], sink) }
         val indexed = model.connections.withIndex()
         val requests = indexed.filter { it.value.type == "request" }
         requests.forEach { (index, connection) ->
@@ -410,6 +427,8 @@ class ModelCompiler(
         }
         val calls = indexed.filter { it.value.type == "call" }.sortedBy { it.value.id }
         val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, origins[connection.id], sink) }
+        val routes = indexed.filter { it.value.type == "route" }.sortedBy { it.value.id }
+        val routeEdges = routes.map { (index, connection) -> readRoute(index, connection, document, origins[connection.id], sink) }
         if (clients.size != 1) {
             sink.error(
                 CoreMessage.TOPOLOGY_CLIENT,
@@ -426,19 +445,51 @@ class ModelCompiler(
             sink.error(CoreMessage.GRAPH_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
         }
         val entry = requests.singleOrNull()?.value?.to
-        checkGraph(entry?.takeIf { it in services }, services.keys, calls, document, sink)
+        checkGraph(entry?.takeIf { it in services }, services.keys + routers.keys, routers.keys, calls + routes, document, sink)
         if (!structureOk || sink.errorCount() > before) return null
-        return GraphParts(clientNodes.single()!!, entry!!, serviceNodes.map { it!! }, callEdges.map { it!! })
+        return GraphParts(
+            clientNodes.single()!!,
+            entry!!,
+            serviceNodes.map {
+                it!!
+            },
+            callEdges.map { it!! },
+            routerNodes.map { it!! },
+            routeEdges.map { it!! },
+        )
     }
 
     private fun checkGraph(
         entry: String?,
         services: Set<String>,
+        routers: Set<String>,
         calls: List<IndexedValue<ConnectionInstance>>,
         document: String,
         sink: Diagnostics,
     ) {
         val validOutgoing = calls.filter { it.value.from in services && it.value.to in services }.groupBy { it.value.from }
+        routers.sorted().forEach { router ->
+            if (validOutgoing[router].orEmpty().none { it.value.type == "route" }) {
+                sink.error(
+                    CoreMessage.ROUTER_OUTPUT,
+                    "Router '$router' must have at least one route output",
+                    document,
+                    JsonPointer.of("blocks", router),
+                    router,
+                    args = mapOf("router" to JsonPrimitive(router)),
+                )
+            }
+            if (calls.count { it.value.to == router } != 1) {
+                sink.error(
+                    CoreMessage.ROUTER_INPUT,
+                    "Router '$router' must have exactly one incoming call or route",
+                    document,
+                    JsonPointer.of("blocks", router),
+                    router,
+                    args = mapOf("router" to JsonPrimitive(router)),
+                )
+            }
+        }
         calls.filter { it.value.to == entry }.forEach { (index, call) ->
             sink.error(
                 CoreMessage.GRAPH_ENTRY,
@@ -672,12 +723,64 @@ class ModelCompiler(
         val timeout = reader.quantity("timeout")
         val attempts = reader.int("attempts")
         val backoff = reader.obj("backoff")?.let(::backoff)
-        return if (network == null || timeout == null || attempts == null || backoff == null) {
+        val retryTarget = reader.choice("retryTarget")
+        return if (network == null || timeout == null || attempts == null || backoff == null || retryTarget == null) {
             null
         } else {
             val origin = Origin(document, JsonPointer.of("connections", index))
-            CallEdge(connection.id, connection.from, connection.to, network, timeout, attempts, backoff, origin)
+            CallEdge(
+                connection.id,
+                connection.from,
+                connection.to,
+                network,
+                timeout,
+                attempts,
+                backoff,
+                origin,
+                if (retryTarget == "other") RetryTarget.OTHER else RetryTarget.ANY,
+            )
         }
+    }
+
+    private fun readRouter(
+        id: String,
+        params: JsonObject,
+        document: String,
+        overrides: OverrideOrigins?,
+        sink: Diagnostics,
+    ): RouterNode? {
+        val reader =
+            reader("router", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+                ?: return null
+        val policy =
+            when (reader.choice("policy") ?: return null) {
+                "roundRobin" -> RoutingPolicy.ROUND_ROBIN
+                "random" -> RoutingPolicy.RANDOM
+                else -> RoutingPolicy.LEAST_IN_FLIGHT
+            }
+        return RouterNode(id, policy, Origin(document, JsonPointer.of("blocks", id)))
+    }
+
+    private fun readRoute(
+        index: Int,
+        connection: ConnectionInstance,
+        document: String,
+        overrides: OverrideOrigins?,
+        sink: Diagnostics,
+    ): RouteEdge? {
+        val reader =
+            reader(
+                "route",
+                TypeCategory.CONNECTION,
+                connection.params,
+                document,
+                JsonPointer.of("connections", index, "params"),
+                connection.id,
+                sink,
+                overrides,
+            ) ?: return null
+        val weight = reader.number("weight") ?: return null
+        return RouteEdge(connection.id, connection.from, connection.to, weight, Origin(document, JsonPointer.of("connections", index)))
     }
 
     private fun distribution(reader: ParamReader): Distribution? {

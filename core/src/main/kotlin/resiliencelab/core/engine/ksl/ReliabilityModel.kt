@@ -11,6 +11,8 @@ import ksl.utilities.observers.ObserverIfc
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.RetryTarget
+import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.ServiceStep
 import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.seconds
@@ -52,7 +54,7 @@ class ReliabilityModel(
             currentTimeMs = { time },
             clientId = graph.client.path,
             windowMs = graph.run.windowMs,
-            connectionIds = graph.topologicalCalls.map { it.path },
+            connectionIds = graph.topologicalCalls.map { it.path } + graph.routes.map { it.path },
             onWindow = onWindow,
         )
     private val runtimes =
@@ -74,6 +76,7 @@ class ReliabilityModel(
             }.associateBy { it.serviceId }
 
     private val callRuntimes = graph.topologicalCalls.associate { it.path to CallRuntime(it, streams) }
+    private val routerRuntimes = graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams) }
 
     var activeInvocations: Int = 0
         private set
@@ -102,6 +105,7 @@ class ReliabilityModel(
         activeOriginalRequests = 0
         activeDownstreamProcesses = 0
         runtimes.values.forEach { it.resetFaults() }
+        routerRuntimes.values.forEach { it.reset() }
         scheduleWindowClose(1)
         schedule(
             eventAction =
@@ -237,6 +241,7 @@ class ReliabilityModel(
         measurementCohort: Boolean,
         originalDeadlineMs: Double,
         incomingNetwork: CallRuntime?,
+        selectedRoutes: List<RouteEdge> = emptyList(),
     ): ServiceInvocation {
         val runtime = requireNotNull(runtimes[serviceId]) { "Unknown service '$serviceId'" }
         val invocation =
@@ -247,6 +252,7 @@ class ReliabilityModel(
                 arrivalTimeMs = time + timeUntilActivation,
                 originalDeadlineMs = originalDeadlineMs,
                 incomingNetwork = incomingNetwork,
+                selectedRoutes = selectedRoutes,
             )
         activate(invocation.work, timeUntilActivation)
         if (incomingNetwork != null) {
@@ -262,10 +268,19 @@ class ReliabilityModel(
         connectionId: String,
         retry: Boolean,
         timeoutMs: Double,
+        selectedRoutes: List<RouteEdge>,
     ): CallAttempt {
         val sentMs = time
-        metrics.recordConnection(connectionId, ConnectionEvent.SENT, caller.measurementCohort)
-        if (retry) metrics.recordConnection(connectionId, ConnectionEvent.RETRY, caller.measurementCohort)
+        val observed = listOf(connectionId) + selectedRoutes.map { it.path }
+
+        fun record(
+            event: ConnectionEvent,
+            latencyMs: Double = 0.0,
+        ) {
+            observed.forEach { metrics.recordConnection(it, event, caller.measurementCohort, latencyMs) }
+        }
+        record(ConnectionEvent.SENT)
+        if (retry) record(ConnectionEvent.RETRY)
         lateinit var attempt: CallAttempt
         val timeoutEvent =
             schedule(
@@ -280,19 +295,17 @@ class ReliabilityModel(
                 caller = caller,
                 recordTimeout = { orphaned ->
                     metrics.recordTimeout(callingServiceId, caller.measurementCohort)
-                    metrics.recordConnection(connectionId, ConnectionEvent.TIMEOUT, caller.measurementCohort)
-                    if (orphaned) metrics.recordConnection(connectionId, ConnectionEvent.ORPHANED, caller.measurementCohort)
+                    record(ConnectionEvent.TIMEOUT)
+                    if (orphaned) record(ConnectionEvent.ORPHANED)
                 },
                 recordResponse = { succeeded ->
-                    metrics.recordConnection(
-                        connectionId,
+                    record(
                         if (succeeded) ConnectionEvent.SUCCEEDED else ConnectionEvent.FAILED,
-                        caller.measurementCohort,
                         time - sentMs,
                     )
                 },
                 recordOrphanCompleted = {
-                    metrics.recordConnection(connectionId, ConnectionEvent.ORPHAN_COMPLETED, caller.measurementCohort)
+                    record(ConnectionEvent.ORPHAN_COMPLETED)
                 },
             )
         child.incomingAttempt = attempt
@@ -310,6 +323,7 @@ class ReliabilityModel(
         private val arrivalTimeMs: Double,
         private val originalDeadlineMs: Double,
         private val incomingNetwork: CallRuntime?,
+        private val selectedRoutes: List<RouteEdge>,
     ) : Entity() {
         private var currentOutcome: AttemptOutcome = AttemptOutcome.PENDING
         private var originalOutcome: AttemptOutcome? = null
@@ -408,12 +422,13 @@ class ReliabilityModel(
         private suspend fun KSLProcessBuilder.executeCall(callRuntime: CallRuntime): AttemptOutcome {
             val call = callRuntime.edge
             var attemptNumber = 1
+            val triedOutputs = mutableMapOf<String, MutableSet<String>>()
             while (true) {
                 if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
                 if (attemptNumber > 1) {
                     metrics.recordRetry(runtime.serviceId, measurementCohort)
                 }
-                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber)
+                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
                 callAttempt = attempt
                 blockUntilCompleted(attempt.child.work)
                 if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
@@ -441,16 +456,30 @@ class ReliabilityModel(
             callRuntime: CallRuntime,
             target: String,
             attemptNumber: Int,
+            triedOutputs: MutableMap<String, MutableSet<String>>,
         ): CallAttempt {
             val call = callRuntime.edge
+            var selectedTarget = target
+            val routes =
+                buildList {
+                    while (true) {
+                        val router = routerRuntimes[selectedTarget] ?: break
+                        val tried = triedOutputs.getOrPut(selectedTarget) { mutableSetOf() }
+                        val route = router.select(if (call.retryTarget == RetryTarget.OTHER) tried else emptySet())
+                        tried.add(route.path)
+                        add(route)
+                        selectedTarget = route.to
+                    }
+                }
             val child =
                 createInvocation(
-                    serviceId = target,
+                    serviceId = selectedTarget,
                     timeUntilActivation = 0.0,
                     originalRequest = false,
                     measurementCohort = measurementCohort,
                     originalDeadlineMs = originalDeadlineMs,
                     incomingNetwork = callRuntime,
+                    selectedRoutes = routes,
                 )
             return createCallAttempt(
                 caller = this,
@@ -459,6 +488,7 @@ class ReliabilityModel(
                 connectionId = call.path,
                 retry = attemptNumber > 1,
                 timeoutMs = minOf(call.timeoutMs, originalDeadlineMs - time),
+                selectedRoutes = routes,
             )
         }
 
@@ -498,6 +528,7 @@ class ReliabilityModel(
                         delay(incomingNetwork.nextNetworkDelayMs())
                     }
                 } finally {
+                    selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
                     incomingAttempt?.onChildProcessEnded()
                     if (incomingNetwork != null) {
                         activeDownstreamProcesses--

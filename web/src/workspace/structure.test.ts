@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
-import { editorReducer, initialEditorState, type EditorCommand, type EditorDocuments } from "./editor";
+import outputCatalog from "../test/catalog.json";
+import type { Catalog } from "../api/apiTypes";
+import { documentDrafts, editorReducer, initialEditorState, setModelParam, type EditorCommand, type EditorDocuments } from "./editor";
 import {
   addBlock, addConnection, connectionRule, copySelection, deleteElements, identifierError,
   insertionPosition, moveBlocks, pasteSelection, renameElement,
@@ -24,6 +26,37 @@ function roundTrip(before: EditorDocuments, command: EditorCommand) {
 }
 
 describe("structure commands", () => {
+  it("adds a router and permits calls and nested routes using catalog target types", () => {
+    const fullCatalog = outputCatalog as Catalog;
+    const after = roundTrip(documents(), addBlock(fullCatalog, "router", { x: 20, y: 40 }));
+    expect(after.model.blocks["router-1"]).toEqual({ type: "router", params: {} });
+    after.model.blocks["router-2"] = { type: "router", params: { policy: "random" } };
+    expect(connectionRule(fullCatalog, after.model, "gateway", "router-1", "out", "in").type).toBe("call");
+    expect(connectionRule(fullCatalog, after.model, "router-1", "dependency", "out", "in").type).toBe("route");
+    expect(connectionRule(fullCatalog, after.model, "router-1", "router-2", "out", "in").type).toBe("route");
+    expect(connectionRule(fullCatalog, after.model, "client", "router-1", "out", "in").error).toBeTruthy();
+  });
+
+  it("opening editing and saving preserves router policy route weights and retry target", () => {
+    const before = documents();
+    before.model.blocks.router = { type: "router", params: { policy: "leastInFlight" } };
+    before.model.connections[1].to = "router";
+    before.model.connections[1].params.retryTarget = "other";
+    before.model.blocks.gateway.scenario = [
+      { type: "process" }, { type: "call", connection: "gateway-to-middle" },
+      { type: "process", processing: { kind: "fixed", mean: "3ms" } },
+      { type: "call", connection: "gateway-to-middle" },
+    ];
+    const route = { id: "weighted", type: "route", from: "router", to: "middle", params: { weight: 2.5 } };
+    before.model.connections.push(route);
+    const after = roundTrip(before, setModelParam("gateway", "handlers", 8));
+    const saved = JSON.parse(JSON.stringify(documentDrafts(after)[0])).content.model;
+    expect(saved.blocks.router).toEqual(before.model.blocks.router);
+    expect(saved.connections).toEqual(before.model.connections);
+    expect(saved.blocks.gateway.params.handlers).toBe(8);
+    expect(saved.blocks.gateway.scenario).toEqual(before.model.blocks.gateway.scenario);
+  });
+
   it("adds a catalog block with the smallest globally free id and no parameter defaults", () => {
     const before = documents();
     before.model.blocks["service-3"] = { type: "service", params: {} };

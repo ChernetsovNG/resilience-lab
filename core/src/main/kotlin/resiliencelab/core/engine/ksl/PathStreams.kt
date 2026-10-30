@@ -20,6 +20,7 @@ enum class StreamRole(
     OUTCOME("outcome"),
     NETWORK("network"),
     JITTER("jitter"),
+    ROUTING("routing"),
 }
 
 /** Resolves the stream of one random source of one model. */
@@ -97,6 +98,7 @@ object PathStreams {
                 add(it.pathSegments to StreamRole.NETWORK)
                 add(it.pathSegments to StreamRole.JITTER)
             }
+            graph.routers.forEach { add(it.pathSegments to StreamRole.ROUTING) }
         }
 
     /** Keys of all sources of [graph] for one replication. */

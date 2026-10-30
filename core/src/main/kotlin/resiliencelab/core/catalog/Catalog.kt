@@ -38,7 +38,7 @@ data class PortDescriptor(
 @Serializable
 data class ConnectionRule(
     val fromType: String,
-    val toType: String,
+    val toTypes: List<String>,
 )
 
 /**

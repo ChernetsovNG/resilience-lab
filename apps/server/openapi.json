@@ -1596,11 +1596,14 @@
           "fromType" : {
             "type" : "string"
           },
-          "toType" : {
-            "type" : "string"
+          "toTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         },
-        "required" : [ "fromType", "toType" ]
+        "required" : [ "fromType", "toTypes" ]
       },
       "ConnectionSeries" : {
         "type" : "object",

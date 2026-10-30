@@ -26,6 +26,45 @@ const test = base.extend<{ files: Files }>({
 });
 test.use({ actionTimeout: 10_000 });
 
+test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
+  const routed = (await stored(page, files.model)).content.model as ModelFile;
+  expect(routed.schemaVersion).toBe(2);
+  routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null };
+  routed.blocks.gateway.scenario = [
+    { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null },
+    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
+    { type: "process", processing: null, failureRate: null, connection: null },
+    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
+  ];
+  routed.blocks.third = structuredClone(routed.blocks.dependency);
+  const call = routed.connections.find(edge => edge.id === "gateway-to-middle")!;
+  call.to = "router";
+  call.params.retryTarget = "other";
+  routed.connections.push(...["middle", "dependency", "third"].map((to, index) => ({
+    id: `route-${to}`, type: "route", from: "router", to, params: { weight: index + 1 }, description: null, notes: null,
+  })));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(routed));
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(6);
+  await expect(page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Router", exact: true })).toBeVisible();
+  await page.getByTestId("rf__node-router").locator(".block-node > strong").click();
+  await page.getByLabel("Policy", { exact: true }).selectOption("leastInFlight");
+  await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+  await page.getByLabel("Handlers", { exact: true }).fill("5");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await save(page);
+  const expected = structuredClone(routed);
+  expected.blocks.router.params.policy = "leastInFlight";
+  expected.blocks.gateway.params.handlers = 5;
+  expect((await stored(page, files.model)).content.model).toEqual(expected);
+  await page.reload();
+  await expect(page.getByTestId("rf__node-router")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect((await stored(page, files.model)).content.model).toEqual(expected);
+});
+
 test("edits and clears the shared series window with validation, persistence and undo", async ({ page, files }) => {
   const windowField = page.getByLabel("Series window", { exact: true });
   await expect(windowField).toHaveValue("");
