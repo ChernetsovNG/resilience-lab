@@ -59,6 +59,7 @@ interface EditorState {
 }
 
 type EditorAction =
+  | { type: "close" }
   | { type: "open"; loaded: LoadedExperiment }
   | { type: "command"; command: EditorCommand }
   | { type: "undo" | "redo" }
@@ -98,7 +99,7 @@ export function dirtyDocuments(loaded: LoadedExperiment | null): Record<Document
 export function documentDrafts(loaded: LoadedExperiment): DocumentDraft[] {
   const changed = dirtyDocuments(loaded);
   return (["model", "layout", "experiment"] as const)
-    .filter((kind) => changed[kind])
+    .filter((kind) => changed[kind] || (kind === "experiment" && loaded.versions.experiment === null))
     .map((kind) => ({ path: loaded[`${kind}Path`], content: { [kind]: loaded[kind] } }));
 }
 
@@ -109,6 +110,7 @@ export function setModelParam(id: string, name: string, value: unknown): EditorC
 
 /** Commands and history share the same document snapshots; saves update only persistence metadata. */
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  if (action.type === "close") return initialEditorState;
   if (action.type === "open") {
     if (state.loaded?.modelPath === action.loaded.modelPath) rememberElementCopies(state.loaded.saved.model, action.loaded.model);
     return { ...initialEditorState, loaded: action.loaded };

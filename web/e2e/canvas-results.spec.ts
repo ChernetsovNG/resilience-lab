@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -20,7 +21,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     const before = await documents();
 
     await page.goto("/");
-    await page.getByLabel("Experiment").selectOption(experimentPath);
+    await selectExperiment(page, experimentPath);
     const response = page.waitForResponse((response) => /\/api\/v1\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const summary: RunSummary = await (await response).json();

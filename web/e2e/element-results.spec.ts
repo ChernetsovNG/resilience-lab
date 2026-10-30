@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 import type { RunSummary } from "../src/api/apiTypes";
 import { formatNumber, formatPercent, formatRate } from "../src/i18n/format";
@@ -5,7 +6,7 @@ import { formatNumber, formatPercent, formatRate } from "../src/i18n/format";
 test("service and call inspectors share Summary, Time and Timeline, including Analysis", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await page.getByTestId("rf__node-gateway").click();
   await expect(page.locator(".element-results")).toHaveCount(0);
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();

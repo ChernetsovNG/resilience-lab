@@ -453,6 +453,7 @@ export interface components {
         DocumentEntry: {
             /** @enum {string} */
             kind: "MODEL" | "LAYOUT" | "EXPERIMENT";
+            modelRef?: string | null;
             path: string;
             version: string;
         };

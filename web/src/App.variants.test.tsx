@@ -181,7 +181,7 @@ it.each(["Handlers", "Seed"])("blocks target switches and variant menus while %s
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   if (field === "Handlers") await selectGateway();
   editField(field, "invalid");
-  expect(button("Experiment").disabled).toBe(true);
+  expect(button("Run settings").disabled).toBe(true);
   expect(button("Add variant").disabled).toBe(true);
   const tab = screen.getByRole("tab", { name: "No retries" });
   fireEvent.contextMenu(tab);

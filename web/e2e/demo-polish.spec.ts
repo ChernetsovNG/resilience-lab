@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test, type Page } from "@playwright/test";
 import type { components } from "../src/api/schema";
 
@@ -5,7 +6,7 @@ type Window = components["schemas"]["WindowMetrics"];
 
 async function run(page: Page) {
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));

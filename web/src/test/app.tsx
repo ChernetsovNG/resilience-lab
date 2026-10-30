@@ -37,7 +37,7 @@ export function server(override?: (url: string, init?: RequestInit) => StubRespo
     if (url === "/api/v1/health") return { body: health };
     if (url === "/api/v1/catalog") return { body: catalog };
     if (url === "/api/v1/validate") return { body: { experiment: JSON.parse(String(init?.body)).experiment, valid: true, diagnostics: [] } };
-    if (url === "/api/v1/workspace/documents") return { body: Object.values(documents) };
+    if (url === "/api/v1/workspace/documents") return { body: Object.values(documents).map(view => ({ ...view, modelRef: view.content.experiment?.modelRef ?? null })) };
     if (url.startsWith("/api/v1/workspace/changes")) {
       const since = new URL(url, "http://localhost").searchParams.get("since");
       return { body: { cursor: since ?? "test:0", reset: false, changes: [] } };

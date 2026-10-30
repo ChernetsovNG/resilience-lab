@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { copySmallExperiment } from "./fixtures";
+import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -53,7 +53,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
     });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption(path);
+    await selectExperiment(page, path);
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveAttribute("title", path);
     await page.getByRole("tab", { name: label, exact: true }).click();
     const run = page.getByRole("button", { name: "Run", exact: true });
@@ -99,7 +99,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       await copySmallExperiment(directory);
       await page.setViewportSize(viewport);
       await page.goto("/");
-      await page.getByLabel("Experiment", { exact: true }).selectOption(`responsive-${viewport.width}/retry-storm.experiment.json`);
+      await selectExperiment(page, `responsive-${viewport.width}/retry-storm.experiment.json`);
       await expect(page.getByText("Shared by all variants", { exact: true })).toHaveCount(1);
       await page.getByRole("tab", { name: "Baseline", exact: true }).click();
       const run = page.getByRole("button", { name: "Run", exact: true });

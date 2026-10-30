@@ -77,7 +77,7 @@ it("shows only the current Inspector target and keeps target navigation out of h
   fireEvent.click(document.querySelector(".react-flow__pane")!);
   expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
   expect(screen.queryByLabelText("Handlers")).toBeNull();
-  await selectGateway(); fireEvent.click(button("Experiment"));
+  await selectGateway(); fireEvent.click(button("Run settings"));
   expect(screen.getByLabelText("Replications")).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   await selectGateway();
@@ -150,7 +150,7 @@ it("falls back to the experiment when the last multi-selected target disappears 
   expect(screen.getByTestId("rf__node-gateway").classList.contains("selected")).toBe(true);
 });
 
-it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the requested Inspector target from Analysis via %s", async (action) => {
+it.each(["Run settings", "Variant", "Rename", "Problem", "Model"])("reveals the requested Inspector target from Analysis via %s", async (action) => {
   server(url => url === "/api/v1/validate" ? { body: { experiment: experimentPath, valid: true, diagnostics: [{
     code: "SEED_HINT", severity: "WARNING", message: "Review the shared seed", document: experimentPath,
     pointer: "/execution/seed", path: null,
@@ -161,7 +161,7 @@ it.each(["Experiment", "Variant", "Rename", "Problem", "Model"])("reveals the re
   fireEvent.click(baseline); fireEvent.click(button("Analysis"));
   expect(screen.getByRole("complementary", { name: "Inspector" })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "Seed" })).toBeNull();
-  if (action === "Experiment") fireEvent.click(button("Experiment"));
+  if (action === "Run settings") fireEvent.click(button("Run settings"));
   else if (action === "Variant") fireEvent.click(baseline);
   else if (action === "Rename") {
     fireEvent.contextMenu(baseline); fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));

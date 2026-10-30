@@ -1,6 +1,17 @@
 import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
+import type { Page } from "@playwright/test";
+
+/** Opens a question through its owning model, independent of the remembered model and interface language. */
+export async function selectExperiment(page: Page, path: string): Promise<void> {
+  const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
+  if (!response.ok()) throw new Error(`Cannot open ${path}: HTTP ${response.status()}`);
+  const { content } = await response.json();
+  const model = new URL(content.experiment.modelRef, `http://workspace/${path}`).pathname.slice(1);
+  await page.getByRole("combobox", { name: /^(Model|Модель)$/ }).selectOption(model);
+  await page.getByRole("combobox", { name: /^(Experiment|Эксперимент)$/ }).selectOption(path);
+}
 
 /** Copies a short UI fixture into an existing, test-owned workspace directory. */
 export async function copySmallExperiment(directory: string, name = "retry-storm.experiment.json", window = "50ms"): Promise<ExperimentFile> {

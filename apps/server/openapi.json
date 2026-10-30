@@ -1954,6 +1954,9 @@
             "type" : "string",
             "enum" : [ "MODEL", "LAYOUT", "EXPERIMENT" ]
           },
+          "modelRef" : {
+            "type" : [ "string", "null" ]
+          },
           "path" : {
             "type" : "string"
           },

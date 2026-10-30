@@ -6,6 +6,7 @@ import { MessageError } from "../i18n/MessageError";
 import type { LoadedExperiment } from "./editor";
 import { isObject } from "./params";
 import { resolveRef } from "./paths";
+import { experimentsForModel } from "./modelSelection";
 
 export interface DownloadDocument { name: string; text: string }
 export type ConfirmReplace = (paths: string[]) => boolean;
@@ -35,40 +36,87 @@ function parseDocument(text: string, name: string): Record<string, unknown> {
   return parsed;
 }
 
-/** A runnable starting point: one client, one service, one request and ten independent replications. */
-export function newExperiment(directory: string): DocumentDraft[] {
+/** Default question for a model: one baseline and ten independent replications. */
+export function defaultExperiment(modelRef: string, layoutRef: string | null): ExperimentFile {
+  return {
+    schemaVersion: 1, modelRef, layoutRef,
+    execution: { replications: 10, seed: 1, warmup: "0ms", measurement: "1s", maxRealTime: "30s" },
+    faults: [], grid: [], variants: [{ id: "baseline", label: t("file.baseline"), overrides: {} }],
+  };
+}
+
+/** A starting point with model, layout and ten independent replications; the canvas starts empty. */
+export function newModel(directory: string): DocumentDraft[] {
   const path = destination(directory);
   const name = nameOf(path);
   return [
     { path: `${path}/${name}.model.json`, content: { model: {
       schemaVersion: 5,
-      blocks: {
-        client: { type: "client", params: { load: { points: [{ time: "0s", rate: "10/s" }] }, deadline: "1s" } },
-        service: { type: "service", params: { handlers: 1, queue: 10, processing: { kind: "fixed", mean: "10ms" } } },
-      },
-      connections: [{ id: "client-to-service", type: "request", from: "client", to: "service", params: {} }],
+      blocks: {}, connections: [],
     } } },
     { path: `${path}/${name}.layout.json`, content: { layout: {
-      schemaVersion: 1, positions: { client: { x: 0, y: 100 }, service: { x: 280, y: 100 } },
+      schemaVersion: 1, positions: {},
     } } },
-    { path: `${path}/${name}.experiment.json`, content: { experiment: {
-      schemaVersion: 1, modelRef: `${name}.model.json`, layoutRef: `${name}.layout.json`,
-      execution: { replications: 10, seed: 1, warmup: "0ms", measurement: "1s", maxRealTime: "30s" },
-      faults: [], grid: [], variants: [{ id: "baseline", label: t("file.baseline"), overrides: {} }],
-    } } },
+    { path: `${path}/${name}.experiment.json`, content: { experiment: defaultExperiment(`${name}.model.json`, `${name}.layout.json`) } },
   ];
 }
 
-/** Copies the current drafts, including unsaved edits; all references stay inside the new directory. */
-export function copyExperiment(loaded: LoadedExperiment, directory: string): DocumentDraft[] {
-  const path = destination(directory);
+/** Creates another question for the current model without writing the source documents. */
+export function newExperiment(loaded: LoadedExperiment, name: string): DocumentDraft[] {
+  const filename = destination(name).replace(/\.experiment\.json$/, "");
+  if (filename.includes("/")) throw new MessageError("file.invalidExperimentName");
+  const path = loaded.modelPath.replace(/[^/]+$/, `${filename}.experiment.json`);
   return [
-    { path: `${path}/${nameOf(loaded.modelPath)}`, content: { model: loaded.model } },
-    { path: `${path}/${nameOf(loaded.layoutPath)}`, content: { layout: loaded.layout } },
-    { path: `${path}/${nameOf(loaded.experimentPath)}`, content: { experiment: {
-      ...loaded.experiment, modelRef: nameOf(loaded.modelPath), layoutRef: nameOf(loaded.layoutPath),
-    } } },
+    ...(loaded.versions.layout === null ? [{ path: loaded.layoutPath, content: { layout: loaded.layout } }] : []),
+    { path, content: { experiment: defaultExperiment(relativeRef(path, loaded.modelPath), relativeRef(path, loaded.layoutPath)) } },
   ];
+}
+
+function relativeRef(from: string, to: string): string {
+  const base = from.split("/").slice(0, -1), target = to.split("/");
+  while (base.length > 0 && base[0] === target[0]) { base.shift(); target.shift(); }
+  return [...base.map(() => ".."), ...target].join("/");
+}
+
+/** Copies the model and all its questions, retaining drafts and relative paths without basename collisions. */
+export async function copyModel(loaded: LoadedExperiment, directory: string): Promise<DocumentDraft[]> {
+  const path = destination(directory);
+  const entries = await api.documents();
+  const sources = new Map<string, DocumentDraft>([
+    [loaded.modelPath, { path: loaded.modelPath, content: { model: loaded.model } }],
+  ]);
+  if (loaded.experiment.layoutRef != null || loaded.versions.layout !== null) {
+    sources.set(loaded.layoutPath, { path: loaded.layoutPath, content: { layout: loaded.layout } });
+  }
+  const experiments = new Set([loaded.experimentPath, ...experimentsForModel(entries, loaded.modelPath)]);
+  for (const experimentPath of experiments) {
+    const experiment = experimentPath === loaded.experimentPath ? loaded.experiment : (await api.document(experimentPath)).content.experiment;
+    if (experiment == null) throw new MessageError("app.workspace.notExperiment", { path: experimentPath });
+    sources.set(experimentPath, { path: experimentPath, content: { experiment } });
+    if (experiment.layoutRef == null) continue;
+    const layoutPath = resolveRef(experimentPath, experiment.layoutRef);
+    if (layoutPath === null) throw new MessageError("app.workspace.layoutRefOutside", { path: experimentPath });
+    if (!sources.has(layoutPath)) {
+      const layout = (await api.document(layoutPath)).content.layout;
+      if (layout == null) throw new MessageError("app.workspace.notLayout", { path: layoutPath });
+      sources.set(layoutPath, { path: layoutPath, content: { layout } });
+    }
+  }
+  const common = loaded.modelPath.split("/").slice(0, -1);
+  while ([...sources.keys()].some(source => !source.startsWith(`${common.join("/")}/`)) && common.length > 0) common.pop();
+  const prefix = common.length === 0 ? "" : `${common.join("/")}/`;
+  const relocate = (source: string) => `${path}/${source.slice(prefix.length)}`;
+  return [...sources.values()].map(source => {
+    const copiedPath = relocate(source.path);
+    const experiment = source.content.experiment;
+    if (experiment == null) return { ...source, path: copiedPath };
+    const layoutPath = experiment.layoutRef == null ? null : source.path === loaded.experimentPath ? loaded.layoutPath
+      : resolveRef(source.path, experiment.layoutRef);
+    return { path: copiedPath, content: { experiment: { ...experiment,
+      modelRef: relativeRef(copiedPath, relocate(loaded.modelPath)),
+      layoutRef: layoutPath === null ? null : relativeRef(copiedPath, relocate(layoutPath)),
+    } } };
+  });
 }
 
 /** Reads every selected file before any write. Selected references are relocated together, including shared models. */
@@ -96,7 +144,7 @@ export async function readImports(files: readonly Pick<File, "name" | "text">[],
 }
 
 /** Checks all collisions before writing. Only an explicit confirmation permits version-conditional replacement. */
-export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: ConfirmReplace): Promise<boolean> {
+export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate = true): Promise<boolean> {
   const entries = await api.documents();
   const versions = new Map(entries.map(entry => [entry.path, entry.version]));
   const collisions = drafts.filter(draft => versions.has(draft.path)).map(draft => draft.path);
@@ -105,7 +153,7 @@ export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: C
     if (!confirmReplace(collisions)) return false;
   }
   for (const draft of drafts) {
-    if (draft.content.experiment == null) continue;
+    if (!validate || draft.content.experiment == null) continue;
     const report = await api.validate(draft.path, drafts);
     if (!report.valid) throw new ApiError(400, { code: "FILE_VALIDATION", message: t("file.invalidDocuments"), diagnostics: report.diagnostics });
   }

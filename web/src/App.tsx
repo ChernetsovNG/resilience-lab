@@ -85,7 +85,8 @@ export function App() {
     setSelectionModel(loaded.model);
   }
   const selected = currentSelection.at(-1) ?? null;
-  const validation = useValidation(loaded);
+  const hasClient = loaded !== null && Object.values(loaded.model.blocks).some(block => block.type === "client");
+  const validation = useValidation(loaded, hasClient);
   const estimate = useEstimate(loaded, invalidFields);
   const variants = loaded?.experiment.variants ?? [];
   let variantId = variantPage.id;
@@ -194,7 +195,8 @@ export function App() {
       fieldDiagnostics.set(target.field, [...(fieldDiagnostics.get(target.field) ?? []), diagnostic]);
     }
   }
-  const runBlockedReason = validation.pending ? t("app.validation.pending")
+  const runBlockedReason = loaded !== null && !hasClient ? t("app.canvas.addClient")
+    : validation.pending ? t("app.validation.pending")
     : validation.problem !== null ? t("app.validation.failed")
       : validation.report?.valid === false ? t("app.validation.invalid") : undefined;
 
@@ -287,6 +289,14 @@ export function App() {
   return (
     <div className={`app app--results-${resultsSize}`}>
       <TopBar
+        models={workspace.models}
+        model={workspace.selectedModel}
+        onModel={path => {
+          if (invalid || loading || workspace.saving || run.running || runPending || estimate.pending) return;
+          if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+          resetExperimentView();
+          void workspace.openModel(path, true);
+        }}
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
@@ -302,6 +312,7 @@ export function App() {
         }}
         loading={workspace.loading}
         dirty={workspace.dirty}
+        savePending={loaded?.versions.experiment === null}
         invalid={invalid}
         conflict={workspace.conflict}
         saving={workspace.saving}
@@ -313,7 +324,7 @@ export function App() {
         canRedo={workspace.canRedo}
         onUndo={workspace.undo}
         onRedo={workspace.redo}
-        running={run.running}
+        running={run.running || runPending}
         runBlockedReason={runBlockedReason}
         estimating={estimate.pending}
         onEstimate={() => void requestEstimate()}
@@ -342,6 +353,7 @@ export function App() {
               if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => backendMessage(warning)).join("\n") }))) return;
             }
             const documents = { model: loaded.model, experiment: loaded.experiment };
+            if (loaded.versions.experiment === null && !await workspace.save()) return;
             setLaunchDocuments(documents);
             await run.run(loaded.experimentPath, documents);
           }).finally(() => setRunPending(false));
@@ -493,6 +505,7 @@ export function App() {
               }}
             />
           )}
+          {loaded !== null && !hasClient ? <p className="canvas-empty canvas-client-hint">{t("app.canvas.addClient")}</p> : null}
         </div>
         <VariantTabs variants={variants} active={variant?.id ?? null} disabled={invalid || !editable} onCommand={workspace.execute}
           onSelect={id => {

@@ -1,9 +1,10 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 
 test("gives the empty panel's space to the canvas and shows call results without scrolling", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await expect(page.getByRole("tabpanel")).toBeHidden();
@@ -54,7 +55,7 @@ test("gives the empty panel's space to the canvas and shows call results without
 test("a model-page variant diagnostic link reveals collapsed Parameters and focuses Timeout", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await page.getByRole("button", { name: "Run", exact: true }).click();

@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -18,7 +19,7 @@ async function expectNoPageScroll(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
   await expect(page.getByLabel("Experiment")).toHaveValue(experiment);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
@@ -103,7 +104,7 @@ test("summarizes a warning from the only variant override on Model and opens its
     document.variants = [{ id: "solo", label: "Solo", overrides: { "gateway.handlers": 1 } }];
   }, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByTestId("rf__node-gateway").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
     const fieldMessages = handlers.locator("..").locator(".field-diagnostics");
@@ -153,7 +154,7 @@ test("validates variant drafts on their own page and blocks Run until errors are
     const modelPath = "variant-validation/fixture.model.json";
     const originalModel = await document(modelPath);
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
     await page.getByTestId("rf__node-gateway").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
@@ -201,7 +202,7 @@ test("saves variant field overrides without changing the model and restores mode
   await withExperimentFixture(path, () => {}, async () => {
     const originalModel = (await document(modelPath)).content.model;
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
     await page.getByTestId("canvas-edge-label-gateway-to-middle").click();
     const timeout = page.getByLabel("Timeout", { exact: true });
@@ -220,7 +221,7 @@ test("saves variant field overrides without changing the model and restores mode
     expect((await document(modelPath)).content.model).toEqual(originalModel);
 
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
     await page.getByTestId("canvas-edge-label-gateway-to-middle").click();
     await expect(timeout).toHaveValue("90ms");
@@ -244,7 +245,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
   const path = "variant-run/three.experiment.json";
   await withExperimentFixture(path, () => {}, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByRole("button", { name: "Add variant", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Variant 1", exact: true })).toHaveAttribute("aria-selected", "true");
     const label = page.getByLabel("Variant label", { exact: true });
@@ -253,7 +254,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     const id = page.getByLabel("Variant ID", { exact: true });
     await id.fill("alternative");
     await id.press("Enter");
-    await page.getByRole("button", { name: "Experiment", exact: true }).click();
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
     for (const [name, value] of [["Replications", "2"], ["Seed", "42"], ["Real-time limit", "10s"],
       ["Fault start", "100ms"], ["Fault end", "500ms"], ["Processing multiplier", "2"], ["Fault failure rate", "5%"]]) {
       const field = page.getByLabel(name, { exact: true });
@@ -289,7 +290,7 @@ test("preserves an absent optional field when editing an existing object overrid
     source.blocks.gateway.params.processing = { kind: "lognormal", mean: "2ms", stdDev: "1ms" };
     await writeFile(modelFile, JSON.stringify(source));
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await page.getByRole("tab", { name: "No retries", exact: true }).click();
     await page.getByTestId("rf__node-gateway").click();
     const mean = page.getByLabel("Mean", { exact: true });
@@ -321,7 +322,7 @@ test("preserves grid axes when saving and shows every point from the real API", 
   ];
   await withExperimentFixture(path, (document) => { document.grid = grid; }, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     const seed = page.getByLabel("Seed", { exact: true });
     await seed.fill("42");
     await seed.press("Enter");
@@ -375,7 +376,7 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   expect(stored.content.model.blocks.gateway.params.handlers).toBe(6);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.reload();
-  await page.getByLabel("Experiment", { exact: true }).selectOption(experiment);
+  await selectExperiment(page, experiment);
   await page.getByTestId("rf__node-gateway").click();
   await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("6");
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
@@ -455,7 +456,7 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
     document.execution.maxRealTime = "60s";
   }, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     const run = page.getByRole("button", { name: "Run", exact: true });
     await expect(run).toBeEnabled();
     const submitted = page.waitForResponse((response) => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");
@@ -530,7 +531,7 @@ test("keeps all twelve variant pages reachable inside the canvas column", async 
     }));
   }, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     await expect(page.getByRole("tab", { name: "Configuration 12", exact: true })).toBeAttached();
     await expect(page.getByTestId("block-node")).toHaveCount(4);
     const panels = await stationaryPanels(page);
@@ -555,7 +556,7 @@ test("keeps toolbar actions and health visible for a long experiment path in cle
   await withExperimentFixture(path, () => {}, async () => {
     await page.reload();
     const selector = page.getByLabel("Experiment");
-    await selector.selectOption(path);
+    await selectExperiment(page, path);
     await expect(selector).toHaveValue(path);
     await expect(selector.locator("option:checked")).toHaveText(path);
     await expect(page.getByTestId("block-node")).toHaveCount(4);
@@ -620,13 +621,13 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   const path = "estimate-drafts/drafts.experiment.json";
   await withExperimentFixture(path, () => {}, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     const modelUrl = `/api/v1/workspace/document?path=${encodeURIComponent("estimate-drafts/fixture.model.json")}`;
     const original = await (await request.get(modelUrl)).json();
     await page.getByTestId("rf__node-gateway").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
     await handlers.fill("5"); await handlers.press("Enter");
-    await page.getByRole("button", { name: "Experiment", exact: true }).click();
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
     const seed = page.getByLabel("Seed", { exact: true });
     await seed.fill("42"); await seed.press("Enter");
     const draft = await estimate();
@@ -653,7 +654,7 @@ test("refuses resume after the model changes and suggests a new run", async ({ p
     document.execution.maxRealTime = "60s";
   }, async () => {
     await page.reload();
-    await page.getByLabel("Experiment").selectOption(path);
+    await selectExperiment(page, path);
     const run = page.getByRole("button", { name: "Run", exact: true });
     await expect(run).toBeEnabled();
     const submitted = page.waitForResponse((response) => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");

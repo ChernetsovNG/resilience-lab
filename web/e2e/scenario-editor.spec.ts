@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -16,7 +17,7 @@ const test = base.extend<{ files: Files }>({
     };
     try {
       await page.goto("/");
-      await page.getByLabel("Experiment").selectOption(files.experiment);
+      await selectExperiment(page, files.experiment);
       await expect(page.getByTestId("block-node")).toHaveCount(4);
       await provide(files);
     } finally {
@@ -271,7 +272,7 @@ test("edits and clears the shared series window with validation, persistence and
   await expect(windowField).toHaveValue("");
   await expect(windowField).toHaveAttribute("placeholder", "10ms");
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
-  await page.getByRole("button", { name: "Experiment", exact: true }).click();
+  await page.getByRole("button", { name: "Run settings", exact: true }).click();
   await page.getByLabel("Measurement", { exact: true }).fill("2s");
   await page.getByLabel("Measurement", { exact: true }).press("Enter");
   await expect(windowField).toHaveAttribute("placeholder", "20ms");
@@ -707,7 +708,7 @@ test("keeps the Inspector on one target and manages variant pages through their 
   await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
   await expect(inspector.getByRole("heading", { name: "Parameter grid" })).toBeVisible();
   await gateway.click();
-  await page.getByRole("button", { name: "Experiment", exact: true }).click();
+  await page.getByRole("button", { name: "Run settings", exact: true }).click();
   await expect(inspector.getByLabel("Replications", { exact: true })).toBeVisible();
   await expect(inspector.getByLabel("Handlers", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("after-experiment.png") });

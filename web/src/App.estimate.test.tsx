@@ -10,7 +10,7 @@ describe("cost estimate and resume", () => {
   it("estimates unsaved model and experiment drafts without saving or starting a job", async () => {
     const fetchMock = server();
     await open(); await selectGateway(); editHandlers("5");
-    fireEvent.click(button("Experiment"));
+    fireEvent.click(button("Run settings"));
     editField("Seed", "42");
     fireEvent.click(button("Estimate"));
     const estimate = await screen.findByRole("region", { name: "Cost estimate" });

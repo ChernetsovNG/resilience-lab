@@ -1,3 +1,4 @@
+import { selectExperiment } from "./fixtures";
 import { expect, test } from "@playwright/test";
 import type { RunSummary } from "../src/api/apiTypes";
 
@@ -9,7 +10,7 @@ test("confidence updates retry-storm success intervals without another run and s
     if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1;
   });
   await page.goto("/");
-  await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const summaryResponse = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
   await page.getByRole("button", { name: "Run", exact: true }).click();
