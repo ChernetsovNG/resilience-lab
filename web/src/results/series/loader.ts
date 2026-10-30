@@ -118,7 +118,7 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
-    if (index.schemaVersion !== 5) {
+    if (index.schemaVersion !== 6) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const connectionRequest = "connections" in request;
@@ -270,7 +270,7 @@ function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, req
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        if (client) covered.add(index);
+        if (client || window.metrics.clientOriginalArrivals != null) covered.add(index);
         else if (requested.has(node.id) && window.hasSlots) services.add(index);
       }
     }
@@ -294,7 +294,8 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        if (!window.hasSlots) arrivals.set(index, (arrivals.get(index) ?? 0) + window.originalArrivals);
+        const clientArrivals = window.metrics.clientOriginalArrivals ?? (!window.hasSlots ? window.originalArrivals : undefined);
+        if (clientArrivals !== undefined) arrivals.set(index, clientArrivals);
         if (!requested.has(node.id)) continue;
         let windows = selected.get(node.id);
         if (windows === undefined) {
@@ -312,7 +313,7 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
     const windows = ordered.map(([index, window]) => {
       const metrics = { ...window.metrics };
       if (window.hasSlots) {
-        const denominator = arrivals.get(index) ?? 0;
+        const denominator = window.metrics.clientOriginalArrivals ?? arrivals.get(index) ?? 0;
         metrics.client = { originalArrivals: denominator };
       }
       return metrics;

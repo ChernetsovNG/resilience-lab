@@ -20,6 +20,7 @@ function fixture(): ElementResultsContext {
   };
   run.variants[0].points[0].coordinates = { "gateway-to-middle.timeout": "150ms" };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
+    slotPoolSummaries: {},
     totals: { measurementMs: 2000,
       sentAttempts: 30,
       retries: 10,

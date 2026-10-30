@@ -9,6 +9,8 @@ import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.LatencyStatistics
+import resiliencelab.core.experiment.ReplicaGroup
+import resiliencelab.core.experiment.ReplicaGroupKind
 import resiliencelab.core.experiment.SlotPoolMetrics
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.workspace.Workspace
@@ -35,6 +37,8 @@ data class WindowMetrics(
     val retries: Int = 0,
     val latency: LatencyStatistics = LatencyStatistics(),
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    /** Shared client original-request denominator for independently loaded group rows; never a summed group counter. */
+    val clientOriginalArrivals: Int? = null,
 )
 
 /** One node in a closed window, passed directly to the artifact writer. */
@@ -87,10 +91,16 @@ data class ConnectionSeries(
     val windows: List<ConnectionWindowMetrics>,
 )
 
+/** Row population stored independently so group loading does not require instance parts. */
+@Serializable
+enum class SeriesPartKind { INSTANCE, GROUP }
+
 /** A group of nodes and connections on a contiguous window range; the latency profile applies to every contained sketch. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SeriesPart(
     val schemaVersion: Int = Versions.SERIES_SCHEMA,
+    @EncodeDefault val kind: SeriesPartKind = SeriesPartKind.INSTANCE,
     val profile: String = LatencySketch.PROFILE,
     val fromWindow: Int,
     val untilWindow: Int,
@@ -99,6 +109,7 @@ data class SeriesPart(
 )
 
 /** SHA-256 covers the stored gzip bytes; [uncompressedBytes] is the actual UTF-8 JSON size before compression. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SeriesPartReference(
     val file: String,
@@ -108,15 +119,18 @@ data class SeriesPartReference(
     val uncompressedBytes: Int,
     val sha256: String,
     val connections: List<String> = emptyList(),
+    @EncodeDefault val kind: SeriesPartKind = SeriesPartKind.INSTANCE,
 )
 
 /** Complete node and connection × window coverage of one variant × p0 × replication task. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SeriesIndex(
     val schemaVersion: Int,
     val endMs: Double,
     val windowMs: Double,
     val parts: List<SeriesPartReference>,
+    @EncodeDefault val groups: List<ReplicaGroup> = emptyList(),
 )
 
 /**
@@ -130,6 +144,7 @@ class SeriesWriter(
     private val endMs: Double,
     private val windowMs: Double,
     private val maxPartBytes: Int = MAX_PART_BYTES,
+    private val groups: List<ReplicaGroup> = emptyList(),
 ) {
     private val expectedWindows = windowCount(endMs, windowMs)
 
@@ -143,7 +158,9 @@ class SeriesWriter(
     private var nextWindow = 0
     private var nodeIds: List<String>? = null
     private var connectionIds: List<String>? = null
-    private var pending: BufferedPart? = null
+    private val pending = mutableMapOf<SeriesPartKind, BufferedPart>()
+    private val groupNodeIds = groups.filter { it.kind == ReplicaGroupKind.NODE }.map { it.id }.toSet()
+    private val groupCallIds = groups.filter { it.kind == ReplicaGroupKind.CONNECTION }.map { it.id }.toSet()
 
     init {
         require(maxPartBytes in 1..MAX_PART_BYTES) { "Part budget must be between 1 and $MAX_PART_BYTES bytes" }
@@ -174,8 +191,33 @@ class SeriesWriter(
         require(connectionIds == null || connectionIds == callIds) { "Every window must cover the same connections" }
         nodeIds = ids
         connectionIds = callIds
-        val baseBytes = prefix(index, index + 1).size + PART_SUFFIX_BYTES
-        var window = BufferedPart(index, index + 1)
+        writeKindWindow(
+            index,
+            sorted.filter {
+                it.id !in groupNodeIds
+            },
+            sortedConnections.filter { it.id !in groupCallIds },
+            SeriesPartKind.INSTANCE,
+        )
+        if (groups.isNotEmpty()) {
+            writeKindWindow(
+                index,
+                sorted.filter { it.id in groupNodeIds },
+                sortedConnections.filter { it.id in groupCallIds },
+                SeriesPartKind.GROUP,
+            )
+        }
+        nextWindow++
+    }
+
+    private fun writeKindWindow(
+        index: Int,
+        sorted: List<NodeWindow>,
+        sortedConnections: List<ConnectionWindow>,
+        kind: SeriesPartKind,
+    ) {
+        val baseBytes = prefix(index, index + 1, kind).size + PART_SUFFIX_BYTES
+        var window = BufferedPart(index, index + 1, kind)
         var splitRows = false
 
         fun add(
@@ -183,16 +225,16 @@ class SeriesWriter(
             connection: Boolean,
         ) {
             if (baseBytes + row.singleWindowBytes > maxPartBytes) {
-                flushPending()
+                flushPending(kind)
                 val kind = if (connection) "connection" else "node"
                 throw ExperimentExecutionException("$kind=${row.id} window=$index: part size limit $maxPartBytes bytes")
             }
             val group = if (connection) window.connections else window.nodes
             val separator = if (group.isEmpty()) 0 else 1
             if (baseBytes + window.bodyBytes + separator + row.singleWindowBytes > maxPartBytes) {
-                flushPending()
+                flushPending(kind)
                 persist(window)
-                window = BufferedPart(index, index + 1)
+                window = BufferedPart(index, index + 1, kind)
                 splitRows = true
             }
             window.add(row, connection)
@@ -206,29 +248,30 @@ class SeriesWriter(
         if (splitRows) {
             persist(window)
         } else {
-            val current = pending
+            val current = pending[kind]
             val added = window.nodes.sumOf { it.windows.single().size + 1 } + window.connections.sumOf { it.windows.single().size + 1 }
             if (current != null &&
-                prefix(current.fromWindow, index + 1).size + current.bodyBytes + added + PART_SUFFIX_BYTES <= maxPartBytes
+                prefix(current.fromWindow, index + 1, kind).size + current.bodyBytes + added + PART_SUFFIX_BYTES <= maxPartBytes
             ) {
                 window.nodes.forEachIndexed { node, value -> current.nodes[node].windows += value.windows.single() }
                 window.connections.forEachIndexed { connection, value -> current.connections[connection].windows += value.windows.single() }
                 current.bodyBytes += added
                 current.untilWindow = index + 1
             } else {
-                flushPending()
-                pending = window
+                flushPending(kind)
+                pending[kind] = window
             }
         }
-        nextWindow++
     }
 
     private fun prefix(
         from: Int,
         until: Int,
+        kind: SeriesPartKind,
     ): ByteArray =
         (
-            "{\"schemaVersion\":${Versions.SERIES_SCHEMA},\"profile\":\"${LatencySketch.PROFILE}\",\"fromWindow\":$from," +
+            "{\"schemaVersion\":${Versions.SERIES_SCHEMA},\"kind\":\"$kind\",\"profile\":\"${LatencySketch.PROFILE}\"," +
+                "\"fromWindow\":$from," +
                 "\"untilWindow\":$until,\"nodes\":["
         ).toByteArray(Charsets.UTF_8)
 
@@ -241,14 +284,13 @@ class SeriesWriter(
         mutableListOf(metrics.toByteArray(Charsets.UTF_8)),
     )
 
-    private fun flushPending() {
-        pending?.let { persist(it) }
-        pending = null
+    private fun flushPending(kind: SeriesPartKind) {
+        pending.remove(kind)?.let { persist(it) }
     }
 
     private fun persist(part: BufferedPart) {
         val output = ByteArrayOutputStream()
-        val header = prefix(part.fromWindow, part.untilWindow)
+        val header = prefix(part.fromWindow, part.untilWindow, part.kind)
         output.write(header)
 
         fun writeRows(rows: List<BufferedSeries>) {
@@ -282,6 +324,7 @@ class SeriesWriter(
                 bytes.size,
                 checksum,
                 part.connections.map { it.id },
+                part.kind,
             )
     }
 
@@ -296,6 +339,7 @@ class SeriesWriter(
     private class BufferedPart(
         val fromWindow: Int,
         var untilWindow: Int,
+        val kind: SeriesPartKind,
     ) {
         val nodes = mutableListOf<BufferedSeries>()
         val connections = mutableListOf<BufferedSeries>()
@@ -315,8 +359,15 @@ class SeriesWriter(
     fun finish(): SeriesIndex =
         uninterruptedArtifactWrite {
             require(nextWindow == expectedWindows) { "Incomplete series: $nextWindow windows" }
-            flushPending()
-            val index = SeriesIndex(schemaVersion = Versions.SERIES_SCHEMA, endMs = endMs, windowMs = windowMs, parts = parts.toList())
+            SeriesPartKind.entries.forEach(::flushPending)
+            val index =
+                SeriesIndex(
+                    schemaVersion = Versions.SERIES_SCHEMA,
+                    endMs = endMs,
+                    windowMs = windowMs,
+                    parts = parts.toList(),
+                    groups = groups,
+                )
             workspace.create("$directory/index.json", DocumentCodec.encode(SeriesIndex.serializer(), index))
             index
         }

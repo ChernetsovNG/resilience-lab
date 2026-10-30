@@ -9,6 +9,7 @@ function fixture() {
   const run = structuredClone(summary);
   const point = run.variants[0].points[0];
   point.aggregate.services.middle = {
+    slotPoolSummaries: {},
     admittedAmplification: { count: 2, mean: 2.5, min: 2, max: 3 },
     totals: { ...point.aggregate.services.gateway.totals,
       measurementMs: 3000,
@@ -163,6 +164,7 @@ it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s
 it("projects connection totals independently of the target service", () => {
   const run = fixture();
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
+    slotPoolSummaries: {},
     totals: { sentAttempts: 40,
       retries: 10,
       succeeded: 20,

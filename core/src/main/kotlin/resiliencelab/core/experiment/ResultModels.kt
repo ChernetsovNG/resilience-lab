@@ -21,12 +21,14 @@ data class ReplicationResult(
     val services: Map<String, ServiceMetrics>,
     val connections: Map<String, ConnectionMetrics> = emptyMap(),
     val poolers: Map<String, PoolerMetrics> = emptyMap(),
+    val groups: List<ReplicaGroup> = emptyList(),
 )
 
 /**
  * Per-service counters for the measured cohort and time-weighted observations for the fixed measurement interval.
  * Offered attempts include queue rejections; admitted attempts were queued or immediately allocated.
  * Queue and handler observations include all work present, including warm-up work, but exclude run-out.
+ * Residence latency covers admitted attempts of the measured arrival cohort, including run-out completions.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -38,6 +40,7 @@ data class ServiceMetrics(
     val failures: Int,
     val measurementMs: Double,
     val queueDurationsMs: Map<Double, Double>,
+    val latency: LatencyStatistics = LatencyStatistics(),
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 ) {
     val handlerUtilization: Double get() = slotPools.getValue("handlers").let { it.busyIntegralMs / it.capacityIntegralMs }
@@ -64,6 +67,7 @@ data class AggregateMetrics(
     val services: Map<String, AggregateServiceMetrics>,
     val connections: Map<String, AggregateConnectionMetrics> = emptyMap(),
     val poolers: Map<String, AggregatePoolerMetrics> = emptyMap(),
+    val groups: List<ReplicaGroup> = emptyList(),
 )
 
 /** Pooled client-latency distributions partitioned by final client outcome. */
@@ -106,6 +110,9 @@ data class AggregateServiceMetrics(
     val admittedAmplification: MetricSummary?,
     val offeredAmplification: MetricSummary?,
     val totals: ServiceTotals,
+    val pooledLatency: LatencyDistribution? = null,
+    val meanLatencyMs: MetricSummary? = null,
+    val slotPoolSummaries: Map<String, AggregateSlotPoolMetrics> = emptyMap(),
 )
 
 /** Pooled numerators, denominators and time integrals; rates can be reconstructed without averaging rates. */
@@ -154,6 +161,8 @@ data class AggregateConnectionMetrics(
     val meanInFlight: MetricSummary?,
     val pooledLatency: LatencyDistribution?,
     val totals: ConnectionTotals,
+    val meanLatencyMs: MetricSummary? = null,
+    val slotPoolSummaries: Map<String, AggregateSlotPoolMetrics> = emptyMap(),
 )
 
 /** Pooled call counters and occupancy integrals; [measurementMs] is summed across contributing replications. */
@@ -225,4 +234,43 @@ data class SlotPoolMetrics(
     @EncodeDefault val totalWaitMs: Double = 0.0,
     @EncodeDefault val queueFullCount: Long = 0L,
     @EncodeDefault val waitLimitCount: Long = 0L,
+    val replicaExtrema: ReplicaSlotExtrema? = null,
+)
+
+/** Replica range for one slot set; undefined utilization from zero capacity is excluded. */
+@Serializable
+data class ReplicaSlotExtrema(
+    val minUtilization: Double?,
+    val maxUtilization: Double?,
+    val maxUtilizationReplica: Int?,
+    val minMeanQueueLength: Double,
+    val maxMeanQueueLength: Double,
+    val maxMeanQueueLengthReplica: Int,
+)
+
+/** Replication-level ratios and means of a group's pooled slot statistics. */
+@Serializable
+data class AggregateSlotPoolMetrics(
+    val utilization: MetricSummary?,
+    val meanQueueLength: MetricSummary?,
+    val meanWaitMs: MetricSummary?,
+)
+
+/** Numeric replica identity is retained separately from its display address. */
+@Serializable
+data class ReplicaMember(
+    val id: String,
+    val replica: Int,
+)
+
+/** Node groups and copied-call groups have independent membership. Router outputs are not groups. */
+@Serializable
+enum class ReplicaGroupKind { NODE, CONNECTION }
+
+/** Source-document identity and ordered expanded instances of one group. */
+@Serializable
+data class ReplicaGroup(
+    val id: String,
+    val kind: ReplicaGroupKind,
+    val instances: List<ReplicaMember>,
 )

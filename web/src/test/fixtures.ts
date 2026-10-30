@@ -200,7 +200,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 11,
+  schemaVersion: 12,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -208,7 +208,7 @@ export const summary: RunSummary = {
       id: "baseline",
       label: "Baseline",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: {
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { groups: [],
         pooledLatency: {},
         connections: {},
         poolers: {},
@@ -217,6 +217,7 @@ export const summary: RunSummary = {
         p99LatencyMs: { count: 2, mean: 80, min: 79, max: 81 },
         services: {
           gateway: {
+            slotPoolSummaries: {},
             admittedAmplification: { count: 2, mean: 1.2, min: 1.1, max: 1.3 },
             totals: { originalArrivals: 200,
       offeredAttempts: 260,
@@ -234,13 +235,13 @@ export const summary: RunSummary = {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { pooledLatency: {}, services: {}, connections: {}, poolers: {} } }],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, aggregate: { groups: [], pooledLatency: {}, services: {}, connections: {}, poolers: {} } }],
     },
   ],
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 11,
+  schemaVersion: 12,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",

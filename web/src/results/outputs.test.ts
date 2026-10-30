@@ -149,3 +149,32 @@ describe("catalog output contract", () => {
     expect(original.title).toBe("Offered attempts");
   });
 });
+
+describe("replica group output bindings", () => {
+  it.each(["service", "call"])("reads %s group extrema and pooled p99 with the closed operations", (type) => {
+    const outputs = outputsOf(catalog, type);
+    const set = type === "service" ? "handlers" : "pool";
+    const metrics = { busyIntegralMs: 18, capacityIntegralMs: 30, queueIntegralMs: 30,
+      waitCount: 2, totalWaitMs: 4, queueFullCount: 0, waitLimitCount: 1,
+      replicaExtrema: { minUtilization: 0.2, maxUtilization: 1, maxUtilizationReplica: 2,
+        minMeanQueueLength: 0, maxMeanQueueLength: 3, maxMeanQueueLengthReplica: 2 } };
+    const context = { durationMs: 10, slotPools: { [set]: metrics } };
+    const maximum = outputs.find(output => output.id === "maxReplicaUtilization");
+    expect(maximum).toBeDefined();
+    expect(calculateOutput(maximum!.calculation, context)).toBe(1);
+    expect(calculateOutput(outputs.find(output => output.id === "maxReplicaMeanQueue")!.calculation, context)).toBe(3);
+    expect(calculateOutput(outputs.find(output => output.id === "groupUtilization")!.calculation, context)).toBe(0.6);
+    expect(outputValue(outputs.find(output => output.id === "groupP99LatencyMs")!, {
+      pooledLatency: { p99Ms: 19.8 },
+    }, false)).toEqual({ value: 19.8, source: "pooled" });
+    const group = outputs.filter(output => ["maxReplicaUtilization", "groupUtilization", "groupP99LatencyMs"].includes(output.id));
+    expect(group.every(output => output.timeline == null && output.inspector == null && output.overlay == null)).toBe(true);
+  });
+  it("retains group replication counts and unmodified confidence intervals", () => {
+    const output = outputsOf(catalog, "service").find(output => output.id === "groupUtilization");
+    expect(output).toBeDefined();
+    expect(outputValue(output!, { slotPoolSummaries: { handlers: { utilization: {
+      count: 2, mean: 0.6, stdDev: 0.2, ci95Low: -0.1, ci95High: 1.3, min: 0.4, max: 0.8,
+    } } } }, false)).toEqual({ value: 0.6, source: "replications", count: 2, stdDev: 0.2, ci95Low: -0.1, ci95High: 1.3 });
+  });
+});

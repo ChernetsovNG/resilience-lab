@@ -19,6 +19,7 @@ import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.execution.checkCancellation
 import resiliencelab.core.experiment.LatencySketch
+import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.GridPoint
 import resiliencelab.core.results.ResultsLayout
@@ -335,6 +336,8 @@ class Lab(
                                 "$runDirectory/series/${variant.id}/${point.id}/rep-$replication",
                                 compiled.run.warmupMs + compiled.run.measurementMs,
                                 compiled.run.windowMs,
+                                groups =
+                                    ReplicaGroups.membership(point.graph),
                             )
                     }
                 }

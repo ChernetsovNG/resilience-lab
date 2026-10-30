@@ -73,7 +73,7 @@ class WindowSeriesTest {
     }
 
     @Test
-    fun `packed series use schema five with slot maps and connection coverage`(
+    fun `packed series use schema six with slot maps and connection coverage`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
@@ -87,9 +87,9 @@ class WindowSeriesTest {
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
         assertThat(bytes.toString(Charsets.UTF_8)).doesNotContain("\"pooler\"")
-        assertThat(index.schemaVersion).isEqualTo(5)
+        assertThat(index.schemaVersion).isEqualTo(6)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(5)
+        assertThat(part.schemaVersion).isEqualTo(6)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")

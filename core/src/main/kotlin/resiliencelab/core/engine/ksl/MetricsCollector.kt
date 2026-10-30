@@ -1,6 +1,8 @@
 package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.experiment.LatencyAccumulator
+import resiliencelab.core.experiment.ReplicaGroup
+import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
@@ -23,13 +25,21 @@ class MetricsCollector(
     private val windowMs: Double = (measurementEndMs - measurementStartMs) / 100.0,
     private val connectionIds: List<String> = emptyList(),
     private val connectionPoolSizes: Map<String, Int> = emptyMap(),
+    private val groups: List<ReplicaGroup> = emptyList(),
     private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { _, _, _ -> },
 ) {
     private val arrivalTimesMs = mutableListOf<Double>()
     private var allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
     private var successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
     private var failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, onWindow)
+    private val groupedWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { index, nodes, calls ->
+        onWindow(
+            index,
+            nodes + ReplicaGroups.nodeWindows(groups, nodes, clientId),
+            calls + ReplicaGroups.connectionWindows(groups, calls),
+        )
+    }
+    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, groupedWindow)
     private var connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
     private var originalArrivals = 0
     private var successes = 0
@@ -45,17 +55,20 @@ class MetricsCollector(
         if (timeMs >= measurementEndMs) {
             finishMeasurement(timeMs)
         }
-        return ReplicationResult(
-            arrivalTimesMs = arrivalTimesMs.toList(),
-            allLatency = allLatency.snapshot(),
-            successfulLatency = successfulLatency.snapshot(),
-            failedLatency = failedLatency.snapshot(),
-            originalArrivals = originalArrivals,
-            successes = successes,
-            failures = failures,
-            services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
-            connections = connections.snapshot(),
-            poolers = poolerMetrics.mapValues { it.value.snapshot() },
+        return ReplicaGroups.replication(
+            groups,
+            ReplicationResult(
+                arrivalTimesMs = arrivalTimesMs.toList(),
+                allLatency = allLatency.snapshot(),
+                successfulLatency = successfulLatency.snapshot(),
+                failedLatency = failedLatency.snapshot(),
+                originalArrivals = originalArrivals,
+                successes = successes,
+                failures = failures,
+                services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
+                connections = connections.snapshot(),
+                poolers = poolerMetrics.mapValues { it.value.snapshot() },
+            ),
         )
     }
 
@@ -64,7 +77,7 @@ class MetricsCollector(
         allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
         successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
         failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, onWindow)
+        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, groupedWindow)
         connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
         originalArrivals = 0
         successes = 0
@@ -283,7 +296,10 @@ class MetricsCollector(
         measured: Boolean = true,
     ) {
         windows.attemptCompletion(serviceId, currentTimeMs(), residenceMs, succeeded)
-        if (measured) poolerMetrics[serviceId]?.complete(residenceMs, succeeded)
+        if (measured) {
+            poolerMetrics[serviceId]?.complete(residenceMs, succeeded)
+            serviceMetrics[serviceId]?.latency?.add(residenceMs)
+        }
     }
 
     private fun newPoolerMetrics() =
@@ -333,6 +349,7 @@ class MetricsCollector(
         private val measurementStartMs: Double,
         private val measurementEndMs: Double,
     ) {
+        var latency = LatencyAccumulator(context = "service cohort residence")
         var slots = SlotStatistics(measurementStartMs, measurementEndMs, configuredHandlers)
         var offeredAttempts = 0
         var admittedAttempts = 0
@@ -344,6 +361,7 @@ class MetricsCollector(
         var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
 
         fun reset() {
+            latency = LatencyAccumulator(context = "service cohort residence")
             slots = SlotStatistics(measurementStartMs, measurementEndMs, configuredHandlers)
             offeredAttempts = 0
             admittedAttempts = 0
@@ -370,6 +388,7 @@ class MetricsCollector(
                 failures = failures,
                 measurementMs = measurementEndMs - measurementStartMs,
                 queueDurationsMs = queueLengthSeries.durations,
+                latency = latency.snapshot(),
                 slotPools =
                     mapOf(
                         "handlers" to
