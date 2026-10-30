@@ -161,9 +161,7 @@ test("View settings stay open while changing preferences and persist without edi
   await expect(menu).toBeVisible();
   await page.getByLabel("Язык", { exact: true }).selectOption("en");
   await expect(menu).toBeVisible();
-  await page.getByLabel("Confidence level", { exact: true }).selectOption("99");
-  await expect(menu).toBeVisible();
-  await expect(page.getByLabel("Confidence level", { exact: true })).toHaveValue("99");
+  await expect(menu.getByLabel("Confidence level", { exact: true })).toHaveCount(0);
   await page.locator(".react-flow__pane").click({ position: { x: 20, y: 100 } });
   await expect(menu).toBeHidden();
   await expect(page.getByRole("button", { name: "View", exact: true })).toBeFocused();
@@ -178,7 +176,7 @@ test("View settings stay open while changing preferences and persist without edi
   await expect(page.getByLabel("Show grid", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("Interface text size", { exact: true })).toHaveValue("110");
   await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
-  await expect(page.getByLabel("Confidence level", { exact: true })).toHaveValue("99");
+  await expect(menu.getByLabel("Confidence level", { exact: true })).toHaveCount(0);
   await page.getByLabel("Grid step", { exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

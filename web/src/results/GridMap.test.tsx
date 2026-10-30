@@ -4,6 +4,7 @@ import { summary } from "../test/fixtures";
 import { GridMap } from "./GridMap";
 import { gridCells, mapMetric } from "./map";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
+import { SummaryTable } from "../layout/SummaryTable";
 
 afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
@@ -11,11 +12,11 @@ it.each([false, true])("updates Map intervals and descriptions without changing 
   const run = gridSummary(twoAxes);
   run.variants[0].replications = 20;
   run.variants[0].points[0].aggregate.successRate = { count: 10, mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
-  render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
+  render(<><SummaryTable summary={run} /><GridMap summary={run} activeVariantId="baseline" pointId="p0" /></>);
   const points = screen.getByRole(twoAxes ? "table" : "list", { name: twoAxes ? "Parameter heatmap" : "Map points" });
   const point = within(points).getAllByRole("button")[0] as HTMLButtonElement;
   expect(point.title).toContain("95% CI 42.8%–57.2%");
-  act(() => setConfidenceLevel(99));
+  fireEvent.change(screen.getByRole("combobox", { name: "Intervals" }), { target: { value: "99" } });
   expect(point.title).toContain("99% CI 39.7%–60.3%");
   expect(screen.getByText(/Means across replications/).textContent).toContain("99% CI");
   if (!twoAxes) expect(screen.getByRole("img", { name: "Parameter line with 99% confidence intervals" })).toBeTruthy();

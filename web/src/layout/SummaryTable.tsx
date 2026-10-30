@@ -1,12 +1,13 @@
 import { instanceServiceEntries } from "../results/instances";
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent } from "../i18n/format";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import { HelpHint } from "../help/HelpHint";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
-import { confidenceInterval, type ConfidenceLevel } from "../results/confidence";
-import { useConfidenceLevel } from "./confidenceLevel";
+import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
+import { setConfidenceLevel, useConfidenceLevel } from "./confidenceLevel";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
 type Metric = Pick<MetricSummary, "mean" | "stdDev"> & Partial<Pick<MetricSummary, "count">>;
@@ -48,6 +49,7 @@ interface SummaryTableProps {
 /** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
 export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement }: SummaryTableProps) {
   const level = useConfidenceLevel();
+  const confidenceHelpId = useId();
   const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
   const ordered = baseline === undefined ? [] : [baseline, ...summary.variants.filter(variant => variant !== baseline)];
   const columns = ordered.flatMap(variant => {
@@ -76,7 +78,17 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   );
   return <div className="answer">
     <section className="answer-insight" aria-label={t("results.saturation.title")}>
-      <h3>{coordinates === "" ? variantLabel : t("results.answer.forVariant", { variant: variantLabel, point: coordinates })}</h3>
+      <header className="answer-heading">
+        <h3>{coordinates === "" ? variantLabel : t("results.answer.forVariant", { variant: variantLabel, point: coordinates })}</h3>
+        <div className="answer-controls">
+          <label>{t("results.answer.intervalsLabel")} <select aria-label={t("results.answer.intervals")}
+            aria-describedby={confidenceHelpId} value={level}
+            onChange={event => setConfidenceLevel(Number(event.target.value) as ConfidenceLevel)}>
+            {CONFIDENCE_LEVELS.map(option => <option key={option} value={option}>{formatPercent(option / 100)}</option>)}
+          </select></label>
+          <HelpHint label={t("results.answer.intervals")} id={confidenceHelpId}>{t("results.answer.intervalsHelp")}</HelpHint>
+        </div>
+      </header>
       {activePoint === undefined || activeVariant === undefined ?
         <p>{t("results.answer.noPoint", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</p> :
         <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom} />}

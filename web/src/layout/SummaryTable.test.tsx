@@ -3,24 +3,45 @@ import { afterEach, describe, expect, it } from "vitest";
 import { slotPoolResource, noSaturation, summary } from "../test/fixtures";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
-import { ViewMenu } from "./ViewMenu";
+import { setLanguage } from "../i18n";
 import { setConfidenceLevel } from "./confidenceLevel";
 
 const comparison = () => screen.getByRole("table", { name: "Answer" });
 const cells = (name: string, table = comparison()) => within(within(table).getByRole("row", { name: new RegExp(name) })).getAllByRole("cell");
-afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
+afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
-  it("updates interval separation through View using each metric's observation count", () => {
+  it.each([
+    { language: "en" as const, label: "Intervals", explanation: "No new run is needed: only the display changes." },
+    { language: "ru" as const, label: "Интервалы", explanation: "Новый прогон не нужен: меняется только показ." },
+  ])("explains the interval selector in $language and restores its shared value", ({ language, label, explanation }) => {
+    act(() => { setLanguage(language); setConfidenceLevel(90); });
+    const { unmount } = render(<SummaryTable summary={summary} />);
+    const choice = screen.getByRole<HTMLSelectElement>("combobox", { name: label });
+    expect(screen.getByRole("heading", { name: "Baseline" }).closest("header")?.contains(choice)).toBe(true);
+    expect(choice.value).toBe("90");
+    expect([...choice.options].map(option => option.value)).toEqual(["80", "90", "95", "99"]);
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(label) }));
+    const help = screen.getByRole("tooltip");
+    expect(help.textContent).toContain(explanation);
+    expect(choice.getAttribute("aria-describedby")).toBe(help.id);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.change(choice, { target: { value: "99" } });
+    unmount();
+    render(<SummaryTable summary={summary} />);
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: label }).value).toBe("99");
+  });
+
+  it("updates interval separation from Answer using each metric's observation count", () => {
     const run = structuredClone(summary);
     run.variants[0].replications = 5;
     run.variants[1].replications = 10;
     run.variants[0].points[0].aggregate.successRate = { count: 5, mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
     run.variants[1].points[0].aggregate.successRate = { count: 10, mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
     const original = structuredClone(run);
-    render(<><ViewMenu /><SummaryTable summary={run} /></>);
-    fireEvent.click(screen.getByRole("button", { name: "View" }));
-    const choice = screen.getByLabelText("Confidence level");
+    render(<SummaryTable summary={run} />);
+    const choice = screen.getByRole("combobox", { name: "Intervals" });
     expect((choice as HTMLSelectElement).value).toBe("95");
     expect(cells("Success rate")[0].textContent).toContain("95% CI 27.6%–52.4%");
     expect(cells("Success rate")[1].textContent).not.toContain("Intervals do not overlap");
@@ -28,6 +49,7 @@ describe("SummaryTable", () => {
     expect(cells("Success rate")[0].textContent).toContain("80% CI 33.1%–46.9%");
     expect(cells("Success rate")[1].textContent).toContain("Intervals do not overlap");
     fireEvent.change(choice, { target: { value: "99" } });
+    expect(localStorage.getItem("resilience-lab.confidenceLevel")).toBe("99");
     expect(cells("Success rate")[1].textContent).toContain("99% CI");
     expect(cells("Success rate")[1].textContent).not.toContain("Intervals do not overlap");
     expect(run).toEqual(original);

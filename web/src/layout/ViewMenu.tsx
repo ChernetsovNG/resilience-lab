@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { setLanguage, t, type Language } from "../i18n";
 import { useLanguage } from "../i18n/useLanguage";
 import { formatPercent } from "../i18n/format";
-import { CONFIDENCE_LEVELS, type ConfidenceLevel } from "../results/confidence";
-import { setConfidenceLevel, useConfidenceLevel } from "./confidenceLevel";
 import { GRID_STEPS, TEXT_SCALES, setViewSettings, useViewSettings, type ViewSettings } from "./viewSettings";
 
 /** Browser view preferences are independent of workspace documents and editor history. */
@@ -13,7 +11,6 @@ export function ViewMenu() {
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const language = useLanguage();
-  const confidenceLevel = useConfidenceLevel();
   const settings = useViewSettings();
   useEffect(() => {
     if (!open) return;
@@ -61,10 +58,6 @@ export function ViewMenu() {
       <label>{t("app.view.language")} <select aria-label={t("app.view.language")} value={language} onChange={event => setLanguage(event.target.value as Language)}>
         <option value="en">{t("app.view.english")}</option>
         <option value="ru">{t("app.view.russian")}</option>
-      </select></label>
-      <label>{t("app.view.confidenceLevel")} <select aria-label={t("app.view.confidenceLevel")} value={confidenceLevel}
-        onChange={event => setConfidenceLevel(Number(event.target.value) as ConfidenceLevel)}>
-        {CONFIDENCE_LEVELS.map(level => <option key={level} value={level}>{formatPercent(level / 100)}</option>)}
       </select></label>
     </div> : null}
   </div>;
