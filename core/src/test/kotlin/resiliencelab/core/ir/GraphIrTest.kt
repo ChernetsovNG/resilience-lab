@@ -1,8 +1,6 @@
 package resiliencelab.core.ir
 
-import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
@@ -115,13 +113,5 @@ class GraphIrTest {
         assertThat(warnings).hasSize(1)
         assertThat(warnings.single().path).isEqualTo("ac")
         assertThat(warnings.single().message).contains("Retry amplification 6 ")
-    }
-
-    @Test
-    fun `legacy engine adapter rejects scenarios it cannot execute`() {
-        val graph = diamond()
-        assertThatThrownBy { TestChains.reliabilityModel(Model("GraphAdapterTest", autoCSVReports = false), graph) }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("scenario")
     }
 }

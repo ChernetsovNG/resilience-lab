@@ -4,9 +4,9 @@ import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
 import ksl.modeling.entity.ResourceWithQ
 import ksl.simulation.ModelElement
-import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.ServiceStep
 
 /**
  * Owns a service's bounded FIFO admission path, blocking handler pool, and its random sources.
@@ -17,7 +17,7 @@ internal class ServiceRuntime(
     parent: ModelElement,
     private val node: ServiceNode,
     streams: StreamSource,
-    val outgoingCall: CallEdge?,
+    val scenario: List<ServiceStep>,
     onAdmitted: (ProcessModel.Entity) -> Unit,
     onQueueLengthChanged: (Int) -> Unit,
     onBusyHandlersChanged: (Int) -> Unit,
@@ -26,9 +26,6 @@ internal class ServiceRuntime(
     private val durationSampler =
         DurationSamplerFactory.create(node.processing, streams.stream(node.pathSegments, StreamRole.PROCESSING))
     private val outcomeStream = streams.stream(node.pathSegments, StreamRole.OUTCOME)
-    private val networkSampler =
-        outgoingCall?.let { DurationSamplerFactory.create(it.network, streams.stream(it.pathSegments, StreamRole.NETWORK)) }
-    private val jitterStream = outgoingCall?.let { streams.stream(it.pathSegments, StreamRole.JITTER) }
     private var activeFault: FaultSpan? = null
 
     val slots =
@@ -62,8 +59,4 @@ internal class ServiceRuntime(
         val failureProbability = activeFault?.failureProbability ?: node.failureProbability
         return outcomeStream.randU01() < failureProbability
     }
-
-    fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
-
-    fun nextJitter(): Double = requireNotNull(jitterStream).randU01()
 }
