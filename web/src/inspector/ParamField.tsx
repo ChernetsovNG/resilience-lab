@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { catalogOption } from "../i18n/catalog";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
 import { DiagnosticMessages, VariantDiagnosticLinks } from "../validation/DiagnosticDisplay";
 import { isObject } from "../workspace/params";
@@ -14,6 +14,8 @@ export interface ParamFieldProps {
   /** Dotted path from the element, used to mark overridden values. */
   path: string;
   editable: boolean;
+  /** An action beside the scalar input, under the same field label. */
+  inputAction?: ReactNode;
   isOverridden: (path: string) => boolean;
   /** New value; undefined removes it from the document. */
   onCommit: (value: unknown) => void;
@@ -101,7 +103,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
   );
 }
 
-function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+function ScalarField({ descriptor, value, path, editable, inputAction, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const shown = value == null ? "" : String(value);
   const [draft, setDraft] = useState(shown);
@@ -143,7 +145,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
   };
 
   return (
-    <div className={overridden ? "param-field param-field--overridden" : "param-field"} data-inspector-field={path}>
+    <div className={`param-field${overridden ? " param-field--overridden" : ""}${inputAction ? " param-field--with-action" : ""}`} data-inspector-field={path}>
       <label htmlFor={id} title={descriptor.description}>
         {descriptor.title}
       </label>
@@ -184,6 +186,7 @@ function ScalarField({ descriptor, value, path, editable, isOverridden, onCommit
           }}
         />
       )}
+      {inputAction}
       {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />

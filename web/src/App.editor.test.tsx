@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {  } from "./test/fixtures";
 import { setupAppTests, server, open, selectGateway, editHandlers, button, editField } from "./test/app";
 
@@ -179,7 +179,7 @@ it("targets the pasted fragment with subsequent arrow and delete actions", async
   expect(button("Save").disabled).toBe(true);
 });
 
-it.each(["model", "experiment"] as const)("marks results stale after %s edits and clears the mark after undo", async (kind) => {
+it.each(["model", "experiment", "random seed"] as const)("marks results stale after %s edits and clears the mark after undo", async (kind) => {
   server();
   await open();
   fireEvent.click(button("Run"));
@@ -187,8 +187,15 @@ it.each(["model", "experiment"] as const)("marks results stale after %s edits an
   if (kind === "model") {
     await selectGateway();
     editHandlers("5");
-  } else {
+  } else if (kind === "experiment") {
     editField("Seed", "43");
+  } else {
+    const random = vi.spyOn(crypto, "getRandomValues").mockImplementation(array => {
+      (array as Uint32Array).set([0, 43]);
+      return array;
+    });
+    fireEvent.click(button("Random seed"));
+    random.mockRestore();
   }
   const stale = "Results belong to a previous document version.";
   await screen.findByText(stale);

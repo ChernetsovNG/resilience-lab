@@ -578,6 +578,17 @@ select {
   font-size: var(--font-secondary);
 }
 
+.inspector-execution .param-field--with-action {
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 1fr) auto;
+}
+
+.inspector-execution .param-field > .seed-random {
+  grid-column: 3;
+  display: grid;
+  place-items: center;
+  padding: 0.125rem 0.25rem;
+}
+
 .param-field input,
 .param-field select {
   min-width: 0;
