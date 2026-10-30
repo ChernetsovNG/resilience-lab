@@ -32,13 +32,15 @@ function storedHeights(): Record<string, number> {
 }
 
 /** Bounded canvas/results split; browser preferences never enter documents or undo history. */
-export function ResultsWorkspace({ children, view, collapsed, analysis, inspector, inspectorSelection = null }: {
+export function ResultsWorkspace({ children, view, collapsed, analysis, inspector, inspectorSelection = null, inspectorRequest = 0, canvasFooterHeight = 0 }: {
   children: ReactNode;
   view: ResultsPanelView;
   collapsed: boolean;
   analysis: boolean;
   inspector?: ReactNode;
   inspectorSelection?: string | null;
+  inspectorRequest?: number;
+  canvasFooterHeight?: number;
 }) {
   const workspace = useRef<HTMLDivElement>(null);
   const inspectorContent = useRef<HTMLDivElement>(null);
@@ -48,6 +50,11 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [heights, setHeights] = useState(storedHeights);
   const [inspectorSize, setInspectorSize] = useState(storedInspector);
+  const [lastInspectorRequest, setLastInspectorRequest] = useState(inspectorRequest);
+  if (lastInspectorRequest !== inspectorRequest) {
+    setLastInspectorRequest(inspectorRequest);
+    if (inspectorSize.collapsed) setInspectorSize(current => ({ ...current, collapsed: false }));
+  }
   useLayoutEffect(() => {
     const element = workspace.current!;
     const measure = ({ width, height }: DOMRectReadOnly) => setSize({ width, height });
@@ -71,9 +78,9 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
     }
   }, [inspectorSize]);
   const available = Math.max(0, size.height - 8);
-  const cramped = available < 380;
+  const cramped = available < 380 + canvasFooterHeight;
   const minimum = cramped ? available / 2 : 160;
-  const maximum = cramped ? available / 2 : available - 220;
+  const maximum = cramped ? available / 2 : available - 220 - canvasFooterHeight;
   const clamp = (value: number) => Math.max(minimum, Math.min(maximum, value));
   const key = (analysis ? "analysis:" : "normal:") + view;
   const fraction = analysis ? 0.62 : view === "timeline" ? 0.55 : 0.32;

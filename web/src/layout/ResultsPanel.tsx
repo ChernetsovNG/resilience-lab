@@ -1,3 +1,5 @@
+import { runConditions } from "../experiment/course";
+import { applyOverrides } from "../workspace/params";
 import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
@@ -86,6 +88,10 @@ export function ResultsPanel({
   const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
     (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
+  const conditionVariant = activeVariantId ?? summary?.variants[0]?.id;
+  const conditions = model === null || experiment === null || catalog === null ? null : runConditions(
+    applyOverrides(applyOverrides(model, experiment.variants.find(variant => variant.id === conditionVariant)?.overrides ?? {}, catalog),
+      summary?.variants.find(variant => variant.id === conditionVariant)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {}, catalog), experiment, catalog);
   return (
     <section id="results-panel" className={`results-panel results-panel--${size}`} aria-label={t("results.title")}>
       <div role="tablist" aria-label={t("results.views")}>
@@ -164,6 +170,7 @@ export function ResultsPanel({
             <p className="results-empty">{t("results.cancelled")}</p>
           ) : summary !== null ? (
             <>
+              {conditions === null ? null : <p className="run-conditions" data-testid="run-conditions" title={conditions}>{conditions}</p>}
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement} />
             </>
           ) : (

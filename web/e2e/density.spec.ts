@@ -50,7 +50,7 @@ test("compact inspector and canvas overlays give the model more space", async ({
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
-  expect((await canvas.boundingBox())!.height).toBeGreaterThan(740);
+  expect((await canvas.boundingBox())!.height + (await page.getByRole("region", { name: "Experiment course", exact: true }).boundingBox())!.height).toBeGreaterThan(740);
   const inspector = page.locator(".inspector");
   const faults = inspector.locator("details").filter({ has: page.getByText("Faults", { exact: true }) });
   await faults.locator(":scope > summary").click();

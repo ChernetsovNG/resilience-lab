@@ -163,3 +163,17 @@ it("opens Analysis at the selected element's results after scrolling through par
   view.rerender(panel(true));
   expect(content.scrollTop).toBe(0);
 });
+
+it("reveals a collapsed inspector when a course fault requests its fields", () => {
+  const view = render(<ResultsWorkspace view="answer" collapsed analysis={false} inspector={<aside>Fault fields</aside>} inspectorRequest={0}><section /></ResultsWorkspace>);
+  fireEvent.click(screen.getByRole("button", { name: "Collapse inspector" }));
+  view.rerender(<ResultsWorkspace view="answer" collapsed analysis={false} inspector={<aside>Fault fields</aside>} inspectorRequest={1}><section /></ResultsWorkspace>);
+  expect(screen.getByText("Fault fields").closest("[hidden]")).toBeNull();
+});
+
+it("reserves the course footer in the minimum canvas allocation", () => {
+  render(<ResultsWorkspace view="timeline" collapsed={false} analysis={false} canvasFooterHeight={32}><section /></ResultsWorkspace>);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });
+  expect(height()).toBe(540);
+  expect(Number(screen.getByRole("separator").getAttribute("aria-valuemax"))).toBe(540);
+});

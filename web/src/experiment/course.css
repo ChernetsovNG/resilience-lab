@@ -1,0 +1,26 @@
+.experiment-course { position: relative; z-index: 10; height: 32px; min-width: 0; box-sizing: border-box; border-top: 1px solid #d5dbe3; background: #f8fafc; }
+.course-toggle { display: flex; align-items: center; gap: 0.5rem; width: 100%; height: 31px; padding: 0 0.6rem; border: 0; border-radius: 0; text-align: left; background: transparent; }
+.course-toggle strong { flex: none; font-size: var(--font-secondary); }
+.course-overview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #52606d; font-size: var(--font-secondary); }
+.course-expanded { position: absolute; bottom: 100%; left: 0; right: 0; display: grid; grid-template-rows: 8px minmax(0, 1fr); background: #fff; border: 1px solid #b8c4d0; box-shadow: 0 -3px 10px #1e293b14; }
+.course-expanded[hidden] { display: none; }
+.course-content { overflow: auto; padding: 0.25rem 0.75rem; }
+.course-plot { position: relative; min-width: 260px; }
+.course-phases { display: flex; height: 22px; color: #475569; font-size: var(--font-secondary); }
+.course-phases span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; background: #e5f1e9; }
+.course-phases [data-phase="warmup"] { background: #e2e8f0; }
+.course-load { position: relative; height: 94px; margin: 0.25rem 0; color: #2563eb; }
+.course-load svg { position: absolute; top: 18px; width: 100%; height: 72px; }
+.course-load figcaption { position: absolute; top: 0; color: #52606d; font-size: var(--font-secondary); }
+.course-load-point { position: absolute; white-space: nowrap; font-size: var(--font-secondary); }
+.course-fault { position: relative; display: block; width: 100%; height: 28px; margin: 3px 0; padding: 0 6px; border: 1px solid #e6c284; background: #fffaf0; text-align: left; overflow: hidden; }
+.course-fault-interval { position: absolute; top: 0; bottom: 0; background: #f3c16b; border-inline: 1px solid #a96c12; }
+.course-fault-label { position: relative; white-space: nowrap; text-shadow: 0 0 3px #fff; font-size: var(--font-secondary); }
+.course-axis { display: flex; align-items: end; justify-content: space-between; height: 26px; border-top: 1px solid #9aa5b1; font-size: var(--font-secondary); color: #52606d; }
+.course-axis--interactive { cursor: crosshair; }
+.course-cursor { position: absolute; top: 0; bottom: 0; border-left: 2px solid #be123c; pointer-events: none; }
+.fault-badge { padding: 0 3px; min-height: 18px; color: #92400e; background: #fff2cf; border: 1px solid #d9ab56; border-radius: 3px; font-size: var(--font-secondary); }
+.block-node { position: relative; }
+.block-node > .fault-badge { position: absolute; top: -9px; right: 4px; }
+.canvas-edge-label > .fault-badge { position: absolute; top: -18px; right: 0; }
+.run-conditions { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 0 0.5rem; color: #52606d; font-size: var(--font-secondary); }

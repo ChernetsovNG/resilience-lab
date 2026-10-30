@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
-import { useEffect, useImperativeHandle, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
+import { useEffect, useImperativeHandle, useMemo, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile } from "../api/apiTypes";
@@ -10,12 +10,13 @@ import { ownEntry } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import type { EditorCommand } from "../workspace/editor";
 import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf } from "../workspace/structure";
+import type { CourseFault } from "../experiment/course";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import { CallEdge } from "./CallEdge";
 import "@xyflow/react/dist/style.css";
 
-const fitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
+const baseFitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
 const nodeTypes = { block: BlockNode };
 const edgeTypes = { call: CallEdge };
 const ariaLabelConfig = (): AriaLabelConfig => ({
@@ -61,8 +62,12 @@ export interface CanvasProps {
   elementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
   variantElementDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
   onProblems?: (id: string) => void;
+  faults?: readonly CourseFault[];
+  onFault?: (index: number) => void;
   /** Reports viewport zoom after node initialization; an empty model reports immediately. */
   onZoomChange?: (zoom: number) => void;
+  /** Space covered by the open experiment course; fit the diagram above it. */
+  bottomInset?: number;
 }
 
 /** The model on a React Flow canvas (ADR 0004); documents and one-command gestures own all edits. */
@@ -72,7 +77,10 @@ export function Canvas(props: CanvasProps) {
 
 function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = {}, results = null,
-  nodeMetric = "utilization", connectionMetric = "amplification" }: CanvasProps) {
+  nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
+  const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
+    ...baseFitViewOptions.padding, bottom: `${Math.max(80, bottomInset + 16)}px` as `${number}px`,
+  } }), [bottomInset]);
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
   const width = useStore((state) => state.width);
@@ -103,7 +111,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   useEffect(() => {
     if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
-  }, [fitView, initialized, width, height, sizes, insertions.length]);
+  }, [fitView, fitViewOptions, initialized, width, height, sizes, insertions.length]);
   useEffect(() => {
     if (pending === undefined || measurement?.request !== pending) return;
     // Commit outside ResizeObserver delivery and cancel if the canvas or active document changes first.
@@ -151,6 +159,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       outgoingConnections: outgoing.get(id)?.length ?? 0,
       needsConnection: block.type === "client"
         ? !model.connections.some(connection => connection.from === id && connection.type === "request") : !reachable.has(id),
+      faults: faults.filter(fault => fault.elementId === id), onFault,
       id, block, catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
@@ -177,6 +186,7 @@ function ModelCanvas({ ref, model, layout, catalog, selected, onSelect, editable
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
+        faults: faults.filter(fault => fault.elementId === connection.id), onFault,
         labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         result: matched, connectionMetric,

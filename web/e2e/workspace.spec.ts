@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await expect(page.getByText(/Backend healthy/)).toBeVisible();
-  await expect(page.getByLabel("Experiment")).toHaveValue(experiment);
+  await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(experiment);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
 });
 
@@ -604,7 +604,7 @@ test("keeps toolbar actions and health visible for a long experiment path in cle
   const path = "experiments/service-chain/degraded-dependency/timeout-and-retry-policy-comparison/production-like-load.experiment.json";
   await withExperimentFixture(path, () => {}, async () => {
     await page.reload();
-    const selector = page.getByLabel("Experiment");
+    const selector = page.getByLabel("Experiment", { exact: true });
     await selectExperiment(page, path);
     await expect(selector).toHaveValue(path);
     await expect(selector.locator("option:checked")).toHaveText(path);
