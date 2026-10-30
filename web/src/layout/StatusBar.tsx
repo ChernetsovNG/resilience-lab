@@ -1,3 +1,5 @@
+import { useId } from "react";
+import { HelpHint } from "../help/HelpHint";
 import type { Diagnostic, HealthView, JobView } from "../api/apiTypes";
 import { HealthBadge } from "../components/HealthBadge";
 import { t } from "../i18n";
@@ -16,6 +18,7 @@ export interface StatusBarProps {
 
 /** Persistent status for the current experiment; commands remain in the top bar. */
 export function StatusBar({ job, health, healthError, diagnostics, stale, cursorMs, zoom, onProblems }: StatusBarProps) {
+  const hintId = useId();
   const active = job?.status === "QUEUED" || job?.status === "RUNNING";
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "ERROR").length;
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "WARNING").length;
@@ -29,7 +32,14 @@ export function StatusBar({ job, health, healthError, diagnostics, stale, cursor
   const scale = zoom === null ? null : t("status.zoom", { zoom: formatPercent(zoom) });
   return (
     <footer className="status-bar" role="region" aria-label={t("status.title")}>
-      <span data-testid="job-status" role="status" title={progress}>{progress}</span>
+      <div className="status-job">
+        <span data-testid="job-status" role="status" aria-describedby={active ? hintId : undefined}>{progress}</span>
+        {active && job !== null ? <HelpHint id={hintId} label={t("app.estimate.tasks")}>
+          {job.totalTasks === 0 ? t("help.tasks.unknown") : t("help.tasks.progress", {
+            completed: formatNumber(job.completedTasks), total: formatNumber(job.totalTasks),
+          })}{" "}{t("help.tasks")}
+        </HelpHint> : null}
+      </div>
       <button type="button" title={problems} className={errors > 0 ? "diagnostic--error" : warnings > 0 ? "diagnostic--warning" : undefined} onClick={onProblems}>
         {problems}
       </button>

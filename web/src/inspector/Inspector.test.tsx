@@ -413,17 +413,21 @@ it("keeps variant actions and experiment sections out of an element Inspector", 
   expect(screen.getByText(/variant overrides/)).toBeTruthy();
 });
 
-it("renders catalog descriptions below scalar and object fields with accessible associations", () => {
+it("keeps scalar and object descriptions in help with accessible associations", () => {
   const described = structuredClone(catalog);
   const params = described.types.find(type => type.id === "service")!.params;
   params.find(param => param.name === "handlers")!.description = "Concurrent handler slots.";
   params.find(param => param.name === "processing")!.description = "Local processing distribution.";
   renderInspector({ catalog: described });
   const field = screen.getByLabelText("Handlers");
-  const description = screen.getByText("Concurrent handler slots.");
-  expect(field.closest(".param-field")?.querySelector("input + .param-description")).toBe(description);
+  expect(field.closest(".param-field")?.querySelector(".param-description")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "More about: Handlers" }));
+  const description = screen.getByRole("tooltip");
+  expect(description.textContent).toBe("Concurrent handler slots.");
   expect(field.getAttribute("aria-describedby")?.split(" ")).toContain(description.id);
-  expect(screen.getByText("Local processing distribution.").closest("fieldset")).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "More about: Processing time" }));
+  expect(screen.getByRole("tooltip").textContent).toBe("Local processing distribution.");
 });
 
 

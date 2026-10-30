@@ -27,7 +27,7 @@ test("Russian browser gets translated controls, catalog and results; language pr
   const inspector = page.getByRole("complementary", { name: "Инспектор", exact: true });
   const handlers = inspector.getByLabel("Обработчики", { exact: true });
   const initialHandlers = await handlers.inputValue();
-  await expect(inspector.getByText("Время обработки", { exact: true })).toBeVisible();
+  await expect(inspector.getByRole("group", { name: "Время обработки", exact: true })).toBeVisible();
   await handlers.fill("99");
   await handlers.press("Enter");
   await chooseLanguage(page, "en", "ru");

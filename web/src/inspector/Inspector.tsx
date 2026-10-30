@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
+import { TypeHelp } from "../help/TypeHelp";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
 import { resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
@@ -52,27 +53,26 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
       .find(element => element.dataset.inspectorField === focusField.path);
     const section = field?.closest<HTMLDetailsElement>(".inspector-section");
     if (section !== null && section !== undefined) section.open = true;
-    if (focusField.focus !== false) field?.querySelector<HTMLElement>("input, select, textarea, button:not(:disabled)")?.focus();
+    if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled)"))?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
 
   return (
     <aside ref={panel} hidden={hidden} className="inspector" aria-label={t("editor.inspector.label")}>
-      {resultsOnly ? <>
-        {selected === null ? <p>{t("results.element.select")}</p> : <h2>{selected}</h2>}
-      </> : null}
+      {resultsOnly && selected === null ? <p>{t("results.element.select")}</p> : null}
+      {(resultsOnly || target === "element") && selected !== null && element !== null ?
+        <div className="inspector-heading"><h2>{selected}</h2><TypeHelp key={element.type} catalog={catalog} typeId={element.type} /></div> : null}
       <div hidden={resultsOnly}>
       {target === "variant" && onCommand !== undefined ? (
         <><VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
           {variantChanges}</>
       ) : null}
-      {target === "element" && selected !== null && element !== null && type !== undefined ? (
+      {target === "element" && selected !== null && element !== null ? (
         <>
-          <h2>{selected}</h2>
           <p className="inspector-type">
-            {type.title}
+            {type?.title ?? element.type}
             {variantId === null ? "" : t("editor.inspector.variantOverrides")}
           </p>
           {prioritizeResults && !resultsOnly ? results : null}
@@ -81,8 +81,9 @@ export function Inspector({ catalog, model, experiment, selected, editable, over
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
           )}
-          {type.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : null}
-          {type.params.map((descriptor) => (
+          {type === undefined ? <p>{t("help.type.unknown", { type: element.type })}</p> : null}
+          {type?.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : null}
+          {type?.params.map((descriptor) => (
             <ParamField
               key={`${selected}.${descriptor.name}`}
               descriptor={descriptor}

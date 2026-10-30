@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { HelpHint } from "../help/HelpHint";
 import { catalogOption } from "../i18n/catalog";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Diagnostic, ParamDescriptor } from "../api/apiTypes";
@@ -41,10 +42,10 @@ export function ParamField(props: ParamFieldProps) {
 function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   return <div className="param-field" data-inspector-field={path}>
-    <label htmlFor={id}>{descriptor.title}</label>
+    <div className="param-field-label"><label htmlFor={id}>{descriptor.title}</label>
+      {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</div>
     <textarea id={id} readOnly value={JSON.stringify(value ?? descriptor.default ?? null, null, 2)}
-      aria-describedby={`${id}-description`} />
-    <p id={`${id}-description`} className="param-description">{descriptor.description}</p>
+      aria-describedby={descriptor.description ? id + "-description" : undefined} />
     <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
     <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
       onSelect={variant => onVariantDiagnostic?.(variant, path)} />
@@ -57,9 +58,8 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
   const [resetCount, setResetCount] = useState(0);
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}
-      data-inspector-field={path} aria-describedby={descriptor.description ? `${id}-description` : undefined}>
-      <legend title={descriptor.description}>{descriptor.title}</legend>
-      {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
+      data-inspector-field={path} aria-label={descriptor.title} aria-describedby={descriptor.description ? `${id}-description` : undefined}>
+      <legend>{descriptor.title} {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</legend>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
       <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
         onSelect={variant => onVariantDiagnostic?.(variant, path)} />
@@ -146,9 +146,8 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
 
   return (
     <div className={`param-field${overridden ? " param-field--overridden" : ""}${inputAction ? " param-field--with-action" : ""}`} data-inspector-field={path}>
-      <label htmlFor={id} title={descriptor.description}>
-        {descriptor.title}
-      </label>
+      <div className="param-field-label"><label htmlFor={id}>{descriptor.title}</label>
+        {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</div>
       {descriptor.kind === "CHOICE" ? (
         <select
           id={id}
@@ -187,7 +186,6 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
         />
       )}
       {inputAction}
-      {descriptor.description ? <p id={`${id}-description`} className="param-description">{descriptor.description}</p> : null}
       {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />
       <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}

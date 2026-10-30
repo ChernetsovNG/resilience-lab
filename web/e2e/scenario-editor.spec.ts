@@ -707,7 +707,8 @@ test("keeps the Inspector on one target and manages variant pages through their 
   await expect(inspector.getByLabel("Handlers", { exact: true })).toBeVisible();
   await expect(inspector.getByRole("heading", { name: "Run settings" })).toHaveCount(0);
   await expect(inspector.getByLabel("Variant ID", { exact: true })).toHaveCount(0);
-  await expect(inspector.locator(".param-description").first()).toBeVisible();
+  await expect(inspector.locator(".param-description")).toHaveCount(0);
+  await expect(inspector.getByRole("button", { name: "More about: Handlers", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("after-element.png") });
 
   await page.locator(".react-flow__pane").click({ position: { x: 15, y: 15 } });
