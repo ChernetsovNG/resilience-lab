@@ -19,6 +19,7 @@ describe("SummaryTable", () => {
     run.variants[1].points[0].aggregate.successRate = { count: 10, mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
     const original = structuredClone(run);
     render(<><ViewMenu /><SummaryTable summary={run} /></>);
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
     const choice = screen.getByLabelText("Confidence level");
     expect((choice as HTMLSelectElement).value).toBe("95");
     expect(cells("Success rate")[0].textContent).toContain("95% CI 27.6%–52.4%");

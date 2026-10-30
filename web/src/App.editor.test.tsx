@@ -163,9 +163,10 @@ it("uses the live View grid for keyboard movement and clipboard insertion withou
   server();
   await open(); await selectGateway();
   const node = screen.getByTestId("rf__node-gateway");
-  const step = screen.getByLabelText("Grid step");
   try {
-    fireEvent.change(step, { target: { value: "40" } });
+    fireEvent.click(button("View"));
+    fireEvent.change(screen.getByLabelText("Grid step"), { target: { value: "40" } });
+    fireEvent.click(button("View"));
     expect(node.style.transform).toBe("translate(260px,100px)");
     expect(button("Save").disabled).toBe(true);
     expect(button("Undo").disabled).toBe(true);
@@ -179,7 +180,11 @@ it("uses the live View grid for keyboard movement and clipboard insertion withou
     fireEvent.click(button("Undo"));
     expect(node.style.transform).toBe("translate(260px,100px)");
     expect(button("Save").disabled).toBe(true);
-  } finally { fireEvent.change(step, { target: { value: "20" } }); }
+  } finally {
+    fireEvent.click(button("View"));
+    fireEvent.change(screen.getByLabelText("Grid step"), { target: { value: "20" } });
+    fireEvent.click(button("View"));
+  }
 });
 
 it("targets the pasted fragment with subsequent arrow and delete actions", async () => {
