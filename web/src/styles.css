@@ -392,7 +392,18 @@ select {
 }
 
 .block-node--service {
-  width: 11rem;
+  width: 12rem;
+}
+
+.block-summary {
+  display: grid;
+}
+
+.block-summary > span {
+  display: flex;
+  align-items: center;
+  column-gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .block-node--client {
