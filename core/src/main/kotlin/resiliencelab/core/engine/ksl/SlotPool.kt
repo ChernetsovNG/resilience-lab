@@ -40,7 +40,7 @@ internal data class SlotPoolMetrics(
  * A null wait limit waits indefinitely; a zero limit permits only allocation at the arrival instant.
  * Capacity changes never preempt work, and growth serves waiting requests using KSL's allocation order.
  * All metrics reset at each replication; the legacy callbacks retain their queue/allocation ordering.
- * Timed queues use stable admission ranks to preserve FIFO when capacity loss cancels a native wake.
+ * Queues use stable admission ranks to preserve FIFO when capacity loss cancels a native wake.
  * Native timeInQ observes each queue residence; [metrics] counts the full logical wait once.
  */
 internal class SlotPool(
@@ -62,7 +62,7 @@ internal class SlotPool(
     val resource: FifoResourceWithQ
     val queue: RequestQ = BoundedRequestQ(parent, "$name:queue", queueCapacity) { resource }
     private val waitedEntities = mutableSetOf<ProcessModel.Entity>()
-    private val timedAcquisitions = mutableSetOf<ProcessModel.Entity>()
+    private val acquiringEntities = mutableSetOf<ProcessModel.Entity>()
     private val waitingSince = mutableMapOf<ProcessModel.Entity.Request, Double>()
     private var nextAdmissionRank = 0
     private var capacityRevision = 0L
@@ -82,10 +82,8 @@ internal class SlotPool(
     init {
         resource = FifoResourceWithQ(parent, name, maxOf(1, initialCapacity), queue, deferReleaseNotifications = waitLimitMs != null)
         resource.initialCapacity = initialCapacity
-        if (waitLimitMs != null) {
-            queue.initialDiscipline = Queue.Discipline.RANKED
-            queue.currentDiscipline = Queue.Discipline.RANKED
-        }
+        queue.initialDiscipline = Queue.Discipline.RANKED
+        queue.currentDiscipline = Queue.Discipline.RANKED
         queue.addQueueListener(
             object : QueueListenerIfc<ProcessModel.Entity.Request> {
                 override fun update(
@@ -94,7 +92,7 @@ internal class SlotPool(
                     qObject: ProcessModel.Entity.Request?,
                 ) {
                     if (qObject != null && qObject === requeueingRequest) return
-                    if (waitLimitMs != null && status == Queue.Status.ENQUEUED && qObject != null) {
+                    if (status == Queue.Status.ENQUEUED && qObject != null) {
                         assignAdmissionRank(qObject)
                     }
                     advance()
@@ -107,7 +105,7 @@ internal class SlotPool(
                             waits++
                         }
                         onAdmitted(qObject.entity)
-                        if (qObject in waitingSince && qObject.entity in timedAcquisitions) {
+                        if (qObject in waitingSince && qObject.entity in acquiringEntities) {
                             throw Waiting(qObject)
                         }
                     } else if (qObject != null) {
@@ -133,7 +131,7 @@ internal class SlotPool(
 
     override fun initialize() {
         waitedEntities.clear()
-        timedAcquisitions.clear()
+        acquiringEntities.clear()
         waitingSince.clear()
         nextAdmissionRank = 0
         capacityRevision = 0L
@@ -154,13 +152,13 @@ internal class SlotPool(
     /** Requests one slot. Allocations/releases retain native KSL priorities, ahead of wait expiry. */
     suspend fun KSLProcessBuilder.acquire(): SlotAcquisition {
         val startedAt = time
-        if (waitLimitMs != null) timedAcquisitions += entity
+        acquiringEntities += entity
         return try {
             val allocation =
                 try {
                     seize(resource)
                 } catch (waiting: Waiting) {
-                    awaitSlot(waiting.request, requireNotNull(waitLimitMs))
+                    awaitSlot(waiting.request)
                 }
             val waitedMs = time - startedAt
             if (allocation == null) {
@@ -177,13 +175,13 @@ internal class SlotPool(
             fullRejections++
             SlotAcquisition(SlotAcquisitionOutcome.QUEUE_FULL)
         } finally {
-            timedAcquisitions -= entity
+            acquiringEntities -= entity
             waitedEntities -= entity
         }
     }
 
     // Native seize creates its Request internally. As with bounded-queue rejection, a listener
-    // hands control back before native suspension, so timed waiting can use public KSL APIs.
+    // hands control back before native suspension, so FIFO recovery and timed waiting can use public KSL APIs.
     private class Waiting(
         val request: ProcessModel.Entity.Request,
     ) : RuntimeException()
@@ -191,22 +189,23 @@ internal class SlotPool(
     @Suppress("DEPRECATION") // KSL's native seize also uses general suspension for resource queue wakeups.
     private suspend fun KSLProcessBuilder.awaitSlot(
         request: ProcessModel.Entity.Request,
-        limitMs: Double,
     ): Allocation? {
         var expired = false
         var observedCapacityRevision = capacityRevision
         val expiry =
-            schedule(
-                EventActionIfc<Nothing> {
-                    if (request.queue === queue) {
-                        expired = true
-                        queue.remove(request)
-                        entity.resumeProcess()
-                    }
-                },
-                limitMs,
-                priority = KSLEvent.DEFAULT_PRIORITY + 1,
-            )
+            waitLimitMs?.let { limitMs ->
+                schedule(
+                    EventActionIfc<Nothing> {
+                        if (request.queue === queue) {
+                            expired = true
+                            queue.remove(request)
+                            entity.resumeProcess()
+                        }
+                    },
+                    limitMs,
+                    priority = KSLEvent.DEFAULT_PRIORITY + 1,
+                )
+            }
         try {
             suspend()
             while (!expired) {
@@ -226,7 +225,7 @@ internal class SlotPool(
             queue.remove(request)
             return resource.allocate(entity, 1, queue)
         } finally {
-            if (expiry.isScheduled) expiry.cancel = true
+            if (expiry?.isScheduled == true) expiry.cancel = true
             if (request.queue === queue) queue.remove(request, waitStats = false)
         }
     }

@@ -243,6 +243,28 @@ class SlotPoolTest {
         assertThat(rig.admittedCount).isEqualTo(3)
     }
 
+    @Test
+    fun `unlimited wait preserves FIFO after partial loss of promised capacity`() {
+        val rig =
+            simulate(
+                interleavedCapacities = 3 to 2,
+                replications = 2,
+                attempts = listOf(Attempt("holder", 0.0, 10.0), Attempt("first", 1.0), Attempt("second", 1.0)),
+            )
+
+        assertThat(rig.acquiredAt).containsExactlyEntriesOf(mapOf("holder" to 0.0, "first" to 4.0, "second" to 5.0))
+        assertThat(rig.waits).containsAllEntriesOf(mapOf("first" to 3.0, "second" to 4.0))
+        assertThat(rig.snapshots[1]).isEqualTo(rig.snapshots[0])
+        val metrics = rig.snapshots.first()
+        assertThat(metrics.totalWaitMs).isEqualTo(7.0)
+        assertThat(metrics.queueIntegralMs).isEqualTo(7.0)
+        assertThat(metrics.waitCount).isEqualTo(2)
+        assertThat(metrics.waitLimitCount).isZero()
+        assertThat(rig.admittedCount).isEqualTo(3)
+        assertThat(rig.pool.queue.size).isZero()
+        assertThat(rig.pool.resource.numBusy).isZero()
+    }
+
     private fun simulate(
         capacity: Int = 1,
         queueCapacity: Int = 3,
