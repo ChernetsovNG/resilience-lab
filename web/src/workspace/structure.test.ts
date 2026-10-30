@@ -348,6 +348,39 @@ describe("structure commands", () => {
 
 describe("block insertion position", () => {
   it.each([
+    [10, { x: 90, y: 50 }],
+    [20, { x: 100, y: 40 }],
+    [40, { x: 80, y: 40 }],
+  ])("uses the selected %s-unit grid for insertion", (step, expected) => {
+    expect(insertionPosition({ x: 91, y: 49 }, [], { width: 180, height: 80 }, step as number, true)).toEqual(expected);
+  });
+
+  it("inserts without rounding when snapping is disabled", () => {
+    expect(insertionPosition({ x: -91.5, y: 49.25 }, [], { width: 180, height: 80 }, 40, false))
+      .toEqual({ x: -91.5, y: 49.25 });
+  });
+
+  it.each([
+    [10, { x: 300, y: 150 }],
+    [20, { x: 300, y: 140 }],
+    [40, { x: 320, y: 160 }],
+  ])("pastes on the selected %s-unit grid without moving the original", (step, expected) => {
+    const before = documents();
+    before.layout.positions.gateway = { x: 263, y: 107 };
+    const fragment = copySelection(before, ["gateway"]);
+    const after = roundTrip(before, pasteSelection(fragment, 40, step as number, true));
+    expect(after.layout.positions["service-1"]).toEqual(expected);
+    expect(after.layout.positions.gateway).toEqual({ x: 263, y: 107 });
+  });
+
+  it("pastes without rounding when snapping is disabled", () => {
+    const before = documents();
+    before.layout.positions.gateway = { x: -263.5, y: 107.25 };
+    const after = roundTrip(before, pasteSelection(copySelection(before, ["gateway"]), 40, 40, false));
+    expect(after.layout.positions["service-1"]).toEqual({ x: -223.5, y: 147.25 });
+  });
+
+  it.each([
     [{ x: 91, y: 49 }, { x: 100, y: 40 }],
     [{ x: -91, y: -49 }, { x: -100, y: -40 }],
   ])("snaps an unoccupied viewport center %j to the grid", (center, expected) => {

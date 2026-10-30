@@ -11,8 +11,39 @@ import { localizeCatalog } from "../i18n/catalog";
 import { overlayOutputs } from "../results/outputs";
 import type { Catalog, TypeDescriptor } from "../api/apiTypes";
 import fullCatalog from "../test/catalog.json";
+import { setViewSettings } from "../layout/viewSettings";
+import type { EditorCommand } from "../workspace/editor";
 
 beforeAll(mockReactFlowDom);
+
+it.each([true, false])("uses the live grid for the background and drops with snapping %s", async snapToGrid => {
+  const onCommand = vi.fn();
+  const { container } = render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+    onCommand={onCommand} editable />);
+  const node = await screen.findByTestId("rf__node-gateway");
+  const original = node.style.transform;
+  try {
+    act(() => { setViewSettings({ gridStep: 40, snapToGrid }); });
+    expect(node.style.transform).toBe(original);
+    const transform = container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform;
+    const [, x, y, zoom] = transform.match(/translate\(([-\d.]+)px,([-\d.]+)px\) scale\(([\d.]+)\)/)!;
+    expect(Number(container.querySelector(".react-flow__background pattern")!.getAttribute("width")) / Number(zoom)).toBeCloseTo(40);
+    act(() => { setViewSettings({ showGrid: false }); });
+    expect(container.querySelector(".react-flow__background")).toBeNull();
+    const drop = new MouseEvent("drop", { bubbles: true, clientX: 91.5, clientY: 49.25 });
+    Object.defineProperty(drop, "dataTransfer", { value: { getData: () => "service" } });
+    fireEvent(container.querySelector(".react-flow")!, drop);
+    const command = onCommand.mock.lastCall![0] as EditorCommand;
+    const position = command({ model, layout, experiment }).layout.positions["service-1"];
+    if (snapToGrid) {
+      expect(position.x % 40).toBe(0);
+      expect(position.y % 40).toBe(0);
+    } else {
+      expect(position.x).toBeCloseTo((91.5 - Number(x)) / Number(zoom));
+      expect(position.y).toBeCloseTo((49.25 - Number(y)) / Number(zoom));
+    }
+  } finally { act(() => { setViewSettings({ gridStep: 20, snapToGrid: true, showGrid: true }); }); }
+});
 
 it("includes the full metric label and a large queue value in its tooltip", async () => {
   const results = canvasResults(summary, model, "baseline", "p0", catalog)!;

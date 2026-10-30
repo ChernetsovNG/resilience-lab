@@ -31,16 +31,20 @@ export function positionOf(model: ModelFile, layout: LayoutFile | null, id: stri
     ?? { x: Object.keys(model.blocks).indexOf(id) * 260, y: 100 };
 }
 
-/** Snaps the viewport center to the 20-unit grid and offsets by 40 until measured block footprints are clear. */
+/** Snaps the viewport center to the selected grid when enabled and offsets by two grid steps until measured block footprints are clear. */
 export function insertionPosition(center: Position, occupied: readonly (Position & { width: number; height: number })[],
-  { width, height }: { width: number; height: number }): Position {
-  const position = { x: Math.round(center.x / 20) * 20, y: Math.round(center.y / 20) * 20 };
+  { width, height }: { width: number; height: number }, gridStep = 20, snapToGrid = true): Position {
+  const position = gridPosition(center, gridStep, snapToGrid);
   while (occupied.some((node) => position.x < node.x + (node.width || width) && position.x + width > node.x &&
     position.y < node.y + (node.height || height) && position.y + height > node.y)) {
-    position.x += 40;
-    position.y += 40;
+    position.x += 2 * gridStep;
+    position.y += 2 * gridStep;
   }
   return position;
+}
+
+function gridPosition(point: Position, gridStep: number, snapToGrid: boolean): Position {
+  return snapToGrid ? { x: Math.round(point.x / gridStep) * gridStep, y: Math.round(point.y / gridStep) * gridStep } : { ...point };
 }
 
 /** Chooses a numbered block id in the shared block/connection namespace, including for measurement previews. */
@@ -202,7 +206,7 @@ export function copySelection(documents: EditorDocuments, selection: string[]): 
 }
 
 /** Pastes a fragment as one model/layout operation with fresh ids and shifted positions. */
-export function pasteSelection(fragment: ClipboardFragment, offset = 40): EditorCommand {
+export function pasteSelection(fragment: ClipboardFragment, offset = 40, gridStep = 20, snapToGrid = true): EditorCommand {
   return (documents) => {
     const used = usedIds(documents.model);
     const ids = new Map(Object.entries(fragment.blocks).map(([id, block]) => [id, freeId(block.type, used, true)]));
@@ -222,7 +226,7 @@ export function pasteSelection(fragment: ClipboardFragment, offset = 40): Editor
         connections: [...documents.model.connections, ...connections],
       },
       layout: { ...documents.layout, positions: { ...documents.layout.positions, ...Object.fromEntries(Object.entries(fragment.positions)
-        .map(([id, point]) => [ids.get(id)!, { x: point.x + offset, y: point.y + offset }])) } },
+        .map(([id, point]) => [ids.get(id)!, gridPosition({ x: point.x + offset, y: point.y + offset }, gridStep, snapToGrid)])) } },
     };
   };
 }

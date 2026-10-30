@@ -352,6 +352,14 @@ select {
   min-height: 0;
 }
 
+/* Diagram units stay fixed; only the canvas viewport scales nodes and connection labels. */
+.react-flow__viewport,
+.react-flow__edgelabel-renderer {
+  --font-ui: 13px;
+  --font-secondary: 12px;
+  font-size: var(--font-ui);
+}
+
 .canvas-navigation {
   display: flex;
   align-items: center;
@@ -395,16 +403,16 @@ select {
 .block-node {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.2rem;
-  min-width: 11rem;
-  padding: 0.6rem 0.8rem;
+  gap: 3.2px;
+  min-width: 176px;
+  padding: 9.6px 12.8px;
   border: 1px solid #9aa5b1;
-  border-radius: 0.5rem;
+  border-radius: 8px;
   background: #fff;
 }
 
 .block-node--service {
-  width: 12rem;
+  width: 192px;
 }
 
 .block-summary {
@@ -414,7 +422,7 @@ select {
 .block-summary > span {
   display: flex;
   align-items: center;
-  column-gap: 0.25rem;
+  column-gap: 4px;
   white-space: nowrap;
 }
 
@@ -931,6 +939,9 @@ select {
   background: #fff;
 }
 
+.block-node .diagnostic-badge,
+.canvas-edge-label .diagnostic-badge { padding: 1.6px 6.4px; }
+
 .react-flow__edgelabel-renderer {
   z-index: 1001;
 }
@@ -940,9 +951,9 @@ select {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.1rem 0.25rem;
-  border-radius: 0.2rem;
+  gap: 2.4px;
+  padding: 1.6px 4px;
+  border-radius: 3.2px;
   background: #fff;
   font-size: var(--font-secondary);
 }
@@ -968,7 +979,7 @@ select {
 .inline-param-value {
   min-inline-size: 24px;
   min-block-size: 24px;
-  padding: 0 0.1rem;
+  padding: 0 1.6px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -976,11 +987,11 @@ select {
 }
 
 .inline-param-editor input {
-  width: 5rem;
+  width: 80px;
   min-height: 24px;
-  padding: 0.1rem 0.25rem;
+  padding: 1.6px 4px;
   border: 1px solid #2563eb;
-  border-radius: 0.2rem;
+  border-radius: 3.2px;
 }
 
 .inline-param .inline-param-error {
@@ -988,7 +999,7 @@ select {
   top: 100%;
   left: 0;
   z-index: 2;
-  padding: 0.15rem;
+  padding: 2.4px;
   background: #fff;
   color: #dc2626;
   white-space: nowrap;
@@ -1199,9 +1210,9 @@ select {
 .block-results {
   display: grid;
   min-width: 0;
-  gap: 0.1rem;
+  gap: 1.6px;
   border-top: 1px solid #9aa5b1;
-  padding-top: 0.25rem;
+  padding-top: 4px;
 }
 
 .block-results > span {
@@ -1209,7 +1220,7 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.125rem;
+  line-height: 18px;
 }
 
 .canvas-metrics--pending { opacity: 0.5; }
@@ -1217,9 +1228,9 @@ select {
 
 .block-node .saturation-badge {
   position: absolute;
-  top: -0.6rem;
-  right: -0.6rem;
-  padding: 0.15rem 0.3rem;
+  top: -9.6px;
+  right: -9.6px;
+  padding: 2.4px 4.8px;
   border: 1px solid #b45309;
   border-radius: 50%;
   background: #fef3c7;
@@ -1229,7 +1240,7 @@ select {
 .canvas-edge-parameters {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 2.4px;
 }
 
 .canvas-edge-results {
