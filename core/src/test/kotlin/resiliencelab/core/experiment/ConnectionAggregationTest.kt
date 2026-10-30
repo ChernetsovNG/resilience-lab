@@ -1,6 +1,8 @@
 package resiliencelab.core.experiment
 
+import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.within
 import kotlin.test.Test
 
 class ConnectionAggregationTest {
@@ -30,6 +32,26 @@ class ConnectionAggregationTest {
         assertThat(result.meanInFlight!!.mean).isEqualTo(0.875)
         assertThat(result.meanInFlight.ci95Low).isNotNull()
         assertThat(result.meanInFlight.ci95High).isNotNull()
+    }
+
+    @Test
+    fun `timeout uncertainty counts only replications with sent attempts`() {
+        val first = connection(4, 0, 3, 0, 0.0, 0.0, 0.0, 100.0, emptyList())
+        val second = connection(2, 0, 1, 0, 0.0, 0.0, 0.0, 100.0, emptyList())
+        val empty = connection(0, 0, 0, 0, 0.0, 0.0, 0.0, 100.0, emptyList(), timeouts = 0)
+        val result =
+            MetricsAggregator
+                .aggregate(listOf(replication(first), replication(second), replication(empty)))
+                .connections
+                .getValue("call")
+        val timeoutRate = requireNotNull(result.timeoutRate)
+        assertThat(Json.encodeToString(MetricSummary.serializer(), timeoutRate)).contains("\"count\":2")
+        assertThat(timeoutRate.mean).isEqualTo(0.375)
+        assertThat(timeoutRate.stdDev!!).isCloseTo(0.1767766952966369, within(1e-12))
+        // Independent Student reference: t(0.975, 1) = 12.706204736174705.
+        assertThat(timeoutRate.ci95Low!!).isCloseTo(-1.213275592021838, within(1e-6))
+        assertThat(timeoutRate.ci95High!!).isCloseTo(1.963275592021838, within(1e-6))
+        assertThat(Json.encodeToString(MetricSummary.serializer(), result.meanInFlight!!)).contains("\"count\":3")
     }
 
     @Test

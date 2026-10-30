@@ -4,6 +4,7 @@ import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRa
 export interface OutputValue {
   value: number | null;
   source: "pooled" | "replications" | "replication" | "perReplication" | "window";
+  count?: number | null;
   stdDev?: number | null;
   ci95Low?: number | null;
   ci95High?: number | null;
@@ -55,7 +56,7 @@ export function outputValue(output: OutputDescriptor, context: unknown, windowed
   const binding = output.summary;
   const interval = outputField(context, binding?.intervalField);
   if (interval != null) return { value: number(outputField(interval, "mean")), source: "replications",
-    stdDev: number(outputField(interval, "stdDev")),
+    count: number(outputField(interval, "count")), stdDev: number(outputField(interval, "stdDev")),
     ci95Low: number(outputField(interval, "ci95Low")), ci95High: number(outputField(interval, "ci95High")) };
   return { value: binding == null ? null : calculateOutput(binding.calculation, context),
     source: binding?.source === "REPLICATION" ? "replication" : binding?.source === "PER_REPLICATION" ? "perReplication" : "pooled" };

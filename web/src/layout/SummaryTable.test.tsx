@@ -11,12 +11,12 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("SummaryTable", () => {
-  it("updates interval separation through View using each variant's replication count", () => {
+  it("updates interval separation through View using each metric's observation count", () => {
     const run = structuredClone(summary);
     run.variants[0].replications = 5;
     run.variants[1].replications = 10;
-    run.variants[0].points[0].aggregate.successRate = { mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
-    run.variants[1].points[0].aggregate.successRate = { mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
+    run.variants[0].points[0].aggregate.successRate = { count: 5, mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
+    run.variants[1].points[0].aggregate.successRate = { count: 10, mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
     const original = structuredClone(run);
     render(<><ViewMenu /><SummaryTable summary={run} /></>);
     const choice = screen.getByLabelText("Confidence level");
@@ -32,11 +32,24 @@ describe("SummaryTable", () => {
     expect(run).toEqual(original);
   });
 
+  it("uses the metric count for interval width and reliability even in a larger variant", () => {
+    const run = structuredClone(summary);
+    run.variants = [run.variants[0]];
+    run.variants[0].replications = 20;
+    run.variants[0].points[0].aggregate.successRate = { count: 2, mean: 0.375, stdDev: 0.1767766952966369,
+      min: 0.25, max: 0.5, ci95Low: -1.213275592021838, ci95High: 1.963275592021838 };
+    render(<SummaryTable summary={run} />);
+    const interval = cells("Success rate")[0].querySelector(".summary-interval")!;
+    expect(interval.textContent).toContain("95% CI -121.3%–196.3%");
+    expect(interval.classList.contains("summary-interval--unreliable")).toBe(true);
+    expect(screen.getByText("Unreliable interval: increase Replications.")).toBeTruthy();
+  });
+
   it("orders baseline first without mutating the document and compares means in matching units", () => {
     const run = structuredClone(summary);
     run.variants[1].points[0].aggregate = {
-      pooledLatency: {}, services: {}, connections: {}, poolers: {}, successRate: { mean: 0.995, min: 0.99, max: 1 },
-      p95LatencyMs: { mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { mean: 90, min: 89, max: 91 },
+      pooledLatency: {}, services: {}, connections: {}, poolers: {}, successRate: { count: 2, mean: 0.995, min: 0.99, max: 1 },
+      p95LatencyMs: { count: 2, mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { count: 2, mean: 90, min: 89, max: 91 },
     };
     run.variants.reverse();
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
@@ -56,7 +69,7 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     run.variants[0].id = "control";
     run.variants[0].label = "Control";
-    run.variants[1].points[0].aggregate.successRate = { mean: 0.975, min: 0.97, max: 0.98 };
+    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: 0.975, min: 0.97, max: 0.98 };
     render(<SummaryTable summary={run} />);
     expect(within(comparison()).getAllByRole("columnheader")[1].textContent).toContain("Control");
     expect(within(comparison()).getByRole("caption").textContent).toContain("Differences from Control");
@@ -69,18 +82,22 @@ describe("SummaryTable", () => {
     [0.5, 0.2, 0.35, 0.005, false], [0.15, null, 0.35, 0.005, false], [0.15, 0.005, 0.35, null, false],
   ])("marks separation only for disjoint complete intervals (means/spreads: %s, %s; %s, %s)", (mean, stdDev, otherMean, otherStdDev, separate) => {
     const run = structuredClone(summary);
-    run.variants[0].points[0].aggregate.successRate = { mean, stdDev, min: 0.1, max: 0.2 };
-    run.variants[1].points[0].aggregate.successRate = { mean: otherMean, stdDev: otherStdDev, min: 0.3, max: 0.4 };
+    run.variants[0].points[0].aggregate.successRate = { count: 2, mean, stdDev, min: 0.1, max: 0.2 };
+    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: otherMean, stdDev: otherStdDev, min: 0.3, max: 0.4 };
     render(<SummaryTable summary={run} />);
     expect(within(cells("Success rate")[1]).queryByText("Intervals do not overlap") !== null).toBe(separate);
     expect(within(cells("Success rate")[0]).queryByText("Intervals do not overlap")).toBeNull();
   });
 
-  it.each([1, 2, 4, 5, 10])("retains unclipped intervals and warns only below five replications (n=%s)", replications => {
+  it.each([1, 2, 4, 5, 10])("retains unclipped intervals and warns only below five observations (n=%s)", replications => {
     const run = structuredClone(summary);
     run.variants = [run.variants[0]];
-    run.variants[0].replications = replications;
-    run.variants[0].points[0].aggregate.successRate = { mean: 0.5, stdDev: 2, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
+    run.variants[0].replications = 20;
+    const aggregate = run.variants[0].points[0].aggregate;
+    aggregate.p95LatencyMs!.count = replications;
+    aggregate.p99LatencyMs!.count = replications;
+    aggregate.services.gateway.admittedAmplification!.count = replications;
+    run.variants[0].points[0].aggregate.successRate = { count: replications, mean: 0.5, stdDev: 2, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
     render(<SummaryTable summary={run} />);
     expect(screen.queryByText("Unreliable interval: increase Replications.") !== null).toBe(replications < 5);
     const interval = cells("Success rate")[0].querySelector(".summary-interval");
@@ -94,10 +111,10 @@ describe("SummaryTable", () => {
   it("compares service amplification and pooled utilization without inventing pooled confidence intervals", () => {
     const run = structuredClone(summary);
     run.variants[0].points[0].aggregate.services.gateway.admittedAmplification = {
-      mean: 1.2, stdDev: 0.02, min: 1.1, max: 1.3, ci95Low: 1, ci95High: 1.4,
+      count: 2, mean: 1.2, stdDev: 0.02, min: 1.1, max: 1.3, ci95Low: 1, ci95High: 1.4,
     };
     const alternative = structuredClone(run.variants[0].points[0].aggregate.services.gateway);
-    alternative.admittedAmplification = { mean: 1.7, stdDev: 0.01, min: 1.6, max: 1.8, ci95Low: 1.6, ci95High: 1.8 };
+    alternative.admittedAmplification = { count: 2, mean: 1.7, stdDev: 0.01, min: 1.6, max: 1.8, ci95Low: 1.6, ci95High: 1.8 };
     alternative.totals.busyHandlerTimeMs = 1500;
     run.variants[1].points[0].aggregate.services.gateway = alternative;
     render(<SummaryTable summary={run} />);

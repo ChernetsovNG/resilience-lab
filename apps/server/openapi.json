@@ -2362,6 +2362,10 @@
             "type" : [ "number", "null" ],
             "format" : "double"
           },
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "max" : {
             "type" : "number",
             "format" : "double"
@@ -2379,7 +2383,7 @@
             "format" : "double"
           }
         },
-        "required" : [ "max", "mean", "min" ]
+        "required" : [ "count", "max", "mean", "min" ]
       },
       "ModelFile" : {
         "type" : "object",

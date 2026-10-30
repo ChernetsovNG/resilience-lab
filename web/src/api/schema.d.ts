@@ -604,6 +604,8 @@ export interface components {
             ci95High?: number | null;
             /** Format: double */
             ci95Low?: number | null;
+            /** Format: int32 */
+            count: number;
             /** Format: double */
             max: number;
             /** Format: double */

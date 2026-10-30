@@ -151,7 +151,7 @@ class ArtifactPipelineTest {
                 "\"queueRejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(9)
+        assertThat(first.manifest.schemaVersion).isEqualTo(10)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

@@ -9,7 +9,7 @@ function fixture() {
   const run = structuredClone(summary);
   const point = run.variants[0].points[0];
   point.aggregate.services.middle = {
-    admittedAmplification: { mean: 2.5, min: 2, max: 3 },
+    admittedAmplification: { count: 2, mean: 2.5, min: 2, max: 3 },
     totals: {
       ...point.aggregate.services.gateway.totals,
       busyHandlerTimeMs: 400, handlerCapacityTimeMs: 500,
@@ -167,7 +167,7 @@ it("projects connection totals independently of the target service", () => {
     totals: { sentAttempts: 40, retries: 10, succeeded: 20, failed: 10, timeouts: 10, orphaned: 8,
       poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       inFlightIntegralMs: 600, orphanedIntegralMs: 250, backoffIntegralMs: 100, measurementMs: 2000 },
-    timeoutRate: { mean: 0.3, min: 0.2, max: 0.4 },
+    timeoutRate: { count: 2, mean: 0.3, min: 0.2, max: 0.4 },
   };
   const result = canvasResults(run, model, "baseline", "p0", catalog)!;
   expect(result.connections.get("gateway-to-middle")?.values).toMatchObject({

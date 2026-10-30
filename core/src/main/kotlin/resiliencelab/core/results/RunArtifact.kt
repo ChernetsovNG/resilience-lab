@@ -43,7 +43,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 9
+    const val ARTIFACT_SCHEMA = 10
     const val SERIES_SCHEMA = 4
     const val REPLICATION_SCHEMA = 3
 }

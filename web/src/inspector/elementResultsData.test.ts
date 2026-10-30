@@ -15,15 +15,15 @@ function fixture(): ElementResultsContext {
   const run = structuredClone(summary);
   run.variants[0].points[0].aggregate.services.middle = {
     ...run.variants[0].points[0].aggregate.services.gateway,
-    admittedAmplification: { mean: 2, min: 1.5, max: 2.5, ci95Low: 1.5, ci95High: 2.5 },
+    admittedAmplification: { count: 2, mean: 2, min: 1.5, max: 2.5, ci95Low: 1.5, ci95High: 2.5 },
   };
   run.variants[0].points[0].coordinates = { "gateway-to-middle.timeout": "150ms" };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
       poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
-    timeoutRate: { mean: 0.25, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
-    meanInFlight: { mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
+    timeoutRate: { count: 2, mean: 0.25, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
+    meanInFlight: { count: 2, mean: 3, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
     pooledLatency: { meanMs: 22, p95Ms: 30, p99Ms: 40, statistics: { count: 24, sumMs: 528, sketch: [24] } },
   };
   const nodes: NodeSeriesMetrics[] = [{ id: "gateway", windows: [window(0, 100, 999),

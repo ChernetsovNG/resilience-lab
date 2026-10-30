@@ -36,7 +36,7 @@ private class Observations {
 }
 
 private fun exactSummary(values: List<Double>): MetricSummary? = approximateSummary(values)?.let {
-    MetricSummary(it.getValue("mean")!!, it["stdDev"], it["ci95Low"], it["ci95High"], it.getValue("min")!!, it.getValue("max")!!)
+    MetricSummary(values.size, it.getValue("mean")!!, it["stdDev"], it["ci95Low"], it["ci95High"], it.getValue("min")!!, it.getValue("max")!!)
 }
 
 /** Runs the unchanged workspace example and compares both pooled and replication statistics. */

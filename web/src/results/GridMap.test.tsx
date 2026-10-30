@@ -9,8 +9,8 @@ afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 it.each([false, true])("updates Map intervals and descriptions without changing the mean (two axes: %s)", twoAxes => {
   const run = gridSummary(twoAxes);
-  run.variants[0].replications = 10;
-  run.variants[0].points[0].aggregate.successRate = { mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
+  run.variants[0].replications = 20;
+  run.variants[0].points[0].aggregate.successRate = { count: 10, mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
   render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
   const points = screen.getByRole(twoAxes ? "table" : "list", { name: twoAxes ? "Parameter heatmap" : "Map points" });
   const point = within(points).getAllByRole("button")[0] as HTMLButtonElement;
@@ -31,7 +31,7 @@ function gridSummary(twoAxes = true) {
   result.variants[0].points = Array.from({ length: twoAxes ? 6 : 3 }, (_, index) => ({
     ...template, id: `p${index}`, coordinates: {}, aggregate: {
       ...template.aggregate,
-      successRate: { mean: index / 10, stdDev: 0.02, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
+      successRate: { count: 2, mean: index / 10, stdDev: 0.02, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
     },
   }));
   return result;
@@ -59,8 +59,8 @@ describe("Map summary data", () => {
   it("uses replication metrics and pooled service totals without clipping CI or inventing missing values", () => {
     const aggregate = gridSummary().variants[0].points[0].aggregate;
     expect(mapMetric(aggregate, "successRate", "gateway")).toMatchObject({ mean: 0, ci95Low: -0.2, ci95High: 0.2 });
-    expect(mapMetric(aggregate, "p95LatencyMs", "gateway")).toEqual({ mean: 41.25, min: 40, max: 42.5 });
-    expect(mapMetric(aggregate, "p99LatencyMs", "gateway")).toEqual({ mean: 80, min: 79, max: 81 });
+    expect(mapMetric(aggregate, "p95LatencyMs", "gateway")).toEqual({ count: 2, mean: 41.25, min: 40, max: 42.5 });
+    expect(mapMetric(aggregate, "p99LatencyMs", "gateway")).toEqual({ count: 2, mean: 80, min: 79, max: 81 });
     expect(mapMetric(aggregate, "admittedAmplification", "gateway")).toMatchObject({ mean: 1.2 });
     expect(mapMetric(aggregate, "handlerUtilization", "gateway")).toEqual({ mean: 0.5 });
     expect(mapMetric(aggregate, "handlerUtilization", "missing")).toBeNull();

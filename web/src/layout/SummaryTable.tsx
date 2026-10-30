@@ -8,18 +8,18 @@ import { confidenceInterval, type ConfidenceLevel } from "../results/confidence"
 import { useConfidenceLevel } from "./confidenceLevel";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
-type Metric = Pick<MetricSummary, "mean" | "stdDev">;
+type Metric = Pick<MetricSummary, "mean" | "stdDev"> & Partial<Pick<MetricSummary, "count">>;
 type Point = RunSummary["variants"][number]["points"][number];
 type Format = (value: number) => string;
 
 const percentagePoints: Format = value => t("results.answer.percentagePoints", { value: formatNumber(value * 100, 1) });
 
 /** Mean and unmodified Student bounds; interval overlap is descriptive, not a significance test. */
-function metric(value: Metric | null | undefined, baseline: Metric | null | undefined, replications: number,
-  baselineReplications: number, level: ConfidenceLevel, format: Format, formatDifference: Format): ReactNode {
+function metric(value: Metric | null | undefined, baseline: Metric | null | undefined,
+  level: ConfidenceLevel, format: Format, formatDifference: Format): ReactNode {
   if (value == null) return formatNumber(null);
-  const interval = confidenceInterval(value, replications, level);
-  const reference = confidenceInterval(baseline, baselineReplications, level);
+  const interval = confidenceInterval(value, level);
+  const reference = confidenceInterval(baseline, level);
   const separate = interval !== null && reference !== null && (interval[1] < reference[0] || reference[1] < interval[0]);
   const difference = baseline == null ? null : value.mean - baseline.mean;
   const formattedDifference = difference === null ? null : formatDifference(difference);
@@ -30,7 +30,7 @@ function metric(value: Metric | null | undefined, baseline: Metric | null | unde
         ? t("results.answer.positiveDifference", { value: formattedDifference! }) : formattedDifference}
     </span>}
     {interval === null ? null :
-      <span className={`summary-interval${replications < MIN_RELIABLE_REPLICATIONS ? " summary-interval--unreliable" : ""}`}>
+      <span className={`summary-interval${(value.count ?? 0) < MIN_RELIABLE_REPLICATIONS ? " summary-interval--unreliable" : ""}`}>
         {t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) })}
       </span>}
     {separate ? <span className="summary-intervals-separate">{t("results.answer.intervalsSeparate")}</span> : null}
@@ -69,7 +69,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       <th scope="row">{label}</th>
       {columns.map(({ variant, point }) => <td key={variant.id} className={columnClass(variant.id)}>
         {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
-          variant.replications, baseline?.replications ?? 0, level, format, difference)}
+          level, format, difference)}
       </td>)}
     </tr>
   );
@@ -85,10 +85,12 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       <caption>{t("results.answer.comparison", { variant: baseline?.label ?? t("results.variant") })}</caption>
       <thead><tr>
         <th scope="col">{t("results.answer.metric")}</th>
-        {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>
+        {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>
           {variant.label}
           <span className="summary-replications">{t("results.answer.replications", { count: formatNumber(variant.replications) })}</span>
-          {variant.replications < MIN_RELIABLE_REPLICATIONS ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
+          {[point.aggregate.successRate, point.aggregate.p95LatencyMs, point.aggregate.p99LatencyMs,
+            ...Object.values(point.aggregate.services).map(service => service.admittedAmplification)]
+            .some(value => value != null && value.count < MIN_RELIABLE_REPLICATIONS) ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
         </th>)}
       </tr></thead>
       <tbody>

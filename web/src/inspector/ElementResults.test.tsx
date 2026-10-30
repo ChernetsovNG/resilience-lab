@@ -29,14 +29,14 @@ function props(): ElementResultsProps {
   const run = structuredClone(summary);
   run.variants[0].points[0].aggregate.services.middle = {
     ...run.variants[0].points[0].aggregate.services.gateway,
-    admittedAmplification: { mean: 2, min: 1, max: 3, ci95Low: 1, ci95High: 3 },
+    admittedAmplification: { count: 2, mean: 2, min: 1, max: 3, ci95Low: 1, ci95High: 3 },
   };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     totals: { measurementMs: 2000, sentAttempts: 30, retries: 10, succeeded: 20, failed: 4, timeouts: 6,
       poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
       orphaned: 4, inFlightIntegralMs: 5000, orphanedIntegralMs: 300, backoffIntegralMs: 100 },
-    timeoutRate: { mean: 0.25, stdDev: 0.05, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
-    meanInFlight: { mean: 3, stdDev: 0.2, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
+    timeoutRate: { count: 2, mean: 0.25, stdDev: 0.05, min: 0, max: 0.5, ci95Low: -0.1, ci95High: 0.7 },
+    meanInFlight: { count: 2, mean: 3, stdDev: 0.2, min: 2, max: 4, ci95Low: 1, ci95High: 5 },
     pooledLatency: { meanMs: 22, p95Ms: 30, p99Ms: 40, statistics: { count: 24, sumMs: 528, sketch: [24] } },
   };
   return { runId: "run", summary: run, manifest: { ...manifest, series: { ...manifest.series!, warmupMs: 100, measurementMs: 200, windowMs: 100 } },
@@ -54,7 +54,8 @@ describe("ElementResults", () => {
   it("recalculates the selected confidence interval for call results", async () => {
     loadSeries();
     const options = { ...props(), selected: "gateway-to-middle" };
-    options.summary.variants[0].replications = 10;
+    options.summary.variants[0].replications = 20;
+    options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].timeoutRate!.count = 10;
     options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].timeoutRate!.stdDev = 0.1;
     render(<ElementResults {...options} />);
     await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
@@ -101,10 +102,12 @@ describe("ElementResults", () => {
   it("shows call-owned Summary values, unclipped CI, timeout and the Timeline action", async () => {
     loadSeries();
     const options = { ...props(), selected: "gateway-to-middle" };
+    options.summary.variants[0].replications = 20;
+    options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].meanInFlight!.count = 20;
     render(<ElementResults {...options} />);
     await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
     expect(row("Sent attempts").textContent).toContain("15 RPSPooled");
-    expect(row("Orphaned attempts").textContent).toBe("Orphaned attempts2per replication");
+    expect(row("Orphaned attempts").textContent).toBe("Orphaned attempts0.2per replication");
     expect(row("Timeout share").textContent).toContain("25% (95% CI -19.9%–69.9%)");
     expect(row("Timeout share").querySelector(".summary-interval--unreliable")).toBeTruthy();
     expect(screen.getByText("Unreliable interval: increase Replications.")).toBeTruthy();

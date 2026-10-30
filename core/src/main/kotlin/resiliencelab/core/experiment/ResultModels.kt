@@ -84,13 +84,14 @@ data class LatencyDistribution(
 )
 
 /**
- * Describes replication-level metric values, with uncertainty available only when at least two values exist.
+ * Describes [count] contributing replication-level values; uncertainty needs at least two values.
  * Student confidence limits are not clipped to the metric's physical range.
  * Latency percentiles use the S5 sketch profile (at most 0.78125% representation error in the tested latency
  * range), retaining KSL interpolation. This approximation bound is separate from replication uncertainty.
  */
 @Serializable
 data class MetricSummary(
+    val count: Int,
     val mean: Double,
     val stdDev: Double?,
     val ci95Low: Double?,

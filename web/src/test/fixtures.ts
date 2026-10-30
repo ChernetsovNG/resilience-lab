@@ -200,7 +200,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 9,
+  schemaVersion: 10,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -212,12 +212,12 @@ export const summary: RunSummary = {
         pooledLatency: {},
         connections: {},
         poolers: {},
-        successRate: { mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
-        p95LatencyMs: { mean: 41.25, min: 40, max: 42.5 },
-        p99LatencyMs: { mean: 80, min: 79, max: 81 },
+        successRate: { count: 2, mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
+        p95LatencyMs: { count: 2, mean: 41.25, min: 40, max: 42.5 },
+        p99LatencyMs: { count: 2, mean: 80, min: 79, max: 81 },
         services: {
           gateway: {
-            admittedAmplification: { mean: 1.2, min: 1.1, max: 1.3 },
+            admittedAmplification: { count: 2, mean: 1.2, min: 1.1, max: 1.3 },
             totals: {
               originalArrivals: 200, offeredAttempts: 260, admittedAttempts: 240,
               timeouts: 20, retries: 40, failures: 10, queueRejections: 20,
@@ -238,7 +238,7 @@ export const summary: RunSummary = {
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 9,
+  schemaVersion: 10,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",
