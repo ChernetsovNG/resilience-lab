@@ -2,6 +2,7 @@ package resiliencelab.core.catalog
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.assertj.core.api.Assertions.assertThat
@@ -80,7 +81,10 @@ class Stage1CatalogTest {
     @Test
     fun `describes required service parameters with units and ranges`() {
         val params = catalog.type("service")!!.params.associateBy { it.name }
-        assertThat(params.keys).containsExactly("handlers", "queue", "processing", "failureRate")
+        assertThat(params.keys).containsExactly("handlers", "queue", "processing", "failureRate", "replicas")
+        assertThat(params.getValue("replicas").default).isEqualTo(JsonPrimitive(1))
+        assertThat(params.getValue("replicas").minimum).isEqualTo(1.0)
+        assertThat(params.getValue("replicas").sweepable).isTrue()
         assertThat(params.getValue("handlers").required).isTrue()
         assertThat(params.getValue("handlers").minimum).isEqualTo(1.0)
         assertThat(params.getValue("failureRate").dimension).isEqualTo(Dimension.PROBABILITY)

@@ -136,6 +136,15 @@ object Stage1Catalog {
                         maximum = 1.0,
                         sweepable = true,
                     ),
+                    ParamDescriptor(
+                        name = "replicas",
+                        kind = ParamKind.INTEGER,
+                        title = "Replicas",
+                        description = "Service instances; one keeps the original service path.",
+                        default = JsonPrimitive(1),
+                        minimum = 1.0,
+                        sweepable = true,
+                    ),
                 ),
         )
 
@@ -189,6 +198,13 @@ object Stage1Catalog {
                         default = JsonPrimitive(1),
                         minimum = 1.0,
                         sweepable = true,
+                    ),
+                    ParamDescriptor(
+                        name = "balancing",
+                        kind = ParamKind.CHOICE,
+                        title = "Balancing",
+                        description = "Selection policy for the target replica group; ignored for other targets.",
+                        options = listOf("roundRobin", "random", "leastInFlight"),
                     ),
                     ParamDescriptor(
                         name = "retryTarget",

@@ -22,6 +22,8 @@ data class BlockInstance(
     val description: String? = null,
     val notes: String? = null,
     val scenario: List<ScenarioStep>? = null,
+    /** Partial service parameters keyed by the canonical one-based replica number. */
+    val replicaOverrides: Map<String, JsonObject>? = null,
 )
 
 /** One service step: `process` inherits omitted values; `call` names an outgoing [connection]. */
@@ -91,7 +93,7 @@ data class ExecutionSettings(
     val window: String? = null,
 )
 
-/** A degradation of the [target] service while local processing starts within [from, to). */
+/** A degradation of a service, replica or call while processing or transmission starts within [from, to). */
 @Serializable
 data class Fault(
     val target: String,

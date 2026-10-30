@@ -27,6 +27,8 @@ function translate({ code, message, args }: BackendMessage): string {
       : name === "amplification" && /^\d+$/.test(value) ? formatNumber(BigInt(value))
       : name === "unit" ? messages[`messages.unit.${value}`] ?? value : value;
   }
-  const translated = t(key, params);
+  const base = t(key, params);
+  const translated = typeof args.replica === "number" && typeof args.service === "string"
+    ? t("messages.replica", { message: base, service: args.service, replica: args.replica }) : base;
   return typeof args?.points === "string" ? t("messages.points", { message: translated, points: args.points }) : translated;
 }

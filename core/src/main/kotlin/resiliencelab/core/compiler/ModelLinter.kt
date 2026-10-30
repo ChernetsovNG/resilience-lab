@@ -100,6 +100,9 @@ class ModelLinter(
 
     private fun lintGraph(graph: GraphIr): List<Diagnostic> {
         val services = graph.services.associateBy { it.path }
+        if (graph.entry !in services) {
+            return graph.entryServices.flatMap { lintGraph(graph.copy(entry = it.path)) }.distinct()
+        }
         return graph
             .callPaths()
             .flatMap { calls ->
@@ -115,6 +118,20 @@ class ModelLinter(
                 }
             }.distinct()
             .toList() +
+            graph.calls
+                .filter { call ->
+                    call.balancing != null &&
+                        graph.routers.none { it.path == call.to && it.pathSegments.last() == "#lb" }
+                }.map { call ->
+                    warning(
+                        CoreMessage.LINT_BALANCING_IGNORED,
+                        "Balancing on connection '${call.path}' is ignored: the target has no replica group",
+                        call.origin,
+                        call.path,
+                        "/params/balancing",
+                        mapOf("connection" to JsonPrimitive(call.path)),
+                    )
+                } +
             graph.services.flatMap { service ->
                 val used =
                     graph
@@ -319,5 +336,24 @@ class ModelLinter(
         path: String,
         suffix: String,
         args: Map<String, JsonPrimitive>,
-    ) = Diagnostic(code, Severity.WARNING, message, origin.document, origin.pointer + suffix, path, args = args)
+    ): Diagnostic {
+        val replica = path.substringAfterLast('#', "").toIntOrNull()
+        val context =
+            if (replica ==
+                null
+            ) {
+                emptyMap()
+            } else {
+                mapOf("replica" to JsonPrimitive(replica), "service" to JsonPrimitive(path.substringBeforeLast('#')))
+            }
+        return Diagnostic(
+            code,
+            Severity.WARNING,
+            if (replica == null) message else "Replica '$path': $message",
+            origin.document,
+            origin.pointer + suffix,
+            path,
+            args = args + context,
+        )
+    }
 }

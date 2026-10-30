@@ -301,6 +301,11 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
+            replicaOverrides?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            } | null;
             scenario?: components["schemas"]["ScenarioStep"][] | null;
             type: string;
         };

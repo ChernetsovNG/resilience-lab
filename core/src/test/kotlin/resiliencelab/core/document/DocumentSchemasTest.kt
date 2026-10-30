@@ -25,6 +25,27 @@ class DocumentSchemasTest {
     private val generated = DocumentSchemas().generate()
 
     @Test
+    fun `replica overrides validate partial service parameters including nested fields`() {
+        val source =
+            model.replace(
+                "\"s\":{\"type\":\"service\"",
+                "\"s\":{\"type\":\"service\",\"replicaOverrides\":{\"2\":{\"processing\":{\"mean\":\"4ms\"},\"handlers\":3}}",
+            )
+        assertThat(validate("model", source)).isEmpty()
+        for (invalid in listOf(
+            source.replace("\"handlers\":3", "\"handlers\":0"),
+            source.replace("\"handlers\":3", "\"handlers\":2.5"),
+            source.replace("\"handlers\":3", "\"unknown\":3"),
+            source.replace("\"handlers\":3", "\"replicas\":3"),
+            source.replace("\"mean\":\"4ms\"", "\"mean\":\"4/s\""),
+            source.replace("\"2\":{", "\"0\":{"),
+            source.replace("\"type\":\"service\",\"replicaOverrides\"", "\"type\":\"router\",\"replicaOverrides\""),
+        )) {
+            assertThat(validate("model", invalid)).describedAs(invalid).isNotEmpty()
+        }
+    }
+
+    @Test
     fun `committed document schemas match serializers and catalog`() {
         generated.forEach { (name, text) ->
             val file = root.resolve("schemas/$name")
@@ -85,8 +106,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":2", "\"schemaVersion\":2,\"extra\":1"),
-                model.replace("\"schemaVersion\":2", "\"schemaVersion\":1"),
+                model.replace("\"schemaVersion\":3", "\"schemaVersion\":3,\"extra\":1"),
+                model.replace("\"schemaVersion\":3", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -264,5 +285,5 @@ class DocumentSchemasTest {
         """{"schemaVersion":1,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":2,"blocks":{"c":{"type":"client","params":{"rate":"120/s","deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":3,"blocks":{"c":{"type":"client","params":{"rate":"120/s","deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

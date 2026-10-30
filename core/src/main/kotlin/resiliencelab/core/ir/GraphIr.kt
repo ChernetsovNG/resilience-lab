@@ -104,6 +104,8 @@ data class CallEdge(
     val backoff: Backoff,
     val origin: Origin = Origin.UNSPECIFIED,
     val retryTarget: RetryTarget = RetryTarget.ANY,
+    /** Explicit incoming policy, applied only when the target is a generated replica router. */
+    val balancing: RoutingPolicy? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -116,7 +118,8 @@ data class CallEdge(
         backoff: Backoff,
         origin: Origin = Origin.UNSPECIFIED,
         retryTarget: RetryTarget = RetryTarget.ANY,
-    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget)
+        balancing: RoutingPolicy? = null,
+    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget, balancing)
 
     val path: String get() = displayPath(pathSegments)
 }
@@ -228,6 +231,22 @@ data class GraphIr(
     /** Router outputs in deterministic instance-path order. */
     fun outgoingRoutes(from: String): List<RouteEdge> =
         routing[from].orEmpty().sortedWith { left, right -> comparePaths(left.pathSegments, right.pathSegments) }
+
+    /** Leaf services reachable through the entry's zero-delay replica routers. */
+    val entryServices: List<ServiceNode>
+        get() {
+            val pending = ArrayDeque<String>()
+            val visited = mutableSetOf<String>()
+            pending.add(entry)
+            return buildList {
+                while (pending.isNotEmpty()) {
+                    val path = pending.removeFirst()
+                    if (!visited.add(path)) continue
+                    val service = servicesByPath[path]
+                    if (service != null) add(service) else outgoingRoutes(path).forEach { pending.addLast(it.to) }
+                }
+            }
+        }
 
     /** All outgoing edges in path order; no single-successor assumption. */
     fun outgoingCalls(from: String): List<CallEdge> =

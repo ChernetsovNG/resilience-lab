@@ -97,6 +97,9 @@ object PathStreams {
             graph.calls.forEach {
                 add(it.pathSegments to StreamRole.NETWORK)
                 add(it.pathSegments to StreamRole.JITTER)
+                if (graph.faults.any { fault -> fault.target == it.path && fault.failureProbability != null }) {
+                    add(it.pathSegments to StreamRole.OUTCOME)
+                }
             }
             graph.routers.forEach { add(it.pathSegments to StreamRole.ROUTING) }
         }

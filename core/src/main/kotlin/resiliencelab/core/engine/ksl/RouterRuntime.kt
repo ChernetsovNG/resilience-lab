@@ -10,8 +10,9 @@ internal class RouterRuntime(
     private val outputs: List<RouteEdge>,
     streams: StreamSource,
 ) {
-    private val policy = node.policy
-    private val random = if (policy == RoutingPolicy.RANDOM) streams.stream(node.pathSegments, StreamRole.ROUTING) else null
+    private val defaultPolicy = node.policy
+    val isReplicaGroup = node.pathSegments.last() == "#lb"
+    private val random by lazy { streams.stream(node.pathSegments, StreamRole.ROUTING) }
     private val inFlight = outputs.associate { it.path to 0 }.toMutableMap()
     private var cursor = 0
 
@@ -25,7 +26,10 @@ internal class RouterRuntime(
         inFlight.replaceAll { _, _ -> 0 }
     }
 
-    fun select(tried: Set<String>): RouteEdge {
+    fun select(
+        tried: Set<String>,
+        policy: RoutingPolicy = defaultPolicy,
+    ): RouteEdge {
         val eligible = outputs.filterNot { it.path in tried }.ifEmpty { outputs }
         val selected =
             when (policy) {
@@ -36,7 +40,7 @@ internal class RouterRuntime(
                 RoutingPolicy.RANDOM -> {
                     val scale = eligible.maxOf { it.weight }
                     val total = eligible.sumOf { it.weight / scale }
-                    var remaining = requireNotNull(random).randU01() * total
+                    var remaining = random.randU01() * total
                     eligible.firstOrNull {
                         remaining -= it.weight / scale
                         remaining < 0.0
