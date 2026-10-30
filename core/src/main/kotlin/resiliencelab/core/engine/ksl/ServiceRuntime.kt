@@ -24,6 +24,7 @@ internal class ServiceRuntime(
     onBusyHandlersChanged: (Int) -> Unit,
     onServerQueueLengthChanged: (Int) -> Unit = {},
     onBusyServerConnectionsChanged: (Int) -> Unit = {},
+    onSlotCapacityChanged: (String, Int) -> Unit = { _, _ -> },
 ) {
     val serviceId: String = node.path
     private val processingStream = streams.stream(node.pathSegments, StreamRole.PROCESSING)
@@ -42,6 +43,7 @@ internal class ServiceRuntime(
             onAdmitted = onAdmitted,
             onQueueLengthChanged = onQueueLengthChanged,
             onBusyChanged = onBusyHandlersChanged,
+            onCapacityChanged = { onSlotCapacityChanged(if (node.pooler == null) "handlers" else "clientConnections", it) },
         )
     val serverSlots =
         node.pooler?.let { pooler ->
@@ -53,6 +55,7 @@ internal class ServiceRuntime(
                 waitLimitMs = pooler.waitTimeoutMs,
                 onQueueLengthChanged = onServerQueueLengthChanged,
                 onBusyChanged = onBusyServerConnectionsChanged,
+                onCapacityChanged = { onSlotCapacityChanged("serverConnections", it) },
             )
         }
     val resource: ResourceWithQ get() = slots.resource

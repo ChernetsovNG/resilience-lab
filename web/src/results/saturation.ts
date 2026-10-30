@@ -30,11 +30,11 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
 /** Summary-only capacity context; the two maxima may belong to different services. */
 export function formatHeadroom(aggregate: RunSummary["variants"][number]["points"][number]["aggregate"]): string {
   const services = Object.entries(aggregate.services);
-  const busiest = services.filter(([, { totals }]) => totals.handlerCapacityTimeMs > 0)
-    .map(([service, { totals }]) => ({ service, value: totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs }))
+  const busiest = services.filter(([, { totals }]) => totals.slotPools.handlers.capacityIntegralMs > 0)
+    .map(([service, { totals }]) => ({ service, value: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs }))
     .sort((left, right) => right.value - left.value)[0];
   const longestQueue = services.filter(([, { totals }]) => totals.measurementMs > 0)
-    .map(([service, { totals }]) => ({ service, value: totals.queueLengthIntegralMs / totals.measurementMs }))
+    .map(([service, { totals }]) => ({ service, value: totals.slotPools.handlers.queueIntegralMs / totals.measurementMs }))
     .sort((left, right) => right.value - left.value)[0];
   const atService = (entry: { service: string; value: number } | undefined, format: (value: number) => string) =>
     entry === undefined ? t("common.na") : t("results.answer.valueAtService", { service: entry.service, value: format(entry.value) });

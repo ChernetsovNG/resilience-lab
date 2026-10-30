@@ -200,7 +200,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 10,
+  schemaVersion: 11,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -218,12 +218,14 @@ export const summary: RunSummary = {
         services: {
           gateway: {
             admittedAmplification: { count: 2, mean: 1.2, min: 1.1, max: 1.3 },
-            totals: {
-              originalArrivals: 200, offeredAttempts: 260, admittedAttempts: 240,
-              timeouts: 20, retries: 40, failures: 10, queueRejections: 20,
-              busyHandlerTimeMs: 1000, handlerCapacityTimeMs: 2000,
-              queueLengthIntegralMs: 200, measurementMs: 2000,
-            },
+            totals: { originalArrivals: 200,
+      offeredAttempts: 260,
+      admittedAttempts: 240,
+      timeouts: 20,
+      retries: 40,
+      failures: 10,
+      measurementMs: 2000,
+      slotPools: { handlers: { busyIntegralMs: 1000, queueIntegralMs: 200, capacityIntegralMs: 2000, waitCount: 0, totalWaitMs: 0, queueFullCount: 20, waitLimitCount: 0 } } },
           },
         },
       } }],
@@ -238,7 +240,7 @@ export const summary: RunSummary = {
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 10,
+  schemaVersion: 11,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",

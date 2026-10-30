@@ -248,11 +248,18 @@ class MetricsAggregatorTest {
             timeouts = 0,
             retries = 0,
             failures = 0,
-            queueRejections = 0,
-            handlers = 1,
             measurementMs = 1.0,
-            busyHandlerTimeMs = 0.0,
-            queueLengthIntegralMs = 0.0,
             queueDurationsMs = emptyMap(),
+            slotPools =
+                mapOf(
+                    "handlers" to
+                        resiliencelab.core.experiment.SlotPoolMetrics(
+                            busyIntegralMs = 0.0,
+                            queueIntegralMs = 0.0,
+                            capacityIntegralMs =
+                                (1).toDouble() * (1.0),
+                            queueFullCount = (0).toLong(),
+                        ),
+                ),
         )
 }

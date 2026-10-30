@@ -115,7 +115,7 @@ describe("SummaryTable", () => {
     };
     const alternative = structuredClone(run.variants[0].points[0].aggregate.services.gateway);
     alternative.admittedAmplification = { count: 2, mean: 1.7, stdDev: 0.01, min: 1.6, max: 1.8, ci95Low: 1.6, ci95High: 1.8 };
-    alternative.totals.busyHandlerTimeMs = 1500;
+    alternative.totals.slotPools.handlers.busyIntegralMs = 1500;
     run.variants[1].points[0].aggregate.services.gateway = alternative;
     render(<SummaryTable summary={run} />);
     fireEvent.click(screen.getByText("gateway metrics"));
@@ -133,7 +133,7 @@ describe("SummaryTable", () => {
 
   it("handles missing metrics and zero capacity without fabricated differences", () => {
     const run = structuredClone(summary);
-    run.variants[0].points[0].aggregate.services.gateway.totals.handlerCapacityTimeMs = 0;
+    run.variants[0].points[0].aggregate.services.gateway.totals.slotPools.handlers.capacityIntegralMs = 0;
     render(<SummaryTable summary={run} />);
     expect(cells("Success rate")[1].textContent).toBe("n/a");
     fireEvent.click(screen.getByText("gateway metrics"));
@@ -178,11 +178,11 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     const point = run.variants[0].points[0];
     point.aggregate.services.middle = structuredClone(point.aggregate.services.gateway);
-    Object.assign(point.aggregate.services.middle.totals, { busyHandlerTimeMs: 1800, handlerCapacityTimeMs: 6000,
-      queueLengthIntegralMs: 750, measurementMs: 1000 });
+    Object.assign(point.aggregate.services.middle.totals, { measurementMs: 1000,
+      slotPools: { handlers: { busyIntegralMs: 1800, queueIntegralMs: 750, capacityIntegralMs: 6000, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } });
     point.aggregate.services.dependency = structuredClone(point.aggregate.services.gateway);
-    Object.assign(point.aggregate.services.dependency.totals, { busyHandlerTimeMs: 900, handlerCapacityTimeMs: 1000,
-      queueLengthIntegralMs: 160, measurementMs: 2000 });
+    Object.assign(point.aggregate.services.dependency.totals, { measurementMs: 2000,
+      slotPools: { handlers: { busyIntegralMs: 900, queueIntegralMs: 160, capacityIntegralMs: 1000, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } });
     point.aggregate.pooledLatency.all = { meanMs: 22, p95Ms: 30, p99Ms: 123.4,
       statistics: { count: 24, sumMs: 528, sketch: [24] } };
     const view = render(<SummaryTable summary={run} activeVariantId="baseline" />);
@@ -203,7 +203,8 @@ describe("SummaryTable", () => {
 
   it("does not infer headroom from zero denominators or replication-mean p99", () => {
     const run = structuredClone(summary);
-    Object.assign(run.variants[0].points[0].aggregate.services.gateway.totals, { handlerCapacityTimeMs: 0, measurementMs: 0 });
+    Object.assign(run.variants[0].points[0].aggregate.services.gateway.totals, { measurementMs: 0,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } });
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
     expect(screen.getByText(/^Capacity headroom:/).textContent).toBe("Capacity headroom: highest handler utilization (pooled) n/a; largest mean queue (pooled) n/a; entry p99 (pooled) n/a.");
   });

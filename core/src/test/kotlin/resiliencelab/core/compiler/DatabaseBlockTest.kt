@@ -65,15 +65,15 @@ class DatabaseBlockTest {
                 .getValue("db")
         assertThat(totals.offeredAttempts).isEqualTo(3)
         assertThat(totals.admittedAttempts).isEqualTo(2)
-        assertThat(totals.queueRejections).isEqualTo(1)
-        assertThat(totals.handlers).isEqualTo(1)
-        assertThat(totals.busyHandlerTimeMs).isEqualTo(20.0)
-        assertThat(totals.queueLengthIntegralMs).isEqualTo(9.0)
+        assertThat(totals.slotPools.getValue("handlers").queueFullCount).isEqualTo(1)
+        assertThat(totals.slotPools.getValue("handlers").capacityIntegralMs).isEqualTo(graph().run.measurementMs)
+        assertThat(totals.slotPools.getValue("handlers").busyIntegralMs).isEqualTo(20.0)
+        assertThat(totals.slotPools.getValue("handlers").queueIntegralMs).isEqualTo(9.0)
         val windows = rig.windows.filter { it.id == "db" }.map { it.metrics }
         assertThat(windows.sumOf { it.successes }).isEqualTo(2)
-        assertThat(windows.sumOf { it.queueRejections }).isEqualTo(1)
-        assertThat(windows.sumOf { it.busyHandlerTimeMs }).isEqualTo(20.0)
-        assertThat(windows.sumOf { it.queueLengthIntegralMs }).isEqualTo(9.0)
+        assertThat(windows.sumOf { it.slotPools.getValue("handlers").queueFullCount }).isEqualTo(1)
+        assertThat(windows.sumOf { it.slotPools.getValue("handlers").busyIntegralMs }).isEqualTo(20.0)
+        assertThat(windows.sumOf { it.slotPools.getValue("handlers").queueIntegralMs }).isEqualTo(9.0)
         assertThat(windows.sumOf { it.latency.count }).isEqualTo(2)
         assertThat(windows.sumOf { it.latency.sumMs }).isEqualTo(29.0)
     }
@@ -104,10 +104,34 @@ class DatabaseBlockTest {
         val rig = simulate(compiled, listOf(0.0, 1.0, 2.0))
         assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(10.0, 20.0, 30.0)
         val result = rig.reliability.metrics.replicationResult()
-        assertThat(result.services.getValue("db").queueLengthIntegralMs).isZero()
-        assertThat(result.connections.getValue("query").poolBusyTimeMs).isEqualTo(30.0)
-        assertThat(result.connections.getValue("query").poolQueueIntegralMs).isEqualTo(27.0)
-        assertThat(result.connections.getValue("query").poolWaitCount).isEqualTo(2)
+        assertThat(
+            result.services
+                .getValue("db")
+                .slotPools
+                .getValue("handlers")
+                .queueIntegralMs,
+        ).isZero()
+        assertThat(
+            result.connections
+                .getValue("query")
+                .slotPools
+                .getValue("pool")
+                .busyIntegralMs,
+        ).isEqualTo(30.0)
+        assertThat(
+            result.connections
+                .getValue("query")
+                .slotPools
+                .getValue("pool")
+                .queueIntegralMs,
+        ).isEqualTo(27.0)
+        assertThat(
+            result.connections
+                .getValue("query")
+                .slotPools
+                .getValue("pool")
+                .waitCount,
+        ).isEqualTo(2)
     }
 
     @Test
@@ -120,7 +144,9 @@ class DatabaseBlockTest {
                 .replicationResult()
                 .services
                 .getValue("db")
-                .queueRejections,
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
         ).isEqualTo(1)
         val parallel = simulate(graph(databaseParams("maxConnections" to JsonPrimitive(2))), listOf(0.0, 1.0))
         assertThat(parallel.invocations.map { it.outcome }).containsOnly(AttemptOutcome.SUCCEEDED)

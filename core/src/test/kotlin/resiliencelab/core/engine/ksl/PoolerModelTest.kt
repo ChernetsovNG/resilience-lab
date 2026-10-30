@@ -18,6 +18,198 @@ import kotlin.test.Test
 
 class PoolerModelTest {
     @Test
+    fun `actual capacity clips warmup and restoration while all seven fields pool by sum`() {
+        val base =
+            requireNotNull(PoolerTestModel.compile(PoolerTestModel.withServicePool()).experiment)
+                .variants
+                .single()
+                .points
+                .single()
+                .graph
+        val graph =
+            base.copy(
+                run = base.run.copy(warmupMs = 20.0, measurementMs = 100.0, windowMs = 70.0),
+                faults =
+                    listOf(
+                        resiliencelab.core.ir.FaultSpan("gateway", 0.0, 60.0, resiliencelab.core.ir.FaultKind.CAPACITY_LOSS, capacity = 0),
+                        resiliencelab.core.ir.FaultSpan(
+                            "to-pooler",
+                            40.0,
+                            80.0,
+                            resiliencelab.core.ir.FaultKind.CAPACITY_LOSS,
+                            capacity = 1,
+                        ),
+                        resiliencelab.core.ir.FaultSpan("pooler", 60.0, 80.0, resiliencelab.core.ir.FaultKind.CAPACITY_LOSS, capacity = 0),
+                        resiliencelab.core.ir.FaultSpan("db", 60.0, 120.0, resiliencelab.core.ir.FaultKind.CAPACITY_LOSS, capacity = 0),
+                    ),
+            )
+        val rig = simulate(graph, emptyList())
+        val result = rig.reliability.metrics.replicationResult()
+        val json = Json.parseToJsonElement(DocumentCodec.encode(ReplicationResult.serializer(), result)).jsonObject
+        val aggregate =
+            resiliencelab.core.experiment.MetricsAggregator
+                .aggregate(listOf(result, result))
+        val pooled =
+            Json
+                .parseToJsonElement(
+                    DocumentCodec.encode(
+                        resiliencelab.core.experiment.AggregateMetrics
+                            .serializer(),
+                        aggregate,
+                    ),
+                ).jsonObject
+        for ((kind, id, set, expected) in listOf(
+            listOf("services", "gateway", "handlers", "6000"),
+            listOf("services", "db", "handlers", "4000"),
+            listOf("connections", "to-pooler", "pool", "160"),
+            listOf("poolers", "pooler", "clientConnections", "200"),
+            listOf("poolers", "pooler", "serverConnections", "80"),
+        )) {
+            val slot =
+                json
+                    .getValue(kind)
+                    .jsonObject
+                    .getValue(id)
+                    .jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue(set)
+                    .jsonObject
+            val total =
+                pooled
+                    .getValue(kind)
+                    .jsonObject
+                    .getValue(id)
+                    .jsonObject
+                    .getValue("totals")
+                    .jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue(set)
+                    .jsonObject
+            assertFields(slot, "capacityIntegralMs" to expected.toDouble())
+            slot.forEach { (field, value) ->
+                assertThat(total.getValue(field).jsonPrimitive.double).isEqualTo(value.jsonPrimitive.double * 2)
+            }
+        }
+        val gateway = rig.windows.filter { it.id == "gateway" }.map { it.metrics.slotPools.getValue("handlers") }
+        assertThat(gateway.map { it.capacityIntegralMs }).containsExactly(1000.0, 5000.0)
+        val servers = rig.windows.filter { it.id == "pooler" }.map { it.metrics.slotPools.getValue("serverConnections") }
+        assertThat(servers.map { it.capacityIntegralMs }).containsExactly(60.0, 40.0)
+    }
+
+    @Test
+    fun `completed waits during runout belong to cohort totals but never extend window integrals`() {
+        val base = graph(clients = 3, wait = "50ms")
+        val rig = simulate(base.copy(run = base.run.copy(warmupMs = 5.0, measurementMs = 10.0, windowMs = 5.0)), listOf(4.0, 12.0, 13.0))
+        val slot =
+            pooler(rig)
+                .getValue("slotPools")
+                .jsonObject
+                .getValue("serverConnections")
+                .jsonObject
+        assertFields(
+            slot,
+            "busyIntegralMs" to 10.0,
+            "queueIntegralMs" to 4.0,
+            "capacityIntegralMs" to 10.0,
+            "waitCount" to 2.0,
+            "totalWaitMs" to 13.0,
+            "queueFullCount" to 0.0,
+            "waitLimitCount" to 0.0,
+        )
+        val windows = rig.windows.filter { it.id == "pooler" }.map { it.metrics.slotPools.getValue("serverConnections") }
+        assertThat(windows.sumOf { it.waitCount }).isEqualTo(1L)
+        assertThat(windows.sumOf { it.totalWaitMs }).isEqualTo(2.0)
+        assertThat(windows.sumOf { it.queueIntegralMs }).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `serialized slot roles share exactly seven fields and absent pools stay absent`() {
+        val graph =
+            requireNotNull(PoolerTestModel.compile(PoolerTestModel.withServicePool()).experiment)
+                .variants
+                .single()
+                .points
+                .single()
+                .graph
+        val rig = simulate(graph, listOf(0.0, 1.0, 2.0, 21.0))
+        val result =
+            Json
+                .parseToJsonElement(
+                    DocumentCodec.encode(
+                        ReplicationResult.serializer(),
+                        rig.reliability.metrics.replicationResult(),
+                    ),
+                ).jsonObject
+        val serviceRows = result.getValue("services").jsonObject
+        val callRows = result.getValue("connections").jsonObject
+        val poolerRow =
+            result
+                .getValue("poolers")
+                .jsonObject
+                .getValue("pooler")
+                .jsonObject
+        val slots =
+            listOf(
+                serviceRows
+                    .getValue("gateway")
+                    .jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("handlers"),
+                serviceRows
+                    .getValue("db")
+                    .jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("handlers"),
+                callRows
+                    .getValue("to-pooler")
+                    .jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+                    .getValue("pool"),
+                poolerRow.getValue("slotPools").jsonObject.getValue("clientConnections"),
+                poolerRow.getValue("slotPools").jsonObject.getValue("serverConnections"),
+            )
+        slots.forEach { slot ->
+            assertThat(slot.jsonObject.keys).containsExactlyInAnyOrder(
+                "busyIntegralMs",
+                "queueIntegralMs",
+                "capacityIntegralMs",
+                "waitCount",
+                "totalWaitMs",
+                "queueFullCount",
+                "waitLimitCount",
+            )
+        }
+        assertFields(slots[2].jsonObject, "waitCount" to 1.0, "totalWaitMs" to 4.0, "queueIntegralMs" to 4.0)
+        assertThat(
+            callRows
+                .getValue("to-db")
+                .jsonObject
+                .getValue("slotPools")
+                .jsonObject,
+        ).isEmpty()
+        assertThat(serviceRows.getValue("gateway").jsonObject).doesNotContainKeys("handlers", "busyHandlerTimeMs", "queueRejections")
+        assertThat(
+            rig.windows.first { it.id == graph.client.path }.metrics.let {
+                Json
+                    .parseToJsonElement(
+                        DocumentCodec.encode(
+                            resiliencelab.core.results.WindowMetrics
+                                .serializer(),
+                            it,
+                        ),
+                    ).jsonObject
+                    .getValue("slotPools")
+                    .jsonObject
+            },
+        ).isEmpty()
+    }
+
+    @Test
     fun `client limit rejects immediately while server wait timeout releases the admitted client`() {
         val rig = simulate(graph(), listOf(0.0, 1.0, 2.0))
         val metrics = pooler(rig)
@@ -211,12 +403,12 @@ class PoolerModelTest {
         val result = rig.reliability.metrics.replicationResult()
         assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(10.0, 6.0, 20.0, 31.0)
         val incoming = result.connections.getValue("to-pooler")
-        assertThat(incoming.poolWaitCount).isEqualTo(1)
-        assertThat(incoming.poolWaitTimeMs).isEqualTo(4.0)
-        assertThat(incoming.poolQueueIntegralMs).isEqualTo(4.0)
-        assertThat(incoming.poolBusyTimeMs).isEqualTo(39.0)
-        assertThat(incoming.poolCapacityTimeMs).isEqualTo(200.0)
-        assertThat(incoming.poolAcquireTimeouts).isZero()
+        assertThat(incoming.slotPools.getValue("pool").waitCount).isEqualTo(1)
+        assertThat(incoming.slotPools.getValue("pool").totalWaitMs).isEqualTo(4.0)
+        assertThat(incoming.slotPools.getValue("pool").queueIntegralMs).isEqualTo(4.0)
+        assertThat(incoming.slotPools.getValue("pool").busyIntegralMs).isEqualTo(39.0)
+        assertThat(incoming.slotPools.getValue("pool").capacityIntegralMs).isEqualTo(200.0)
+        assertThat(incoming.slotPools.getValue("pool").waitLimitCount).isZero()
         assertThat(incoming.sentAttempts).isEqualTo(4)
         assertThat(incoming.succeeded).isEqualTo(3)
         assertThat(incoming.failed).isEqualTo(1)
@@ -235,12 +427,18 @@ class PoolerModelTest {
             "busyServerConnectionTimeMs" to 30.0,
         )
         assertThat(result.services.getValue("db").admittedAttempts).isEqualTo(3)
-        assertThat(result.services.getValue("db").busyHandlerTimeMs).isEqualTo(27.0)
+        assertThat(
+            result.services
+                .getValue("db")
+                .slotPools
+                .getValue("handlers")
+                .busyIntegralMs,
+        ).isEqualTo(27.0)
         assertThat(result.connections.getValue("to-db").sentAttempts).isEqualTo(3)
-        val rows = rig.windows.filter { it.id == "pooler" }.mapNotNull { it.metrics.pooler }
-        assertThat(rows.sumOf { it.waitTimeouts }).isEqualTo(1)
-        assertThat(rows.sumOf { it.serverWaitTimeMs }).isEqualTo(9.0)
-        assertThat(rows.sumOf { it.busyServerConnectionTimeMs }).isEqualTo(30.0)
+        val rows = rig.windows.filter { it.id == "pooler" }.map { it.metrics.slotPools.getValue("serverConnections") }
+        assertThat(rows.sumOf { it.waitLimitCount }).isEqualTo(1)
+        assertThat(rows.sumOf { it.totalWaitMs }).isEqualTo(9.0)
+        assertThat(rows.sumOf { it.busyIntegralMs }).isEqualTo(30.0)
         assertThat(rig.reliability.activeInvocations).isZero()
         assertThat(rig.reliability.activeOriginalRequests).isZero()
         assertThat(rig.reliability.activeDownstreamProcesses).isZero()
@@ -285,11 +483,31 @@ class PoolerModelTest {
             .getValue("pooler")
             .jsonObject
 
+    private fun field(
+        metrics: JsonObject,
+        name: String,
+    ): kotlinx.serialization.json.JsonElement {
+        val path =
+            when (name) {
+                "clientConnectionRejections" -> "clientConnections.queueFullCount"
+                "waitTimeouts" -> "serverConnections.waitLimitCount"
+                "busyClientConnectionTimeMs" -> "clientConnections.busyIntegralMs"
+                "busyServerConnectionTimeMs" -> "serverConnections.busyIntegralMs"
+                "serverQueueLengthIntegralMs" -> "serverConnections.queueIntegralMs"
+                "serverWaitCount" -> "serverConnections.waitCount"
+                "serverWaitTimeMs" -> "serverConnections.totalWaitMs"
+                "clientConnectionCapacityTimeMs" -> "clientConnections.capacityIntegralMs"
+                "serverConnectionCapacityTimeMs" -> "serverConnections.capacityIntegralMs"
+                else -> return metrics.getValue(name)
+            }
+        return path.split('.').fold(metrics.getValue("slotPools")) { value, key -> value.jsonObject.getValue(key) }
+    }
+
     private fun assertFields(
         metrics: JsonObject,
         vararg expected: Pair<String, Double>,
     ) {
-        expected.forEach { (name, value) -> assertThat(metrics.getValue(name).jsonPrimitive.double).describedAs(name).isEqualTo(value) }
+        expected.forEach { (name, value) -> assertThat(field(metrics, name).jsonPrimitive.double).describedAs(name).isEqualTo(value) }
     }
 
     private fun simulate(

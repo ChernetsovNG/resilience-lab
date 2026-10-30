@@ -64,7 +64,7 @@ describe("Map summary data", () => {
     expect(mapMetric(aggregate, "admittedAmplification", "gateway")).toMatchObject({ mean: 1.2 });
     expect(mapMetric(aggregate, "handlerUtilization", "gateway")).toEqual({ mean: 0.5 });
     expect(mapMetric(aggregate, "handlerUtilization", "missing")).toBeNull();
-    aggregate.services.gateway.totals.handlerCapacityTimeMs = 0;
+    aggregate.services.gateway.totals.slotPools.handlers.capacityIntegralMs = 0;
     expect(mapMetric(aggregate, "handlerUtilization", "gateway")).toBeNull();
   });
 });

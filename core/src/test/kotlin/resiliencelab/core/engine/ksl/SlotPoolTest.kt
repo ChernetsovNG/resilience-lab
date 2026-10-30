@@ -4,9 +4,18 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import org.assertj.core.api.Assertions.assertThat
+import resiliencelab.core.experiment.SlotPoolMetrics
 import kotlin.test.Test
 
 class SlotPoolTest {
+    @Test
+    fun `unfinished waits have no completed wait sample`() {
+        val rig = simulate(attempts = listOf(Attempt("holder", 0.0, 100.0), Attempt("waiting", 1.0)))
+        assertThat(rig.snapshots.single().waitCount).isZero()
+        assertThat(rig.snapshots.single().totalWaitMs).isZero()
+        assertThat(rig.snapshots.single().queueIntegralMs).isEqualTo(29.0)
+    }
+
     @Test
     fun `idle acquisition is immediate and full queue rejects separately`() {
         val rig = simulate(queueCapacity = 1, attempts = listOf(Attempt("holder", 0.0, 10.0), Attempt("waiter", 1.0), Attempt("full", 2.0)))

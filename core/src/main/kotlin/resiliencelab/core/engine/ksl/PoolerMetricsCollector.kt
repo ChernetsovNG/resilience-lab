@@ -11,25 +11,20 @@ internal class PoolerMetricsCollector(
     private val startMs: Double,
     private val endMs: Double,
 ) {
+    val clientSlots = SlotStatistics(startMs, endMs, node.handlers)
+    val serverSlots = SlotStatistics(startMs, endMs, requireNotNull(node.pooler).poolSize)
     var offered = 0
     var admitted = 0
     var clientRejections = 0
-    private var waitTimeouts = 0
     private var successes = 0
     private var failures = 0
-    private var waitCount = 0
-    private var waitTime = 0.0
     val clients = TimeWeightedSeries(startMs, endMs)
     val servers = TimeWeightedSeries(startMs, endMs)
     val queue = TimeWeightedSeries(startMs, endMs)
     private val latency = LatencyAccumulator(context = "pooler=${node.path} cohort residence")
 
     fun waitCompleted(acquisition: SlotAcquisition) {
-        if (acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT) waitTimeouts++
-        if (acquisition.outcome in setOf(SlotAcquisitionOutcome.WAITED, SlotAcquisitionOutcome.WAIT_LIMIT)) {
-            waitCount++
-            waitTime += acquisition.waitMs
-        }
+        serverSlots.completed(acquisition)
     }
 
     fun complete(
@@ -41,6 +36,8 @@ internal class PoolerMetricsCollector(
     }
 
     fun finish(timeMs: Double) {
+        clientSlots.finish(timeMs)
+        serverSlots.finish(timeMs)
         clients.finish(timeMs)
         servers.finish(timeMs)
         queue.finish(timeMs)
@@ -48,20 +45,16 @@ internal class PoolerMetricsCollector(
 
     fun snapshot(): PoolerMetrics =
         PoolerMetrics(
-            offered,
-            admitted,
-            clientRejections,
-            waitTimeouts,
-            successes,
-            failures,
-            node.handlers,
-            requireNotNull(node.pooler).poolSize,
-            endMs - startMs,
-            clients.integral,
-            servers.integral,
-            queue.integral,
-            waitCount,
-            waitTime,
-            latency.snapshot(),
+            offeredAttempts = offered,
+            admittedAttempts = admitted,
+            successes = successes,
+            failures = failures,
+            measurementMs = endMs - startMs,
+            latency = latency.snapshot(),
+            slotPools =
+                mapOf(
+                    "clientConnections" to clientSlots.snapshot(clients.integral, 0.0).copy(queueFullCount = clientRejections.toLong()),
+                    "serverConnections" to serverSlots.snapshot(servers.integral, queue.integral),
+                ),
         )
 }

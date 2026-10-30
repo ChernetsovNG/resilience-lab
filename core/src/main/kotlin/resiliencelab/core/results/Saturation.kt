@@ -122,17 +122,19 @@ object SaturationAnalyzer {
             metrics: WindowMetrics,
             rule: SaturationRule,
         ) {
+            val handlers = metrics.slotPools["handlers"]
             val queued =
                 metrics.durationMs > 0 &&
-                    metrics.handlers > 0 &&
-                    metrics.busyHandlerTimeMs / (metrics.handlers * metrics.durationMs) >= rule.handlerUtilizationThreshold &&
-                    metrics.queueLengthIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
+                    handlers != null &&
+                    handlers.capacityIntegralMs > 0 &&
+                    handlers.busyIntegralMs / handlers.capacityIntegralMs >= rule.handlerUtilizationThreshold &&
+                    handlers.queueIntegralMs / metrics.durationMs > rule.meanQueueLengthThreshold
             backlog.observe(metrics, rule, queued, metrics.startMs + metrics.durationMs)
             // A rejection count does not establish pressure throughout its window; require later observations.
             overflow.observe(
                 metrics,
                 rule,
-                metrics.durationMs > 0 && metrics.queueRejections > rule.queueRejectionsThreshold,
+                metrics.durationMs > 0 && (handlers?.queueFullCount ?: 0L) > rule.queueRejectionsThreshold,
                 metrics.startMs,
             )
         }

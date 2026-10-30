@@ -110,7 +110,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
           {row(t("results.metrics.admittedAmplification"), point => point.aggregate.services[service]?.admittedAmplification, formatMultiplier)}
           {row(t("results.metrics.pooledUtilization"), point => {
             const totals = point.aggregate.services[service]?.totals;
-            return totals == null || totals.handlerCapacityTimeMs === 0 ? undefined : { mean: totals.busyHandlerTimeMs / totals.handlerCapacityTimeMs };
+            return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? undefined : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
           }, formatPercent, percentagePoints)}
         </tbody>
       </table>

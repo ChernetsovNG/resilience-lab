@@ -68,7 +68,7 @@ class ServiceMetricsIntegrationTest {
         val service = result.services.getValue("entry")
         assertThat(service.offeredAttempts).isEqualTo(1)
         assertThat(service.admittedAttempts).isEqualTo(1)
-        assertThat(service.queueRejections).isZero()
+        assertThat(service.slotPools.getValue("handlers").queueFullCount).isZero()
         assertThat(service.handlerUtilization).isCloseTo(0.95, offset(1e-9))
         assertThat(service.meanQueueLength).isCloseTo(0.5, offset(1e-9))
         assertThat(service.p95QueueLength).isCloseTo(1.0, offset(1e-9))

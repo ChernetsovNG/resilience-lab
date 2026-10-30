@@ -8,27 +8,21 @@ type RawWindow = components["schemas"]["WindowMetrics"];
 type RawPart = components["schemas"]["SeriesPart"];
 
 function window(values: Partial<RawWindow>): RawWindow {
-  return {
-    startMs: 0,
-    durationMs: 10,
-    originalArrivals: 0,
-    offeredAttempts: 0,
-    admittedAttempts: 0,
-    queueRejections: 0,
-    successes: 0,
-    failures: 0,
-    timeouts: 0,
-    retries: 0,
-    busyHandlerTimeMs: 0,
-    handlers: 0,
-    queueLengthIntegralMs: 0,
-    latency: { count: 0, sumMs: 0, sketch: [0] },
-    ...values,
-  };
+  return { startMs: 0,
+      durationMs: 10,
+      originalArrivals: 0,
+      offeredAttempts: 0,
+      admittedAttempts: 0,
+      successes: 0,
+      failures: 0,
+      timeouts: 0,
+      retries: 0,
+      latency: { count: 0, sumMs: 0, sketch: [0] },
+      slotPools: {  }, ...values };
 }
 
 function part(nodes: RawPart["nodes"]): RawPart {
-  return { schemaVersion: 4, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, connections: [] };
+  return { schemaVersion: 5, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, connections: [] };
 }
 
 describe("window metrics", () => {
@@ -39,20 +33,17 @@ describe("window metrics", () => {
         window({ startMs: 10, durationMs: 5 }),
       ] },
       { id: "service", windows: [
-        window({
-          offeredAttempts: 30,
-          admittedAttempts: 24,
-          queueRejections: 6,
-          successes: 18,
-          failures: 6,
-          timeouts: 4,
-          retries: 8,
-          busyHandlerTimeMs: 40,
-          handlers: 4,
-          queueLengthIntegralMs: 50,
-          latency: { count: 24, sumMs: 240, sketch: [0, 64, 24] },
-        }),
-        window({ startMs: 10, durationMs: 5, handlers: 4 }),
+        window({ offeredAttempts: 30,
+      admittedAttempts: 24,
+      successes: 18,
+      failures: 6,
+      timeouts: 4,
+      retries: 8,
+      latency: { count: 24, sumMs: 240, sketch: [0, 64, 24] },
+      slotPools: { handlers: { busyIntegralMs: 40, queueIntegralMs: 50, capacityIntegralMs: (4) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 6, waitLimitCount: 0 } } }),
+        window({ startMs: 10,
+      durationMs: 5,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (4) * (5), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
       ] },
     ])));
 
@@ -84,7 +75,9 @@ describe("window metrics", () => {
   it("gives an empty service window zero load and queue but no latency or amplification", () => {
     const decoded = decodeSeriesPart(JSON.stringify(part([
       { id: "client", windows: [window({}), window({ startMs: 10, durationMs: 5 })] },
-      { id: "service", windows: [window({ handlers: 4 }), window({ startMs: 10, durationMs: 5, handlers: 4 })] },
+      { id: "service", windows: [window({ slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (4) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }), window({ startMs: 10,
+      durationMs: 5,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (4) * (5), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
     ])));
 
     expect(outputWindow(outputsOf(catalog, "service"), decoded.nodes[1].windows[1].metrics)).toMatchObject({

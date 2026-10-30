@@ -118,7 +118,7 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
-    if (index.schemaVersion !== 4) {
+    if (index.schemaVersion !== 5) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const connectionRequest = "connections" in request;
@@ -254,7 +254,7 @@ function clientIdsOf(parts: ReadonlyMap<string, DecodedSeriesPart>): ReadonlySet
   const result = new Set<string>();
   for (const part of parts.values()) {
     for (const node of part.nodes) {
-      if (node.windows.every((window) => window.handlers === 0)) result.add(node.id);
+      if (node.windows.every((window) => !window.hasSlots)) result.add(node.id);
     }
   }
   return result;
@@ -266,12 +266,12 @@ function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, req
   const services = new Set<number>();
   for (const part of parts.values()) {
     for (const node of part.nodes) {
-      const client = node.windows.every((window) => window.handlers === 0);
+      const client = node.windows.every((window) => !window.hasSlots);
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
         if (client) covered.add(index);
-        else if (requested.has(node.id) && window.handlers > 0) services.add(index);
+        else if (requested.has(node.id) && window.hasSlots) services.add(index);
       }
     }
   }
@@ -294,7 +294,7 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        if (window.handlers === 0) arrivals.set(index, (arrivals.get(index) ?? 0) + window.originalArrivals);
+        if (!window.hasSlots) arrivals.set(index, (arrivals.get(index) ?? 0) + window.originalArrivals);
         if (!requested.has(node.id)) continue;
         let windows = selected.get(node.id);
         if (windows === undefined) {
@@ -311,7 +311,7 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
     const ordered = [...selectedWindows.entries()].sort(([a], [b]) => a - b);
     const windows = ordered.map(([index, window]) => {
       const metrics = { ...window.metrics };
-      if (window.handlers > 0) {
+      if (window.hasSlots) {
         const denominator = arrivals.get(index) ?? 0;
         metrics.client = { originalArrivals: denominator };
       }

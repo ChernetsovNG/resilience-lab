@@ -10,12 +10,10 @@ function fixture() {
   const point = run.variants[0].points[0];
   point.aggregate.services.middle = {
     admittedAmplification: { count: 2, mean: 2.5, min: 2, max: 3 },
-    totals: {
-      ...point.aggregate.services.gateway.totals,
-      busyHandlerTimeMs: 400, handlerCapacityTimeMs: 500,
-      queueLengthIntegralMs: 750, measurementMs: 3000,
-      queueRejections: 25, offeredAttempts: 100,
-    },
+    totals: { ...point.aggregate.services.gateway.totals,
+      measurementMs: 3000,
+      offeredAttempts: 100,
+      slotPools: { handlers: { busyIntegralMs: 400, queueIntegralMs: 750, capacityIntegralMs: 500, waitCount: 0, totalWaitMs: 0, queueFullCount: 25, waitLimitCount: 0 } } },
   };
   return run;
 }
@@ -50,7 +48,7 @@ describe("canvasResults", () => {
     const run = fixture();
     const point = structuredClone(run.variants[0].points[0]);
     point.id = "p1";
-    point.aggregate.services.gateway.totals.busyHandlerTimeMs = 1500;
+    point.aggregate.services.gateway.totals.slotPools.handlers.busyIntegralMs = 1500;
     run.variants[0].points.push(point);
     expect(canvasResults(run, model, "baseline", "p1", catalog)?.services.get("gateway")?.values.utilization).toBe(0.75);
     expect(canvasResults(run, model, "no-retries", "p0", catalog)?.services.size).toBe(0);
@@ -62,18 +60,19 @@ describe("canvasResults", () => {
     const run = fixture();
     const service = run.variants[0].points[0].aggregate.services.gateway;
     service.admittedAmplification = null;
-    service.totals = {
-      ...service.totals, handlerCapacityTimeMs: 0, measurementMs: 0, offeredAttempts: 0,
-    };
+    service.totals = { ...service.totals,
+      measurementMs: 0,
+      offeredAttempts: 0,
+      slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } };
     const result = canvasResults(run, model, "baseline", "p0", catalog)!;
     expect(result.services.get("gateway")?.values).toEqual({
       utilization: null, meanQueue: null, queueRejectionRate: null,
     });
     expect(result.connections.get("client-to-gateway")?.values.amplification).toBeNull();
     const middle = run.variants[0].points[0].aggregate.services.middle;
-    middle.totals.busyHandlerTimeMs = 0;
-    middle.totals.queueLengthIntegralMs = 0;
-    middle.totals.queueRejections = 0;
+    middle.totals.slotPools.handlers.busyIntegralMs = 0;
+    middle.totals.slotPools.handlers.queueIntegralMs = 0;
+    middle.totals.slotPools.handlers.queueFullCount = 0;
     expect(canvasResults(run, model, "baseline", "p0", catalog)?.services.get("middle")?.values).toMatchObject({
       utilization: 0, meanQueue: 0, queueRejectionRate: 0,
     });
@@ -164,9 +163,17 @@ it.each(["gateway", "client-to-gateway"])("restores diagram associations when %s
 it("projects connection totals independently of the target service", () => {
   const run = fixture();
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
-    totals: { sentAttempts: 40, retries: 10, succeeded: 20, failed: 10, timeouts: 10, orphaned: 8,
-      poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-      inFlightIntegralMs: 600, orphanedIntegralMs: 250, backoffIntegralMs: 100, measurementMs: 2000 },
+    totals: { sentAttempts: 40,
+      retries: 10,
+      succeeded: 20,
+      failed: 10,
+      timeouts: 10,
+      orphaned: 8,
+      inFlightIntegralMs: 600,
+      orphanedIntegralMs: 250,
+      backoffIntegralMs: 100,
+      measurementMs: 2000,
+      slotPools: {  } },
     timeoutRate: { count: 2, mean: 0.3, min: 0.2, max: 0.4 },
   };
   const result = canvasResults(run, model, "baseline", "p0", catalog)!;
@@ -177,16 +184,27 @@ it("projects connection totals independently of the target service", () => {
   delete run.variants[0].points[0].aggregate.services.middle;
   expect(canvasResults(run, model, "baseline", "p0", catalog)?.connections.get("gateway-to-middle")?.values.sentAttemptsPerSecond).toBe(20);
   const frame = windowCanvasResults(result, [
-    { id: "gateway", windows: [recordedWindow({ busyHandlerTimeMs: 50, offeredAttempts: 9999,
-      admittedAttempts: 99, client: { originalArrivals: 1 } })] },
-    { id: "middle", windows: [recordedWindow({ busyHandlerTimeMs: 50, offeredAttempts: 9999,
-      admittedAttempts: 77, client: { originalArrivals: 1 } })] },
-  ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
-    startMs: 0, durationMs: 100, sentAttempts: 2, retries: 1, succeeded: 0, failed: 0, timeouts: 1,
-    poolBusyTimeMs: 0, poolCapacityTimeMs: 0, poolQueueIntegralMs: 0, poolWaitCount: 0, poolWaitTimeMs: 0, poolAcquireTimeouts: 0,
-    orphaned: 1, inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 0,
-    latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
-  }] }])!;
+    { id: "gateway", windows: [recordedWindow({ offeredAttempts: 9999,
+      admittedAttempts: 99,
+      client: { originalArrivals: 1 },
+      slotPools: { handlers: { busyIntegralMs: 50, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
+    { id: "middle", windows: [recordedWindow({ offeredAttempts: 9999,
+      admittedAttempts: 77,
+      client: { originalArrivals: 1 },
+      slotPools: { handlers: { busyIntegralMs: 50, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
+  ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{ startMs: 0,
+      durationMs: 100,
+      sentAttempts: 2,
+      retries: 1,
+      succeeded: 0,
+      failed: 0,
+      timeouts: 1,
+      orphaned: 1,
+      inFlightIntegralMs: 20,
+      orphanedIntegralMs: 50,
+      backoffIntegralMs: 0,
+      latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
+      slotPools: {  } }] }])!;
   expect(frame.connections.get("gateway-to-middle")?.values).toMatchObject({
     sentAttemptsPerSecond: 20, timeoutRate: 0.5, meanOrphaned: 0.5, amplification: 77,
   });

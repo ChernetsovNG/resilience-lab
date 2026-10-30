@@ -10,7 +10,7 @@ type RawWindow = components["schemas"]["WindowMetrics"];
 /** Parses one browser-decompressed part and turns every sketch into numeric window metrics. */
 export function decodeSeriesPart(text: string): DecodedSeriesPart {
   const part = JSON.parse(text) as RawPart;
-  if (part.schemaVersion !== 4) throw new MessageError("results.series.unsupportedPartSchema", { version: String(part.schemaVersion) });
+  if (part.schemaVersion !== 5) throw new MessageError("results.series.unsupportedPartSchema", { version: String(part.schemaVersion) });
   for (const connection of part.connections) {
     if (connection.windows.length !== part.untilWindow - part.fromWindow || connection.windows.some((window) =>
       !Number.isFinite(window.startMs) || window.startMs < 0 || !Number.isFinite(window.durationMs) || window.durationMs <= 0,
@@ -47,7 +47,7 @@ function decodeWindow(window: RawWindow, originalArrivals: number, profile: stri
   return {
     originalArrivals: window.originalArrivals,
     admittedAttempts: window.admittedAttempts,
-    handlers: window.handlers,
+    hasSlots: Object.keys(window.slotPools).length > 0,
     latency: { count: window.latency.count, sumMs: window.latency.sumMs },
     metrics: { ...window, latency: decodeLatency(window.latency, profile), client: { originalArrivals } },
   };

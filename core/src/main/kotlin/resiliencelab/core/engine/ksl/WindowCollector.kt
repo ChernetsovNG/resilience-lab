@@ -1,13 +1,13 @@
 package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.experiment.LatencyAccumulator
+import resiliencelab.core.experiment.SlotPoolMetrics
 import resiliencelab.core.ir.PoolerSettings
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.results.ConnectionWindow
 import resiliencelab.core.results.ConnectionWindowMetrics
 import resiliencelab.core.results.NodeWindow
-import resiliencelab.core.results.PoolerWindowMetrics
 import resiliencelab.core.results.WindowMetrics
 
 internal enum class AttemptEvent { OFFERED, ADMITTED, QUEUE_REJECTED, TIMEOUT, RETRY }
@@ -45,10 +45,10 @@ internal class WindowCollector(
                             0
                         },
                         it.pooler,
+                        it.handlers,
                     )
             } + (clientId to State(clientId, 0))
         ).toMap().toSortedMap()
-    private val nodesClientCapacity = services.associate { it.path to it.handlers }
     private val connections = connectionIds.sorted().associateWith { ConnectionState(it) }
 
     fun connectionEvent(
@@ -90,6 +90,47 @@ internal class WindowCollector(
             poolWaitTimeMs += waitMs
             if (expired) poolAcquireTimeouts++
         }
+    }
+
+    fun slotCapacity(
+        id: String,
+        set: String,
+        timeMs: Double,
+        capacity: Int,
+    ) {
+        if (!advance(timeMs)) return
+        if (set == "pool") {
+            connections.getValue(id).apply {
+                integratePoolCapacity(timeMs)
+                poolSize = capacity
+            }
+        } else {
+            nodes.getValue(id).apply {
+                if (set == "serverConnections") {
+                    if (serverCapacity != capacity) {
+                        integrateServerCapacity(timeMs)
+                        serverCapacity = capacity
+                    }
+                } else if (capacityValue != capacity) {
+                    integrateCapacity(timeMs)
+                    capacityValue = capacity
+                }
+            }
+        }
+    }
+
+    fun handlerAcquisition(
+        id: String,
+        timeMs: Double,
+        acquisition: SlotAcquisition,
+    ) {
+        if (!advance(timeMs)) return
+        val row = nodes.getValue(id).row
+        if (acquisition.outcome == SlotAcquisitionOutcome.WAITED || acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT) {
+            row.waitCount++
+            row.waitTime += acquisition.waitMs
+        }
+        if (acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT) row.waitTimeouts++
     }
 
     fun originalArrival(timeMs: Double) {
@@ -207,7 +248,11 @@ internal class WindowCollector(
             val boundary = minOf(endMs, (index + 1).toDouble() * windowMs)
             check(boundary > startMs) { "Window boundary did not advance" }
             if (timeMs < boundary) break
-            nodes.values.forEach { it.integrate(boundary) }
+            nodes.values.forEach {
+                it.integrate(boundary)
+                it.integrateCapacity(boundary)
+                it.integrateServerCapacity(boundary)
+            }
             connections.values.forEach { it.integrate(boundary) }
             onWindow(
                 index,
@@ -226,11 +271,16 @@ internal class WindowCollector(
         val id: String,
         val handlers: Int,
         val pooler: PoolerSettings? = null,
+        val clientCapacity: Int = 0,
     ) {
         var row = Row(id, 0)
         var queue = 0
         var busy = 0
         var serverBusy = 0
+        var capacityValue = if (pooler == null) handlers else clientCapacity
+        var serverCapacity = pooler?.poolSize ?: 0
+        private var lastCapacityMs = 0.0
+        private var lastServerCapacityMs = 0.0
         private var lastMs = 0.0
 
         fun integrate(timeMs: Double) {
@@ -241,35 +291,62 @@ internal class WindowCollector(
             lastMs = timeMs
         }
 
+        // Constant capacity uses the same one-product denominator as the preceding format.
+        // Work events must not fragment capacity arithmetic; only its own changes and window edges do.
+        fun integrateCapacity(timeMs: Double) {
+            row.capacityTime += capacityValue * (timeMs - lastCapacityMs)
+            lastCapacityMs = timeMs
+        }
+
+        fun integrateServerCapacity(timeMs: Double) {
+            row.serverCapacityTime += serverCapacity * (timeMs - lastServerCapacityMs)
+            lastServerCapacityMs = timeMs
+        }
+
         fun snapshot(duration: Double): WindowMetrics =
             WindowMetrics(
-                startMs,
-                duration,
-                row.originalArrivals,
-                row.offeredAttempts,
-                row.admittedAttempts,
-                row.queueRejections,
-                row.successes,
-                row.failures,
-                row.timeouts,
-                row.retries,
-                if (pooler == null) row.busyTime else 0.0,
-                handlers,
-                if (pooler == null) row.queueIntegral else 0.0,
-                row.latency.snapshot(),
-                pooler?.let {
-                    PoolerWindowMetrics(
-                        nodesClientCapacity.getValue(id),
-                        it.poolSize,
-                        row.clientRejections,
-                        row.waitTimeouts,
-                        row.busyTime,
-                        row.serverBusyTime,
-                        row.queueIntegral,
-                        row.waitCount,
-                        row.waitTime,
-                    )
-                },
+                startMs = startMs,
+                durationMs = duration,
+                originalArrivals = row.originalArrivals,
+                offeredAttempts = row.offeredAttempts,
+                admittedAttempts = row.admittedAttempts,
+                successes = row.successes,
+                failures = row.failures,
+                timeouts = row.timeouts,
+                retries = row.retries,
+                latency = row.latency.snapshot(),
+                slotPools =
+                    when {
+                        pooler != null ->
+                            mapOf(
+                                "clientConnections" to
+                                    SlotPoolMetrics(row.busyTime, 0.0, row.capacityTime, queueFullCount = row.clientRejections.toLong()),
+                                "serverConnections" to
+                                    SlotPoolMetrics(
+                                        row.serverBusyTime,
+                                        row.queueIntegral,
+                                        row.serverCapacityTime,
+                                        row.waitCount.toLong(),
+                                        row.waitTime,
+                                        0L,
+                                        row.waitTimeouts.toLong(),
+                                    ),
+                            )
+                        handlers > 0 ->
+                            mapOf(
+                                "handlers" to
+                                    SlotPoolMetrics(
+                                        row.busyTime,
+                                        row.queueIntegral,
+                                        row.capacityTime,
+                                        row.waitCount.toLong(),
+                                        row.waitTime,
+                                        row.queueRejections.toLong(),
+                                        row.waitTimeouts.toLong(),
+                                    ),
+                            )
+                        else -> emptyMap()
+                    },
             )
     }
 
@@ -277,6 +354,8 @@ internal class WindowCollector(
         node: String,
         window: Int,
     ) {
+        var capacityTime = 0.0
+        var serverCapacityTime = 0.0
         var clientRejections = 0
         var waitTimeouts = 0
         var serverBusyTime = 0.0
@@ -301,11 +380,12 @@ internal class WindowCollector(
         var row = ConnectionRow(id, 0)
         var poolBusy = 0
         var poolQueued = 0
-        private val poolSize = connectionPoolSizes[id] ?: 0
+        var poolSize = connectionPoolSizes[id] ?: 0
         private var inFlight = 0
         private var orphaned = 0
         private var backoff = 0
         private var lastMs = 0.0
+        private var lastPoolCapacityMs = 0.0
 
         fun integrate(timeMs: Double) {
             val duration = timeMs - lastMs
@@ -314,8 +394,13 @@ internal class WindowCollector(
             row.backoffIntegral += backoff * duration
             row.poolBusyTimeMs += poolBusy * duration
             row.poolQueueIntegralMs += poolQueued * duration
-            row.poolCapacityTimeMs += poolSize * duration
+            integratePoolCapacity(timeMs)
             lastMs = timeMs
+        }
+
+        fun integratePoolCapacity(timeMs: Double) {
+            row.poolCapacityTimeMs += poolSize * (timeMs - lastPoolCapacityMs)
+            lastPoolCapacityMs = timeMs
         }
 
         fun record(
@@ -366,12 +451,23 @@ internal class WindowCollector(
                 row.orphanedIntegral,
                 row.backoffIntegral,
                 row.latency.snapshot(),
-                poolBusyTimeMs = row.poolBusyTimeMs,
-                poolCapacityTimeMs = row.poolCapacityTimeMs,
-                poolQueueIntegralMs = row.poolQueueIntegralMs,
-                poolWaitCount = row.poolWaitCount,
-                poolWaitTimeMs = row.poolWaitTimeMs,
-                poolAcquireTimeouts = row.poolAcquireTimeouts,
+                slotPools =
+                    if (id in connectionPoolSizes) {
+                        mapOf(
+                            "pool" to
+                                SlotPoolMetrics(
+                                    row.poolBusyTimeMs,
+                                    row.poolQueueIntegralMs,
+                                    row.poolCapacityTimeMs,
+                                    row.poolWaitCount.toLong(),
+                                    row.poolWaitTimeMs,
+                                    0L,
+                                    row.poolAcquireTimeouts.toLong(),
+                                ),
+                        )
+                    } else {
+                        emptyMap()
+                    },
             )
     }
 

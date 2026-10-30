@@ -342,9 +342,15 @@ class ExperimentExecutorTest {
         assertThat(replication.successes).isEqualTo(replication.originalArrivals)
         assertThat(replication.failures).isZero()
         assertThat(utilization).isCloseTo(0.5, offset(0.03))
-        val windowUtilization = windows.sumOf { it.busyHandlerTimeMs } / windows.sumOf { it.handlers * it.durationMs }
+        val windowUtilization =
+            windows.sumOf { it.slotPools.getValue("handlers").busyIntegralMs } /
+                windows.sumOf { it.slotPools.getValue("handlers").capacityIntegralMs }
         assertThat(windowUtilization).isCloseTo(utilization, offset(0.03))
-        windows.forEach { assertThat(it.busyHandlerTimeMs / (it.handlers * it.durationMs)).isBetween(0.0, 1.0) }
+        windows.forEach {
+            assertThat(
+                it.slotPools.getValue("handlers").busyIntegralMs / (it.slotPools.getValue("handlers").capacityIntegralMs),
+            ).isBetween(0.0, 1.0)
+        }
         assertThat(meanResponseMs).isCloseTo(4.0, offset(0.25))
     }
 

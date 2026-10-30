@@ -80,12 +80,7 @@ object MetricsAggregator {
                         orphanedIntegralMs = values.sumOf { it.orphanedIntegralMs },
                         backoffIntegralMs = values.sumOf { it.backoffIntegralMs },
                         measurementMs = values.sumOf { it.measurementMs },
-                        poolBusyTimeMs = values.sumOf { it.poolBusyTimeMs },
-                        poolCapacityTimeMs = values.sumOf { it.poolCapacityTimeMs },
-                        poolQueueIntegralMs = values.sumOf { it.poolQueueIntegralMs },
-                        poolWaitCount = values.sumOf { it.poolWaitCount.toLong() },
-                        poolWaitTimeMs = values.sumOf { it.poolWaitTimeMs },
-                        poolAcquireTimeouts = values.sumOf { it.poolAcquireTimeouts.toLong() },
+                        slotPools = sumSlotPools(values.map { it.slotPools }),
                     ),
             )
         }
@@ -99,18 +94,10 @@ object MetricsAggregator {
                     PoolerTotals(
                         offeredAttempts = values.sumOf { it.offeredAttempts.toLong() },
                         admittedAttempts = values.sumOf { it.admittedAttempts.toLong() },
-                        clientConnectionRejections = values.sumOf { it.clientConnectionRejections.toLong() },
-                        waitTimeouts = values.sumOf { it.waitTimeouts.toLong() },
                         successes = values.sumOf { it.successes.toLong() },
                         failures = values.sumOf { it.failures.toLong() },
-                        busyClientConnectionTimeMs = values.sumOf { it.busyClientConnectionTimeMs },
-                        clientConnectionCapacityTimeMs = values.sumOf { it.maxClientConnections * it.measurementMs },
-                        busyServerConnectionTimeMs = values.sumOf { it.busyServerConnectionTimeMs },
-                        serverConnectionCapacityTimeMs = values.sumOf { it.poolSize * it.measurementMs },
-                        serverQueueLengthIntegralMs = values.sumOf { it.serverQueueLengthIntegralMs },
-                        serverWaitCount = values.sumOf { it.serverWaitCount.toLong() },
-                        serverWaitTimeMs = values.sumOf { it.serverWaitTimeMs },
                         measurementMs = values.sumOf { it.measurementMs },
+                        slotPools = sumSlotPools(values.map { it.slotPools }),
                     ),
             )
         }
@@ -141,13 +128,24 @@ object MetricsAggregator {
             timeouts = services.sumOf { it.timeouts.toLong() },
             retries = services.sumOf { it.retries.toLong() },
             failures = services.sumOf { it.failures.toLong() },
-            queueRejections = services.sumOf { it.queueRejections.toLong() },
-            busyHandlerTimeMs = services.sumOf { it.busyHandlerTimeMs },
-            handlerCapacityTimeMs = services.sumOf { it.handlers * it.measurementMs },
-            queueLengthIntegralMs = services.sumOf { it.queueLengthIntegralMs },
             measurementMs = services.sumOf { it.measurementMs },
+            slotPools = sumSlotPools(services.map { it.slotPools }),
         )
     }
+
+    private fun sumSlotPools(rows: List<Map<String, SlotPoolMetrics>>): Map<String, SlotPoolMetrics> =
+        rows.flatMap { it.keys }.distinct().sorted().associateWith { set ->
+            val values = rows.mapNotNull { it[set] }
+            SlotPoolMetrics(
+                values.sumOf { it.busyIntegralMs },
+                values.sumOf { it.queueIntegralMs },
+                values.sumOf { it.capacityIntegralMs },
+                values.sumOf { it.waitCount },
+                values.sumOf { it.totalWaitMs },
+                values.sumOf { it.queueFullCount },
+                values.sumOf { it.waitLimitCount },
+            )
+        }
 
     private fun ratio(
         numerator: Int,

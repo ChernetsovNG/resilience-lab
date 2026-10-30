@@ -43,9 +43,9 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 10
-    const val SERIES_SCHEMA = 4
-    const val REPLICATION_SCHEMA = 3
+    const val ARTIFACT_SCHEMA = 11
+    const val SERIES_SCHEMA = 5
+    const val REPLICATION_SCHEMA = 4
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */

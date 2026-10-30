@@ -35,9 +35,28 @@ class Stage1CatalogTest {
             json
                 .encodeToJsonElement(
                     WindowMetrics.serializer(),
-                    WindowMetrics(0.0, 100.0, pooler = resiliencelab.core.results.PoolerWindowMetrics(2, 1, 0, 0, 0.0, 0.0, 0.0, 0, 0.0)),
+                    WindowMetrics(
+                        0.0,
+                        100.0,
+                        slotPools =
+                            listOf("handlers", "clientConnections", "serverConnections").associateWith {
+                                resiliencelab.core.experiment.SlotPoolMetrics()
+                            },
+                    ),
                 ).jsonObject
-        val connection = json.encodeToJsonElement(ConnectionWindowMetrics.serializer(), ConnectionWindowMetrics(0.0, 100.0)).jsonObject
+        val connection =
+            json
+                .encodeToJsonElement(
+                    ConnectionWindowMetrics.serializer(),
+                    ConnectionWindowMetrics(
+                        0.0,
+                        100.0,
+                        slotPools =
+                            mapOf(
+                                "pool" to resiliencelab.core.experiment.SlotPoolMetrics(),
+                            ),
+                    ),
+                ).jsonObject
         catalog.types.forEach { type ->
             assertThat(type.outputs.map { it.id }).doesNotHaveDuplicates()
             type.outputs.forEach { output ->

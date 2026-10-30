@@ -53,11 +53,11 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   const baseline = await windows(request, runId, "baseline", 0);
   const noRetries = await windows(request, runId, "no-retries", 0);
   const endMs = baseline.at(-1)!.startMs + baseline.at(-1)!.durationMs;
-  const before = baseline.filter((window) => window.startMs < 200).sort((a, b) => a.queueLengthIntegralMs - b.queueLengthIntegralMs)[0];
+  const before = baseline.filter((window) => window.startMs < 200).sort((a, b) => a.slotPools.handlers.queueIntegralMs - b.slotPools.handlers.queueIntegralMs)[0];
   const during = baseline.filter((window) => window.startMs >= 200 && window.startMs < 700);
-  const queuePeak = during.toSorted((a, b) => b.queueLengthIntegralMs / b.durationMs - a.queueLengthIntegralMs / a.durationMs)[0];
+  const queuePeak = during.toSorted((a, b) => b.slotPools.handlers.queueIntegralMs / b.durationMs - a.slotPools.handlers.queueIntegralMs / a.durationMs)[0];
   const errorPeak = during.toSorted((a, b) => b.queueRejections / b.durationMs - a.queueRejections / a.durationMs)[0];
-  expect(queuePeak.queueLengthIntegralMs / queuePeak.durationMs).toBeGreaterThan(before.queueLengthIntegralMs / before.durationMs);
+  expect(queuePeak.slotPools.handlers.queueIntegralMs / queuePeak.durationMs).toBeGreaterThan(before.slotPools.handlers.queueIntegralMs / before.durationMs);
   expect(errorPeak.queueRejections).toBeGreaterThan(0);
 
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
@@ -70,7 +70,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await inspect(page, queueSlider, before, endMs);
   const queueBefore = await value(queue, "Mean queue");
   await inspect(page, queueSlider, queuePeak, endMs);
-  expect(await value(queue, "Mean queue")).toBeCloseTo(queuePeak.queueLengthIntegralMs / queuePeak.durationMs, 2);
+  expect(await value(queue, "Mean queue")).toBeCloseTo(queuePeak.slotPools.handlers.queueIntegralMs / queuePeak.durationMs, 2);
   expect(await value(queue, "Mean queue")).toBeGreaterThan(queueBefore);
   await inspect(page, queueSlider, errorPeak, endMs);
   expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.queueRejections * 1000 / errorPeak.durationMs, 2);
@@ -81,7 +81,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   const pinned = baseline.indexOf(queuePeak);
   await expect(page.getByTestId("timeline-cursor")).toContainText(`Window ${pinned} ·`);
   await expect(page.getByTestId("timeline-cursor")).toContainText("pinned");
-  expect(await value(queue, "Mean queue", "no-retries")).toBeCloseTo(noRetries[pinned].queueLengthIntegralMs / noRetries[pinned].durationMs, 2);
+  expect(await value(queue, "Mean queue", "no-retries")).toBeCloseTo(noRetries[pinned].slotPools.handlers.queueIntegralMs / noRetries[pinned].durationMs, 2);
 
   await page.getByLabel("Replication", { exact: true }).selectOption("1");
   await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();

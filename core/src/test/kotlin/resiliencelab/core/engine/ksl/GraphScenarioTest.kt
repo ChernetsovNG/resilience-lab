@@ -79,8 +79,8 @@ class GraphScenarioTest {
                 .replicationResult()
                 .services
                 .getValue("entry")
-        assertThat(entry.busyHandlerTimeMs).isEqualTo(84.0)
-        assertThat(entry.queueLengthIntegralMs).isEqualTo(41.0)
+        assertThat(entry.slotPools.getValue("handlers").busyIntegralMs).isEqualTo(84.0)
+        assertThat(entry.slotPools.getValue("handlers").queueIntegralMs).isEqualTo(41.0)
         assertThat(entry.admittedAttempts).isEqualTo(2)
     }
 

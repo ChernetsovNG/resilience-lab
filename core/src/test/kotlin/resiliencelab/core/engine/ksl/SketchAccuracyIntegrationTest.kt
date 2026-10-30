@@ -99,7 +99,7 @@ class SketchAccuracyIntegrationTest {
         assertThat(result.originalArrivals).isEqualTo(2)
         assertThat(client.last().durationMs).isEqualTo(5.0)
         val services = windows.map { rows -> rows.single { it.id == "service" }.metrics }
-        assertThat(services.sumOf { it.busyHandlerTimeMs }).isEqualTo(25.0)
+        assertThat(services.sumOf { it.slotPools.getValue("handlers").busyIntegralMs }).isEqualTo(25.0)
         assertThat(services.sumOf { it.latency.count }).isEqualTo(1L)
         assertThat(result.services.getValue("service").handlerUtilization).isEqualTo(1.0)
     }

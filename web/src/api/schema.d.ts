@@ -371,21 +371,12 @@ export interface components {
             /** Format: double */
             orphanedIntegralMs: number;
             /** Format: int64 */
-            poolAcquireTimeouts: number;
-            /** Format: double */
-            poolBusyTimeMs: number;
-            /** Format: double */
-            poolCapacityTimeMs: number;
-            /** Format: double */
-            poolQueueIntegralMs: number;
-            /** Format: int64 */
-            poolWaitCount: number;
-            /** Format: double */
-            poolWaitTimeMs: number;
-            /** Format: int64 */
             retries: number;
             /** Format: int64 */
             sentAttempts: number;
+            slotPools: {
+                [key: string]: components["schemas"]["SlotPoolMetrics"];
+            };
             /** Format: int64 */
             succeeded: number;
             /** Format: int64 */
@@ -406,21 +397,12 @@ export interface components {
             /** Format: double */
             orphanedIntegralMs: number;
             /** Format: int32 */
-            poolAcquireTimeouts: number;
-            /** Format: double */
-            poolBusyTimeMs: number;
-            /** Format: double */
-            poolCapacityTimeMs: number;
-            /** Format: double */
-            poolQueueIntegralMs: number;
-            /** Format: int32 */
-            poolWaitCount: number;
-            /** Format: double */
-            poolWaitTimeMs: number;
-            /** Format: int32 */
             retries: number;
             /** Format: int32 */
             sentAttempts: number;
+            slotPools: {
+                [key: string]: components["schemas"]["SlotPoolMetrics"];
+            };
             /** Format: double */
             startMs: number;
             /** Format: int32 */
@@ -729,52 +711,17 @@ export interface components {
         PoolerTotals: {
             /** Format: int64 */
             admittedAttempts: number;
-            /** Format: double */
-            busyClientConnectionTimeMs: number;
-            /** Format: double */
-            busyServerConnectionTimeMs: number;
-            /** Format: double */
-            clientConnectionCapacityTimeMs: number;
-            /** Format: int64 */
-            clientConnectionRejections: number;
             /** Format: int64 */
             failures: number;
             /** Format: double */
             measurementMs: number;
             /** Format: int64 */
             offeredAttempts: number;
-            /** Format: double */
-            serverConnectionCapacityTimeMs: number;
-            /** Format: double */
-            serverQueueLengthIntegralMs: number;
-            /** Format: int64 */
-            serverWaitCount: number;
-            /** Format: double */
-            serverWaitTimeMs: number;
+            slotPools: {
+                [key: string]: components["schemas"]["SlotPoolMetrics"];
+            };
             /** Format: int64 */
             successes: number;
-            /** Format: int64 */
-            waitTimeouts: number;
-        };
-        PoolerWindowMetrics: {
-            /** Format: double */
-            busyClientConnectionTimeMs: number;
-            /** Format: double */
-            busyServerConnectionTimeMs: number;
-            /** Format: int32 */
-            clientConnectionRejections: number;
-            /** Format: int32 */
-            maxClientConnections: number;
-            /** Format: int32 */
-            poolSize: number;
-            /** Format: double */
-            serverQueueLengthIntegralMs: number;
-            /** Format: int32 */
-            serverWaitCount: number;
-            /** Format: double */
-            serverWaitTimeMs: number;
-            /** Format: int32 */
-            waitTimeouts: number;
         };
         PortDescriptor: {
             /** @enum {string} */
@@ -913,26 +860,37 @@ export interface components {
         ServiceTotals: {
             /** Format: int64 */
             admittedAttempts: number;
-            /** Format: double */
-            busyHandlerTimeMs: number;
             /** Format: int64 */
             failures: number;
-            /** Format: double */
-            handlerCapacityTimeMs: number;
             /** Format: double */
             measurementMs: number;
             /** Format: int64 */
             offeredAttempts: number;
             /** Format: int64 */
             originalArrivals: number;
-            /** Format: double */
-            queueLengthIntegralMs: number;
-            /** Format: int64 */
-            queueRejections: number;
             /** Format: int64 */
             retries: number;
+            slotPools: {
+                [key: string]: components["schemas"]["SlotPoolMetrics"];
+            };
             /** Format: int64 */
             timeouts: number;
+        };
+        SlotPoolMetrics: {
+            /** Format: double */
+            busyIntegralMs: number;
+            /** Format: double */
+            capacityIntegralMs: number;
+            /** Format: int64 */
+            queueFullCount: number;
+            /** Format: double */
+            queueIntegralMs: number;
+            /** Format: double */
+            totalWaitMs: number;
+            /** Format: int64 */
+            waitCount: number;
+            /** Format: int64 */
+            waitLimitCount: number;
         };
         TypeDescriptor: {
             assumptions: string[];
@@ -977,25 +935,19 @@ export interface components {
             /** Format: int32 */
             admittedAttempts: number;
             /** Format: double */
-            busyHandlerTimeMs: number;
-            /** Format: double */
             durationMs: number;
             /** Format: int32 */
             failures: number;
-            /** Format: int32 */
-            handlers: number;
             latency: components["schemas"]["LatencyStatistics"];
             /** Format: int32 */
             offeredAttempts: number;
             /** Format: int32 */
             originalArrivals: number;
-            pooler?: components["schemas"]["PoolerWindowMetrics"] | null;
-            /** Format: double */
-            queueLengthIntegralMs: number;
-            /** Format: int32 */
-            queueRejections: number;
             /** Format: int32 */
             retries: number;
+            slotPools: {
+                [key: string]: components["schemas"]["SlotPoolMetrics"];
+            };
             /** Format: double */
             startMs: number;
             /** Format: int32 */

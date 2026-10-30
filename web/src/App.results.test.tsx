@@ -57,13 +57,13 @@ describe("diagram results", () => {
     const second = structuredClone(run.variants[0].points[0]);
     second.id = "p1";
     second.coordinates = { "gateway.handlers": 6 };
-    second.aggregate.services.gateway.totals.busyHandlerTimeMs = 1500;
+    second.aggregate.services.gateway.totals.slotPools.handlers.busyIntegralMs = 1500;
     second.saturation.firstNodes = [
       { node: "gateway", replicationCount: 1, medianStartMs: 200, minStartMs: 200, maxStartMs: 200 },
     ];
     run.variants[0].points.push(second);
     const alternative = structuredClone(second);
-    alternative.aggregate.services.gateway.totals.busyHandlerTimeMs = 500;
+    alternative.aggregate.services.gateway.totals.slotPools.handlers.busyIntegralMs = 500;
     alternative.saturation.firstNodes = [];
     run.variants[1].points.push(alternative);
     server((url) => url.endsWith("/summary") ? { body: run } : undefined);
@@ -114,16 +114,19 @@ it("shares point, replication and time between the context row, Answer, Timeline
   const point = structuredClone(run.variants[0].points[0]);
   point.id = "p1";
   point.coordinates = { "gateway.handlers": 1000 };
-  point.aggregate.services.gateway.totals.busyHandlerTimeMs = 1500;
+  point.aggregate.services.gateway.totals.slotPools.handlers.busyIntegralMs = 1500;
   run.variants[0].points.push(point);
   run.variants[1].points.push({ ...point, id: "p2", coordinates: { "gateway.handlers": 6 } });
   vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, replication, cell }) => nodes.map(id => ({
-    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({
-      startMs: (fromWindow + index) * 10, durationMs: 10,
-      originalArrivals: 1, offeredAttempts: 2, admittedAttempts: 1.5, queueRejections: 0.5, successes: 1,
-      busyHandlerTimeMs: cell === "p1" && replication === 1 ? 8 : 2, queueLengthIntegralMs: replication === 1 ? 30 : 70,
-      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 }, client: { originalArrivals: 1 },
-    })),
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({ startMs: (fromWindow + index) * 10,
+      durationMs: 10,
+      originalArrivals: 1,
+      offeredAttempts: 2,
+      admittedAttempts: 1.5,
+      successes: 1,
+      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 },
+      client: { originalArrivals: 1 },
+      slotPools: { handlers: { busyIntegralMs: cell === "p1" && replication === 1 ? 8 : 2, queueIntegralMs: replication === 1 ? 30 : 70, capacityIntegralMs: 10, waitCount: 0, totalWaitMs: 0, queueFullCount: 0.5, waitLimitCount: 0 } } })),
   })));
   server(url => url.endsWith("/summary") ? { body: run } : undefined);
   await open();
@@ -219,19 +222,22 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   run.grid = [{ path: "gateway.queue", values: [16, 8, 0] }];
   const point = run.variants[0].points[0];
   point.coordinates = { "gateway.queue": 16 };
-  point.aggregate.services.gateway.totals.queueLengthIntegralMs = 16000;
+  point.aggregate.services.gateway.totals.slotPools.handlers.queueIntegralMs = 16000;
   point.aggregate.services.middle = structuredClone(point.aggregate.services.gateway);
-  point.aggregate.services.middle.totals.queueLengthIntegralMs = 8000;
+  point.aggregate.services.middle.totals.slotPools.handlers.queueIntegralMs = 8000;
   run.variants[0].points.push({ ...point, id: "p1", coordinates: { "gateway.queue": 8 } });
   run.variants[0].points.push({ ...point, id: "p2", coordinates: { "gateway.queue": 0 } });
   vi.spyOn(seriesLoader, "load").mockImplementation(async ({ nodes, fromWindow = 0, untilWindow, cell }) => nodes.map(id => ({
-    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({
-      startMs: (fromWindow + index) * 10, durationMs: 10,
-      originalArrivals: 1, offeredAttempts: 1, admittedAttempts: 1, successes: 1, busyHandlerTimeMs: 5,
-      queueLengthIntegralMs: cell === "p2" && id === "gateway" ? 0
-        : (id === "gateway" ? 80 : 40) / ((fromWindow + index) === 0 ? 1 : 2),
-      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 }, client: { originalArrivals: 1 },
-    })),
+    id, windows: Array.from({ length: untilWindow - fromWindow }, (_, index) => recordedWindow({ startMs: (fromWindow + index) * 10,
+      durationMs: 10,
+      originalArrivals: 1,
+      offeredAttempts: 1,
+      admittedAttempts: 1,
+      successes: 1,
+      latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 },
+      client: { originalArrivals: 1 },
+      slotPools: { handlers: { busyIntegralMs: 5, queueIntegralMs: cell === "p2" && id === "gateway" ? 0
+        : (id === "gateway" ? 80 : 40) / ((fromWindow + index) === 0 ? 1 : 2), capacityIntegralMs: 10, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })),
   })));
   server(url => {
     if (url.endsWith("/summary")) return { body: run };

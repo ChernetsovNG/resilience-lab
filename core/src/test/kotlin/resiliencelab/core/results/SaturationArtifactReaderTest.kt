@@ -14,7 +14,22 @@ class SaturationArtifactReaderTest {
     ) {
         val workspace = FileWorkspace(root)
         val directory = ".results/e/r/series/v/p0/rep-0"
-        val hot = WindowMetrics(0.0, 25.0, busyHandlerTimeMs = 23.75, handlers = 1, queueLengthIntegralMs = 25.0)
+        val hot =
+            WindowMetrics(
+                0.0,
+                25.0,
+                slotPools =
+                    mapOf(
+                        "handlers" to
+                            resiliencelab.core.experiment.SlotPoolMetrics(
+                                busyIntegralMs = 23.75,
+                                queueIntegralMs = 25.0,
+                                capacityIntegralMs =
+                                    (1).toDouble() * (25.0),
+                                queueFullCount = (0).toLong(),
+                            ),
+                    ),
+            )
         val json = Json { encodeDefaults = true }
         val budget =
             (0 until 4).maxOf { window ->

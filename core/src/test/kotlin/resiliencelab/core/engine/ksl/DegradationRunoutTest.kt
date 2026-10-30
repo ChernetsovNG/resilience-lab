@@ -280,7 +280,9 @@ class DegradationRunoutTest {
         assertThat(
             rig.result.services
                 .getValue("backend")
-                .queueRejections,
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
         ).isEqualTo(1)
         assertThat(window.firstMs + gapMs / 2.0).isGreaterThan(window.firstMs + 30.0)
         assertThat(rig.model.time).isGreaterThanOrEqualTo(window.firstMs + 40.0)

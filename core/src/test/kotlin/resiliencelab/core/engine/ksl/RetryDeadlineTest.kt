@@ -98,7 +98,13 @@ class RetryDeadlineTest {
         assertThat(result.services.getValue("entry").retries).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(3)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(2)
-        assertThat(result.services.getValue("backend").queueRejections).isEqualTo(1)
+        assertThat(
+            result.services
+                .getValue("backend")
+                .slotPools
+                .getValue("handlers")
+                .queueFullCount,
+        ).isEqualTo(1)
         assertDrained(rig)
     }
 

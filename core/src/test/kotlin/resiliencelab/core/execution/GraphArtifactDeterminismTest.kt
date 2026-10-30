@@ -137,7 +137,7 @@ class GraphArtifactDeterminismTest {
             expected.result.variants
                 .flatMap { it.points }
                 .flatMap { it.replications }
-                .sumOf { replication -> replication.connections.values.sumOf { it.poolWaitCount } },
+                .sumOf { replication -> replication.connections.values.sumOf { it.slotPools["pool"]?.waitCount ?: 0L } },
         ).isPositive()
         for (workers in listOf(1, 2, 4, 8)) {
             val actual = run(root.resolve("pooled-$workers"), pooled, workers, true)

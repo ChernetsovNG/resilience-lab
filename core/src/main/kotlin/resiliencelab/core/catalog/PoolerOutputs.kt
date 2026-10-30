@@ -10,17 +10,14 @@ internal object PoolerOutputs {
     private fun resource(
         id: String,
         title: String,
-        field: String,
-        capacity: String,
+        set: String,
         order: Int,
-    ) = OutputDescriptor(
+    ) = SlotPoolOutputs.output(
+        set,
+        SlotPoolOutputs.Quantity.UTILIZATION,
         id,
         title,
         "Busy connection time divided by available connection time.",
-        OutputUnit.PERCENT,
-        OutputKind.UTILIZATION,
-        OutputCalculation(OutputCalculationKind.NORMALIZED_RATIO, "pooler.$field", "durationMs", "pooler.$capacity"),
-        OutputSummary(ratio("totals.$field", "totals.${if (capacity == "poolSize") "server" else "client"}ConnectionCapacityTimeMs")),
         OutputTimeline("poolerResources", "Pooler connections", 3, order),
         OutputInspector(title, order, chartOrder = order),
         OutputOverlay(title, "$title {value}", "Busy connection time / connection capacity time, {interval}.", order),
@@ -45,16 +42,14 @@ internal object PoolerOutputs {
 
     val outputs =
         listOf(
-            resource("serverUtilization", "Server pool utilization", "busyServerConnectionTimeMs", "poolSize", 0),
-            resource("clientUtilization", "Client connection utilization", "busyClientConnectionTimeMs", "maxClientConnections", 1),
-            OutputDescriptor(
+            resource("serverUtilization", "Server pool utilization", "serverConnections", 0),
+            resource("clientUtilization", "Client connection utilization", "clientConnections", 1),
+            SlotPoolOutputs.output(
+                "serverConnections",
+                SlotPoolOutputs.Quantity.QUEUE,
                 "meanWaitingClients",
                 "Waiting clients",
                 "Server connection queue integral divided by interval duration.",
-                OutputUnit.REQUESTS,
-                OutputKind.MEAN_LEVEL,
-                ratio("pooler.serverQueueLengthIntegralMs", "durationMs"),
-                OutputSummary(ratio("totals.serverQueueLengthIntegralMs", "totals.measurementMs")),
                 OutputTimeline("poolerQueue", "Waiting clients", 4, 0),
                 OutputInspector("Waiting clients", 2, chartOrder = 2),
                 OutputOverlay(
@@ -66,20 +61,62 @@ internal object PoolerOutputs {
             ),
             count("offeredAttempts", "Offered attempts", "offeredAttempts", 0),
             count("admittedAttempts", "Admitted attempts", "admittedAttempts", 1),
-            count("clientConnectionRejections", "Client connection rejections", "pooler.clientConnectionRejections", 2),
-            count("waitTimeouts", "Server wait timeouts", "pooler.waitTimeouts", 3),
+            SlotPoolOutputs.output(
+                "clientConnections",
+                SlotPoolOutputs.Quantity.QUEUE_FULL,
+                "clientConnectionRejections",
+                "Client connection rejections",
+                "Event count in the window; the summary is the count per independent replication.",
+                OutputTimeline("poolerCounts", "Pooler attempts", 0, 2),
+                OutputInspector("Client connection rejections", 5),
+            ),
+            SlotPoolOutputs.output(
+                "serverConnections",
+                SlotPoolOutputs.Quantity.WAIT_LIMIT,
+                "waitTimeouts",
+                "Server wait timeouts",
+                "Event count in the window; the summary is the count per independent replication.",
+                OutputTimeline("poolerCounts", "Pooler attempts", 0, 3),
+                OutputInspector("Server wait timeouts", 6),
+            ),
             count("successes", "Successful replies", "successes", 4),
             count("failures", "Failed replies", "failures", 5),
-            OutputDescriptor(
+            SlotPoolOutputs.output(
+                "serverConnections",
+                SlotPoolOutputs.Quantity.WAIT,
                 "meanServerWaitMs",
                 "Mean server connection wait",
                 "Completed FIFO waits, including expired waits; immediate acquisitions have no sample.",
-                OutputUnit.MILLISECONDS,
-                OutputKind.LATENCY,
-                ratio("pooler.serverWaitTimeMs", "pooler.serverWaitCount"),
-                OutputSummary(ratio("totals.serverWaitTimeMs", "totals.serverWaitCount")),
                 OutputTimeline("poolerWait", "Connection wait", 5, 0),
                 OutputInspector("Mean server connection wait", 9),
+            ),
+            SlotPoolOutputs.output(
+                "clientConnections",
+                SlotPoolOutputs.Quantity.QUEUE,
+                "meanClientQueue",
+                "Mean client queue",
+                "Client connection queue integral / duration.",
+            ),
+            SlotPoolOutputs.output(
+                "clientConnections",
+                SlotPoolOutputs.Quantity.WAIT,
+                "meanClientWaitMs",
+                "Mean client wait",
+                "Completed client connection waits.",
+            ),
+            SlotPoolOutputs.output(
+                "clientConnections",
+                SlotPoolOutputs.Quantity.WAIT_LIMIT,
+                "clientWaitLimitCount",
+                "Client wait limits",
+                "Client wait-limit rejections.",
+            ),
+            SlotPoolOutputs.output(
+                "serverConnections",
+                SlotPoolOutputs.Quantity.QUEUE_FULL,
+                "serverQueueFullCount",
+                "Server queue rejections",
+                "Full server-queue rejections.",
             ),
         ) +
             listOf("mean" to null, "p95" to 0.95, "p99" to 0.99).mapIndexed { index, (name, percentile) ->
