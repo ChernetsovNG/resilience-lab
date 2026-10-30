@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copySmallExperiment } from "./fixtures";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 async function expectDesktopLayout(page: Page, minimumCanvasHeight = 140) {
@@ -42,10 +43,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
   const label = "Baseline with a long descriptive label for the selected experiment variant ".repeat(4).trim();
   await mkdir(directory);
   try {
-    for (const file of ["retry-storm.model.json", "retry-storm.layout.json"]) {
-      await copyFile(resolve("../examples/retry-storm", file), resolve(directory, file));
-    }
-    const experiment = JSON.parse(await readFile(resolve("../examples/retry-storm/retry-storm.experiment.json"), "utf8"));
+    const experiment = await copySmallExperiment(directory, name);
     experiment.variants[0].label = label;
     experiment.grid = [{ path: "gateway.handlers", values: [4] }];
     await writeFile(resolve(directory, name), JSON.stringify(experiment));
@@ -95,47 +93,54 @@ test("long document, variant and backend labels fit supported desktop widths", a
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
   test(`example, Run, Answer, Time and Timeline at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
-    await page.setViewportSize(viewport);
-    await page.goto("/");
-    await page.getByLabel("Experiment", { exact: true }).selectOption("retry-storm/retry-storm.experiment.json");
-    await expect(page.getByText("Shared by all variants", { exact: true })).toHaveCount(1);
-    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
-    const run = page.getByRole("button", { name: "Run", exact: true });
-    await expect(run).toBeEnabled();
-    await run.click();
-    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
-    await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
-    await expectDesktopLayout(page);
-    await page.screenshot({ path: testInfo.outputPath(`answer-${viewport.width}.png`) });
+    const directory = resolve(`../apps/server/build/e2e-workspace/responsive-${viewport.width}`);
+    await mkdir(directory);
+    try {
+      await copySmallExperiment(directory);
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await page.getByLabel("Experiment", { exact: true }).selectOption(`responsive-${viewport.width}/retry-storm.experiment.json`);
+      await expect(page.getByText("Shared by all variants", { exact: true })).toHaveCount(1);
+      await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+      const run = page.getByRole("button", { name: "Run", exact: true });
+      await expect(run).toBeEnabled();
+      await run.click();
+      await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+      await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
+      await expectDesktopLayout(page);
+      await page.screenshot({ path: testInfo.outputPath(`answer-${viewport.width}.png`) });
 
-    await page.getByRole("button", { name: "Time", exact: true }).click();
-    await expect(page.getByRole("slider", { name: "Playback window", exact: true })).toHaveValue("0");
-    await page.getByTestId("rf__node-dependency").click();
-    await page.getByRole("tab", { name: "Timeline", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeVisible();
-    await expectDesktopLayout(page);
-    await page.screenshot({ path: testInfo.outputPath(`timeline-${viewport.width}.png`) });
+      await page.getByRole("button", { name: "Time", exact: true }).click();
+      await expect(page.getByRole("slider", { name: "Playback window", exact: true })).toHaveValue("0");
+      await page.getByTestId("rf__node-dependency").click();
+      await page.getByRole("tab", { name: "Timeline", exact: true }).click();
+      await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeVisible();
+      await expectDesktopLayout(page);
+      await page.screenshot({ path: testInfo.outputPath(`timeline-${viewport.width}.png`) });
 
-    const divider = page.getByRole("separator", { name: "Resize inspector", exact: true });
-    const initialWidth = Number(await divider.getAttribute("aria-valuenow"));
-    const boundary = (await divider.boundingBox())!;
-    await page.mouse.move(boundary.x + boundary.width / 2, boundary.y + boundary.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(boundary.x + boundary.width / 2 - 48, boundary.y + boundary.height / 2);
-    await page.mouse.up();
-    expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(Math.min(480, initialWidth + 48));
-    await divider.dblclick();
-    await divider.press("End");
-    expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(480);
-    await divider.dblclick();
-    expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(initialWidth);
-    await page.getByRole("button", { name: "Collapse inspector", exact: true }).click();
-    await page.getByTestId("rf__node-gateway").click();
-    await expect(page.getByRole("button", { name: "Expand inspector: gateway selected", exact: true })).toBeVisible();
-    await expect(page.locator(".inspector-content")).toBeHidden();
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
-    await page.reload();
-    await expect(page.getByRole("button", { name: "Expand inspector", exact: true })).toBeVisible();
+      const divider = page.getByRole("separator", { name: "Resize inspector", exact: true });
+      const initialWidth = Number(await divider.getAttribute("aria-valuenow"));
+      const boundary = (await divider.boundingBox())!;
+      await page.mouse.move(boundary.x + boundary.width / 2, boundary.y + boundary.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(boundary.x + boundary.width / 2 - 48, boundary.y + boundary.height / 2);
+      await page.mouse.up();
+      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(Math.min(480, initialWidth + 48));
+      await divider.dblclick();
+      await divider.press("End");
+      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(480);
+      await divider.dblclick();
+      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(initialWidth);
+      await page.getByRole("button", { name: "Collapse inspector", exact: true }).click();
+      await page.getByTestId("rf__node-gateway").click();
+      await expect(page.getByRole("button", { name: "Expand inspector: gateway selected", exact: true })).toBeVisible();
+      await expect(page.locator(".inspector-content")).toBeHidden();
+      await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+      await page.reload();
+      await expect(page.getByRole("button", { name: "Expand inspector", exact: true })).toBeVisible();
+    } finally {
+      await rm(directory, { recursive: true });
+    }
   });
 }

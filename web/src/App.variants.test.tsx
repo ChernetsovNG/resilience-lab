@@ -1,0 +1,273 @@
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import { catalog, documentViews, experiment, experimentPath } from "./test/fixtures";
+import { setupAppTests, server, open, selectGateway, editHandlers, button, experimentSelect, editField } from "./test/app";
+
+setupAppTests();
+
+
+it("saves precise variant overrides only to the experiment and resets fields and objects with undo", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.click(await screen.findByTestId("rf__edge-gateway-to-middle"));
+  editField("Timeout", "90ms");
+  editField("Base delay", "4ms");
+  expect((await screen.findByTestId("canvas-edge-label-gateway-to-middle")).textContent).toContain("◆");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+  expect(puts).toHaveLength(1);
+  expect(String(puts[0][0])).toContain(encodeURIComponent(experimentPath));
+  expect(puts[0][1]?.headers).toMatchObject({ "If-Match": '"v-experiment"' });
+  expect(JSON.parse(String(puts[0][1]?.body)).experiment.variants[1].overrides).toEqual({
+    "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "gateway-to-middle.timeout": "90ms", "gateway-to-middle.backoff.base": "4ms",
+  });
+  fireEvent.click(button("Reset Timeout"));
+  expect((screen.getByLabelText("Timeout") as HTMLInputElement).value).toBe("80ms");
+  fireEvent.click(button("Reset Backoff"));
+  expect((screen.getByLabelText("Base delay") as HTMLInputElement).value).toBe("2ms");
+  fireEvent.click(button("Undo"));
+  expect((screen.getByLabelText("Base delay") as HTMLInputElement).value).toBe("4ms");
+});
+
+it("edits canvas timeout with undo and saves variant edits only as overrides", async () => {
+  const fetchMock = server();
+  await open();
+  const editTimeout = async (value: string) => {
+    const parameter = await screen.findByTestId("canvas-param-gateway-to-middle-timeout");
+    fireEvent.doubleClick(parameter);
+    const input = parameter.querySelector("input")!;
+    fireEvent.change(input, { target: { value } });
+    fireEvent.submit(input.closest("form")!);
+  };
+
+  await editTimeout("90ms");
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("90ms");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  await editTimeout("100ms");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+  expect(puts).toHaveLength(1);
+  expect(String(puts[0][0])).toContain(encodeURIComponent(experimentPath));
+  expect(JSON.parse(String(puts[0][1]?.body)).experiment.variants[1].overrides).toEqual({
+    "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "gateway-to-middle.timeout": "100ms",
+  });
+});
+
+it("adds, copies, renames and confirms deletion of a variant while keeping its page active", async () => {
+  server();
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  await open();
+  fireEvent.click(button("Add variant"));
+  expect(screen.getByRole("tab", { name: "Variant 1" }).getAttribute("aria-selected")).toBe("true");
+  editField("Variant label", "My variant");
+  editField("Variant ID", "my-variant");
+  expect(screen.getByRole("tab", { name: "My variant" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "My variant" }).getAttribute("aria-selected")).toBe("true");
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("variant-1");
+  fireEvent.click(button("Redo"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("my-variant");
+  editField("Variant ID", "baseline");
+  expect(screen.getByText("This variant ID is already used")).toBeTruthy();
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Add variant").disabled).toBe(true);
+  editField("Variant ID", "my-variant");
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+  expect(screen.getByRole("tab", { name: "My variant copy" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+  expect(confirm).toHaveBeenCalled();
+  expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
+  confirm.mockReturnValue(true);
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+  expect(screen.queryByRole("tab", { name: "My variant copy" })).toBeNull();
+  expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
+});
+
+it("edits shared execution and fault settings from a variant and preserves invalid drafts", async () => {
+  const fetchMock = server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  editField("Replications", "3");
+  editField("Warm-up", "100ms");
+  editField("Measurement", "2s");
+  editField("Seed", "9007199254740991");
+  editField("Real-time limit", "10s");
+  fireEvent.change(screen.getByLabelText("Fault target"), { target: { value: "middle" } });
+  editField("Fault start", "100ms");
+  editField("Fault end", "500ms");
+  editField("Processing multiplier", "4");
+  editField("Fault failure rate", "25%");
+  editField("Seed", "9007199254740992");
+  expect(button("Save").disabled).toBe(true);
+  expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
+  editField("Seed", "9007199254740991");
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect((screen.getByLabelText("Replications") as HTMLInputElement).value).toBe("3");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.execution).toEqual({ replications: 3, warmup: "100ms", measurement: "2s", seed: 9007199254740991, maxRealTime: "10s" });
+  expect(saved.faults).toEqual([{ target: "middle", from: "100ms", to: "500ms", processingMultiplier: 4, failureRate: "25%" }]);
+  expect(saved.variants).toEqual(experiment.variants);
+  fireEvent.click(button("Add fault"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(2);
+  fireEvent.click(button("Remove fault 2"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(1);
+  fireEvent.click(button("Undo"));
+  expect(screen.getAllByLabelText("Fault target")).toHaveLength(2);
+});
+
+it("reads duration and probability units for shared fields from the catalog", async () => {
+  const customCatalog = structuredClone(catalog);
+  const changeUnits = (params: typeof customCatalog.types[number]["params"]) => {
+    for (const param of params) {
+      if (param.dimension === "DURATION") param.units = [{ symbol: "tick", numerator: 2, denominator: 1 }];
+      if (param.dimension === "PROBABILITY") param.units = [{ symbol: "permille", numerator: 1, denominator: 1000 }];
+      changeUnits(param.fields);
+    }
+  };
+  customCatalog.types.forEach((type) => changeUnits(type.params));
+  const fetchMock = server((url) => url === "/api/v1/catalog" ? { body: customCatalog } : undefined);
+  await open();
+  editField("Measurement", "20tick");
+  editField("Fault failure rate", "250permille");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.execution.measurement).toBe("20tick");
+  expect(saved.faults[0].failureRate).toBe("250permille");
+});
+
+it("keeps navigation blocked while either the canvas or Inspector draft is invalid", async () => {
+  server();
+  await open();
+  await selectGateway();
+  const parameter = await screen.findByTestId("canvas-param-gateway-handlers");
+  fireEvent.doubleClick(parameter);
+  const canvasInput = parameter.querySelector("input")!;
+  fireEvent.change(canvasInput, { target: { value: "invalid" } });
+  const inspectorInput = within(screen.getByRole("complementary", { name: "Inspector" })).getByLabelText("Handlers");
+  fireEvent.change(inspectorInput, { target: { value: "invalid" } });
+  expect(screen.getByText(/Fix invalid values before changing/)).toBeTruthy();
+
+  fireEvent.keyDown(canvasInput, { key: "Escape" });
+  expect(screen.getByText(/Fix invalid values before changing/)).toBeTruthy();
+  expect((screen.getByRole("tab", { name: "Baseline" }) as HTMLButtonElement).disabled).toBe(true);
+
+  fireEvent.change(inspectorInput, { target: { value: "4" } });
+  expect(screen.queryByText(/Fix invalid values before changing/)).toBeNull();
+  expect((screen.getByRole("tab", { name: "Baseline" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+it.each(["Handlers", "Seed"])("blocks target switches and variant menus while %s is unparseable", async (field) => {
+  server();
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  if (field === "Handlers") await selectGateway();
+  editField(field, "invalid");
+  expect(button("Experiment").disabled).toBe(true);
+  expect(button("Add variant").disabled).toBe(true);
+  const tab = screen.getByRole("tab", { name: "No retries" });
+  fireEvent.contextMenu(tab);
+  fireEvent.keyDown(tab, { key: "F10", shiftKey: true });
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(document.querySelector(".react-flow__pane")!);
+  expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe("invalid");
+  expect(button("Save").disabled).toBe(true);
+  editField(field, field === "Handlers" ? "5" : "42");
+  fireEvent.contextMenu(tab);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+  expect(document.activeElement).toBe(screen.getByLabelText("Variant label"));
+});
+
+it("keeps variant identity when undo restores a different deleted variant before it", async () => {
+  const third = { id: "third", label: "Third", overrides: {} };
+  const fetchMock = server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
+    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [...experiment.variants, third] } } },
+  } : undefined);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await open();
+  fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "No retries" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Third" }));
+  fireEvent.click(button("Undo"));
+  expect(screen.getByRole("tab", { name: "Third" }).getAttribute("aria-selected")).toBe("true");
+  await selectGateway();
+  editHandlers("7");
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  const saved = JSON.parse(String(put[1]?.body)).experiment;
+  expect(saved.variants[1]).toEqual(experiment.variants[1]);
+  expect(saved.variants[2].overrides).toEqual({ "gateway.handlers": 7 });
+});
+
+it("keeps navigation available until invalid stored variant data is edited", async () => {
+  server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
+    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "invalid", label: "Invalid variant", overrides: { "gateway.handlers": 0 } }] } } },
+  } : undefined);
+  await open(); await selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "Invalid variant" }));
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("0");
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).readOnly).toBe(false);
+  expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(experimentSelect().disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "oops" } });
+  expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Handlers"), { target: { value: "4" } });
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
+});
+
+it.each(["ContextMenu", "F10"])("opens a tab menu with %s, supports focus navigation and restores the tab on Escape", async (key) => {
+  server(); await open();
+  const tab = screen.getByRole("tab", { name: "No retries" });
+  tab.focus(); fireEvent.keyDown(tab, { key, shiftKey: key === "F10" });
+  const duplicate = screen.getByRole("menuitem", { name: "Duplicate" });
+  expect(document.activeElement).toBe(duplicate);
+  fireEvent.keyDown(duplicate, { key: "ArrowDown" });
+  const rename = screen.getByRole("menuitem", { name: "Rename" });
+  expect(document.activeElement).toBe(rename);
+  fireEvent.click(rename);
+  expect(document.activeElement).toBe(screen.getByLabelText("Variant label"));
+  expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("no-retries");
+  tab.focus(); fireEvent.keyDown(tab, { key, shiftKey: key === "F10" });
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  expect(screen.queryByRole("menu")).toBeNull(); expect(document.activeElement).toBe(tab);
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "Model" }));
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+it("explains why the last variant cannot be deleted", async () => {
+  server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: { ...documentViews[experimentPath],
+    content: { experiment: { ...experiment, variants: [experiment.variants[0]] } } } } : undefined);
+  await open(); fireEvent.contextMenu(screen.getByRole("tab", { name: "Baseline" }));
+  const deletion = screen.getByRole<HTMLButtonElement>("menuitem", { name: "Delete" });
+  expect(deletion.disabled).toBe(true);
+  expect(document.getElementById(deletion.getAttribute("aria-describedby")!)?.textContent).toContain("last variant");
+});
+
+it("keeps menu keystrokes from deleting the selected diagram element", async () => {
+  server(); await open(); await selectGateway();
+  fireEvent.contextMenu(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Delete" });
+  expect(screen.getByTestId("rf__node-gateway")).toBeTruthy();
+  expect(button("Undo").disabled).toBe(true);
+});

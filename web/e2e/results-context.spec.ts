@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { copySmallExperiment } from "./fixtures";
+import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -8,9 +9,7 @@ test("one context row gives the diagram more height and shares time with Timelin
   const directory = resolve("../apps/server/build/e2e-workspace/results-context");
   await mkdir(directory);
   try {
-    for (const name of ["retry-storm.experiment.json", "retry-storm.model.json", "retry-storm.layout.json"]) {
-      await copyFile(resolve("../examples/retry-storm", name), resolve(directory, name));
-    }
+    await copySmallExperiment(directory, "retry-storm.experiment.json", "3ms");
     await page.goto("/");
     await page.getByLabel("Experiment", { exact: true }).selectOption("results-context/retry-storm.experiment.json");
     const row = page.getByRole("region", { name: "Results context", exact: true });
@@ -38,7 +37,7 @@ test("one context row gives the diagram more height and shares time with Timelin
     await row.getByRole("button", { name: "Time", exact: true }).click();
     const window = row.getByRole("slider", { name: "Playback window", exact: true });
     await expect(window).toHaveValue("0");
-    await row.getByLabel("Playback speed", { exact: true }).selectOption("0.25");
+    await row.getByLabel("Playback speed", { exact: true }).selectOption("4");
     await row.getByRole("button", { name: "Play run", exact: true }).click();
     await expect.poll(async () => Number(await window.inputValue())).toBeGreaterThan(0);
     await row.getByRole("button", { name: "Pause run", exact: true }).click();
@@ -57,9 +56,7 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(page.locator(".inspector").getByRole("textbox")).toHaveCount(0);
     await expect(canvas).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeInViewport({ ratio: 0.5 });
-    await window.focus();
-    await window.press("Home");
-    for (let index = 0; index < 19; index++) await window.press("ArrowRight");
+    await window.fill("19");
     await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
     const beforePlayback = await page.getByTestId("canvas-results-dependency").textContent();
     await row.getByRole("button", { name: "Play run", exact: true }).click();
