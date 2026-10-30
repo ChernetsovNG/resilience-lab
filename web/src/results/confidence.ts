@@ -64,10 +64,11 @@ export function studentTQuantile(probability: number, degreesOfFreedom: number):
 }
 
 /** Replication uncertainty only: absent spread or fewer than two observations means no interval. Bounds stay unclipped. */
-export function confidenceInterval(metric: { mean: number | null; stdDev?: number | null } | null | undefined,
-  replications: number, level: ConfidenceLevel): ConfidenceInterval | null {
+export function confidenceInterval(metric: { mean: number | null; stdDev?: number | null; count?: number | null } | null | undefined,
+  level: ConfidenceLevel): ConfidenceInterval | null {
   if (metric?.mean == null || !Number.isFinite(metric.mean) || metric.stdDev == null
-    || !Number.isFinite(metric.stdDev) || metric.stdDev < 0 || !Number.isInteger(replications) || replications < 2) return null;
-  const radius = studentTQuantile((1 + level / 100) / 2, replications - 1) * metric.stdDev / Math.sqrt(replications);
+    || !Number.isFinite(metric.stdDev) || metric.stdDev < 0 || metric.count == null
+    || !Number.isInteger(metric.count) || metric.count < 2) return null;
+  const radius = studentTQuantile((1 + level / 100) / 2, metric.count - 1) * metric.stdDev / Math.sqrt(metric.count);
   return Number.isFinite(radius) ? [metric.mean - radius, metric.mean + radius] : null;
 }

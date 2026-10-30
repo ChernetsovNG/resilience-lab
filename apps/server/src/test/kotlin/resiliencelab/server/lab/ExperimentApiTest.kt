@@ -364,7 +364,7 @@ class ExperimentApiTest {
 
     @Test
     fun `old result versions return a clear diagnostic instead of a decode failure`() {
-        listOf("0", "1", "2147483647", "missing").forEach { actual ->
+        listOf("0", "1", "9", "2147483647", "missing").forEach { actual ->
             val id = "unsupported-$actual"
             val directory = root.resolve(".results/old/$id")
             Files.createDirectories(directory)
@@ -372,16 +372,16 @@ class ExperimentApiTest {
             Files.writeString(directory.resolve("manifest.json"), content)
             val args =
                 if (actual == "missing") {
-                    """{"reason":"missing","kind":"manifest","expectedSchema":9}"""
+                    """{"reason":"missing","kind":"manifest","expectedSchema":10}"""
                 } else {
-                    """{"reason":"version","kind":"manifest","actual":$actual,"expectedSchema":9}"""
+                    """{"reason":"version","kind":"manifest","actual":$actual,"expectedSchema":10}"""
                 }
             listOf("manifest", "summary").forEach { part ->
                 val response = mockMvc.perform(get("/api/v1/runs/{id}/$part", id)).andReturn().response
                 assertThat(response.status).isEqualTo(400)
                 assertThat(JsonPath.read<String>(response.contentAsString, "$.code")).isEqualTo("RUN_VERSION_UNSUPPORTED")
                 assertThat(JsonPath.read<String>(response.contentAsString, "$.message"))
-                    .isEqualTo("Unsupported manifest schemaVersion $actual; expected 9; run again")
+                    .isEqualTo("Unsupported manifest schemaVersion $actual; expected 10; run again")
                 assertThat(Json.parseToJsonElement(response.contentAsString).jsonObject["args"])
                     .isEqualTo(Json.parseToJsonElement(args))
                 openApi.assertResponse("get", "/api/v1/runs/{id}/$part", response)

@@ -162,6 +162,7 @@ object MetricsAggregator {
         val statistic = Statistic(values.toDoubleArray())
         val interval = if (values.size >= 2) statistic.confidenceInterval(0.95) else null
         return MetricSummary(
+            count = values.size,
             mean = statistic.average,
             stdDev = if (values.size >= 2) statistic.standardDeviation else null,
             ci95Low = interval?.lowerLimit,

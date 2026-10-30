@@ -3,7 +3,7 @@ import type { MetricSummary, RunSummary } from "../api/apiTypes";
 
 type Point = RunSummary["variants"][number]["points"][number];
 export type MapMetric = "successRate" | "p95LatencyMs" | "p99LatencyMs" | "admittedAmplification" | "handlerUtilization";
-export type MapValue = Pick<MetricSummary, "mean" | "stdDev">;
+export type MapValue = Pick<MetricSummary, "mean" | "stdDev"> & Partial<Pick<MetricSummary, "count">>;
 
 /** The first axis is outermost. Positions, rather than coordinate equality, distinguish repeated values. */
 export function gridCells(grid: RunSummary["grid"], points: Point[]) {

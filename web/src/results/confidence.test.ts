@@ -25,33 +25,47 @@ describe("Student confidence intervals", () => {
   it("reproduces stored 95% bounds of the retry-storm fixture", () => {
     for (const variant of retryStorm.variants) for (const metric of Object.values(variant.replicationMetricSummary)) {
       for (const value of [metric.exact, metric.approximate]) {
-        const interval = confidenceInterval(value, retryStorm.replications, 95)!;
+        const interval = confidenceInterval({ ...value, count: retryStorm.replications }, 95)!;
         expect(interval[0]).toBeCloseTo(value.ci95Low, 6);
         expect(interval[1]).toBeCloseTo(value.ci95High, 6);
       }
     }
   });
 
+  it("reproduces 95% bounds when only two of three replications contribute", () => {
+    const metric = { count: 2, mean: 0.375, stdDev: 0.1767766952966369,
+      ci95Low: -1.213275592021838, ci95High: 1.963275592021838 };
+    const interval = confidenceInterval(metric, 95)!;
+    expect(interval[0]).toBeCloseTo(metric.ci95Low, 6);
+    expect(interval[1]).toBeCloseTo(metric.ci95High, 6);
+  });
+
+  it.each([0, 1])("omits intervals with count=%s without enough observations", count => {
+    expect(confidenceInterval({ count, mean: 0.5, stdDev: 0 }, 95)).toBeNull();
+  });
+
   it("widens with confidence and never clips bounds to the physical range", () => {
-    const metric = { mean: 0.5, stdDev: 0.2 };
-    const narrow = confidenceInterval(metric, 2, 80)!;
-    const normal = confidenceInterval(metric, 2, 95)!;
-    const wide = confidenceInterval(metric, 2, 99)!;
+    const metric = { count: 2, mean: 0.5, stdDev: 0.2 };
+    const narrow = confidenceInterval(metric, 80)!;
+    const normal = confidenceInterval(metric, 95)!;
+    const wide = confidenceInterval(metric, 99)!;
     expect(wide[0]).toBeLessThan(normal[0]);
     expect(normal[0]).toBeLessThan(narrow[0]);
     expect(wide[1]).toBeGreaterThan(normal[1]);
     expect(normal[1]).toBeGreaterThan(narrow[1]);
     expect(normal[0]).toBeLessThan(0);
     expect(normal[1]).toBeGreaterThan(1);
-    expect(confidenceInterval({ mean: 5, stdDev: 0 }, 2, 99)).toEqual([5, 5]);
+    expect(confidenceInterval({ count: 2, mean: 5, stdDev: 0 }, 99)).toEqual([5, 5]);
   });
 
   it.each([
     [null, 2], [{ mean: 0.5 }, 2], [{ mean: 0.5, stdDev: null }, 2],
     [{ mean: 0.5, stdDev: 0.2 }, 1], [{ mean: 0.5, stdDev: 0.2 }, 0],
     [{ mean: null, stdDev: 0.2 }, 2], [{ mean: NaN, stdDev: 0.2 }, 2],
+    [{ mean: 0.5, stdDev: 0.2 }, -1], [{ mean: 0.5, stdDev: 0.2 }, 2.5],
+    [{ mean: 0.5, stdDev: 0.2 }, NaN], [{ mean: 0.5, stdDev: 0.2 }, Infinity],
     [{ mean: 0.5, stdDev: Infinity }, 2], [{ mean: 0.5, stdDev: -1 }, 2],
-  ])("omits uncertainty without valid mean, spread and independent replications (%j, %s)", (metric, n) => {
-    expect(confidenceInterval(metric, n, 95)).toBeNull();
+  ])("omits uncertainty without valid mean, spread and observation count (%j, %s)", (metric, n) => {
+    expect(confidenceInterval(metric === null ? null : { ...metric, count: n }, 95)).toBeNull();
   });
 });

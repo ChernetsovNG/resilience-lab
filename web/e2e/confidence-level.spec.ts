@@ -18,6 +18,7 @@ test("confidence updates retry-storm success intervals without another run and s
   const baseline = summary.variants.find(variant => variant.id === "baseline")!;
   const metric = baseline.points[0].aggregate.successRate!;
   expect(baseline.replications).toBe(10);
+  expect(metric.count).toBe(10);
   const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
   const success = page.getByRole("table", { name: "Answer", exact: true })
     .getByRole("row", { name: /Success rate/ }).locator("td").first();
@@ -29,7 +30,7 @@ test("confidence updates retry-storm success intervals without another run and s
   await page.getByLabel("Confidence level", { exact: true }).selectOption("99");
   await page.getByRole("button", { name: "View", exact: true }).click();
   // Independent reference: t(0.995, 9), not the web calculator under test.
-  const radius = 3.2498355415921254 * metric.stdDev! / Math.sqrt(baseline.replications);
+  const radius = 3.2498355415921254 * metric.stdDev! / Math.sqrt(metric.count);
   await expect(interval).toContainText(`99% CI ${percent.format(metric.mean - radius)}–${percent.format(metric.mean + radius)}`);
   await expect(interval).not.toHaveText(before!);
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();

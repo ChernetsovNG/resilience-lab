@@ -35,7 +35,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange }: Pr
   const serviceMetric = metric === "admittedAmplification" || metric === "handlerUtilization";
   const cells = gridCells(grid, variant.points).map((cell) => {
     const value = cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service);
-    return { ...cell, value, interval: confidenceInterval(value, variant.replications, level) };
+    return { ...cell, value, interval: confidenceInterval(value, level) };
   });
   const values = cells.flatMap((cell) => cell.value === null ? [] : [cell.value.mean]);
   const low = values.length === 0 ? 0 : values.reduce((min, value) => Math.min(min, value));

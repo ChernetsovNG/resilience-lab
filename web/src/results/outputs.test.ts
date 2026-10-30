@@ -135,8 +135,8 @@ describe("catalog output contract", () => {
 
   it("uses the supplied replication mean and preserves confidence bounds outside the physical range", () => {
     const output = outputsOf(catalog, "call").find(output => output.id === "timeoutRate")!;
-    expect(outputValue(output, { timeoutRate: { mean: 0.25, stdDev: 0.2, ci95Low: -0.1, ci95High: 1.2 }, totals: { timeouts: 0, sentAttempts: 100 } }, false))
-      .toEqual({ value: 0.25, source: "replications", stdDev: 0.2, ci95Low: -0.1, ci95High: 1.2 });
+    expect(outputValue(output, { timeoutRate: { count: 2, mean: 0.25, stdDev: 0.2, ci95Low: -0.1, ci95High: 1.2 }, totals: { timeouts: 0, sentAttempts: 100 } }, false))
+      .toEqual({ value: 0.25, source: "replications", count: 2, stdDev: 0.2, ci95Low: -0.1, ci95High: 1.2 });
     expect(outputValue(output, { timeouts: 0, sentAttempts: 100 }, true)).toEqual({ value: 0, source: "window" });
   });
 
