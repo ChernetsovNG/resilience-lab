@@ -53,9 +53,11 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: process.platform === "win32"
-        ? "gradlew.bat :apps:server:bootRunE2e"
-        : "./gradlew :apps:server:bootRunE2e",
+      command: process.env.E2E_SERVER_JAR
+        ? "node web/scripts/e2e-server.mjs"
+        : process.platform === "win32"
+          ? "gradlew.bat :apps:server:bootRunE2e"
+          : "./gradlew :apps:server:bootRunE2e",
       cwd: "..",
       name: `backend (E2E_BACKEND_PORT=${backendPort})`,
       env: { E2E_BACKEND_PORT: String(backendPort) },
