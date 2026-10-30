@@ -1,16 +1,12 @@
 package resiliencelab.core.engine.ksl
 
-import ksl.modeling.entity.Allocation
-import ksl.modeling.entity.AllocationListenerIfc
 import ksl.modeling.entity.ProcessModel
 import ksl.modeling.entity.RequestQ
 import ksl.modeling.entity.ResourceWithQ
-import ksl.modeling.queue.Queue
-import ksl.modeling.queue.QueueListenerIfc
 import ksl.simulation.ModelElement
-import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.ServiceStep
 
 /**
  * Owns a service's bounded FIFO admission path, blocking handler pool, and its random sources.
@@ -21,7 +17,7 @@ internal class ServiceRuntime(
     parent: ModelElement,
     private val node: ServiceNode,
     streams: StreamSource,
-    val outgoingCall: CallEdge?,
+    val scenario: List<ServiceStep>,
     onAdmitted: (ProcessModel.Entity) -> Unit,
     onQueueLengthChanged: (Int) -> Unit,
     onBusyHandlersChanged: (Int) -> Unit,
@@ -30,54 +26,20 @@ internal class ServiceRuntime(
     private val durationSampler =
         DurationSamplerFactory.create(node.processing, streams.stream(node.pathSegments, StreamRole.PROCESSING))
     private val outcomeStream = streams.stream(node.pathSegments, StreamRole.OUTCOME)
-    private val networkSampler =
-        outgoingCall?.let { DurationSamplerFactory.create(it.network, streams.stream(it.pathSegments, StreamRole.NETWORK)) }
-    private val jitterStream = outgoingCall?.let { streams.stream(it.pathSegments, StreamRole.JITTER) }
     private var activeFault: FaultSpan? = null
 
-    val resource: ResourceWithQ
-    val queue: RequestQ =
-        BoundedRequestQ(
+    val slots =
+        SlotPool(
             parent = parent,
-            name = "$serviceId:queue",
-            waitingCapacity = node.queueCapacity,
-            resourceProvider = { resource },
+            name = serviceId,
+            initialCapacity = node.handlers,
+            queueCapacity = node.queueCapacity,
+            onAdmitted = onAdmitted,
+            onQueueLengthChanged = onQueueLengthChanged,
+            onBusyChanged = onBusyHandlersChanged,
         )
-
-    init {
-        resource =
-            FifoResourceWithQ(
-                parent = parent,
-                name = serviceId,
-                capacity = node.handlers,
-                queue = queue,
-            )
-        queue.addQueueListener(
-            object : QueueListenerIfc<ProcessModel.Entity.Request> {
-                override fun update(
-                    status: Queue.Status,
-                    queue: Queue<ProcessModel.Entity.Request>,
-                    qObject: ProcessModel.Entity.Request?,
-                ) {
-                    onQueueLengthChanged(queue.size)
-                    if (status == Queue.Status.ENQUEUED && qObject != null) {
-                        onAdmitted(qObject.entity)
-                    }
-                }
-            },
-        )
-        resource.addAllocationListener(
-            object : AllocationListenerIfc {
-                override fun allocate(allocation: Allocation) {
-                    onBusyHandlersChanged(resource.numBusy)
-                }
-
-                override fun deallocate(allocation: Allocation) {
-                    onBusyHandlersChanged(resource.numBusy)
-                }
-            },
-        )
-    }
+    val resource: ResourceWithQ get() = slots.resource
+    val queue: RequestQ get() = slots.queue
 
     fun resetFaults() {
         activeFault = null
@@ -97,8 +59,4 @@ internal class ServiceRuntime(
         val failureProbability = activeFault?.failureProbability ?: node.failureProbability
         return outcomeStream.randU01() < failureProbability
     }
-
-    fun nextNetworkDelayMs(): Double = requireNotNull(networkSampler).next()
-
-    fun nextJitter(): Double = requireNotNull(jitterStream).randU01()
 }

@@ -1,6 +1,7 @@
 package resiliencelab.core.engine.ksl
 
 import ksl.modeling.entity.KSLProcess
+import ksl.modeling.entity.KSLProcessBuilder
 import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Executive
 import ksl.simulation.KSLEvent
@@ -8,7 +9,9 @@ import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.ServiceStep
 import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
@@ -20,6 +23,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Arrivals stop at measurement end, but a replication finishes only after every original client outcome is known
  * and all accepted work, including orphaned work, has drained.
+ * [selectTarget] resolves the target service for each edge attempt (numbered from one for each call step);
+ * the default uses the edge target. Network and retry streams remain keyed by the original edge path.
  * A worker interruption stops the replication at an event boundary and raises [CancellationException] after
  * terminating suspended processes; cancelled work is never returned as a complete replication.
  */
@@ -34,13 +39,8 @@ class ReliabilityModel(
         List<resiliencelab.core.results.ConnectionWindow>,
     ) -> Unit = { _, _, _ -> },
     private val onOriginalCompletion: ((Double, Boolean) -> Unit)? = null,
+    private val selectTarget: (CallEdge, Int) -> String = { call, _ -> call.to },
 ) : ProcessModel(model) {
-    init {
-        require(graph.topologicalServices.all { graph.scenario(it) == graph.defaultScenario(it) }) {
-            "The stage-1 engine adapter supports only default process/call scenarios"
-        }
-    }
-
     private val measurementStartMs = graph.run.warmupMs
     private val measurementEndMs = graph.run.warmupMs + graph.run.measurementMs
 
@@ -62,7 +62,7 @@ class ReliabilityModel(
                     parent = this,
                     node = service,
                     streams = streams,
-                    outgoingCall = graph.outgoingCalls(service.path).singleOrNull(),
+                    scenario = graph.scenario(service),
                     onAdmitted = ::recordAdmission,
                     onQueueLengthChanged = { queueLength ->
                         metrics.recordQueueLength(service.path, this@ReliabilityModel.time, queueLength)
@@ -72,6 +72,8 @@ class ReliabilityModel(
                     },
                 )
             }.associateBy { it.serviceId }
+
+    private val callRuntimes = graph.topologicalCalls.associate { it.path to CallRuntime(it, streams) }
 
     var activeInvocations: Int = 0
         private set
@@ -234,7 +236,7 @@ class ReliabilityModel(
         originalRequest: Boolean,
         measurementCohort: Boolean,
         originalDeadlineMs: Double,
-        incomingNetwork: ServiceRuntime?,
+        incomingNetwork: CallRuntime?,
     ): ServiceInvocation {
         val runtime = requireNotNull(runtimes[serviceId]) { "Unknown service '$serviceId'" }
         val invocation =
@@ -307,7 +309,7 @@ class ReliabilityModel(
         internal val measurementCohort: Boolean,
         private val arrivalTimeMs: Double,
         private val originalDeadlineMs: Double,
-        private val incomingNetwork: ServiceRuntime?,
+        private val incomingNetwork: CallRuntime?,
     ) : Entity() {
         private var currentOutcome: AttemptOutcome = AttemptOutcome.PENDING
         private var originalOutcome: AttemptOutcome? = null
@@ -380,6 +382,86 @@ class ReliabilityModel(
             if (measurementCohort) onOriginalCompletion?.invoke(time - arrivalTimeMs, succeeded)
         }
 
+        /** Runs ordered steps in this process while the caller keeps its handler allocation. */
+        private suspend fun KSLProcessBuilder.executeScenario(): AttemptOutcome {
+            for (step in runtime.scenario) {
+                val outcome =
+                    when (step) {
+                        ServiceStep.Process -> {
+                            val durationMs = runtime.nextDurationMs()
+                            val localFailure = runtime.nextLocalFailure()
+                            delay(durationMs)
+                            if (localFailure) {
+                                metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
+                                AttemptOutcome.LOCAL_FAILURE
+                            } else {
+                                AttemptOutcome.SUCCEEDED
+                            }
+                        }
+                        is ServiceStep.Call -> executeCall(callRuntimes.getValue(step.edge))
+                    }
+                if (outcome != AttemptOutcome.SUCCEEDED) return outcome
+            }
+            return AttemptOutcome.SUCCEEDED
+        }
+
+        private suspend fun KSLProcessBuilder.executeCall(callRuntime: CallRuntime): AttemptOutcome {
+            val call = callRuntime.edge
+            var attemptNumber = 1
+            while (true) {
+                if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
+                if (attemptNumber > 1) {
+                    metrics.recordRetry(runtime.serviceId, measurementCohort)
+                }
+                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber)
+                callAttempt = attempt
+                blockUntilCompleted(attempt.child.work)
+                if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
+                if (attempt.status == AttemptOutcome.SUCCEEDED) return AttemptOutcome.SUCCEEDED
+                if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
+                if (attemptNumber == call.attempts) return attempt.status
+                val backoffMs =
+                    RetryPolicyEvaluator.backoffMs(
+                        backoff = call.backoff,
+                        failedAttemptNumber = attemptNumber,
+                        jitter = { callRuntime.nextJitter() },
+                    )
+                metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_STARTED, measurementCohort)
+                try {
+                    delay(minOf(backoffMs, originalDeadlineMs - time))
+                } finally {
+                    metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_COMPLETED, measurementCohort)
+                }
+                attemptNumber++
+            }
+        }
+
+        /** Starts one attempt against the selected service; routing is resolved anew before each retry. */
+        private fun startAttempt(
+            callRuntime: CallRuntime,
+            target: String,
+            attemptNumber: Int,
+        ): CallAttempt {
+            val call = callRuntime.edge
+            val child =
+                createInvocation(
+                    serviceId = target,
+                    timeUntilActivation = 0.0,
+                    originalRequest = false,
+                    measurementCohort = measurementCohort,
+                    originalDeadlineMs = originalDeadlineMs,
+                    incomingNetwork = callRuntime,
+                )
+            return createCallAttempt(
+                caller = this,
+                child = child,
+                callingServiceId = runtime.serviceId,
+                connectionId = call.path,
+                retry = attemptNumber > 1,
+                timeoutMs = minOf(call.timeoutMs, originalDeadlineMs - time),
+            )
+        }
+
         internal val work: KSLProcess =
             process("service:${runtime.serviceId}") {
                 try {
@@ -394,81 +476,10 @@ class ReliabilityModel(
                         metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
                     }
                     try {
-                        val allocation = seize(runtime.resource)
+                        val acquisition = with(runtime.slots) { acquire() }
+                        val allocation = acquisition.allocation ?: throw QueueFullException(runtime.serviceId)
                         try {
-                            val durationMs = runtime.nextDurationMs()
-                            val localFailure = runtime.nextLocalFailure()
-                            delay(durationMs)
-                            if (localFailure) {
-                                currentOutcome = AttemptOutcome.LOCAL_FAILURE
-                                metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
-                            } else {
-                                val call = runtime.outgoingCall
-                                if (call == null) {
-                                    currentOutcome = AttemptOutcome.SUCCEEDED
-                                } else if (time >= originalDeadlineMs) {
-                                    currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
-                                } else {
-                                    var attemptNumber = 1
-                                    while (true) {
-                                        if (time >= originalDeadlineMs) {
-                                            currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
-                                            break
-                                        }
-                                        if (attemptNumber > 1) {
-                                            metrics.recordRetry(runtime.serviceId, measurementCohort)
-                                        }
-                                        val child =
-                                            createInvocation(
-                                                serviceId = call.to,
-                                                timeUntilActivation = 0.0,
-                                                originalRequest = false,
-                                                measurementCohort = measurementCohort,
-                                                originalDeadlineMs = originalDeadlineMs,
-                                                incomingNetwork = runtime,
-                                            )
-                                        val attempt =
-                                            createCallAttempt(
-                                                caller = this@ServiceInvocation,
-                                                child = child,
-                                                callingServiceId = runtime.serviceId,
-                                                connectionId = call.path,
-                                                retry = attemptNumber > 1,
-                                                timeoutMs = minOf(call.timeoutMs, originalDeadlineMs - time),
-                                            )
-                                        callAttempt = attempt
-                                        blockUntilCompleted(child.work)
-                                        if (attempt.status == AttemptOutcome.PENDING) {
-                                            attempt.onChildCompleted()
-                                        }
-                                        if (attempt.status == AttemptOutcome.SUCCEEDED) {
-                                            currentOutcome = AttemptOutcome.SUCCEEDED
-                                            break
-                                        }
-                                        if (time >= originalDeadlineMs) {
-                                            currentOutcome = AttemptOutcome.DEADLINE_EXCEEDED
-                                            break
-                                        }
-                                        if (attemptNumber == call.attempts) {
-                                            currentOutcome = attempt.status
-                                            break
-                                        }
-                                        val backoffMs =
-                                            RetryPolicyEvaluator.backoffMs(
-                                                backoff = call.backoff,
-                                                failedAttemptNumber = attemptNumber,
-                                                jitter = { runtime.nextJitter() },
-                                            )
-                                        metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_STARTED, measurementCohort)
-                                        try {
-                                            delay(minOf(backoffMs, originalDeadlineMs - time))
-                                        } finally {
-                                            metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_COMPLETED, measurementCohort)
-                                        }
-                                        attemptNumber++
-                                    }
-                                }
-                            }
+                            currentOutcome = executeScenario()
                         } finally {
                             release(allocation)
                             if (currentOutcome != AttemptOutcome.PENDING) {
