@@ -28,11 +28,11 @@ internal class ServiceRuntime(
 ) {
     val serviceId: String = node.path
     private val durationSampler =
-        DurationSamplerFactory.create(node.processing, streams.stream(node.path, StreamRole.PROCESSING))
-    private val outcomeStream = streams.stream(node.path, StreamRole.OUTCOME)
+        DurationSamplerFactory.create(node.processing, streams.stream(node.pathSegments, StreamRole.PROCESSING))
+    private val outcomeStream = streams.stream(node.pathSegments, StreamRole.OUTCOME)
     private val networkSampler =
-        outgoingCall?.let { DurationSamplerFactory.create(it.network, streams.stream(it.path, StreamRole.NETWORK)) }
-    private val jitterStream = outgoingCall?.let { streams.stream(it.path, StreamRole.JITTER) }
+        outgoingCall?.let { DurationSamplerFactory.create(it.network, streams.stream(it.pathSegments, StreamRole.NETWORK)) }
+    private val jitterStream = outgoingCall?.let { streams.stream(it.pathSegments, StreamRole.JITTER) }
     private var activeFault: FaultSpan? = null
 
     val resource: ResourceWithQ

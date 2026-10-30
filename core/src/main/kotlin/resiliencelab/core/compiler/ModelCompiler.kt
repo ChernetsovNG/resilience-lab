@@ -17,11 +17,11 @@ import resiliencelab.core.document.ModelFile
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
@@ -41,7 +41,7 @@ data class CompiledVariant(
 data class CompiledPoint(
     val id: String,
     val coordinates: Map<String, JsonElement>,
-    val chain: ChainIr,
+    val graph: GraphIr,
     /** Source locations of explicit overrides, keyed by element.parameter. */
     val parameterOrigins: Map<String, Origin> = emptyMap(),
 )
@@ -62,9 +62,9 @@ data class CompileResult(
 )
 
 /**
- * Compiles a model and an experiment into one chain IR per variant and grid point (ADR 0002; stage 1 design §3–4):
- * variant overrides and then grid values are applied by path, parameters are read against the catalog and the stage 1 topology —
- * one client, one request to the entry service and a linear chain of calls — is checked.
+ * Compiles a model and an experiment into one graph IR per variant and grid point (ADR 0002; stage 1 design §3–4):
+ * variant overrides and then grid values are applied by path, parameters are read against the catalog and the call graph topology —
+ * one client, one request, reachable services and no cycles — is checked.
  */
 class ModelCompiler(
     private val catalog: Catalog = Stage1Catalog.catalog,
@@ -91,13 +91,18 @@ class ModelCompiler(
                     points.mapIndexedNotNull { pointIndex, point ->
                         val patched = applyOverrides(model, overrides + point, variant.id, experimentDocument, sink)
                         val parts =
-                            buildChain(patched.model, modelDocument, patched.origins, sink, structureOk)
+                            buildGraph(patched.model, modelDocument, patched.origins, sink, structureOk)
                                 ?: return@mapIndexedNotNull null
                         run?.let {
                             CompiledPoint(
                                 "p$pointIndex",
                                 point.associate { it.path to it.value },
-                                ChainIr(parts.client, parts.entry, parts.services, parts.calls, faults, it),
+                                GraphIr(parts.client, parts.entry, parts.services, parts.calls, faults, it).let { graph ->
+                                    graph.copy(
+                                        services = graph.topologicalServices.map { node -> node.copy(scenario = graph.scenario(node)) },
+                                        calls = graph.topologicalCalls,
+                                    )
+                                },
                                 patched.origins
                                     .flatMap { (path, origins) ->
                                         origins.pointers.map { (parameter, pointer) ->
@@ -159,7 +164,7 @@ class ModelCompiler(
         }
     }
 
-    private class ChainParts(
+    private class GraphParts(
         val client: ClientNode,
         val entry: String,
         val services: List<ServiceNode>,
@@ -367,13 +372,13 @@ class ModelCompiler(
         return JsonObject(params + (name to setIn(current, descriptor.fields, path.drop(1), value)))
     }
 
-    private fun buildChain(
+    private fun buildGraph(
         model: ModelFile,
         document: String,
         origins: Map<String, OverrideOrigins>,
         sink: Diagnostics,
         structureOk: Boolean,
-    ): ChainParts? {
+    ): GraphParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
         val services = model.blocks.filterValues { it.type == "service" }.toSortedMap()
@@ -408,61 +413,41 @@ class ModelCompiler(
             )
         }
         if (requests.size != 1 || requests.single().value.from !in clients) {
-            sink.error(CoreMessage.CHAIN_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
+            sink.error(CoreMessage.GRAPH_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
         }
         val entry = requests.singleOrNull()?.value?.to
-        checkChain(entry?.takeIf { it in services }, services.keys, calls.map { it.value }, document, sink)
+        checkGraph(entry?.takeIf { it in services }, services.keys, calls, document, sink)
         if (!structureOk || sink.errorCount() > before) return null
-        return ChainParts(clientNodes.single()!!, entry!!, serviceNodes.map { it!! }, callEdges.map { it!! })
+        return GraphParts(clientNodes.single()!!, entry!!, serviceNodes.map { it!! }, callEdges.map { it!! })
     }
 
-    private fun checkChain(
+    private fun checkGraph(
         entry: String?,
         services: Set<String>,
-        calls: List<ConnectionInstance>,
+        calls: List<IndexedValue<ConnectionInstance>>,
         document: String,
         sink: Diagnostics,
     ) {
-        val outgoing = calls.filter { it.from in services }.groupBy { it.from }
-        val incoming = calls.filter { it.to in services }.groupBy { it.to }
-        val validOutgoing = calls.filter { it.from in services && it.to in services }.groupBy { it.from }
+        val outgoing = calls.filter { it.value.from in services }.groupBy { it.value.from }
+        val validOutgoing = calls.filter { it.value.from in services && it.value.to in services }.groupBy { it.value.from }
         outgoing.filterValues { it.size > 1 }.keys.sorted().forEach {
             sink.error(
-                CoreMessage.CHAIN_OUTGOING,
-                "Service '$it' has more than one outgoing call",
+                CoreMessage.SCENARIO_REQUIRED,
+                "Service '$it' needs a scenario for multiple outgoing calls",
                 document,
                 JsonPointer.of("blocks", it),
                 it,
-                args =
-                    mapOf(
-                        "service" to JsonPrimitive(it),
-                    ),
+                args = mapOf("service" to JsonPrimitive(it)),
             )
         }
-        incoming.filterValues { it.size > 1 }.keys.sorted().forEach {
+        calls.filter { it.value.to == entry }.forEach { (index, call) ->
             sink.error(
-                CoreMessage.CHAIN_INCOMING,
-                "Service '$it' has more than one incoming call",
-                document,
-                JsonPointer.of("blocks", it),
-                it,
-                args =
-                    mapOf(
-                        "service" to JsonPrimitive(it),
-                    ),
-            )
-        }
-        if (entry != null && entry in incoming) {
-            sink.error(
-                CoreMessage.CHAIN_ENTRY,
+                CoreMessage.GRAPH_ENTRY,
                 "Entry service '$entry' must not receive calls",
                 document,
-                JsonPointer.of("blocks", entry),
-                entry,
-                args =
-                    mapOf(
-                        "service" to JsonPrimitive(entry),
-                    ),
+                JsonPointer.of("connections", index, "to"),
+                call.id,
+                args = mapOf("service" to JsonPrimitive(entry)),
             )
         }
         val visited = mutableSetOf<String>()
@@ -470,7 +455,7 @@ class ModelCompiler(
         services.sorted().forEach { start ->
             if (!visited.add(start)) return@forEach
             active.add(start)
-            val pending = ArrayDeque<Pair<String, Iterator<ConnectionInstance>>>()
+            val pending = ArrayDeque<Pair<String, Iterator<IndexedValue<ConnectionInstance>>>>()
             pending.addLast(start to validOutgoing[start].orEmpty().iterator())
             while (pending.isNotEmpty()) {
                 val (current, edges) = pending.last()
@@ -479,18 +464,26 @@ class ModelCompiler(
                     pending.removeLast()
                     continue
                 }
-                val next = edges.next().to
+                val (index, edge) = edges.next()
+                val next = edge.to
                 if (next in active) {
+                    val members = pending.map { it.first }.dropWhile { it != next }
+                    val cycleEdges =
+                        members.zipWithNext().map { (from, to) ->
+                            validOutgoing
+                                .getValue(from)
+                                .first { it.value.to == to }
+                                .value.id
+                        } + edge.id
+                    val cycle = (members + next).joinToString(" -> ")
+                    val connections = cycleEdges.joinToString(", ")
                     sink.error(
-                        CoreMessage.CHAIN_CYCLE,
-                        "Calls form a cycle through '$next'",
+                        CoreMessage.GRAPH_CYCLE,
+                        "Calls form a cycle: $cycle (connections: $connections)",
                         document,
-                        JsonPointer.of("blocks", next),
-                        next,
-                        args =
-                            mapOf(
-                                "service" to JsonPrimitive(next),
-                            ),
+                        JsonPointer.of("connections", index),
+                        edge.id,
+                        args = mapOf("cycle" to JsonPrimitive(cycle), "connections" to JsonPrimitive(connections)),
                     )
                 } else if (visited.add(next)) {
                     active.add(next)
@@ -504,11 +497,11 @@ class ModelCompiler(
         pending.addLast(entry)
         while (pending.isNotEmpty()) {
             val current = pending.removeFirst()
-            if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.to) }
+            if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.value.to) }
         }
         (services - reachable).sorted().forEach {
             sink.error(
-                CoreMessage.CHAIN_UNREACHABLE,
+                CoreMessage.GRAPH_UNREACHABLE,
                 "Service '$it' is not reachable from the client",
                 document,
                 JsonPointer.of("blocks", it),

@@ -9,9 +9,9 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.assertLatencies
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.FaultSpan
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.nanoseconds
@@ -296,7 +296,7 @@ class DegradationRunoutTest {
         processingMs: Double,
         arrivalRate: Double,
         requestDeadlineMs: Double = 1_000.0,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             services =
@@ -319,7 +319,7 @@ class DegradationRunoutTest {
     }
 
     private fun simulateManual(
-        chain: ChainIr,
+        chain: GraphIr,
         requests: List<InvocationSpec>,
         execution: RunSettings,
         replicationLengthMs: Double,
@@ -334,7 +334,7 @@ class DegradationRunoutTest {
     }
 
     private fun simulateOpen(
-        chain: ChainIr,
+        chain: GraphIr,
         execution: RunSettings,
         observationTimesMs: List<Double> = emptyList(),
         manualInvocations: List<InvocationSpec> = emptyList(),

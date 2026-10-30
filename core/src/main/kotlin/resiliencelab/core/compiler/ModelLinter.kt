@@ -5,14 +5,14 @@ import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.ServiceNode
 import java.math.BigInteger
 import kotlin.math.pow
 
 /**
- * Advisory checks on valid, compiled linear chains (stage-1 design §3.4).
+ * Advisory checks on valid, compiled paths from the client (stage-1 design §3.4).
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
@@ -36,7 +36,7 @@ class ModelLinter(
             .flatMap { variant ->
                 variant.points
                     .flatMap { point ->
-                        lintChain(point.chain).map { diagnostic ->
+                        lintGraph(point.graph).map { diagnostic ->
                             val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
                             val origin = point.parameterOrigins["${diagnostic.path}.$parameter"]
                             val located =
@@ -97,18 +97,23 @@ class ModelLinter(
                 }
             }
 
-    private fun lintChain(chain: ChainIr): List<Diagnostic> {
-        val services = chain.services.associateBy { it.path }
-        val outgoing = chain.calls.associateBy { it.from }
-        val ordered = generateSequence(chain.entry) { outgoing[it]?.to }.map { services.getValue(it) }.toList()
-        return buildList {
-            chain.calls.forEach { call ->
-                timeoutBudget(call, services.getValue(call.to), outgoing[call.to])?.let(::add)
-            }
-            retryAmplification(chain, outgoing[chain.entry])?.let(::add)
-            addAll(handlerDemand(chain, ordered, outgoing))
-            deadlineBudget(chain)?.let(::add)
-        }
+    private fun lintGraph(graph: GraphIr): List<Diagnostic> {
+        val services = graph.services.associateBy { it.path }
+        return graph
+            .callPaths()
+            .flatMap { calls ->
+                val outgoing = calls.associateBy { it.from }
+                val ordered = (listOf(graph.entry) + calls.map { it.to }).map { services.getValue(it) }
+                buildList {
+                    calls.forEach { call ->
+                        timeoutBudget(call, services.getValue(call.to), outgoing[call.to])?.let(::add)
+                    }
+                    retryAmplification(calls, calls.firstOrNull())?.let(::add)
+                    addAll(handlerDemand(graph, ordered, outgoing))
+                    deadlineBudget(graph, calls.firstOrNull())?.let(::add)
+                }
+            }.distinct()
+            .toList()
     }
 
     /**
@@ -143,10 +148,10 @@ class ModelLinter(
      * Products beyond JavaScript's 53-bit exact integer range travel as digit strings.
      */
     private fun retryAmplification(
-        chain: ChainIr,
+        calls: List<CallEdge>,
         firstCall: CallEdge?,
     ): Diagnostic? {
-        val product = chain.calls.fold(BigInteger.ONE) { total, call -> total * BigInteger.valueOf(call.attempts.toLong()) }
+        val product = calls.fold(BigInteger.ONE) { total, call -> total * BigInteger.valueOf(call.attempts.toLong()) }
         return if (product > BigInteger.valueOf(retryAmplificationThreshold.toLong()) && firstCall != null) {
             val amplification = if (product.bitLength() <= 53) JsonPrimitive(product) else JsonPrimitive(product.toString())
             warning(
@@ -169,7 +174,7 @@ class ModelLinter(
      * Compare handlers with client arrivalRatePerMs × W; this is the offered-load estimate before timeout truncation.
      */
     private fun handlerDemand(
-        chain: ChainIr,
+        graph: GraphIr,
         ordered: List<ServiceNode>,
         outgoing: Map<String, CallEdge>,
     ): List<Diagnostic> {
@@ -177,20 +182,20 @@ class ModelLinter(
         return buildList {
             ordered.asReversed().forEach { service ->
                 holdingMs += service.processing.meanMs + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
-                val demand = chain.client.arrivalRatePerMs * holdingMs
+                val demand = graph.client.arrivalRatePerMs * holdingMs
                 if (service.handlers < demand) {
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
                             "Handlers ${service.handlers} are below λ·W = ${number(demand)} " +
-                                "(λ = ${number(chain.client.arrivalRatePerMs * 1_000.0)} requests/s, W = ${number(holdingMs)} ms)",
+                                "(λ = ${number(graph.client.arrivalRatePerMs * 1_000.0)} requests/s, W = ${number(holdingMs)} ms)",
                             service.origin,
                             service.path,
                             "/params/handlers",
                             mapOf(
                                 "handlers" to JsonPrimitive(service.handlers),
                                 "demand" to messageNumber(demand),
-                                "ratePerSecond" to messageNumber(chain.client.arrivalRatePerMs * 1_000.0),
+                                "ratePerSecond" to messageNumber(graph.client.arrivalRatePerMs * 1_000.0),
                                 "holdingMs" to messageNumber(holdingMs),
                             ),
                         ),
@@ -205,18 +210,20 @@ class ModelLinter(
      * The outgoing timeout already covers its network and nested calls; their budgets are not added again.
      * An entry without an outgoing call needs only its own processing. The client's request edge adds no budget.
      */
-    private fun deadlineBudget(chain: ChainIr): Diagnostic? {
-        val entry = chain.services.first { it.path == chain.entry }
-        val call = chain.calls.firstOrNull { it.from == chain.entry }
+    private fun deadlineBudget(
+        graph: GraphIr,
+        call: CallEdge?,
+    ): Diagnostic? {
+        val entry = graph.services.first { it.path == graph.entry }
         val required = entry.processing.meanMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
-        return if (chain.client.deadlineMs < required) {
+        return if (graph.client.deadlineMs < required) {
             warning(
                 CoreMessage.LINT_DEADLINE_BUDGET,
-                "Deadline ${number(chain.client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
-                chain.client.origin,
-                chain.client.path,
+                "Deadline ${number(graph.client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
+                graph.client.origin,
+                graph.client.path,
                 "/params/deadline",
-                mapOf("deadlineMs" to messageNumber(chain.client.deadlineMs), "requiredMs" to messageNumber(required)),
+                mapOf("deadlineMs" to messageNumber(graph.client.deadlineMs), "requiredMs" to messageNumber(required)),
             )
         } else {
             null

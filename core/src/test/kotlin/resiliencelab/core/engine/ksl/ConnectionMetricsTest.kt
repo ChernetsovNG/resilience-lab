@@ -4,7 +4,7 @@ import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.results.ConnectionWindow
 import kotlin.test.Test
 
@@ -176,7 +176,7 @@ class ConnectionMetricsTest {
         timeoutMs: Double = 100.0,
         attempts: Int = 1,
         backoffMs: Double = 0.0,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             services =
@@ -198,7 +198,7 @@ class ConnectionMetricsTest {
     }
 
     private fun simulate(
-        chain: ChainIr,
+        chain: GraphIr,
         arrivals: List<Double> = listOf(0.0),
     ): Rig {
         val model = Model("ConnectionMetricsTest", autoCSVReports = false)

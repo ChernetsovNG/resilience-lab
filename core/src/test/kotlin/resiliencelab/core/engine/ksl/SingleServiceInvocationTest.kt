@@ -8,7 +8,7 @@ import org.assertj.core.data.Offset.offset
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.assertLatencies
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
@@ -182,7 +182,7 @@ class SingleServiceInvocationTest {
     }
 
     private fun simulate(
-        chain: ChainIr,
+        chain: GraphIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
     ): SimulationRig {
@@ -198,7 +198,7 @@ class SingleServiceInvocationTest {
     private fun singleServiceChain(
         queueCapacity: Int = 2,
         failureProbability: Double = 0.0,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             services =

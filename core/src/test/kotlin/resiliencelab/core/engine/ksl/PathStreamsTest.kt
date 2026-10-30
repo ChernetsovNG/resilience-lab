@@ -66,4 +66,25 @@ class PathStreamsTest {
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessageContaining("absent")
     }
+
+    @Test
+    fun `graph sources retain explicit instance path segments`() {
+        val original = TestChains.simple()
+        val graph =
+            original.copy(
+                entry = "entry#2",
+                calls = original.calls.map { it.copy(from = "entry#2") },
+                services =
+                    original.services.map {
+                        if (it.path == "entry") it.copy(pathSegments = listOf("entry", "#2")) else it
+                    },
+            )
+        val keys = PathStreams.keys(graph, 0)
+        assertThat(keys.filter { it.path == listOf("entry", "#2") }.map { it.role })
+            .containsExactly("processing", "outcome")
+        assertThat(keys.filter { it.path == listOf("backend") })
+            .containsExactlyElementsOf(PathStreams.keys(original, 0).filter { it.path == listOf("backend") })
+        val model = ksl.simulation.Model("SegmentedPathTest", autoCSVReports = false)
+        assertThat(TestChains.reliabilityModel(model, graph).runReplication().originalArrivals).isPositive()
+    }
 }

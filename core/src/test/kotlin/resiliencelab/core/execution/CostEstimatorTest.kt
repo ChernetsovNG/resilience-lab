@@ -9,12 +9,12 @@ import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.TestChains
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.ServiceNode
 import kotlin.test.Test
 
 class CostEstimatorTest {
-    private fun experiment(chain: ChainIr) =
+    private fun experiment(chain: GraphIr) =
         CompiledExperiment(
             variants = listOf(CompiledVariant("baseline", "Baseline", listOf(CompiledPoint("p0", emptyMap(), chain)))),
             run = chain.run,
@@ -124,5 +124,23 @@ class CostEstimatorTest {
             assertThat(sixteen.warnings.map { it.code }).doesNotContain("ESTIMATE_WORKER_EXTRAPOLATION")
             assertThat(sixteen.estimatedSeconds).isGreaterThanOrEqualTo(eight.estimatedSeconds)
         }
+    }
+
+    @Test
+    fun `renaming a chain across alphabetical order leaves its estimate unchanged`() {
+        val base = TestChains.simple()
+        val renamed =
+            base.copy(
+                entry = "z-entry",
+                services =
+                    base.services
+                        .map {
+                            it.copy(pathSegments = listOf(if (it.path == "entry") "z-entry" else "a-backend"))
+                        }.reversed(),
+                calls = base.calls.map { it.copy(from = "z-entry", to = "a-backend") },
+            )
+        val original = CostEstimator.estimate(experiment(base), workers = 1)
+        val reordered = CostEstimator.estimate(experiment(renamed), workers = 1)
+        assertThat(reordered).isEqualTo(original)
     }
 }

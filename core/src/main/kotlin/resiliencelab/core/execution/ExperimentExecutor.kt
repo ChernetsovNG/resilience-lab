@@ -11,7 +11,7 @@ import resiliencelab.core.engine.ksl.StreamPlan
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
-import resiliencelab.core.ir.ChainIr
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.results.ConnectionWindow
 import resiliencelab.core.results.NodeWindow
 import java.util.concurrent.CancellationException
@@ -51,7 +51,7 @@ data class ExperimentRun(
  */
 class ExperimentExecutor internal constructor(
     private val workers: Int,
-    private val replicate: ((ChainIr, StreamPlan, Long, Int) -> ReplicationResult)?,
+    private val replicate: ((GraphIr, StreamPlan, Long, Int) -> ReplicationResult)?,
 ) : AutoCloseable {
     constructor(workers: Int = defaultWorkers()) : this(workers, null)
 
@@ -148,7 +148,7 @@ class ExperimentExecutor internal constructor(
         val plan =
             StreamPlan(
                 experiment.variants.flatMap { variant ->
-                    variant.points.flatMap { point -> (0 until replications).flatMap { PathStreams.keys(point.chain, it) } }
+                    variant.points.flatMap { point -> (0 until replications).flatMap { PathStreams.keys(point.graph, it) } }
                 },
             )
         val tasks =
@@ -177,9 +177,9 @@ class ExperimentExecutor internal constructor(
                     val compiledPoint = compiledVariant.points[point]
                     val result =
                         try {
-                            replicate?.invoke(compiledPoint.chain, plan, experiment.run.seed, replication)
+                            replicate?.invoke(compiledPoint.graph, plan, experiment.run.seed, replication)
                                 ?: runReplication(
-                                    compiledPoint.chain,
+                                    compiledPoint.graph,
                                     plan,
                                     experiment.run.seed,
                                     replication,
@@ -380,7 +380,7 @@ private class Progress(
 
 /** One task: a fresh KSL model, one replication, streams of this replication only. */
 private fun runReplication(
-    chain: ChainIr,
+    graph: GraphIr,
     plan: StreamPlan,
     seed: Long,
     replication: Int,
@@ -390,7 +390,7 @@ private fun runReplication(
     val model = Model("resilience-lab-task", autoCSVReports = false)
     return ReliabilityModel(
         model,
-        chain,
+        graph,
         PathStreamSource(plan, seed, replication.toLong()),
         onWindow = onWindow,
         onOriginalCompletion = onOriginalCompletion,

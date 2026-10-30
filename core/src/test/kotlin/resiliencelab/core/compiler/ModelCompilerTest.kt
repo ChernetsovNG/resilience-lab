@@ -55,7 +55,7 @@ class ModelCompilerTest {
     private fun codes(result: CompileResult) = result.diagnostics.map { it.code }
 
     @Test
-    fun `compiles every variant into a canonical chain`() {
+    fun `compiles every variant into a topologically ordered graph`() {
         val result = compile()
 
         assertThat(result.diagnostics).isEmpty()
@@ -68,14 +68,14 @@ class ModelCompilerTest {
                 .first { it.id == "baseline" }
                 .points
                 .single()
-                .chain
+                .graph
         assertThat(baseline.client.arrivalRatePerMs).isEqualTo(0.12)
         assertThat(baseline.client.deadlineMs).isEqualTo(250.0)
         assertThat(baseline.entry).isEqualTo("gateway")
-        assertThat(baseline.services.map { it.path }).containsExactly("dependency", "gateway")
+        assertThat(baseline.services.map { it.path }).containsExactly("gateway", "dependency")
         assertThat(
             baseline.services
-                .first()
+                .last()
                 .processing.shape,
         ).isEqualTo(DistributionShape.EXPONENTIAL)
         val call = baseline.calls.single()
@@ -89,7 +89,7 @@ class ModelCompilerTest {
         assertThat(
             noRetries.points
                 .single()
-                .chain.calls
+                .graph.calls
                 .single()
                 .attempts,
         ).isEqualTo(1)
@@ -104,10 +104,10 @@ class ModelCompilerTest {
                 .first()
                 .points
                 .single()
-                .chain
+                .graph
 
         assertThat(chain.client.origin).isEqualTo(Origin("m.model.json", "/blocks/client"))
-        assertThat(chain.services.first().origin).isEqualTo(Origin("m.model.json", "/blocks/dependency"))
+        assertThat(chain.services.last().origin).isEqualTo(Origin("m.model.json", "/blocks/dependency"))
         assertThat(chain.calls.single().origin).isEqualTo(Origin("m.model.json", "/connections/1"))
         assertThat(chain.faults.single().origin).isEqualTo(Origin("e.experiment.json", "/faults/0"))
     }
@@ -251,9 +251,9 @@ class ModelCompilerTest {
                     variant.copy(
                         points =
                             variant.points.map { point ->
-                                val chain = point.chain
+                                val chain = point.graph
                                 point.copy(
-                                    chain =
+                                    graph =
                                         chain.copy(
                                             client = chain.client.copy(origin = Origin.UNSPECIFIED),
                                             services = chain.services.map { it.copy(origin = Origin.UNSPECIFIED) },
@@ -301,7 +301,7 @@ class ModelCompilerTest {
     }
 
     @Test
-    fun `enforces exactly one client and a linear chain`() {
+    fun `enforces exactly one client and an acyclic reachable graph`() {
         val twoClients =
             model.replace(
                 "\"gateway\": {",
@@ -312,11 +312,11 @@ class ModelCompilerTest {
         val orphan = """"orphan": {"type": "service", "params": {"handlers": 1, "processing": {"kind": "fixed", "mean": "1ms"}}}"""
         val unreachable = model.replace("\"dependency\": {", "$orphan, \"dependency\": {")
         val result = compile(modelText = unreachable)
-        assertThat(result.diagnostics.single { it.code == "TOPOLOGY_CHAIN" }.path).isEqualTo("orphan")
+        assertThat(result.diagnostics.single { it.code == "TOPOLOGY_GRAPH" }.path).isEqualTo("orphan")
 
         val back = """{"id": "back", "type": "call", "from": "dependency", "to": "gateway", "params": {"timeout": "10ms"}}"""
         val cycle = model.replace("]}", ", $back]}")
-        assertThat(codes(compile(modelText = cycle))).contains("TOPOLOGY_CHAIN")
+        assertThat(codes(compile(modelText = cycle))).contains("TOPOLOGY_GRAPH")
     }
 
     @Test
@@ -342,7 +342,7 @@ class ModelCompilerTest {
                 .last()
                 .points
                 .single()
-                .chain
+                .graph
 
         assertThat(
             chain.calls
@@ -361,7 +361,7 @@ class ModelCompilerTest {
         val gateway =
             variant.points
                 .single()
-                .chain.services
+                .graph.services
                 .first { it.path == "gateway" }
         assertThat(gateway.processing.meanMs).isEqualTo(3.0)
     }
@@ -433,7 +433,7 @@ class ModelCompilerTest {
         assertThat(result.diagnostics).anySatisfy {
             assertThat(it.message).contains("cycle")
             assertThat(it.document).isEqualTo("m.model.json")
-            assertThat(it.path).isIn("gateway", "dependency")
+            assertThat(it.path).isIn("gateway-to-dependency", "back")
         }
     }
 
@@ -460,7 +460,7 @@ class ModelCompilerTest {
             "CONNECTION_ENDPOINT" to "/connections/3/to",
         )
         assertThat(result.diagnostics).anySatisfy {
-            assertThat(it.message).contains("more than one outgoing")
+            assertThat(it.message).contains("needs a scenario")
             assertThat(it.pointer).isEqualTo("/blocks/gateway")
         }
         assertThat(result.diagnostics).noneSatisfy { assertThat(it.message).contains("not reachable") }
@@ -510,7 +510,7 @@ class ModelCompilerTest {
         assertThat(result.diagnostics.filter { "not reachable" in it.message }.map { it.path }).containsExactly("a", "b")
         assertThat(result.diagnostics).anySatisfy {
             assertThat(it.message).contains("cycle")
-            assertThat(it.path).isIn("a", "b")
+            assertThat(it.path).isIn("a-b", "b-a")
         }
     }
 

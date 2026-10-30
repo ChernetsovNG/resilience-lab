@@ -9,8 +9,8 @@ import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.assertLatencies
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
-import resiliencelab.core.ir.ChainIr
 import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.RunSettings
 import kotlin.test.Test
 
@@ -534,7 +534,7 @@ class RetryDeadlineTest {
         attempts: Int = 2,
         backoff: Backoff = TestChains.backoff(BackoffKind.NONE, 0.0, 0.0),
         requestDeadlineMs: Double = 500.0,
-    ): ChainIr {
+    ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
             services =
@@ -561,12 +561,12 @@ class RetryDeadlineTest {
         )
     }
 
-    private fun threeServiceChain(): ChainIr {
+    private fun threeServiceChain(): GraphIr {
         val base = chain(timeoutMs = 500.0, requestDeadlineMs = 40.0)
-        val third = base.services[1].copy(path = "third", processing = fixed(100.0))
+        val third = base.services[1].copy(pathSegments = listOf("third"), processing = fixed(100.0))
         val secondLink =
             base.calls.single().copy(
-                path = "backend-to-third",
+                pathSegments = listOf("backend-to-third"),
                 from = "backend",
                 to = "third",
             )
@@ -591,7 +591,7 @@ class RetryDeadlineTest {
     }
 
     private fun simulate(
-        chain: ChainIr,
+        chain: GraphIr,
         requests: List<InvocationSpec>,
         observationTimesMs: List<Double> = emptyList(),
         replicationLengthMs: Double = 200.0,
