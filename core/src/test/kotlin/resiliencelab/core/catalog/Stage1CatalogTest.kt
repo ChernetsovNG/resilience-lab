@@ -118,4 +118,16 @@ class Stage1CatalogTest {
         val fixture = Json.decodeFromString(Catalog.serializer(), Path.of("../web/src/test/catalog.json").readText())
         assertThat(fixture).isEqualTo(catalog)
     }
+
+    @Test
+    fun `database shares service overlays while retaining query terminology in other views`() {
+        val service = catalog.type("service")!!.outputs.associateBy { it.id }
+        val database = catalog.type("database")!!.outputs
+        database.filter { it.overlay != null }.forEach { output ->
+            assertThat(output.overlay).describedAs(output.id).isEqualTo(service.getValue(output.id).overlay)
+        }
+        val utilization = database.first { it.id == "utilization" }
+        assertThat(utilization.title).isEqualTo("Connections busy")
+        assertThat(utilization.inspector!!.title).isEqualTo("Connections busy")
+    }
 }

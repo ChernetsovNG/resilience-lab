@@ -184,7 +184,7 @@ internal object Stage1Outputs {
             ),
         ) + latencies(service = true)
 
-    /** Database rows reuse service statistics, with connection/query terminology in every presentation. */
+    /** Database rows reuse service statistics, with query terminology in Timeline and the inspector. */
     val database: List<OutputDescriptor> =
         service.filterNot { it.id in setOf("retriesPerSecond", "timeoutsPerSecond") }.map { output ->
             val (title, description) =
@@ -212,13 +212,6 @@ internal object Stage1Outputs {
                 title = title,
                 description = description,
                 inspector = output.inspector?.copy(title = title),
-                overlay =
-                    output.overlay?.copy(
-                        title = title,
-                        label = "$title {value}",
-                        description = "$description {interval}.",
-                        scaleTitle = output.overlay.scaleTitle?.let { "Query queue fill" },
-                    ),
             )
         }
 

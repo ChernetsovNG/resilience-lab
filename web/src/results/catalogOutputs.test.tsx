@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { TypeDescriptor } from "../api/apiTypes";
+import type { Catalog, TypeDescriptor } from "../api/apiTypes";
+import fullCatalog from "../test/catalog.json";
 import { ElementResults } from "../inspector/ElementResults";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
 import { recordedWindow } from "../test/series";
@@ -10,6 +11,22 @@ import { seriesLoader } from "./series";
 import { Timeline } from "./timeline/Timeline";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("a database catalog preserves the node overlay choices and values for a model without databases", () => {
+  const props = { model, summary, variant: experiment.variants[0],
+    selection: { pointId: "p0", replication: 0, window: null }, onSelect: vi.fn(), replications: 2,
+    playback: { frame: null, loading: false, problem: null, playing: false, speed: 1,
+      setSpeed: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn() },
+    windowCount: 1, windowMs: 100, endMs: 100, metric: "utilization", onMetricChange: vi.fn(),
+    stale: false, analysis: false, onAnalysisChange: vi.fn() };
+  const view = render(<ResultsContextBar {...props} catalog={catalog} />);
+  const options = () => within(screen.getByRole("combobox", { name: "Node overlay" })).getAllByRole<HTMLOptionElement>("option")
+    .map(option => [option.textContent, option.value]);
+  const expected = [["Utilization", "utilization"], ["Mean queue", "meanQueue"], ["Queue rejections", "queueRejections"], ["Off", "off"]];
+  expect(options()).toEqual(expected);
+  view.rerender(<ResultsContextBar {...props} catalog={fullCatalog as Catalog} />);
+  expect(options()).toEqual(expected);
+});
 
 it("uses the effective grid parameter for a catalog-defined normalized Timeline output", async () => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
@@ -56,7 +73,7 @@ it("adds a new type's output to the chart, inspector and overlay without registe
     <ElementResults runId="custom" summary={summary} manifest={runManifest} runModel={snapshot} currentModel={snapshot}
       experiment={experiment} catalog={extended} variantId="baseline" pointId="p0" replication={0} window={null}
       selected="gateway" onShowTimeline={vi.fn()} />
-    <ResultsContextBar catalog={extended} summary={summary} variant={experiment.variants[0]}
+    <ResultsContextBar catalog={extended} model={snapshot} summary={summary} variant={experiment.variants[0]}
       selection={{ pointId: "p0", replication: 0, window: null }} onSelect={vi.fn()} replications={2} playback={playback}
       windowCount={1} windowMs={100} endMs={100} metric="testThroughput" onMetricChange={vi.fn()}
       stale={false} analysis={false} onAnalysisChange={vi.fn()} />

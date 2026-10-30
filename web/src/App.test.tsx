@@ -1501,7 +1501,7 @@ it("colors nodes and labels the scale for the selected overlay metric", async ()
   expect(node.style.backgroundColor).not.toBe(utilization);
   expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue fill: 0%–100%");
   const queue = node.style.backgroundColor;
-  fireEvent.change(overlay, { target: { value: "queueRejectionRate" } });
+  fireEvent.change(overlay, { target: { value: "queueRejections" } });
   expect(node.style.backgroundColor).not.toBe(queue);
   expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue rejections: 0%–100%");
   fireEvent.change(overlay, { target: { value: "off" } });

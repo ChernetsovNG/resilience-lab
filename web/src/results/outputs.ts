@@ -1,4 +1,4 @@
-import type { Catalog, OutputCalculation, OutputDescriptor, TypeDescriptor } from "../api/apiTypes";
+import type { Catalog, ModelFile, OutputCalculation, OutputDescriptor, TypeDescriptor } from "../api/apiTypes";
 import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
 
 export interface OutputValue {
@@ -93,7 +93,10 @@ export function inspectorOutputs(outputs: readonly OutputDescriptor[], charts = 
 export type OverlayOutput = OutputDescriptor & { key: string; types: string[] };
 
 /** Share a selector only when the type-local definitions agree; IDs alone are not globally unique. */
-export function overlayOutputs(catalog: Catalog, category: TypeDescriptor["category"]): OverlayOutput[] {
+export function overlayOutputs(catalog: Catalog, category: TypeDescriptor["category"], model?: ModelFile): OverlayOutput[] {
+  const present = model === undefined ? null : new Set([
+    ...Object.values(model.blocks).map(block => block.type), ...model.connections.map(connection => connection.type),
+  ]);
   const choices: { output: OutputDescriptor; signature: string; types: string[] }[] = [];
   for (const type of catalog.types.filter(type => type.category === category)) for (const output of type.outputs ?? []) {
     if (output.overlay == null) continue;
@@ -103,10 +106,15 @@ export function overlayOutputs(catalog: Catalog, category: TypeDescriptor["categ
     if (shared) shared.types.push(type.id);
     else choices.push({ output, signature, types: [type.id] });
   }
-  return choices.sort((a, b) => a.output.overlay!.order - b.output.overlay!.order).map(({ output, types }) => ({
-    ...output, types,
-    key: choices.filter(choice => choice.output.id === output.id).length === 1 ? output.id : JSON.stringify([output.id, [...types].sort()]),
-  }));
+  return choices.sort((a, b) => a.output.overlay!.order - b.output.overlay!.order).map(({ output, types }) => {
+    // Keep the existing selector value for queue rejections; its output ID names the ratio.
+    const id = category === "BLOCK" && output.id === "queueRejectionRate" ? "queueRejections" : output.id;
+    return { ...output,
+      types: present === null ? types : types.filter(type => present.has(type)),
+      // Keys use the complete catalog so filtered selectors and canvas renderers resolve the same choice.
+      key: choices.filter(choice => choice.output.id === output.id).length === 1 ? id : JSON.stringify([id, [...types].sort()]),
+    };
+  }).filter(output => output.types.length > 0);
 }
 
 /** Existing unqualified defaults resolve to the first applicable choice if a new type introduces a collision. */
