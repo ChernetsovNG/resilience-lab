@@ -39,7 +39,7 @@ Gradle — из корня репозитория, JDK 25 (`jvmToolchain(25)`), 
 - `./gradlew :apps:cli:installDist` — установленный CLI в `apps/cli/build/install/cli/bin/`; рабочая область CLI — текущий каталог. Для разбора stdout запускай установленный launcher, а не `:apps:cli:run`: Gradle добавляет в вывод служебные сообщения.
 - `docker compose up --build -d` / `docker compose down` — production-like запуск, подробности в README. На Docker Desktop и Colima `.workspace.lock` не связывает процессы хоста и контейнера: пока работает Compose, не запускай на хосте CLI или `bootRun` с той же рабочей областью.
 
-CI (`.github/workflows/ci.yml`) запускается на push в `main`, на pull request и вручную. Job `build` выполняет `./gradlew --no-daemon clean build`, lint, `npm run api:check`, `npm run test:coverage` и production build web; job `e2e` — `npm run test:e2e` в образе Playwright. Отчёты сохраняются артефактами и при падении.
+CI (`.github/workflows/ci.yml`) запускается на push в `main`, на pull request и вручную. Job `build` выполняет `./gradlew --no-daemon clean build`, lint, `npm run api:check`, `npm run test:coverage` и production build web; job `e2e` — `npm run test:e2e` в образе Playwright. Отчёты сохраняются артефактами и при падении. Pull request, который меняет только `docs/` и файлы `*.md`, пропускает `build` и `e2e`: это решает job `changes`, а пропущенный job засчитывается обязательной проверкой. Push в `main` и ручной запуск проверяют всё.
 
 ## Устойчивые решения
 
@@ -86,7 +86,7 @@ CI (`.github/workflows/ci.yml`) запускается на push в `main`, на
 - Всегда: `git diff --check origin/main` и просмотр diff относительно `origin/main`, чтобы исключить посторонние изменения.
 - JVM-код, зависимости или сборка JVM-модулей: `./gradlew clean build` из корня.
 - Web-код, зависимости или сборка web: проверки из [web/AGENTS.md](web/AGENTS.md).
-- Взаимодействие UI и API, пользовательские сценарии, E2E-тесты или их запуск: `npm run test:e2e` из `web`.
+- Взаимодействие UI и API, пользовательские сценарии, E2E-тесты или их запуск: затронутые сценарии E2E из `web` по правилу [web/AGENTS.md](web/AGENTS.md#e2e); полный набор выполняет CI.
 - Только документация или шаблоны: проверь ссылки, Markdown и YAML-заголовок шаблона issue. Сборка приложения не требуется.
 
 В описании PR объясни, что изменено и зачем; перечисли команды проверок и их результаты, а также то, что проверить не удалось, с причиной. Отдельно укажи найденное попутно или напиши, что таких находок нет. Не называй проверку пройденной, если её результат неизвестен.
