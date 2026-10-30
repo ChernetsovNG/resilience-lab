@@ -2,6 +2,10 @@ server:
   address: 127.0.0.1
   port: 8080
   shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json
+    min-response-size: 1KB
 
 spring:
   main:
