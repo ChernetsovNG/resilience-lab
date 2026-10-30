@@ -47,7 +47,7 @@ describe("Inspector", () => {
     expect(screen.getByText(subtitle, { selector: ".inspector-type" })).toBeTruthy();
   });
 
-  it.each(["Run", "Parameter grid", "Faults"])("remembers %s independently across remounts", async title => {
+  it.each(["Run", "Parameter sweep", "Faults"])("remembers %s independently across remounts", async title => {
     const props: InspectorProps = { catalog, model, experiment, selected: null, editable: true,
       overrides: {}, onParam: vi.fn(), onValidity: vi.fn() };
     const view = render(<Inspector {...props} />);
@@ -62,7 +62,7 @@ describe("Inspector", () => {
     view.unmount();
     render(<Inspector {...props} />);
     expect(screen.getByText(title).closest("details")!.open).toBe(false);
-    expect(screen.getByText(title === "Faults" ? "Parameter grid" : "Run").closest("details")!.open)
+    expect(screen.getByText(title === "Faults" ? "Parameter sweep" : "Run").closest("details")!.open)
       .toBe(title === "Run" ? false : true);
   });
 
@@ -80,7 +80,7 @@ describe("Inspector", () => {
   it.each([
     ["execution", "Run", "execution.seed", "Seed"],
     ["faults", "Faults", "faults.0.multiplier", "Time multiplier"],
-    ["grid", "Parameter grid", "grid.0.path", "Axis 1 parameter"],
+    ["grid", "Parameter sweep", "grid.0.path", "Axis 1 parameter"],
   ])("opens collapsed %s when Problems requests its field", async (section, title, path, label) => {
     localStorage.setItem(`resilience-lab.inspector-${section}-open`, "false");
     const props: InspectorProps = { catalog, model, experiment: { ...experiment, grid: [{ path: "gateway.handlers", values: [4] }] },
@@ -487,4 +487,35 @@ it("enables a pool only in the active variant without changing the shared model"
     "gateway-to-middle.pool": { size: 10, acquireTimeout: "30s" },
   });
   expect(after.experiment.variants[1]).toBe(before.experiment.variants[1]);
+});
+
+
+it.each([
+  ["gateway-to-middle", "timeout", "Timeout"],
+  ["gateway-to-middle", "backoff.base", "Base delay"],
+  ["gateway", "processing.mean", "Mean"],
+])("marks only the swept parameter %s.%s on a variant page", (selected, path, title) => {
+  const props: InspectorProps = { catalog, model, experiment: { ...experiment, grid: [{ path: `${selected}.${path}`, values: ["1s", "2s"] }] },
+    selected, editable: true, overrides: { [`${selected}.${path}`]: "3s" }, onParam: vi.fn(), onValidity: vi.fn() };
+  const view = render(<Inspector {...props} variantId="baseline" />);
+  const badge = screen.getByText("Swept by the parameter grid");
+  expect(screen.getAllByText("Swept by the parameter grid")).toHaveLength(1);
+  expect(badge.closest(".param-field")).toBe(screen.getByLabelText(title).closest(".param-field"));
+  expect(screen.getByLabelText(title).getAttribute("aria-describedby")?.split(" ")).toContain(badge.id);
+  view.rerender(<Inspector {...props} variantId={null} />);
+  expect(screen.queryByText("Swept by the parameter grid")).toBeNull();
+  view.rerender(<Inspector {...props} variantId="baseline" experiment={experiment} />);
+  expect(screen.queryByText("Swept by the parameter grid")).toBeNull();
+});
+
+
+it("marks an unset optional object whose nested field is supplied by the sweep", () => {
+  renderInspector({ catalog: serverCatalog as typeof catalog, selected: "gateway-to-middle", variantId: "baseline",
+    experiment: { ...experiment, grid: [{ path: "gateway-to-middle.pool.size", values: [1, 2] }] } });
+  const pool = screen.getByRole("group", { name: "Connection pool" });
+  const marker = screen.getByText("Swept by the parameter grid");
+  expect(pool.contains(marker)).toBe(true);
+  expect(pool.getAttribute("aria-describedby")?.split(" ")).toContain(marker.id);
+  expect(screen.getAllByText("Swept by the parameter grid")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Enable Connection pool" })).toBeTruthy();
 });

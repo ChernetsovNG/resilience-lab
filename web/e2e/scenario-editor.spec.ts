@@ -713,7 +713,7 @@ test("keeps the Inspector on one target and manages variant pages through their 
 
   await page.locator(".react-flow__pane").click({ position: { x: 15, y: 15 } });
   await expect(inspector.getByRole("heading", { name: "Run settings" })).toBeVisible();
-  await expect(inspector.getByRole("heading", { name: "Parameter grid" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Parameter sweep" })).toBeVisible();
   await gateway.click();
   await page.getByRole("button", { name: "Run settings", exact: true }).click();
   await expect(inspector.getByLabel("Replications", { exact: true })).toBeVisible();

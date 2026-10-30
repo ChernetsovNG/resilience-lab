@@ -18,6 +18,8 @@ export interface ParamFieldProps {
   /** An action beside the scalar input, under the same field label. */
   inputAction?: ReactNode;
   isOverridden: (path: string) => boolean;
+  /** Whether the shared experiment sweep replaces this variant parameter or a descendant at each point. */
+  isSwept?: (path: string) => boolean;
   /** New value; undefined removes it from the document. */
   onCommit: (value: unknown) => void;
   /** Variant edits report the precise leaf path instead of replacing its enclosing object. */
@@ -52,13 +54,15 @@ function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDia
   </div>;
 }
 
-function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+function ObjectField({ descriptor, value, path, editable, isOverridden, isSwept, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const current = isObject(value) ? value : isObject(descriptor.default) ? descriptor.default : {};
+  const unset = value == null && descriptor.default == null && !descriptor.required;
+  const hiddenSweep = unset && (isSwept?.(path) ?? false);
   const [resetCount, setResetCount] = useState(0);
   return (
     <fieldset className={isOverridden(path) ? "param-group param-group--overridden" : "param-group"}
-      data-inspector-field={path} aria-label={descriptor.title} aria-describedby={descriptor.description ? `${id}-description` : undefined}>
+      data-inspector-field={path} aria-label={descriptor.title} aria-describedby={[descriptor.description ? `${id}-description` : null, hiddenSweep ? `${id}-sweep` : null].filter(Boolean).join(" ") || undefined}>
       <legend>{descriptor.title} {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</legend>
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
       <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
@@ -67,8 +71,9 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
         <button type="button" className="param-reset" aria-label={t("editor.param.reset", { title: descriptor.title })} disabled={!editable}
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
-      {value == null && descriptor.default == null && !descriptor.required
+      {unset
         ? <><p className="param-description">{t("editor.param.notSet")}</p>
+          {hiddenSweep ? <span id={`${id}-sweep`} className="param-sweep">{t("editor.param.swept")}</span> : null}
           {editable ? <button type="button" onClick={() => {
             const initial = initialParams(descriptor.fields);
             if (onFieldCommit === undefined) onCommit(initial);
@@ -84,6 +89,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
           path={`${path}.${field.name}`}
           editable={editable}
           isOverridden={isOverridden}
+          isSwept={isSwept}
           onFieldCommit={onFieldCommit}
           onReset={onReset}
           onValidity={onValidity}
@@ -103,7 +109,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, onCommit
   );
 }
 
-function ScalarField({ descriptor, value, path, editable, inputAction, isOverridden, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+function ScalarField({ descriptor, value, path, editable, inputAction, isOverridden, isSwept, onCommit, onFieldCommit, onReset, onValidity, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
   const shown = value == null ? "" : String(value);
   const [draft, setDraft] = useState(shown);
@@ -135,8 +141,9 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
   const overridden = isOverridden(path);
   const fallback = descriptor.default == null ? "" : String(descriptor.default);
   const commitValue = (next: unknown) => onFieldCommit === undefined ? onCommit(next) : onFieldCommit(path, next);
+  const swept = isSwept?.(path) ?? false;
   const diagnostics = fieldDiagnostics?.get(path) ?? [];
-  const describedBy = [descriptor.description ? `${id}-description` : null, diagnostics.length > 0 ? `${id}-diagnostics` : null]
+  const describedBy = [descriptor.description ? `${id}-description` : null, diagnostics.length > 0 ? `${id}-diagnostics` : null, swept ? `${id}-sweep` : null]
     .filter(Boolean).join(" ") || undefined;
   const hasError = !parsed.ok || diagnostics.some((diagnostic) => diagnostic.severity === "ERROR");
   const commit = () => {
@@ -186,6 +193,7 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
         />
       )}
       {inputAction}
+      {swept ? <span id={`${id}-sweep`} className="param-sweep">{t("editor.param.swept")}</span> : null}
       {overridden ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages id={`${id}-diagnostics`} diagnostics={diagnostics} />
       <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}

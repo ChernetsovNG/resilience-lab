@@ -20,7 +20,7 @@ for (const language of ["en", "ru"] as const) {
     await expect(inspector.locator(".inspector-type").first()).toHaveText("checkout-grid");
     await expect(inspector.getByRole("heading", { name: russian ? "Прогон" : "Run", exact: true })).toBeVisible();
     await expect(inspector.getByRole("heading", { level: 3 })).toHaveText(russian
-      ? ["Прогон", "Отказы", "Перебор"] : ["Run", "Faults", "Parameter grid"]);
+      ? ["Прогон", "Отказы", "Перебор параметров"] : ["Run", "Faults", "Parameter sweep"]);
     await expect(settings).toHaveAttribute("aria-pressed", "true");
 
     await page.getByTestId("rf__node-api-gateway").locator(".block-node > strong").click();
