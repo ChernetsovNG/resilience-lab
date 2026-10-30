@@ -6,6 +6,7 @@ import { decodeSeriesPart } from "../results/series/decode";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
 import { ElementResults, type ElementResultsProps } from "./ElementResults";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
+import { SummaryTable } from "../layout/SummaryTable";
 
 const raw: SeriesPart = {
   schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
@@ -79,10 +80,10 @@ describe("ElementResults", () => {
     options.summary.variants[0].replications = 20;
     options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].timeoutRate!.count = 10;
     options.summary.variants[0].points[0].aggregate.connections["gateway-to-middle"].timeoutRate!.stdDev = 0.1;
-    render(<ElementResults {...options} />);
+    render(<><SummaryTable summary={options.summary} /><ElementResults {...options} /></>);
     await screen.findByRole("img", { name: /gateway-to-middle: Sent attempts/ });
     expect(row("Timeout share").textContent).toContain("95% CI 17.8%–32.2%");
-    act(() => setConfidenceLevel(99));
+    fireEvent.change(screen.getByRole("combobox", { name: "Intervals" }), { target: { value: "99" } });
     expect(row("Timeout share").textContent).toContain("99% CI 14.7%–35.3%");
     expect(row("Sent attempts").textContent).not.toContain("CI");
   });

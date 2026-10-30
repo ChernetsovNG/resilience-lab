@@ -17,6 +17,7 @@ afterEach(() => {
 it("offers grid and text settings in both interface languages", () => {
   render(<ViewMenu />);
   fireEvent.click(screen.getByRole("button", { name: "View" }));
+  expect(screen.queryByLabelText("Confidence level")).toBeNull();
   const step = screen.getByLabelText<HTMLSelectElement>("Grid step");
   expect([...step.options].map(option => option.value)).toEqual(["10", "20", "40"]);
   expect(step.value).toBe("20");
@@ -31,6 +32,7 @@ it("offers grid and text settings in both interface languages", () => {
   expect(screen.getByLabelText("Размер текста интерфейса")).toBeTruthy();
   expect(screen.getByLabelText("Привязка к сетке")).toBeTruthy();
   expect(screen.getByLabelText("Показывать сетку")).toBeTruthy();
+  expect(screen.queryByLabelText("Уровень доверия")).toBeNull();
 });
 
 it("applies every select and checkbox without closing View", () => {
@@ -39,7 +41,7 @@ it("applies every select and checkbox without closing View", () => {
   fireEvent.click(button);
   const expectOpen = () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByRole("combobox", { hidden: true })).toHaveLength(4);
+    expect(screen.getAllByRole("combobox", { hidden: true })).toHaveLength(3);
     expect(screen.getAllByRole("checkbox", { hidden: true })).toHaveLength(2);
   };
 
@@ -59,9 +61,6 @@ it("applies every select and checkbox without closing View", () => {
   fireEvent.change(screen.getByLabelText("Language"), { target: { value: "ru" } });
   expect(document.documentElement.lang).toBe("ru");
   expect(localStorage.getItem("resilience-lab.language")).toBe("ru");
-  expectOpen();
-  fireEvent.change(screen.getByLabelText("Уровень доверия"), { target: { value: "99" } });
-  expect(localStorage.getItem("resilience-lab.confidenceLevel")).toBe("99");
   expectOpen();
 });
 

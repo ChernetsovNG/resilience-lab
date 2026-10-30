@@ -27,9 +27,8 @@ test("confidence updates retry-storm success intervals without another run and s
   await expect(interval).toContainText(`95% CI ${percent.format(metric.ci95Low!)}–${percent.format(metric.ci95High!)}`);
   const before = await interval.textContent();
 
-  await page.getByRole("button", { name: "View", exact: true }).click();
-  await page.getByLabel("Confidence level", { exact: true }).selectOption("99");
-  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Intervals", exact: true })).toBeInViewport({ ratio: 1 });
+  await page.getByRole("combobox", { name: "Intervals", exact: true }).selectOption("99");
   // Independent reference: t(0.995, 9), not the web calculator under test.
   const radius = 3.2498355415921254 * metric.stdDev! / Math.sqrt(metric.count);
   await expect(interval).toContainText(`99% CI ${percent.format(metric.mean - radius)}–${percent.format(metric.mean + radius)}`);
@@ -40,22 +39,25 @@ test("confidence updates retry-storm success intervals without another run and s
 
   await page.getByRole("button", { name: "View", exact: true }).click();
   await page.getByLabel("Language", { exact: true }).selectOption("ru");
-  await expect(page.getByLabel("Уровень доверия", { exact: true })).toHaveValue("99");
+  await expect(page.getByLabel("Уровень доверия", { exact: true })).toHaveCount(0);
   const menu = (await page.locator(".view-menu-panel").boundingBox())!;
   const button = (await page.getByRole("button", { name: "Вид", exact: true }).boundingBox())!;
   expect(menu.y).toBeGreaterThanOrEqual(button.y + button.height);
   expect(menu.x).toBeGreaterThanOrEqual(0);
   expect(menu.x + menu.width).toBeLessThanOrEqual(1280);
   expect(menu.y + menu.height).toBeLessThanOrEqual(720);
-  await page.screenshot({ path: testInfo.outputPath("view-menu-ru-1280x720.png") });
-  await page.getByLabel("Уровень доверия", { exact: true }).selectOption("90");
   await page.getByRole("button", { name: "Вид", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Интервалы", exact: true })).toHaveValue("99");
+  await page.getByRole("combobox", { name: "Интервалы", exact: true }).selectOption("90");
   await expect(page.getByRole("table", { name: "Ответ", exact: true }).getByRole("row", { name: /Доля успешных/ })
     .locator("td").first()).toContainText(/90\s*% CI/);
   expect(jobs).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath("answer-confidence-ru-1280x720.png") });
+  await page.getByRole("button", { name: "Подробнее: Интервалы", exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("answer-confidence-help-ru-1280x720.png") });
+  await page.keyboard.press("Escape");
 
   await page.reload();
-  await page.getByRole("button", { name: "Вид", exact: true }).click();
-  await expect(page.getByLabel("Уровень доверия", { exact: true })).toHaveValue("90");
+  expect(await page.evaluate(() => localStorage.getItem("resilience-lab.confidenceLevel"))).toBe("90");
   expect(jobs).toBe(1);
 });
