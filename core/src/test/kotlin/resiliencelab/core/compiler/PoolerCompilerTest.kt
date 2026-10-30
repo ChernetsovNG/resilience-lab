@@ -54,7 +54,7 @@ class PoolerCompilerTest {
                 }
             }
         }
-        val model = PoolerTestModel.model
+        val model = PoolerTestModel.withServicePool()
         val expected = run(model, 1)
         val shuffled =
             model.copy(
@@ -109,7 +109,19 @@ class PoolerCompilerTest {
                 blocks =
                     model.blocks +
                         mapOf(
-                            "client" to client.copy(params = JsonObject(client.params + ("load" to kotlinx.serialization.json.Json.parseToJsonElement("""{"points":[{"time":"0ms","rate":"1000/s"}]}""")))),
+                            "client" to
+                                client.copy(
+                                    params =
+                                        JsonObject(
+                                            client.params +
+                                                (
+                                                    "load" to
+                                                        kotlinx.serialization.json.Json.parseToJsonElement(
+                                                            """{"points":[{"time":"0ms","rate":"1000/s"}]}""",
+                                                        )
+                                                ),
+                                        ),
+                                ),
                             "gateway" to gateway.copy(params = JsonObject(gateway.params + ("handlers" to JsonPrimitive(1)))),
                         ),
             )
@@ -122,6 +134,91 @@ class PoolerCompilerTest {
             assertThat(it.path).isEqualTo("gateway")
             assertThat(it.pointer).isEqualTo("/blocks/gateway/params/handlers")
             assertThat(it.args).containsEntry("holdingMs", JsonPrimitive(10.0))
+        }
+    }
+
+    @Test
+    fun `pool on the outgoing pooler call is rejected at that parameter`() {
+        val model = PoolerTestModel.model
+        val source =
+            model.copy(
+                connections =
+                    model.connections.map { edge ->
+                        if (edge.id == "to-db") {
+                            edge.copy(
+                                params =
+                                    JsonObject(
+                                        edge.params + (
+                                            "pool" to
+                                                kotlinx.serialization.json.Json
+                                                    .parseToJsonElement("""{"size":1,"acquireTimeout":"5ms"}""")
+                                        ),
+                                    ),
+                            )
+                        } else {
+                            edge
+                        }
+                    },
+            )
+        val result = PoolerTestModel.compile(source)
+        assertThat(result.experiment).isNull()
+        assertThat(result.diagnostics).anySatisfy {
+            assertThat(it.code).isEqualTo("POOLER_CALL_POOL")
+            assertThat(it.pointer).isEqualTo("/connections/2/params/pool")
+            assertThat(it.path).isEqualTo("to-db")
+            assertThat(it.args).containsEntry("pooler", JsonPrimitive("pooler"))
+        }
+    }
+
+    @Test
+    fun `forbidden outgoing pool keeps the source of whole and nested variant overrides`() {
+        for ((path, value) in listOf(
+            "to-db.pool" to JsonObject(mapOf("size" to JsonPrimitive(1))),
+            "to-db.pool.size" to JsonPrimitive(1),
+        )) {
+            val experiment =
+                PoolerTestModel.experiment.copy(
+                    variants =
+                        listOf(
+                            PoolerTestModel.experiment.variants
+                                .single()
+                                .copy(overrides = mapOf(path to value)),
+                        ),
+                )
+            val result = ModelCompiler().compile(PoolerTestModel.model, "m.model.json", experiment, "e.experiment.json")
+            assertThat(result.experiment).isNull()
+            assertThat(result.diagnostics).anySatisfy {
+                assertThat(it.code).isEqualTo("POOLER_CALL_POOL")
+                assertThat(it.document).isEqualTo("e.experiment.json")
+                assertThat(it.pointer).isEqualTo("/variants/0/overrides/$path")
+                assertThat(it.variant).isEqualTo("baseline")
+                assertThat(it.path).isEqualTo("to-db")
+            }
+        }
+    }
+
+    @Test
+    fun `forbidden outgoing pool keeps grid origin ahead of a variant object origin`() {
+        for (overrides in listOf(emptyMap(), mapOf("to-db.pool" to JsonObject(mapOf("size" to JsonPrimitive(2)))))) {
+            val experiment =
+                PoolerTestModel.experiment.copy(
+                    variants =
+                        listOf(
+                            PoolerTestModel.experiment.variants
+                                .single()
+                                .copy(overrides = overrides),
+                        ),
+                    grid = listOf(resiliencelab.core.document.GridAxis("to-db.pool.size", listOf(JsonPrimitive(1)))),
+                )
+            val result = ModelCompiler().compile(PoolerTestModel.model, "m.model.json", experiment, "e.experiment.json")
+            assertThat(result.experiment).isNull()
+            assertThat(result.diagnostics).anySatisfy {
+                assertThat(it.code).isEqualTo("POOLER_CALL_POOL")
+                assertThat(it.document).isEqualTo("e.experiment.json")
+                assertThat(it.pointer).isEqualTo("/grid/0/values/0")
+                assertThat(it.variant).isEqualTo("baseline")
+                assertThat(it.path).isEqualTo("to-db")
+            }
         }
     }
 
@@ -185,6 +282,27 @@ internal object PoolerTestModel {
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value
+
+    fun withServicePool(): ModelFile =
+        model.copy(
+            connections =
+                model.connections.map { edge ->
+                    if (edge.id == "to-pooler") {
+                        edge.copy(
+                            params =
+                                JsonObject(
+                                    edge.params + (
+                                        "pool" to
+                                            kotlinx.serialization.json.Json
+                                                .parseToJsonElement("""{"size":2,"acquireTimeout":"50ms"}""")
+                                    ),
+                                ),
+                        )
+                    } else {
+                        edge
+                    }
+                },
+        )
 
     fun compile(source: ModelFile = model): CompileResult = ModelCompiler().compile(source, "m.model.json", experiment, "e.experiment.json")
 }

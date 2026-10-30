@@ -45,6 +45,7 @@ internal enum class CoreMessage(
         "Outgoing connection '{connection}' is not used in the scenario of service '{service}'",
     ),
     POOLER_OUTPUT("POOLER_OUTPUT", null, "Pooler '{pooler}' must have exactly one outgoing call"),
+    POOLER_CALL_POOL("POOLER_CALL_POOL", null, "Outgoing call of pooler '{pooler}' must not declare a connection pool"),
     POOLER_TARGET("POOLER_TARGET", null, "Pooler '{pooler}' must call a database, service or router"),
     ROUTER_OUTPUT("ROUTER_OUTPUT", null, "Router '{router}' must have at least one route output"),
     ROUTER_INPUT("ROUTER_INPUT", null, "Router '{router}' must have exactly one incoming call or route"),

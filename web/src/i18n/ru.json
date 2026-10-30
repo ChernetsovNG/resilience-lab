@@ -1094,5 +1094,6 @@
   "catalog.types.pooler.outputs.p99LatencyMs.timeline.groupTitle": "Время пребывания",
   "catalog.types.pooler.outputs.p99LatencyMs.inspector.title": "Время пребывания",
   "messages.POOLER_OUTPUT": "У пулера «{pooler}» должна быть ровно одна исходящая связь call",
+  "messages.POOLER_CALL_POOL": "Исходящая связь пулера «{pooler}» не должна задавать отдельный пул соединений",
   "messages.POOLER_TARGET": "Пулер «{pooler}» должен вызывать БД, сервис или маршрутизатор"
 }

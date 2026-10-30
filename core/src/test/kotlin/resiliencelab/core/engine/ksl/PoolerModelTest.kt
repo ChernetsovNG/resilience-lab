@@ -192,6 +192,61 @@ class PoolerModelTest {
         ).isEqualTo(13.0)
     }
 
+    @Test
+    fun `service pool and transaction pooler wait independently reject by wait timeout and release connections`() {
+        val source = PoolerTestModel.withServicePool()
+        assertThat(source.blocks.getValue("db").type).isEqualTo("database")
+        val compiled = PoolerTestModel.compile(source)
+        assertThat(compiled.diagnostics).isEmpty()
+        val graph =
+            requireNotNull(compiled.experiment)
+                .variants
+                .single()
+                .points
+                .single()
+                .graph
+        // The third request waits in the service pool until the second expires in the pooler at 6 ms.
+        // It then waits for the server connection until 10 ms. The last request proves both pools are reusable.
+        val rig = simulate(graph, listOf(0.0, 1.0, 2.0, 21.0))
+        val result = rig.reliability.metrics.replicationResult()
+        assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(10.0, 6.0, 20.0, 31.0)
+        val incoming = result.connections.getValue("to-pooler")
+        assertThat(incoming.poolWaitCount).isEqualTo(1)
+        assertThat(incoming.poolWaitTimeMs).isEqualTo(4.0)
+        assertThat(incoming.poolQueueIntegralMs).isEqualTo(4.0)
+        assertThat(incoming.poolBusyTimeMs).isEqualTo(39.0)
+        assertThat(incoming.poolCapacityTimeMs).isEqualTo(200.0)
+        assertThat(incoming.poolAcquireTimeouts).isZero()
+        assertThat(incoming.sentAttempts).isEqualTo(4)
+        assertThat(incoming.succeeded).isEqualTo(3)
+        assertThat(incoming.failed).isEqualTo(1)
+        assertFields(
+            pooler(rig),
+            "offeredAttempts" to 4.0,
+            "admittedAttempts" to 4.0,
+            "successes" to 3.0,
+            "failures" to 1.0,
+            "clientConnectionRejections" to 0.0,
+            "waitTimeouts" to 1.0,
+            "serverWaitCount" to 2.0,
+            "serverWaitTimeMs" to 9.0,
+            "serverQueueLengthIntegralMs" to 9.0,
+            "busyClientConnectionTimeMs" to 39.0,
+            "busyServerConnectionTimeMs" to 30.0,
+        )
+        assertThat(result.services.getValue("db").admittedAttempts).isEqualTo(3)
+        assertThat(result.services.getValue("db").busyHandlerTimeMs).isEqualTo(27.0)
+        assertThat(result.connections.getValue("to-db").sentAttempts).isEqualTo(3)
+        val rows = rig.windows.filter { it.id == "pooler" }.mapNotNull { it.metrics.pooler }
+        assertThat(rows.sumOf { it.waitTimeouts }).isEqualTo(1)
+        assertThat(rows.sumOf { it.serverWaitTimeMs }).isEqualTo(9.0)
+        assertThat(rows.sumOf { it.busyServerConnectionTimeMs }).isEqualTo(30.0)
+        assertThat(rig.reliability.activeInvocations).isZero()
+        assertThat(rig.reliability.activeOriginalRequests).isZero()
+        assertThat(rig.reliability.activeDownstreamProcesses).isZero()
+        rig.reliability.metrics.verifyConnectionsDrained()
+    }
+
     private fun graph(
         clients: Int = 2,
         wait: String = "5ms",

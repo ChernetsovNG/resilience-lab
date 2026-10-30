@@ -335,6 +335,187 @@
         },
         {
           "additionalProperties": false,
+          "description": "Client admission and a bounded-wait server connection pool before one synchronous call.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "maxClientConnections": {
+                  "description": "Concurrent client connections; excess attempts are rejected immediately.",
+                  "minimum": 1.0,
+                  "title": "Maximum client connections",
+                  "type": "integer"
+                },
+                "poolSize": {
+                  "description": "Concurrent server connections held through local delay and the outgoing call.",
+                  "minimum": 1.0,
+                  "title": "Server pool size",
+                  "type": "integer"
+                },
+                "processing": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "description": "Distribution of the duration.",
+                          "enum": [
+                            "fixed",
+                            "exponential",
+                            "lognormal"
+                          ],
+                          "title": "Distribution",
+                          "type": "string"
+                        },
+                        "mean": {
+                          "description": "Mean duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                          "title": "Mean",
+                          "type": "string",
+                          "x-quantity": {
+                            "dimension": "DURATION",
+                            "minimum": 0.0,
+                            "units": [
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1.0,
+                                "symbol": "ms"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1000.0,
+                                "symbol": "s"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 60000.0,
+                                "symbol": "min"
+                              }
+                            ]
+                          }
+                        },
+                        "stdDev": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Required for lognormal only. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Standard deviation"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mean"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": {
+                    "kind": "fixed",
+                    "mean": "0ms"
+                  },
+                  "description": "Local delay after acquiring a server connection, before the outgoing call.",
+                  "title": "Pooler delay"
+                },
+                "waitTimeout": {
+                  "description": "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                  "title": "Server connection wait timeout",
+                  "type": "string",
+                  "x-quantity": {
+                    "dimension": "DURATION",
+                    "minimum": 0.0,
+                    "units": [
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1.0,
+                        "symbol": "ms"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 1000.0,
+                        "symbol": "s"
+                      },
+                      {
+                        "denominator": 1.0,
+                        "numerator": 60000.0,
+                        "symbol": "min"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "maxClientConnections",
+                "poolSize",
+                "waitTimeout"
+              ],
+              "type": "object"
+            },
+            "replicaOverrides": {
+              "maxProperties": 0,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "scenario": {
+              "type": "null"
+            },
+            "type": {
+              "const": "pooler"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ],
+          "title": "Transaction pooler",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Selects a service, database or another router without queueing or delay; outputs are measured on route connections.",
           "properties": {
             "description": {
@@ -1195,7 +1376,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "One router output to a service, database or another router.",
+          "description": "One router output to a callable block.",
           "properties": {
             "description": {
               "type": [

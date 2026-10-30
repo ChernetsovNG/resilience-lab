@@ -1094,5 +1094,6 @@
   "catalog.types.pooler.outputs.p99LatencyMs.timeline.groupTitle": "Residence time",
   "catalog.types.pooler.outputs.p99LatencyMs.inspector.title": "Residence time",
   "messages.POOLER_OUTPUT": "Pooler '{pooler}' must have exactly one outgoing call",
+  "messages.POOLER_CALL_POOL": "Outgoing call of pooler '{pooler}' must not declare a connection pool",
   "messages.POOLER_TARGET": "Pooler '{pooler}' must call a database, service or router"
 }

@@ -1,5 +1,6 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -150,7 +151,13 @@ class SeriesWriter(
     private val maxPartBytes: Int = MAX_PART_BYTES,
 ) {
     private val expectedWindows = windowCount(endMs, windowMs)
-    private val json = Json { encodeDefaults = true }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private val json =
+        Json {
+            encodeDefaults = true
+            explicitNulls = false
+        }
     private val parts = mutableListOf<SeriesPartReference>()
     private var nextWindow = 0
     private var nodeIds: List<String>? = null

@@ -76,7 +76,9 @@ class Stage1CatalogTest {
 
     @Test
     fun `contains the stage 1 block and connection types`() {
-        assertThat(catalog.types.map { it.id }).containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler")
+        assertThat(
+            catalog.types.map { it.id },
+        ).containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler")
         assertThat(catalog.type("client")!!.category).isEqualTo(TypeCategory.BLOCK)
         assertThat(
             catalog.type("call")!!.connects,

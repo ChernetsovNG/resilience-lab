@@ -497,9 +497,42 @@ class ModelCompiler(
                             args = mapOf("pooler" to JsonPrimitive(id)),
                         )
                     }
+                    outputs.filter { "pool" in it.params }.forEach { output ->
+                        val override = origins[output.id]
+                        val descendants =
+                            override
+                                ?.pointers
+                                ?.entries
+                                .orEmpty()
+                                .filter { it.key.startsWith("pool.") }
+                        val nestedOrigin = (descendants.firstOrNull { it.value.startsWith("/grid/") } ?: descendants.firstOrNull())?.key
+                        reader(
+                            "call",
+                            TypeCategory.CONNECTION,
+                            output.params,
+                            document,
+                            JsonPointer.of("connections", model.connections.indexOf(output), "params"),
+                            output.id,
+                            sink,
+                            override,
+                        )?.fail<Unit>(
+                            CoreMessage.POOLER_CALL_POOL,
+                            "pool",
+                            "Outgoing call of pooler '$id' must not declare a connection pool",
+                            dependsOn = nestedOrigin,
+                            args = mapOf("pooler" to JsonPrimitive(id)),
+                        )
+                    }
                     readPooler(id, block.params, document, origins[id], sink)
                 } else {
-                    val steps = if (block.type == "service") readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink) else null
+                    val steps =
+                        if (block.type ==
+                            "service"
+                        ) {
+                            readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
+                        } else {
+                            null
+                        }
                     readService(id, block.params, document, origins[id], sink, block.type)?.copy(scenario = steps)
                 }
             }
