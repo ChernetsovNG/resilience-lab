@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import { documentViews, model, modelPath } from "./test/fixtures";
@@ -8,15 +8,19 @@ setupAppTests();
 
 describe("palette insertion", () => {
 
-  it.each([1, 0])("adds and selects a centered block as one undo command (click detail %s)", async (detail) => {
+  it.each(["double click", "Enter", "Add"])("adds and selects a centered block as one undo command with %s", async activation => {
     server((url, init) => url.includes(encodeURIComponent(modelPath)) && init?.method !== "PUT" ? {
       body: { ...documentViews[modelPath], content: { model: { ...model, blocks: {}, connections: [] } } },
     } : undefined);
     render(<App />);
     await screen.findByRole("heading", { name: "Run settings" });
     await waitFor(() => expect(button("Service").disabled).toBe(false));
-    // Native Enter activation emits a click with detail=0; the browser E2E exercises the key itself.
-    fireEvent.click(button("Service"), { detail });
+    if (activation === "double click") fireEvent.doubleClick(button("Service"));
+    else if (activation === "Enter") fireEvent.keyDown(button("Service"), { key: "Enter" });
+    else {
+      fireEvent.click(button("Service"));
+      fireEvent.click(within(screen.getByRole("dialog", { name: "About Service" })).getByRole("button", { name: "Add" }));
+    }
     const node = await screen.findByTestId("rf__node-service-1");
     await waitFor(() => expect(node.classList.contains("selected")).toBe(true));
     expect(node.style.transform).toBe("translate(100px,40px)");
@@ -28,18 +32,34 @@ describe("palette insertion", () => {
     expect(await screen.findByTestId("rf__node-service-1")).toBeTruthy();
   });
 
-  it("explains blocked insertion on a variant page and disables insertion while an input draft is invalid", async () => {
+  it("opens details without changing the model or history", async () => {
+    server();
+    await open();
+    fireEvent.click(button("Service"));
+    expect(screen.getByRole("dialog", { name: "About Service" })).toBeTruthy();
+    expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+    expect(button("Undo").disabled).toBe(true);
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("allows details and help but blocks insertion on variant pages and with an invalid input draft", async () => {
     server();
     await open();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     expect(button("Service").disabled).toBe(false);
     fireEvent.click(button("Service"));
-    expect(screen.getByRole("alert").textContent).toContain("Structure is edited on the Model page");
+    expect(button("Add").disabled).toBe(true);
+    fireEvent.doubleClick(button("Service"));
+    fireEvent.keyDown(button("Service"), { key: "Enter" });
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
+    fireEvent.keyDown(button("Service"), { key: "Escape" });
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     await selectGateway();
     editHandlers("invalid");
-    expect(button("Service").disabled).toBe(true);
+    expect(button("Service").disabled).toBe(false);
+    fireEvent.click(button("Service"));
+    expect(button("Add").disabled).toBe(true);
+    expect(within(screen.getByRole("dialog", { name: "About Service" })).getByRole("button", { name: "Type help" })).toBeTruthy();
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();
   });
 
@@ -48,8 +68,8 @@ describe("palette insertion", () => {
 it("keeps successive palette activations as separate undoable insertions while measuring", async () => {
   server();
   await open();
-  fireEvent.click(button("Service"));
-  fireEvent.click(button("Service"));
+  fireEvent.doubleClick(button("Service"));
+  fireEvent.doubleClick(button("Service"));
   const second = await screen.findByTestId("rf__node-service-2");
   await waitFor(() => expect(second.classList.contains("selected")).toBe(true));
   expect(screen.getAllByTestId("block-node")).toHaveLength(6);
@@ -64,7 +84,7 @@ it("keeps successive palette activations as separate undoable insertions while m
 it("cancels a measured palette insertion when switching experiments before its command", async () => {
   server();
   await open();
-  fireEvent.click(button("Service"));
+  fireEvent.doubleClick(button("Service"));
   const preview = await screen.findByTestId("rf__node-service-1");
   expect(preview.classList.contains("selected")).toBe(false);
   fireEvent.change(experimentSelect(), { target: { value: otherPath } });

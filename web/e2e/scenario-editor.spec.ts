@@ -454,6 +454,37 @@ async function connect(page: Page, from: string, to: string, targetPort = "in") 
   await source.dragTo(target);
 }
 
+test("inspects a palette block without changing the model and inserts it once with a double click", async ({ page, files }) => {
+  const source = (await stored(page, files.model)).content.model as ModelFile;
+  const service = page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true });
+  await service.click();
+  const card = page.getByRole("dialog", { name: "About Service", exact: true });
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  expect((await stored(page, files.model)).content.model).toEqual(source);
+  await card.getByRole("button", { name: "Type help", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Service", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await service.dblclick();
+  const node = page.getByTestId("rf__node-service-1");
+  await expect(node).toHaveClass(/selected/);
+  await expect(page.getByTestId("block-node")).toHaveCount(5);
+  await expect(card).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(node).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await save(page);
+  const saved = (await stored(page, files.model)).content.model as ModelFile;
+  expect(Object.keys(saved.blocks)).toHaveLength(5);
+  expect(saved.blocks["service-1"].type).toBe("service");
+});
+
 test("adds a block with Tab and Enter at the panned viewport center, with undo and persistence", async ({ page, files }) => {
   await page.addInitScript(() => {
     const target = window as Window & { paletteErrors: string[] };
@@ -475,13 +506,19 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(palette.getByRole("tooltip").filter({ hasText: "Blocking service" })).toBeVisible();
   await page.locator(".react-flow__controls-zoomout").click();
   const bounds = (await canvas.boundingBox())!;
+  const pan = await canvas.evaluate(element => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
+    return { x: matrix.e, y: matrix.f };
+  });
   // Move the existing chain above the visible center, leaving a free insertion point after zooming.
   await page.mouse.move(bounds.x + 80, bounds.y + bounds.height - 40);
   await page.mouse.down();
   await page.mouse.move(bounds.x - 70, bounds.y + bounds.height - 280, { steps: 12 });
   await page.mouse.up();
-  // Let the pan finish rendering before sending native keyboard activation.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect.poll(() => canvas.evaluate((element, start) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
+    return { x: Math.round(matrix.e - start.x), y: Math.round(matrix.f - start.y) };
+  }, pan)).toEqual({ x: -150, y: -240 });
   const expected = await canvas.evaluate((element) => {
     const viewport = element.querySelector(".react-flow__viewport")!;
     const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
@@ -520,10 +557,14 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(node).toBeVisible();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await service.click();
-  await expect(page.getByRole("alert")).toContainText("Structure is edited on the Model page");
+  const card = page.getByRole("dialog", { name: "About Service", exact: true });
+  await expect(card.getByRole("button", { name: "Add", exact: true })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "Type help", exact: true })).toBeEnabled();
+  await service.press("Enter");
   await expect(page.getByTestId("rf__node-service-2")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Model", exact: true }).click();
-  await service.click();
+  await service.dblclick();
   const second = page.getByTestId("rf__node-service-2");
   await expect(second).toHaveClass(/selected/);
   const boxes = await page.locator(".react-flow__node").evaluateAll((nodes) => nodes.map((element) => {
@@ -563,7 +604,7 @@ test("measures a new Client before collision checks with its initial values and 
   await page.mouse.down();
   await page.mouse.move(bounds.x + 20 + delta.x, bounds.y + bounds.height - 40 + delta.y, { steps: 12 });
   await page.mouse.up();
-  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Client", exact: true }).click();
+  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Client", exact: true }).dblclick();
   const incoming = page.getByTestId("rf__node-client-1");
   await expect(incoming).toHaveClass(/selected/);
   await expect(incoming).toHaveCSS("transform", "matrix(1, 0, 0, 1, -100, 280)");
@@ -580,8 +621,14 @@ test("measures a new Client before collision checks with its initial values and 
 test("extends the chain through real drag and ports, persists positions and commits a move as one layout-only command", async ({ page, files }) => {
   const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = await canvas.boundingBox();
+  const targetPosition = { x: Math.round(bounds!.width * 0.55), y: Math.round(bounds!.height * 0.7) };
+  const expectedDrop = await canvas.evaluate((element, point) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
+    return { x: Math.round((point.x - matrix.e) / matrix.a / 20) * 20,
+      y: Math.round((point.y - matrix.f) / matrix.d / 20) * 20 };
+  }, targetPosition);
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true })
-    .dragTo(canvas, { targetPosition: { x: bounds!.width * 0.55, y: bounds!.height * 0.7 } });
+    .dragTo(canvas, { targetPosition });
   const node = page.getByTestId("rf__node-service-1");
   await expect(node).toBeVisible();
   await expect(node).toHaveClass(/selected/);
@@ -609,6 +656,7 @@ test("extends the chain through real drag and ports, persists positions and comm
   expect(initial.content.model.connections.at(-1)).toMatchObject({ id: "dependency-to-service-1", from: "dependency", to: "service-1", type: "call", params: { timeout: "80ms" } });
   expect(layout.positions["service-1"].x % 20).toBe(0);
   expect(layout.positions["service-1"].y % 20).toBe(0);
+  expect(layout.positions["service-1"]).toEqual(expectedDrop);
   await page.reload();
   await expect(node).toBeVisible();
   await expect(edge).toBeAttached();
@@ -687,7 +735,10 @@ test("moves a multi-selection once, copies its internal connection, and keeps va
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service" }).click();
-  await expect(page.getByRole("alert")).toContainText("Structure is edited on the Model page");
+  const card = page.getByRole("dialog", { name: "About Service", exact: true });
+  await expect(card.getByRole("button", { name: "Add", exact: true })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "Type help", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await gateway.click();
   await expect(page.getByLabel("Identifier", { exact: true })).not.toBeEditable();
@@ -765,7 +816,7 @@ test("keeps the Inspector on one target and manages variant pages through their 
 test("inserts a database with explicit initial values and a wiring hint, then connects it", async ({ page, files }) => {
   const palette = page.getByRole("complementary", { name: "Palette" });
   const run = page.getByRole("button", { name: "Run", exact: true });
-  await palette.getByRole("button", { name: "Database", exact: true }).click();
+  await palette.getByRole("button", { name: "Database", exact: true }).dblclick();
   const database = page.getByTestId("rf__node-database-1");
   await expect(database).toBeVisible();
   await expect(page.getByLabel("Maximum connections", { exact: true })).toHaveValue("100");

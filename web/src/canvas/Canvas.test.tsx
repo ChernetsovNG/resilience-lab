@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useLayoutEffect, useRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
-import { Canvas } from "./Canvas";
+import { Canvas, type CanvasHandle } from "./Canvas";
 import { VariantTabs } from "./VariantTabs";
 import { canvasResults, type CanvasResults } from "../results/canvasResults";
 import { summary } from "../test/fixtures";
@@ -16,6 +17,20 @@ import type { EditorCommand } from "../workspace/editor";
 import { applyOverrides } from "../workspace/params";
 
 beforeAll(mockReactFlowDom);
+
+it("retains an insertion activated before the viewport has its initial dimensions", async () => {
+  const onCommand = vi.fn();
+  function EarlyActivation() {
+    const ref = useRef<CanvasHandle>(null);
+    useLayoutEffect(() => { ref.current!.addBlock("service"); }, []);
+    return <Canvas ref={ref} catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+      onCommand={onCommand} editable />;
+  }
+  render(<EarlyActivation />);
+  await waitFor(() => expect(onCommand).toHaveBeenCalledTimes(1));
+  const command = onCommand.mock.lastCall![0] as EditorCommand;
+  expect(command({ model, layout, experiment }).model.blocks["service-1"].type).toBe("service");
+});
 
 it("marks overridden route weights before any results exist", async () => {
   const base = structuredClone(model);

@@ -444,7 +444,7 @@ export function App() {
             }}
           />
         )}>
-      <Palette hidden={analysis} catalog={catalog} editable={editable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
+      <Palette hidden={analysis} catalog={catalog} editable={model !== null && structureEditable && !invalid} onAdd={(type) => canvas.current?.addBlock(type)} />
       <main className="canvas-area" onKeyDown={event => {
         if (event.key === "Escape" && !event.defaultPrevented && event.target instanceof Element &&
           !event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) {

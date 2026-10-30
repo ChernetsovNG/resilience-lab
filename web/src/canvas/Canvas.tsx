@@ -37,7 +37,7 @@ const ariaLabelConfig = (): AriaLabelConfig => ({
   "handle.ariaLabel": t("editor.canvas.handle"),
 });
 
-/** Palette activation places a block using the canvas viewport at the moment of activation. */
+/** Palette activation uses the current viewport, waiting for its first measurement when necessary. */
 export interface CanvasHandle {
   addBlock: (type: string) => void;
 }
@@ -107,12 +107,12 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
   const zoom = useStore((state) => state.transform[2]);
-  const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } }[]>([]);
+  const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } | null }[]>([]);
   const [measurement, setMeasurement] = useState<{
     request: (typeof insertions)[number]; size: { width: number; height: number };
   } | null>(null);
   const pending = insertions[0];
-  const pendingId = pending === undefined ? null : nextBlockId(model, pending.type);
+  const pendingId = pending?.center == null ? null : nextBlockId(model, pending.type);
   const pendingSize = measurement !== null && measurement.request === pending ? measurement.size : undefined;
   const [notice, setNotice] = useState<{ readonly message: string | null; variant?: string } | null>(null);
   const gesture = useRef<{ x: number; y: number } | null>(null);
@@ -123,9 +123,10 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   useImperativeHandle(ref, () => ({
     addBlock: (type) => {
       if (!editable) { structureHint(); return; }
-      if (disabled || width <= 0 || height <= 0) return;
+      if (disabled) return;
       const viewport = getViewport();
-      const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
+      const center = width > 0 && height > 0
+        ? { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom } : null;
       if (catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) {
         setInsertions((current) => [...current, { type, center }]);
       }
@@ -133,6 +134,11 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   }));
   const initialized = useNodesInitialized();
   const hasNodes = Object.keys(model.blocks).length > 0;
+  if (pending?.center === null && width > 0 && height > 0 && (initialized || !hasNodes)) {
+    const viewport = getViewport();
+    const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
+    setInsertions([{ ...pending, center }, ...insertions.slice(1)]);
+  }
   useEffect(() => {
     if (initialized || !hasNodes) onZoomChange?.(zoom);
   }, [initialized, hasNodes, zoom, onZoomChange]);
@@ -141,14 +147,15 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
   }, [fitView, fitViewOptions, initialized, width, height, sizes, insertions.length]);
   useEffect(() => {
-    if (pending === undefined || measurement?.request !== pending) return;
+    if (pending === undefined || pending.center === null || measurement?.request !== pending) return;
+    const center = pending.center;
     // Commit outside ResizeObserver delivery and cancel if the canvas or active document changes first.
     const frame = requestAnimationFrame(() => {
       setInsertions((current) => current.slice(1));
       if (editable && !disabled) {
         const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ ...node.position,
           width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }));
-        onCommand(addBlock(catalog, pending.type, insertionPosition(pending.center, occupied, measurement.size, gridStep, snapToGrid)));
+        onCommand(addBlock(catalog, pending.type, insertionPosition(center, occupied, measurement.size, gridStep, snapToGrid)));
       }
     });
     return () => cancelAnimationFrame(frame);
@@ -171,7 +178,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   const nodes: BlockNodeType[] = blocks.map(([id, block]) => ({
     id,
     type: "block",
-    position: id === pendingId && pending !== undefined ? pending.center : ownEntry(moving, id) ?? positionOf(model, layout, id),
+    position: id === pendingId && pending?.center != null ? pending.center : ownEntry(moving, id) ?? positionOf(model, layout, id),
     measured: id === pendingId ? pendingSize : ownEntry(sizes, id),
     style: id === pendingId ? { visibility: "hidden" } : undefined,
     selectable: id === pendingId ? false : undefined,

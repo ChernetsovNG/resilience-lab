@@ -6,8 +6,18 @@ import { localizeCatalog } from "../i18n/catalog";
 import rawCatalog from "../test/catalog.json";
 import { experiment, model } from "../test/fixtures";
 import { Inspector } from "../inspector/Inspector";
+import { TypeHelp } from "./TypeHelp";
 
 afterEach(() => { setLanguage("en"); localStorage.clear(); });
+
+it.each(["en", "ru"] as const)("keeps the visible text in the accessible name of a text help trigger in %s", locale => {
+  setLanguage(locale);
+  const catalog = localizeCatalog(rawCatalog as Catalog, locale);
+  const text = locale === "en" ? "Type help" : "Справка о типе";
+  render(<TypeHelp catalog={catalog} typeId="service">{text}</TypeHelp>);
+  fireEvent.click(screen.getByRole("button", { name: text }));
+  expect(within(screen.getByRole("dialog")).getByRole("heading", { name: locale === "en" ? "Service" : "Сервис" })).toBeTruthy();
+});
 
 function inspect(typeId: string, locale: Language = "en") {
   setLanguage(locale);

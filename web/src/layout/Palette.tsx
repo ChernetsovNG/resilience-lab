@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { Catalog, TypeDescriptor } from "../api/apiTypes";
+import { TypeHelp } from "../help/TypeHelp";
 
 function BlockIcon({ type }: { type: TypeDescriptor }) {
   if (type.id !== "client" && type.id !== "service" && type.id !== "router") {
@@ -26,15 +27,38 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
   onAdd: (type: string) => void;
 }) {
   const tooltipId = useId();
+  const [details, setDetails] = useState<{ type: string; anchor: HTMLButtonElement } | null>(null);
+  const close = useCallback((restoreFocus = false) => {
+    setDetails(null);
+    if (restoreFocus) details?.anchor.focus();
+  }, [details]);
+  if (hidden && details !== null) setDetails(null);
   const types = catalog?.types.filter((type) => type.category === "BLOCK") ?? [];
+  const add = (type: string) => {
+    if (!editable) return;
+    close(true);
+    onAdd(type);
+  };
   return (
     <aside hidden={hidden} className="palette" aria-label={t("editor.palette.label")}>
       <ul>
         {types.map((type) => (
-          <li key={type.id}>
-            <button type="button" draggable={editable} disabled={!editable} aria-label={type.title}
-              aria-describedby={`${tooltipId}-type-${type.id}`} onClick={() => onAdd(type.id)}
+          <li key={type.id} className={details?.type === type.id ? "palette-item--open" : undefined}>
+            <button type="button" draggable={editable} aria-label={type.title}
+              aria-expanded={details?.type === type.id} aria-controls={details?.type === type.id ? `${tooltipId}-card` : undefined}
+              aria-describedby={`${tooltipId}-type-${type.id}`}
+              onClick={event => {
+                if (event.detail < 2) setDetails(details?.type === type.id ? null : { type: type.id, anchor: event.currentTarget });
+              }}
+              onDoubleClick={() => add(type.id)}
+              onKeyDown={event => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                if (!event.repeat) add(type.id);
+              }}
               onDragStart={(event) => {
+                if (!editable) { event.preventDefault(); return; }
+                close();
                 event.dataTransfer.setData("application/resilience-lab-block", type.id);
                 event.dataTransfer.effectAllowed = "copy";
               }}>
@@ -43,6 +67,8 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
             <span className="palette-tooltip" role="tooltip" id={`${tooltipId}-type-${type.id}`}>
               <strong>{type.title}</strong><span>{type.description}</span>
             </span>
+            {details?.type !== type.id || catalog === null ? null : <PaletteDetails id={`${tooltipId}-card`}
+              catalog={catalog} type={type} anchor={details.anchor} editable={editable} onAdd={() => add(type.id)} onClose={close} />}
           </li>
         ))}
         <li className="palette-help">
@@ -56,4 +82,53 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
       </ul>
     </aside>
   );
+}
+
+function PaletteDetails({ id, catalog, type, anchor, editable, onAdd, onClose }: {
+  id: string; catalog: Catalog; type: TypeDescriptor; anchor: HTMLButtonElement; editable: boolean;
+  onAdd: () => void; onClose: (restoreFocus?: boolean) => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const popup = panel.current!;
+    if (popup.showPopover) popup.showPopover();
+    else popup.style.display = "block";
+    const position = () => {
+      const button = anchor.getBoundingClientRect();
+      const bounds = popup.getBoundingClientRect();
+      popup.style.left = Math.max(8, Math.min(button.right + 8, window.innerWidth - bounds.width - 8)) + "px";
+      popup.style.top = Math.max(8, Math.min(button.top, window.innerHeight - bounds.height - 8)) + "px";
+    };
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !popup.contains(event.target) && !anchor.contains(event.target)) onClose();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose(true);
+    };
+    position();
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("keydown", escape);
+    window.addEventListener("resize", position);
+    document.addEventListener("scroll", position, true);
+    return () => {
+      popup.hidePopover?.();
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", position);
+      document.removeEventListener("scroll", position, true);
+    };
+  }, [anchor, onClose]);
+
+  return <div ref={panel} id={id} popover="manual" role="dialog" aria-label={t("editor.palette.details", { type: type.title })}
+    className="palette-card">
+    <h3>{type.title}</h3>
+    <p>{type.description}</p>
+    <div className="palette-card-actions">
+      <button type="button" disabled={!editable} onClick={onAdd}>{t("editor.palette.add")}</button>
+      <TypeHelp catalog={catalog} typeId={type.id}>{t("editor.palette.help")}</TypeHelp>
+    </div>
+  </div>;
 }

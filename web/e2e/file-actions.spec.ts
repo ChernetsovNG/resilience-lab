@@ -140,8 +140,8 @@ test("creates an empty model and runs a system built from the palette", async ({
     await page.getByRole("button", { name: "Collapse results", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("empty-model.png") });
     const palette = page.getByRole("complementary", { name: "Palette" });
-    await palette.getByRole("button", { name: "Client", exact: true }).click();
-    await palette.getByRole("button", { name: "Service", exact: true }).click();
+    await palette.getByRole("button", { name: "Client", exact: true }).dblclick();
+    await palette.getByRole("button", { name: "Service", exact: true }).dblclick();
     await page.locator(".react-flow__controls-fitview").click();
     await page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]').dragTo(
       page.getByTestId("rf__node-service-1").locator('[data-handleid="in"]'));
