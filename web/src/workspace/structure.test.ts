@@ -11,6 +11,7 @@ import {
 const documents = (): EditorDocuments => structuredClone({ model, layout, experiment });
 
 function roundTrip(before: EditorDocuments, command: EditorCommand) {
+  const snapshot = structuredClone(before);
   const loaded = {
     ...before, saved: before,
     experimentPath: "chain.experiment.json", modelPath: "chain.model.json", layoutPath: "chain.layout.json",
@@ -19,13 +20,123 @@ function roundTrip(before: EditorDocuments, command: EditorCommand) {
   const opened = editorReducer(initialEditorState, { type: "open", loaded });
   const edited = editorReducer(opened, { type: "command", command });
   expect(edited.past).toHaveLength(1);
+  expect(before).toEqual(snapshot);
   const undone = editorReducer(edited, { type: "undo" });
   expect(undone.loaded).toEqual(loaded);
   expect(editorReducer(undone, { type: "redo" }).loaded).toEqual(edited.loaded);
   return edited.loaded!;
 }
 
+function scenarioDocuments(): EditorDocuments {
+  const before = documents();
+  before.model.connections.push({ id: "gateway-to-middle-extra", type: "call", from: "gateway", to: "dependency", params: {} });
+  before.model.blocks.gateway.scenario = [
+    { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+    { type: "call", connection: "gateway-to-middle" },
+    { type: "process" },
+    { type: "call", connection: "gateway-to-middle" },
+    { type: "call", connection: "gateway-to-middle-extra" },
+  ];
+  before.model.blocks.middle.scenario = [{ type: "process" }, { type: "call", connection: "middle-to-dependency" }];
+  before.model.blocks.dependency.scenario = null;
+  return before;
+}
+
 describe("structure commands", () => {
+  it("renames every repeated scenario call by exact connection id in one undo step", () => {
+    const before = scenarioDocuments();
+    const after = roundTrip(before, renameElement("gateway-to-middle", "rpc"));
+    expect(after.model.blocks.gateway.scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "call", connection: "rpc" },
+      { type: "process" },
+      { type: "call", connection: "rpc" },
+      { type: "call", connection: "gateway-to-middle-extra" },
+    ]);
+    expect(after.model.blocks.middle).toEqual(before.model.blocks.middle);
+    expect(after.model.blocks.dependency.scenario).toBeNull();
+    expect(after.model.blocks.client).not.toHaveProperty("scenario");
+  });
+
+  it("removes repeated calls to a deleted connection while preserving other steps in one undo step", () => {
+    const before = scenarioDocuments();
+    const after = roundTrip(before, deleteElements(["gateway-to-middle"]));
+    expect(after.model.blocks.gateway.scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "process" },
+      { type: "call", connection: "gateway-to-middle-extra" },
+    ]);
+    expect(after.model.blocks.middle).toEqual(before.model.blocks.middle);
+    expect(after.model.connections.some(edge => edge.id === "gateway-to-middle")).toBe(false);
+  });
+
+  it("omits a scenario after deleting its last call steps in one undo step", () => {
+    const before = documents();
+    before.model.blocks.gateway.scenario = [
+      { type: "call", connection: "gateway-to-middle" }, { type: "call", connection: "gateway-to-middle" },
+    ];
+    const after = roundTrip(before, deleteElements(["gateway-to-middle"]));
+    expect(after.model.blocks.gateway).not.toHaveProperty("scenario");
+  });
+
+  it("removes calls to connections deleted by a block cascade in one undo step", () => {
+    const before = scenarioDocuments();
+    const after = roundTrip(before, deleteElements(["middle"]));
+    expect(after.model.blocks).not.toHaveProperty("middle");
+    expect(after.model.blocks.gateway.scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "process" },
+      { type: "call", connection: "gateway-to-middle-extra" },
+    ]);
+    expect(after.model.connections.map(edge => edge.id)).toEqual(["client-to-gateway", "gateway-to-middle-extra"]);
+  });
+
+  it("renames a service without changing its scenario connection ids", () => {
+    const before = scenarioDocuments();
+    const after = roundTrip(before, renameElement("gateway", "entry"));
+    expect(after.model.blocks.entry.scenario).toEqual(before.model.blocks.gateway.scenario);
+    expect(after.model.connections[1].from).toBe("entry");
+  });
+
+  it("pastes repeated and downstream calls using copied connection ids in one undo step", () => {
+    const before = scenarioDocuments();
+    const fragment = copySelection(before, ["gateway", "middle", "dependency"]);
+    const after = roundTrip(before, pasteSelection(fragment));
+    expect(after.model.blocks["service-2"].scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "call", connection: "service-2-to-service-3" },
+      { type: "process" },
+      { type: "call", connection: "service-2-to-service-3" },
+      { type: "call", connection: "service-2-to-service-1" },
+    ]);
+    expect(after.model.blocks["service-3"].scenario).toEqual([{ type: "process" }, { type: "call", connection: "service-3-to-service-1" }]);
+    expect(after.model.blocks.gateway).toEqual(before.model.blocks.gateway);
+    expect(fragment).toEqual(copySelection(before, ["gateway", "middle", "dependency"]));
+  });
+
+  it("drops calls outside a partial copy and rewrites collision-safe ids on every paste", () => {
+    const before = scenarioDocuments();
+    before.model.blocks["service-1-to-service-2"] = { type: "service", params: {} };
+    before.model.blocks.middle.scenario = [{ type: "call", connection: "middle-to-dependency" }];
+    const fragment = copySelection(before, ["gateway", "middle"]);
+    const first = roundTrip(before, pasteSelection(fragment));
+    expect(first.model.blocks["service-1"].scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "call", connection: "service-1-to-service-2-1" },
+      { type: "process" },
+      { type: "call", connection: "service-1-to-service-2-1" },
+    ]);
+    expect(first.model.blocks["service-2"]).not.toHaveProperty("scenario");
+    const second = roundTrip(first, pasteSelection(fragment));
+    expect(second.model.blocks["service-3"].scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "call", connection: "service-3-to-service-4" },
+      { type: "process" },
+      { type: "call", connection: "service-3-to-service-4" },
+    ]);
+    expect(second.model.blocks["service-4"]).not.toHaveProperty("scenario");
+  });
+
   it("adds a database leaf and preserves its query parameters when editing and saving", () => {
     const fullCatalog = outputCatalog as Catalog;
     const added = roundTrip(documents(), addBlock(fullCatalog, "database", { x: 20, y: 40 }));

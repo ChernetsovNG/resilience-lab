@@ -67,6 +67,70 @@ test("opens saves and runs a transaction pooler and displays both resource limit
   expect((await stored(page, files.model)).content.model).toEqual(source);
 });
 
+for (const operation of ["rename", "delete connection", "delete block", "copy group", "copy service"] as const) {
+  test(`keeps scenario references valid after ${operation} and undo/redo`, async ({ page, files }) => {
+    const source = JSON.parse(await readFile(resolve("../apps/server/build/e2e-workspace", files.model), "utf8")) as ModelFile;
+    source.blocks.gateway.scenario = [
+      { type: "call", connection: "gateway-to-middle" }, { type: "call", connection: "gateway-to-middle" },
+    ];
+    source.blocks.middle.scenario = [{ type: "process" }, { type: "call", connection: "middle-to-dependency" }];
+    await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(source));
+    await page.reload();
+    await expect(page.getByTestId("block-node")).toHaveCount(4);
+    const expected = structuredClone(source);
+
+    if (operation === "rename") {
+      await page.getByTestId("canvas-param-gateway-to-middle-timeout").click();
+      await page.getByLabel("Identifier", { exact: true }).fill("rpc");
+      await page.getByLabel("Identifier", { exact: true }).press("Enter");
+      expected.connections.find(edge => edge.id === "gateway-to-middle")!.id = "rpc";
+      expected.blocks.gateway.scenario = [{ type: "call", connection: "rpc" }, { type: "call", connection: "rpc" }];
+    } else if (operation === "delete connection" || operation === "delete block") {
+      if (operation === "delete connection") {
+        await page.getByTestId("canvas-param-gateway-to-middle-timeout").click();
+        expected.connections = expected.connections.filter(edge => edge.id !== "gateway-to-middle");
+      } else {
+        await page.getByTestId("rf__node-middle").locator(".block-node > strong").click();
+        delete expected.blocks.middle;
+        expected.connections = expected.connections.filter(edge => edge.from !== "middle" && edge.to !== "middle");
+      }
+      await page.keyboard.press("Delete");
+      delete expected.blocks.gateway.scenario;
+    } else {
+      await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+      expected.blocks["service-1"] = structuredClone(source.blocks.gateway);
+      if (operation === "copy group") {
+        await page.getByTestId("rf__node-middle").locator(".block-node > strong").click({ modifiers: ["ControlOrMeta"] });
+        expected.blocks["service-1"].scenario = [
+          { type: "call", connection: "service-1-to-service-2" }, { type: "call", connection: "service-1-to-service-2" },
+        ];
+        expected.blocks["service-2"] = { ...structuredClone(source.blocks.middle), scenario: [{ type: "process" }] };
+        expected.connections.push({ ...structuredClone(source.connections[1]), id: "service-1-to-service-2", from: "service-1", to: "service-2" });
+      } else {
+        delete expected.blocks["service-1"].scenario;
+      }
+      await page.keyboard.press("ControlOrMeta+c");
+      await page.keyboard.press("ControlOrMeta+v");
+    }
+
+    async function persistAndValidate() {
+      await save(page);
+      const response = await page.request.post("/api/v1/validate", { data: { experiment: files.experiment } });
+      expect(response.ok()).toBe(true);
+      const validation = await response.json();
+      expect(validation.diagnostics.filter((item: { code: string }) => item.code === "SCENARIO_CONNECTION")).toEqual([]);
+      return JSON.parse(await readFile(resolve("../apps/server/build/e2e-workspace", files.model), "utf8")) as ModelFile;
+    }
+
+    expect(await persistAndValidate()).toEqual(expected);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    expect(await persistAndValidate()).toEqual(source);
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    expect(await persistAndValidate()).toEqual(expected);
+  });
+}
+
 test("opens saves and runs a load profile without losing points", async ({ page, files }) => {
   const profiled = (await stored(page, files.model)).content.model as ModelFile;
   const load = { points: [{ time: "0s", rate: "120/s" }, { time: "1s", rate: "180/s" }] };

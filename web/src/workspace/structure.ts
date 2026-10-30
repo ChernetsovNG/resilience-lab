@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { Catalog, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
+import type { BlockInstance, Catalog, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand, EditorDocuments } from "./editor";
 import { elementOf, ownEntry } from "./params";
 
@@ -122,6 +122,18 @@ function references(experiment: ExperimentFile, mapId: (id: string) => string | 
   };
 }
 
+function scenarioReferences(block: BlockInstance, mapId: (id: string) => string | null): BlockInstance {
+  if (block.scenario == null) return block;
+  const scenario = block.scenario.flatMap((step) => {
+    if (step.type !== "call" || step.connection == null) return [step];
+    const connection = mapId(step.connection);
+    return connection === null ? [] : [{ ...step, connection }];
+  });
+  const next: BlockInstance = { ...block, scenario };
+  if (scenario.length === 0) delete next.scenario;
+  return next;
+}
+
 /** Removes a selection and every reference to it in one undoable document operation. */
 export function deleteElements(selection: string[]): EditorCommand {
   return (documents) => {
@@ -130,14 +142,16 @@ export function deleteElements(selection: string[]): EditorCommand {
     for (const edge of documents.model.connections) {
       if (selected.has(edge.id) || removed.has(edge.from) || removed.has(edge.to)) removed.add(edge.id);
     }
+    const mapId = (id: string) => removed.has(id) ? null : id;
     return {
       ...documents,
       model: { ...documents.model,
-        blocks: Object.fromEntries(Object.entries(documents.model.blocks).filter(([id]) => !removed.has(id))),
+        blocks: Object.fromEntries(Object.entries(documents.model.blocks).filter(([id]) => !removed.has(id))
+          .map(([id, block]) => [id, scenarioReferences(block, mapId)])),
         connections: documents.model.connections.filter((edge) => !removed.has(edge.id)),
       },
       layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).filter(([id]) => !removed.has(id))) },
-      experiment: references(documents.experiment, (id) => removed.has(id) ? null : id),
+      experiment: references(documents.experiment, mapId),
     };
   };
 }
@@ -150,7 +164,7 @@ export function renameElement(id: string, next: string): EditorCommand {
     return {
       ...documents,
       model: { ...documents.model,
-        blocks: Object.fromEntries(Object.entries(documents.model.blocks).map(([key, value]) => [mapId(key), value])),
+        blocks: Object.fromEntries(Object.entries(documents.model.blocks).map(([key, value]) => [mapId(key), scenarioReferences(value, mapId)])),
         connections: documents.model.connections.map((edge) => ({ ...edge, id: mapId(edge.id), from: mapId(edge.from), to: mapId(edge.to) })),
       },
       layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).map(([key, value]) => [mapId(key), value])) },
@@ -190,16 +204,20 @@ export function pasteSelection(fragment: ClipboardFragment, offset = 40): Editor
   return (documents) => {
     const used = usedIds(documents.model);
     const ids = new Map(Object.entries(fragment.blocks).map(([id, block]) => [id, freeId(block.type, used, true)]));
+    const connectionIds = new Map<string, string>();
+    const connections = fragment.connections.map((edge) => {
+      const from = ids.get(edge.from)!;
+      const to = ids.get(edge.to)!;
+      const id = freeId(`${from}-to-${to}`, used);
+      connectionIds.set(edge.id, id);
+      return { ...structuredClone(edge), id, from, to };
+    });
     return {
       ...documents,
       model: { ...documents.model,
         blocks: { ...documents.model.blocks, ...Object.fromEntries(Object.entries(fragment.blocks)
-          .map(([id, block]) => [ids.get(id)!, structuredClone(block)])) },
-        connections: [...documents.model.connections, ...fragment.connections.map((edge) => {
-          const from = ids.get(edge.from)!;
-          const to = ids.get(edge.to)!;
-          return { ...structuredClone(edge), id: freeId(`${from}-to-${to}`, used), from, to };
-        })],
+          .map(([id, block]) => [ids.get(id)!, scenarioReferences(structuredClone(block), (id) => connectionIds.get(id) ?? null)])) },
+        connections: [...documents.model.connections, ...connections],
       },
       layout: { ...documents.layout, positions: { ...documents.layout.positions, ...Object.fromEntries(Object.entries(fragment.positions)
         .map(([id, point]) => [ids.get(id)!, { x: point.x + offset, y: point.y + offset }])) } },
