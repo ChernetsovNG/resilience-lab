@@ -125,6 +125,8 @@ Compose. Порты `8080` и `5173` должны быть свободны.
 [спецификации OpenAPI](apps/server/openapi.json). Браузерный интерфейс
 использует API этапа 1.
 
+JSON-ответы API (`application/json` и `application/problem+json`) размером от 1 КиБ сжимаются gzip при `Accept-Encoding: gzip`; части рядов передаются исходными gzip-файлами, в том числе через Nginx.
+
 Во втором терминале перейдите из корня в `web`, установите Node.js через fnm
 и запустите интерфейс:
 
