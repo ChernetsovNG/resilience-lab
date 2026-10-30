@@ -21,6 +21,16 @@ data class BlockInstance(
     val params: JsonObject = JsonObject(emptyMap()),
     val description: String? = null,
     val notes: String? = null,
+    val scenario: List<ScenarioStep>? = null,
+)
+
+/** One service step: `process` inherits omitted values; `call` names an outgoing [connection]. */
+@Serializable
+data class ScenarioStep(
+    val type: String,
+    val processing: JsonObject? = null,
+    val failureRate: String? = null,
+    val connection: String? = null,
 )
 
 /** One connection from a source block to a target block. */

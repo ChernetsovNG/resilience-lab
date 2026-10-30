@@ -301,6 +301,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
+            scenario?: components["schemas"]["ScenarioStep"][] | null;
             type: string;
         };
         Catalog: {
@@ -742,6 +743,14 @@ export interface components {
             rule: components["schemas"]["SaturationRule"];
             /** Format: int32 */
             withoutSaturation: number;
+        };
+        ScenarioStep: {
+            connection?: string | null;
+            failureRate?: string | null;
+            processing?: {
+                [key: string]: unknown;
+            } | null;
+            type: string;
         };
         SeriesIndex: {
             /** Format: double */

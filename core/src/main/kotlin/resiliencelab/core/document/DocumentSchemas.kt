@@ -43,7 +43,10 @@ class DocumentSchemas(
             DocumentCodec.encode(JsonObject.serializer(), identified)
         }
 
-    private fun structural(serializer: KSerializer<*>): JsonObject =
+    private fun structural(
+        serializer: KSerializer<*>,
+        schemaVersion: Int = DocumentCodec.SCHEMA_VERSION,
+    ): JsonObject =
         numericStrings(
             Json
                 .parseToJsonElement(generator.generateSchemaString(serializer.descriptor))
@@ -52,7 +55,7 @@ class DocumentSchemas(
                     "schemaVersion" to
                         buildJsonObject {
                             put("type", "integer")
-                            put("const", DocumentCodec.SCHEMA_VERSION)
+                            put("const", schemaVersion)
                         },
                 ),
         ).jsonObject
@@ -90,8 +93,58 @@ class DocumentSchemas(
         }
 
     private fun model(): JsonObject {
-        val schema = structural(ModelFile.serializer())
+        val schema = structural(ModelFile.serializer(), DocumentCodec.MODEL_SCHEMA_VERSION)
         val definitions = schema.getValue("\$defs").jsonObject.toMutableMap()
+        val scenarioStep = "resiliencelab.core.document.ScenarioStep"
+        val processDescriptors =
+            catalog
+                .type("service")
+                ?.params
+                .orEmpty()
+                .filter { it.name in setOf("processing", "failureRate") }
+        definitions[scenarioStep] =
+            buildJsonObject {
+                put(
+                    "oneOf",
+                    JsonArray(
+                        listOf(
+                            buildJsonObject {
+                                put("type", "object")
+                                put("additionalProperties", false)
+                                put("required", JsonArray(listOf(JsonPrimitive("type"))))
+                                put(
+                                    "properties",
+                                    buildJsonObject {
+                                        put("type", buildJsonObject { put("const", "process") })
+                                        put("connection", buildJsonObject { put("type", "null") })
+                                        processDescriptors.forEach { put(it.name, parameter(it.copy(required = false))) }
+                                    },
+                                )
+                            },
+                            buildJsonObject {
+                                put("type", "object")
+                                put("additionalProperties", false)
+                                put("required", JsonArray(listOf(JsonPrimitive("type"), JsonPrimitive("connection"))))
+                                put(
+                                    "properties",
+                                    buildJsonObject {
+                                        put("type", buildJsonObject { put("const", "call") })
+                                        put("processing", buildJsonObject { put("type", "null") })
+                                        put("failureRate", buildJsonObject { put("type", "null") })
+                                        put(
+                                            "connection",
+                                            buildJsonObject {
+                                                put("type", "string")
+                                                put("minLength", 1)
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        ),
+                    ),
+                )
+            }
         listOf("BlockInstance" to TypeCategory.BLOCK, "ConnectionInstance" to TypeCategory.CONNECTION).forEach { (name, category) ->
             val key = "resiliencelab.core.document.$name"
             val shape = definitions.getValue(key).jsonObject
@@ -102,8 +155,25 @@ class DocumentSchemas(
                             "type" to buildJsonObject { put("const", type.id) },
                             "params" to parameters(type.params),
                         )
+                    val withScenario =
+                        if (category == TypeCategory.BLOCK) {
+                            specialized.properties(
+                                "scenario" to
+                                    buildJsonObject {
+                                        if (type.id == "service") {
+                                            put("type", JsonArray(listOf(JsonPrimitive("array"), JsonPrimitive("null"))))
+                                            put("minItems", 1)
+                                            put("items", buildJsonObject { put("\$ref", "#/\$defs/$scenarioStep") })
+                                        } else {
+                                            put("type", "null")
+                                        }
+                                    },
+                            )
+                        } else {
+                            specialized
+                        }
                     buildJsonObject {
-                        specialized.forEach { (key, value) -> put(key, value) }
+                        withScenario.forEach { (key, value) -> put(key, value) }
                         put("title", type.title)
                         put("description", type.description)
                         if (type.params.any { it.required }) {

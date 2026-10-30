@@ -12,7 +12,7 @@ class GraphCompilerTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":1,"blocks":{
+                """{"schemaVersion":2,"blocks":{
           "client":{"type":"client","params":{"rate":"10/s","deadline":"1s"}},
           "z-entry":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}},
           "a-leaf":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}}
@@ -108,8 +108,8 @@ class GraphCompilerTest {
                 .single()
                 .graph
         assertThat(graph.services.first().scenario)
-            .containsExactly(ServiceStep.Process, ServiceStep.Call("z-call"))
-        assertThat(graph.services.last().scenario).containsExactly(ServiceStep.Process)
+            .containsExactly(ServiceStep.Process(), ServiceStep.Call("z-call"))
+        assertThat(graph.services.last().scenario).containsExactly(ServiceStep.Process())
         assertThat(graph.client.pathSegments).containsExactly("client")
         assertThat(graph.services.first().pathSegments).containsExactly("z-entry")
         assertThat(graph.calls.single().pathSegments).containsExactly("z-call")

@@ -14,6 +14,7 @@ import resiliencelab.core.document.ConnectionInstance
 import resiliencelab.core.document.ExperimentFile
 import resiliencelab.core.document.GridAxis
 import resiliencelab.core.document.ModelFile
+import resiliencelab.core.document.ScenarioStep
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -25,6 +26,7 @@ import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.ir.WindowCountException
 import resiliencelab.core.ir.WindowGridFailure
 import resiliencelab.core.ir.windowCount
@@ -194,6 +196,9 @@ class ModelCompiler(
                 )
             }
             val type = catalog.type(block.type)
+            if (block.scenario != null && block.type != "service") {
+                sink.error(CoreMessage.SCENARIO_BLOCK, "Only service blocks may define a scenario", document, "$pointer/scenario", id)
+            }
             if (type == null || type.category != TypeCategory.BLOCK) {
                 sink.error(
                     CoreMessage.TYPE_BLOCK,
@@ -383,7 +388,12 @@ class ModelCompiler(
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
         val services = model.blocks.filterValues { it.type == "service" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink) }
-        val serviceNodes = services.map { (id, block) -> readService(id, block.params, document, origins[id], sink) }
+        val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
+        val serviceNodes =
+            services.map { (id, block) ->
+                val steps = readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
+                readService(id, block.params, document, origins[id], sink)?.copy(scenario = steps)
+            }
         val indexed = model.connections.withIndex()
         val requests = indexed.filter { it.value.type == "request" }
         requests.forEach { (index, connection) ->
@@ -428,18 +438,7 @@ class ModelCompiler(
         document: String,
         sink: Diagnostics,
     ) {
-        val outgoing = calls.filter { it.value.from in services }.groupBy { it.value.from }
         val validOutgoing = calls.filter { it.value.from in services && it.value.to in services }.groupBy { it.value.from }
-        outgoing.filterValues { it.size > 1 }.keys.sorted().forEach {
-            sink.error(
-                CoreMessage.SCENARIO_REQUIRED,
-                "Service '$it' needs a scenario for multiple outgoing calls",
-                document,
-                JsonPointer.of("blocks", it),
-                it,
-                args = mapOf("service" to JsonPrimitive(it)),
-            )
-        }
         calls.filter { it.value.to == entry }.forEach { (index, call) ->
             sink.error(
                 CoreMessage.GRAPH_ENTRY,
@@ -511,6 +510,107 @@ class ModelCompiler(
                         "service" to JsonPrimitive(it),
                     ),
             )
+        }
+    }
+
+    private fun readScenario(
+        id: String,
+        steps: List<ScenarioStep>?,
+        outgoing: Set<String>,
+        document: String,
+        sink: Diagnostics,
+    ): List<ServiceStep>? {
+        val pointer = JsonPointer.of("blocks", id)
+        if (steps == null) {
+            if (outgoing.size > 1) {
+                sink.error(
+                    CoreMessage.SCENARIO_REQUIRED,
+                    "Service '$id' needs a scenario for multiple outgoing calls",
+                    document,
+                    pointer,
+                    id,
+                    args = mapOf("service" to JsonPrimitive(id)),
+                )
+            }
+            return null
+        }
+        if (steps.isEmpty()) {
+            sink.error(
+                CoreMessage.SCENARIO_EMPTY,
+                "A service scenario must not be empty",
+                document,
+                "$pointer/scenario",
+                id,
+            )
+        }
+        return steps.mapIndexedNotNull { index, step ->
+            val location = "$pointer/scenario/$index"
+            val invalidFields =
+                when (step.type) {
+                    "process" -> listOfNotNull(step.connection?.let { "connection" })
+                    "call" -> listOfNotNull(step.processing?.let { "processing" }, step.failureRate?.let { "failureRate" })
+                    else -> emptyList()
+                }
+            invalidFields.forEach { field ->
+                sink.error(
+                    CoreMessage.SCENARIO_FIELD,
+                    "Field '$field' does not apply to scenario step '${step.type}'",
+                    document,
+                    "$location/$field",
+                    id,
+                    args = mapOf("field" to JsonPrimitive(field), "type" to JsonPrimitive(step.type)),
+                )
+            }
+            when (step.type) {
+                "process" -> {
+                    val params =
+                        JsonObject(
+                            buildMap {
+                                step.processing?.let { put("processing", it) }
+                                step.failureRate?.let { put("failureRate", JsonPrimitive(it)) }
+                            },
+                        )
+                    val descriptors =
+                        catalog
+                            .type("service")
+                            ?.params
+                            .orEmpty()
+                            .filter { it.name in setOf("processing", "failureRate") }
+                    if (descriptors.isEmpty()) return@mapIndexedNotNull null
+                    val reader = ParamReader(params, descriptors, document, location, id, sink.items)
+                    ServiceStep.Process(
+                        step.processing?.let { reader.obj("processing")?.let(::distribution) },
+                        step.failureRate?.let { reader.quantity("failureRate") },
+                    )
+                }
+                "call" -> {
+                    val connection = step.connection
+                    if (connection !in outgoing) {
+                        sink.error(
+                            CoreMessage.SCENARIO_CONNECTION,
+                            "Scenario of service '$id' must call an outgoing connection; found '${connection.orEmpty()}'",
+                            document,
+                            "$location/connection",
+                            id,
+                            args = mapOf("service" to JsonPrimitive(id), "connection" to JsonPrimitive(connection.orEmpty())),
+                        )
+                        null
+                    } else {
+                        ServiceStep.Call(requireNotNull(connection))
+                    }
+                }
+                else -> {
+                    sink.error(
+                        CoreMessage.SCENARIO_STEP_TYPE,
+                        "Unknown scenario step type '${step.type}'; expected process or call",
+                        document,
+                        "$location/type",
+                        id,
+                        args = mapOf("type" to JsonPrimitive(step.type)),
+                    )
+                    null
+                }
+            }
         }
     }
 

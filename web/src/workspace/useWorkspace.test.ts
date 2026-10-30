@@ -119,6 +119,28 @@ describe("useWorkspace", () => {
     expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
   });
 
+  it("preserves service scenario when opening editing undoing and saving the model", async () => {
+    const scenario = [
+      { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "1%" },
+      { type: "call", connection: "gateway-to-middle" },
+      { type: "process" },
+      { type: "call", connection: "gateway-to-middle" },
+    ];
+    const source = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, scenario } } };
+    const fetchMock = stubWorkspace({ documents: {
+      [modelPath]: { ...documentViews[modelPath], content: { model: source } },
+    } });
+    const { result } = await loaded();
+    expect(result.current.loaded?.model.blocks.gateway.scenario).toEqual(scenario);
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    act(() => result.current.undo());
+    act(() => result.current.redo());
+    await act(async () => { await result.current.save(); });
+    const [, init] = fetchMock.mock.calls.find(([, call]) => call?.method === "PUT")!;
+    expect(JSON.parse(String(init?.body)).model.blocks.gateway.scenario).toEqual(scenario);
+    expect(result.current.dirty).toBe(false);
+  });
+
   it("reports documents that cannot be opened", async () => {
     stubWorkspace();
     const { result } = await loaded();

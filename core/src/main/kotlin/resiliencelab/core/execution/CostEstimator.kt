@@ -140,7 +140,7 @@ internal object CostEstimator {
             if (service.path != graph.entry) perOriginalRequest += 2.0 * count
             graph.scenario(service).forEach { step ->
                 when (step) {
-                    ServiceStep.Process -> perOriginalRequest += 3.0 * count
+                    is ServiceStep.Process -> perOriginalRequest += 3.0 * count
                     is ServiceStep.Call -> {
                         val call = graph.call(step.edge)
                         val attempts = count * call.attempts

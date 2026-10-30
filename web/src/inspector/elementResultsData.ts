@@ -65,7 +65,7 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const effective = applyOverrides(applyOverrides(runModel,
     experiment.variants.find(variant => variant.id === variantId)?.overrides ?? {}, catalog), point.coordinates, catalog);
   const element = block ? ownEntry(effective.blocks, selection.id) : effective.connections.find(connection => connection.id === selection.id);
-  const params = { ...Object.fromEntries(descriptor.params.map(param => [param.name, param.default])), ...element?.params };
+  const params: Record<string, unknown> = { ...Object.fromEntries(descriptor.params.map(param => [param.name, param.default])), ...element?.params };
   const node = context.nodes?.find(node => node.id === selection.id);
   const frames = block ? node?.windows ?? [] : context.connections?.find(connection => connection.id === selection.id)?.windows ?? [];
   const target = context.nodes?.find(node => node.id === selection.target);

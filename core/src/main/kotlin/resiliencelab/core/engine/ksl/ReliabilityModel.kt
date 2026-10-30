@@ -387,9 +387,9 @@ class ReliabilityModel(
             for (step in runtime.scenario) {
                 val outcome =
                     when (step) {
-                        ServiceStep.Process -> {
-                            val durationMs = runtime.nextDurationMs()
-                            val localFailure = runtime.nextLocalFailure()
+                        is ServiceStep.Process -> {
+                            val durationMs = runtime.nextDurationMs(step)
+                            val localFailure = runtime.nextLocalFailure(step)
                             delay(durationMs)
                             if (localFailure) {
                                 metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
