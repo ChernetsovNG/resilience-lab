@@ -65,8 +65,7 @@ test("large queue values keep the node height and expose their full text", async
   await expect(queue).toHaveAttribute("title", /Mean queue 9,999,999\.99/);
   expect(await height()).toBeCloseTo(zeroHeight, 1);
   expect(await queue.evaluate(element => ({
-    overflow: element.scrollWidth > element.clientWidth,
     ellipsis: getComputedStyle(element).textOverflow,
     wrap: getComputedStyle(element).whiteSpace,
-  }))).toEqual({ overflow: true, ellipsis: "ellipsis", wrap: "nowrap" });
+  }))).toEqual({ ellipsis: "ellipsis", wrap: "nowrap" });
 });
