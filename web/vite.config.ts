@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   test: {
+    // App tests render the whole application in jsdom. Parallel files share the CI runner's CPU,
+    // so an individual test can exceed Vitest's default 5 s.
+    testTimeout: 15_000,
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
