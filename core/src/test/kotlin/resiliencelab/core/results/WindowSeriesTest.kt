@@ -1,5 +1,6 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -19,10 +20,15 @@ import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 
 class WindowSeriesTest {
-    private val partJson = Json { encodeDefaults = true }
+    @OptIn(ExperimentalSerializationApi::class)
+    private val partJson =
+        Json {
+            encodeDefaults = true
+            explicitNulls = false
+        }
 
     @Test
-    fun `packed series use schema three and include connection coverage`(
+    fun `packed series use schema four preserve legacy rows and include connection coverage`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
@@ -35,9 +41,10 @@ class WindowSeriesTest {
         )
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
-        assertThat(index.schemaVersion).isEqualTo(3)
+        assertThat(bytes.toString(Charsets.UTF_8)).doesNotContain("\"pooler\"")
+        assertThat(index.schemaVersion).isEqualTo(4)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(3)
+        assertThat(part.schemaVersion).isEqualTo(4)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")

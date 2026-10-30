@@ -1528,6 +1528,12 @@
           "pooledLatency" : {
             "$ref" : "#/components/schemas/LatencySummary"
           },
+          "poolers" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregatePoolerMetrics"
+            }
+          },
           "services" : {
             "type" : "object",
             "additionalProperties" : {
@@ -1542,7 +1548,23 @@
             } ]
           }
         },
-        "required" : [ "connections", "pooledLatency", "services" ]
+        "required" : [ "connections", "pooledLatency", "poolers", "services" ]
+      },
+      "AggregatePoolerMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "pooledLatency" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/LatencyDistribution"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "totals" : {
+            "$ref" : "#/components/schemas/PoolerTotals"
+          }
+        },
+        "required" : [ "totals" ]
       },
       "AggregateServiceMetrics" : {
         "type" : "object",
@@ -1676,8 +1698,11 @@
       "ConnectionRule" : {
         "type" : "object",
         "properties" : {
-          "fromType" : {
-            "type" : "string"
+          "fromTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           },
           "toTypes" : {
             "type" : "array",
@@ -1686,7 +1711,7 @@
             }
           }
         },
-        "required" : [ "fromType", "toTypes" ]
+        "required" : [ "fromTypes", "toTypes" ]
       },
       "ConnectionSeries" : {
         "type" : "object",
@@ -2648,6 +2673,110 @@
         },
         "required" : [ "aggregate", "coordinates", "id", "saturation" ]
       },
+      "PoolerTotals" : {
+        "type" : "object",
+        "properties" : {
+          "admittedAttempts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "busyClientConnectionTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "busyServerConnectionTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "clientConnectionCapacityTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "clientConnectionRejections" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "measurementMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "offeredAttempts" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "serverConnectionCapacityTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "serverQueueLengthIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "serverWaitCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "serverWaitTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "successes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "waitTimeouts" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "admittedAttempts", "busyClientConnectionTimeMs", "busyServerConnectionTimeMs", "clientConnectionCapacityTimeMs", "clientConnectionRejections", "failures", "measurementMs", "offeredAttempts", "serverConnectionCapacityTimeMs", "serverQueueLengthIntegralMs", "serverWaitCount", "serverWaitTimeMs", "successes", "waitTimeouts" ]
+      },
+      "PoolerWindowMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "busyClientConnectionTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "busyServerConnectionTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "clientConnectionRejections" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "maxClientConnections" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "poolSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "serverQueueLengthIntegralMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "serverWaitCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "serverWaitTimeMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "waitTimeouts" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "busyClientConnectionTimeMs", "busyServerConnectionTimeMs", "clientConnectionRejections", "maxClientConnections", "poolSize", "serverQueueLengthIntegralMs", "serverWaitCount", "serverWaitTimeMs", "waitTimeouts" ]
+      },
       "PortDescriptor" : {
         "type" : "object",
         "properties" : {
@@ -3237,6 +3366,13 @@
           "originalArrivals" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "pooler" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/PoolerWindowMetrics"
+            }, {
+              "type" : "null"
+            } ]
           },
           "queueLengthIntegralMs" : {
             "type" : "number",

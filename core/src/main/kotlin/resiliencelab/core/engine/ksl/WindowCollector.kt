@@ -1,11 +1,13 @@
 package resiliencelab.core.engine.ksl
 
 import resiliencelab.core.experiment.LatencyAccumulator
+import resiliencelab.core.ir.PoolerSettings
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.windowCount
 import resiliencelab.core.results.ConnectionWindow
 import resiliencelab.core.results.ConnectionWindowMetrics
 import resiliencelab.core.results.NodeWindow
+import resiliencelab.core.results.PoolerWindowMetrics
 import resiliencelab.core.results.WindowMetrics
 
 internal enum class AttemptEvent { OFFERED, ADMITTED, QUEUE_REJECTED, TIMEOUT, RETRY }
@@ -30,7 +32,23 @@ internal class WindowCollector(
     private var startMs = 0.0
     private var lastEventMs = 0.0
     private val nodes =
-        (services.map { it.path to State(it.path, it.handlers) } + (clientId to State(clientId, 0))).toMap().toSortedMap()
+        (
+            services.map {
+                it.path to
+                    State(
+                        it.path,
+                        if (it.pooler ==
+                            null
+                        ) {
+                            it.handlers
+                        } else {
+                            0
+                        },
+                        it.pooler,
+                    )
+            } + (clientId to State(clientId, 0))
+        ).toMap().toSortedMap()
+    private val nodesClientCapacity = services.associate { it.path to it.handlers }
     private val connections = connectionIds.sorted().associateWith { ConnectionState(it) }
 
     fun connectionEvent(
@@ -141,6 +159,39 @@ internal class WindowCollector(
         }
     }
 
+    fun poolerServerBusy(
+        id: String,
+        timeMs: Double,
+        busy: Int,
+    ) {
+        if (!advance(timeMs)) return
+        nodes.getValue(id).apply {
+            integrate(timeMs)
+            serverBusy = busy
+        }
+    }
+
+    fun poolerClientRejection(
+        id: String,
+        timeMs: Double,
+    ) {
+        if (advance(timeMs)) nodes.getValue(id).row.clientRejections++
+    }
+
+    fun poolerWait(
+        id: String,
+        timeMs: Double,
+        acquisition: SlotAcquisition,
+    ) {
+        if (!advance(timeMs)) return
+        val row = nodes.getValue(id).row
+        if (acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT) row.waitTimeouts++
+        if (acquisition.outcome in setOf(SlotAcquisitionOutcome.WAITED, SlotAcquisitionOutcome.WAIT_LIMIT)) {
+            row.waitCount++
+            row.waitTime += acquisition.waitMs
+        }
+    }
+
     fun finish() {
         if (startMs < endMs) advance(maxOf(endMs, lastEventMs))
     }
@@ -174,15 +225,18 @@ internal class WindowCollector(
     private inner class State(
         val id: String,
         val handlers: Int,
+        val pooler: PoolerSettings? = null,
     ) {
         var row = Row(id, 0)
         var queue = 0
         var busy = 0
+        var serverBusy = 0
         private var lastMs = 0.0
 
         fun integrate(timeMs: Double) {
             val duration = timeMs - lastMs
             row.busyTime += busy * duration
+            row.serverBusyTime += serverBusy * duration
             row.queueIntegral += queue * duration
             lastMs = timeMs
         }
@@ -199,10 +253,23 @@ internal class WindowCollector(
                 row.failures,
                 row.timeouts,
                 row.retries,
-                row.busyTime,
+                if (pooler == null) row.busyTime else 0.0,
                 handlers,
-                row.queueIntegral,
+                if (pooler == null) row.queueIntegral else 0.0,
                 row.latency.snapshot(),
+                pooler?.let {
+                    PoolerWindowMetrics(
+                        nodesClientCapacity.getValue(id),
+                        it.poolSize,
+                        row.clientRejections,
+                        row.waitTimeouts,
+                        row.busyTime,
+                        row.serverBusyTime,
+                        row.queueIntegral,
+                        row.waitCount,
+                        row.waitTime,
+                    )
+                },
             )
     }
 
@@ -210,6 +277,11 @@ internal class WindowCollector(
         node: String,
         window: Int,
     ) {
+        var clientRejections = 0
+        var waitTimeouts = 0
+        var serverBusyTime = 0.0
+        var waitCount = 0
+        var waitTime = 0.0
         var originalArrivals = 0
         var offeredAttempts = 0
         var admittedAttempts = 0

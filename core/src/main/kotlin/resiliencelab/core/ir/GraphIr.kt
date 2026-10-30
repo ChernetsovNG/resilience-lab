@@ -54,6 +54,12 @@ data class ClientNode(
     val path: String get() = displayPath(pathSegments)
 }
 
+/** Transaction server pool; the executable node's handlers are the client connection limit, with no client queue. */
+data class PoolerSettings(
+    val poolSize: Int,
+    val waitTimeoutMs: Double,
+)
+
 /**
  * Blocking service with a bounded FIFO queue and an ordered invocation scenario.
  * A database shares this runtime shape: handlers are connections, processing is query execution,
@@ -68,6 +74,7 @@ data class ServiceNode(
     val origin: Origin = Origin.UNSPECIFIED,
     /** Null selects processing followed by outgoing calls in path order. */
     val scenario: List<ServiceStep>? = null,
+    val pooler: PoolerSettings? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -78,7 +85,8 @@ data class ServiceNode(
         failureProbability: Double,
         origin: Origin = Origin.UNSPECIFIED,
         scenario: List<ServiceStep>? = null,
-    ) : this(path.split('/'), handlers, queueCapacity, processing, failureProbability, origin, scenario)
+        pooler: PoolerSettings? = null,
+    ) : this(path.split('/'), handlers, queueCapacity, processing, failureProbability, origin, scenario, pooler)
 
     val path: String get() = displayPath(pathSegments)
 }

@@ -1,5 +1,6 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -34,6 +35,21 @@ data class WindowMetrics(
     val handlers: Int = 0,
     val queueLengthIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
+    val pooler: PoolerWindowMetrics? = null,
+)
+
+/** Pooler-only resource fields of a node row; counters and residence latency remain in [WindowMetrics]. */
+@Serializable
+data class PoolerWindowMetrics(
+    val maxClientConnections: Int,
+    val poolSize: Int,
+    val clientConnectionRejections: Int,
+    val waitTimeouts: Int,
+    val busyClientConnectionTimeMs: Double,
+    val busyServerConnectionTimeMs: Double,
+    val serverQueueLengthIntegralMs: Double,
+    val serverWaitCount: Int,
+    val serverWaitTimeMs: Double,
 )
 
 /** One node in a closed window, passed directly to the artifact writer. */
@@ -135,7 +151,13 @@ class SeriesWriter(
     private val maxPartBytes: Int = MAX_PART_BYTES,
 ) {
     private val expectedWindows = windowCount(endMs, windowMs)
-    private val json = Json { encodeDefaults = true }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private val json =
+        Json {
+            encodeDefaults = true
+            explicitNulls = false
+        }
     private val parts = mutableListOf<SeriesPartReference>()
     private var nextWindow = 0
     private var nodeIds: List<String>? = null

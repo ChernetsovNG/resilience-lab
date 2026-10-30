@@ -59,7 +59,9 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const outputs = outputsOf(catalog, selection.kind).filter(output => output.inspector != null);
   if (outputs.length === 0) return null;
   const block = selection.category === "BLOCK";
-  const aggregate = block ? ownEntry(point.aggregate.services, selection.id) : ownEntry(point.aggregate.connections, selection.id);
+  const aggregate = block
+    ? selection.kind === "pooler" ? ownEntry(point.aggregate.poolers, selection.id) : ownEntry(point.aggregate.services, selection.id)
+    : ownEntry(point.aggregate.connections, selection.id);
   if (aggregate === undefined) return null;
   const descriptor = catalog.types.find(type => type.id === selection.kind)!;
   const effective = applyOverrides(applyOverrides(runModel,

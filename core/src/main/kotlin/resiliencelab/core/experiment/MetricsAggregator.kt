@@ -57,6 +57,7 @@ object MetricsAggregator {
             p99LatencyMs = p99LatencyMs,
             services = services,
             connections = connectionMetrics(replications),
+            poolers = poolerMetrics(replications),
         )
     }
 
@@ -85,6 +86,31 @@ object MetricsAggregator {
                         poolWaitCount = values.sumOf { it.poolWaitCount.toLong() },
                         poolWaitTimeMs = values.sumOf { it.poolWaitTimeMs },
                         poolAcquireTimeouts = values.sumOf { it.poolAcquireTimeouts.toLong() },
+                    ),
+            )
+        }
+
+    private fun poolerMetrics(replications: List<ReplicationResult>): Map<String, AggregatePoolerMetrics> =
+        replications.flatMap { it.poolers.keys }.distinct().sorted().associateWith { id ->
+            val values = replications.mapNotNull { it.poolers[id] }
+            AggregatePoolerMetrics(
+                pooledLatency = latencyDistribution(values.map { it.latency }),
+                totals =
+                    PoolerTotals(
+                        offeredAttempts = values.sumOf { it.offeredAttempts.toLong() },
+                        admittedAttempts = values.sumOf { it.admittedAttempts.toLong() },
+                        clientConnectionRejections = values.sumOf { it.clientConnectionRejections.toLong() },
+                        waitTimeouts = values.sumOf { it.waitTimeouts.toLong() },
+                        successes = values.sumOf { it.successes.toLong() },
+                        failures = values.sumOf { it.failures.toLong() },
+                        busyClientConnectionTimeMs = values.sumOf { it.busyClientConnectionTimeMs },
+                        clientConnectionCapacityTimeMs = values.sumOf { it.maxClientConnections * it.measurementMs },
+                        busyServerConnectionTimeMs = values.sumOf { it.busyServerConnectionTimeMs },
+                        serverConnectionCapacityTimeMs = values.sumOf { it.poolSize * it.measurementMs },
+                        serverQueueLengthIntegralMs = values.sumOf { it.serverQueueLengthIntegralMs },
+                        serverWaitCount = values.sumOf { it.serverWaitCount.toLong() },
+                        serverWaitTimeMs = values.sumOf { it.serverWaitTimeMs },
+                        measurementMs = values.sumOf { it.measurementMs },
                     ),
             )
         }

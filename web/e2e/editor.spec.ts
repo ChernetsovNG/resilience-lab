@@ -2,7 +2,7 @@ import { expect, test as base, type Locator, type Page } from "@playwright/test"
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
+import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
 
 type Files = { model: string; layout: string; experiment: string };
 const test = base.extend<{ files: Files }>({
@@ -25,6 +25,47 @@ const test = base.extend<{ files: Files }>({
   },
 });
 test.use({ actionTimeout: 10_000 });
+
+test("opens saves and runs a transaction pooler and displays both resource limits", async ({ page, files }) => {
+  const source = (await stored(page, files.model)).content.model as ModelFile;
+  source.blocks.pooler = { type: "pooler", params: {
+    maxClientConnections: 4, poolSize: 2, waitTimeout: "20ms", processing: { kind: "fixed", mean: "0.25ms" },
+  }, description: null, notes: null, scenario: null, replicaOverrides: null };
+  source.connections.find(edge => edge.id === "middle-to-dependency")!.to = "pooler";
+  source.connections.push({ id: "pooler-to-dependency", type: "call", from: "pooler", to: "dependency",
+    params: { timeout: "60ms" }, description: null, notes: null });
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(source));
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(5);
+  await expect(page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Transaction pooler", exact: true })).toBeVisible();
+  await page.getByTestId("rf__node-pooler").locator(".block-node > strong").click();
+  await expect(page.getByLabel("Maximum client connections", { exact: true })).toHaveValue("4");
+  await expect(page.getByLabel("Server connection wait timeout", { exact: true })).toHaveValue("20ms");
+  await page.getByLabel("Server pool size", { exact: true }).fill("3");
+  await page.getByLabel("Server pool size", { exact: true }).press("Enter");
+  await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+  await page.getByLabel("Handlers", { exact: true }).fill("5");
+  await page.getByLabel("Handlers", { exact: true }).press("Enter");
+  await save(page);
+  source.blocks.pooler.params.poolSize = 3;
+  source.blocks.gateway.params.handlers = 5;
+  expect((await stored(page, files.model)).content.model).toEqual(source);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+  const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  const summary: RunSummary = await (await response).json();
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  expect(summary.variants[0].points[0].aggregate.poolers.pooler.totals.offeredAttempts).toBeGreaterThan(0);
+  expect(summary.variants[0].points[0].aggregate.services.pooler).toBeUndefined();
+  await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+  await page.getByTestId("rf__node-pooler").locator(".block-node > strong").click();
+  await expect(page.locator(".element-results")).toContainText("Server pool utilization");
+  await expect(page.locator(".element-results")).toContainText("Waiting clients");
+  await expect(page.locator(".element-results")).toContainText("Client connection rejections");
+  await expect(page.locator(".element-results")).toContainText("Server wait timeouts");
+  expect((await stored(page, files.model)).content.model).toEqual(source);
+});
 
 test("opens saves and runs a load profile without losing points", async ({ page, files }) => {
   const profiled = (await stored(page, files.model)).content.model as ModelFile;

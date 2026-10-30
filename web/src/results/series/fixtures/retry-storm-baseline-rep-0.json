@@ -15122,7 +15122,7 @@
       }
     ],
     "profile": "ddsketch-bitwise6-rational-v1",
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "untilWindow": 100
   },
   "quantiles": [

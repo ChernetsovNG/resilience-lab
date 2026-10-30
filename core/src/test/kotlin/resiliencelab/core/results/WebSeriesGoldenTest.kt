@@ -18,7 +18,11 @@ import kotlin.test.Test
 class WebSeriesGoldenTest {
     private val root = Path.of(System.getProperty("resilience-lab.project-root"))
     private val golden = root.resolve("web/src/results/series/fixtures/retry-storm-baseline-rep-0.json")
-    private val seriesJson = Json { encodeDefaults = true }
+    private val seriesJson =
+        Json {
+            encodeDefaults = true
+            explicitNulls = false
+        }
 
     @Test
     fun `committed web retry storm fixture round trips and matches core quantile bits`(

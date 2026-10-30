@@ -293,10 +293,17 @@ export interface components {
             p95LatencyMs?: components["schemas"]["MetricSummary"] | null;
             p99LatencyMs?: components["schemas"]["MetricSummary"] | null;
             pooledLatency: components["schemas"]["LatencySummary"];
+            poolers: {
+                [key: string]: components["schemas"]["AggregatePoolerMetrics"];
+            };
             services: {
                 [key: string]: components["schemas"]["AggregateServiceMetrics"];
             };
             successRate?: components["schemas"]["MetricSummary"] | null;
+        };
+        AggregatePoolerMetrics: {
+            pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
+            totals: components["schemas"]["PoolerTotals"];
         };
         AggregateServiceMetrics: {
             admittedAmplification?: components["schemas"]["MetricSummary"] | null;
@@ -343,7 +350,7 @@ export interface components {
             type: string;
         };
         ConnectionRule: {
-            fromType: string;
+            fromTypes: string[];
             toTypes: string[];
         };
         ConnectionSeries: {
@@ -709,6 +716,56 @@ export interface components {
             id: string;
             saturation: components["schemas"]["SaturationSummary"];
         };
+        PoolerTotals: {
+            /** Format: int64 */
+            admittedAttempts: number;
+            /** Format: double */
+            busyClientConnectionTimeMs: number;
+            /** Format: double */
+            busyServerConnectionTimeMs: number;
+            /** Format: double */
+            clientConnectionCapacityTimeMs: number;
+            /** Format: int64 */
+            clientConnectionRejections: number;
+            /** Format: int64 */
+            failures: number;
+            /** Format: double */
+            measurementMs: number;
+            /** Format: int64 */
+            offeredAttempts: number;
+            /** Format: double */
+            serverConnectionCapacityTimeMs: number;
+            /** Format: double */
+            serverQueueLengthIntegralMs: number;
+            /** Format: int64 */
+            serverWaitCount: number;
+            /** Format: double */
+            serverWaitTimeMs: number;
+            /** Format: int64 */
+            successes: number;
+            /** Format: int64 */
+            waitTimeouts: number;
+        };
+        PoolerWindowMetrics: {
+            /** Format: double */
+            busyClientConnectionTimeMs: number;
+            /** Format: double */
+            busyServerConnectionTimeMs: number;
+            /** Format: int32 */
+            clientConnectionRejections: number;
+            /** Format: int32 */
+            maxClientConnections: number;
+            /** Format: int32 */
+            poolSize: number;
+            /** Format: double */
+            serverQueueLengthIntegralMs: number;
+            /** Format: int32 */
+            serverWaitCount: number;
+            /** Format: double */
+            serverWaitTimeMs: number;
+            /** Format: int32 */
+            waitTimeouts: number;
+        };
         PortDescriptor: {
             /** @enum {string} */
             direction: "IN" | "OUT";
@@ -922,6 +979,7 @@ export interface components {
             offeredAttempts: number;
             /** Format: int32 */
             originalArrivals: number;
+            pooler?: components["schemas"]["PoolerWindowMetrics"] | null;
             /** Format: double */
             queueLengthIntegralMs: number;
             /** Format: int32 */

@@ -21,13 +21,15 @@ internal class ServiceRuntime(
     onAdmitted: (ProcessModel.Entity) -> Unit,
     onQueueLengthChanged: (Int) -> Unit,
     onBusyHandlersChanged: (Int) -> Unit,
+    onServerQueueLengthChanged: (Int) -> Unit = {},
+    onBusyServerConnectionsChanged: (Int) -> Unit = {},
 ) {
     val serviceId: String = node.path
     private val processingStream = streams.stream(node.pathSegments, StreamRole.PROCESSING)
     private val durationSamplers =
         (listOf(node.processing) + scenario.filterIsInstance<ServiceStep.Process>().mapNotNull { it.processing })
             .associateWith { DurationSamplerFactory.create(it, processingStream) }
-    private val outcomeStream = streams.stream(node.pathSegments, StreamRole.OUTCOME)
+    private val outcomeStream = if (node.pooler == null) streams.stream(node.pathSegments, StreamRole.OUTCOME) else null
     private var activeFault: FaultSpan? = null
 
     val slots =
@@ -40,6 +42,18 @@ internal class ServiceRuntime(
             onQueueLengthChanged = onQueueLengthChanged,
             onBusyChanged = onBusyHandlersChanged,
         )
+    val serverSlots =
+        node.pooler?.let { pooler ->
+            SlotPool(
+                parent = parent,
+                name = "$serviceId:server",
+                initialCapacity = pooler.poolSize,
+                queueCapacity = Int.MAX_VALUE,
+                waitLimitMs = pooler.waitTimeoutMs,
+                onQueueLengthChanged = onServerQueueLengthChanged,
+                onBusyChanged = onBusyServerConnectionsChanged,
+            )
+        }
     val resource: ResourceWithQ get() = slots.resource
     val queue: RequestQ get() = slots.queue
 
@@ -60,6 +74,6 @@ internal class ServiceRuntime(
 
     fun nextLocalFailure(step: ServiceStep.Process): Boolean {
         val failureProbability = activeFault?.failureProbability ?: step.failureProbability ?: node.failureProbability
-        return outcomeStream.randU01() < failureProbability
+        return outcomeStream?.randU01()?.let { it < failureProbability } ?: false
     }
 }

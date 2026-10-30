@@ -31,7 +31,7 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
 }
 
 function part(nodes: SeriesPart["nodes"], fromWindow = 0, untilWindow = fromWindow + 2): SeriesPart {
-  return { schemaVersion: 3, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
+  return { schemaVersion: 4, profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
 }
 
 function fixture() {
@@ -45,7 +45,7 @@ function fixture() {
   ] }]);
   const texts = [JSON.stringify(client), JSON.stringify(service)];
   const index: SeriesIndex = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     endMs: 20,
     windowMs: 10,
     parts: [
@@ -95,7 +95,7 @@ describe("series loader", () => {
     unrelated.connections = [{ id: "unselected-call", windows: [callWindow(0, 31), callWindow(10, 32)] }];
     const parts = [mixed, connectionOnly, last, unrelated];
     const texts = parts.map((value) => JSON.stringify(value));
-    const index: SeriesIndex = { schemaVersion: 3, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
+    const index: SeriesIndex = { schemaVersion: 4, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
       file: `part-${index}.json.gz`, nodes: value.nodes.map((node) => node.id),
       connections: value.connections.map((connection) => connection.id), fromWindow: value.fromWindow,
       untilWindow: value.untilWindow, uncompressedBytes: texts[index].length, sha256: String(index).repeat(64),
@@ -214,7 +214,7 @@ describe("series loader", () => {
       ] },
     ], 0, 3);
     const text = JSON.stringify(measured);
-    const index: SeriesIndex = { schemaVersion: 3, endMs: 25, windowMs: 10, parts: [{
+    const index: SeriesIndex = { schemaVersion: 4, endMs: 25, windowMs: 10, parts: [{
       file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 3,
       uncompressedBytes: text.length, sha256: CLIENT_SHA,
     }] };
@@ -226,7 +226,7 @@ describe("series loader", () => {
     expect(result[0].windows.map((value) => [value.startMs, value.durationMs])).toEqual([[10, 10], [20, 5]]);
   });
 
-  it.each([1, 2, 4])("rejects unsupported index schema version %s", async (schemaVersion) => {
+  it.each([1, 2, 3, 5])("rejects unsupported index schema version %s", async (schemaVersion) => {
     const { index, texts } = fixture();
     const api = apiFor({ ...index, schemaVersion }, texts);
     const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
@@ -341,7 +341,7 @@ describe("series loader", () => {
     ];
     const texts = parts.map((value) => JSON.stringify(value));
     const index: SeriesIndex = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       endMs: 20,
       windowMs: 10,
       parts: [

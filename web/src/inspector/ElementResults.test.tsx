@@ -8,7 +8,7 @@ import { ElementResults, type ElementResultsProps } from "./ElementResults";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
 
 const raw: SeriesPart = {
-  schemaVersion: 3, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
+  schemaVersion: 4, profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
   nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({
     startMs, durationMs: 100, handlers: 2, originalArrivals: 0, admittedAttempts: 8, offeredAttempts: 10,
     retries: 1, queueRejections: 2, successes: 7, failures: 1, timeouts: 1, busyHandlerTimeMs: 100, queueLengthIntegralMs: 100,

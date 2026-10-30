@@ -18,6 +18,7 @@ data class ReplicationResult(
     val failures: Int,
     val services: Map<String, ServiceMetrics>,
     val connections: Map<String, ConnectionMetrics> = emptyMap(),
+    val poolers: Map<String, PoolerMetrics> = emptyMap(),
 )
 
 /**
@@ -62,6 +63,7 @@ data class AggregateMetrics(
     val p99LatencyMs: MetricSummary?,
     val services: Map<String, AggregateServiceMetrics>,
     val connections: Map<String, AggregateConnectionMetrics> = emptyMap(),
+    val poolers: Map<String, AggregatePoolerMetrics> = emptyMap(),
 )
 
 /** Pooled client-latency distributions partitioned by final client outcome. */
@@ -178,4 +180,55 @@ data class ConnectionTotals(
     val poolWaitCount: Long = 0L,
     val poolWaitTimeMs: Double = 0.0,
     val poolAcquireTimeouts: Long = 0L,
+)
+
+/**
+ * Transaction-pooler totals for the measured arrival cohort, including run-out. Client rejections are not admitted;
+ * admitted failures include wait expiry. Residence covers admission through the reply, including server waiting.
+ * Occupancy and queue integrals include all work within the fixed measurement interval, excluding run-out.
+ * Wait counts and durations describe completed waits of cohort attempts, including expired waits.
+ */
+@Serializable
+data class PoolerMetrics(
+    val offeredAttempts: Int,
+    val admittedAttempts: Int,
+    val clientConnectionRejections: Int,
+    val waitTimeouts: Int,
+    val successes: Int,
+    val failures: Int,
+    val maxClientConnections: Int,
+    val poolSize: Int,
+    val measurementMs: Double,
+    val busyClientConnectionTimeMs: Double,
+    val busyServerConnectionTimeMs: Double,
+    val serverQueueLengthIntegralMs: Double,
+    val serverWaitCount: Int,
+    val serverWaitTimeMs: Double,
+    val latency: LatencyStatistics,
+)
+
+/** Pooled transaction-pooler counters, resource time and residence distribution across independent replications. */
+@Serializable
+data class AggregatePoolerMetrics(
+    val pooledLatency: LatencyDistribution?,
+    val totals: PoolerTotals,
+)
+
+/** Capacities are integrated over each replication's measurement interval before pooling. */
+@Serializable
+data class PoolerTotals(
+    val offeredAttempts: Long,
+    val admittedAttempts: Long,
+    val clientConnectionRejections: Long,
+    val waitTimeouts: Long,
+    val successes: Long,
+    val failures: Long,
+    val busyClientConnectionTimeMs: Double,
+    val clientConnectionCapacityTimeMs: Double,
+    val busyServerConnectionTimeMs: Double,
+    val serverConnectionCapacityTimeMs: Double,
+    val serverQueueLengthIntegralMs: Double,
+    val serverWaitCount: Long,
+    val serverWaitTimeMs: Double,
+    val measurementMs: Double,
 )

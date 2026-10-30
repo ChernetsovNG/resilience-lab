@@ -34,8 +34,9 @@ class MetricsCollector(
     private var originalArrivals = 0
     private var successes = 0
     private var failures = 0
+    private var poolerMetrics = newPoolerMetrics()
     private val serviceMetrics =
-        services.associateTo(linkedMapOf()) { service ->
+        services.filter { it.pooler == null }.associateTo(linkedMapOf()) { service ->
             service.path to MutableServiceMetrics(service.handlers, measurementStartMs, measurementEndMs)
         }
 
@@ -54,6 +55,7 @@ class MetricsCollector(
             failures = failures,
             services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
             connections = connections.snapshot(),
+            poolers = poolerMetrics.mapValues { it.value.snapshot() },
         )
     }
 
@@ -68,6 +70,7 @@ class MetricsCollector(
         successes = 0
         failures = 0
         serviceMetrics.values.forEach { it.reset() }
+        poolerMetrics = newPoolerMetrics()
     }
 
     internal fun startMeasurement(
@@ -75,6 +78,10 @@ class MetricsCollector(
         queueLength: Int,
         busyHandlers: Int,
     ) {
+        poolerMetrics[serviceId]?.let { pooler ->
+            pooler.clients.record(measurementStartMs, busyHandlers.toDouble())
+            return
+        }
         val metrics = serviceMetrics.getValue(serviceId)
         metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
         metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
@@ -85,6 +92,7 @@ class MetricsCollector(
         timeMs: Double,
         queueLength: Int,
     ) {
+        if (serviceId in poolerMetrics) return
         windows.queueLength(serviceId, timeMs, queueLength)
         serviceMetrics.getValue(serviceId).queueLengthSeries.record(timeMs, queueLength.toDouble())
     }
@@ -95,12 +103,18 @@ class MetricsCollector(
         busyHandlers: Int,
     ) {
         windows.busyHandlers(serviceId, timeMs, busyHandlers)
-        serviceMetrics.getValue(serviceId).busyHandlerSeries.record(timeMs, busyHandlers.toDouble())
+        val pooler = poolerMetrics[serviceId]
+        if (pooler == null) {
+            serviceMetrics.getValue(serviceId).busyHandlerSeries.record(timeMs, busyHandlers.toDouble())
+        } else {
+            pooler.clients.record(timeMs, busyHandlers.toDouble())
+        }
     }
 
     internal fun finishMeasurement(timeMs: Double) {
         serviceMetrics.values.forEach { it.finish(timeMs) }
         connections.finish(timeMs)
+        poolerMetrics.values.forEach { it.finish(timeMs) }
         if (timeMs >= measurementEndMs) windows.finish()
     }
 
@@ -182,7 +196,10 @@ class MetricsCollector(
         measured: Boolean = true,
     ) {
         windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.OFFERED)
-        if (measured) serviceMetrics.getValue(serviceId).offeredAttempts++
+        if (measured) {
+            val pooler = poolerMetrics[serviceId]
+            if (pooler == null) serviceMetrics.getValue(serviceId).offeredAttempts++ else pooler.offered++
+        }
     }
 
     internal fun recordAdmitted(
@@ -190,7 +207,10 @@ class MetricsCollector(
         measured: Boolean = true,
     ) {
         windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.ADMITTED)
-        if (measured) serviceMetrics.getValue(serviceId).admittedAttempts++
+        if (measured) {
+            val pooler = poolerMetrics[serviceId]
+            if (pooler == null) serviceMetrics.getValue(serviceId).admittedAttempts++ else pooler.admitted++
+        }
     }
 
     internal fun recordLocalFailure(
@@ -204,8 +224,14 @@ class MetricsCollector(
         serviceId: String,
         measured: Boolean = true,
     ) {
-        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.QUEUE_REJECTED)
-        if (measured) serviceMetrics.getValue(serviceId).queueRejections++
+        val pooler = poolerMetrics[serviceId]
+        if (pooler == null) {
+            windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.QUEUE_REJECTED)
+            if (measured) serviceMetrics.getValue(serviceId).queueRejections++
+        } else {
+            windows.poolerClientRejection(serviceId, currentTimeMs())
+            if (measured) pooler.clientRejections++
+        }
     }
 
     internal fun recordTimeout(
@@ -213,7 +239,7 @@ class MetricsCollector(
         measured: Boolean = true,
     ) {
         windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.TIMEOUT)
-        if (measured) serviceMetrics.getValue(serviceId).timeouts++
+        if (measured) serviceMetrics[serviceId]?.let { it.timeouts++ }
     }
 
     internal fun recordRetry(
@@ -221,15 +247,58 @@ class MetricsCollector(
         measured: Boolean = true,
     ) {
         windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.RETRY)
-        if (measured) serviceMetrics.getValue(serviceId).retries++
+        if (measured) serviceMetrics[serviceId]?.let { it.retries++ }
     }
 
     internal fun recordAttemptCompletion(
         serviceId: String,
         residenceMs: Double,
         succeeded: Boolean,
+        measured: Boolean = true,
     ) {
         windows.attemptCompletion(serviceId, currentTimeMs(), residenceMs, succeeded)
+        if (measured) poolerMetrics[serviceId]?.complete(residenceMs, succeeded)
+    }
+
+    private fun newPoolerMetrics() =
+        services.filter { it.pooler != null }.associate { node ->
+            node.path to PoolerMetricsCollector(node, measurementStartMs, measurementEndMs)
+        }
+
+    internal fun startPoolerMeasurement(
+        id: String,
+        busy: Int,
+        queued: Int,
+    ) {
+        poolerMetrics.getValue(id).apply {
+            servers.record(measurementStartMs, busy.toDouble())
+            queue.record(measurementStartMs, queued.toDouble())
+        }
+    }
+
+    internal fun recordPoolerServerBusy(
+        id: String,
+        busy: Int,
+    ) {
+        windows.poolerServerBusy(id, currentTimeMs(), busy)
+        poolerMetrics.getValue(id).servers.record(currentTimeMs(), busy.toDouble())
+    }
+
+    internal fun recordPoolerQueue(
+        id: String,
+        queued: Int,
+    ) {
+        windows.queueLength(id, currentTimeMs(), queued)
+        poolerMetrics.getValue(id).queue.record(currentTimeMs(), queued.toDouble())
+    }
+
+    internal fun recordPoolerWait(
+        id: String,
+        acquisition: SlotAcquisition,
+        measured: Boolean,
+    ) {
+        windows.poolerWait(id, currentTimeMs(), acquisition)
+        if (measured) poolerMetrics.getValue(id).waitCompleted(acquisition)
     }
 
     private class MutableServiceMetrics(

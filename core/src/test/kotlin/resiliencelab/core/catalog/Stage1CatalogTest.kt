@@ -31,7 +31,12 @@ class Stage1CatalogTest {
 
     @Test
     fun `output identifiers are unique and calculations reference existing fields`() {
-        val node = json.encodeToJsonElement(WindowMetrics.serializer(), WindowMetrics(0.0, 100.0)).jsonObject
+        val node =
+            json
+                .encodeToJsonElement(
+                    WindowMetrics.serializer(),
+                    WindowMetrics(0.0, 100.0, pooler = resiliencelab.core.results.PoolerWindowMetrics(2, 1, 0, 0, 0.0, 0.0, 0.0, 0, 0.0)),
+                ).jsonObject
         val connection = json.encodeToJsonElement(ConnectionWindowMetrics.serializer(), ConnectionWindowMetrics(0.0, 100.0)).jsonObject
         catalog.types.forEach { type ->
             assertThat(type.outputs.map { it.id }).doesNotHaveDuplicates()
@@ -71,10 +76,14 @@ class Stage1CatalogTest {
 
     @Test
     fun `contains the stage 1 block and connection types`() {
-        assertThat(catalog.types.map { it.id }).containsExactly("client", "service", "request", "call", "router", "route", "database")
+        assertThat(
+            catalog.types.map { it.id },
+        ).containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler")
         assertThat(catalog.type("client")!!.category).isEqualTo(TypeCategory.BLOCK)
-        assertThat(catalog.type("call")!!.connects).isEqualTo(ConnectionRule("service", listOf("service", "router", "database")))
-        assertThat(catalog.type("request")!!.connects).isEqualTo(ConnectionRule("client", listOf("service")))
+        assertThat(
+            catalog.type("call")!!.connects,
+        ).isEqualTo(ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler")))
+        assertThat(catalog.type("request")!!.connects).isEqualTo(ConnectionRule(listOf("client"), listOf("service")))
         assertThat(catalog.type("unknown")).isNull()
     }
 

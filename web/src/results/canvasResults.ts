@@ -59,7 +59,7 @@ export function canvasResults(
   });
   const first = point.saturation.firstNodes[0];
   const services = new Map<string, ServiceCanvasResults>();
-  for (const [id, aggregate] of Object.entries(point.aggregate.services)) {
+  for (const [id, aggregate] of Object.entries({ ...point.aggregate.services, ...point.aggregate.poolers })) {
     const original = ownEntry(model.blocks, id), current = ownEntry(currentModel.blocks, id);
     if (original === undefined || current?.type !== original.type || elementIdentity(original) !== elementIdentity(current)) continue;
     const outputs = outputsOf(catalog, original.type).filter(output => output.overlay != null).sort((a, b) => a.overlay!.order - b.overlay!.order);
