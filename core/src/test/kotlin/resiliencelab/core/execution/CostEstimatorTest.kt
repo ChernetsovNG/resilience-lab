@@ -135,7 +135,8 @@ class CostEstimatorTest {
         assertThat(estimate.expectedEvents).isEqualTo(586.0)
         assertThat(estimate.expectedRows).isEqualTo(800)
         assertThat(estimate.estimatedUncompressedBytes).isEqualTo(294_400)
-        assertThat(estimate.estimatedArtifactBytes).isEqualTo(62_720)
+        // 36,800 series + 1,024 part metadata + 3,112 compressed totals + 12,448 summary bytes.
+        assertThat(estimate.estimatedArtifactBytes).isEqualTo(53_384)
         assertThat(estimate.estimatedParts).isEqualTo(2)
         assertThat(estimate.estimatedSeconds).isPositive()
         assertThat(estimate.warnings.map { it.code }).doesNotContain("ESTIMATE_EXTRAPOLATION")

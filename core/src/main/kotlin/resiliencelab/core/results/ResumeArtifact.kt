@@ -6,6 +6,7 @@ import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
+import java.util.zip.GZIPInputStream
 
 /** Selects invalid tasks and removes stale files before an in-place resume. */
 internal class ResumeArtifact(
@@ -39,9 +40,11 @@ internal class ResumeArtifact(
         directory: String,
     ): Boolean =
         try {
-            val replicationPath = "$directory/replication.json"
+            val replicationPath = "$directory/replication.json.gz"
             val indexPath = "$directory/index.json"
-            val replication = json.decodeFromString(ReplicationArtifact.serializer(), workspace.read(replicationPath).text)
+            val text =
+                GZIPInputStream(workspace.readBytes(replicationPath).inputStream()).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val replication = json.decodeFromString(ReplicationArtifact.serializer(), text)
             if (replication.schemaVersion != Versions.REPLICATION_SCHEMA ||
                 replication.profile != LatencySketch.PROFILE ||
                 replication.unit != "ms"

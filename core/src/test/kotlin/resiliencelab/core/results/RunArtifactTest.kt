@@ -1,12 +1,16 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.experiment.AggregateMetrics
+import resiliencelab.core.experiment.LatencySketch
+import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.LatencySummary
+import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.DocumentExistsException
@@ -14,9 +18,46 @@ import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.GZIPInputStream
 import kotlin.test.Test
 
 class RunArtifactTest {
+    @Test
+    fun `writes compressed canonical replication totals and hashes the stored bytes`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val writer = ArtifactWriter(workspace)
+        val directory = ".results/e/run-1/series/baseline/p0/rep-0"
+        val result =
+            ReplicationResult(
+                arrivalTimesMs = listOf(1.0, 2.0),
+                allLatency = LatencyStatistics(count = 2, sumMs = 30.0),
+                successfulLatency = LatencyStatistics(count = 1, sumMs = 10.0),
+                failedLatency = LatencyStatistics(count = 1, sumMs = 20.0),
+                originalArrivals = 2,
+                successes = 1,
+                failures = 1,
+                services = emptyMap(),
+            )
+
+        writer.writeReplication(directory, result)
+
+        assertThat(workspace.exists("$directory/replication.json.gz")).isTrue()
+        assertThat(workspace.exists("$directory/replication.json")).isFalse()
+        val compressed = workspace.readBytes("$directory/replication.json.gz")
+        assertThat(compressed.copyOfRange(4, 8)).containsExactly(0, 0, 0, 0)
+        val text = GZIPInputStream(compressed.inputStream()).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val artifact = Json.decodeFromString(ReplicationArtifact.serializer(), text)
+        assertThat(artifact.result).isEqualTo(result.copy(arrivalTimesMs = emptyList()))
+        assertThat(text).isEqualTo(
+            DocumentCodec.encode(ReplicationArtifact.serializer(), ReplicationArtifact(5, LatencySketch.PROFILE, "ms", result)),
+        )
+        assertThat(text).doesNotContain("arrivalTimesMs")
+        val written = writer.write(".results/e/run-1", manifest(), summary())
+        assertThat(written.parts["series/baseline/p0/rep-0/replication.json.gz"]).isEqualTo(DocumentVersion.of(compressed))
+    }
+
     @Test
     fun `places runs under the results directory by experiment name`() {
         assertThat(ResultsLayout.runDirectory("examples/retry-storm.experiment.json", "run-1"))
@@ -126,7 +167,7 @@ class RunArtifactTest {
     fun `prepare selects only the task with a bad file checksum`(
         @TempDir root: Path,
     ) {
-        listOf("replication.json", "index.json", "part-0.json.gz").forEach { fileName ->
+        listOf("replication.json.gz", "index.json", "part-0.json.gz").forEach { fileName ->
             val caseRoot = root.resolve(fileName)
             Files.createDirectories(caseRoot)
             val outcome = runExample(caseRoot)
@@ -134,7 +175,7 @@ class RunArtifactTest {
             val tasks = exampleTasks()
             val target = tasks.first()
             val targetDirectory = "${outcome.runDirectory}/series/${target.variant}/${target.point}/rep-${target.replication}"
-            val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-1/replication.json"
+            val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-1/replication.json.gz"
             val validBytes = workspace.readBytes(validPath)
             val corrupted = caseRoot.resolve("$targetDirectory/$fileName")
             if (fileName.endsWith(".gz")) {
@@ -160,10 +201,10 @@ class RunArtifactTest {
         val tasks = exampleTasks()
         val target = tasks[2]
         val targetDirectory = "${outcome.runDirectory}/series/${target.variant}/${target.point}/rep-${target.replication}"
-        Files.delete(root.resolve("$targetDirectory/replication.json"))
+        Files.delete(root.resolve("$targetDirectory/replication.json.gz"))
         workspace.create("$targetDirectory/stale.json", "stale")
         workspace.create("${outcome.runDirectory}/orphan.json", "orphan")
-        val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-0/replication.json"
+        val validPath = "${outcome.runDirectory}/series/baseline/p0/rep-0/replication.json.gz"
         val validBytes = workspace.readBytes(validPath)
 
         val invalid = ResumeArtifact(workspace).prepare(outcome.runDirectory, outcome.manifest.copy(complete = false), tasks)
@@ -173,6 +214,26 @@ class RunArtifactTest {
         assertThat(workspace.exists("${outcome.runDirectory}/orphan.json")).isFalse()
         assertThat(workspace.exists("${outcome.runDirectory}/summary.json")).isFalse()
         assertThat(workspace.readBytes(validPath)).isEqualTo(validBytes)
+    }
+
+    @Test
+    fun `prepare checks the compressed replication bytes even when their JSON is unchanged`(
+        @TempDir root: Path,
+    ) {
+        val outcome = runExample(root)
+        val workspace = FileWorkspace(root)
+        val tasks = exampleTasks()
+        val target = tasks.first()
+        val path = "${outcome.runDirectory}/series/${target.variant}/${target.point}/rep-${target.replication}/replication.json.gz"
+        val original = workspace.readBytes(path)
+        val changed = original.copyOf().also { it[4] = 1 }
+        assertThat(GZIPInputStream(changed.inputStream()).use { it.readAllBytes() })
+            .isEqualTo(GZIPInputStream(original.inputStream()).use { it.readAllBytes() })
+        Files.write(root.resolve(path), changed)
+
+        val invalid = ResumeArtifact(workspace).prepare(outcome.runDirectory, outcome.manifest.copy(complete = false), tasks)
+
+        assertThat(invalid).containsExactly(target)
     }
 
     private fun exampleTasks() =

@@ -69,15 +69,15 @@ class CostEstimatorArtifactTest {
                         println(
                             "$path: rows=${estimate.expectedRows}/$rows raw=${estimate.estimatedUncompressedBytes}/$rawBytes artifact=${estimate.estimatedArtifactBytes}/$artifactBytes parts=${estimate.estimatedParts}/$parts",
                         )
-                        val compressedBytes = files.filter { it.fileName.toString().endsWith(".json.gz") }.sumOf { Files.size(it) }
+                        val compressedBytes = files.filter { it.fileName.toString().startsWith("part-") }.sumOf { Files.size(it) }
                         println(
                             "$path: gzip=$compressedBytes metadata=${artifactBytes - compressedBytes} summary=${Files.size(
                                 root.resolve("summary.json"),
-                            )} replication=${files.filter { it.fileName.toString() == "replication.json" }.sumOf { Files.size(it) }}",
+                            )} replication=${files.filter { it.fileName.toString() == "replication.json.gz" }.sumOf { Files.size(it) }}",
                         )
                         val seriesChecksums =
                             files
-                                .filter { it.fileName.toString().endsWith(".json.gz") }
+                                .filter { it.fileName.toString().startsWith("part-") }
                                 .sorted()
                                 .joinToString { DocumentVersion.of(Files.readAllBytes(it)) }
                         println(

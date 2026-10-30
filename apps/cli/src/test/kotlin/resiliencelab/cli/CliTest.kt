@@ -493,7 +493,7 @@ class CliTest {
         val expectedDirectory = ".results/retry-storm/run-1"
         val expected = artifactBytes(expectedDirectory)
         createIncomplete("run-2")
-        val missing = FileWorkspace(workspace).listFiles(".results/retry-storm/run-2").first { it.endsWith("/replication.json") }
+        val missing = FileWorkspace(workspace).listFiles(".results/retry-storm/run-2").first { it.endsWith("/replication.json.gz") }
         Files.delete(workspace.resolve(missing))
 
         val result = execute(listOf("resume", argument))

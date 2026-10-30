@@ -146,33 +146,36 @@ class LabTest {
     }
 
     @Test
-    fun `resumed and continuous artifacts are byte identical and a corrupt part is recomputed`() {
-        val expectedRoot = exampleWorkspace()
-        val actualRoot = exampleWorkspace()
-        Lab(FileWorkspace(expectedRoot)).use { it.run(experiment, "run-1") }
-        val cancelled = AtomicBoolean()
-        Lab(FileWorkspace(actualRoot)).use { lab ->
-            assertThatThrownBy {
-                lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
-                    if (done == 1) cancelled.set(true)
-                }
-            }.isInstanceOf(CancellationException::class.java)
-        }
-        val runDirectory = ".results/retry-storm/cancelled"
-        val corrupt = FileWorkspace(actualRoot).listFiles(runDirectory).first { it.endsWith(".json.gz") }
-        Files.write(actualRoot.resolve(corrupt), byteArrayOf(1, 2, 3))
+    fun `resumed and continuous artifacts are byte identical and corrupt task files are recomputed`() {
+        listOf("part-0.json.gz", "replication.json.gz").forEach { fileName ->
+            val expectedRoot = exampleWorkspace()
+            val actualRoot = exampleWorkspace()
+            Lab(FileWorkspace(expectedRoot)).use { it.run(experiment, "run-1") }
+            val cancelled = AtomicBoolean()
+            Lab(FileWorkspace(actualRoot)).use { lab ->
+                assertThatThrownBy {
+                    lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                        if (done == 1) cancelled.set(true)
+                    }
+                }.isInstanceOf(CancellationException::class.java)
+            }
+            val runDirectory = ".results/retry-storm/cancelled"
+            val corrupt = FileWorkspace(actualRoot).listFiles(runDirectory).first { it.endsWith("/$fileName") }
+            val original = Files.readAllBytes(actualRoot.resolve(corrupt))
+            Files.write(actualRoot.resolve(corrupt), original.copyOf(original.size - 4))
 
-        val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
+            val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
 
-        assertThat(resumed.manifest.complete).isTrue()
-        val expectedDirectory = ".results/retry-storm/run-1"
-        val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
-        val actualFiles = FileWorkspace(actualRoot).listFiles(runDirectory).map { it.removePrefix("$runDirectory/") }
-        assertThat(actualFiles).containsExactlyElementsOf(expectedFiles)
-        expectedFiles.forEach { relative ->
-            assertThat(Files.readAllBytes(actualRoot.resolve("$runDirectory/$relative")))
-                .describedAs(relative)
-                .containsExactly(*Files.readAllBytes(expectedRoot.resolve("$expectedDirectory/$relative")))
+            assertThat(resumed.manifest.complete).isTrue()
+            val expectedDirectory = ".results/retry-storm/run-1"
+            val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
+            val actualFiles = FileWorkspace(actualRoot).listFiles(runDirectory).map { it.removePrefix("$runDirectory/") }
+            assertThat(actualFiles).containsExactlyElementsOf(expectedFiles)
+            expectedFiles.forEach { relative ->
+                assertThat(Files.readAllBytes(actualRoot.resolve("$runDirectory/$relative")))
+                    .describedAs(relative)
+                    .containsExactly(*Files.readAllBytes(expectedRoot.resolve("$expectedDirectory/$relative")))
+            }
         }
     }
 
@@ -308,7 +311,7 @@ class LabTest {
         val root = exampleWorkspace()
         createIncomplete(root)
         val runDirectory = ".results/retry-storm/cancelled"
-        val missing = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json") }
+        val missing = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json.gz") }
         Files.delete(root.resolve(missing))
         val cancelled = AtomicBoolean()
 
@@ -334,8 +337,8 @@ class LabTest {
         val manifestPath = root.resolve("$runDirectory/manifest.json")
         Files.writeString(manifestPath, Files.readString(manifestPath).replace("\"complete\": true", "\"complete\": false"))
         Files.delete(root.resolve("$runDirectory/summary.json"))
-        Files.delete(root.resolve("$runDirectory/series/baseline/p0/rep-0/replication.json"))
-        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-0/replication.json"))
+        Files.delete(root.resolve("$runDirectory/series/baseline/p0/rep-0/replication.json.gz"))
+        Files.delete(root.resolve("$runDirectory/series/no-retries/p0/rep-0/replication.json.gz"))
         val backing = FileWorkspace(root)
         val manifestReads = AtomicInteger()
         val workspace =
@@ -512,7 +515,7 @@ class LabTest {
         assertThat(Files.readString(directory.resolve("manifest.json"))).contains("\"complete\": false")
         assertThat(directory.resolve("summary.json")).doesNotExist()
         assertThat(FileWorkspace(root).listFiles(".results/retry-storm/cancelled"))
-            .anyMatch { it.endsWith("/replication.json") }
+            .anyMatch { it.endsWith("/replication.json.gz") }
     }
 
     @Test

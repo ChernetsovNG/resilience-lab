@@ -19,6 +19,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.GZIPInputStream
 import kotlin.concurrent.thread
 import kotlin.test.Test
 
@@ -86,7 +87,7 @@ class ArtifactPipelineTest {
     @Test
     fun `artifact is byte identical across workers and document order and summary rebuilds from replication files`() {
         val sequential = example("one")
-        val parallel = example("three")
+        val parallel = example("eight")
         val reordered = example("reordered")
         val modelPath = reordered.resolve("retry-storm/retry-storm.model.json")
         val model = (DocumentCodec.decodeModel(Files.readString(modelPath), modelPath.toString()) as DecodeResult.Ok).value
@@ -111,11 +112,11 @@ class ArtifactPipelineTest {
             Lab(FileWorkspace(root), executor = executor).use { it.run(experiment, "r") }
         }
         val first = run(sequential, 1)
-        run(parallel, 3)
-        run(reordered, 3)
+        run(parallel, 8)
+        run(reordered, 8)
         val workspace = FileWorkspace(sequential)
         val files = workspace.listFiles(first.runDirectory)
-        assertThat(files).anyMatch { it.endsWith("/replication.json") }.anyMatch { it.endsWith("/index.json") }
+        assertThat(files).anyMatch { it.endsWith("/replication.json.gz") }.anyMatch { it.endsWith("/index.json") }
         val indexes = files.filter { it.endsWith("/index.json") }
         assertThat(indexes).hasSize(20)
         indexes.forEach { path ->
@@ -151,7 +152,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(13)
+        assertThat(first.manifest.schemaVersion).isEqualTo(14)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")
@@ -190,16 +191,13 @@ class ArtifactPipelineTest {
         first.manifest.parts.forEach { (path, checksum) ->
             assertThat(DocumentVersion.of(workspace.readBytes("${first.runDirectory}/$path"))).isEqualTo(checksum)
         }
-        val replication =
-            Json.decodeFromString(
-                ReplicationArtifact.serializer(),
-                workspace
-                    .read(
-                        "${first.runDirectory}/series/baseline/p0/rep-0/replication.json",
-                    ).text,
-            )
+        val replicationText =
+            GZIPInputStream(
+                workspace.readBytes("${first.runDirectory}/series/baseline/p0/rep-0/replication.json.gz").inputStream(),
+            ).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val replication = Json.decodeFromString(ReplicationArtifact.serializer(), replicationText)
         assertThat(replication.result.allLatency.count).isEqualTo(replication.result.originalArrivals.toLong())
-        assertThat(workspace.read("${first.runDirectory}/series/baseline/p0/rep-0/replication.json").text)
+        assertThat(replicationText)
             .doesNotContain("arrivalTimesMs", "allLatenciesMs")
     }
 

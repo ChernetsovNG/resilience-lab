@@ -161,7 +161,7 @@ class GridExperimentTest {
             coordinates(2, "30ms"),
         )
         assertThat(progress).containsExactlyElementsOf((1..12).map { it to 12 })
-        assertThat(workspace.listFiles(".results/e/r").count { it.endsWith("/replication.json") }).isEqualTo(12)
+        assertThat(workspace.listFiles(".results/e/r").count { it.endsWith("/replication.json.gz") }).isEqualTo(12)
         for (point in 0..5) {
             for (replication in 0..1) {
                 assertThat(workspace.exists(".results/e/r/series/baseline/p$point/rep-$replication/index.json")).isTrue()
@@ -194,8 +194,8 @@ class GridExperimentTest {
         }
         assertThat(points(grid).first().getValue("aggregate")).isEqualTo(points(original).single().getValue("aggregate"))
         assertThat(points(overridden)).isEqualTo(points(grid))
-        assertThat(grid.read(".results/e/r/series/baseline/p0/rep-0/replication.json").text)
-            .isEqualTo(original.read(".results/e/r/series/baseline/p0/rep-0/replication.json").text)
+        assertThat(grid.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
+            .isEqualTo(original.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
     }
 
     @Test
@@ -209,8 +209,8 @@ class GridExperimentTest {
         val points = points(workspace)
         assertThat(points[1].getValue("aggregate")).isEqualTo(points[0].getValue("aggregate"))
         assertThat(points[0].getValue("aggregate")).isEqualTo(points(baseline).single().getValue("aggregate"))
-        assertThat(workspace.read(".results/e/r/series/baseline/p1/rep-0/replication.json").text)
-            .isEqualTo(workspace.read(".results/e/r/series/baseline/p0/rep-0/replication.json").text)
+        assertThat(workspace.readBytes(".results/e/r/series/baseline/p1/rep-0/replication.json.gz"))
+            .isEqualTo(workspace.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
     }
 
     @Test

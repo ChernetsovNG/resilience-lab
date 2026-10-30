@@ -56,7 +56,7 @@ class ResumeApiTest {
         assertThat(JsonPath.read<Boolean>(manifest.contentAsString, "$.complete")).isFalse()
         openApi.assertResponse("get", "/api/v1/runs/{id}/manifest", manifest)
 
-        val ready = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json") }
+        val ready = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json.gz") }
         val segments = ready.split('/')
         val series =
             mockMvc
