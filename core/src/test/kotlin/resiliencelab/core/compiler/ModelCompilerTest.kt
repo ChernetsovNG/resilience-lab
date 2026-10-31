@@ -37,7 +37,7 @@ class ModelCompilerTest {
 
     private val experiment =
         """
-        {"schemaVersion": 2, "modelRef": "m.model.json",
+        {"schemaVersion": 3, "modelRef": "m.model.json",
          "execution": {"replications": 2, "warmup": "0ms", "measurement": "1s", "seed": 20261025},
          "faults": [{"target": "dependency", "from": "200ms", "to": "700ms", "kind": "slowdown", "multiplier": 6.0},
                     {"target": "dependency", "from": "200ms", "to": "700ms", "kind": "errors", "failureRate": "5%"}],

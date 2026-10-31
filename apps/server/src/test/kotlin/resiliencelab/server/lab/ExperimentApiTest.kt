@@ -184,7 +184,7 @@ class ExperimentApiTest {
         Files.writeString(
             root.resolve(path),
             """
-            {"schemaVersion":2,"modelRef":"retry-storm/retry-storm.model.json",
+            {"schemaVersion":3,"modelRef":"retry-storm/retry-storm.model.json",
              "execution":{"replications":2,"warmup":"0ms","measurement":"100ms","seed":42},
              "variants":[{"id":"baseline"},{"id":"candidate"}],
              "grid":[{"path":"gateway-to-middle.timeout","values":["40ms","80ms"]},

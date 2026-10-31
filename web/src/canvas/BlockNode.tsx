@@ -90,6 +90,9 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
       <strong className="block-node-header">
         <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
         <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
+        {data.block.description ? <span className="nodrag nopan"><HelpHint label={data.id}>
+          <span className="annotation-text">{data.block.description}</span>
+        </HelpHint></span> : null}
         {replicas > 1 ? <span className="block-replica-count" aria-label={t("editor.replicas.count", { count: formatNumber(replicas) })}>
           {t("editor.canvas.replicas", { count: formatNumber(replicas) })}</span> : null}
       </strong>

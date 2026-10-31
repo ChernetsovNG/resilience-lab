@@ -21,6 +21,15 @@ import kotlin.test.Test
 
 class DocumentSchemasTest {
     @Test
+    fun `experiment three validates optional variant descriptions and rejects version two`() {
+        val source =
+            experiment().replace("\"id\":\"baseline\"", "\"id\":\"baseline\",\"description\":\"Другая реплика\"")
+        assertThat(validate("experiment", source)).isEmpty()
+        assertThat(validate("experiment", source.replace("\"schemaVersion\":3", "\"schemaVersion\":2"))).isNotEmpty()
+        assertThat(validate("experiment", source.replace("\"description\":\"Другая реплика\"", "\"description\":42"))).isNotEmpty()
+    }
+
+    @Test
     fun `client class profiles and structural filters follow the model six schema`() {
         val load = """{"points":[{"time":"0s","rate":"10/s"}]}"""
         val classes = """[{"id":"read","load":$load}]"""
@@ -361,7 +370,7 @@ class DocumentSchemasTest {
     ) = factory.getSchema(generated.getValue("$kind.schema.json"), InputFormat.JSON).validate(text, InputFormat.JSON)
 
     private fun experiment(overrides: String = "{}") =
-        """{"schemaVersion":2,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
+        """{"schemaVersion":3,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
         """{"schemaVersion":6,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""

@@ -1,9 +1,64 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import {  } from "./test/fixtures";
+import { documentViews, experiment, experimentPath, model, modelPath } from "./test/fixtures";
+import serverCatalog from "./test/catalog.json";
 import { setupAppTests, server, open, selectGateway, editHandlers, button, editField } from "./test/app";
 
 setupAppTests();
+
+it.each([true, false])("confirms model kind changes only when experiment settings are removed (dependents=%s)", async dependents => {
+  const sourceModel = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway,
+    params: { ...model.blocks.gateway.params, processing: { kind: "lognormal", mean: "2ms", stdDev: "1ms" } },
+  } } };
+  const sourceExperiment = { ...experiment,
+    grid: dependents ? [{ path: "gateway.processing.stdDev", values: ["1ms", "2ms"] }] : [],
+    variants: experiment.variants.map(variant => variant.id !== "no-retries" || !dependents ? variant
+      : { ...variant, overrides: { ...variant.overrides, "gateway.processing.stdDev": "3ms" } }),
+  };
+  const fetchMock = server((url, init) => {
+    if (url === "/api/v1/catalog") return { body: serverCatalog };
+    if (init?.method === "PUT") return;
+    if (url === `/api/v1/workspace/document?path=${encodeURIComponent(modelPath)}`) {
+      return { body: { ...documentViews[modelPath], content: { model: sourceModel } } };
+    }
+    if (url === `/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`) {
+      return { body: { ...documentViews[experimentPath], content: { experiment: sourceExperiment } } };
+    }
+  });
+  await open();
+  await selectGateway();
+  const processing = within(screen.getByRole("group", { name: "Processing time" }));
+  const distribution = processing.getByRole("combobox", { name: "Distribution" });
+  fireEvent.change(distribution, { target: { value: "fixed" } });
+  if (dependents) {
+    let dialog = within(await screen.findByRole("dialog", { name: "Remove dependent settings?" }));
+    expect(dialog.getByText(/Axis 1/).textContent).toContain("Standard deviation");
+    expect(dialog.getByText(/Axis 1/).textContent).toContain("No retries");
+    expect(dialog.getByText(/Axis 1/).textContent).toContain("Undo");
+    fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    expect((distribution as HTMLSelectElement).value).toBe("lognormal");
+    expect(button("Undo").disabled).toBe(true);
+    expect(button("Save").disabled).toBe(true);
+    fireEvent.change(distribution, { target: { value: "fixed" } });
+    dialog = within(await screen.findByRole("dialog", { name: "Remove dependent settings?" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Change" }));
+    await waitFor(() => expect((distribution as HTMLSelectElement).value).toBe("fixed"));
+    fireEvent.click(button("Undo"));
+    expect((distribution as HTMLSelectElement).value).toBe("lognormal");
+    expect(button("Save").disabled).toBe(true);
+    fireEvent.click(button("Redo"));
+  } else {
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect((distribution as HTMLSelectElement).value).toBe("fixed");
+  }
+  fireEvent.click(button("Save"));
+  await waitFor(() => expect(button("Save").disabled).toBe(true));
+  const saved = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([, init]) => JSON.parse(String(init?.body)));
+  expect(saved.find(body => body.model).model.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "2ms" });
+  if (dependents) {
+    expect(saved.find(body => body.experiment).experiment).toEqual(experiment);
+  } else expect(saved).toHaveLength(1);
+});
 
 
 it("exposes undo and redo buttons without putting selection or variant navigation in history", async () => {

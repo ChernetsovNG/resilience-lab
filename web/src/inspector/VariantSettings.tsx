@@ -1,3 +1,4 @@
+import { AnnotationFields } from "./AnnotationFields";
 import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { Diagnostic, Variant } from "../api/apiTypes";
@@ -26,6 +27,8 @@ export function VariantSettings({ variants, active, disabled, editable, onComman
       <VariantText key={`${variant.id}-label`} label={t("editor.variant.name")} path="variant.label" value={variant.label ?? ""} editable={editable}
         onValidity={onValidity} diagnostics={fieldDiagnostics?.get("variant.label")}
         onCommit={(label) => onCommand(updateVariant(variant.id, { label }))} />
+      <AnnotationFields key={`${variant.id}-description`} value={variant} editable={editable} prefix="variant." fields={["description"]}
+        onCommit={(_field, description) => onCommand(updateVariant(variant.id, { description }))} />
     </section>
   );
 }

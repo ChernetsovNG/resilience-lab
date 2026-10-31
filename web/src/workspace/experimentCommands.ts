@@ -119,13 +119,14 @@ export function addVariant(id: string, label: string, copyFrom?: string): Editor
 }
 
 /** Rename the variant in place; parameter paths address model elements and do not change with a variant ID. */
-export function updateVariant(id: string, patch: Partial<Pick<Variant, "id" | "label">>): EditorCommand {
+export function updateVariant(id: string, patch: Partial<Pick<Variant, "id" | "label" | "description">>): EditorCommand {
   return editExperiment((experiment) => {
     if (patch.id !== undefined && variantIdError(experiment.variants, patch.id, id) !== null) return experiment;
     return { ...experiment, variants: experiment.variants.map((variant) => {
       if (variant.id !== id) return variant;
       const next = { ...variant, ...patch };
       if (patch.label === "") delete next.label;
+      if (patch.description === "") delete next.description;
       return next;
     }) };
   });

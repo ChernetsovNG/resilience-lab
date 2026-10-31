@@ -16,7 +16,7 @@ for (const locale of ["en-US", "ru-RU"]) {
           timeout: "10s", attempts: 1, pool: { size: 1, acquireTimeout: "10s" },
         } },
       ] };
-      const experiment = { schemaVersion: 2, modelRef: `${name}.model.json`,
+      const experiment = { schemaVersion: 3, modelRef: `${name}.model.json`,
         execution: { replications: 2, seed: 42, warmup: "0ms", measurement: "300ms", window: "50ms" },
         variants: [{ id: "baseline", label: "Baseline" }] };
       expect((await request.put(`/api/v1/workspace/document?path=${name}.model.json`, { data: { model } })).ok()).toBe(true);

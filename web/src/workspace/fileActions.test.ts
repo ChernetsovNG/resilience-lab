@@ -64,7 +64,7 @@ describe("workspace file actions", () => {
   it("creates a baseline question referring to the current model and layout", () => {
     const before = structuredClone(loaded);
     expect(newExperiment(loaded, "capacity")).toEqual([{ path: "retry-storm/capacity.experiment.json", content: { experiment: {
-      schemaVersion: 2, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json",
+      schemaVersion: 3, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json",
       execution: { replications: 10, seed: 1, warmup: "10s", measurement: "60s", maxRealTime: "30s" },
       faults: [], grid: [], variants: [{ id: "baseline", label: "Baseline", overrides: {} }],
     } } }]);
@@ -153,7 +153,7 @@ describe("workspace file actions", () => {
   });
 
   it("preserves large integer text until ordinary server validation", async () => {
-    const source = '{"schemaVersion":2,"modelRef":"model.model.json","execution":{"seed":9007199254740993}}';
+    const source = '{"schemaVersion":3,"modelRef":"model.model.json","execution":{"seed":9007199254740993}}';
     const drafts = await readImports([new File([source], "source.experiment.json")], "imported");
     expect(JSON.stringify(drafts[0].content)).toContain('"seed":9007199254740993');
   });

@@ -44,3 +44,9 @@ it("keeps Add disabled with immediate feedback until the new variant can render"
   expect(screen.getAllByRole("tab")).toHaveLength(3);
   expect(add.disabled).toBe(false);
 });
+
+it("includes a variant description in its tab hint", () => {
+  render(<VariantTabs variants={[{ id: "baseline", label: "Baseline", description: "  Explain why this case exists  ", overrides: {} }]}
+    active={null} onSelect={vi.fn()} onInspect={vi.fn()} onCommand={vi.fn()} />);
+  expect(screen.getByRole("tab", { name: "Baseline" }).title).toContain("  Explain why this case exists  ");
+});

@@ -483,7 +483,12 @@ describe("Inspector", () => {
 
 it("shows a missing required choice as unset until the user selects it", () => {
   const empty = { ...model, blocks: { ...model.blocks, gateway: { type: "service", params: {} } } };
-  renderInspector({ model: empty });
+  function Editor() {
+    const [current, setCurrent] = useState<ModelFile>(empty);
+    return <Inspector catalog={catalog} model={current} experiment={experiment} selected="gateway" editable
+      overrides={{}} onValidity={vi.fn()} onParam={(id, path, value) => setCurrent(previous => withParam(previous, id, path, value))} />;
+  }
+  render(<Editor />);
   const distribution = screen.getByLabelText("Distribution") as HTMLSelectElement;
   expect(distribution.value).toBe("");
   expect(distribution.selectedOptions[0].disabled).toBe(true);
