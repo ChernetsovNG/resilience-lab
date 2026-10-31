@@ -687,6 +687,40 @@ test("measures a new Client before collision checks with its initial values and 
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
 });
 
+test("keeps the viewport fixed while a palette block is held over a resizing canvas", async ({ page, files }) => {
+  const canvas = page.getByLabel("Model canvas", { exact: true });
+  const drag = await canvas.evaluateHandle(element => {
+    const state = { started: false, transforms: [] as string[] };
+    element.addEventListener("dragover", () => {
+      state.started = true;
+      const viewport = element.querySelector(".react-flow__viewport")!;
+      state.transforms.push(getComputedStyle(viewport).transform);
+      new MutationObserver(() => state.transforms.push(getComputedStyle(viewport).transform))
+        .observe(viewport, { attributes: true, attributeFilter: ["style"] });
+    }, { capture: true, once: true });
+    return state;
+  });
+  const bounds = (await canvas.boundingBox())!;
+  const target = { x: bounds.x + bounds.width * 0.55, y: bounds.y + bounds.height * 0.5 };
+  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true }).hover();
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 10 });
+  await page.mouse.move(target.x + 1, target.y);
+  expect(await drag.evaluate(state => state.started)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect.poll(async () => (await canvas.boundingBox())!.height).not.toBe(bounds.height);
+  await canvas.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const transforms = await drag.evaluate(state => state.transforms);
+  expect(new Set(transforms)).toEqual(new Set([transforms[0]]));
+  await drag.dispose();
+  await page.mouse.up();
+  await expect(page.getByTestId("rf__node-service-1")).toBeVisible();
+  await save(page);
+  expect((await stored(page, files.model)).content.model.blocks["service-1"].type).toBe("service");
+});
+
 test("extends the chain through real drag and ports, persists positions and commits a move as one layout-only command", async ({ page, files }) => {
   const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = await canvas.boundingBox();
