@@ -24,6 +24,17 @@ it("prefers the model's last experiment and falls back to the first path when it
   expect(preferredExperiment(entries, "empty.model.json")).toBeNull();
 });
 
+it("opens the matching main experiment unless a surviving last choice exists", () => {
+  const withMain = [...entries,
+    { path: "checkout/checkout-grid.experiment.json", kind: "EXPERIMENT", version: "grid", modelRef: "./checkout.model.json" },
+    { path: "checkout/checkout.experiment.json", kind: "EXPERIMENT", version: "main", modelRef: "./checkout.model.json" },
+    { path: "other/checkout.experiment.json", kind: "EXPERIMENT", version: "other", modelRef: "../checkout/checkout.model.json" },
+  ] as DocumentEntry[];
+  expect(preferredExperiment(withMain, "checkout/checkout.model.json")).toBe("checkout/checkout.experiment.json");
+  expect(preferredExperiment(withMain, "checkout/checkout.model.json", "deleted.experiment.json")).toBe("checkout/checkout.experiment.json");
+  expect(preferredExperiment(withMain, "checkout/checkout.model.json", "checkout/grid.experiment.json")).toBe("checkout/grid.experiment.json");
+});
+
 it("remembers the model and an independent last experiment per model", () => {
   rememberSelection("checkout/checkout.model.json", "questions/compare.experiment.json");
   rememberSelection("retry/retry.model.json", "retry/retry.experiment.json");

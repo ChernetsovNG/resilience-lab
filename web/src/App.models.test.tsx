@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { App } from "./App";
 import { setupAppTests, server, button } from "./test/app";
@@ -55,4 +55,31 @@ it("persists a model-only default before submitting a run", async () => {
   expect(save).toBeGreaterThanOrEqual(0);
   expect(save).toBeLessThan(run);
   expect(JSON.parse(String(calls[save][1]?.body)).experiment.execution.replications).toBe(10);
+});
+
+it("shows the model description immediately and opens its full notes from an element inspector", async () => {
+  const description = "Why retries overload a slow dependency";
+  const notes = "The model uses synthetic measurements.";
+  server(url => url.includes(encodeURIComponent(modelPath)) ? { body: {
+    ...documentViews[modelPath], content: { model: { ...documentViews[modelPath].content.model!, description, notes } },
+  } } : undefined);
+  render(<App />);
+  const visibleDescription = await screen.findByText(description, { selector: "p" });
+  expect(visibleDescription.closest("details")).toBeNull();
+  fireEvent.click(await screen.findByTestId("rf__node-gateway"));
+  fireEvent.click(button("Full notes"));
+  const fields = await screen.findByRole("group", { name: "Model" });
+  expect(fields.closest<HTMLDetailsElement>("details")?.open).toBe(true);
+  expect(within(fields).getByRole<HTMLTextAreaElement>("textbox", { name: "Notes" }).value).toBe(notes);
+  expect(within(fields).getByRole<HTMLTextAreaElement>("textbox", { name: "Notes" })).toBe(document.activeElement);
+  expect(button("Save").disabled).toBe(true);
+});
+
+it("omits the description banner when the model has no description", async () => {
+  server(url => url.includes(encodeURIComponent(modelPath)) ? { body: {
+    ...documentViews[modelPath], content: { model: { ...documentViews[modelPath].content.model!, description: "  " } },
+  } } : undefined);
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  expect(screen.queryByRole("button", { name: "Full notes" })).toBeNull();
 });

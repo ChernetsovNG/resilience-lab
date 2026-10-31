@@ -38,20 +38,20 @@ it("selects models and exposes only experiments referring to the selected model"
   expect(result.current.models).toEqual([orphan, modelPath]);
   await act(async () => { await result.current.openModel(modelPath); });
   expect(result.current.experiments).toEqual([second, experimentPath]);
-  expect(result.current.loaded?.experimentPath).toBe(second);
+  expect(result.current.loaded?.experimentPath).toBe(experimentPath);
 });
 
 it("restores each model's last experiment across model switches and browser reloads", async () => {
   server();
   const first = renderHook(() => useWorkspace());
   await waitFor(() => expect(first.result.current.loaded).not.toBeNull());
-  await act(async () => { await first.result.current.open(experimentPath); });
+  await act(async () => { await first.result.current.open(second); });
   await act(async () => { await first.result.current.openModel(orphan); });
   await act(async () => { await first.result.current.openModel(modelPath); });
-  expect(first.result.current.loaded?.experimentPath).toBe(experimentPath);
+  expect(first.result.current.loaded?.experimentPath).toBe(second);
   first.unmount();
   const next = renderHook(() => useWorkspace());
-  await waitFor(() => expect(next.result.current.loaded?.experimentPath).toBe(experimentPath));
+  await waitFor(() => expect(next.result.current.loaded?.experimentPath).toBe(second));
 });
 
 it("opens a model without experiments and creates its default only on first save", async () => {
@@ -69,14 +69,14 @@ it("opens a model without experiments and creates its default only on first save
   expect(api.document).not.toHaveBeenCalledWith(layoutPath);
 });
 
-it("keeps a model's other questions accessible when the first experiment cannot be opened", async () => {
+it("keeps a model's other questions accessible when the default experiment cannot be opened", async () => {
   const views = server();
   delete views[orphan];
-  views[second].content.experiment!.layoutRef = "missing.layout.json";
+  views[experimentPath].content.experiment!.layoutRef = "missing.layout.json";
   const { result } = renderHook(() => useWorkspace());
   await waitFor(() => expect(result.current.problem).not.toBeNull());
   expect(result.current.experiments).toEqual([second, experimentPath]);
-  await act(async () => { expect(await result.current.open(experimentPath)).toBe(true); });
+  await act(async () => { expect(await result.current.open(second)).toBe(true); });
   expect(result.current.loaded?.modelPath).toBe(modelPath);
-  expect(result.current.loaded?.experimentPath).toBe(experimentPath);
+  expect(result.current.loaded?.experimentPath).toBe(second);
 });

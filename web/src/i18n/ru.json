@@ -73,6 +73,7 @@
   "editor.inspector.expandSelected": "Развернуть инспектор: выбран элемент {selection}",
   "editor.inspector.resize": "Изменить ширину инспектора",
   "editor.inspector.width": "Ширина инспектора: {width} пикселей",
+  "app.canvas.fullNotes": "Полные заметки",
   "app.canvas.loading": "Загрузка рабочей области…",
   "app.canvas.results": "Контекст результатов",
   "app.canvas.showResults": "Показать результаты на схеме",
