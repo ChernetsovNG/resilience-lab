@@ -39,6 +39,12 @@ class RunController(
     @Throws(IOException::class)
     fun listRuns(): List<RunEntry> = runs.list()
 
+    @GetMapping("/latest")
+    @Throws(IOException::class)
+    fun getLatestRuns(
+        @RequestParam experiment: String,
+    ): List<RunEntry> = runs.latest(experiment)
+
     @GetMapping("/obsolete")
     @Throws(IOException::class)
     fun listObsoleteRuns(): List<RunStorageEntry> {

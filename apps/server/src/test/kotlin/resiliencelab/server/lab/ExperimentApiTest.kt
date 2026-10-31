@@ -40,6 +40,28 @@ class ExperimentApiTest {
     }
 
     @Test
+    fun `selects the latest runs of one experiment`() {
+        val submitted = postJson("/api/v1/jobs", """{"experiment":"$experiment"}""")
+        val finished = awaitJob(JsonPath.read<String>(submitted.contentAsString, "$.id"))
+        val runId = JsonPath.read<String>(finished.contentAsString, "$.runId")
+        val response = mockMvc.perform(get("/api/v1/runs/latest").param("experiment", experiment)).andReturn().response
+
+        assertThat(response.status).isEqualTo(200)
+        assertThat(JsonPath.read<List<String>>(response.contentAsString, "$[?(@.complete == true)].id")).containsExactly(runId)
+        assertThat(JsonPath.read<List<String>>(response.contentAsString, "$[*].experiment")).containsOnly(experiment)
+        openApi.assertResponse("get", "/api/v1/runs/latest", response)
+        val absent = mockMvc.perform(get("/api/v1/runs/latest").param("experiment", "other/missing.experiment.json")).andReturn().response
+        assertThat(absent.status).isEqualTo(200)
+        assertThat(absent.contentAsString).isEqualTo("[]")
+        assertThat(
+            mockMvc
+                .perform(get("/api/v1/runs/latest").param("experiment", "../escape"))
+                .andReturn()
+                .response.status,
+        ).isEqualTo(400)
+    }
+
+    @Test
     fun `few replications warning locates the draft experiment without blocking jobs`() {
         val original = Files.readString(root.resolve(experiment))
         val draft = original.replace(Regex("\"replications\": \\d+"), "\"replications\": 4")
@@ -372,16 +394,16 @@ class ExperimentApiTest {
             Files.writeString(directory.resolve("manifest.json"), content)
             val args =
                 if (actual == "missing") {
-                    """{"reason":"missing","kind":"manifest","expectedSchema":16}"""
+                    """{"reason":"missing","kind":"manifest","expectedSchema":17}"""
                 } else {
-                    """{"reason":"version","kind":"manifest","actual":$actual,"expectedSchema":16}"""
+                    """{"reason":"version","kind":"manifest","actual":$actual,"expectedSchema":17}"""
                 }
             listOf("manifest", "summary").forEach { part ->
                 val response = mockMvc.perform(get("/api/v1/runs/{id}/$part", id)).andReturn().response
                 assertThat(response.status).isEqualTo(400)
                 assertThat(JsonPath.read<String>(response.contentAsString, "$.code")).isEqualTo("RUN_VERSION_UNSUPPORTED")
                 assertThat(JsonPath.read<String>(response.contentAsString, "$.message"))
-                    .isEqualTo("Unsupported manifest schemaVersion $actual; expected 16; run again")
+                    .isEqualTo("Unsupported manifest schemaVersion $actual; expected 17; run again")
                 assertThat(Json.parseToJsonElement(response.contentAsString).jsonObject["args"])
                     .isEqualTo(Json.parseToJsonElement(args))
                 openApi.assertResponse("get", "/api/v1/runs/{id}/$part", response)

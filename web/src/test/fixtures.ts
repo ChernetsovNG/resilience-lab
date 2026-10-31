@@ -205,7 +205,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 16,
+  schemaVersion: 17,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -250,12 +250,13 @@ export const summary: RunSummary = {
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 16,
+  schemaVersion: 17,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",
   experiment: experimentPath,
   documents: { [experimentPath]: "experiment-hash", [modelPath]: "model-hash" },
+  snapshots: { [experimentPath]: JSON.stringify(experiment), [modelPath]: JSON.stringify(model) },
   seed: 20261025,
   replications: 2,
   variants: ["baseline", "no-retries"],

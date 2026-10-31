@@ -86,6 +86,7 @@ export const api = {
     request<ExperimentEstimate>("/api/v1/estimate", json("POST", { experiment, drafts })),
   resumeRun: (runId: string) => request<JobView>(`/api/v1/runs/${encodeURIComponent(runId)}/resume`, { method: "POST" }),
   runs: () => request<RunEntry[]>("/api/v1/runs"),
+  latestRuns: (experiment: string) => request<RunEntry[]>(`/api/v1/runs/latest?experiment=${encodeURIComponent(experiment)}`),
   obsoleteRuns: () => request<RunStorageEntry[]>("/api/v1/runs/obsolete"),
   deleteRun: (id: string) => request<void>(`/api/v1/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
   deleteRunDirectory: (directory: string) => request<void>(`/api/v1/runs?directory=${encodeURIComponent(directory)}`, { method: "DELETE" }),

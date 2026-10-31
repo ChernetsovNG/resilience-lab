@@ -55,7 +55,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 16
+    const val ARTIFACT_SCHEMA = 17
     const val SERIES_SCHEMA = 7
     const val REPLICATION_SCHEMA = 6
 }
@@ -87,6 +87,8 @@ data class RunManifest(
     val complete: Boolean,
     val grid: List<GridAxis>,
     val series: SeriesMetadata? = null,
+    /** Canonical JSON of the computation inputs, keyed like [documents] and covered by those hashes. */
+    val snapshots: Map<String, String> = emptyMap(),
 )
 
 /** Time grid, sketch version and population semantics shared by all series tasks. All durations are in ms. */
@@ -151,6 +153,13 @@ data class RunSummary(
 object ResultsLayout {
     private val segment = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+    /** Run group for a canonical workspace-relative experiment; inspecting it never visits another experiment. */
+    fun experimentDirectory(experimentPath: String): String = ".results/${DocumentVersion.of(experimentPath)}"
+
+    /** Completion metadata alongside run directories, outside the reproducible artifact and its checksums. */
+    fun completionMarker(runDirectory: String): String =
+        "${runDirectory.substringBeforeLast('/')}/.completed-${runDirectory.substringAfterLast('/')}"
+
     /**
      * `.results/<SHA-256 of the canonical workspace-relative experiment path>/<runId>`.
      * Document names are unrestricted by the results layout; the hash and validated run ID are plain path segments.
@@ -173,7 +182,7 @@ object ResultsLayout {
                 ),
             )
         }
-        return ".results/${DocumentVersion.of(experimentPath)}/$runId"
+        return "${experimentDirectory(experimentPath)}/$runId"
     }
 }
 
@@ -306,6 +315,12 @@ class ArtifactWriter(
                 workspace.write(manifestPath, encoded)
             } else {
                 workspace.create(manifestPath, encoded)
+            }
+            // A lost summary must not turn a completed run into an unfinished one. This cache is optional:
+            // failure to update it must not discard an already published artifact; summary presence is the fallback.
+            runCatching {
+                val marker = ResultsLayout.completionMarker(runDirectory)
+                if (written.complete) workspace.write(marker, "") else workspace.delete(marker)
             }
             written
         }

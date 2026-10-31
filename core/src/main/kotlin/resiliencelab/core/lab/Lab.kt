@@ -12,6 +12,8 @@ import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.ConnectionInstance
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
+import resiliencelab.core.document.ExperimentFile
+import resiliencelab.core.document.ModelFile
 import resiliencelab.core.engine.ksl.PathStreams
 import resiliencelab.core.execution.CostEstimator
 import resiliencelab.core.execution.ExperimentEstimate
@@ -167,7 +169,7 @@ class Lab(
         if (workspace.listFiles(runDirectory).isNotEmpty()) throw DocumentExistsException(runDirectory)
         val writer = ArtifactWriter(workspace)
         val series = seriesWriters(compiled, runDirectory)
-        val manifest = newManifest(experimentPath, loaded.artifactVersions, compiled)
+        val manifest = newManifest(experimentPath, loaded.artifactVersions, compiled, loaded.snapshots)
         try {
             executor.run(
                 compiled,
@@ -312,7 +314,7 @@ class Lab(
         if (loaded.artifactVersions != manifest.documents) {
             throw resumeFailure(CoreMessage.RUN_DOCUMENT_CHANGED, "Run documents changed; run again", manifest.experiment)
         }
-        val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled)
+        val expected = newManifest(manifest.experiment, loaded.artifactVersions, compiled, loaded.snapshots)
         if (
             manifest.seed != expected.seed ||
             manifest.replications != expected.replications ||
@@ -357,6 +359,7 @@ class Lab(
         experimentPath: String,
         documents: Map<String, String>,
         compiled: CompiledExperiment,
+        snapshots: Map<String, String>,
     ) = RunManifest(
         schemaVersion = Versions.ARTIFACT_SCHEMA,
         applicationVersion = Versions.APPLICATION,
@@ -364,6 +367,7 @@ class Lab(
         streamAssignment = PathStreams.ASSIGNMENT_VERSION,
         experiment = experimentPath,
         documents = documents,
+        snapshots = snapshots,
         seed = compiled.run.seed,
         replications = compiled.run.replications,
         variants = compiled.variants.map { it.id },
@@ -392,6 +396,7 @@ class Lab(
         val diagnostics: List<Diagnostic>,
         val versions: Map<String, String>,
         val artifactVersions: Map<String, String> = versions,
+        val snapshots: Map<String, String> = emptyMap(),
     )
 
     private fun load(
@@ -466,12 +471,13 @@ class Lab(
                             .thenBy { it.id },
                     ),
             )
-        val artifactVersions =
+        val snapshots =
             sortedMapOf(
-                experimentPath to DocumentVersion.of(DocumentCodec.encodeExperiment(experiment)),
-                modelDocument.path to DocumentVersion.of(DocumentCodec.encodeModel(artifactModel)),
+                experimentPath to DocumentCodec.encodeSnapshot(ExperimentFile.serializer(), experiment),
+                modelDocument.path to DocumentCodec.encodeSnapshot(ModelFile.serializer(), artifactModel),
             )
-        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions, artifactVersions)
+        val artifactVersions = snapshots.mapValues { DocumentVersion.of(it.value) }
+        return Loaded(result.experiment.takeIf { layout.isEmpty() }, result.diagnostics + layout, versions, artifactVersions, snapshots)
     }
 
     /** The optional layout must be a readable layout document inside the workspace (ADR 0005, item 3). */

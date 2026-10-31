@@ -19,6 +19,8 @@ data class RunEntry(
     val directory: String,
     val complete: Boolean,
     val sizeBytes: Long = 0,
+    /** Manifest publication time in Unix milliseconds; null until the run is complete. */
+    val completedAt: Long? = null,
 )
 
 /** A stored directory, including artifacts whose manifest cannot be decoded by this version. */
@@ -73,11 +75,86 @@ class RunCatalog(
                             directory,
                             it.complete,
                             workspace.directorySize(directory),
+                            if (it.complete) workspace.lastModified(path) else null,
                         )
                     }
             }.sortedWith(compareByDescending<RunEntry> { it.id }.thenBy { it.directory })
 
     fun entry(id: String): RunEntry? = find(id)
+
+    /**
+     * Latest completed and unfinished runs of one experiment. Candidate ordering uses file metadata and the
+     * completion metadata or a summary; two selected manifests are decoded, with at most one extra candidate
+     * when old completion metadata is missing. Summaries are not read.
+     */
+    fun latest(experiment: String): List<RunEntry> {
+        val canonical = workspace.canonicalPath(experiment)
+        val candidates =
+            workspace.listDirectories(ResultsLayout.experimentDirectory(canonical)).mapNotNull { directory ->
+                runCatching {
+                    val path = "$directory/$MANIFEST_FILE"
+                    if (!workspace.exists(path)) return@runCatching null
+                    val complete =
+                        workspace.exists(ResultsLayout.completionMarker(directory)) || workspace.exists("$directory/$SUMMARY_FILE")
+                    RunEntry(
+                        directory.substringAfterLast('/'),
+                        canonical,
+                        directory,
+                        complete,
+                        completedAt = if (complete) workspace.lastModified(path) else null,
+                    )
+                }.getOrNull()
+            }
+
+        fun read(entry: RunEntry): RunEntry? =
+            runCatching {
+                val manifest = readManifest(entry.directory)
+                if (canonicalExperiment(manifest.experiment) != canonical) {
+                    null
+                } else {
+                    entry.copy(
+                        complete = manifest.complete,
+                        completedAt = if (manifest.complete) workspace.lastModified("${entry.directory}/$MANIFEST_FILE") else null,
+                        sizeBytes = workspace.directorySize(entry.directory),
+                    )
+                }
+            }.getOrNull()
+
+        val completed =
+            candidates
+                .filter { it.complete }
+                .sortedWith(
+                    compareByDescending<RunEntry> { it.completedAt }.thenByDescending { it.id }.thenBy { it.directory },
+                ).firstOrNull()
+                ?.let(::read)
+        val incomplete =
+            candidates
+                .filter { !it.complete }
+                .sortedWith(
+                    compareByDescending<RunEntry> { it.id }.thenBy { it.directory },
+                ).firstOrNull()
+                ?.let(::read)
+        val recoveredIncomplete =
+            if (incomplete?.complete == true) {
+                candidates
+                    .filter { !it.complete && it.directory != incomplete.directory }
+                    .sortedWith(
+                        compareByDescending<RunEntry> { it.id }.thenBy { it.directory },
+                    ).firstOrNull()
+                    ?.let(::read)
+            } else {
+                null
+            }
+        val selected = listOfNotNull(completed, incomplete, recoveredIncomplete)
+        return listOfNotNull(
+            selected
+                .filter { it.complete }
+                .sortedWith(
+                    compareByDescending<RunEntry> { it.completedAt }.thenByDescending { it.id }.thenBy { it.directory },
+                ).firstOrNull(),
+            selected.filter { !it.complete }.maxByOrNull { it.id },
+        )
+    }
 
     /** Directories with unsupported, malformed or absent manifests; empty directories are included. */
     fun obsolete(): List<RunStorageEntry> = directories().filter(::isObsolete).map(::storageEntry)
@@ -99,7 +176,9 @@ class RunCatalog(
     /** Deletes only a physical run directory, never `.results`, an experiment group or a symbolic-link target. */
     fun deleteDirectory(directory: String): Boolean {
         checkDirectory(directory)
-        return directory in directories() && workspace.deleteDirectory(directory)
+        val deleted = directory in directories() && workspace.deleteDirectory(directory)
+        if (deleted) workspace.delete(ResultsLayout.completionMarker(directory))
+        return deleted
     }
 
     private fun directories(): List<String> = workspace.listDirectories(RESULTS).flatMap(workspace::listDirectories)
@@ -199,9 +278,9 @@ class RunCatalog(
     }
 
     private fun find(id: String): RunEntry? {
-        for (path in workspace.listFiles(RESULTS).filter { MANIFEST.matches(it) }) {
-            val directory = path.removeSuffix("/$MANIFEST_FILE")
+        for (directory in directories()) {
             if (directory.substringAfterLast('/') != id) continue
+            val path = "$directory/$MANIFEST_FILE"
             val manifest =
                 try {
                     readManifest(directory)
@@ -210,7 +289,14 @@ class RunCatalog(
                 } catch (_: Exception) {
                     continue
                 }
-            return RunEntry(id, canonicalExperiment(manifest.experiment), directory, manifest.complete, workspace.directorySize(directory))
+            return RunEntry(
+                id,
+                canonicalExperiment(manifest.experiment),
+                directory,
+                manifest.complete,
+                workspace.directorySize(directory),
+                if (manifest.complete) workspace.lastModified(path) else null,
+            )
         }
         return null
     }

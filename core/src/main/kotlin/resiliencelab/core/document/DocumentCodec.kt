@@ -46,6 +46,13 @@ object DocumentCodec {
             encodeDefaults = false
         }
 
+    @OptIn(ExperimentalSerializationApi::class)
+    private val snapshotWriter =
+        Json(writer) {
+            explicitNulls = true
+            encodeDefaults = true
+        }
+
     fun decodeModel(
         text: String,
         document: String,
@@ -72,6 +79,12 @@ object DocumentCodec {
         serializer: KSerializer<T>,
         value: T,
     ): String = writer.encodeToString(JsonElement.serializer(), canonical(writer.encodeToJsonElement(serializer, value))) + "\n"
+
+    /** Canonical snapshot with every default and null field present, matching typed API document responses. */
+    fun <T> encodeSnapshot(
+        serializer: KSerializer<T>,
+        value: T,
+    ): String = writer.encodeToString(JsonElement.serializer(), canonical(snapshotWriter.encodeToJsonElement(serializer, value))) + "\n"
 
     private fun canonical(element: JsonElement): JsonElement =
         when (element) {

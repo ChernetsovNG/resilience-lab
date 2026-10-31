@@ -1,6 +1,9 @@
 package resiliencelab.core.results
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
@@ -125,6 +128,22 @@ class ArtifactPipelineTest {
         run(parallel, 8)
         run(reordered, 8)
         val workspace = FileWorkspace(sequential)
+        val storedManifest = Json.parseToJsonElement(workspace.read("${first.runDirectory}/manifest.json").text).jsonObject
+        val snapshots = storedManifest["snapshots"]?.jsonObject
+        assertThat(snapshots).isNotNull()
+        first.manifest.documents.forEach { (path, hash) ->
+            val text = snapshots!!.getValue(path).jsonPrimitive.content
+            assertThat(DocumentVersion.of(text)).isEqualTo(hash)
+        }
+        val modelSnapshot =
+            Json
+                .parseToJsonElement(
+                    snapshots!!.getValue("retry-storm/retry-storm.model.json").jsonPrimitive.content,
+                ).jsonObject
+        assertThat(modelSnapshot.getValue("connections").jsonArray.map { it.jsonObject["params"] }).doesNotContainNull()
+        val experimentSnapshot = Json.parseToJsonElement(snapshots.getValue(experiment).jsonPrimitive.content).jsonObject
+        assertThat(experimentSnapshot.getValue("variants").jsonArray.map { it.jsonObject["overrides"] }).doesNotContainNull()
+        assertThat(experimentSnapshot["grid"]).isNotNull()
         val files = workspace.listFiles(first.runDirectory)
         assertThat(files).anyMatch { it.endsWith("/replication.json.gz") }.anyMatch { it.endsWith("/index.json") }
         val indexes = files.filter { it.endsWith("/index.json") }
@@ -162,7 +181,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(16)
+        assertThat(first.manifest.schemaVersion).isEqualTo(17)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")
