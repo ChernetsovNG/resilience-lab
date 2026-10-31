@@ -79,7 +79,7 @@ it("adds a new type's output to the chart, inspector and overlay without registe
       stale={false} analysis={false} onAnalysisChange={vi.fn()} />
   </>);
   const chart = await screen.findByRole("region", { name: "Rates" });
-  expect(within(chart).getByText("gateway · Test throughput · Baseline (baseline)")).toBeTruthy();
+  expect(within(chart).getByText("gateway · Test throughput · Baseline")).toBeTruthy();
   expect(within(chart).getByText("80 RPS")).toBeTruthy();
   const table = screen.getByRole("table", { name: "Results" });
   await waitFor(() => expect(within(table).getByRole("rowheader", { name: "Test throughput" }).closest("tr")!.textContent).toContain("120 RPSPooled"));

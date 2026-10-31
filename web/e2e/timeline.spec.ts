@@ -39,7 +39,7 @@ async function inspect(page: Page, slider: Locator, window: Window, endMs: numbe
 
 async function value(chart: Locator, metric: string, variant = "baseline") {
   const row = chart.locator(".timeline-readout > div").filter({ has: chart.page().getByText(`dependency · ${metric} ·`, { exact: false }) })
-    .filter({ hasText: `(${variant})` });
+    .filter({ hasText: variant === "baseline" ? " · Baseline" : " · No retries" });
   return Number((await row.locator("dd").innerText()).replace(/,/g, "").split(" ")[0]);
 }
 
@@ -64,6 +64,9 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
   await expect(page.getByLabel("Replication", { exact: true })).toHaveValue("0");
   await expect(page.getByLabel("Time regions")).toContainText("Fault: dependency: 200 ms–700 ms");
+  await page.getByText("Elements and metrics", { exact: true }).click();
+  await page.getByRole("group", { name: "dependency · Service", exact: true }).getByRole("checkbox", { name: "Queue rejections", exact: true }).check();
+  await page.getByText("Elements and metrics", { exact: true }).click();
   const queue = page.getByRole("region", { name: "Queue", exact: true });
   const errors = page.getByRole("region", { name: "Errors and rejections", exact: true });
   const queueSlider = queue.getByRole("slider");

@@ -73,6 +73,12 @@ test("latency markers show recorded windows and leave empty-window readouts unav
   await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
   await page.getByRole("button", { name: "Analysis", exact: true }).click();
+  await page.getByText("Elements and metrics", { exact: true }).click();
+  const metrics = page.getByRole("group", { name: "dependency · Service", exact: true });
+  for (const name of ["p50 latency", "p95 latency", "p99 latency"]) {
+    await metrics.getByRole("checkbox", { name, exact: true }).check();
+  }
+  await page.getByText("Elements and metrics", { exact: true }).click();
   const latency = page.getByRole("region", { name: "Latency", exact: true });
   await expect(latency.locator(".recharts-line-dots").first()).toBeVisible();
   const dots = latency.locator(".recharts-line-dots").first().locator("circle");

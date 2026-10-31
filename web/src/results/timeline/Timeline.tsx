@@ -13,6 +13,7 @@ import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
 
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
+const metricChoiceKey = (element: string, metric: string) => JSON.stringify([element, metric]);
 
 interface TimelineProps {
   enabled?: boolean;
@@ -39,9 +40,16 @@ export function Timeline(props: TimelineProps) {
 function RunTimeline({ enabled = true, runId, summary, manifest, model, experiment, catalog, activeVariantId, pointId,
   replication, cursorWindow, selectedNodes, onCursorChange }: TimelineProps) {
   const groups = useMemo(() => timelineGroups(catalog), [catalog]);
+  const elements = useMemo(() => [
+    ...Object.entries(model.blocks).map(([id, block]) => ({ id, type: block.type })),
+    ...model.connections.map(({ id, type }) => ({ id, type })),
+  ].map(element => ({ ...element, title: catalog.types.find(type => type.id === element.type)?.title ?? element.type,
+    groups: groups.map(group => ({ ...group, metrics: group.metrics.filter(metric => metric.types.includes(element.type)) }))
+      .filter(group => group.metrics.length > 0),
+  })).filter(element => element.groups.length > 0), [model, catalog, groups]);
   const canvasKey = JSON.stringify(selectedNodes);
-  const availableConnections = model.connections.filter((connection) => outputsOf(catalog, connection.type).some(output => output.timeline != null)).map((connection) => connection.id);
-  const availableNodes = [...Object.keys(model.blocks).filter(id => outputsOf(catalog, model.blocks[id].type).some(output => output.timeline != null)), ...availableConnections];
+  const availableNodes = elements.map(element => element.id);
+  const availableConnections = model.connections.filter(connection => availableNodes.includes(connection.id)).map(connection => connection.id);
   const selectedFromCanvas = selectedNodes.filter((id) => availableNodes.includes(id));
   const initialNodes = selectedNodes.length > 0 ? selectedFromCanvas
     : [availableNodes.find((id) => model.blocks[id]?.type === "service") ?? availableNodes[0]].filter((id) => id !== undefined);
@@ -49,7 +57,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const nodes = nodeChoice.canvasKey === canvasKey ? nodeChoice.ids
     : selectedNodes.length > 0 ? selectedFromCanvas : nodeChoice.ids;
   if (nodeChoice.canvasKey !== canvasKey) setNodeChoice({ canvasKey, ids: nodes });
-  const [metricKeys, setMetricKeys] = useState<string[]>(groups.flatMap((group) => group.metrics.map((metric) => metric.key)));
+  const [metricKeys, setMetricKeys] = useState(() => elements.flatMap(element =>
+    element.groups.map(group => metricChoiceKey(element.id, group.metrics[0].key))));
   const [comparison, setComparison] = useState("");
   const variant = activeVariantId === null ? summary.variants[0] : summary.variants.find((candidate) => candidate.id === activeVariantId);
   const context = JSON.stringify([variant?.id, pointId, replication, cursorWindow]);
@@ -80,6 +89,12 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog),
     [metadata, experiment, catalog]);
   const charts = useMemo(() => {
+    const lineColor = (element: number, metric: number, comparison: boolean) => {
+      // Disjoint palettes distinguish variants while keeping separate element/metric colors.
+      const index = compared === undefined ? element * 3 + metric
+        : ((element + metric) % (colors.length / 2)) * 2 + Number(comparison);
+      return colors[index % colors.length];
+    };
     const effectiveModel = (source: RunSummary["variants"][number] | undefined) => applyOverrides(applyOverrides(model,
       experiment.variants.find(variant => variant.id === source?.id)?.overrides ?? {}, catalog),
       source?.points.find(point => point.id === pointId)?.coordinates ?? {}, catalog);
@@ -110,32 +125,30 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     return groups.map((group) => {
       const lines: TimelineLine[] = [];
       for (const metric of group.metrics) {
-        if (!metricKeys.includes(metric.key)) continue;
         for (const [nodeIndex, node] of primaryNodes.entries()) {
-          if (!metric.types.includes(model.blocks[node.id]?.type)) continue;
-          const color = colors[(nodeIndex * 3 + group.metrics.indexOf(metric)) % colors.length];
+          if (!metric.types.includes(model.blocks[node.id]?.type) || !metricKeys.includes(metricChoiceKey(node.id, metric.key))) continue;
           for (const source of [{ variant, data: node, comparison: false }, {
             variant: compared, data: overlayNodes.find((candidate) => candidate.id === node.id), comparison: true,
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
             lines.push({
               id: `${source.variant.id}:${node.id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: node.id, metric: metric.label, variant: source.variant.label ?? source.variant.id, id: source.variant.id }),
-              metric: metric.id, scale: group.scale, color, comparison: source.comparison, windows: source.data.windows,
+              metric: metric.id, scale: group.scale, color: lineColor(nodeIndex, group.metrics.indexOf(metric), source.comparison),
+              comparison: source.comparison, windows: source.data.windows,
             });
           }
         }
         for (const [connectionIndex, connection] of connectionSeries.entries()) {
-          if (!metric.types.includes(connectionType(connection.id))) continue;
-          const color = colors[((primaryNodes.length + connectionIndex) * 3 + group.metrics.indexOf(metric)) % colors.length];
+          if (!metric.types.includes(connectionType(connection.id)) || !metricKeys.includes(metricChoiceKey(connection.id, metric.key))) continue;
           for (const source of [{ variant, data: connection, comparison: false }, {
             variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true,
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
-            const label = source.comparison
-              ? t("results.timeline.connectionComparisonLabel", { connection: connection.id, metric: metric.label, variant: source.variant.id })
-              : t("results.timeline.connectionLineLabel", { connection: connection.id, metric: metric.label });
+            const label = t("results.timeline.lineLabel", { node: connection.id, metric: metric.label,
+              variant: source.variant.label ?? source.variant.id });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
-              metric: metric.id, scale: group.scale, color, comparison: source.comparison,
+              metric: metric.id, scale: group.scale, color: lineColor(primaryNodes.length + connectionIndex, group.metrics.indexOf(metric), source.comparison),
+              comparison: source.comparison,
               windows: source.data.windows });
           }
         }
@@ -175,19 +188,22 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       </select></label>
     </div>
     <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
-      <fieldset><legend>{t("results.timeline.nodes")}</legend>{availableNodes.map((id) => <label key={id}>
-        <input type="checkbox" checked={nodes.includes(id)} onChange={(event) => setNodeChoice({ canvasKey,
-          ids: event.target.checked ? [...nodes, id] : nodes.filter((node) => node !== id) })} />{id}
-      </label>)}</fieldset>
-      {groups.map((group) => <fieldset key={group.id}><legend>{group.title}</legend>{group.metrics.map((metric) =>
-        <label key={metric.key}><input type="checkbox" checked={metricKeys.includes(metric.key)} onChange={(event) =>
-          setMetricKeys(event.target.checked ? [...metricKeys, metric.key] : metricKeys.filter((key) => key !== metric.key))} />{metric.label}</label>)}</fieldset>)}
+      {elements.map(element => <fieldset key={element.id}>
+        <legend><label><input type="checkbox" checked={nodes.includes(element.id)} onChange={event => setNodeChoice({ canvasKey,
+          ids: event.target.checked ? [...nodes, element.id] : nodes.filter(id => id !== element.id) })} />{element.id}</label>{t("results.timeline.elementType", { type: element.title })}</legend>
+        {nodes.includes(element.id) ? element.groups.flatMap(group => group.metrics.map(metric => {
+          const key = metricChoiceKey(element.id, metric.key);
+          return <label key={key}><input type="checkbox" checked={metricKeys.includes(key)} onChange={event =>
+            setMetricKeys(event.target.checked ? [...metricKeys, key] : metricKeys.filter(candidate => candidate !== key))} />{metric.label}</label>;
+        })) : null}
+      </fieldset>)}
     </details>
     <div className="timeline-regions" aria-label={t("results.timeline.regions")}>
       {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}>
         {t("results.timeline.region", { label: region.label, from: formatDuration(region.fromMs), to: formatDuration(region.toMs) })}
       </span>)}
-      <span>{t("results.timeline.solid", { variant: variant.id, comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: compared.id }) })}</span>
+      <span>{t("results.timeline.solid", { variant: variant.label ?? variant.id,
+        comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: compared.label ?? compared.id }) })}</span>
     </div>
     <p className="timeline-cursor" role="status" data-testid="timeline-cursor">
       {activeWindow === null ? t("results.timeline.inspect")
