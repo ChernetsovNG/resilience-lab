@@ -138,7 +138,7 @@ test("View remains accessible on narrow screens during a run", async ({ page }) 
   await page.goto("/");
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await page.getByRole("button", { name: "Запустить", exact: true }).click();
-  await expect(page.locator(".run-actions > button")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Отменить", exact: true })).toBeVisible();
   for (const width of [1024, 768]) {
     await page.setViewportSize({ width, height: 900 });
     const view = page.getByRole("button", { name: "Вид", exact: true });
