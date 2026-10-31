@@ -11,10 +11,6 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(experiment);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
-  const stored: { experiment: string; complete: boolean }[] = await (await page.request.get("/api/v1/runs")).json();
-  if (stored.some(run => run.experiment === experiment && run.complete)) {
-    await expect(page.getByRole("table", { name: "Findings", exact: true })).toBeVisible();
-  }
 });
 
 async function noOverflow(page: Page) {
@@ -68,8 +64,6 @@ test("estimate popover preserves diagram height and closes by button, outside cl
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
-  const collapse = page.getByRole("button", { name: "Collapse results", exact: true });
-  if (await collapse.isVisible()) await collapse.click();
   await page.getByRole("button", { name: "Restore results", exact: true }).click();
   const before = await canvas.boundingBox();
   await page.getByRole("button", { name: "Estimate", exact: true }).click();
@@ -102,7 +96,10 @@ test("estimate popover preserves diagram height and closes by button, outside cl
 });
 
 test("failed estimation starts a real run only after explicit confirmation", async ({ page, expectedPageErrors }, testInfo) => {
-  const previousFindings = await page.getByRole("table", { name: "Findings", exact: true }).allTextContents();
+  const findings = page.getByRole("table", { name: "Findings", exact: true, includeHidden: true });
+  const stored: { complete: boolean }[] = await (await page.request.get(`/api/v1/runs/latest?experiment=${encodeURIComponent(experiment)}`)).json();
+  if (stored.some(run => run.complete)) await expect(findings).toHaveCount(1);
+  const previousFindings = await findings.allTextContents();
   expectedPageErrors.push(/^console\.error: Failed to load resource: net::ERR_CONNECTION_FAILED \(http:\/\/127\.0\.0\.1:\d+\/api\/v1\/estimate\)$/);
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
@@ -116,7 +113,7 @@ test("failed estimation starts a real run only after explicit confirmation", asy
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(run).toBeEnabled();
   expect(jobs).toBe(0);
-  expect(await page.getByRole("table", { name: "Findings", exact: true }).allTextContents()).toEqual(previousFindings);
+  await expect(findings).toHaveText(previousFindings);
   await run.click();
   await expect(confirmation).toContainText("without an estimate");
   await confirmation.getByRole("button", { name: "Start run", exact: true }).click();

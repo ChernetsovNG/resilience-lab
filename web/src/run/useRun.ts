@@ -153,7 +153,7 @@ export function useRun(pollMs = 500): Run {
     const live = () => current === generation.current;
     setExperiment(experimentPath);
     try {
-      const stored = (await api.runs()).filter(entry => entry.experiment === experimentPath);
+      const stored = (await api.latestRuns(experimentPath)).filter(entry => entry.experiment === experimentPath);
       if (!live()) return false;
       const completed = stored.filter(entry => entry.complete).sort((a, b) =>
         (b.completedAt ?? 0) - (a.completedAt ?? 0) || b.id.localeCompare(a.id) || a.directory.localeCompare(b.directory))[0];

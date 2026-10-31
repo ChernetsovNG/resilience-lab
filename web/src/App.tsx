@@ -93,10 +93,8 @@ export function App() {
   const runExperiment = run.experiment;
   const restoreRun = useEffectEvent((path: string) => loaded === null ? Promise.resolve(false) : run.restore(path, loaded.model));
   useEffect(() => {
-    if (experimentPath !== null && runExperiment !== experimentPath) void restoreRun(experimentPath).then(restored => {
-      if (restored) setResultsSize("normal");
-    });
-  }, [experimentPath, runExperiment]);
+    if (!loading && experimentPath !== null && runExperiment !== experimentPath) void restoreRun(experimentPath);
+  }, [experimentPath, runExperiment, loading]);
   let currentSelection = selection;
   if (loaded !== null && loaded.model !== selectionModel) {
     if (selectionModel !== null && selection.length > 0) {
@@ -237,7 +235,7 @@ export function App() {
     const previousRun = new Set<string>(JSON.parse(previousErrors.run));
     const currentRun = new Set(currentRunDiagnostics.map(diagnosticKey));
     const hasNewError = JSON.parse(validationErrors).some((key: string) => !previousValidation.has(key)) ||
-      JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key));
+      (launchDocuments !== null && JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key)));
     setObservedErrors({ path, validation: validationErrors, run: runErrors });
     if (hasNewError) {
       setProblemsElement(null);
@@ -378,7 +376,6 @@ export function App() {
     setLaunchDocuments(null);
     setEstimatePanel(null);
     setProblemsElement(null);
-    setResultsSize("collapsed");
     setAnalysis(false);
     setSelection([]);
     setInspectorTarget("experiment");
@@ -519,7 +516,7 @@ export function App() {
             variantChanges={variant === undefined ? undefined : <VariantChanges model={loaded.model} catalog={catalog}
               overrides={overrides} disabled={invalid || loading} onSelect={selectVariantChange} />}
             results={elementResults === null ? null : <ElementResults {...elementResults} />}
-            resultsFirst={elementResults !== null && elementResults.manifest.complete && projectElementResults(elementResults) !== null}
+            resultsFirst={launchDocuments !== null && elementResults !== null && elementResults.manifest.complete && projectElementResults(elementResults) !== null}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
             model={model}

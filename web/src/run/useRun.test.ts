@@ -40,7 +40,7 @@ describe("useRun", () => {
     let finished = false;
     let submissions = 0;
     stubFetch(async (url, init) => {
-      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
       if (url === "/api/v1/jobs") return { body: [job("RUNNING", { id: "active-resume" })] };
       if (url === "/api/v1/jobs/active-resume") {
         await gate.promise;
@@ -64,7 +64,7 @@ describe("useRun", () => {
     let attempts = 0;
     let finished = false;
     stubFetch((url, init) => {
-      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
       if (url === "/api/v1/jobs") return { body: accepted && attempts > 0 ? [job("COMPLETED", { id: "resumed" })] : [] };
       if (url === "/api/v1/runs/run-1/resume" && init?.method === "POST") {
         if (++attempts === 1) {
@@ -89,7 +89,7 @@ describe("useRun", () => {
 
   it.each(["completed summary", "incomplete snapshot", "incomplete identity"])("retains independently readable state when %s fails", async failure => {
     stubFetch(url => {
-      if (url === "/api/v1/runs") return { body: [
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [
         { id: "stored", experiment: experimentPath, directory: ".results/example/stored", sizeBytes: 1, complete: true, completedAt: 1000 },
         { id: "incomplete", experiment: experimentPath, directory: ".results/example/incomplete", sizeBytes: 1, complete: false, completedAt: null },
       ] };
@@ -112,7 +112,7 @@ describe("useRun", () => {
 
   it("restores only this experiment's latest completion, even when run IDs have a different order", async () => {
     stubFetch(url => {
-      if (url === "/api/v1/runs") return { body: [
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [
         { id: "newer-start", experiment: experimentPath, complete: true, completedAt: 1000 },
         { id: "foreign", experiment: "other/retry-storm.experiment.json", complete: true, completedAt: 3000 },
         { id: "older-start", experiment: experimentPath, complete: true, completedAt: 2000 },
@@ -134,7 +134,7 @@ describe("useRun", () => {
     let resumed = false;
     stubFetch(url => {
       if (url === "/api/v1/jobs") return { body: [] };
-      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
       if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: resumed } };
       if (url === "/api/v1/runs/run-1/resume") {
         resumed = true;
@@ -157,7 +157,7 @@ describe("useRun", () => {
     const gate = deferred();
     const reached = deferred();
     stubFetch(async url => {
-      if (url === "/api/v1/runs") return { body: [{ id: "stored", experiment: experimentPath, directory: ".results/example/stored", sizeBytes: 1, complete: true, completedAt: 1000 }] };
+      if (url.startsWith("/api/v1/runs/latest?")) return { body: [{ id: "stored", experiment: experimentPath, directory: ".results/example/stored", sizeBytes: 1, complete: true, completedAt: 1000 }] };
       if (url.includes("/runs/stored/")) {
         reached.release();
         await gate.promise;

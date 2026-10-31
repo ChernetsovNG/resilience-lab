@@ -153,6 +153,13 @@ data class RunSummary(
 object ResultsLayout {
     private val segment = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+    /** Run group for a canonical workspace-relative experiment; inspecting it never visits another experiment. */
+    fun experimentDirectory(experimentPath: String): String = ".results/${DocumentVersion.of(experimentPath)}"
+
+    /** Completion metadata alongside run directories, outside the reproducible artifact and its checksums. */
+    fun completionMarker(runDirectory: String): String =
+        "${runDirectory.substringBeforeLast('/')}/.completed-${runDirectory.substringAfterLast('/')}"
+
     /**
      * `.results/<SHA-256 of the canonical workspace-relative experiment path>/<runId>`.
      * Document names are unrestricted by the results layout; the hash and validated run ID are plain path segments.
@@ -175,7 +182,7 @@ object ResultsLayout {
                 ),
             )
         }
-        return ".results/${DocumentVersion.of(experimentPath)}/$runId"
+        return "${experimentDirectory(experimentPath)}/$runId"
     }
 }
 
@@ -308,6 +315,12 @@ class ArtifactWriter(
                 workspace.write(manifestPath, encoded)
             } else {
                 workspace.create(manifestPath, encoded)
+            }
+            // A lost summary must not turn a completed run into an unfinished one. This cache is optional:
+            // failure to update it must not discard an already published artifact; summary presence is the fallback.
+            runCatching {
+                val marker = ResultsLayout.completionMarker(runDirectory)
+                if (written.complete) workspace.write(marker, "") else workspace.delete(marker)
             }
             written
         }

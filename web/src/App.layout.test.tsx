@@ -6,7 +6,7 @@ import { setupAppTests, otherPath, completed, deferred, server, open, selectGate
 setupAppTests();
 
 
-it("starts with collapsed results and preserves manual expansion until the experiment changes", async () => {
+it("starts with collapsed results and preserves manual expansion across experiment changes", async () => {
   server(); await open();
   expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(button("Restore results"));
@@ -16,10 +16,10 @@ it("starts with collapsed results and preserves manual expansion until the exper
   fireEvent.click(button("Undo"));
   fireEvent.change(experimentSelect(), { target: { value: otherPath } });
   await screen.findByRole("heading", { name: "Run settings" });
-  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
   fireEvent.change(experimentSelect(), { target: { value: experimentPath } });
   await screen.findByRole("heading", { name: "Run settings" });
-  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
 it("keeps a manual collapse made while a run is pending after completion", async () => {

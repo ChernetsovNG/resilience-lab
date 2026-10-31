@@ -26,6 +26,8 @@ test("restores completed Findings and diagram results after reload and reopening
     expect(original).toBeTruthy();
 
     await page.reload();
+    await expect(page.getByRole("tabpanel")).toBeHidden();
+    await page.getByRole("tab", { name: "Выводы", exact: true }).click();
     await expect(findings).toBeVisible();
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await expect(metrics).toHaveText(original!);
@@ -37,6 +39,7 @@ test("restores completed Findings and diagram results after reload and reopening
 
     await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
     await selectExperiment(page, experimentPath);
+    await page.getByRole("tab", { name: "Выводы", exact: true }).click();
     await expect(findings).toBeVisible();
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await expect(metrics).toHaveText(original!);
@@ -50,6 +53,8 @@ test("restores completed Findings and diagram results after reload and reopening
     await save.click();
     await expect(save).toBeDisabled();
     await page.reload();
+    await expect(page.getByRole("tabpanel")).toBeHidden();
+    await page.getByRole("tab", { name: "Выводы", exact: true }).click();
     await expect(findings).toBeVisible();
     await expect(stale.first()).toBeVisible();
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
