@@ -32,6 +32,65 @@ import kotlin.test.Test
 
 class GraphArtifactDeterminismTest {
     @Test
+    fun `multiple clients and class paths preserve every artifact byte across workers and document order`(
+        @TempDir root: Path,
+    ) {
+        val base = graph()
+        val mobile =
+            base.client.copy(
+                pathSegments = listOf("mobile"),
+                classes =
+                    mapOf(
+                        "status" to LoadProfile(listOf(LoadPoint(0.0, 0.04), LoadPoint(70.0, 0.12))),
+                        "checkout" to LoadProfile.constant(0.08),
+                    ),
+            )
+        val classified =
+            base.copy(
+                clients =
+                    listOf(
+                        mobile,
+                        mobile.copy(
+                            pathSegments = listOf("partner"),
+                            classes = mapOf("status" to LoadProfile.constant(0.03)),
+                            deadlineMs = 20.0,
+                        ),
+                    ),
+                services =
+                    base.services.map { node ->
+                        if (node.path == "entry") {
+                            node.copy(
+                                scenario =
+                                    listOf(
+                                        ServiceStep.Process(classes = setOf("checkout")),
+                                        ServiceStep.Call("entry-left", setOf("status")),
+                                        ServiceStep.Call("entry-right", setOf("checkout")),
+                                    ),
+                            )
+                        } else {
+                            node
+                        }
+                    },
+                routers = listOf(RouterNode("router", RoutingPolicy.RANDOM)),
+                routes =
+                    listOf(
+                        RouteEdge(listOf("route-left"), "router", "left", classes = setOf("status")),
+                        RouteEdge(listOf("route-shared"), "router", "shared", classes = setOf("checkout")),
+                    ),
+                calls = base.calls.map { if (it.path == "entry-left") it.copy(to = "router", retryTarget = RetryTarget.OTHER) else it },
+            )
+        val reference = run(root.resolve("reference"), classified, 1, false)
+        for (workers in listOf(1, 2, 4, 8)) {
+            val actual = run(root.resolve("workers-$workers"), classified, workers, true)
+            assertThat(actual.result).isEqualTo(reference.result)
+            assertThat(actual.files.keys).containsExactlyInAnyOrderElementsOf(reference.files.keys)
+            reference.files.forEach { (path, bytes) ->
+                assertThat(actual.files.getValue(path)).describedAs("$workers/$path").isEqualTo(bytes)
+            }
+        }
+    }
+
+    @Test
     fun `profiled arrivals preserve every artifact byte across workers and document order`(
         @TempDir root: Path,
     ) {
@@ -175,6 +234,15 @@ class GraphArtifactDeterminismTest {
         val effective =
             if (reverse) {
                 graph.copy(
+                    clients =
+                        graph.clients.reversed().map { client ->
+                            client.copy(
+                                classes =
+                                    client.classes.entries
+                                        .reversed()
+                                        .associate { it.toPair() },
+                            )
+                        },
                     services = graph.services.reversed(),
                     calls = graph.calls.reversed(),
                     routers = graph.routers.reversed(),

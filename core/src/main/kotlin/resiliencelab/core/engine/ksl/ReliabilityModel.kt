@@ -13,6 +13,7 @@ import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
@@ -57,7 +58,7 @@ class ReliabilityModel(
             measurementStartMs = measurementStartMs,
             measurementEndMs = measurementEndMs,
             currentTimeMs = { time },
-            clientId = graph.client.path,
+            clientId = graph.clients.minBy { it.path }.path,
             windowMs = graph.run.windowMs,
             connectionIds = graph.topologicalCalls.map { it.path } + graph.routes.map { it.path },
             connectionPoolSizes = graph.topologicalCalls.mapNotNull { call -> call.pool?.let { call.path to it.size } }.toMap(),
@@ -216,23 +217,20 @@ class ReliabilityModel(
 
     internal fun prepareWorkload() {
         if (workloadPrepared) return
-        ArrivalGenerator(
-            reliabilityModel = this,
-            entryServiceId = graph.entry,
-            load = graph.client.load,
-            warmupMs = graph.run.warmupMs,
-            measurementMs = graph.run.measurementMs,
-            stream = streams.stream(graph.client.pathSegments, StreamRole.ARRIVALS),
-            acceptanceStream =
-                if (graph.client.load.isConstant) {
-                    null
-                } else {
-                    streams.stream(
-                        graph.client.pathSegments,
-                        StreamRole.ARRIVAL_ACCEPTANCE,
-                    )
-                },
-        )
+        graph.clients.sortedBy { it.path }.forEach { client ->
+            client.classes.toSortedMap().forEach { (requestClass, load) ->
+                val path = PathStreams.arrivalPath(client, requestClass)
+                ArrivalGenerator(
+                    reliabilityModel = this,
+                    client = client,
+                    requestClass = requestClass,
+                    warmupMs = graph.run.warmupMs,
+                    measurementMs = graph.run.measurementMs,
+                    stream = streams.stream(path, StreamRole.ARRIVALS),
+                    acceptanceStream = if (load.isConstant) null else streams.stream(path, StreamRole.ARRIVAL_ACCEPTANCE),
+                )
+            }
+        }
         CompletionMonitor(
             reliabilityModel = this,
             arrivalEndMs = measurementEndMs,
@@ -271,11 +269,14 @@ class ReliabilityModel(
         return metrics.replicationResult()
     }
 
+    /** Creates an invocation with the originating [client]'s deadline and [requestClass]. */
     fun invoke(
         serviceId: String,
         timeUntilActivation: Double = 0.0,
         originalRequest: Boolean = false,
         measurementCohort: Boolean = true,
+        client: ClientNode = graph.clients.first(),
+        requestClass: String = "default",
     ): ServiceInvocation {
         val arrivalTimeMs = time + timeUntilActivation
         if (!arrivalTimeMs.isFinite()) {
@@ -283,7 +284,7 @@ class ReliabilityModel(
         }
         val originalDeadlineMs =
             if (originalRequest) {
-                (arrivalTimeMs + graph.client.deadlineMs).also { deadline ->
+                (arrivalTimeMs + client.deadlineMs).also { deadline ->
                     if (!deadline.isFinite()) {
                         throw ExperimentExecutionException(CoreMessage.EXECUTION_TIME_DEADLINE, "Original request deadline must be finite")
                     }
@@ -296,7 +297,7 @@ class ReliabilityModel(
             timeUntilActivation = timeUntilActivation,
             originalRequest = originalRequest,
             measurementCohort = measurementCohort,
-            originalDeadlineMs = originalDeadlineMs,
+            request = RequestContext(client.path, requestClass, arrivalTimeMs, originalDeadlineMs),
             incomingNetwork = null,
         )
     }
@@ -306,7 +307,7 @@ class ReliabilityModel(
         timeUntilActivation: Double,
         originalRequest: Boolean,
         measurementCohort: Boolean,
-        originalDeadlineMs: Double,
+        request: RequestContext,
         incomingNetwork: CallRuntime?,
         selectedRoutes: List<RouteEdge> = emptyList(),
     ): ServiceInvocation {
@@ -316,8 +317,7 @@ class ReliabilityModel(
                 target = serviceId,
                 originalRequest = originalRequest,
                 measurementCohort = measurementCohort,
-                arrivalTimeMs = time + timeUntilActivation,
-                originalDeadlineMs = originalDeadlineMs,
+                request = request,
                 incomingNetwork = incomingNetwork,
                 initialRoutes = selectedRoutes,
             )
@@ -387,11 +387,12 @@ class ReliabilityModel(
         private val target: String,
         private val originalRequest: Boolean,
         internal val measurementCohort: Boolean,
-        private val arrivalTimeMs: Double,
-        private val originalDeadlineMs: Double,
+        val request: RequestContext,
         private val incomingNetwork: CallRuntime?,
         initialRoutes: List<RouteEdge>,
     ) : Entity() {
+        private val arrivalTimeMs: Double get() = request.arrivalTimeMs
+        private val originalDeadlineMs: Double get() = request.deadlineMs
         private lateinit var runtime: ServiceRuntime
         private val selectedRoutes = initialRoutes.toMutableList()
         private var currentOutcome: AttemptOutcome = AttemptOutcome.PENDING
@@ -478,6 +479,7 @@ class ReliabilityModel(
         /** Runs ordered steps in this process while the caller keeps its handler allocation. */
         private suspend fun KSLProcessBuilder.executeScenario(): AttemptOutcome {
             for (step in runtime.scenario) {
+                if (step.classes != null && request.requestClass !in step.classes!!) continue
                 val outcome =
                     when (step) {
                         is ServiceStep.Process -> {
@@ -594,7 +596,12 @@ class ReliabilityModel(
                         val tried = triedOutputs.getOrPut(selectedTarget) { mutableSetOf() }
                         val eligible = if (call.retryTarget == RetryTarget.OTHER) tried else emptySet()
                         val policy = call.balancing?.takeIf { router.isReplicaGroup && selectedTarget == call.to }
-                        val route = if (policy == null) router.select(eligible) else router.select(eligible, policy)
+                        val route =
+                            if (policy == null) {
+                                router.select(eligible, requestClass = request.requestClass)
+                            } else {
+                                router.select(eligible, policy, request.requestClass)
+                            } ?: break
                         tried.add(route.path)
                         add(route)
                         selectedTarget = route.to
@@ -606,7 +613,7 @@ class ReliabilityModel(
                     timeUntilActivation = 0.0,
                     originalRequest = false,
                     measurementCohort = measurementCohort,
-                    originalDeadlineMs = originalDeadlineMs,
+                    request = request,
                     incomingNetwork = callRuntime,
                     selectedRoutes = routes,
                 )
@@ -624,19 +631,24 @@ class ReliabilityModel(
         internal val work: KSLProcess =
             process("service:$target") {
                 try {
-                    var selectedTarget = target
-                    while (selectedTarget in routerRuntimes) {
-                        val route = routerRuntimes.getValue(selectedTarget).select(emptySet())
-                        selectedRoutes.add(route)
-                        metrics.recordConnection(route.path, ConnectionEvent.SENT, measurementCohort)
-                        selectedTarget = route.to
-                    }
-                    runtime = runtimes.getValue(selectedTarget)
                     if (originalRequest) {
                         originalClientActive = true
                         activeOriginalRequests++
                         metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
                     }
+                    var selectedTarget = target
+                    while (selectedTarget in routerRuntimes) {
+                        val route =
+                            routerRuntimes.getValue(selectedTarget).select(emptySet(), requestClass = request.requestClass)
+                        if (route == null) {
+                            currentOutcome = AttemptOutcome.NO_ROUTE
+                            return@process
+                        }
+                        selectedRoutes.add(route)
+                        metrics.recordConnection(route.path, ConnectionEvent.SENT, measurementCohort)
+                        selectedTarget = route.to
+                    }
+                    runtime = runtimes.getValue(selectedTarget)
                     val transmissionStates = selectedRoutes.map { routeFaults.getValue(it.path) } + listOfNotNull(incomingNetwork?.faults)
                     if (transmissionStates.any { it.blackhole }) {
                         blackhole()

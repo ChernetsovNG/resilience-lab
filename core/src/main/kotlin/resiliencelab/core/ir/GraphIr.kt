@@ -58,7 +58,7 @@ data class ClientNode(
 
     val path: String get() = displayPath(pathSegments)
 
-    /** Sum of class intensities; a single profile is retained exactly for the stage-1 engine. */
+    /** Sum of class intensities; a single profile retains its exact points. */
     val load: LoadProfile
         get() {
             if (classes.size == 1) return classes.values.single()
@@ -288,7 +288,7 @@ data class GraphIr(
     val routers: List<RouterNode> = emptyList(),
     val routes: List<RouteEdge> = emptyList(),
 ) {
-    /** Source-level adapter for the unchanged single-client engine and hand-built stage-1 IR. */
+    /** Source-level adapter for hand-built single-client IR. */
     constructor(
         client: ClientNode,
         entry: String,
@@ -300,7 +300,7 @@ data class GraphIr(
         routes: List<RouteEdge> = emptyList(),
     ) : this(listOf(client.copy(entry = entry)), services, calls, faults, run, routers, routes)
 
-    /** The stage-1 engine consumes one client until its multi-client implementation is introduced. */
+    /** Convenience accessors for callers constructing single-client IR. */
     val client: ClientNode get() = clients.single()
     val entry: String get() = client.entry
 

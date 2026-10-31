@@ -4,7 +4,7 @@ import ksl.simulation.ModelElement
 import ksl.utilities.random.rng.RNStreamIfc
 import ksl.utilities.random.rvariable.KSLRandom
 import resiliencelab.core.compiler.CoreMessage
-import resiliencelab.core.ir.LoadProfile
+import resiliencelab.core.ir.ClientNode
 
 /**
  * Generates the open, possibly non-homogeneous Poisson stream by thinning the maximum profile intensity.
@@ -14,13 +14,14 @@ import resiliencelab.core.ir.LoadProfile
  */
 internal class ArrivalGenerator(
     private val reliabilityModel: ReliabilityModel,
-    private val entryServiceId: String,
-    private val load: LoadProfile,
+    private val client: ClientNode,
+    private val requestClass: String,
     private val warmupMs: Double,
     measurementMs: Double,
     private val stream: RNStreamIfc,
     private val acceptanceStream: RNStreamIfc?,
-) : ModelElement(reliabilityModel, "workload:arrival-generator") {
+) : ModelElement(reliabilityModel, "workload:${client.path}:$requestClass:arrival-generator") {
+    private val load = client.classes.getValue(requestClass)
     private val arrivalEndMs = warmupMs + measurementMs
     private val maximumRate = load.maximum(arrivalEndMs)
     private val meanInterArrivalMs = 1 / maximumRate
@@ -28,9 +29,11 @@ internal class ArrivalGenerator(
         EventActionIfc<Nothing> {
             if (acceptanceStream == null || acceptanceStream.randU01() < load.rateAt(time) / maximumRate) {
                 reliabilityModel.invoke(
-                    serviceId = entryServiceId,
+                    serviceId = client.entry,
                     originalRequest = true,
                     measurementCohort = time >= warmupMs && time < arrivalEndMs,
+                    client = client,
+                    requestClass = requestClass,
                 )
             }
             scheduleNext()

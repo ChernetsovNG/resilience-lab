@@ -2,6 +2,7 @@ package resiliencelab.core.engine.ksl
 
 import ksl.utilities.random.rng.RNStreamFactory
 import ksl.utilities.random.rng.RNStreamIfc
+import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.GraphIr
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -87,11 +88,22 @@ object PathStreams {
      */
     fun streamAt(address: Long): RNStreamIfc = RNStreamFactory().nextStream().apply { advanceSubStreams(address) }
 
+    /** Default requests retain the original client key; explicit classes use a reserved path segment. */
+    fun arrivalPath(
+        client: ClientNode,
+        requestClass: String,
+    ): List<String> = if (requestClass == "default") client.pathSegments else client.pathSegments + listOf("#class", requestClass)
+
     /** Random sources the engine reads for [graph]. */
     fun sources(graph: GraphIr): List<Pair<List<String>, StreamRole>> =
         buildList {
-            add(graph.client.pathSegments to StreamRole.ARRIVALS)
-            if (!graph.client.load.isConstant) add(graph.client.pathSegments to StreamRole.ARRIVAL_ACCEPTANCE)
+            graph.clients.forEach { client ->
+                client.classes.forEach { (requestClass, load) ->
+                    val path = arrivalPath(client, requestClass)
+                    add(path to StreamRole.ARRIVALS)
+                    if (!load.isConstant) add(path to StreamRole.ARRIVAL_ACCEPTANCE)
+                }
+            }
             graph.services.forEach {
                 add(it.pathSegments to StreamRole.PROCESSING)
                 if (it.pooler == null || graph.faults.any { fault -> fault.target == it.path && fault.failureProbability != null }) {

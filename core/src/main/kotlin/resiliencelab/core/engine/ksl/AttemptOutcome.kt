@@ -9,6 +9,7 @@ enum class AttemptOutcome {
     SUCCEEDED,
     LOCAL_FAILURE,
     DOWNSTREAM_FAILURE,
+    NO_ROUTE,
     TIMED_OUT,
     ACQUIRE_TIMED_OUT,
     QUEUE_REJECTED,
