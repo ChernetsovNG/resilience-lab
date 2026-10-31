@@ -75,6 +75,7 @@
   "editor.inspector.width": "Inspector width: {width} pixels",
   "app.canvas.fullNotes": "Full notes",
   "app.canvas.aboutModel": "About model",
+  "app.canvas.modelInfoUnread": "Model information has not been opened yet",
   "app.canvas.closeModelInfo": "Close model information",
   "app.canvas.closeModelInfoSymbol": "×",
   "app.canvas.loading": "Loading workspace…",

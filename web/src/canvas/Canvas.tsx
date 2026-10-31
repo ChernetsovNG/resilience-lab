@@ -410,7 +410,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     >
       {showGrid && <Background gap={gridStep} />}
       {modelInfo == null ? null : <Panel position="top-left" className="model-info-position"
-        style={{ top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 24 : 16)) }}>
+        style={{ top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 48 : 40)) }}>
         {modelInfo}
       </Panel>}
       <Panel position="bottom-right" className="react-flow__attribution">

@@ -74,7 +74,12 @@ it("opens both descriptions over the model and links to full notes without editi
   const notes = "The model uses synthetic measurements.";
   annotatedServer({ description, notes }, { description: "Compare two retry policies." });
   render(<App />);
+  const about = await screen.findByRole("button", { name: "About model" });
+  expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
+  expect(about.title).toBe("Model information has not been opened yet");
+  fireEvent.click(about);
   const panel = await screen.findByRole("dialog", { name: "About model" });
+  expect(about.title).toBe("About model");
   expect(within(panel).getByText(description)).toBeTruthy();
   expect(within(panel).getByText("Compare two retry policies.")).toBeTruthy();
   fireEvent.click(button("Full notes"));
@@ -87,9 +92,10 @@ it("opens both descriptions over the model and links to full notes without editi
   expect(button("Undo").disabled).toBe(true);
 });
 
-it.each(["close", "escape", "outside"])("closes model information with %s and remembers it after reopening the workspace", async method => {
+it.each(["close", "escape", "outside"])("closes model information with %s and remembers that it has been read", async method => {
   annotatedServer({ description: "A model worth explaining." });
   const view = render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "About model" }));
   await screen.findByRole("dialog", { name: "About model" });
   if (method === "close") fireEvent.click(button("Close model information"));
   if (method === "escape") fireEvent.keyDown(document, { key: "Escape" });
@@ -101,6 +107,7 @@ it.each(["close", "escape", "outside"])("closes model information with %s and re
   render(<App />);
   await screen.findByTestId("rf__node-gateway");
   expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
+  expect(button("About model").title).toBe("About model");
   fireEvent.click(button("About model"));
   expect(screen.getByRole("dialog", { name: "About model" })).toBeTruthy();
   expect(button("Save").disabled).toBe(true);
@@ -124,6 +131,7 @@ it.each([
 it("does not consume Escape from a dialog opened over model information", async () => {
   annotatedServer({ description: "Model information behind another dialog." });
   render(<><App /><dialog open><button>Another dialog</button></dialog></>);
+  fireEvent.click(await screen.findByRole("button", { name: "About model" }));
   await screen.findByRole("dialog", { name: "About model" });
   fireEvent.keyDown(button("Another dialog"), { key: "Escape" });
   expect(screen.getByRole("dialog", { name: "About model" })).toBeTruthy();

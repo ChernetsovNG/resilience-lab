@@ -75,6 +75,7 @@
   "editor.inspector.width": "Ширина инспектора: {width} пикселей",
   "app.canvas.fullNotes": "Полные заметки",
   "app.canvas.aboutModel": "О модели",
+  "app.canvas.modelInfoUnread": "Описание модели ещё не открывали",
   "app.canvas.closeModelInfo": "Закрыть сведения о модели",
   "app.canvas.closeModelInfoSymbol": "×",
   "app.canvas.loading": "Загрузка рабочей области…",

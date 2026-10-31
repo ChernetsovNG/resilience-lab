@@ -372,12 +372,13 @@ select {
   min-height: 0;
 }
 
-.model-info-position { z-index: 1001; margin: .5rem; max-width: calc(100% - 1rem); }
+.model-info-position { z-index: 1001; margin: 1.25rem; max-width: calc(100% - 2.5rem); }
 .model-info { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; max-width: 100%; max-height: inherit; }
 .model-info button { padding: .2rem .4rem; border: 1px solid #9aa5b1; border-radius: .35rem; background: #fff; color: inherit; font: inherit; cursor: pointer; }
 .model-info button:hover:not(:disabled) { background: #eff6ff; }
 .model-info button:disabled { opacity: .5; cursor: not-allowed; }
 .model-info-trigger { display: inline-flex; align-items: center; gap: .3rem; flex-shrink: 0; box-shadow: 0 1px 4px #102a4320; }
+.model-info-unread { width: .375rem; height: .375rem; border-radius: 50%; background: #2563eb; }
 .model-info-panel {
   display: flex; flex-direction: column; gap: .6rem; min-height: 0;
   box-sizing: border-box; width: 24rem; max-width: 100%; padding: .6rem .75rem;

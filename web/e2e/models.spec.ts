@@ -13,10 +13,19 @@ test("checkout opens its main experiment and remembers a dismissible information
   const about = page.getByRole("button", { name: "О модели", exact: true });
   const panel = page.getByRole("dialog", { name: "О модели", exact: true });
   const canvas = page.getByRole("application", { name: "Полотно модели", exact: true });
+  const unread = about.locator(".model-info-unread");
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await expect(unread).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`checkout-about-unread-ru-${viewport.width}.png`) });
+  }
+  await about.click();
+  await expect(unread).toHaveCount(0);
   await expect(panel).toContainText("Оформление заказа");
   await expect(panel.getByRole("heading", { name: "Модель", exact: true })).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Эксперимент", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
   await expect(page.locator(".inspector-annotations")).not.toHaveAttribute("open");
   for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
@@ -44,13 +53,18 @@ test("checkout opens its main experiment and remembers a dismissible information
   await page.screenshot({ path: testInfo.outputPath("checkout-notes-ru.png") });
   await page.reload();
   await expect(about).toHaveAttribute("aria-expanded", "false");
+  await expect(unread).toHaveCount(0);
   await expect(panel).toBeHidden();
   await page.getByLabel("Модель", { exact: true }).selectOption("retry-storm/retry-storm.model.json");
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeHidden();
+  await expect(unread).toBeVisible();
+  await about.click();
+  await expect(unread).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
   await page.getByLabel("Модель", { exact: true }).selectOption("checkout/checkout.model.json");
   await expect(about).toHaveAttribute("aria-expanded", "false");
+  await expect(unread).toHaveCount(0);
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await about.click();
   const banner = (await page.getByTestId("variant-banner").boundingBox())!;
@@ -74,6 +88,8 @@ test("long model information scrolls within the canvas and keeps full notes reac
     await page.goto("/");
     await page.getByLabel("Model", { exact: true }).selectOption(`${directory}/retry-storm.model.json`);
     const panel = page.getByRole("dialog", { name: "About model", exact: true });
+    await expect(panel).toBeHidden();
+    await page.getByRole("button", { name: "About model", exact: true }).click();
     await expect(panel).toBeVisible();
     const canvas = (await page.getByRole("application", { name: "Model canvas", exact: true }).boundingBox())!;
     const box = (await panel.boundingBox())!;

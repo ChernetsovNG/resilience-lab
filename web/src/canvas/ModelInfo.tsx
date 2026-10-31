@@ -8,18 +8,16 @@ export function ModelInfo({ modelPath, model, experiment, onFullNotes, notesDisa
   modelPath: string; model: Annotations; experiment: Annotations; onFullNotes: () => void; notesDisabled?: boolean;
 }) {
   const key = `resilience-lab.model-info.${modelPath}`;
-  const [open, setOpen] = useState(() => {
-    if (!model.description?.trim()) return false;
-    try { return localStorage.getItem(key) !== "seen"; }
-    catch { return true; }
+  const [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState(() => {
+    try { return localStorage.getItem(key) === "seen"; }
+    catch { return false; }
   });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const id = useId();
   useEffect(() => {
     if (!open) return;
-    try { localStorage.setItem(key, "seen"); }
-    catch { /* Information remains available when browser storage is disabled. */ }
     const outside = (event: PointerEvent) => {
       if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
     };
@@ -37,12 +35,20 @@ export function ModelInfo({ modelPath, model, experiment, onFullNotes, notesDisa
       document.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("keydown", escape, true);
     };
-  }, [key, open]);
+  }, [open]);
 
   if (![model.description, model.notes, experiment.description, experiment.notes].some(text => text?.trim())) return null;
   return <div ref={root} className="model-info nodrag nopan nowheel" onDoubleClick={event => event.stopPropagation()}>
     <button ref={button} type="button" className="model-info-trigger" aria-expanded={open} aria-controls={id} aria-haspopup="dialog"
-      onClick={() => setOpen(current => !current)}><Icon name="info" size={14} />{t("app.canvas.aboutModel")}</button>
+      title={t(seen ? "app.canvas.aboutModel" : "app.canvas.modelInfoUnread")}
+      onClick={() => {
+        setOpen(current => !current);
+        setSeen(true);
+        try { localStorage.setItem(key, "seen"); }
+        catch { /* Information remains available when browser storage is disabled. */ }
+      }}><Icon name="info" size={14} />{t("app.canvas.aboutModel")}
+      {seen ? null : <span className="model-info-unread" aria-hidden="true" />}
+    </button>
     {open ? <section id={id} role="dialog" aria-label={t("app.canvas.aboutModel")} className="model-info-panel">
       <header><strong>{t("app.canvas.aboutModel")}</strong>
         <button type="button" aria-label={t("app.canvas.closeModelInfo")} onClick={() => {
