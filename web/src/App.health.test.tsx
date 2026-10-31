@@ -28,7 +28,7 @@ describe("backend availability", () => {
     expect(button("Run").disabled).toBe(false);
   });
 
-  it.each(["network", "5xx"])("recovers from a %s poll failure with bounded backoff and keeps drafts", async (failure) => {
+  it.each(["network", "5xx"])("recovers within one poll after a %s outage with long health backoff and keeps drafts", async (failure) => {
     let unavailable = false;
     let recovered = false;
     const reason = failure === "network" ? "Connection refused" : "Maintenance";
@@ -63,7 +63,7 @@ describe("backend availability", () => {
 
     unavailable = false;
     recovered = true;
-    await advance(10_000);
+    await advance(1000);
     expect(screen.getByText(/Backend healthy · vrecovered/)).toBeTruthy();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("8");
     expect(button("Save").disabled).toBe(false);

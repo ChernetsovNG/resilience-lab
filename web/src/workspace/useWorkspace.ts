@@ -112,7 +112,7 @@ async function loadModel(modelPath: string, documents: readonly DocumentEntry[])
 }
 
 /** Loads workspace documents, tracks external changes and saves command edits with conditional versions (stage 1 design §6.2). */
-export function useWorkspace(onRequestFailure?: (reason: unknown) => void): Workspace {
+export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onRequestSuccess?: () => void): Workspace {
   const language = useLanguage();
   const [sourceCatalog, setCatalog] = useState<Catalog | null>(null);
   const catalog = useMemo(() => sourceCatalog === null ? null : localizeCatalog(sourceCatalog, language), [sourceCatalog, language]);
@@ -247,6 +247,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void): Work
         const since = cursor.current;
         const response = await api.changes(since ?? undefined);
         if (!active) return;
+        onRequestSuccess?.();
         let changes = response.changes;
         if (since === null || response.reset) {
           const documents = await refreshDocuments();
@@ -278,7 +279,10 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void): Work
     const initialize = async (): Promise<void> => {
       try {
         const initial = await api.changes();
-        if (active) cursor.current = initial.cursor;
+        if (active) {
+          cursor.current = initial.cursor;
+          onRequestSuccess?.();
+        }
       } catch (error) {
         // The first successful poll reconciles a workspace loaded without an initial cursor.
         if (active) onRequestFailure?.(error);
@@ -308,7 +312,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void): Work
       active = false;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [load, classifyChanges, onRequestFailure]);
+  }, [load, classifyChanges, onRequestFailure, onRequestSuccess]);
 
   const execute = useCallback((command: EditorCommand) => {
     if (!loadInFlight.current) dispatch({ type: "command", command });

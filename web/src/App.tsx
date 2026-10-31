@@ -43,7 +43,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
  */
 export function App() {
   const health = useHealth();
-  const workspace = useWorkspace(health.reportFailure);
+  const workspace = useWorkspace(health.reportFailure, health.reportSuccess);
   const canvas = useRef<CanvasHandle>(null);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
