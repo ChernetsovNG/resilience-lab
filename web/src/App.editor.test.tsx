@@ -213,7 +213,7 @@ it.each(["model", "experiment", "random seed"] as const)("marks results stale af
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   if (kind === "model") {
     await selectGateway();
     editHandlers("5");
@@ -235,7 +235,7 @@ it.each(["model", "experiment", "random seed"] as const)("marks results stale af
   expect(screen.getByText("Shared assumptions")).toBeTruthy();
   fireEvent.click(button("Undo"));
   expect(screen.queryByText(stale)).toBeNull();
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   expect(screen.queryByText(stale)).toBeNull();
 });
 
@@ -243,7 +243,7 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await selectGateway();
   fireEvent.keyDown(window, { key: "c", ctrlKey: true });
   fireEvent.keyDown(window, { key: "Delete" });

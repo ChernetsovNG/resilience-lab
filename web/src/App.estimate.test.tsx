@@ -46,7 +46,7 @@ describe("cost estimate and resume", () => {
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
     if (accepted) {
-      await screen.findByRole("table", { name: "Answer" });
+      await screen.findByRole("table", { name: "Findings" });
       expect(screen.queryByRole("region", { name: "Cost estimate" })).toBeNull();
     } else expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain(warning.message);
   });
@@ -60,7 +60,7 @@ describe("cost estimate and resume", () => {
     fireEvent.click(button("Estimate"));
     await screen.findByRole("region", { name: "Cost estimate" });
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Answer" });
+    await screen.findByRole("table", { name: "Findings" });
     const requests = fetchMock.mock.calls.map(([url]) => url).filter((url) => url === "/api/v1/estimate" || url === "/api/v1/jobs");
     expect(requests).toEqual(["/api/v1/estimate", "/api/v1/estimate", "/api/v1/jobs"]);
     expect(confirm).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe("cost estimate and resume", () => {
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
     if (accepted) {
-      await screen.findByRole("table", { name: "Answer" });
+      await screen.findByRole("table", { name: "Findings" });
       expect(screen.queryByText("Estimation unavailable")).toBeNull();
     }
   });

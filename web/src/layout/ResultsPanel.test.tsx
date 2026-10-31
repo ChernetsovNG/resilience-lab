@@ -23,7 +23,7 @@ it("preserves a deliberately entered variant label even when it resembles a gene
   run.variants = [{ ...run.variants[0], id: "variant-2", label: "variant-2" }];
   render(<ResultsPanel job={null} summary={run} problem={null} activeVariantId="variant-2"
     experiment={{ ...experiment, variants: [{ id: "variant-2", label: "variant-2", overrides: {} }] }} />);
-  expect(within(screen.getByRole("table", { name: "Answer" })).getAllByRole("columnheader")[1].textContent).toContain("variant-2");
+  expect(within(screen.getByRole("table", { name: "Findings" })).getAllByRole("columnheader")[1].textContent).toContain("variant-2");
 });
 
 it("uses variant labels and catalog coordinates in Problems, keeping the code secondary", () => {
@@ -63,8 +63,8 @@ it("offers Map only for the summary grid and returns to Summary after a run with
   expect(await screen.findByRole("list", { name: "Map points" })).toBeTruthy();
   view.rerender(<ResultsPanel job={null} summary={summary} problem={null} activeVariantId="baseline" />);
   expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
-  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Answer" }).id);
-  expect(screen.getByRole("table", { name: "Answer" })).toBeTruthy();
+  expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Findings" }).id);
+  expect(screen.getByRole("table", { name: "Findings" })).toBeTruthy();
 });
 
 it("lists all diagnostics in Problems and navigates from a finding", () => {
@@ -86,7 +86,7 @@ it("lists all diagnostics in Problems and navigates from a finding", () => {
   expect(onDiagnostic).toHaveBeenCalledWith(finding);
 });
 
-it("uses the shared point without offering another context selector in Answer or Timeline", () => {
+it("uses the shared point without offering another context selector in Findings or Timeline", () => {
   const grid = structuredClone(summary);
   grid.grid = [{ path: "gateway-to-middle.timeout", values: ["40ms", "80ms"] }];
   const point = grid.variants[0].points[0];
@@ -111,7 +111,7 @@ it("explains that a cancelled run is incomplete and has no summary", () => {
   }} summary={null} problem={null} />);
 
   expect(screen.getByText("Run cancelled; the run is incomplete and has no summary.")).toBeTruthy();
-  expect(screen.queryByRole("table", { name: "Answer" })).toBeNull();
+  expect(screen.queryByRole("table", { name: "Findings" })).toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
@@ -129,7 +129,7 @@ it("collapses and restores while preserving tabs", () => {
   expect(onSizeChange).toHaveBeenCalledWith("collapsed");
   view.rerender(panel("collapsed"));
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  expect(screen.getByRole("tab", { name: "Answer" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "Findings" })).toBeTruthy();
   expect(screen.queryByText(/RUNNING/)).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
@@ -139,7 +139,7 @@ it("collapses and restores while preserving tabs", () => {
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
-it.each(["Answer", "Timeline", "Assumptions", "Map", "Problems"])("opens collapsed %s and keeps it open on repeated selection", async name => {
+it.each(["Findings", "Timeline", "Assumptions", "Map", "Problems"])("opens collapsed %s and keeps it open on repeated selection", async name => {
   const grid = structuredClone(summary);
   grid.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
   function Panel() {
@@ -195,23 +195,23 @@ const runJob = (status: "RUNNING" | "COMPLETED" | "CANCELLED" | "FAILED", id = "
   completedTasks: status === "COMPLETED" ? 4 : 1, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
 });
 
-it("opens Answer after success even when Problems was selected before Run", () => {
+it("opens Findings after success even when Problems was selected before Run", () => {
   const view = render(<ResultsPanel job={null} summary={null} problem={null} running={false} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   view.rerender(<ResultsPanel job={null} summary={null} problem={null} running />);
   view.rerender(<ResultsPanel job={runJob("RUNNING")} summary={null} problem={null} running />);
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} />);
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} />);
   expect(screen.getByRole("tab", { name: "Assumptions" }).getAttribute("aria-selected")).toBe("true");
 });
 
-it("opens Answer for a run that completes without an intermediate running render", () => {
+it("opens Findings for a run that completes without an intermediate running render", () => {
   const view = render(<ResultsPanel job={null} summary={null} problem={null} />);
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} />);
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
 });
 
 it.each(["submission", "execution"])("keeps the tab selected during %s and resets the preference for the next run", phase => {
@@ -223,7 +223,7 @@ it.each(["submission", "execution"])("keeps the tab selected during %s and reset
   expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
   view.rerender(<ResultsPanel job={null} summary={null} problem={null} running />);
   view.rerender(<ResultsPanel job={runJob("COMPLETED", "job-2")} summary={summary} problem={null} running={false} />);
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
 });
 
 it("preserves a manually collapsed panel after success and keeps the chosen tab", () => {
@@ -255,9 +255,9 @@ it.each([false, true])("keeps a Problems request ahead of completion navigation:
   if (duringRun) view.rerender(<ResultsPanel job={null} summary={null} problem={null} running problemsRequest={1} />);
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={summary} problem={null} running={false} problemsRequest={1} />);
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   view.rerender(<ResultsPanel job={runJob("COMPLETED")} summary={structuredClone(summary)} problem={null} running={false} problemsRequest={1} />);
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
 });
 
 
@@ -266,14 +266,14 @@ it("opens Timeline from the inspector request and preserves later tab choices", 
   const view = render(<ResultsPanel {...props} timelineRequest={0} />);
   view.rerender(<ResultsPanel {...props} timelineRequest={1} />);
   expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   view.rerender(<ResultsPanel {...props} timelineRequest={1} />);
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   view.rerender(<ResultsPanel {...props} timelineRequest={2} />);
   expect(screen.getByRole("tab", { name: "Timeline" }).getAttribute("aria-selected")).toBe("true");
 });
 
-it("shows the submitted load and faults above the Answer using variant and point overrides", async () => {
+it("shows the submitted load and faults above the Findings using variant and point overrides", async () => {
   const { catalog, model, experiment } = await import("../test/fixtures");
   const run = structuredClone(experiment);
   run.variants[0].overrides = { "client.load.points": [{ time: "0s", rate: "30/s" }] };

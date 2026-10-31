@@ -12,7 +12,7 @@ it("commits a focused field before the Run button saves and submits", async () =
   field.focus();
   fireEvent.change(field, { target: { value: "9" } });
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   const write = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
   expect(write).toBeDefined();
   expect(JSON.parse(String(write![1]?.body)).model.blocks.gateway.params.handlers).toBe(9);
@@ -30,7 +30,7 @@ it("saves dirty documents before submitting a run", async () => {
   await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true));
   expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
   await act(async () => saving.release());
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
   expect(JSON.parse(String(writes[0][1]?.body)).model.blocks.gateway.params.handlers).toBe(5);
   expect(button("Save").disabled).toBe(true);
@@ -59,7 +59,7 @@ for (const modifier of ["ctrlKey", "metaKey"] as const) {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true));
     const write = fetchMock.mock.calls.find(([url, init]) => init?.method === "PUT" && String(url).includes(encodeURIComponent(modelPath)))!;
     expect(JSON.parse(String(write[1]?.body)).model.blocks.gateway.params.handlers).toBe(7);
-    if (key === "Enter") await screen.findByRole("table", { name: "Answer" });
+    if (key === "Enter") await screen.findByRole("table", { name: "Findings" });
     else expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
   });
 }
@@ -88,7 +88,7 @@ it("blocks an invalid draft shortcut with a visible explanation beside Run", asy
   expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "PUT" || url === "/api/v1/jobs")).toBe(false);
 });
 
-it("preserves the first Answer during submission and loading of replacement artifacts", async () => {
+it("preserves the first Findings during submission and loading of replacement artifacts", async () => {
   const submission = deferred(), artifacts = deferred();
   let submissions = 0;
   const replacement = structuredClone(summary);
@@ -106,23 +106,23 @@ it("preserves the first Answer during submission and loading of replacement arti
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   fireEvent.click(button("Run"));
   await waitFor(() => expect(submissions).toBe(2));
-  expect(screen.getByRole("table", { name: "Answer" }).textContent).toContain("Baseline");
+  expect(screen.getByRole("table", { name: "Findings" }).textContent).toContain("Baseline");
   expect(screen.getByRole("tabpanel").textContent).toContain("Results are outdated; a new run is in progress.");
   await act(async () => submission.release());
   await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/runs/run-2/summary")).toBe(true));
-  expect(screen.getByRole("table", { name: "Answer" }).textContent).toContain("Baseline");
+  expect(screen.getByRole("table", { name: "Findings" }).textContent).toContain("Baseline");
   await act(async () => artifacts.release());
-  await waitFor(() => expect(screen.getByRole("table", { name: "Answer" }).textContent).toContain("Updated baseline"));
+  await waitFor(() => expect(screen.getByRole("table", { name: "Findings" }).textContent).toContain("Updated baseline"));
   expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
   expect(screen.getByRole("tabpanel").textContent).not.toContain("a new run is in progress");
   expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(2);
 });
 
-it.each(["FAILED", "CANCELLED"] as const)("retains the last Answer when its replacement is %s", async status => {
+it.each(["FAILED", "CANCELLED"] as const)("retains the last Findings when its replacement is %s", async status => {
   let submissions = 0;
   server(url => {
     if (url === "/api/v1/jobs" && ++submissions === 2) return { status: 202, body: {
@@ -133,11 +133,11 @@ it.each(["FAILED", "CANCELLED"] as const)("retains the last Answer when its repl
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   fireEvent.click(button("Run"));
   await waitFor(() => expect(screen.getByTestId("job-status").textContent).toBe(status));
   await waitFor(() => expect(button("Run").disabled).toBe(false));
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
-  expect(screen.getByRole("table", { name: "Answer" }).textContent).toContain("Baseline");
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
+  expect(screen.getByRole("table", { name: "Findings" }).textContent).toContain("Baseline");
 });

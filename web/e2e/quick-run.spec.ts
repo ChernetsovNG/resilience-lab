@@ -7,7 +7,7 @@ import { copySmallExperiment, selectExperiment } from "./fixtures";
 test.use({ viewport: { width: 1280, height: 800 } });
 
 for (const language of ["en", "ru"] as const) {
-  test(`saves and runs by button or keyboard, preserving the previous Answer in ${language}`, async ({ page }) => {
+  test(`saves and runs by button or keyboard, preserving the previous Findings in ${language}`, async ({ page }) => {
     await page.addInitScript(language => {
       localStorage.setItem("resilience-lab.language", language);
       localStorage.setItem("resilience-lab.results-panel-heights", JSON.stringify({ "normal:answer": 360 }));
@@ -32,7 +32,7 @@ for (const language of ["en", "ru"] as const) {
       else await run.click();
       const first = await firstResponse;
       expect(first.ok()).toBe(true);
-      const answer = page.getByRole("table", { name: russian ? "Ответ" : "Answer", exact: true });
+      const answer = page.getByRole("table", { name: russian ? "Выводы" : "Findings", exact: true });
       await expect(answer).toBeVisible();
       await expect(run).toBeEnabled();
       await expect(save).toBeDisabled();

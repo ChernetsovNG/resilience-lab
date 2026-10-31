@@ -366,7 +366,7 @@
   "results.answer.replications": "{count} replications",
   "results.answer.serviceMetrics": "{service} metrics",
   "results.answer.servicesFor": "Element metrics: {service}",
-  "results.answer.title": "Answer",
+  "results.answer.title": "Findings",
   "results.assumptions.applicationVersion": "Application version",
   "results.assumptions.empty": "Run the experiment to see model assumptions.",
   "results.assumptions.kslVersion": "KSL version",

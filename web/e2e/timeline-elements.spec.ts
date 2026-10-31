@@ -10,7 +10,7 @@ test("checkout Timeline offers model elements and distinguishes compared variant
   const completed = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()), { timeout: 90_000 });
   await page.getByRole("button", { name: "Запустить", exact: true }).click();
   await completed;
-  await expect(page.getByRole("table", { name: "Ответ", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Таймлайн", exact: true }).click();
   await page.getByLabel("Вариант для сравнения", { exact: true }).selectOption("no-order-retries");
   const queue = page.getByRole("region", { name: "Очередь", exact: true });

@@ -366,7 +366,7 @@
   "results.answer.replications": "Повторений: {count}",
   "results.answer.serviceMetrics": "Показатели {service}",
   "results.answer.servicesFor": "Показатели элемента: {service}",
-  "results.answer.title": "Ответ",
+  "results.answer.title": "Выводы",
   "results.assumptions.applicationVersion": "Версия приложения",
   "results.assumptions.empty": "Запустите эксперимент, чтобы увидеть допущения модели.",
   "results.assumptions.kslVersion": "Версия KSL",

@@ -54,7 +54,7 @@ interface SummaryTableProps {
   variants?: readonly NamedVariant[];
 }
 
-/** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
+/** Findings for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
 export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement, faults = [], windowMs = 0, catalog, model, variants = summary.variants }: SummaryTableProps) {
   const level = useConfidenceLevel();
   const confidenceHelpId = useId();

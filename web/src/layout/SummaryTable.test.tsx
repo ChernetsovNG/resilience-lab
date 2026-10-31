@@ -6,12 +6,12 @@ import { SummaryTable } from "./SummaryTable";
 import { setLanguage } from "../i18n";
 import { setConfidenceLevel } from "./confidenceLevel";
 
-const comparison = () => screen.getByRole("table", { name: "Answer" });
+const comparison = () => screen.getByRole("table", { name: "Findings" });
 const cells = (name: string, table = comparison()) => within(within(table).getByRole("row", { name: new RegExp(name) })).getAllByRole("cell");
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
-  it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Answer", locale => {
+  it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Findings", locale => {
     setLanguage(locale);
     const run = structuredClone(summary);
     run.variants[1].id = "variant-2";
@@ -21,7 +21,7 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={run} catalog={catalog} model={model} activeVariantId="variant-2" />);
     const heading = within(screen.getByRole("region", { name: locale === "en" ? "Saturation insight" : "Вывод о насыщении" })).getByRole("heading");
     expect(heading.textContent).toBe(locale === "en" ? "Variant 2 · Handlers · gateway = 4" : "Вариант 2 · Обработчики · gateway = 4");
-    expect(screen.getByRole("table", { name: locale === "en" ? "Answer" : "Ответ" }).textContent).not.toMatch(/variant-2|p0|gateway\.handlers/);
+    expect(screen.getByRole("table", { name: locale === "en" ? "Findings" : "Выводы" }).textContent).not.toMatch(/variant-2|p0|gateway\.handlers/);
   });
 
   it("summarizes both variants without switching the active page", () => {
@@ -47,7 +47,7 @@ describe("SummaryTable", () => {
     const insight = screen.getByRole("region", { name: "Вывод о насыщении" });
     expect(insight.textContent?.match(/по объединённым данным/g)).toHaveLength(1);
     expect(insight.textContent).toContain("54,1 мс");
-    const table = screen.getByRole("table", { name: "Ответ" });
+    const table = screen.getByRole("table", { name: "Выводы" });
     expect(table.textContent).toContain("55,4 мс");
     expect(within(table).getByRole("caption").textContent).toContain("p95 и p99 — средние квантилей отдельных повторений");
     expect(insight.textContent).not.toContain("Запросов:");
@@ -74,7 +74,7 @@ describe("SummaryTable", () => {
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: label }).value).toBe("99");
   });
 
-  it("updates interval separation from Answer using each metric's observation count", () => {
+  it("updates interval separation from Findings using each metric's observation count", () => {
     const run = structuredClone(summary);
     run.variants[0].replications = 5;
     run.variants[1].replications = 10;

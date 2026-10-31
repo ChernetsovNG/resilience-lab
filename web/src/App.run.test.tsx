@@ -10,7 +10,7 @@ it.each(["Estimate", "Run"])("keeps Analysis while %s follows its estimate visib
   server(); await open();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   fireEvent.click(button("Analysis"));
   fireEvent.click(button("Collapse results"));
@@ -35,7 +35,7 @@ it("keeps ordinary Run estimates hidden during estimation and after completion",
   fireEvent.click(button("Run"));
   expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
   await act(async () => gate.release());
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
   fireEvent.click(button("Estimate"));
   await screen.findByRole("region", { name: "Cost estimate" });
@@ -60,7 +60,7 @@ it.each(["ESTIMATE_UI_CACHE", "ESTIMATE_EXTRAPOLATION"])("shows %s only until th
   await waitFor(() => expect(submitted).toBe(true));
   expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain("Run cost warning");
   await act(async () => gate.release());
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
   expect(nativeConfirm).not.toHaveBeenCalled();
 });
@@ -78,7 +78,7 @@ it("keeps an automatically closed estimate hidden while another experiment opens
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
   fireEvent.change(experimentSelect(), { target: { value: otherPath } });
@@ -113,7 +113,7 @@ it.each(["Estimate", "Run"])("reveals the prior tab when %s never submits a new 
   await open();
   fireEvent.click(button("Run"));
   fireEvent.click(within(await screen.findByRole("dialog", { name: "Start run?" })).getByRole("button", { name: "Start run" }));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   fireEvent.click(button("Collapse results"));

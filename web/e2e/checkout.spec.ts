@@ -49,7 +49,7 @@ test("opens Problems from a collapsed example and restores each tab's saved heig
   await expect(divider).toHaveAttribute("aria-valuenow", "320");
 
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
-  await page.getByRole("tab", { name: "Answer", exact: true }).click();
+  await page.getByRole("tab", { name: "Findings", exact: true }).click();
   await expect(panel).toBeVisible();
   await expect(divider).toHaveAttribute("aria-valuenow", "200");
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
@@ -67,7 +67,7 @@ test.describe("readable checkout answer", () => {
     const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
     await page.getByRole("button", { name: "Запустить", exact: true }).click();
     const summary: RunSummary = await (await response).json();
-    await expect(page.getByRole("table", { name: "Ответ", exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByRole("button", { name: "Анализ", exact: true }).click();
     const overview = page.getByRole("region", { name: "Сводка по вариантам" });
@@ -96,7 +96,7 @@ test.describe("readable checkout answer", () => {
       await page.goto("/");
       await selectExperiment(page, "checkout/no-faults.experiment.json");
       await page.getByRole("button", { name: "Запустить", exact: true }).click();
-      await expect(page.getByRole("table", { name: "Ответ", exact: true })).toBeVisible();
+      await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
       await page.getByRole("tab", { name: "Baseline", exact: true }).click();
       await page.getByRole("button", { name: "Анализ", exact: true }).click();
       const insight = page.getByRole("region", { name: "Вывод о насыщении" });
@@ -105,7 +105,7 @@ test.describe("readable checkout answer", () => {
       await expect(insight).not.toContainText("во время отказа");
       await insight.getByText("Пути деградации", { exact: true }).click();
       await expect(insight.getByRole("listitem")).toHaveText(["нет насыщения — 10 из 10 повторений"]);
-      await expect(page.getByRole("table", { name: "Ответ", exact: true }).getByRole("caption")).toContainText("средние квантилей отдельных повторений");
+      await expect(page.getByRole("table", { name: "Выводы", exact: true }).getByRole("caption")).toContainText("средние квантилей отдельных повторений");
       await page.screenshot({ path: testInfo.outputPath("checkout-headroom.png") });
     } finally { await rm(file, { force: true }); }
   });

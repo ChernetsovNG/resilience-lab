@@ -46,14 +46,14 @@ it("preserves the chosen tab when a repeated launch reveals the panel and return
   await open();
   fireEvent.click(button("Run"));
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   fireEvent.click(button("Run"));
   await waitFor(() => expect(submissions).toBe(2));
   expect(screen.getByRole("tabpanel")).toBeTruthy();
   await act(async () => gate.release());
   await waitFor(() => expect(button("Run").disabled).toBe(false));
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
@@ -77,7 +77,7 @@ it("expires launch findings after document edits and reveals the same error in a
   await waitFor(() => expect(checks).toBe(2));
   expect(button("Errors: 0 · Warnings: 0")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).queryByRole("button", { name: /Handler error/ })).toBeNull();
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   findings = [finding];
   editHandlers("6");

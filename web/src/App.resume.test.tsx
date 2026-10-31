@@ -7,7 +7,7 @@ setupAppTests();
 
 describe("cost estimate and resume", () => {
 
-  it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and makes Answer available", async (status) => {
+  it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and makes Findings available", async (status) => {
     let resumed = false;
     server((url) => {
       if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status, error: status === "FAILED" ? "Execution stopped" : null } };
@@ -21,7 +21,7 @@ describe("cost estimate and resume", () => {
     await open(); fireEvent.click(button("Run"));
     const resume = await screen.findByRole("button", { name: "Resume" });
     fireEvent.click(resume);
-    await screen.findByRole("table", { name: "Answer" });
+    await screen.findByRole("table", { name: "Findings" });
     expect(screen.getByTestId("job-status").textContent).toBe("COMPLETED");
     expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
   });
@@ -42,7 +42,7 @@ describe("cost estimate and resume", () => {
     expect(alert.textContent).toContain("Start a new run");
     if (status === 400) expect(screen.getByRole("tabpanel").textContent).toContain("RUN_DOCUMENT_CHANGED");
     expect(button("Run").disabled).toBe(false);
-    expect(screen.queryByRole("table", { name: "Answer" })).toBeNull();
+    expect(screen.queryByRole("table", { name: "Findings" })).toBeNull();
   });
 
   it("does not offer Resume when cancellation created no artifact", async () => {

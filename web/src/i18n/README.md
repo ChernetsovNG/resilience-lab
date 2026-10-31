@@ -79,7 +79,7 @@ npm test -- --run src/i18n/catalogs.test.ts
 | Replications | Повторения |
 | Warm-up | Разогрев |
 | Measurement | Измерение |
-| Answer | Ответ |
+| Findings | Выводы |
 | Timeline | Таймлайн |
 | Problems | Проблемы |
 | Assumptions | Допущения |

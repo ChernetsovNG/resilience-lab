@@ -12,7 +12,7 @@ async function run(page: Page) {
   const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));
   await page.getByRole("button", { name: "Run", exact: true }).click();
   const summary = await response;
-  await expect(page.getByRole("table", { name: "Answer" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Findings" })).toBeVisible();
   return /\/runs\/([^/]+)\/summary$/.exec(summary.url())![1];
 }
 
@@ -94,7 +94,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await page.getByRole("checkbox", { name: "dependency", exact: true }).uncheck();
   await page.getByRole("checkbox", { name: "p99 latency", exact: true }).uncheck();
   await page.getByText("Elements and metrics", { exact: true }).click();
-  await page.getByRole("tab", { name: "Answer", exact: true }).click();
+  await page.getByRole("tab", { name: "Findings", exact: true }).click();
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
   await expect(page.getByLabel("Replication", { exact: true })).toHaveValue("1");
   await expect(page.getByLabel("Compare variant", { exact: true })).toHaveValue("no-retries");
@@ -145,7 +145,7 @@ test("grid point and replication persist across views; warmup and the last short
     await slider.focus();
     await slider.press("End");
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1.08 s–1.1 s");
-    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    await page.getByRole("tab", { name: "Findings", exact: true }).click();
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p1");
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1.08 s–1.1 s");

@@ -195,7 +195,7 @@ test("manual viewport survives results and Analysis keeps a usable canvas", asyn
   await page.getByRole("button", { name: "Свернуть результаты", exact: true }).click();
   await expect.soft.poll(scale).toBeCloseTo(manual, 4);
   expect.soft(await translation()).toEqual(panned);
-  await page.getByRole("tab", { name: "Ответ", exact: true }).click();
+  await page.getByRole("tab", { name: "Выводы", exact: true }).click();
   await expect.soft.poll(scale).toBeCloseTo(manual, 4);
   expect.soft(await translation()).toEqual(panned);
   await page.getByRole("button", { name: "Вместить схему", exact: true }).click();

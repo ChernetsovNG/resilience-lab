@@ -13,15 +13,15 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
     { code: "LINT", severity: "WARNING", message: `Budget warning ${++checks}`, document: modelPath, pointer: null, path: "gateway" },
   ] } } : undefined);
   await open();
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(await screen.findByRole("button", { name: "Errors: 0 · Warnings: 1" }));
   expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   await selectGateway(); editHandlers("5");
   await waitFor(() => expect(checks).toBe(2));
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
 });
 
@@ -38,18 +38,18 @@ it("reveals new errors but preserves dismissal through pending checks of the sam
   render(<App />);
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
   await selectGateway();
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   editHandlers("5");
   await waitFor(() => expect(checks).toBe(2));
-  expect(screen.getByRole("tab", { name: "Answer" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
 
   findings = [first, { ...first, message: "Another handler error" }];
   editHandlers("6");
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
   expect(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Another handler error/ })).toBeTruthy();
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   findings = [];
   editHandlers("7");

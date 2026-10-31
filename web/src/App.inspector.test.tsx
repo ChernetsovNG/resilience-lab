@@ -51,7 +51,7 @@ it("shows available element results first and opens Parameters for Problems and 
     return undefined;
   });
   await open(); fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" })); await selectGateway();
   const parameters = () => document.querySelector<HTMLDetailsElement>(".inspector-parameters")!;
   expect(parameters().open).toBe(false);
@@ -80,7 +80,7 @@ it("opens collapsed variant parameters from a model-page diagnostic link and foc
     return undefined;
   });
   await open(); fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" })); await selectGateway();
   const parameters = () => document.querySelector<HTMLDetailsElement>(".inspector-parameters")!;
   expect(parameters().open).toBe(false);
@@ -161,9 +161,9 @@ it("opens and focuses the variant field named by a Problem", async () => {
   expect(screen.queryByLabelText("Handlers")).toBeNull();
 });
 
-it("selects an Answer service in the Inspector", async () => {
+it("selects a service from Findings in the Inspector", async () => {
   server(); await open(); fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   const service = [...document.querySelectorAll(".summary-services summary")].find(row => row.textContent?.includes("gateway"))!;
   fireEvent.click(service);
   expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
@@ -191,7 +191,7 @@ it.each(["Run settings", "Variant", "Rename", "Problem", "Model"])("reveals the 
     pointer: "/execution/seed", path: null,
   }] } } : undefined);
   await open(); fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   const baseline = screen.getByRole("tab", { name: "Baseline" });
   fireEvent.click(baseline); fireEvent.click(button("Analysis"));
   expect(button("Run settings").getAttribute("aria-pressed")).toBe("false");
