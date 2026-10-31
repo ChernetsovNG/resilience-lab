@@ -55,7 +55,10 @@ const viewport = (z) => ({
 });
 // All geometry is own work. Fixed details retain pixel dimensions as the body stretches.
 function geometryVariables(w, h) {
-  const d = Math.min(0.38 * w, 0.35 * h);
+  const d = 0.38 * w;
+  const bodyTop = 2 + (d * 2) / 3;
+  const shoulderR = 0.25 * w;
+  const contentTop = bodyTop + shoulderR + 8;
   return {
     w,
     h,
@@ -66,18 +69,25 @@ function geometryVariables(w, h) {
     headR: d / 2,
     headCy: 2 + d / 2,
     headL: w / 2 - d / 2,
-    bodyTop: 2 + (d * 2) / 3,
-    bodyShoulder: 24 + (d * 2) / 3,
+    bodyTop,
+    shoulderR,
+    shoulderL: 2 + shoulderR,
+    shoulderRight: w - 2 - shoulderR,
+    bodyShoulder: bodyTop + shoulderR,
+    contentTop,
+    minPersonHeight: Math.ceil(contentTop + 72 + 8 + 2),
   };
 }
 function shapePaths(k, w, h) {
-  const { cx, cy, r, rx, headR, headCy, headL, bodyTop, bodyShoulder } =
-    geometryVariables(w, h);
+  const {
+    cx, cy, r, rx, headR, headCy, headL, bodyTop, bodyShoulder,
+    shoulderR, shoulderL, shoulderRight,
+  } = geometryVariables(w, h);
   switch (k) {
     case 0:
       return [
         `M ${headL} ${headCy} a ${headR} ${headR} 0 1 0 ${2 * headR} 0 a ${headR} ${headR} 0 1 0 ${-2 * headR} 0`,
-        `M 2 ${h - 2} V ${bodyShoulder} Q 2 ${bodyTop} ${cx} ${bodyTop} Q ${w - 2} ${bodyTop} ${w - 2} ${bodyShoulder} V ${h - 2} Z`,
+        `M ${shoulderL} ${bodyTop} H ${shoulderRight} A ${shoulderR} ${shoulderR} 0 0 1 ${w - 2} ${bodyShoulder} V ${h - 10} A 8 8 0 0 1 ${w - 10} ${h - 2} H 10 A 8 8 0 0 1 2 ${h - 10} V ${bodyShoulder} A ${shoulderR} ${shoulderR} 0 0 1 ${shoulderL} ${bodyTop} Z`,
       ];
     case 1:
       return [
@@ -107,7 +117,7 @@ function shapePaths(k, w, h) {
 }
 // A deliberately small XML path-template interpreter, not the mxGraph/mxStencil runtime.
 const xmlTemplates = [
-  '<shape><path d="M @headL @headCy a @headR @headR 0 1 0 @headDiameter 0 a @headR @headR 0 1 0 @negativeHeadDiameter 0"/><path d="M 2 @h-2 V @bodyShoulder Q 2 @bodyTop @cx @bodyTop Q @w-2 @bodyTop @w-2 @bodyShoulder V @h-2 Z"/></shape>',
+  '<shape><path d="M @headL @headCy a @headR @headR 0 1 0 @headDiameter 0 a @headR @headR 0 1 0 @negativeHeadDiameter 0"/><path d="M @shoulderL @bodyTop H @shoulderRight A @shoulderR @shoulderR 0 0 1 @w-2 @bodyShoulder V @h-10 A 8 8 0 0 1 @w-10 @h-2 H 10 A 8 8 0 0 1 2 @h-10 V @bodyShoulder A @shoulderR @shoulderR 0 0 1 @shoulderL @bodyTop Z"/></shape>',
   '<shape><path d="M 12 2 H @w-12 Q @w-2 2 @w-2 12 V @h-12 Q @w-2 @h-2 @w-12 @h-2 H 12 Q 2 @h-2 2 @h-12 V 12 Q 2 2 12 2 Z"/></shape>',
   '<shape><path d="M 2 18 A @rx 16 0 0 1 @w-2 18 V @h-18 A @rx 16 0 0 1 2 @h-18 Z"/><path d="M 2 18 A @rx 16 0 0 0 @w-2 18"/></shape>',
   '<shape><path d="M 2 2 H @w-2 V @h-2 H 2 Z"/><path d="M 8 8 H @w-8 V @h-8 H 8 Z"/></shape>',
@@ -565,7 +575,7 @@ if (q.has("gallery")) {
       </nav>
       <p>
         Normal 180×126 · wide 300×180 · tall 150×220; own icons at 16/24 px.
-        Same illustration functions as benchmark.
+        Person grows vertically to fit its head, shoulders and content.
       </p>
       <Symbols />
       {types.map((name, kind) => (
@@ -576,7 +586,10 @@ if (q.has("gallery")) {
               [180, 126],
               [300, 180],
               [150, 220],
-            ].map(([w, h]) => (
+            ].map(([w, h]) => [
+              w,
+              kind === 0 ? Math.max(h, geometryVariables(w, h).minPersonHeight) : h,
+            ]).map(([w, h]) => (
               <div
                 key={w}
                 style={{ width: w, height: h, position: "relative" }}
@@ -589,7 +602,7 @@ if (q.has("gallery")) {
                     fontSize: kind === 4 ? 11 : 13,
                     top:
                       kind === 0
-                        ? geometryVariables(w, h).bodyTop + 18
+                        ? geometryVariables(w, h).contentTop
                         : kind === 4
                           ? h / 2 - 31
                           : 35,
