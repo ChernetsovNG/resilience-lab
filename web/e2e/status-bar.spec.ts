@@ -11,7 +11,11 @@ test("detects a server outage and recovers without reloading or losing edits", a
   await expect(run).toBeEnabled();
   await expect(status).toContainText("Backend healthy");
 
-  await page.route("**/api/v1/**", route => route.abort("connectionrefused"));
+  let failedHealthChecks = 0;
+  await page.route("**/api/v1/**", route => {
+    if (route.request().url().endsWith("/health")) failedHealthChecks++;
+    return route.abort("connectionrefused");
+  });
   await expect(status).toContainText("Backend unavailable");
   await expect(run).toBeDisabled();
   await expect(estimate).toBeDisabled();
@@ -21,8 +25,10 @@ test("detects a server outage and recovers without reloading or losing edits", a
   await handlers.press("Enter");
   await expect(save).toBeDisabled();
 
+  // Three failed retries leave health waiting on its 10-second fallback pause.
+  await expect.poll(() => failedHealthChecks, { timeout: 15_000 }).toBeGreaterThanOrEqual(3);
   await page.unroute("**/api/v1/**");
-  await expect(status).toContainText("Backend healthy", { timeout: 15_000 });
+  await expect(status).toContainText("Backend healthy", { timeout: 2000 });
   await expect(handlers).toHaveValue("8");
   await expect(save).toBeEnabled();
   await expect(estimate).toBeEnabled();

@@ -54,6 +54,74 @@ describe("useHealth", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  it("checks health immediately once after a successful poll despite long backoff", async () => {
+    vi.useFakeTimers();
+    let unavailable = true;
+    let release!: () => void;
+    const fetch = stubFetch(async () => {
+      if (unavailable) throw new TypeError("offline");
+      await new Promise<void>(resolve => { release = resolve; });
+      return { body: health };
+    });
+    const { result } = renderHook(useHealth);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(fetch).toHaveBeenCalledTimes(4);
+
+    unavailable = false;
+    await act(async () => {
+      result.current.reportSuccess();
+      result.current.reportSuccess();
+    });
+    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(result.current.health).toBeNull();
+    expect(result.current.error).toBe("offline");
+    await act(async () => {
+      result.current.reportSuccess();
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(5);
+
+    await act(async () => { release(); });
+    expect(result.current.health).toEqual(health);
+    expect(result.current.error).toBeNull();
+    await act(async () => {
+      result.current.reportSuccess();
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it("keeps backoff after a failed immediate check and allows one new check per outage", async () => {
+    vi.useFakeTimers();
+    let unavailable = true;
+    const fetch = stubFetch(() => {
+      if (unavailable) throw new TypeError("offline");
+      return { body: health };
+    });
+    const { result } = renderHook(useHealth);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { result.current.reportSuccess(); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toBe("offline");
+    await act(async () => {
+      result.current.reportSuccess();
+      result.current.reportSuccess();
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    unavailable = false;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(result.current.health).toEqual(health);
+    expect(result.current.error).toBeNull();
+    act(() => result.current.reportFailure(new TypeError("new outage")));
+    await act(async () => { result.current.reportSuccess(); });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(result.current.health).toEqual(health);
+    expect(result.current.error).toBeNull();
+  });
+
   it("keeps recovering when a successful retry and a new poll failure are batched", async () => {
     vi.useFakeTimers();
     let resolveRetry!: (value: typeof health) => void;
