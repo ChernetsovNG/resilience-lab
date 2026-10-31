@@ -9,8 +9,8 @@ describe("cost estimate and resume", () => {
 
   it.each(["CANCELLED", "FAILED"] as const)("resumes an incomplete %s run and makes Findings available", async (status) => {
     let resumed = false;
-    server((url) => {
-      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status, error: status === "FAILED" ? "Execution stopped" : null } };
+    server((url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: { ...completed, status, error: status === "FAILED" ? "Execution stopped" : null } };
       if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: resumed } };
       if (url === "/api/v1/runs/run-1/resume") {
         resumed = true;
@@ -30,8 +30,8 @@ describe("cost estimate and resume", () => {
     [409, "RUN_COMPLETE", []],
     [400, "EXPERIMENT_INVALID", [{ code: "RUN_DOCUMENT_CHANGED", severity: "ERROR", message: "Model changed", document: modelPath, pointer: null, path: null, variant: null }]],
   ] as const)("shows resume refusal %s with diagnostics and a new-run suggestion", async (status, code, diagnostics) => {
-    server((url) => {
-      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+    server((url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: { ...completed, status: "CANCELLED" } };
       if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
       if (url === "/api/v1/runs/run-1/resume") return { status, body: { code, message: "Cannot resume this run", diagnostics } };
     });
@@ -46,8 +46,8 @@ describe("cost estimate and resume", () => {
   });
 
   it("does not offer Resume when cancellation created no artifact", async () => {
-    server((url) => {
-      if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+    server((url, init) => {
+      if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: { ...completed, status: "CANCELLED" } };
       if (url === "/api/v1/runs/run-1/manifest") return { status: 404, body: { code: "RUN_NOT_FOUND", message: "No artifact", diagnostics: [] } };
     });
     await open(); fireEvent.click(button("Run"));
@@ -59,8 +59,8 @@ describe("cost estimate and resume", () => {
 });
 
 it.each(["Assumptions", "Problems", "Timeline", "collapsed"])("shows resume refusal from %s", async (view) => {
-  server((url) => {
-    if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+  server((url, init) => {
+    if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: { ...completed, status: "CANCELLED" } };
     if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
     if (url === "/api/v1/runs/run-1/resume") return {
       status: 409, body: { code: "RUN_COMPLETE", message: "Cannot resume this run", diagnostics: [] },

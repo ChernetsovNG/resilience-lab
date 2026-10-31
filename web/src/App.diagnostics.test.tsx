@@ -86,8 +86,8 @@ it("expires launch findings after document edits and reveals the same error in a
 });
 
 it("reveals a resume refusal against the edited documents while the original run remains stale", async () => {
-  server((url) => {
-    if (url === "/api/v1/jobs") return { status: 202, body: { ...completed, status: "CANCELLED" } };
+  server((url, init) => {
+    if (url === "/api/v1/jobs" && init?.method === "POST") return { status: 202, body: { ...completed, status: "CANCELLED" } };
     if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
     if (url === "/api/v1/runs/run-1/resume") return { status: 400, body: { code: "EXPERIMENT_INVALID", message: "Experiment has errors", diagnostics: [
       { code: "RUN_DOCUMENT_CHANGED", severity: "ERROR", message: "Model changed", document: modelPath, pointer: null, path: null },

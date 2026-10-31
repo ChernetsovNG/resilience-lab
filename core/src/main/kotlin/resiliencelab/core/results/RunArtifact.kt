@@ -55,7 +55,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 16
+    const val ARTIFACT_SCHEMA = 17
     const val SERIES_SCHEMA = 7
     const val REPLICATION_SCHEMA = 6
 }
@@ -87,6 +87,8 @@ data class RunManifest(
     val complete: Boolean,
     val grid: List<GridAxis>,
     val series: SeriesMetadata? = null,
+    /** Canonical JSON of the computation inputs, keyed like [documents] and covered by those hashes. */
+    val snapshots: Map<String, String> = emptyMap(),
 )
 
 /** Time grid, sketch version and population semantics shared by all series tasks. All durations are in ms. */

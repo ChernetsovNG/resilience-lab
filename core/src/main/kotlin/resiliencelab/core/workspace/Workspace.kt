@@ -78,6 +78,9 @@ interface Workspace {
 
     fun read(path: String): VersionedDocument
 
+    /** Last publication time of a stored file, as Unix milliseconds; separate from reproducible content. */
+    fun lastModified(path: String): Long
+
     /** Reads a binary artifact with the same path confinement as document reads. */
     fun readBytes(path: String): ByteArray
 
@@ -185,6 +188,8 @@ class FileWorkspace(
         val text = Files.readString(file)
         return VersionedDocument(path, text, DocumentVersion.of(text))
     }
+
+    override fun lastModified(path: String): Long = Files.getLastModifiedTime(resolve(path)).toMillis()
 
     override fun listDirectories(directory: String): List<String> {
         val start = resolve(directory)

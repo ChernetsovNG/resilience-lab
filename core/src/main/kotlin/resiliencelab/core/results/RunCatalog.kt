@@ -19,6 +19,8 @@ data class RunEntry(
     val directory: String,
     val complete: Boolean,
     val sizeBytes: Long = 0,
+    /** Manifest publication time in Unix milliseconds; null until the run is complete. */
+    val completedAt: Long? = null,
 )
 
 /** A stored directory, including artifacts whose manifest cannot be decoded by this version. */
@@ -73,6 +75,7 @@ class RunCatalog(
                             directory,
                             it.complete,
                             workspace.directorySize(directory),
+                            if (it.complete) workspace.lastModified(path) else null,
                         )
                     }
             }.sortedWith(compareByDescending<RunEntry> { it.id }.thenBy { it.directory })
@@ -210,7 +213,14 @@ class RunCatalog(
                 } catch (_: Exception) {
                     continue
                 }
-            return RunEntry(id, canonicalExperiment(manifest.experiment), directory, manifest.complete, workspace.directorySize(directory))
+            return RunEntry(
+                id,
+                canonicalExperiment(manifest.experiment),
+                directory,
+                manifest.complete,
+                workspace.directorySize(directory),
+                if (manifest.complete) workspace.lastModified(path) else null,
+            )
         }
         return null
     }

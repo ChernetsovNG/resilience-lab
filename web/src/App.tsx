@@ -9,7 +9,7 @@ import { canvasResults, type ConnectionOverlayMetric, type NodeOverlayMetric } f
 import { ResultsContextBar } from "./results/ResultsContextBar";
 import { EstimatePopover } from "./run/EstimatePopover";
 import { usePlayback } from "./results/playback/usePlayback";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { t } from "./i18n";
 import type { Diagnostic, ModelFile, Variant } from "./api/apiTypes";
 import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
@@ -33,7 +33,7 @@ import { TopBar } from "./layout/TopBar";
 import { FileMenu, type FileMenuHandle } from "./layout/FileMenu";
 import { StatusBar } from "./layout/StatusBar";
 import { currentViewSettings } from "./layout/viewSettings";
-import { useRun, type RunDocuments } from "./run/useRun";
+import { runDocumentsEqual, useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
 import { documentValuesEqual, elementIdentity, setModelParam } from "./workspace/editor";
@@ -63,7 +63,7 @@ export function App() {
   const resultRunId = run.result?.runId ?? run.job?.runId ?? null;
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
-  const results = useResultsSelection(run.result?.jobId ?? null);
+  const results = useResultsSelection(run.result?.jobId ?? run.result?.runId ?? null);
   const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
   const [connectionMetric, setConnectionMetric] = useState<ConnectionOverlayMetric>("amplification");
   const [timelineRequest, setTimelineRequest] = useState(0);
@@ -89,6 +89,14 @@ export function App() {
   const clipboard = useRef<{ path: string; fragment: ClipboardFragment; offset: number } | null>(null);
   const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
   const { loaded, catalog, loading, undo, redo, execute } = workspace;
+  const experimentPath = loaded?.experimentPath ?? null;
+  const runExperiment = run.experiment;
+  const restoreRun = useEffectEvent((path: string) => loaded === null ? Promise.resolve(false) : run.restore(path, loaded.model));
+  useEffect(() => {
+    if (experimentPath !== null && runExperiment !== experimentPath) void restoreRun(experimentPath).then(restored => {
+      if (restored) setResultsSize("normal");
+    });
+  }, [experimentPath, runExperiment]);
   let currentSelection = selection;
   if (loaded !== null && loaded.model !== selectionModel) {
     if (selectionModel !== null && selection.length > 0) {
@@ -159,9 +167,7 @@ export function App() {
     setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1 }));
   };
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
-  const staleResults = ownRun && loaded !== null && resultDocuments !== null && (
-    !documentValuesEqual(loaded.model, resultDocuments.model) || !documentValuesEqual(loaded.experiment, resultDocuments.experiment)
-  );
+  const staleResults = ownRun && loaded !== null && resultDocuments !== null && !runDocumentsEqual(loaded, resultDocuments);
   const selectedPointId = results.selection.pointId;
   const summaryDiagramResults = ownRun && summary !== null && resultDocuments !== null && variant !== undefined && catalog !== null
     ? canvasResults(summary, resultDocuments.model, variant.id, selectedPointId, catalog, loaded.model, resultDocuments.experiment) : null;
@@ -214,7 +220,7 @@ export function App() {
   const launchIsCurrent = ownRun && launchDocuments !== null && loaded !== null &&
     documentValuesEqual(loaded.model, launchDocuments.model) && documentValuesEqual(loaded.experiment, launchDocuments.experiment);
   const currentRunDiagnostics = mergeDiagnostics(ownRun && !staleResults ? run.job?.diagnostics ?? [] : [],
-    launchIsCurrent ? problemDiagnostics(run.problem) : []);
+    launchIsCurrent || (ownRun && launchDocuments === null) ? problemDiagnostics(run.problem) : []);
   const workspaceDiagnostics = problemDiagnostics(workspace.problem);
   const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics, workspaceDiagnostics);
   const path = loaded?.experimentPath ?? null;
@@ -369,6 +375,7 @@ export function App() {
 
   const resetExperimentView = () => {
     setCommand(null);
+    setLaunchDocuments(null);
     setEstimatePanel(null);
     setProblemsElement(null);
     setResultsSize("collapsed");
@@ -477,7 +484,7 @@ export function App() {
         runProblem={workspace.problem === null ? undefined : backendMessage(workspace.problem)}
         estimating={estimate.pending}
         onEstimate={() => void requestEstimate()}
-        canResume={ownRun && run.manifest?.complete === false && (run.job?.status === "CANCELLED" || run.job?.status === "FAILED")}
+        canResume={ownRun && run.canResume}
         onResume={() => {
           if (loaded === null) return;
           setLaunchDocuments({ model: loaded.model, experiment: loaded.experiment });
@@ -675,7 +682,7 @@ export function App() {
         running={startingRun || (ownRun && run.running)}
         job={ownRun ? run.job : null}
         summary={ownRun ? summary : null}
-        problem={launchIsCurrent ? run.problem : null}
+        problem={launchIsCurrent || (ownRun && launchDocuments === null) ? run.problem : null}
         catalog={catalog}
         model={ownRun ? resultDocuments?.model ?? null : null}
         manifest={ownRun ? resultManifest : null}

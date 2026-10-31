@@ -3239,6 +3239,10 @@
           "complete" : {
             "type" : "boolean"
           },
+          "completedAt" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
           "directory" : {
             "type" : "string"
           },
@@ -3307,6 +3311,12 @@
               "type" : "null"
             } ]
           },
+          "snapshots" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
           "streamAssignment" : {
             "type" : "string"
           },
@@ -3317,7 +3327,7 @@
             }
           }
         },
-        "required" : [ "applicationVersion", "complete", "documents", "experiment", "grid", "kslVersion", "parts", "replications", "schemaVersion", "seed", "streamAssignment", "variants" ]
+        "required" : [ "applicationVersion", "complete", "documents", "experiment", "grid", "kslVersion", "parts", "replications", "schemaVersion", "seed", "snapshots", "streamAssignment", "variants" ]
       },
       "RunStorageEntry" : {
         "type" : "object",

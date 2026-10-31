@@ -3,10 +3,18 @@ import { t } from "../i18n";
 import { ApiError, api } from "../api/apiClient";
 import type { ApiProblem, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { problemOf } from "../workspace/useWorkspace";
+import { resolveRef } from "../workspace/paths";
+import { documentValuesEqual, rememberElementCopies } from "../workspace/editor";
 
 export interface RunDocuments {
   model: ModelFile;
   experiment: ExperimentFile;
+}
+
+/** Connection order is canonicalized in artifacts and does not change the modeled calls. */
+export function runDocumentsEqual(left: RunDocuments, right: RunDocuments): boolean {
+  const ordered = (model: ModelFile) => ({ ...model, connections: [...model.connections].sort((a, b) => a.id.localeCompare(b.id)) });
+  return documentValuesEqual(left.experiment, right.experiment) && documentValuesEqual(ordered(left.model), ordered(right.model));
 }
 
 type RunProblem = ApiProblem & { requiresNewRun?: boolean };
@@ -14,7 +22,7 @@ type RunProblem = ApiProblem & { requiresNewRun?: boolean };
 /** One completed artifact and the exact documents submitted for it; independent of the next job. */
 export interface RunResult {
   runId: string;
-  jobId: string;
+  jobId: string | null;
   summary: RunSummary;
   manifest: RunManifest;
   documents: RunDocuments;
@@ -30,6 +38,8 @@ export interface Run {
   result: RunResult | null;
   problem: RunProblem | null;
   running: boolean;
+  canResume: boolean;
+  restore: (experimentPath: string, currentModel: ModelFile) => Promise<boolean>;
   run: (experimentPath: string, documents: RunDocuments) => Promise<void>;
   resume: () => Promise<void>;
   cancel: () => Promise<void>;
@@ -37,6 +47,15 @@ export interface Run {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function documentsOf(manifest: RunManifest, currentModel: ModelFile): RunDocuments {
+  const experiment = JSON.parse(manifest.snapshots[manifest.experiment]) as ExperimentFile;
+  const modelPath = resolveRef(manifest.experiment, experiment.modelRef);
+  if (modelPath === null) throw new Error(t("app.workspace.requestFailed"));
+  const model = JSON.parse(manifest.snapshots[modelPath]) as ModelFile;
+  rememberElementCopies(currentModel, model);
+  return { experiment, model };
+}
 
 /** Submits or resumes a job and loads its artifacts; terminal state is authoritative within each generation. */
 export function useRun(pollMs = 500): Run {
@@ -47,6 +66,7 @@ export function useRun(pollMs = 500): Run {
   const [documents, setDocuments] = useState<RunDocuments | null>(null);
   const [problem, setProblem] = useState<RunProblem | null>(null);
   const [running, setRunning] = useState(false);
+  const [resumeRunId, setResumeRunId] = useState<string | null>(null);
   const generation = useRef(0);
   const terminalGeneration = useRef<number | null>(null);
 
@@ -67,15 +87,18 @@ export function useRun(pollMs = 500): Run {
     setDocuments(null);
     setProblem(null);
     setRunning(false);
+    setResumeRunId(null);
   }, []);
 
-  const track = useCallback(async (submit: () => Promise<JobView>, submitted: RunDocuments, resuming = false) => {
+  const track = useCallback(async (submit: (live: () => boolean) => Promise<JobView | null>, submitted: RunDocuments, resuming = false) => {
     const current = ++generation.current;
     const live = () => current === generation.current;
     setProblem(null);
     setRunning(true);
+    if (!resuming) setResumeRunId(null);
     try {
-      let next = await submit();
+      let next = await submit(live);
+      if (next === null) return;
       while (next.status === "QUEUED" || next.status === "RUNNING") {
         if (!live()) return;
         publishJob(current, next);
@@ -87,6 +110,7 @@ export function useRun(pollMs = 500): Run {
       publishJob(current, next);
       setProblem(null);
       if (next.status === "COMPLETED") {
+        setResumeRunId(null);
         const [loadedSummary, loadedManifest] = await Promise.all([api.runSummary(next.runId), api.runManifest(next.runId)]);
         if (live()) {
           setResult({ runId: next.runId, jobId: next.id, summary: loadedSummary, manifest: loadedManifest, documents: submitted });
@@ -100,7 +124,10 @@ export function useRun(pollMs = 500): Run {
         }
         try {
           const loadedManifest = await api.runManifest(next.runId);
-          if (live()) setManifest(loadedManifest);
+          if (live()) {
+            setManifest(loadedManifest);
+            if (!loadedManifest.complete) setResumeRunId(next.runId);
+          }
         } catch (error) {
           // A queued cancellation or a preflight failure may create no artifact.
           if (live() && next.status === "CANCELLED" && !(error instanceof ApiError && error.status === 404)) {
@@ -119,6 +146,46 @@ export function useRun(pollMs = 500): Run {
     }
   }, [pollMs, publishJob]);
 
+  /** Restores completed results and unfinished work independently of server job retention. */
+  const restore = useCallback(async (experimentPath: string, currentModel: ModelFile) => {
+    reset();
+    const current = generation.current;
+    const live = () => current === generation.current;
+    setExperiment(experimentPath);
+    try {
+      const stored = (await api.runs()).filter(entry => entry.experiment === experimentPath);
+      if (!live()) return false;
+      const completed = stored.filter(entry => entry.complete).sort((a, b) =>
+        (b.completedAt ?? 0) - (a.completedAt ?? 0) || b.id.localeCompare(a.id) || a.directory.localeCompare(b.directory))[0];
+      const incomplete = stored.find(entry => !entry.complete);
+      const [completedRead, incompleteRead, jobsRead] = await Promise.allSettled([
+        completed === undefined ? null : Promise.all([api.runManifest(completed.id), api.runSummary(completed.id)])
+          .then(([manifest, summary]) => ({ runId: completed.id, jobId: null, manifest, summary, documents: documentsOf(manifest, currentModel) })),
+        incomplete === undefined ? null : api.runManifest(incomplete.id)
+          .then(manifest => ({ runId: incomplete.id, manifest, documents: documentsOf(manifest, currentModel) })),
+        incomplete === undefined ? [] : api.jobs(),
+      ]);
+      if (!live()) return false;
+      const finished = completedRead.status === "fulfilled" ? completedRead.value : null;
+      const unfinished = incompleteRead.status === "fulfilled" ? incompleteRead.value : null;
+      const existingJob = jobsRead.status === "fulfilled" && unfinished !== null ? jobsRead.value.find(job =>
+        job.runId === unfinished.runId && job.experiment === experimentPath &&
+        (job.status === "QUEUED" || job.status === "RUNNING" || job.status === "COMPLETED")) : undefined;
+      const failure = [completedRead, incompleteRead, jobsRead].find(read => read.status === "rejected");
+      setResult(finished);
+      setManifest(unfinished?.manifest ?? finished?.manifest ?? null);
+      setDocuments(unfinished?.documents ?? finished?.documents ?? null);
+      setResumeRunId(unfinished !== null && !unfinished.manifest.complete && existingJob === undefined ? unfinished.runId : null);
+      setProblem(failure === undefined ? null : problemOf(failure.reason));
+      if (existingJob !== undefined && unfinished !== null) void track(() => Promise.resolve(existingJob), unfinished.documents, true);
+      return finished !== null || unfinished !== null || failure !== undefined;
+    } catch (error) {
+      if (!live()) return false;
+      setProblem(problemOf(error));
+      return true;
+    }
+  }, [reset, track]);
+
   const run = useCallback(async (experimentPath: string, submitted: RunDocuments) => {
     if (experimentPath !== experiment) setResult(null);
     setExperiment(experimentPath);
@@ -129,9 +196,15 @@ export function useRun(pollMs = 500): Run {
   }, [experiment, track]);
 
   const resume = useCallback(async () => {
-    if (job === null || documents === null || manifest?.complete !== false || (job.status !== "CANCELLED" && job.status !== "FAILED")) return;
-    await track(() => api.resumeRun(job.runId), documents, true);
-  }, [job, manifest, documents, track]);
+    if (resumeRunId === null || documents === null || running) return;
+    await track(async live => {
+      const jobs = await api.jobs();
+      if (!live()) return null;
+      const existingJob = jobs.find(job => job.runId === resumeRunId && job.experiment === experiment &&
+        (job.status === "QUEUED" || job.status === "RUNNING" || job.status === "COMPLETED"));
+      return existingJob ?? api.resumeRun(resumeRunId);
+    }, documents, true);
+  }, [resumeRunId, documents, experiment, running, track]);
 
   const cancel = useCallback(async () => {
     if (job === null || (job.status !== "QUEUED" && job.status !== "RUNNING")) return;
@@ -155,5 +228,6 @@ export function useRun(pollMs = 500): Run {
     }
   }, [job, publishJob]);
 
-  return { experiment, job, summary: result?.summary ?? null, manifest, documents, result, problem, running, run, resume, cancel, reset };
+  return { experiment, job, summary: result?.summary ?? null, manifest, documents, result, problem, running,
+    canResume: resumeRunId !== null && !running, restore, run, resume, cancel, reset };
 }

@@ -1,13 +1,19 @@
 package resiliencelab.core.results
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import resiliencelab.core.workspace.FileWorkspace
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 
 class RunCatalogTest {
-    private val workspace = FileWorkspace(Files.createTempDirectory("run-catalog"))
+    private val root = Files.createTempDirectory("run-catalog")
+    private val workspace = FileWorkspace(root)
     private val catalog = RunCatalog(workspace)
 
     private fun finish(
@@ -40,13 +46,32 @@ class RunCatalogTest {
         workspace.write(".results/a/20261027-110000-000-0003/summary.json", "{}\n")
 
         assertThat(catalog.list().map { it.id }).containsExactly("20261027-100000-000-0002", "20261027-090000-000-0001")
-        assertThat(catalog.list().first().copy(sizeBytes = 0))
+        assertThat(catalog.list().first().copy(sizeBytes = 0, completedAt = null))
             .isEqualTo(RunEntry("20261027-100000-000-0002", "b.experiment.json", ".results/b/20261027-100000-000-0002", true))
         assertThat(catalog.entry("20261027-090000-000-0001")?.complete).isTrue()
         assertThat(catalog.manifest("20261027-090000-000-0001")!!.experiment).isEqualTo("a.experiment.json")
         assertThat(catalog.summary("20261027-090000-000-0001")!!.experiment).isEqualTo("a.experiment.json")
         assertThat(catalog.manifest("missing")).isNull()
         assertThat(catalog.summary("missing")).isNull()
+    }
+
+    @Test
+    fun `completion time follows manifest publication including a resumed older run`() {
+        finish(".results/a/older", "a.experiment.json")
+        finish(".results/a/newer", "a.experiment.json")
+        finish(".results/a/incomplete", "a.experiment.json", complete = false)
+        Files.setLastModifiedTime(root.resolve(".results/a/older/manifest.json"), FileTime.fromMillis(2000))
+        Files.setLastModifiedTime(root.resolve(".results/a/newer/manifest.json"), FileTime.fromMillis(1000))
+
+        fun completedAt(entry: RunEntry): Long? {
+            val body = Json.encodeToJsonElement(RunEntry.serializer(), entry).jsonObject
+            return body["completedAt"]?.jsonPrimitive?.longOrNull
+        }
+
+        assertThat(completedAt(catalog.entry("older")!!)).isEqualTo(2000L)
+        assertThat(completedAt(catalog.entry("newer")!!)).isEqualTo(1000L)
+        assertThat(completedAt(catalog.entry("incomplete")!!)).isNull()
+        assertThat(catalog.list().map(::completedAt)).contains(2000L, 1000L, null)
     }
 
     @Test

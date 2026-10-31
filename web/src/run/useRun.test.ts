@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Diagnostic, JobView } from "../api/apiTypes";
-import { experiment, experimentPath, manifest, model, summary } from "../test/fixtures";
+import { experiment, experimentPath, manifest, model, modelPath, summary } from "../test/fixtures";
 import { stubFetch } from "../test/stubFetch";
 import { useRun } from "./useRun";
 
@@ -35,6 +35,161 @@ async function run() {
 }
 
 describe("useRun", () => {
+  it("reattaches an active resume after reload instead of submitting another one", async () => {
+    const gate = deferred();
+    let finished = false;
+    let submissions = 0;
+    stubFetch(async (url, init) => {
+      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url === "/api/v1/jobs") return { body: [job("RUNNING", { id: "active-resume" })] };
+      if (url === "/api/v1/jobs/active-resume") {
+        await gate.promise;
+        finished = true;
+        return { body: job("COMPLETED", { id: "active-resume" }) };
+      }
+      if (init?.method === "POST") submissions += 1;
+      return { body: url.endsWith("/summary") ? summary : { ...manifest, complete: finished } };
+    });
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    await waitFor(() => expect(result.current.running).toBe(true));
+    expect(result.current.canResume).toBe(false);
+    expect(result.current.job?.id).toBe("active-resume");
+    await act(async () => { gate.release(); });
+    await waitFor(() => expect(result.current.summary).toEqual(summary));
+    expect(submissions).toBe(0);
+  });
+
+  it.each([false, true])("retries a transient resume failure, reconciling ambiguous acceptance %s", async accepted => {
+    let attempts = 0;
+    let finished = false;
+    stubFetch((url, init) => {
+      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url === "/api/v1/jobs") return { body: accepted && attempts > 0 ? [job("COMPLETED", { id: "resumed" })] : [] };
+      if (url === "/api/v1/runs/run-1/resume" && init?.method === "POST") {
+        if (++attempts === 1) {
+          finished = accepted;
+          throw new Error("offline");
+        }
+        finished = true;
+        return { status: 202, body: job("COMPLETED", { id: "resumed" }) };
+      }
+      return { body: url.endsWith("/summary") ? summary : { ...manifest, complete: finished } };
+    });
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    await act(async () => { await result.current.resume(); });
+    expect(result.current.problem?.message).toBe("offline");
+    expect(result.current.canResume).toBe(true);
+    await act(async () => { await result.current.resume(); });
+    expect(result.current.summary).toEqual(summary);
+    expect(attempts).toBe(accepted ? 1 : 2);
+    expect(result.current.canResume).toBe(false);
+  });
+
+  it.each(["completed summary", "incomplete snapshot", "incomplete identity"])("retains independently readable state when %s fails", async failure => {
+    stubFetch(url => {
+      if (url === "/api/v1/runs") return { body: [
+        { id: "stored", experiment: experimentPath, directory: ".results/example/stored", sizeBytes: 1, complete: true, completedAt: 1000 },
+        { id: "incomplete", experiment: experimentPath, directory: ".results/example/incomplete", sizeBytes: 1, complete: false, completedAt: null },
+      ] };
+      if (url === "/api/v1/jobs") return { body: [] };
+      if (url === "/api/v1/runs/stored/summary") return failure === "completed summary"
+        ? { status: 404, body: { code: "MISSING_SUMMARY", message: "Summary is missing", diagnostics: [] } } : { body: summary };
+      if (url === "/api/v1/runs/incomplete/manifest") return { body: {
+        ...manifest, complete: false, ...(failure === "incomplete snapshot" ? { snapshots: {} } : {}),
+        ...(failure === "incomplete identity" ? { snapshots: { ...manifest.snapshots,
+          [modelPath]: JSON.stringify({ ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, params: null } } }) } } : {}),
+      } };
+      return { body: manifest };
+    });
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    expect(result.current.problem).not.toBeNull();
+    expect(result.current.summary).toEqual(failure === "completed summary" ? null : summary);
+    expect(result.current.canResume).toBe(failure === "completed summary");
+  });
+
+  it("restores only this experiment's latest completion, even when run IDs have a different order", async () => {
+    stubFetch(url => {
+      if (url === "/api/v1/runs") return { body: [
+        { id: "newer-start", experiment: experimentPath, complete: true, completedAt: 1000 },
+        { id: "foreign", experiment: "other/retry-storm.experiment.json", complete: true, completedAt: 3000 },
+        { id: "older-start", experiment: experimentPath, complete: true, completedAt: 2000 },
+      ].map(run => ({ directory: `.results/example/${run.id}`, sizeBytes: 1, ...run })) };
+      if (url === "/api/v1/runs/older-start/summary") return { body: summary };
+      if (url === "/api/v1/runs/older-start/manifest") return { body: manifest };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    expect(result.current.result).toMatchObject({ runId: "older-start", summary, documents });
+    expect(result.current.job).toBeNull();
+    expect(result.current.experiment).toBe(experimentPath);
+    expect(result.current.canResume).toBe(false);
+    expect(result.current.problem).toBeNull();
+  });
+
+  it("restores incomplete run documents and resumes without an in-memory job", async () => {
+    let resumed = false;
+    stubFetch(url => {
+      if (url === "/api/v1/jobs") return { body: [] };
+      if (url === "/api/v1/runs") return { body: [{ id: "run-1", experiment: experimentPath, directory: ".results/example/run-1", sizeBytes: 1, complete: false, completedAt: null }] };
+      if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: resumed } };
+      if (url === "/api/v1/runs/run-1/resume") {
+        resumed = true;
+        return { status: 202, body: job("COMPLETED", { id: "resumed" }) };
+      }
+      if (url === "/api/v1/runs/run-1/summary") return { body: summary };
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    expect(result.current.result).toBeNull();
+    expect(result.current.canResume).toBe(true);
+    expect(result.current.documents).toEqual(documents);
+    await act(async () => { await result.current.resume(); });
+    expect(result.current.result).toMatchObject({ jobId: "resumed", documents });
+    expect(result.current.canResume).toBe(false);
+  });
+
+  it.each(["reset", "new run"])("ignores delayed restored artifacts after %s", async action => {
+    const gate = deferred();
+    const reached = deferred();
+    stubFetch(async url => {
+      if (url === "/api/v1/runs") return { body: [{ id: "stored", experiment: experimentPath, directory: ".results/example/stored", sizeBytes: 1, complete: true, completedAt: 1000 }] };
+      if (url.includes("/runs/stored/")) {
+        reached.release();
+        await gate.promise;
+      }
+      if (url === "/api/v1/jobs") return { status: 202, body: job("COMPLETED") };
+      return { body: url.endsWith("/summary") ? summary : manifest };
+    });
+    const { result } = renderHook(() => useRun(1));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.restore(experimentPath, model); });
+    await act(async () => { await reached.promise; });
+    await act(async () => {
+      if (action === "reset") result.current.reset();
+      else await result.current.run(experimentPath, documents);
+    });
+    await act(async () => { gate.release(); await pending; });
+    expect(result.current.result?.runId ?? null).toBe(action === "reset" ? null : "run-1");
+    expect(result.current.problem).toBeNull();
+  });
+
+  it("leaves results empty when there are no runs, and reports restoration failures", async () => {
+    stubFetch(() => ({ body: [] }));
+    const { result } = renderHook(() => useRun(1));
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    expect(result.current.result).toBeNull();
+    expect(result.current.canResume).toBe(false);
+    stubFetch(() => { throw new Error("offline"); });
+    await act(async () => { await result.current.restore(experimentPath, model); });
+    expect(result.current.problem?.message).toBe("offline");
+    expect(result.current.running).toBe(false);
+  });
+
   it("retains a coherent completed snapshot until replacement artifacts arrive", async () => {
     const gate = deferred();
     let submissions = 0;
@@ -374,6 +529,7 @@ describe("useRun", () => {
 it("cancels a resumed job using its new job ID and keeps the original run documents", async () => {
   let cancelled = false;
   const fetchMock = stubFetch((url, init) => {
+    if (url === "/api/v1/jobs" && init?.method !== "POST") return { body: [] };
     if (url === "/api/v1/jobs") return { status: 202, body: job("CANCELLED") };
     if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
     if (url === "/api/v1/runs/run-1/resume" && init?.method === "POST") return { status: 202, body: job("RUNNING", { id: "resume-1" }) };
@@ -397,15 +553,18 @@ it("cancels a resumed job using its new job ID and keeps the original run docume
   expect(result.current.documents).toEqual(documents);
   expect(result.current.experiment).toBe(experimentPath);
   expect(result.current.running).toBe(false);
-  expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(1);
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/v1/jobs" && init?.method === "POST")).toHaveLength(1);
 });
 
 it("ignores a late resume acceptance after reset", async () => {
   const gate = deferred();
-  stubFetch(async (url) => {
+  const reached = deferred();
+  stubFetch(async (url, init) => {
+    if (url === "/api/v1/jobs" && init?.method !== "POST") return { body: [] };
     if (url === "/api/v1/jobs") return { status: 202, body: job("CANCELLED") };
     if (url === "/api/v1/runs/run-1/manifest") return { body: { ...manifest, complete: false } };
     if (url === "/api/v1/runs/run-1/resume") {
+      reached.release();
       await gate.promise;
       return { status: 202, body: job("COMPLETED", { id: "resume-1" }) };
     }
@@ -414,6 +573,7 @@ it("ignores a late resume acceptance after reset", async () => {
   const result = await run();
   let pending!: Promise<void>;
   act(() => { pending = result.current.resume(); });
+  await act(async () => { await reached.promise; });
   act(() => result.current.reset());
   await act(async () => { gate.release(); await pending; });
   expect(result.current.job).toBeNull();
@@ -421,4 +581,28 @@ it("ignores a late resume acceptance after reset", async () => {
   expect(result.current.summary).toBeNull();
   expect(result.current.problem).toBeNull();
   expect(result.current.running).toBe(false);
+});
+
+it("does not submit Resume if reset happens while reconciling retained jobs", async () => {
+  const gate = deferred();
+  const reached = deferred();
+  let submissions = 0;
+  stubFetch(async (url, init) => {
+    if (url === "/api/v1/jobs" && init?.method !== "POST") {
+      reached.release();
+      await gate.promise;
+      return { body: [] };
+    }
+    if (url === "/api/v1/jobs") return { status: 202, body: job("CANCELLED") };
+    if (url === "/api/v1/runs/run-1/resume") submissions += 1;
+    return { body: { ...manifest, complete: false } };
+  });
+  const result = await run();
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.resume(); });
+  await act(async () => { await reached.promise; });
+  act(() => result.current.reset());
+  await act(async () => { gate.release(); await pending; });
+  expect(submissions).toBe(0);
+  expect(result.current.job).toBeNull();
 });

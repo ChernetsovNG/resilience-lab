@@ -33,7 +33,8 @@ export function elementIdentity(element: ModelElement): object {
   return elementOrigins.get(element.params) ?? element.params;
 }
 
-function rememberElementCopies(before: ModelFile, after: ModelFile): void {
+/** Reconnects matching elements after an edit or snapshot load; values in either model stay unchanged. */
+export function rememberElementCopies(before: ModelFile, after: ModelFile): void {
   if (before === after) return;
   const remember = (previous: ModelElement, current: ModelElement) => {
     if (previous.params !== current.params && !elementOrigins.has(current.params)) {

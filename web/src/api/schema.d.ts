@@ -873,6 +873,8 @@ export interface components {
         };
         RunEntry: {
             complete: boolean;
+            /** Format: int64 */
+            completedAt?: number | null;
             directory: string;
             experiment: string;
             id: string;
@@ -898,6 +900,9 @@ export interface components {
             /** Format: int64 */
             seed: number;
             series?: components["schemas"]["SeriesMetadata"] | null;
+            snapshots: {
+                [key: string]: string;
+            };
             streamAssignment: string;
             variants: string[];
         };
