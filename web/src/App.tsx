@@ -49,7 +49,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
 export function App() {
   const health = useHealth();
   const workspace = useWorkspace(health.reportFailure, health.reportSuccess);
-  const { confirm, confirmationDialog } = useConfirmation();
+  const { confirm, confirmDocumentSwitch, confirmationDialog } = useConfirmation();
   const canvas = useRef<CanvasHandle>(null);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
@@ -367,12 +367,6 @@ export function App() {
     return estimate.request();
   };
 
-  const confirmDocumentSwitch = () => confirm({
-    title: t("app.topBar.unsavedChanges"), message: t("app.confirm.saveBeforeSwitch"),
-    confirmLabel: t("app.confirm.dontSave"), cancelLabel: t("app.confirm.cancelSwitch"),
-    save: { label: t("app.confirm.saveAndSwitch"), action: workspace.save },
-  });
-
   const resetExperimentView = () => {
     setCommand(null);
     setEstimatePanel(null);
@@ -443,7 +437,7 @@ export function App() {
         onNewExperiment={() => { void fileMenu.current?.start("newExperiment"); }}
         onModel={async path => {
           if (invalid || loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !await confirmDocumentSwitch()) return;
+          if (workspace.dirty && !await confirmDocumentSwitch(workspace.save)) return;
           resetExperimentView();
           void workspace.openModel(path, true);
         }}
@@ -451,7 +445,7 @@ export function App() {
         experiment={loaded?.experimentPath ?? null}
         onExperiment={async (path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !await confirmDocumentSwitch()) return;
+          if (workspace.dirty && !await confirmDocumentSwitch(workspace.save)) return;
           resetExperimentView();
           void workspace.open(path, true);
         }}

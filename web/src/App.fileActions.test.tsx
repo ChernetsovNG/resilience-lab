@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { App } from "./App";
-import { button, editHandlers, selectGateway, server, setupAppTests } from "./test/app";
+import { button, deferred, editHandlers, selectGateway, server, setupAppTests } from "./test/app";
 import { documentViews, experimentPath, layoutPath, modelPath } from "./test/fixtures";
 import type { RunEntry, RunStorageEntry } from "./api/apiTypes";
 
@@ -74,10 +74,60 @@ it.each([
   const previous = select.value;
   const create = within(select).getByRole<HTMLOptionElement>("option", { name: option });
   fireEvent.change(select, { target: { value: create.value } });
-  const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
+  const dialog = await screen.findByRole("dialog", { name: "Unsaved changes" });
+  expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Cancel", "Don't save", "Save and switch"]);
+  expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(nativeConfirm).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).toBeNull();
+  expect(select.value).toBe(previous);
+  expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
+});
+
+it.each([["Model", "New model"], ["Experiment", "New experiment"]])("saves edits before creation from %s", async (label, title) => {
+  const gate = deferred();
+  const fetchMock = server(async (_url, init) => {
+    if (init?.method !== "PUT") return;
+    await gate.promise;
+    return { body: { path: modelPath, kind: "MODEL", version: "saved" } };
+  });
+  render(<App />); await selectGateway(); editHandlers("7");
+  fireEvent.change(screen.getByRole("combobox", { name: label }), { target: { value: "__create__" } });
+  const confirmation = await screen.findByRole("dialog", { name: "Unsaved changes" });
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Save and switch" }));
+  expect(screen.queryByRole("dialog", { name: title })).toBeNull();
+  gate.release();
+  await screen.findByRole("dialog", { name: title });
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
+  expect(JSON.parse(String(put[1]?.body)).model.blocks.gateway.params.handlers).toBe(7);
+  expect(screen.queryByText("Unsaved changes")).toBeNull();
+});
+
+it.each([["Model", "New model"], ["Experiment", "New experiment"]])("opens creation from %s without saving only when chosen", async (label, title) => {
+  const fetchMock = server();
+  render(<App />); await selectGateway(); editHandlers("7");
+  fireEvent.change(screen.getByRole("combobox", { name: label }), { target: { value: "__create__" } });
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Unsaved changes" }))
+    .getByRole("button", { name: "Don't save" }));
+  const creation = await screen.findByRole("dialog", { name: title });
+  expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  fireEvent.click(within(creation).getByRole("button", { name: "Cancel" }));
+  expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
+  expect(button("Save").disabled).toBe(false);
+});
+
+it.each([["Model", "New model", 500], ["Experiment", "New experiment", 409]] as const)("does not open creation from %s when saving fails", async (label, title, status) => {
+  server((_url, init) => init?.method === "PUT" ? { status, body: {
+    code: status === 409 ? "VERSION_CONFLICT" : "SAVE_FAILED", message: "Save failed", diagnostics: [],
+  } } : undefined);
+  render(<App />); await selectGateway(); editHandlers("7");
+  const select = screen.getByRole<HTMLSelectElement>("combobox", { name: label });
+  const previous = select.value;
+  fireEvent.change(select, { target: { value: "__create__" } });
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Unsaved changes" }))
+    .getByRole("button", { name: "Save and switch" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull());
+  expect(screen.queryByRole("dialog", { name: title })).toBeNull();
   expect(select.value).toBe(previous);
   expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmationDialog, type ConfirmationOptions } from "./ConfirmationDialog";
+import { t } from "../i18n";
 
 /** Await the user's explicit action; render confirmationDialog beside the invoking UI. */
 export function useConfirmation() {
@@ -12,6 +13,11 @@ export function useConfirmation() {
       setRequest(options);
     });
   }, []);
+  const confirmDocumentSwitch = useCallback((save: () => Promise<boolean>) => confirm({
+    title: t("app.topBar.unsavedChanges"), message: t("app.confirm.saveBeforeSwitch"),
+    confirmLabel: t("app.confirm.dontSave"), cancelLabel: t("app.confirm.cancelSwitch"),
+    save: { label: t("app.confirm.saveAndSwitch"), action: save },
+  }), [confirm]);
   const finish = useCallback((accepted: boolean) => {
     const resolve = pending.current;
     pending.current = null;
@@ -19,5 +25,5 @@ export function useConfirmation() {
     resolve?.(accepted);
   }, []);
   useEffect(() => () => { pending.current?.(false); pending.current = null; }, []);
-  return { confirm, confirmationDialog: request === null ? null : <ConfirmationDialog {...request} onDecision={finish} /> };
+  return { confirm, confirmDocumentSwitch, confirmationDialog: request === null ? null : <ConfirmationDialog {...request} onDecision={finish} /> };
 }

@@ -182,6 +182,7 @@ describe("App stage 1 integration", () => {
 
     fireEvent.click(button("Reload"));
     const dialog = await screen.findByRole("dialog", { name: "Reload and discard unsaved changes to the documents?" });
+    expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Stay", "Reload and discard edits"]);
     fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length).toBe(reads);

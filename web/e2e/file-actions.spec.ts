@@ -54,12 +54,28 @@ for (const [label, title] of [["Model", "New model"], ["Experiment", "New experi
     await page.getByLabel("Handlers", { exact: true }).fill("7");
     await page.getByLabel("Handlers", { exact: true }).press("Enter");
     await selector.selectOption({ label: `+ ${title}…` });
-    await page.getByRole("dialog", { name: "Discard unsaved edits?", exact: true })
-      .getByRole("button", { name: "Stay", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Unsaved changes", exact: true });
+    await expect(confirmation.getByRole("button")).toHaveText(["Cancel", "Don't save", "Save and switch"]);
+    await expect(confirmation.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(selector).toHaveValue(previous);
     await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("7");
     expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model.blocks.gateway.params.handlers).not.toBe(7);
+  });
+
+  test(`creation from ${label} saves edits before opening the new document form`, async ({ page, directory }) => {
+    await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+    await page.getByLabel("Handlers", { exact: true }).fill("7");
+    await page.getByLabel("Handlers", { exact: true }).press("Enter");
+    await page.getByRole("combobox", { name: label, exact: true }).selectOption({ label: `+ ${title}…` });
+    await page.getByRole("dialog", { name: "Unsaved changes", exact: true })
+      .getByRole("button", { name: "Save and switch", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: title, exact: true });
+    await expect(dialog).toBeVisible();
+    expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model.blocks.gateway.params.handlers).toBe(7);
+    await expect(page.locator(".dirty-mark")).toBeHidden();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   });
 }
 
