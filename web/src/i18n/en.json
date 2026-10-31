@@ -1,4 +1,9 @@
 {
+  "editor.annotations.title": "Descriptions and notes",
+  "editor.annotations.model": "Model",
+  "editor.annotations.experiment": "Experiment",
+  "editor.annotations.description": "Description",
+  "editor.annotations.notes": "Notes",
   "results.timeline.addReplica": "Add replica #{replica} to chart",
   "results.timeline.replicaRange": "Replica range: {min}–{max}",
   "results.groups.summaryHelp": "Measured interval across all replications. Click a column heading to sort. p99 comes from merged latency observations, not averaged replica percentiles. Missing observations appear as n/a.",

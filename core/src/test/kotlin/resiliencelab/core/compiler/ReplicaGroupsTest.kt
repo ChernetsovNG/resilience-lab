@@ -280,7 +280,7 @@ class ReplicaGroupsTest {
     internal fun experiment(faults: String = "[]"): ExperimentFile =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":2,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"faults":$faults,"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"faults":$faults,"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

@@ -451,7 +451,7 @@ class CliTest {
         workspace.resolve("replicas.experiment.json").writeText(
             """
             {
-              "schemaVersion": 2,
+              "schemaVersion": 3,
               "modelRef": "replicas.model.json",
               "execution": {"seed":42,"warmup":"0ms","measurement":"1s","replications":2},
               "variants": [{"id":"baseline"}],

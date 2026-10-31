@@ -688,3 +688,26 @@ it("preserves the viewport after an explicit click on an edge label", async () =
     await waitFor(() => { expect(viewport()).not.toBe(before); });
   } finally { height.mockRestore(); }
 });
+
+it("shows block and every connection type description through HelpHint without exposing notes", async () => {
+  const annotated = structuredClone(model);
+  annotated.blocks.gateway.description = "  Gateway explanation  ";
+  annotated.blocks.gateway.notes = "Private editing notes";
+  annotated.connections.forEach(connection => { connection.description = `${connection.id} explanation`; connection.notes = "Connection notes"; });
+  annotated.connections[2].type = "route";
+  render(<Canvas catalog={catalog} model={annotated} layout={layout} selected={[]}
+    onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const node = await screen.findByTestId("rf__node-gateway");
+  fireEvent.click(within(node).getByRole("button", { name: "More about: gateway" }));
+  expect(screen.getByRole("tooltip").textContent).toBe("  Gateway explanation  ");
+  expect(node.textContent).not.toContain("Private editing notes");
+  fireEvent.keyDown(window, { key: "Escape" });
+  for (const connection of annotated.connections) {
+    const label = screen.getByTestId(`canvas-edge-label-${connection.id}`);
+    fireEvent.click(within(label).getByRole("button", { name: `More about: ${connection.id}` }));
+    expect(screen.getByRole("tooltip").textContent).toBe(`${connection.id} explanation`);
+    expect(label.textContent).not.toContain("Connection notes");
+    fireEvent.keyDown(window, { key: "Escape" });
+  }
+  expect(within(screen.getByTestId("rf__node-client")).queryByRole("button", { name: "More about: client" })).toBeNull();
+});

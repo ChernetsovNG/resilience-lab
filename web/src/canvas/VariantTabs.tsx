@@ -72,7 +72,7 @@ export function VariantTabs({ variants, active, disabled: navigationDisabled = f
             aria-selected={variant.id === active}
             title={t(Object.keys(variant.overrides).length === 1 ? "editor.pages.variantHintOne" : "editor.pages.variantHint", {
               name: variantLabel(variant, variants), count: Object.keys(variant.overrides).length,
-            })}
+            }) + (variant.description ? `\n${variant.description}` : "")}
             aria-haspopup="menu"
             aria-expanded={menu?.id === variant.id}
             onClick={() => onSelect(variant.id)}

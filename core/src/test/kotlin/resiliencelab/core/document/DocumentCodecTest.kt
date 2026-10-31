@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.assertj.core.api.Assertions.assertThat
@@ -12,9 +13,38 @@ import kotlin.test.Test
 
 class DocumentCodecTest {
     @Test
-    fun `reads experiment version two faults and keeps layout at version one`() {
+    fun `experiment three preserves optional variant descriptions verbatim`() {
+        val description = "  Другая реплика\nИсточник: https://example.org/  "
+        val source = """{"schemaVersion":3,"modelRef":"m.model.json",
+            "execution":{"replications":2,"warmup":"0ms","measurement":"1s","seed":7},
+            "variants":[{"id":"baseline","description":${Json.encodeToString(description)}}]}"""
+
+        val decoded = DocumentCodec.decodeExperiment(source, "e.experiment.json")
+
+        assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
+        val encoded = DocumentCodec.encodeExperiment((decoded as DecodeResult.Ok).value)
+        val root = Json.parseToJsonElement(encoded).jsonObject
+        val variants = root.getValue("variants").jsonArray
+        val variant = variants.single().jsonObject
+        assertThat(variant["description"]).isEqualTo(JsonPrimitive(description))
+        assertThat(DocumentCodec.decodeExperiment(encoded, "e.experiment.json")).isEqualTo(decoded)
+    }
+
+    @Test
+    fun `old experiments report their version before obsolete shape`() {
+        for (version in listOf(1, 2)) {
+            val decoded = DocumentCodec.decodeExperiment("""{"schemaVersion":$version,"oldShape":true}""", "old.experiment.json")
+            val diagnostic = (decoded as DecodeResult.Failed).diagnostics.single()
+            assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
+            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 3")
+            assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(3))
+        }
+    }
+
+    @Test
+    fun `reads experiment faults and keeps layout at version one`() {
         val text =
-            """{"schemaVersion":2,"modelRef":"m.model.json",
+            """{"schemaVersion":3,"modelRef":"m.model.json",
               "execution":{"replications":1,"warmup":"0ms","measurement":"1s","seed":1},
               "faults":[
                 {"target":"service","from":"0ms","to":"1s","kind":"slowdown","multiplier":2,"delay":"20ms"},
@@ -36,7 +66,7 @@ class DocumentCodecTest {
         val old = DocumentCodec.decodeExperiment("""{"schemaVersion":1,"oldShape":true}""", "old.experiment.json")
         val diagnostic = (old as DecodeResult.Failed).diagnostics.single()
         assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
-        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(2))
+        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(3))
     }
 
     @Test
@@ -142,7 +172,7 @@ class DocumentCodecTest {
     fun `round-trips experiment and layout documents`() {
         val experiment =
             ExperimentFile(
-                schemaVersion = 2,
+                schemaVersion = 3,
                 modelRef = "m.model.json",
                 execution = ExecutionSettings(replications = 2, warmup = "0ms", measurement = "1s", seed = 7),
                 variants = listOf(Variant(id = "baseline")),

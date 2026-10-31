@@ -44,7 +44,7 @@ class DatabaseBlockTest {
     private val experiment =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":2,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","seed":42},"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","seed":42},"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

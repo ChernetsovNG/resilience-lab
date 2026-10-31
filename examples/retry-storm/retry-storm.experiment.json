@@ -24,7 +24,7 @@
   ],
   "layoutRef": "retry-storm.layout.json",
   "modelRef": "retry-storm.model.json",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "variants": [
     {
       "id": "baseline",

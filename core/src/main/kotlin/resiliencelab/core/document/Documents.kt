@@ -115,5 +115,7 @@ data class Fault(
 data class Variant(
     val id: String,
     val label: String? = null,
+    /** Optional explanation of what this variant changes and why. */
+    val description: String? = null,
     val overrides: Map<String, JsonElement> = emptyMap(),
 )

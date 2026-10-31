@@ -126,6 +126,6 @@ class CostEstimatorArtifactTest {
             ]}"""
 
         internal val experiment =
-            """{"schemaVersion":2,"modelRef":"m.model.json","execution":{"replications":2,"warmup":"200ms","measurement":"1s","window":"100ms","seed":42},"variants":[{"id":"baseline"}]}"""
+            """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":2,"warmup":"200ms","measurement":"1s","window":"100ms","seed":42},"variants":[{"id":"baseline"}]}"""
     }
 }
