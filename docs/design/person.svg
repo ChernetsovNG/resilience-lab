@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="210" viewBox="0 0 240 210" font-family="system-ui, sans-serif">
+  <title>Client block: C4 Person shape (reference)</title>
+  <!-- Head: diameter = 0.38 of body width, centred; its lower third is hidden behind the body. -->
+  <circle cx="120" cy="44" r="38" fill="#ffffff" stroke="#9aa5b1" stroke-width="2"/>
+  <!-- Body ("shoulders"): top corners radius = 0.25 of body width, bottom corners as other cards (8). -->
+  <path d="M 70 70 H 170 A 50 50 0 0 1 220 120 V 192 A 8 8 0 0 1 212 200 H 28 A 8 8 0 0 1 20 192 V 120 A 50 50 0 0 1 70 70 Z"
+        fill="#ffffff" stroke="#9aa5b1" stroke-width="2"/>
+  <text x="120" y="118" text-anchor="middle" font-size="15" font-weight="600" fill="#1f2933">mobile-app</text>
+  <text x="120" y="146" text-anchor="middle" font-size="12" fill="#52606d">интенсивность: 30/s</text>
+  <text x="120" y="168" text-anchor="middle" font-size="12" fill="#52606d">дедлайн: 10s</text>
+</svg>

@@ -33,6 +33,13 @@
 - Trace и screenshot при ошибках — в `test-results/`. HTML-отчёт для `npx playwright show-report` пишется только с `--reporter=html` (в CI передаётся `--reporter=line,html`). В CI отчёты частей сохраняются отдельно: скачай `playwright-artifacts-<i>` и открой его `playwright-report/` командой `npx playwright show-report <каталог>/playwright-report`.
 - Перед проверкой холодного старта удаляй `node_modules/.vite`: лениво загружаемые зависимости при пустом кэше могут перезагрузить страницу, если их нет в `optimizeDeps.include` в `vite.config.ts`.
 
+## Картинки и значки
+
+- **Значки интерфейса** — отдельные SVG-файлы в `web/src/assets/icons/`, по одному на значок, имя по смыслу (`database.svg`, `pooler.svg`). Цвет — `currentColor`, без встроенных размеров кроме `viewBox`. Компоненты импортируют файл, а не дублируют разметку SVG в коде.
+- **Эталоны вида** — что должно получиться и в каких пропорциях — в [docs/design/](../docs/design/README.md). Делая элемент по эталону, сверяй результат с ним и приложи скриншот в PR.
+- Сторонние картинки и значки в репозиторий не копируются: репозиторий публичный, а у них свои лицензии. Рисуй своё по нотации-ориентиру.
+- Скриншоты к PR — только в ветке `pr-assets` (раздел «Работа по issue» в [AGENTS.md](../AGENTS.md)).
+
 ## Зависимости
 
 Dependabot еженедельно проверяет npm в `/web` и `web/Dockerfile`; minor и patch объединяются, major приходят отдельными PR, для `@playwright/test` выделена группа `playwright`.
