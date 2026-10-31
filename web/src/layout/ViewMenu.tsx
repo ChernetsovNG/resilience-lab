@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import { useEffect, useRef, useState } from "react";
 import { setLanguage, t, type Language } from "../i18n";
 import { useLanguage } from "../i18n/useLanguage";
@@ -37,10 +38,7 @@ export function ViewMenu() {
     <button ref={button} type="button" aria-controls="view-menu" aria-expanded={open}
       onClick={event => { setOpen(!open); event.currentTarget.focus(); }}
       aria-label={t("app.view.title")} title={t("app.view.title")}>
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" fill="white" />
-        <circle cx="15" cy="12" r="2" fill="white" /><circle cx="9" cy="18" r="2" fill="white" />
-      </svg>
+      <Icon name="view-settings" size={20} />
     </button>
     {open ? <div id="view-menu" ref={panel} popover="manual" className="view-menu-panel">
       <label>{t("app.view.gridStep")} <select aria-label={t("app.view.gridStep")} value={settings.gridStep}

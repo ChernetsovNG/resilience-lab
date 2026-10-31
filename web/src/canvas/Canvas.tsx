@@ -1,3 +1,4 @@
+import { Icon } from "../layout/Icon";
 import { t } from "../i18n";
 import { observeResize } from "../layout/observeResize";
 import { formatNumber } from "../i18n/format";
@@ -338,9 +339,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       onMouseUpCapture={() => { gesture.current = null; }} onMouseLeave={() => { gesture.current = null; }}>
     {variant === undefined ? null : <details ref={banner} key={variant.id} className="variant-banner" data-testid="variant-banner">
       <summary title={variantSummary}>
-        <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor">
-          <rect x="3" y="7" width="10" height="7" rx="1" /><path d="M5 7V5a3 3 0 0 1 6 0v2" />
-        </svg>
+        <Icon name="lock" size={14} />
         {variantSummary}
       </summary>
       <VariantChanges model={baseModel ?? model} catalog={catalog} overrides={overrides} disabled={disabled} onSelect={onSelectChange} />

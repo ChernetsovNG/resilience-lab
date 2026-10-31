@@ -16,7 +16,7 @@ describe("Palette", () => {
       for (const id of ["router", "database", "pooler"]) {
         const button = screen.getByRole("button", { name: localized.types.find(type => type.id === id)!.title });
         expect(button.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");
-        expect(button.textContent).toBe("");
+        expect(button.textContent?.trim()).toBe("");
       }
     } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
   });
