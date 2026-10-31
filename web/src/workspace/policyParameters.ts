@@ -2,7 +2,7 @@ import type { ModelFile } from "../api/apiTypes";
 import { elementOf, isObject, ownEntry } from "./params";
 
 /** Policy editing is introduced by T4; existing policy values remain readable and preserved. */
-export const readOnlyPolicies = new Set(["circuitBreaker", "retryBudget", "fallback", "rateLimit", "healthCheck"]);
+export const readOnlyPolicies = new Set(["circuitBreaker", "retryBudget", "fallback", "rateLimit", "healthCheck", "outlierDetection"]);
 
 const outputPolicies: Record<string, string> = {
   circuitOpenShare: "circuitBreaker",
@@ -14,6 +14,8 @@ const outputPolicies: Record<string, string> = {
   rateLimitedRate: "rateLimit",
   probeFailuresPerSecond: "healthCheck",
   notReadyShare: "healthCheck",
+  ejectionsCount: "outlierDetection",
+  ejectedShare: "outlierDetection",
 };
 
 function clientHasFallback(model: ModelFile, id: string): boolean {
@@ -39,6 +41,13 @@ export function policyOutputAvailable(output: string, id: string, models: readon
   const policy = ownEntry(outputPolicies, output);
   if (policy === undefined) return true;
   return models.some(model => {
+    if (policy === "outlierDetection") {
+      const replicas = Number(ownEntry(model.blocks, id)?.params.replicas ?? 1);
+      return model.connections.some(edge => edge.to === id && (
+        (edge.type === "call" && replicas > 1 && isObject(edge.params?.outlierDetection))
+        || (edge.type === "route" && replicas === 1 && isObject(ownEntry(model.blocks, edge.from)?.params.outlierDetection))
+      ));
+    }
     const element = elementOf(model, id);
     if (element?.type === "client" && policy === "fallback") return clientHasFallback(model, id);
     const enabled = isObject(element?.params[policy]);

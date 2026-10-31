@@ -121,8 +121,25 @@ class ReliabilityModel(
                         )
                 }
             }.toMap()
-    private val routerRuntimes =
-        graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams, ::isTargetReady) }
+    private val routerRuntimes: Map<String, RouterRuntime> =
+        graph.routers.associate { node ->
+            node.path to
+                RouterRuntime(
+                    node,
+                    graph.outgoingRoutes(node.path),
+                    streams,
+                    ::isTargetReady,
+                    onEjected = { target, duration ->
+                        metrics.recordEjection(target, true)
+                        schedule(
+                            eventAction = ModelElement.EventActionIfc<Nothing> { routerRuntimes.getValue(node.path).restore(target) },
+                            timeToEvent = duration,
+                            priority = KSLEvent.DEFAULT_PRIORITY - 1,
+                        )
+                    },
+                    onReturned = { target -> metrics.recordEjection(target, false) },
+                )
+        }
     private val routeFaults = graph.routes.associate { it.path to FaultState() }
 
     private fun isTargetReady(
@@ -402,8 +419,11 @@ class ReliabilityModel(
                     observed.forEach { metrics.recordConnectionFailure(it, AttemptOutcome.TIMED_OUT, caller.measurementCohort) }
                     record(ConnectionEvent.TIMEOUT)
                     if (orphaned) record(ConnectionEvent.ORPHANED)
+                    // A timeout shortened by the original deadline is not evidence against the selected target.
+                    if (time < caller.request.deadlineMs) child.observeRouting(AttemptOutcome.TIMED_OUT)
                 },
                 recordResponse = { outcome ->
+                    child.observeRouting(outcome)
                     observed.forEach { metrics.recordConnectionFailure(it, outcome, caller.measurementCohort) }
                     record(
                         if (outcome == AttemptOutcome.SUCCEEDED) ConnectionEvent.SUCCEEDED else ConnectionEvent.FAILED,
@@ -439,6 +459,7 @@ class ReliabilityModel(
         private var originalClientActive = false
         private var admitted = false
         private var routingCompleted = false
+        private var routingObserved = false
         private var serviceOutcomeRecorded = false
         private var degraded = false
         internal var incomingAttempt: CallAttempt? = null
@@ -474,6 +495,13 @@ class ReliabilityModel(
             if (routingCompleted) return
             routingCompleted = true
             selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
+        }
+
+        internal fun observeRouting(outcome: AttemptOutcome) {
+            if (routingObserved) return
+            routingObserved = true
+            if (!::runtime.isInitialized) return
+            selectedRoutes.forEach { routerRuntimes.getValue(it.from).observe(it, outcome) }
         }
 
         private fun recordServiceOutcome() {
@@ -850,6 +878,7 @@ class ReliabilityModel(
                 } finally {
                     recordServiceOutcome()
                     if (originalRequest) {
+                        observeRouting(originalOutcome ?: currentOutcome)
                         selectedRoutes.forEach { route ->
                             metrics.recordConnectionFailure(route.path, originalOutcome ?: currentOutcome, measurementCohort)
                             metrics.recordConnection(

@@ -170,6 +170,7 @@ data class CallEdge(
     val circuitBreaker: CircuitBreakerConfig? = null,
     val retryBudget: RetryBudgetConfig? = null,
     val fallback: FallbackConfig? = null,
+    val outlierDetection: OutlierDetectionConfig? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -187,6 +188,7 @@ data class CallEdge(
         circuitBreaker: CircuitBreakerConfig? = null,
         retryBudget: RetryBudgetConfig? = null,
         fallback: FallbackConfig? = null,
+        outlierDetection: OutlierDetectionConfig? = null,
     ) : this(
         path.split('/'),
         from,
@@ -202,6 +204,7 @@ data class CallEdge(
         circuitBreaker,
         retryBudget,
         fallback,
+        outlierDetection,
     )
 
     val path: String get() = displayPath(pathSegments)
@@ -218,8 +221,14 @@ data class RouterNode(
     val pathSegments: List<String>,
     val policy: RoutingPolicy,
     val origin: Origin = Origin.UNSPECIFIED,
+    val outlierDetection: OutlierDetectionConfig? = null,
 ) {
-    constructor(path: String, policy: RoutingPolicy, origin: Origin = Origin.UNSPECIFIED) : this(path.split('/'), policy, origin)
+    constructor(
+        path: String,
+        policy: RoutingPolicy,
+        origin: Origin = Origin.UNSPECIFIED,
+        outlierDetection: OutlierDetectionConfig? = null,
+    ) : this(path.split('/'), policy, origin, outlierDetection)
 
     val path: String get() = displayPath(pathSegments)
 }

@@ -31,14 +31,16 @@ describe("catalog output contract", () => {
       ["Service policies", "%", 100, ["Rate-limited share"]],
       ["Circuit breaker", "%", 100, ["Circuit open share"]],
       ["Readiness", "%", 100, ["Not-ready share"]],
+      ["Outlier detection", "requests", 1, ["Ejections"]],
+      ["Outlier detection", "%", 100, ["Ejected share"]],
     ]);
   });
 
   it("computes service policy outputs from raw windows and pooled summary totals", () => {
     const outputs = outputsOf(catalog, "service");
-    const frame = { startMs: 0, durationMs: 100, offeredAttempts: 20, rateLimited: 5, probeFailures: 2, notReadyMs: 25 };
-    const expected = { rateLimitedPerSecond: 50, rateLimitedRate: 0.25, probeFailuresPerSecond: 20, notReadyShare: 0.25 };
-    const totals = { measurementMs: 400, offeredAttempts: 80, rateLimited: 20, probeFailures: 8, notReadyMs: 100 };
+    const frame = { startMs: 0, durationMs: 100, offeredAttempts: 20, rateLimited: 5, probeFailures: 2, notReadyMs: 25, ejections: 2, ejectedMs: 40 };
+    const expected = { rateLimitedPerSecond: 50, rateLimitedRate: 0.25, probeFailuresPerSecond: 20, notReadyShare: 0.25, ejectionsCount: 2, ejectedShare: 0.4 };
+    const totals = { measurementMs: 400, offeredAttempts: 80, rateLimited: 20, probeFailures: 8, notReadyMs: 100, ejections: 2, ejectedMs: 160 };
     for (const [id, value] of Object.entries(expected)) {
       const output = outputs.find(output => output.id === id)!;
       expect(outputWindow([output], frame)[id]).toBe(value);

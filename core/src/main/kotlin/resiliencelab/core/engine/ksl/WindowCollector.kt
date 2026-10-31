@@ -105,6 +105,19 @@ internal class WindowCollector(
         }
     }
 
+    fun ejection(
+        id: String,
+        timeMs: Double,
+        ejected: Boolean,
+    ) {
+        if (!advance(timeMs)) return
+        nodes.getValue(id).apply {
+            integrate(timeMs)
+            this.ejected += if (ejected) 1 else -1
+            if (ejected) row.ejections++
+        }
+    }
+
     fun poolWait(
         id: String,
         timeMs: Double,
@@ -351,6 +364,7 @@ internal class WindowCollector(
         var busy = 0
         var serverBusy = 0
         var ready = true
+        var ejected = 0
         var capacityValue = if (pooler == null) handlers else clientCapacity
         var serverCapacity = pooler?.poolSize ?: 0
         private var lastCapacityMs = 0.0
@@ -363,6 +377,7 @@ internal class WindowCollector(
             row.serverBusyTime += serverBusy * duration
             row.queueIntegral += queue * duration
             if (!ready) row.notReadyMs += duration
+            row.ejectedMs += ejected * duration
             lastMs = timeMs
         }
 
@@ -397,6 +412,8 @@ internal class WindowCollector(
                 probes = row.probes,
                 probeFailures = row.probeFailures,
                 notReadyMs = row.notReadyMs,
+                ejections = row.ejections,
+                ejectedMs = row.ejectedMs,
                 timeouts = row.timeouts,
                 retries = row.retries,
                 latency = row.latency.snapshot(),
@@ -460,6 +477,8 @@ internal class WindowCollector(
         var probes = 0
         var probeFailures = 0
         var notReadyMs = 0.0
+        var ejections = 0
+        var ejectedMs = 0.0
         var busyTime = 0.0
         var queueIntegral = 0.0
         val latency = LatencyAccumulator(sparse = true, context = "node=$node window=$window")

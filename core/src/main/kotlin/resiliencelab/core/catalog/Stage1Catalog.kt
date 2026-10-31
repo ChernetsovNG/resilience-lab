@@ -49,7 +49,7 @@ object Stage1Catalog {
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 6,
+            schemaVersion = 7,
             types =
                 listOf(client(), service(), request(), call(), router(), route(), database(), pooler()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
@@ -181,8 +181,10 @@ object Stage1Catalog {
     private fun service() =
         TypeDescriptor(
             id = "service",
-            outputs = Stage1Outputs.service + ServicePolicyOutputs.outputs + ReplicaGroupOutputs.outputs("handlers"),
-            version = 2,
+            outputs =
+                Stage1Outputs.service + ServicePolicyOutputs.outputs + OutlierDetectionOutputs.outputs +
+                    ReplicaGroupOutputs.outputs("handlers"),
+            version = 3,
             category = TypeCategory.BLOCK,
             title = "Service",
             description = "Blocking service: a handler is held through local work, downstream calls and backoff.",
@@ -318,7 +320,7 @@ object Stage1Catalog {
         TypeDescriptor(
             id = "call",
             outputs = Stage1Outputs.call + ReplicaGroupOutputs.outputs("pool"),
-            version = 2,
+            version = 3,
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
@@ -456,13 +458,13 @@ object Stage1Catalog {
                                 ),
                             ),
                     ),
-                ) + CallPolicyParameters.parameters,
+                ) + CallPolicyParameters.parameters + OutlierDetectionParameters.parameter,
         )
 
     private fun router() =
         TypeDescriptor(
             id = "router",
-            version = 1,
+            version = 2,
             category = TypeCategory.BLOCK,
             title = "Router",
             description =
@@ -479,7 +481,7 @@ object Stage1Catalog {
                         default = JsonPrimitive("roundRobin"),
                         options = listOf("roundRobin", "random", "leastInFlight"),
                     ),
-                ),
+                ) + OutlierDetectionParameters.parameter,
         )
 
     private fun route() =
