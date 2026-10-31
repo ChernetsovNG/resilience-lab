@@ -202,6 +202,15 @@ class MetricsCollector(
         connections.poolState(id, timeMs, busy, queueLength)
     }
 
+    internal fun recordCircuitState(
+        id: String,
+        open: Boolean,
+    ) {
+        val timeMs = currentTimeMs()
+        windows.circuitState(id, timeMs, open)
+        connections.circuitState(id, timeMs, open)
+    }
+
     internal fun recordPoolWait(
         id: String,
         measured: Boolean,
@@ -241,12 +250,13 @@ class MetricsCollector(
         clientId: String = this.clientId,
         requestClass: String = "default",
         failureReason: String? = if (succeeded) null else "error",
+        degraded: Boolean = false,
     ) {
         val latencyMs = completionTimeMs - arrivalTimeMs
-        windows.originalCompletion(completionTimeMs, latencyMs, succeeded, clientId, requestClass, failureReason)
+        windows.originalCompletion(completionTimeMs, latencyMs, succeeded, clientId, requestClass, failureReason, degraded)
         if (!measured) return
         listOf(totalEntry, clientEntries.getValue(clientId), classEntries.getValue(requestClass)).forEach {
-            it.complete(latencyMs, succeeded, failureReason)
+            it.complete(latencyMs, succeeded, failureReason, degraded)
         }
     }
 
@@ -393,17 +403,20 @@ class MetricsCollector(
         var originalArrivals = 0
         private var successes = 0
         private var failures = 0
+        private var degraded = 0
         private val reasons = sortedMapOf<String, Int>()
 
         fun complete(
             latencyMs: Double,
             succeeded: Boolean,
             reason: String?,
+            withFallback: Boolean,
         ) {
             allLatency.add(latencyMs)
             if (succeeded) {
                 successfulLatency.add(latencyMs)
                 successes++
+                if (withFallback) degraded++
             } else {
                 failedLatency.add(latencyMs)
                 failures++
@@ -420,6 +433,7 @@ class MetricsCollector(
                 originalArrivals,
                 successes,
                 failures,
+                degraded = degraded,
                 failuresByReason = reasons.toMap(),
             )
     }

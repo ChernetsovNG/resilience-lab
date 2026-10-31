@@ -151,6 +151,9 @@ data class CallEdge(
     /** Explicit incoming policy, applied only when the target is a generated replica router. */
     val balancing: RoutingPolicy? = null,
     val pool: CallPool? = null,
+    val circuitBreaker: CircuitBreakerConfig? = null,
+    val retryBudget: RetryBudgetConfig? = null,
+    val fallback: FallbackConfig? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -165,7 +168,25 @@ data class CallEdge(
         retryTarget: RetryTarget = RetryTarget.ANY,
         balancing: RoutingPolicy? = null,
         pool: CallPool? = null,
-    ) : this(path.split('/'), from, to, network, timeoutMs, attempts, backoff, origin, retryTarget, balancing, pool)
+        circuitBreaker: CircuitBreakerConfig? = null,
+        retryBudget: RetryBudgetConfig? = null,
+        fallback: FallbackConfig? = null,
+    ) : this(
+        path.split('/'),
+        from,
+        to,
+        network,
+        timeoutMs,
+        attempts,
+        backoff,
+        origin,
+        retryTarget,
+        balancing,
+        pool,
+        circuitBreaker,
+        retryBudget,
+        fallback,
+    )
 
     val path: String get() = displayPath(pathSegments)
 }

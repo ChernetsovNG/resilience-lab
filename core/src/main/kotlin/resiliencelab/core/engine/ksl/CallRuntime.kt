@@ -7,7 +7,10 @@ import resiliencelab.core.ir.FaultSpan
 internal class CallRuntime(
     val edge: CallEdge,
     private val streams: StreamSource,
+    onCircuitOpenChanged: (Boolean) -> Unit = {},
 ) {
+    val circuitBreaker = edge.circuitBreaker?.let { CircuitBreaker(it, onCircuitOpenChanged) }
+    val retryBudget = edge.retryBudget?.let(::RetryBudget)
     private val networkSampler =
         DurationSamplerFactory.create(edge.network, streams.stream(edge.pathSegments, StreamRole.NETWORK))
     private val jitterStream = streams.stream(edge.pathSegments, StreamRole.JITTER)
@@ -16,6 +19,8 @@ internal class CallRuntime(
 
     fun resetFaults() {
         faults.clear()
+        circuitBreaker?.reset()
+        retryBudget?.reset()
     }
 
     fun startFault(fault: FaultSpan) {

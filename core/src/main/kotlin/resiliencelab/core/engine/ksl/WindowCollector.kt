@@ -81,6 +81,18 @@ internal class WindowCollector(
         }
     }
 
+    fun circuitState(
+        id: String,
+        timeMs: Double,
+        open: Boolean,
+    ) {
+        if (!advance(timeMs)) return
+        connections.getValue(id).apply {
+            integrate(timeMs)
+            circuitOpen = open
+        }
+    }
+
     fun poolWait(
         id: String,
         timeMs: Double,
@@ -153,12 +165,14 @@ internal class WindowCollector(
         client: String = clientId,
         requestClass: String = "default",
         reason: String? = if (succeeded) null else "error",
+        degraded: Boolean = false,
     ) {
         if (!advance(timeMs)) return
         listOf(nodes.getValue(client).row, classes.getValue(requestClass).row).forEach { row ->
             row.latency.add(latencyMs)
             if (succeeded) {
                 row.successes++
+                if (degraded) row.degraded++
             } else {
                 row.failures++
                 val code = requireNotNull(reason)
@@ -360,6 +374,7 @@ internal class WindowCollector(
                 admittedAttempts = row.admittedAttempts,
                 successes = row.successes,
                 failures = row.failures,
+                degraded = row.degraded,
                 failuresByReason = row.failuresByReason.toMap(),
                 timeouts = row.timeouts,
                 retries = row.retries,
@@ -415,6 +430,7 @@ internal class WindowCollector(
         var admittedAttempts = 0
         var queueRejections = 0
         var successes = 0
+        var degraded = 0
         val failuresByReason = sortedMapOf<String, Int>()
         var failures = 0
         var timeouts = 0
@@ -434,6 +450,7 @@ internal class WindowCollector(
         private var inFlight = 0
         private var orphaned = 0
         private var backoff = 0
+        var circuitOpen = false
         private var lastMs = 0.0
         private var lastPoolCapacityMs = 0.0
 
@@ -442,6 +459,7 @@ internal class WindowCollector(
             row.inFlightIntegral += inFlight * duration
             row.orphanedIntegral += orphaned * duration
             row.backoffIntegral += backoff * duration
+            if (circuitOpen) row.circuitOpenMs += duration
             row.poolBusyTimeMs += poolBusy * duration
             row.poolQueueIntegralMs += poolQueued * duration
             integratePoolCapacity(timeMs)
@@ -484,6 +502,9 @@ internal class WindowCollector(
                 ConnectionEvent.ORPHAN_COMPLETED -> orphaned--
                 ConnectionEvent.BACKOFF_STARTED -> backoff++
                 ConnectionEvent.BACKOFF_COMPLETED -> backoff--
+                ConnectionEvent.CIRCUIT_REJECTED -> row.circuitRejections++
+                ConnectionEvent.RETRY_DENIED -> row.retriesDenied++
+                ConnectionEvent.FALLBACK -> row.fallbacks++
             }
         }
 
@@ -506,6 +527,10 @@ internal class WindowCollector(
                 row.latency.snapshot(),
                 clientOriginalArrivals = clientOriginalArrivals,
                 failuresByReason = row.failuresByReason.toMap(),
+                circuitOpenMs = row.circuitOpenMs,
+                circuitRejections = row.circuitRejections,
+                retriesDenied = row.retriesDenied,
+                fallbacks = row.fallbacks,
                 slotPools =
                     if (id in connectionPoolSizes) {
                         mapOf(
@@ -535,6 +560,10 @@ internal class WindowCollector(
         var succeeded = 0
         val failuresByReason = sortedMapOf<String, Int>()
         var failed = 0
+        var circuitOpenMs = 0.0
+        var circuitRejections = 0
+        var retriesDenied = 0
+        var fallbacks = 0
         var timeouts = 0
         var orphaned = 0
         var inFlightIntegral = 0.0

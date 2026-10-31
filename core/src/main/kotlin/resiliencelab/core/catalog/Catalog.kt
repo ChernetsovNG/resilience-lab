@@ -55,6 +55,7 @@ data class ParamApplicability(
  * units a document may write with their scales, so UI checks ranges as the core does; [default] is used when a
  * document omits the parameter. [initial] is written explicitly when creating an element; readers never apply it.
  * A null [appliesWhen] means the parameter is always applicable; otherwise its sibling condition controls visibility.
+ * For [ParamKind.ARRAY], non-empty [options] describe string choices; otherwise [fields] describe each object item.
  */
 @Serializable
 data class ParamDescriptor(

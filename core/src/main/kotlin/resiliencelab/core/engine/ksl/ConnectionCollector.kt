@@ -16,6 +16,9 @@ internal enum class ConnectionEvent {
     ORPHAN_COMPLETED,
     BACKOFF_STARTED,
     BACKOFF_COMPLETED,
+    CIRCUIT_REJECTED,
+    RETRY_DENIED,
+    FALLBACK,
 }
 
 /** Cohort counters and fixed-interval occupancy, independent of the event-time window population. */
@@ -60,6 +63,17 @@ internal class ConnectionCollector(
         }
     }
 
+    fun circuitState(
+        id: String,
+        timeMs: Double,
+        open: Boolean,
+    ) {
+        states.getValue(id).apply {
+            circuitOpen = open
+            circuitOpenSeries.record(timeMs, if (open) 1.0 else 0.0)
+        }
+    }
+
     fun poolWait(
         id: String,
         measured: Boolean,
@@ -86,7 +100,10 @@ internal class ConnectionCollector(
     }
 
     fun startMeasurement() {
-        states.values.forEach { it.observe(startMs) }
+        states.values.forEach {
+            it.observe(startMs)
+            it.circuitOpenSeries.record(startMs, if (it.circuitOpen) 1.0 else 0.0)
+        }
     }
 
     fun finish(timeMs: Double) {
@@ -97,6 +114,7 @@ internal class ConnectionCollector(
             state.poolBusySeries.finish(timeMs)
             state.poolQueueSeries.finish(timeMs)
             state.poolCapacitySeries.finish(timeMs)
+            state.circuitOpenSeries.finish(timeMs)
         }
     }
 
@@ -118,6 +136,11 @@ internal class ConnectionCollector(
         var succeeded = 0
         val failuresByReason = sortedMapOf<String, Int>()
         var failed = 0
+        var circuitRejections = 0
+        var circuitOpen = false
+        var retriesDenied = 0
+        var fallbacks = 0
+        val circuitOpenSeries = TimeWeightedSeries(startMs, endMs)
         var timeouts = 0
         var orphaned = 0
         var poolBusy = 0
@@ -175,6 +198,9 @@ internal class ConnectionCollector(
                 ConnectionEvent.ORPHAN_COMPLETED -> activeOrphaned--
                 ConnectionEvent.BACKOFF_STARTED -> backoff++
                 ConnectionEvent.BACKOFF_COMPLETED -> backoff--
+                ConnectionEvent.CIRCUIT_REJECTED -> if (measured) circuitRejections++
+                ConnectionEvent.RETRY_DENIED -> if (measured) retriesDenied++
+                ConnectionEvent.FALLBACK -> if (measured) fallbacks++
             }
             check(inFlight >= 0 && activeOrphaned >= 0 && backoff >= 0) { "Unbalanced connection observations" }
             observe(timeMs)
@@ -203,6 +229,10 @@ internal class ConnectionCollector(
                 endMs - startMs,
                 latency.snapshot(),
                 failuresByReason = failuresByReason.toMap(),
+                circuitOpenMs = circuitOpenSeries.integral,
+                circuitRejections = circuitRejections,
+                retriesDenied = retriesDenied,
+                fallbacks = fallbacks,
                 slotPools =
                     if (ownsPool) {
                         mapOf(

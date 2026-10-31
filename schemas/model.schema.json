@@ -1260,6 +1260,206 @@
                   "description": "Choose how attempts are distributed across the target replicas. The default is round robin.",
                   "title": "Balancing"
                 },
+                "circuitBreaker": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "failureRate": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "PROBABILITY",
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 100.0,
+                                    "numerator": 1.0,
+                                    "symbol": "%"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "50%",
+                          "description": "Open when the failure share reaches this threshold after the minimum number of completed attempts. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                          "title": "Failure threshold"
+                        },
+                        "halfOpenCalls": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 3,
+                          "description": "Maximum number of probe attempts. Their completed failure share decides whether to close or reopen.",
+                          "title": "Half-open calls"
+                        },
+                        "minimumCalls": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 10,
+                          "description": "Completed attempts required before evaluating the failure share; no greater than the window size.",
+                          "title": "Minimum calls"
+                        },
+                        "openDuration": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "5s",
+                          "description": "Time before allowing half-open probes; rejected attempts use no pool, network or target work. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Open duration"
+                        },
+                        "window": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 20,
+                          "description": "Number of most recent completed attempts in the closed-state window. Breaker rejections are excluded.",
+                          "title": "Window size"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reject attempts locally while open. Each calling instance keeps its own count-based window.",
+                  "title": "Circuit breaker"
+                },
+                "fallback": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "on": {
+                          "anyOf": [
+                            {
+                              "items": {
+                                "enum": [
+                                  "error",
+                                  "unavailable",
+                                  "timeout",
+                                  "queueFull",
+                                  "waitLimit",
+                                  "circuitOpen",
+                                  "rateLimited",
+                                  "noRoute",
+                                  "noReadyTarget"
+                                ],
+                                "type": "string"
+                              },
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": [
+                            "circuitOpen"
+                          ],
+                          "description": "Final failure reasons replaced by the fallback; deadline is excluded.",
+                          "title": "Failure reasons"
+                        },
+                        "processing": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "1ms",
+                          "description": "Time spent on the calling handler before continuing the scenario, bounded by the original deadline. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "title": "Fallback processing time"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Replace a matching final call failure after all attempts. Successful originals with a fallback count as degraded.",
+                  "title": "Fallback"
+                },
                 "network": {
                   "anyOf": [
                     {
@@ -1412,6 +1612,118 @@
                   ],
                   "description": "Slots owned by the calling instance, held until response or attempt timeout.",
                   "title": "Connection pool"
+                },
+                "retryBudget": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "minPerSecond": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "RATE",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/ms"
+                                  },
+                                  {
+                                    "denominator": 1000.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/s"
+                                  },
+                                  {
+                                    "denominator": 60000.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "10/s",
+                          "description": "Additional allowance multiplied by the window duration; it is available even with no first attempts. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                          "title": "Minimum retries per second"
+                        },
+                        "ratio": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "PROBABILITY",
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 100.0,
+                                    "numerator": 1.0,
+                                    "symbol": "%"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "20%",
+                          "description": "Maximum retries per first attempt within the window. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                          "title": "Retry ratio"
+                        },
+                        "window": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "10s",
+                          "description": "Age after which first attempts and retries leave the budget. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Budget window"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Bound retries by a share of first attempts plus a minimum allowance over a rolling time window.",
+                  "title": "Retry budget"
                 },
                 "retryTarget": {
                   "anyOf": [

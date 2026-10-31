@@ -318,7 +318,7 @@ object Stage1Catalog {
         TypeDescriptor(
             id = "call",
             outputs = Stage1Outputs.call + ReplicaGroupOutputs.outputs("pool"),
-            version = 1,
+            version = 2,
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
@@ -456,7 +456,7 @@ object Stage1Catalog {
                                 ),
                             ),
                     ),
-                ),
+                ) + CallPolicyParameters.parameters,
         )
 
     private fun router() =
