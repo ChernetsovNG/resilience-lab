@@ -71,8 +71,14 @@ test.describe("readable checkout answer", () => {
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByRole("button", { name: "Анализ", exact: true }).click();
     const overview = page.getByRole("region", { name: "Сводка по вариантам" });
-    await expect(overview.locator("p")).toHaveCount(summary.variants.length);
-    for (const variant of summary.variants) await expect(overview).toContainText(variant.label);
+    const best = [...summary.variants].sort((left, right) =>
+      right.points[0].aggregate.entries.total.successRate!.mean - left.points[0].aggregate.entries.total.successRate!.mean)[0];
+    expect(best.id).toBe("bigger-payment-pool");
+    await expect(overview.getByTestId("comparison-conclusion")).toContainText("Лучшая наблюдаемая доля успешных запросов: Bigger payment pool");
+    await expect(overview.getByTestId("comparison-conclusion")).toContainText("Наименьший наблюдаемый p99:");
+    const table = page.getByRole("table", { name: "Выводы", exact: true });
+    for (const variant of summary.variants) await expect(table.getByRole("columnheader", { name: new RegExp(variant.label) })).toBeVisible();
+    await expect(table.getByRole("row", { name: /p99/ }).getByRole("cell").first()).toContainText("совпадает с таймаутом 5 с");
     const first = summary.variants[0].points[0].saturation.firstNodes[0];
     expect(first.medianStartMs).toBeGreaterThanOrEqual(20000);
     expect(first.medianStartMs).toBeLessThan(40000);
@@ -81,6 +87,9 @@ test.describe("readable checkout answer", () => {
     await expect(insight).toContainText("20–40 с");
     expect(((await page.getByRole("tabpanel").innerText()).match(/по объединённым данным/g) ?? []).length).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath("checkout-answer.png") });
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await table.screenshot({ path: testInfo.outputPath("checkout-quantiles-ru.png") });
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole("tab", { name: "Таймлайн", exact: true }).click();
     await expect(page.locator(".timeline-axis").first()).toHaveText("Время симуляции (с)");
     await expect(page.locator(".timeline-chart").first().getByText("70", { exact: true })).toBeVisible();
@@ -108,5 +117,33 @@ test.describe("readable checkout answer", () => {
       await expect(page.getByRole("table", { name: "Выводы", exact: true }).getByRole("caption")).toContainText("средние квантилей отдельных повторений");
       await page.screenshot({ path: testInfo.outputPath("checkout-headroom.png") });
     } finally { await rm(file, { force: true }); }
+  });
+});
+
+
+test.describe("grid Findings in Russian", () => {
+  test.use({ locale: "ru-RU" });
+
+  test("labels the summary and saturation with the selected checkout grid point", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await selectExperiment(page, "checkout/checkout-grid.experiment.json");
+    const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
+    await page.getByRole("button", { name: "Запустить", exact: true }).click();
+    const summary: RunSummary = await (await response).json();
+    expect(summary.variants[0].points).toHaveLength(9);
+    await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Baseline", exact: true }).click();
+    const points = page.getByLabel("Точка сетки", { exact: true });
+    for (const [point, timeout, attempts] of [["p0", "1s", "1"], ["p8", "5s", "3"]]) {
+      await points.selectOption(point);
+      for (const name of ["Сводка по вариантам", "Вывод о насыщении"]) {
+        const heading = page.getByRole("region", { name, exact: true }).getByRole("heading");
+        await expect(heading).toContainText(`Таймаут · order-service → payment-service = ${timeout}`);
+        await expect(heading).toContainText(`Попытки · order-service → payment-service = ${attempts}`);
+        await expect(heading).not.toContainText(point);
+      }
+    }
+    await page.getByRole("button", { name: "Анализ", exact: true }).click();
+    await page.screenshot({ path: testInfo.outputPath("checkout-grid-findings-ru.png") });
   });
 });

@@ -52,3 +52,23 @@ it("keeps the no-saturation conclusion as text when element navigation is availa
   render(<SaturationInsight saturation={noSaturation} replications={2} onElement={vi.fn()} />);
   expect(screen.getByText("No saturation.").closest("button")).toBeNull();
 });
+
+
+it("shows the three most frequent paths and discloses the remaining paths", () => {
+  const step = (node: string, startMs: number) => ({ node, ...slotPoolResource(node), startMs });
+  const saturation = { ...noSaturation, replications: [
+    { replication: 0, degradationPath: [step("rare-a", 10)] },
+    ...[1, 2, 3, 4].map(replication => ({ replication, degradationPath: [step("frequent", 20 + replication)] })),
+    ...["rare-b", "rare-c", "rare-d"].map((node, index) => ({ replication: 5 + index, degradationPath: [step(node, 30)] })),
+  ] };
+  render(<SaturationInsight saturation={saturation} replications={8} />);
+  fireEvent.click(screen.getByText("Degradation paths"));
+  const paths = screen.getByText("Degradation paths").closest("details")!;
+  expect(paths.querySelector("li")?.textContent).toBe("handlers frequent at 21 ms–24 ms — 4 of 8 replications");
+  const more = screen.getByText("More 2 paths").closest("details")!;
+  expect(more.open).toBe(false);
+  expect(more.querySelectorAll("li")).toHaveLength(2);
+  fireEvent.click(screen.getByText("More 2 paths"));
+  expect(more.open).toBe(true);
+  expect(more.textContent).toContain("handlers rare-d");
+});

@@ -26,7 +26,7 @@ describe("SummaryTable", () => {
     expect(cells("Success rate")[0].textContent).toContain("75%");
     expect(cells("p95")[0].textContent).toContain("40 ms");
     expect(cells("p99")[0].textContent).toContain("80 ms");
-    expect(screen.getByRole("region", { name: "Variant summary" }).textContent).toContain("Success rate: 75%.");
+    expect(screen.getByRole("region", { name: "Variant summary" }).textContent).toContain("Best observed success rate: Baseline (75%)");
   });
   it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Findings", locale => {
     setLanguage(locale);
@@ -48,8 +48,8 @@ describe("SummaryTable", () => {
       firstNodes: [{ node: "dependency", ...slotPoolResource("dependency"), replicationCount: 2, medianStartMs: 80, minStartMs: 70, maxStartMs: 90 }] };
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
     const overview = screen.getByRole("region", { name: "Variant summary" });
-    expect(overview.textContent).toContain("Baseline: no saturation. Success rate: 97.5%.");
-    expect(overview.textContent).toContain("No retries: first saturation at handlers dependency. Success rate: 50%.");
+    expect(overview.textContent).toContain("Baseline: no saturation.");
+    expect(overview.textContent).toContain("No retries: first saturation at handlers dependency.");
     expect(overview.compareDocumentPosition(comparison()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -362,4 +362,144 @@ it("shows group aggregates with instance comparison tables nested inside", () =>
   const group = screen.getByText("Group: workers").closest("details")!;
   expect(group.querySelectorAll(".summary-services")).toHaveLength(3);
   expect(screen.getByRole("table", { name: /workers#1$/ })).toBeTruthy();
+});
+
+
+describe("Findings conclusions", () => {
+  const measured = (mean: number, stdDev = 0.01, count = 10) => ({ mean, stdDev, count, min: mean, max: mean });
+  const compared = () => {
+    const run = structuredClone(summary);
+    const [base, other] = run.variants.map(variant => variant.points[0].aggregate.entries.total);
+    base.successRate = measured(0.5);
+    other.successRate = measured(0.9);
+    base.p99LatencyMs = measured(100, 1);
+    other.p99LatencyMs = measured(150, 1);
+    return run;
+  };
+
+  it("names the higher success rate and lower p99 independently", () => {
+    render(<SummaryTable summary={compared()} />);
+    const conclusion = screen.getByTestId("comparison-conclusion");
+    expect(conclusion.textContent).toContain("Best observed success rate: No retries (90%)");
+    expect(conclusion.textContent).toContain("Lowest observed p99: Baseline (100 ms)");
+    expect(conclusion.textContent).toContain("intervals do not overlap");
+  });
+
+  it("qualifies overlapping intervals and updates the conclusion with the confidence level", () => {
+    const run = compared();
+    run.variants[0].points[0].aggregate.entries.total.successRate = measured(0.4, 0.1, 5);
+    run.variants[1].points[0].aggregate.entries.total.successRate = measured(0.55, 0.1);
+    render(<SummaryTable summary={run} />);
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("difference within the spread: Baseline");
+    fireEvent.change(screen.getByRole("combobox", { name: "Intervals" }), { target: { value: "80" } });
+    expect(screen.getByTestId("comparison-conclusion").textContent).not.toContain("difference within the spread");
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("intervals do not overlap");
+  });
+
+  it("names tied variants and distinguishes missing intervals from overlap", () => {
+    const run = compared();
+    run.variants[0].points[0].aggregate.entries.total.successRate = measured(0.9);
+    run.variants[1].points[0].aggregate.entries.total.p99LatencyMs = { mean: 150, count: 1, min: 150, max: 150 };
+    render(<SummaryTable summary={run} />);
+    const conclusion = screen.getByTestId("comparison-conclusion");
+    expect(conclusion.textContent).toContain("Best observed success rate: Baseline, No retries (90%)");
+    expect(conclusion.textContent).toContain("interval comparison unavailable: No retries");
+  });
+
+  it("does not declare a winner from missing metrics", () => {
+    const run = compared();
+    for (const variant of run.variants) variant.points[0].aggregate.entries.total.successRate = null;
+    render(<SummaryTable summary={run} />);
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("Success rate: no data to compare");
+  });
+
+  it("names the selected grid point in both the overview and detailed insight", () => {
+    const run = compared();
+    run.grid = [{ path: "gateway.handlers", values: [4, 6] }];
+    for (const variant of run.variants) variant.points.push({ ...structuredClone(variant.points[0]), id: "p1", coordinates: { "gateway.handlers": 6 } });
+    render(<SummaryTable summary={run} catalog={catalog} model={model} selectedPointId="p1" />);
+    for (const name of ["Variant summary", "Saturation insight"]) {
+      expect(within(screen.getByRole("region", { name })).getByRole("heading").textContent).toContain("Handlers · gateway = 6");
+    }
+  });
+
+  it("states a common first saturated resource once and keeps different resources separate", () => {
+    const run = compared();
+    const first = { node: "dependency", ...slotPoolResource("dependency"), replicationCount: 2, medianStartMs: 80, minStartMs: 70, maxStartMs: 90 };
+    for (const variant of run.variants) variant.points[0].saturation = { ...noSaturation, firstNodes: [first], withoutSaturation: 0 };
+    const { rerender } = render(<SummaryTable summary={run} />);
+    const overview = screen.getByRole("region", { name: "Variant summary" });
+    expect(overview.textContent).toContain("All variants: first saturation at handlers dependency.");
+    expect(overview.textContent?.match(/first saturation at/g)).toHaveLength(1);
+    const distinct = structuredClone(run);
+    distinct.variants[1].points[0].saturation.firstNodes = [{ ...first, node: "gateway", ...slotPoolResource("gateway") }];
+    rerender(<SummaryTable summary={distinct} />);
+    expect(overview.textContent).toContain("Baseline: first saturation at handlers dependency.");
+    expect(overview.textContent).toContain("No retries: first saturation at handlers gateway.");
+  });
+
+  it("marks quantized timeout ceilings using the effective variant and grid parameters", () => {
+    setLanguage("ru");
+    const run = compared();
+    const source = structuredClone(model);
+    source.blocks.client.params.deadline = "10s";
+    source.connections.find(connection => connection.type === "call")!.params!.timeout = "5s";
+    for (const variant of run.variants) {
+      variant.points[0].aggregate.entries.total.p95LatencyMs = measured(5031.25, 0);
+      variant.points[0].aggregate.entries.total.p99LatencyMs = measured(5031.25, 0);
+    }
+    const call = source.connections.find(connection => connection.type === "call")!;
+    const variants = run.variants.map(variant => ({ id: variant.id, label: variant.label,
+      overrides: variant.id === "baseline" ? {} : { [`${call.id}.timeout`]: "8s" } }));
+    const { rerender } = render(<SummaryTable summary={run} model={source} catalog={catalog} variants={variants} />);
+    const table = screen.getByRole("table", { name: "Выводы" });
+    expect(cells("p99", table)[0].textContent).toContain("совпадает с таймаутом 5 с");
+    expect(cells("p95", table)[0].textContent).toContain("совпадает с таймаутом 5 с");
+    expect(cells("p99", table)[1].textContent).not.toContain("совпадает");
+    run.grid = [{ path: `${call.id}.timeout`, values: ["5s"] }];
+    for (const variant of run.variants) variant.points[0].coordinates = { [`${call.id}.timeout`]: "5s" };
+    rerender(<SummaryTable summary={run} model={source} catalog={catalog} variants={variants} />);
+    expect(cells("p99", table)[1].textContent).toContain("совпадает с таймаутом 5 с");
+  });
+
+  it("marks a client deadline but not a distant quantile or unavailable run documents", () => {
+    const run = compared();
+    run.variants[0].points[0].aggregate.entries.total.p95LatencyMs = measured(200, 0);
+    run.variants[0].points[0].aggregate.entries.total.p99LatencyMs = measured(251, 0);
+    const { rerender } = render(<SummaryTable summary={run} model={model} catalog={catalog} />);
+    expect(cells("p99")[0].textContent).toContain("matches deadline 250 ms");
+    expect(cells("p95")[0].textContent).not.toContain("matches");
+    rerender(<SummaryTable summary={run} />);
+    expect(cells("p99")[0].textContent).not.toContain("matches");
+  });
+
+  it.each([false, true])("compares every tied leader regardless of their ordering (reverse=%s)", reverse => {
+    const run = compared();
+    run.variants = [
+      { label: "A", mean: 0.9, spread: 0.001 },
+      { label: "B", mean: 0.9, spread: 0.2 },
+      { label: "C", mean: 0.8, spread: 0.001 },
+    ].map(({ label, mean, spread }) => {
+      const variant = structuredClone(run.variants[0]);
+      variant.id = label;
+      variant.label = label;
+      variant.points[0].aggregate.entries.total.successRate = measured(mean, spread);
+      return variant;
+    });
+    if (reverse) run.variants.reverse();
+    render(<SummaryTable summary={run} />);
+    const conclusion = screen.getByTestId("comparison-conclusion");
+    expect(conclusion.textContent).toContain("difference within the spread: C");
+    expect(conclusion.textContent).not.toContain("intervals do not overlap with C");
+  });
+
+  it("describes numerical timeout matches without asserting they caused successful latency", () => {
+    const run = compared();
+    run.variants[0].points[0].aggregate.entries.total.successRate = measured(1, 0);
+    run.variants[0].points[0].aggregate.entries.total.p99LatencyMs = measured(80, 0);
+    render(<SummaryTable summary={run} model={model} catalog={catalog} />);
+    expect(cells("p99")[0].textContent).toContain("matches timeout 80 ms");
+    expect(cells("p99")[0].textContent).not.toContain("limited by");
+  });
+
 });

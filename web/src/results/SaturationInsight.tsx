@@ -1,3 +1,4 @@
+import { formatNumber } from "../i18n/format";
 import { t } from "../i18n";
 import type { SaturationSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
@@ -18,7 +19,11 @@ export function SaturationInsight({ saturation, replications, headroom, faults =
       {headroom == null ? null : <p>{headroom}</p>}
       <details>
         <summary>{t("results.saturation.degradationPaths")}</summary>
-        <ul>{text.degradationPaths.map((path, index) => <li key={index}>{path}</li>)}</ul>
+        <ul>{text.degradationPaths.slice(0, 3).map((path, index) => <li key={index}>{path}</li>)}</ul>
+        {text.degradationPaths.length <= 3 ? null : <details>
+          <summary>{t("results.saturation.morePaths", { count: formatNumber(text.degradationPaths.length - 3) })}</summary>
+          <ul>{text.degradationPaths.slice(3).map((path, index) => <li key={index}>{path}</li>)}</ul>
+        </details>}
       </details>
       <details className="saturation-rule">
         <summary>{t("results.saturation.howDetected")}</summary>

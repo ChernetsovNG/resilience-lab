@@ -1050,7 +1050,8 @@ select {
 .summary-replications,
 .summary-reliability-warning,
 .summary-difference,
-.summary-intervals-separate {
+.summary-intervals-separate,
+.summary-limit {
   display: block;
   margin-top: 0.2rem;
   font-size: var(--font-secondary);
