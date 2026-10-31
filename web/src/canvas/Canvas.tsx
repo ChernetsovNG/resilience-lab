@@ -2,7 +2,7 @@ import { Icon } from "../layout/Icon";
 import { t } from "../i18n";
 import { observeResize } from "../layout/observeResize";
 import { formatNumber } from "../i18n/format";
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type ReactNode, type Ref, type SetStateAction } from "react";
 import { Background, ControlButton, Controls, getViewportForBounds, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import type { AriaLabelConfig, Edge, NodeChange, Rect } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile, Variant } from "../api/apiTypes";
@@ -51,6 +51,7 @@ export interface CanvasProps {
   /** Original model values shown beside the active variant's overrides. */
   baseModel?: ModelFile;
   variant?: Variant;
+  modelInfo?: ReactNode;
   onSelectChange?: (id: string, path: string) => void;
   onModelPage?: () => void;
   overrides?: Record<string, unknown>;
@@ -85,7 +86,7 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
-function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
+function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
   replicaSelection, nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
   const { gridStep, snapToGrid, showGrid } = useViewSettings();
@@ -408,6 +409,10 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       }}
     >
       {showGrid && <Background gap={gridStep} />}
+      {modelInfo == null ? null : <Panel position="top-left" className="model-info-position"
+        style={{ top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 24 : 16)) }}>
+        {modelInfo}
+      </Panel>}
       <Panel position="bottom-right" className="react-flow__attribution">
         <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"
           aria-label={t("editor.canvas.attributionLabel")}>{t("editor.canvas.attribution")}</a>

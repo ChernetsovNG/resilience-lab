@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import { App } from "./App";
 import { setupAppTests, server, button } from "./test/app";
 import { documentViews, experimentPath, modelPath } from "./test/fixtures";
+import type { Annotations } from "./workspace/annotations";
 
 setupAppTests();
 
@@ -57,29 +58,81 @@ it("persists a model-only default before submitting a run", async () => {
   expect(JSON.parse(String(calls[save][1]?.body)).experiment.execution.replications).toBe(10);
 });
 
-it("shows the model description immediately and opens its full notes from an element inspector", async () => {
+function annotatedServer(model: Annotations, experiment: Annotations = {}) {
+  server(url => {
+    if (url.includes(encodeURIComponent(modelPath))) return { body: {
+      ...documentViews[modelPath], content: { model: { ...documentViews[modelPath].content.model!, ...model } },
+    } };
+    if (url.includes(encodeURIComponent(experimentPath))) return { body: {
+      ...documentViews[experimentPath], content: { experiment: { ...documentViews[experimentPath].content.experiment!, ...experiment } },
+    } };
+  });
+}
+
+it("opens both descriptions over the model and links to full notes without editing documents", async () => {
   const description = "Why retries overload a slow dependency";
   const notes = "The model uses synthetic measurements.";
-  server(url => url.includes(encodeURIComponent(modelPath)) ? { body: {
-    ...documentViews[modelPath], content: { model: { ...documentViews[modelPath].content.model!, description, notes } },
-  } } : undefined);
+  annotatedServer({ description, notes }, { description: "Compare two retry policies." });
   render(<App />);
-  const visibleDescription = await screen.findByText(description, { selector: "p" });
-  expect(visibleDescription.closest("details")).toBeNull();
-  fireEvent.click(await screen.findByTestId("rf__node-gateway"));
+  const panel = await screen.findByRole("dialog", { name: "About model" });
+  expect(within(panel).getByText(description)).toBeTruthy();
+  expect(within(panel).getByText("Compare two retry policies.")).toBeTruthy();
   fireEvent.click(button("Full notes"));
+  expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
   const fields = await screen.findByRole("group", { name: "Model" });
   expect(fields.closest<HTMLDetailsElement>("details")?.open).toBe(true);
   expect(within(fields).getByRole<HTMLTextAreaElement>("textbox", { name: "Notes" }).value).toBe(notes);
   expect(within(fields).getByRole<HTMLTextAreaElement>("textbox", { name: "Notes" })).toBe(document.activeElement);
   expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
 });
 
-it("omits the description banner when the model has no description", async () => {
-  server(url => url.includes(encodeURIComponent(modelPath)) ? { body: {
-    ...documentViews[modelPath], content: { model: { ...documentViews[modelPath].content.model!, description: "  " } },
-  } } : undefined);
+it.each(["close", "escape", "outside"])("closes model information with %s and remembers it after reopening the workspace", async method => {
+  annotatedServer({ description: "A model worth explaining." });
+  const view = render(<App />);
+  await screen.findByRole("dialog", { name: "About model" });
+  if (method === "close") fireEvent.click(button("Close model information"));
+  if (method === "escape") fireEvent.keyDown(document, { key: "Escape" });
+  if (method === "outside") fireEvent.pointerDown(await screen.findByTestId("rf__node-gateway"));
+  expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
+  expect(button("About model").getAttribute("aria-expanded")).toBe("false");
+  if (method !== "outside") expect(document.activeElement).toBe(button("About model"));
+  view.unmount();
   render(<App />);
   await screen.findByTestId("rf__node-gateway");
+  expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
+  fireEvent.click(button("About model"));
+  expect(screen.getByRole("dialog", { name: "About model" })).toBeTruthy();
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
+});
+
+it.each([
+  { model: { notes: "Model notes without a description." }, experiment: {} },
+  { model: {}, experiment: { description: "An experiment without a model description." } },
+  { model: {}, experiment: { notes: "Experiment notes without a description." } },
+])("offers information without auto-opening when only $model or $experiment has text", async ({ model, experiment }) => {
+  annotatedServer(model, experiment);
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  expect(screen.queryByRole("dialog", { name: "About model" })).toBeNull();
+  fireEvent.click(button("About model"));
+  const panel = screen.getByRole("dialog", { name: "About model" });
+  expect(within(panel).getByText(model.notes ?? experiment.description ?? experiment.notes!)).toBeTruthy();
+});
+
+it("does not consume Escape from a dialog opened over model information", async () => {
+  annotatedServer({ description: "Model information behind another dialog." });
+  render(<><App /><dialog open><button>Another dialog</button></dialog></>);
+  await screen.findByRole("dialog", { name: "About model" });
+  fireEvent.keyDown(button("Another dialog"), { key: "Escape" });
+  expect(screen.getByRole("dialog", { name: "About model" })).toBeTruthy();
+});
+
+it("omits model information when neither document has descriptions or notes", async () => {
+  annotatedServer({ description: "  ", notes: "\n" }, { description: "", notes: null });
+  render(<App />);
+  await screen.findByTestId("rf__node-gateway");
+  expect(screen.queryByRole("button", { name: "About model" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Full notes" })).toBeNull();
 });
