@@ -25,6 +25,7 @@ internal class ServiceRuntime(
     onServerQueueLengthChanged: (Int) -> Unit = {},
     onBusyServerConnectionsChanged: (Int) -> Unit = {},
     onSlotCapacityChanged: (String, Int) -> Unit = { _, _ -> },
+    onReadyChanged: (Boolean) -> Unit = {},
 ) {
     val serviceId: String = node.path
     private val processingStream = streams.stream(node.pathSegments, StreamRole.PROCESSING)
@@ -33,6 +34,9 @@ internal class ServiceRuntime(
             .associateWith { DurationSamplerFactory.create(it, processingStream) }
     private val outcomeStream by lazy { streams.stream(node.pathSegments, StreamRole.OUTCOME) }
     val faults = FaultState()
+    val rateLimit = node.rateLimit?.let(::TokenBucket)
+    val health = node.healthCheck?.let { ServiceHealth(it, onReadyChanged) }
+    val ready: Boolean get() = health?.ready ?: true
 
     val slots =
         SlotPool(
@@ -63,6 +67,8 @@ internal class ServiceRuntime(
 
     fun resetFaults() {
         faults.clear()
+        rateLimit?.reset()
+        health?.reset()
     }
 
     fun startFault(fault: FaultSpan) {

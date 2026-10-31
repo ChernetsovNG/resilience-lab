@@ -10,7 +10,7 @@ import resiliencelab.core.results.ConnectionWindowMetrics
 import resiliencelab.core.results.NodeWindow
 import resiliencelab.core.results.WindowMetrics
 
-internal enum class AttemptEvent { OFFERED, ADMITTED, QUEUE_REJECTED, TIMEOUT, RETRY }
+internal enum class AttemptEvent { OFFERED, ADMITTED, QUEUE_REJECTED, TIMEOUT, RETRY, RATE_LIMITED, PROBE, PROBE_FAILURE }
 
 /**
  * Owns only one open event-time window. Integrals carry queue/handler state across boundaries; closed rows are
@@ -90,6 +90,18 @@ internal class WindowCollector(
         connections.getValue(id).apply {
             integrate(timeMs)
             circuitOpen = open
+        }
+    }
+
+    fun readiness(
+        id: String,
+        timeMs: Double,
+        ready: Boolean,
+    ) {
+        if (!advance(timeMs)) return
+        nodes.getValue(id).apply {
+            integrate(timeMs)
+            this.ready = ready
         }
     }
 
@@ -214,6 +226,9 @@ internal class WindowCollector(
             AttemptEvent.QUEUE_REJECTED -> row.queueRejections++
             AttemptEvent.TIMEOUT -> row.timeouts++
             AttemptEvent.RETRY -> row.retries++
+            AttemptEvent.RATE_LIMITED -> row.rateLimited++
+            AttemptEvent.PROBE -> row.probes++
+            AttemptEvent.PROBE_FAILURE -> row.probeFailures++
         }
     }
 
@@ -335,6 +350,7 @@ internal class WindowCollector(
         var queue = 0
         var busy = 0
         var serverBusy = 0
+        var ready = true
         var capacityValue = if (pooler == null) handlers else clientCapacity
         var serverCapacity = pooler?.poolSize ?: 0
         private var lastCapacityMs = 0.0
@@ -346,6 +362,7 @@ internal class WindowCollector(
             row.busyTime += busy * duration
             row.serverBusyTime += serverBusy * duration
             row.queueIntegral += queue * duration
+            if (!ready) row.notReadyMs += duration
             lastMs = timeMs
         }
 
@@ -376,6 +393,10 @@ internal class WindowCollector(
                 failures = row.failures,
                 degraded = row.degraded,
                 failuresByReason = row.failuresByReason.toMap(),
+                rateLimited = row.rateLimited,
+                probes = row.probes,
+                probeFailures = row.probeFailures,
+                notReadyMs = row.notReadyMs,
                 timeouts = row.timeouts,
                 retries = row.retries,
                 latency = row.latency.snapshot(),
@@ -435,6 +456,10 @@ internal class WindowCollector(
         var failures = 0
         var timeouts = 0
         var retries = 0
+        var rateLimited = 0
+        var probes = 0
+        var probeFailures = 0
+        var notReadyMs = 0.0
         var busyTime = 0.0
         var queueIntegral = 0.0
         val latency = LatencyAccumulator(sparse = true, context = "node=$node window=$window")

@@ -173,6 +173,129 @@ it("groups only model outputs by element, without unrelated types or duplicate m
   expect(within(database).queryByRole("checkbox", { name: "Handler utilization" })).toBeNull();
 });
 
+it.each([
+  { policy: "rateLimit", metrics: ["Rate-limit rejections", "Rate-limited share"] },
+  { policy: "healthCheck", metrics: ["Failed health probes", "Not-ready share"] },
+])("offers $policy outputs only for the service enabled in another variant", async ({ policy, metrics }) => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(experiment);
+  configured.variants[1].overrides[`gateway.${policy}`] = {};
+  render(<Timeline runId={`policy-${policy}`} summary={summary} manifest={shortManifest} model={model} experiment={configured}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["gateway", "middle"]} />);
+  await screen.findByRole("region", { name: "Utilization" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const enabled = within(screen.getByRole("group", { name: "gateway · Service" }));
+  const disabled = within(screen.getByRole("group", { name: "middle · Service" }));
+  for (const name of metrics) {
+    expect(enabled.getByRole("checkbox", { name })).toBeTruthy();
+    expect(disabled.queryByRole("checkbox", { name })).toBeNull();
+  }
+});
+
+it("offers health outputs for a policy enabled only on one replica", async () => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(model);
+  configured.blocks.gateway.params.replicas = 2;
+  configured.blocks.gateway.replicaOverrides = { "2": { healthCheck: {} } };
+  render(<Timeline runId="replica-policy" summary={summary} manifest={shortManifest} model={configured} experiment={experiment}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["gateway", "middle"]} />);
+  await screen.findByRole("region", { name: "Utilization" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const enabled = within(screen.getByRole("group", { name: "gateway · Service" }));
+  const disabled = within(screen.getByRole("group", { name: "middle · Service" }));
+  for (const name of ["Failed health probes", "Not-ready share"]) {
+    expect(enabled.getByRole("checkbox", { name })).toBeTruthy();
+    expect(disabled.queryByRole("checkbox", { name })).toBeNull();
+  }
+});
+
+it("hides health outputs when every replica disables the base policy", async () => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(model);
+  configured.blocks.gateway.params = { ...configured.blocks.gateway.params, replicas: 2, healthCheck: {} };
+  configured.blocks.gateway.replicaOverrides = { "1": { healthCheck: null }, "2": { healthCheck: null } };
+  render(<Timeline runId="disabled-replica-policies" summary={summary} manifest={shortManifest} model={configured} experiment={experiment}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["gateway"]} />);
+  await screen.findByRole("region", { name: "Utilization" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const service = within(screen.getByRole("group", { name: "gateway · Service" }));
+  expect(service.queryByRole("checkbox", { name: "Failed health probes" })).toBeNull();
+  expect(service.queryByRole("checkbox", { name: "Not-ready share" })).toBeNull();
+});
+
+it("offers health outputs when a grid point adds a replica inheriting the policy", async () => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(model);
+  configured.blocks.gateway.params = { ...configured.blocks.gateway.params, replicas: 2, healthCheck: {} };
+  configured.blocks.gateway.replicaOverrides = { "1": { healthCheck: null }, "2": { healthCheck: null } };
+  const run = structuredClone(summary);
+  const first = run.variants[0].points[0];
+  first.coordinates = { "gateway.replicas": 2 };
+  run.variants[0].points.push({ ...first, id: "p1", coordinates: { "gateway.replicas": 3 } });
+  render(<Timeline runId="grid-replica-policies" summary={run} manifest={shortManifest} model={configured} experiment={experiment}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["gateway"]} />);
+  await screen.findByRole("region", { name: "Utilization" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const service = within(screen.getByRole("group", { name: "gateway · Service" }));
+  expect(service.getByRole("checkbox", { name: "Failed health probes" })).toBeTruthy();
+  expect(service.getByRole("checkbox", { name: "Not-ready share" })).toBeTruthy();
+});
+
+it.each(["route", "scenario"])("offers degraded entries only for client classes reaching fallback through %s filters", async filter => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(model);
+  configured.blocks.client.params = { deadline: "250ms", classes: [{ id: "status", load: { points: [{ time: "0s", rate: "1/s" }] } }] };
+  configured.blocks.partner = { type: "client", params: { deadline: "250ms",
+    classes: [{ id: "checkout", load: { points: [{ time: "0s", rate: "1/s" }] } }] } };
+  configured.connections.push({ id: "partner-to-gateway", type: "request", from: "partner", to: "gateway", params: {} });
+  if (filter === "route") {
+    configured.blocks.router = { type: "router", params: { policy: "roundRobin" } };
+    configured.connections.find(edge => edge.id === "gateway-to-middle")!.to = "router";
+    configured.connections.push(
+      { id: "checkout-route", type: "route", from: "router", to: "middle", classes: ["checkout"], params: {} },
+      { id: "status-route", type: "route", from: "router", to: "dependency", classes: ["status"], params: {} },
+    );
+  } else {
+    configured.blocks.gateway.scenario = [{ type: "process" }, { type: "call", connection: "gateway-to-middle", classes: ["checkout"] }];
+  }
+  const question = structuredClone(experiment);
+  question.variants[1].overrides = { "middle-to-dependency.fallback": {} };
+  render(<Timeline runId={`client-fallback-${filter}`} summary={summary} manifest={shortManifest} model={configured} experiment={question}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["client", "partner", "gateway"]} />);
+  await screen.findByRole("region", { name: "Utilization" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const metric = { name: "Successful requests with fallback" };
+  expect(within(screen.getByRole("group", { name: "partner · Client" })).getByRole("checkbox", metric)).toBeTruthy();
+  expect(within(screen.getByRole("group", { name: "client · Client" })).queryByRole("checkbox", metric)).toBeNull();
+});
+
+it("offers call policy outputs and degraded entries only on their configured path", async () => {
+  stubSeries();
+  const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
+  const configured = structuredClone(experiment);
+  configured.variants[1].overrides = {
+    "gateway-to-middle.circuitBreaker": {}, "gateway-to-middle.retryBudget": {}, "gateway-to-middle.fallback": {},
+  };
+  render(<Timeline runId="call-policies" summary={summary} manifest={shortManifest} model={model} experiment={configured}
+    catalog={fullCatalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0}
+    selectedNodes={["client", "gateway-to-middle", "middle-to-dependency"]} />);
+  await screen.findByRole("region", { name: "Rates" });
+  fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
+  const enabled = within(screen.getByRole("group", { name: "gateway-to-middle · Call" }));
+  const disabled = within(screen.getByRole("group", { name: "middle-to-dependency · Call" }));
+  for (const name of ["Circuit open share", "Circuit rejections", "Retries denied by budget", "Fallbacks"]) {
+    expect(enabled.getByRole("checkbox", { name })).toBeTruthy();
+    expect(disabled.queryByRole("checkbox", { name })).toBeNull();
+  }
+  expect(within(screen.getByRole("group", { name: "client · Client" }))
+    .getByRole("checkbox", { name: "Successful requests with fallback" })).toBeTruthy();
+});
+
 it("keeps metric choices independent for each selected element", async () => {
   stubSeries();
   render(<Timeline runId="element-metrics" summary={summary} manifest={shortManifest} model={model} experiment={experiment}

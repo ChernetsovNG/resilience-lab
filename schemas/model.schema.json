@@ -773,6 +773,155 @@
                   "title": "Handlers",
                   "type": "integer"
                 },
+                "healthCheck": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "healthyThreshold": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 1,
+                          "description": "Consecutive successful probes required to restore readiness.",
+                          "title": "Healthy threshold"
+                        },
+                        "interval": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "10s",
+                          "description": "Minimum time between probe starts; the first probe starts after this interval. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Probe interval"
+                        },
+                        "processing": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "1ms",
+                          "description": "Local handler time, affected by processing delay faults, without running the request scenario or network. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "title": "Probe processing time"
+                        },
+                        "timeout": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "1s",
+                          "description": "Maximum wait for a probe result, including queueing. Admitted processing continues after timeout. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Probe timeout"
+                        },
+                        "unhealthyThreshold": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 3,
+                          "description": "Consecutive failed probes required to mark the initially ready instance not ready.",
+                          "title": "Unhealthy threshold"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
+                  "title": "Health check"
+                },
                 "processing": {
                   "additionalProperties": false,
                   "description": "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
@@ -870,6 +1019,71 @@
                   "description": "Waiting places in the FIFO queue. 0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
                   "title": "Queue capacity"
                 },
+                "rateLimit": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "burst": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 10,
+                          "description": "Maximum tokens; the bucket starts full at each replication.",
+                          "title": "Burst capacity"
+                        },
+                        "rate": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "RATE",
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/ms"
+                                  },
+                                  {
+                                    "denominator": 1000.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/s"
+                                  },
+                                  {
+                                    "denominator": 60000.0,
+                                    "numerator": 1.0,
+                                    "symbol": "/min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "100/s",
+                          "description": "Tokens replenished per second, up to the burst capacity. Zero permits only the initial burst. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                          "title": "Token rate"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Per-instance token bucket before the handler queue. Rejections occupy no handler; probes bypass the bucket.",
+                  "title": "Rate limit"
+                },
                 "replicas": {
                   "anyOf": [
                     {
@@ -933,6 +1147,155 @@
                     ],
                     "description": "Concurrent handlers. Initially 200.",
                     "title": "Handlers"
+                  },
+                  "healthCheck": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "healthyThreshold": {
+                            "anyOf": [
+                              {
+                                "minimum": 1.0,
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": 1,
+                            "description": "Consecutive successful probes required to restore readiness.",
+                            "title": "Healthy threshold"
+                          },
+                          "interval": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "exclusiveMinimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": "10s",
+                            "description": "Minimum time between probe starts; the first probe starts after this interval. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                            "title": "Probe interval"
+                          },
+                          "processing": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "minimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": "1ms",
+                            "description": "Local handler time, affected by processing delay faults, without running the request scenario or network. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                            "title": "Probe processing time"
+                          },
+                          "timeout": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "exclusiveMinimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": "1s",
+                            "description": "Maximum wait for a probe result, including queueing. Admitted processing continues after timeout. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                            "title": "Probe timeout"
+                          },
+                          "unhealthyThreshold": {
+                            "anyOf": [
+                              {
+                                "minimum": 1.0,
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": 3,
+                            "description": "Consecutive failed probes required to mark the initially ready instance not ready.",
+                            "title": "Unhealthy threshold"
+                          }
+                        },
+                        "required": [],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
+                    "title": "Health check"
                   },
                   "processing": {
                     "anyOf": [
@@ -1048,6 +1411,71 @@
                     "default": 0,
                     "description": "Waiting places in the FIFO queue. 0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
                     "title": "Queue capacity"
+                  },
+                  "rateLimit": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "burst": {
+                            "anyOf": [
+                              {
+                                "minimum": 1.0,
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": 10,
+                            "description": "Maximum tokens; the bucket starts full at each replication.",
+                            "title": "Burst capacity"
+                          },
+                          "rate": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "RATE",
+                                  "minimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/ms"
+                                    },
+                                    {
+                                      "denominator": 1000.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/s"
+                                    },
+                                    {
+                                      "denominator": 60000.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/min"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": "100/s",
+                            "description": "Tokens replenished per second, up to the burst capacity. Zero permits only the initial burst. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                            "title": "Token rate"
+                          }
+                        },
+                        "required": [],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Per-instance token bucket before the handler queue. Rejections occupy no handler; probes bypass the bucket.",
+                    "title": "Rate limit"
                   }
                 },
                 "required": [],

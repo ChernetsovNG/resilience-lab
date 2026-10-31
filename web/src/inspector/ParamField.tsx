@@ -9,7 +9,7 @@ import { isObject } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { parseParam } from "../workspace/paramParsing";
 import { parameterApplies, reconcileParameter } from "../workspace/parameterApplicability";
-import { readOnlyCallPolicies } from "../workspace/policyParameters";
+import { readOnlyPolicies } from "../workspace/policyParameters";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -41,7 +41,7 @@ export interface ParamFieldProps {
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
 export function ParamField(props: ParamFieldProps) {
   // Policy editing is introduced by T4; preserve their values while editing existing fields.
-  if (readOnlyCallPolicies.has(props.descriptor.name)) return <ObjectField {...props} editable={false} />;
+  if (readOnlyPolicies.has(props.descriptor.name)) return <ObjectField {...props} editable={false} />;
   if (props.descriptor.kind === "ARRAY") return <ArrayField {...props} />;
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
@@ -77,7 +77,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, isSwept,
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
       {unset
-        ? <><p className="param-description">{t("editor.param.notSet")}</p>
+        ? <><span>{t("editor.param.notSet")}</span>
           {hiddenSweep ? <span id={`${id}-sweep`} className="param-sweep">{t("editor.param.swept")}</span> : null}
           {editable ? <button type="button" onClick={() => {
             const initial = initialParams(descriptor.fields);

@@ -49,7 +49,7 @@ object Stage1Catalog {
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 5,
+            schemaVersion = 6,
             types =
                 listOf(client(), service(), request(), call(), router(), route(), database(), pooler()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
@@ -181,8 +181,8 @@ object Stage1Catalog {
     private fun service() =
         TypeDescriptor(
             id = "service",
-            outputs = Stage1Outputs.service + ReplicaGroupOutputs.outputs("handlers"),
-            version = 1,
+            outputs = Stage1Outputs.service + ServicePolicyOutputs.outputs + ReplicaGroupOutputs.outputs("handlers"),
+            version = 2,
             category = TypeCategory.BLOCK,
             title = "Service",
             description = "Blocking service: a handler is held through local work, downstream calls and backoff.",
@@ -240,7 +240,7 @@ object Stage1Catalog {
                         minimum = 1.0,
                         sweepable = true,
                     ),
-                ),
+                ) + ServicePolicyParameters.parameters,
         )
 
     private fun pooler() =
@@ -528,12 +528,13 @@ object Stage1Catalog {
         service().let { service ->
             service.copy(
                 id = "database",
+                version = 1,
                 title = "Database",
                 description = "Database server with a connection limit and a bounded FIFO query queue; no outgoing calls.",
                 ports = listOf(PortDescriptor("in", PortDirection.IN)),
                 outputs = Stage1Outputs.database,
                 params =
-                    service.params.filterNot { it.name == "replicas" }.map { param ->
+                    service.params.filterNot { it.name in setOf("replicas", "rateLimit", "healthCheck") }.map { param ->
                         when (param.name) {
                             "handlers" ->
                                 param.copy(
