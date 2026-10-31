@@ -1,5 +1,5 @@
 {
-  "description": "Compares retries with no retries while the dependency is six times slower.",
+  "description": "Сравнение вариантов «Baseline» и «No retries», когда зависимость работает в шесть раз медленнее. В «No retries» на обеих связях параметр «Попытки» равен 1.",
   "execution": {
     "measurement": "1s",
     "replications": 10,

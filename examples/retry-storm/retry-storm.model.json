@@ -96,6 +96,6 @@
       "type": "call"
     }
   ],
-  "description": "Retry storm on a three-service chain with a degraded dependency.",
+  "description": "Лавина повторов в цепочке из трёх сервисов при замедлении зависимости. Как параметры «Попытки» и «Пауза перед повтором» влияют на перегрузку?",
   "schemaVersion": 6
 }

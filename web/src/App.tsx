@@ -15,6 +15,7 @@ import type { Diagnostic, ModelFile, Variant } from "./api/apiTypes";
 import { diagnosticKey, diagnosticTarget, mergeDiagnostics, problemDiagnostics } from "./validation/diagnostics";
 import { useValidation } from "./validation/useValidation";
 import { Canvas, type CanvasHandle } from "./canvas/Canvas";
+import { ModelInfo } from "./canvas/ModelInfo";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { VariantChanges } from "./canvas/VariantChanges";
 import { useHealth } from "./components/useHealth";
@@ -614,6 +615,13 @@ export function App() {
               onModelPage={() => { if (!invalid) { setAnalysis(false); selectVariant(null); setFieldFocus(null); } }}
               layout={loaded.layout}
               key={loaded.experimentPath}
+              modelInfo={<ModelInfo key={loaded.modelPath} modelPath={loaded.modelPath} model={loaded.model} experiment={loaded.experiment}
+                notesDisabled={invalid || loading} onFullNotes={() => {
+                  setAnalysis(false);
+                  setSelection([]); setInspectorTarget("experiment");
+                  setInspectorRequest(current => current + 1);
+                  setFieldFocus(previous => ({ path: "model.notes", request: (previous?.request ?? 0) + 1 }));
+                }} />}
               catalog={catalog}
               selected={selection}
               faults={courseFaults} onFault={openFault} bottomInset={courseHeight}
