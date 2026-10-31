@@ -20,6 +20,7 @@ enum class PortDirection {
 /** Value kinds of catalog parameters. */
 @Serializable
 enum class ParamKind {
+    STRING,
     INTEGER,
     NUMBER,
     QUANTITY,

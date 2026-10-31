@@ -6,7 +6,7 @@ for (const locale of ["en-US", "ru-RU"]) {
     test.use({ locale });
     test("Findings names the connection pool from a real run", async ({ page, request }) => {
       const name = `slot-saturation-${locale}`;
-      const model = { schemaVersion: 5, blocks: {
+      const model = { schemaVersion: 6, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0ms", rate: "300/s" }] }, deadline: "10s" } },
         gateway: { type: "service", params: { handlers: 100, queue: 1000, processing: { kind: "fixed", mean: "0ms" } } },
         "orders-db": { type: "database", params: { maxConnections: 100, queue: 1000, processing: { kind: "fixed", mean: "200ms" } } },

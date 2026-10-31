@@ -16,7 +16,7 @@ class LoadProfileArrivalsTest {
         val base = TestChains.simple()
         val graph =
             base.copy(
-                client = base.client.copy(load = load),
+                clients = listOf(base.client.copy(classes = mapOf("default" to load))),
                 services = listOf(base.services.first().copy(handlers = 100, processing = TestChains.fixed(0.0))),
                 calls = emptyList(),
                 run = base.run.copy(measurementMs = 4_000.0),
@@ -66,9 +66,11 @@ class LoadProfileArrivalsTest {
         val graph =
             TestChains.simple().let {
                 it.copy(
-                    client =
-                        it.client.copy(
-                            load = LoadProfile(listOf(LoadPoint(0.0, 0.1), LoadPoint(1_000.0, 0.2))),
+                    clients =
+                        listOf(
+                            it.client.copy(
+                                classes = mapOf("default" to LoadProfile(listOf(LoadPoint(0.0, 0.1), LoadPoint(1_000.0, 0.2)))),
+                            ),
                         ),
                 )
             }

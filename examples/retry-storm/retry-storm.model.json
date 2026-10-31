@@ -97,5 +97,5 @@
     }
   ],
   "description": "Retry storm on a three-service chain with a degraded dependency.",
-  "schemaVersion": 5
+  "schemaVersion": 6
 }

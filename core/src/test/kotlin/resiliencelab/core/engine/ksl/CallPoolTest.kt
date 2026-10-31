@@ -74,7 +74,7 @@ class CallPoolTest {
     @Test
     fun `deadline removes pool waiter without sending or retrying`() {
         val base = graph(processing = 50.0, acquireTimeout = 100.0, attempts = 3)
-        val rig = simulate(base.copy(client = base.client.copy(deadlineMs = 10.0)), listOf(0.0, 1.0), unboundedFirst = true)
+        val rig = simulate(base.copy(clients = listOf(base.client.copy(deadlineMs = 10.0))), listOf(0.0, 1.0), unboundedFirst = true)
         assertThat(rig.completionTimes).containsExactly(50.0, 11.0)
         assertThat(
             rig.result.connections
@@ -123,7 +123,7 @@ class CallPoolTest {
             )
         val graph =
             base.copy(
-                entry = "lb",
+                clients = listOf(base.client.copy(entry = "lb")),
                 services = services,
                 calls =
                     services.take(2).mapIndexed {

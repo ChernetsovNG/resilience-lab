@@ -49,7 +49,7 @@ object Stage1Catalog {
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 4,
+            schemaVersion = 5,
             types =
                 listOf(client(), service(), request(), call(), router(), route(), database(), pooler()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
@@ -83,56 +83,39 @@ object Stage1Catalog {
         )
     }
 
-    private fun client() =
-        TypeDescriptor(
+    private fun client(): TypeDescriptor {
+        val load = loadParameter()
+        return TypeDescriptor(
             id = "client",
             outputs = Stage1Outputs.client,
-            version = 1,
+            version = 2,
             category = TypeCategory.BLOCK,
             title = "Client",
             description = "Open Poisson stream of original requests with an end-to-end deadline.",
             ports = listOf(PortDescriptor("out", PortDirection.OUT)),
             params =
                 listOf(
+                    load,
                     ParamDescriptor(
-                        name = "load",
-                        kind = ParamKind.OBJECT,
-                        title = "Load profile",
+                        name = "classes",
+                        kind = ParamKind.ARRAY,
+                        title = "Request classes",
                         description =
-                            "Piecewise-linear intensity from simulation start including warm-up; compare profiles in " +
-                                "variants. Initially one point at 0s with 10/s.",
-                        required = true,
-                        initial = Json.parseToJsonElement("""{"points":[{"time":"0s","rate":"10/s"}]}"""),
+                            "Per-class load profiles; use either load or classes. " +
+                                "Variants replace the entire list; grids are not supported.",
                         fields =
                             listOf(
                                 ParamDescriptor(
-                                    name = "points",
-                                    kind = ParamKind.ARRAY,
-                                    title = "Load points",
-                                    description =
-                                        "Increasing times with linear interpolation; the nearest rate is held outside the points.",
+                                    "id",
+                                    ParamKind.STRING,
+                                    "Class id",
+                                    "Unique block-style identifier; default is reserved.",
                                     required = true,
-                                    fields =
-                                        listOf(
-                                            ParamDescriptor(
-                                                name = "time",
-                                                kind = ParamKind.QUANTITY,
-                                                title = "Time",
-                                                description = "Time from simulation start, including warm-up.",
-                                                required = true,
-                                                dimension = Dimension.DURATION,
-                                                minimum = 0.0,
-                                            ),
-                                            ParamDescriptor(
-                                                name = "rate",
-                                                kind = ParamKind.QUANTITY,
-                                                title = "Intensity",
-                                                description = "Non-negative arrival intensity.",
-                                                required = true,
-                                                dimension = Dimension.RATE,
-                                                minimum = 0.0,
-                                            ),
-                                        ),
+                                    initial = JsonPrimitive("read"),
+                                ),
+                                load.copy(
+                                    required = true,
+                                    description = "Piecewise-linear intensity for this request class, including warm-up.",
                                 ),
                             ),
                     ),
@@ -146,6 +129,51 @@ object Stage1Catalog {
                         dimension = Dimension.DURATION,
                         exclusiveMinimum = 0.0,
                         sweepable = true,
+                    ),
+                ),
+        )
+    }
+
+    private fun loadParameter() =
+        ParamDescriptor(
+            name = "load",
+            kind = ParamKind.OBJECT,
+            title = "Load profile",
+            description =
+                "Piecewise-linear intensity from simulation start including warm-up; compare profiles in " +
+                    "variants. Initially one point at 0s with 10/s.",
+            required = false,
+            initial = Json.parseToJsonElement("""{"points":[{"time":"0s","rate":"10/s"}]}"""),
+            fields =
+                listOf(
+                    ParamDescriptor(
+                        name = "points",
+                        kind = ParamKind.ARRAY,
+                        title = "Load points",
+                        description =
+                            "Increasing times with linear interpolation; the nearest rate is held outside the points.",
+                        required = true,
+                        fields =
+                            listOf(
+                                ParamDescriptor(
+                                    name = "time",
+                                    kind = ParamKind.QUANTITY,
+                                    title = "Time",
+                                    description = "Time from simulation start, including warm-up.",
+                                    required = true,
+                                    dimension = Dimension.DURATION,
+                                    minimum = 0.0,
+                                ),
+                                ParamDescriptor(
+                                    name = "rate",
+                                    kind = ParamKind.QUANTITY,
+                                    title = "Intensity",
+                                    description = "Non-negative arrival intensity.",
+                                    required = true,
+                                    dimension = Dimension.RATE,
+                                    minimum = 0.0,
+                                ),
+                            ),
                     ),
                 ),
         )

@@ -239,7 +239,7 @@ class WorkspaceApiTest {
     @Test
     fun `rejects wrong kinds, invalid content, bad paths and missing documents`() {
         val modelBody =
-            apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 5, blocks = emptyMap())))
+            apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 6, blocks = emptyMap())))
         assertThat(code(putDocument("drafts/x.layout.json", modelBody, ifMatch = null))).isEqualTo("DOCUMENT_KIND")
 
         val futureBody = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 2)))

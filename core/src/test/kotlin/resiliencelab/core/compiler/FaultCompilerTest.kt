@@ -227,7 +227,7 @@ class FaultCompilerTest {
     private fun model(): ModelFile =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":5,"blocks":{
+                """{"schemaVersion":6,"blocks":{
                   "client":{"type":"client","params":{"load":{"points":[{"time":"0ms","rate":"10/s"}]},"deadline":"1s"}},
                   "gateway":{"type":"service","params":{"handlers":4,"processing":{"kind":"fixed","mean":"1ms"}}},
                   "router":{"type":"router"},

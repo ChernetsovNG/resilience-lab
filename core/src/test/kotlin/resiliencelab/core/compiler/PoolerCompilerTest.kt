@@ -262,7 +262,7 @@ internal object PoolerTestModel {
     val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":5,"blocks":{
+                """{"schemaVersion":6,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0ms","rate":"100/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "pooler":{"type":"pooler","params":{"maxClientConnections":2,"poolSize":1,"waitTimeout":"5ms","processing":{"kind":"fixed","mean":"1ms"}}},

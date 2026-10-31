@@ -363,7 +363,10 @@ class ExperimentExecutorTest {
     ): GraphIr {
         val base = TestChains.simple()
         return base.copy(
-            client = base.client.copy(load = LoadProfile.constant(arrivalRatePerMs), deadlineMs = deadlineMs),
+            clients =
+                listOf(
+                    base.client.copy(classes = mapOf("default" to LoadProfile.constant(arrivalRatePerMs)), deadlineMs = deadlineMs),
+                ),
             services =
                 listOf(
                     base.services.first().copy(

@@ -126,7 +126,7 @@ class DegradationRunoutTest {
                             attempts = 1,
                         ),
                     ),
-                client = base.client.copy(load = LoadProfile.constant(10.0), deadlineMs = 100_000.0),
+                clients = listOf(base.client.copy(classes = mapOf("default" to LoadProfile.constant(10.0)), deadlineMs = 100_000.0)),
             )
         val execution = execution(warmupMs = 10.0, measurementMs = 5.0)
         val allArrivals =
@@ -242,7 +242,7 @@ class DegradationRunoutTest {
                             attempts = 1,
                         ),
                     ),
-                client = base.client.copy(load = LoadProfile.constant(0.01), deadlineMs = 1_000.0),
+                clients = listOf(base.client.copy(classes = mapOf("default" to LoadProfile.constant(0.01)), deadlineMs = 1_000.0)),
             )
         val execution =
             execution(
@@ -329,10 +329,12 @@ class DegradationRunoutTest {
                     ),
                 ),
             calls = emptyList(),
-            client =
-                base.client.copy(
-                    load = LoadProfile.constant(arrivalRate),
-                    deadlineMs = requestDeadlineMs,
+            clients =
+                listOf(
+                    base.client.copy(
+                        classes = mapOf("default" to LoadProfile.constant(arrivalRate)),
+                        deadlineMs = requestDeadlineMs,
+                    ),
                 ),
             faults = emptyList(),
         )

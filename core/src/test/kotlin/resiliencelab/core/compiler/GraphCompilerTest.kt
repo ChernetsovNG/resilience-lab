@@ -12,7 +12,7 @@ class GraphCompilerTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":5,"blocks":{
+                """{"schemaVersion":6,"blocks":{
           "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "10/s"}]},"deadline":"1s"}},
           "z-entry":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}},
           "a-leaf":{"type":"service","params":{"handlers":2,"queue":2,"processing":{"kind":"fixed","mean":"1ms"}}}
@@ -69,12 +69,13 @@ class GraphCompilerTest {
     }
 
     @Test
-    fun `two clients are rejected at the block collection`() {
+    fun `every additional client requires its own request connection`() {
         val result = compile(model.copy(blocks = model.blocks + ("client2" to model.blocks.getValue("client"))))
         val diagnostic = result.diagnostics.single()
-        assertThat(diagnostic.code).isEqualTo("TOPOLOGY_CLIENT")
-        assertThat(diagnostic.pointer).isEqualTo("/blocks")
-        assertThat(diagnostic.args).containsEntry("found", JsonPrimitive(2))
+        assertThat(diagnostic.code).isEqualTo("CLIENT_REQUEST")
+        assertThat(diagnostic.pointer).isEqualTo("/blocks/client2")
+        assertThat(diagnostic.args).containsEntry("client", JsonPrimitive("client2"))
+        assertThat(diagnostic.args).containsEntry("found", JsonPrimitive(0))
     }
 
     @Test

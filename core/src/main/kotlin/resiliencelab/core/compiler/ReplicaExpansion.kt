@@ -59,7 +59,7 @@ internal fun GraphIr.expandReplicaGroups(instances: Map<String, List<ServiceNode
             }
         }
     return copy(
-        entry = target(entry),
+        clients = clients.map { it.copy(entry = target(it.entry)) },
         services = expandedServices,
         calls = expandedCalls,
         routers = routers + generatedRouters,

@@ -24,7 +24,7 @@ class ModelCompilerTest {
 
     private val model =
         """
-        {"schemaVersion": 5, "blocks": {
+        {"schemaVersion": 6, "blocks": {
           "client": {"type": "client", "params": {"load": {"points": [{"time": "0s", "rate": "120/s"}]}, "deadline": "250ms"}},
           "gateway": {"type": "service", "params": {"handlers": 4, "queue": 16, "processing": {"kind": "fixed", "mean": "1ms"}}},
           "dependency": {"type": "service", "params": {"handlers": 2, "queue": 8, "processing": {"kind": "exponential", "mean": "8ms"}}}
@@ -237,7 +237,7 @@ class ModelCompilerTest {
     fun `document order does not change the compiled experiment`() {
         val reordered =
             """
-            {"schemaVersion": 5, "connections": [
+            {"schemaVersion": 6, "connections": [
               {"id": "gateway-to-dependency", "type": "call", "from": "gateway", "to": "dependency",
                "params": {"backoff": {"max": "20ms", "base": "2ms", "kind": "exponential-full-jitter"}, "attempts": 3, "timeout": "80ms"}},
               {"id": "client-to-gateway", "type": "request", "from": "client", "to": "gateway"}
@@ -265,7 +265,7 @@ class ModelCompilerTest {
                                 point.copy(
                                     graph =
                                         chain.copy(
-                                            client = chain.client.copy(origin = Origin.UNSPECIFIED),
+                                            clients = listOf(chain.client.copy(origin = Origin.UNSPECIFIED)),
                                             services = chain.services.map { it.copy(origin = Origin.UNSPECIFIED) },
                                             calls = chain.calls.map { it.copy(origin = Origin.UNSPECIFIED) },
                                             faults = chain.faults.map { it.copy(origin = Origin.UNSPECIFIED) },
@@ -311,13 +311,13 @@ class ModelCompilerTest {
     }
 
     @Test
-    fun `enforces exactly one client and an acyclic reachable graph`() {
+    fun `enforces one request per client and an acyclic reachable graph`() {
         val twoClients =
             model.replace(
                 "\"gateway\": {",
                 "\"spare\": {\"type\": \"client\", \"params\": {\"load\": {\"points\": [{\"time\": \"0s\", \"rate\": \"1/s\"}]}, \"deadline\": \"1s\"}}, \"gateway\": {",
             )
-        assertThat(codes(compile(modelText = twoClients))).contains("TOPOLOGY_CLIENT")
+        assertThat(codes(compile(modelText = twoClients))).contains("CLIENT_REQUEST")
 
         val orphan = """"orphan": {"type": "service", "params": {"handlers": 1, "processing": {"kind": "fixed", "mean": "1ms"}}}"""
         val unreachable = model.replace("\"dependency\": {", "$orphan, \"dependency\": {")

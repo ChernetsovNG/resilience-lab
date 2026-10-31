@@ -76,7 +76,7 @@ class PathStreamsTest {
         val original = TestChains.simple()
         val graph =
             original.copy(
-                entry = "entry#2",
+                clients = listOf(original.client.copy(entry = "entry#2")),
                 calls = original.calls.map { it.copy(from = "entry#2") },
                 services =
                     original.services.map {

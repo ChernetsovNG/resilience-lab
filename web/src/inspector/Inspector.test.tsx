@@ -597,3 +597,21 @@ it("marks an unset optional object whose nested field is supplied by the sweep",
   expect(screen.getAllByText("Swept by the parameter grid")).toHaveLength(1);
   expect(screen.getByRole("button", { name: "Enable Connection pool" })).toBeTruthy();
 });
+
+it("shows client request classes read-only without offering a competing load profile", () => {
+  const classes = [{ id: "status", load: { points: [{ time: "0s", rate: "80/s" }] } }];
+  const source = structuredClone(model);
+  source.blocks.client.params = { deadline: "2s", classes };
+  const sourceCatalog = structuredClone(serverCatalog) as Catalog;
+  const client = sourceCatalog.types.find(type => type.id === "client")!;
+  if (!client.params.some(param => param.name === "classes")) {
+    client.params.push({ name: "classes", kind: "ARRAY", title: "Request classes", required: false,
+      description: "Independent load profiles", fields: [], options: [], sweepable: false, units: [] });
+  }
+  const onParam = renderInspector({ catalog: sourceCatalog, model: source, selected: "client" });
+  const field = screen.getByLabelText("Request classes") as HTMLTextAreaElement;
+  expect(field.readOnly).toBe(true);
+  expect(JSON.parse(field.value)).toEqual(classes);
+  expect(screen.queryByRole("table", { name: "Load points" })).toBeNull();
+  expect(onParam).not.toHaveBeenCalled();
+});

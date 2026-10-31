@@ -435,7 +435,7 @@ class CliTest {
         workspace.resolve("replicas.model.json").writeText(
             """
             {
-              "schemaVersion": 5,
+              "schemaVersion": 6,
               "blocks": {
                 "client": {"type":"client","params":{"deadline":"1s","load":{"points":[{"time":"0ms","rate":"$rate"}]}}},
                 "gateway": {"type":"service","params":{"handlers":100,"queue":100,"processing":{"kind":"fixed","mean":"1ms"}}},

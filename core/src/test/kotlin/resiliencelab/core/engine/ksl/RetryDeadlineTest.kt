@@ -563,7 +563,7 @@ class RetryDeadlineTest {
                         backoff = backoff,
                     ),
                 ),
-            client = base.client.copy(deadlineMs = requestDeadlineMs),
+            clients = listOf(base.client.copy(deadlineMs = requestDeadlineMs)),
         )
     }
 

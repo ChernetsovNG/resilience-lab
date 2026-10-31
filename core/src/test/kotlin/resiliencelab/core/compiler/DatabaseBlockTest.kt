@@ -30,7 +30,7 @@ class DatabaseBlockTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":5,"blocks":{
+                """{"schemaVersion":6,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "db":{"type":"database","params":{"maxConnections":1,"queue":1,"processing":{"kind":"fixed","mean":"10ms"}}}
@@ -65,7 +65,7 @@ class DatabaseBlockTest {
         val result = compile(model.copy(connections = model.connections.filterNot { it.id == "query" }))
         val diagnostic = result.diagnostics.single { it.code == "TOPOLOGY_GRAPH" && it.path == "db" }
 
-        assertThat(diagnostic.message).isEqualTo("Database 'db' is not reachable from the client")
+        assertThat(diagnostic.message).isEqualTo("Database 'db' is not reachable from any client")
         assertThat(diagnostic.args)
             .containsEntry("reason", JsonPrimitive("unreachable"))
             .containsEntry("elementType", JsonPrimitive("database"))

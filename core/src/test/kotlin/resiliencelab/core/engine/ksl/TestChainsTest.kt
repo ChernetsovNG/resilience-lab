@@ -11,7 +11,7 @@ class TestChainsTest {
         val base = TestChains.simple()
         val chain =
             base.copy(
-                client = base.client.copy(load = LoadProfile.constant(0.25)),
+                clients = listOf(base.client.copy(classes = mapOf("default" to LoadProfile.constant(0.25)))),
                 services = listOf(base.services.first().copy(processing = TestChains.fixed(0.0), queueCapacity = 1_000)),
                 calls = emptyList(),
                 run = TestChains.run(measurementMs = 100.0),

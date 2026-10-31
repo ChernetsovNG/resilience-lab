@@ -390,6 +390,7 @@ export interface components {
             types: components["schemas"]["TypeDescriptor"][];
         };
         ConnectionInstance: {
+            classes?: string[] | null;
             description?: string | null;
             from: string;
             id: string;
@@ -744,7 +745,7 @@ export interface components {
                 [key: string]: unknown;
             } | string;
             /** @enum {string} */
-            kind: "INTEGER" | "NUMBER" | "QUANTITY" | "CHOICE" | "OBJECT" | "ARRAY";
+            kind: "STRING" | "INTEGER" | "NUMBER" | "QUANTITY" | "CHOICE" | "OBJECT" | "ARRAY";
             /** Format: double */
             maximum?: number | null;
             /** Format: double */
@@ -899,6 +900,7 @@ export interface components {
             withoutSaturation: number;
         };
         ScenarioStep: {
+            classes?: string[] | null;
             connection?: string | null;
             failureRate?: string | null;
             processing?: {

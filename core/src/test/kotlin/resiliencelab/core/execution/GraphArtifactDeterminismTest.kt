@@ -38,12 +38,17 @@ class GraphArtifactDeterminismTest {
         val base = graph()
         val profiled =
             base.copy(
-                client =
-                    base.client.copy(
-                        load =
-                            LoadProfile(
-                                listOf(LoadPoint(0.0, 0.05), LoadPoint(50.0, 0.2)),
-                            ),
+                clients =
+                    listOf(
+                        base.client.copy(
+                            classes =
+                                mapOf(
+                                    "default" to
+                                        LoadProfile(
+                                            listOf(LoadPoint(0.0, 0.05), LoadPoint(50.0, 0.2)),
+                                        ),
+                                ),
+                        ),
                     ),
             )
         val reference = run(root.resolve("reference"), profiled, 1, false)
@@ -128,7 +133,15 @@ class GraphArtifactDeterminismTest {
         val initial = graph()
         val base =
             initial.copy(
-                client = initial.client.copy(load = LoadProfile(listOf(LoadPoint(0.0, 0.5), LoadPoint(130.0, 0.7)))),
+                clients =
+                    listOf(
+                        initial.client.copy(
+                            classes =
+                                mapOf(
+                                    "default" to LoadProfile(listOf(LoadPoint(0.0, 0.5), LoadPoint(130.0, 0.7))),
+                                ),
+                        ),
+                    ),
             )
         val pooled = base.copy(calls = base.calls.map { it.copy(pool = CallPool(1, 3.0)) })
         assertThat(PathStreams.keys(pooled, 0)).isEqualTo(PathStreams.keys(base, 0))
@@ -257,7 +270,7 @@ class GraphArtifactDeterminismTest {
             TestChains.backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 1.0, 3.0),
         )
         return base.copy(
-            client = base.client.copy(load = LoadProfile.constant(0.1), deadlineMs = 40.0),
+            clients = listOf(base.client.copy(classes = mapOf("default" to LoadProfile.constant(0.1)), deadlineMs = 40.0)),
             services =
                 listOf(
                     node(

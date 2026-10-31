@@ -61,6 +61,7 @@ class CatalogInitialValuesTest {
                     val reader =
                         ParamReader(JsonObject(mapOf(param.name to value)), listOf(param), "initial.model.json", path, path, diagnostics)
                     when (param.kind) {
+                        ParamKind.STRING -> reader.string(param.name)
                         ParamKind.INTEGER -> reader.int(param.name)
                         ParamKind.NUMBER -> reader.number(param.name)
                         ParamKind.QUANTITY -> reader.quantity(param.name)
@@ -80,7 +81,7 @@ class CatalogInitialValuesTest {
     fun `all block and connection initial values compile without parameter errors`() {
         val model =
             ModelFile(
-                schemaVersion = 5,
+                schemaVersion = 6,
                 blocks = listOf("client", "service", "router", "pooler", "database").associateWith { BlockInstance(it, params(it)) },
                 connections =
                     listOf(

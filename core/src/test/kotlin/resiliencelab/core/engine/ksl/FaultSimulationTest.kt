@@ -124,7 +124,7 @@ class FaultSimulationTest {
             val rig =
                 simulate(
                     base.copy(
-                        client = base.client.copy(deadlineMs = 5.0),
+                        clients = listOf(base.client.copy(deadlineMs = 5.0)),
                         faults = listOf(FaultSpan("entry", 10.0, 20.0, kind)),
                     ),
                     listOf(9.0, 10.0, 20.0),

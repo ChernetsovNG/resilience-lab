@@ -34,7 +34,7 @@ test("opens saves and runs a transaction pooler and displays both resource limit
   }, description: null, notes: null, scenario: null, replicaOverrides: null };
   source.connections.find(edge => edge.id === "middle-to-dependency")!.to = "pooler";
   source.connections.push({ id: "pooler-to-dependency", type: "call", from: "pooler", to: "dependency",
-    params: { timeout: "60ms" }, description: null, notes: null });
+    params: { timeout: "60ms" }, description: null, notes: null, classes: null });
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(source));
   await page.reload();
   await expect(page.getByTestId("block-node")).toHaveCount(5);
@@ -233,20 +233,20 @@ test("opens saves and runs a call pool without losing its configuration", async 
 
 test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
   const routed = (await stored(page, files.model)).content.model as ModelFile;
-  expect(routed.schemaVersion).toBe(5);
+  expect(routed.schemaVersion).toBe(6);
   routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null, replicaOverrides: null };
   routed.blocks.gateway.scenario = [
-    { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null },
-    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
-    { type: "process", processing: null, failureRate: null, connection: null },
-    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
+    { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null, classes: null },
+    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
+    { type: "process", processing: null, failureRate: null, connection: null, classes: null },
+    { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
   ];
   routed.blocks.third = structuredClone(routed.blocks.dependency);
   const call = routed.connections.find(edge => edge.id === "gateway-to-middle")!;
   call.to = "router";
   call.params.retryTarget = "other";
   routed.connections.push(...["middle", "dependency", "third"].map((to, index) => ({
-    id: `route-${to}`, type: "route", from: "router", to, params: { weight: index + 1 }, description: null, notes: null,
+    id: `route-${to}`, type: "route", from: "router", to, params: { weight: index + 1 }, description: null, notes: null, classes: null,
   })));
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(routed));
   await page.reload();

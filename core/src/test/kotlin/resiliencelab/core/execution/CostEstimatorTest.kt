@@ -25,15 +25,20 @@ class CostEstimatorTest {
         val base = TestChains.simple()
         val ramp =
             base.copy(
-                client =
-                    base.client.copy(
-                        load =
-                            LoadProfile(
-                                listOf(
-                                    LoadPoint(0.0, 0.0),
-                                    LoadPoint(1_000.0, 0.02),
+                clients =
+                    listOf(
+                        base.client.copy(
+                            classes =
+                                mapOf(
+                                    "default" to
+                                        LoadProfile(
+                                            listOf(
+                                                LoadPoint(0.0, 0.0),
+                                                LoadPoint(1_000.0, 0.02),
+                                            ),
+                                        ),
                                 ),
-                            ),
+                        ),
                     ),
             )
         assertThat(CostEstimator.estimate(experiment(ramp), 1).expectedEvents)
@@ -64,7 +69,7 @@ class CostEstimatorTest {
     @Test
     fun `counts both boundaries of each expanded fault interval without request traffic`() {
         val graph = replicaGraph(3)
-        val idle = graph.copy(client = graph.client.copy(load = LoadProfile.constant(0.0)))
+        val idle = graph.copy(clients = listOf(graph.client.copy(classes = mapOf("default" to LoadProfile.constant(0.0)))))
         val faults =
             listOf(
                 FaultSpan("worker#1", 100.0, 200.0, FaultKind.BLACKHOLE),
@@ -160,7 +165,7 @@ class CostEstimatorTest {
             (0 until 1_600).map { index ->
                 ServiceNode("service-$index", 1, 2, TestChains.fixed(1.0), 0.0)
             }
-        val chain = base.copy(entry = "service-0", services = services, calls = emptyList())
+        val chain = base.copy(clients = base.clients.map { it.copy(entry = "service-0") }, services = services, calls = emptyList())
 
         val estimate = CostEstimator.estimate(experiment(chain), workers = 1)
 
@@ -180,7 +185,7 @@ class CostEstimatorTest {
         val base = TestChains.simple()
         val chain =
             base.copy(
-                client = base.client.copy(load = LoadProfile.constant(0.0)),
+                clients = listOf(base.client.copy(classes = mapOf("default" to LoadProfile.constant(0.0)))),
                 run = base.run.copy(measurementMs = Int.MAX_VALUE.toDouble(), windowMs = 1.0),
             )
 
@@ -204,7 +209,7 @@ class CostEstimatorTest {
     fun `model extrapolation warning remains independent of workers`() {
         val base = TestChains.simple()
         val services = (0 until 5_001).map { index -> ServiceNode("service-$index", 1, 2, TestChains.fixed(1.0), 0.0) }
-        val chain = base.copy(entry = "service-0", services = services, calls = emptyList())
+        val chain = base.copy(clients = base.clients.map { it.copy(entry = "service-0") }, services = services, calls = emptyList())
 
         val estimate = CostEstimator.estimate(experiment(chain), workers = 9)
 
@@ -238,7 +243,7 @@ class CostEstimatorTest {
         val base = TestChains.simple()
         val renamed =
             base.copy(
-                entry = "z-entry",
+                clients = base.clients.map { it.copy(entry = "z-entry") },
                 services =
                     base.services
                         .map {

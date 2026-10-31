@@ -51,7 +51,7 @@ export function newModel(directory: string): DocumentDraft[] {
   const name = nameOf(path);
   return [
     { path: `${path}/${name}.model.json`, content: { model: {
-      schemaVersion: 5,
+      schemaVersion: 6,
       blocks: {}, connections: [],
     } } },
     { path: `${path}/${name}.layout.json`, content: { layout: {

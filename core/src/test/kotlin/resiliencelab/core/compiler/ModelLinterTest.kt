@@ -218,7 +218,7 @@ class ModelLinterTest {
     fun `amplification beyond double range serializes as exact digits`() {
         val changed =
             chain.copy(
-                entry = "service-0",
+                clients = chain.clients.map { it.copy(entry = "service-0") },
                 services = (0..34).map { service("service-$it", 1.0) },
                 calls = (0 until 34).map { call("call-$it", "service-$it", "service-${it + 1}", 100.0, Int.MAX_VALUE, it) },
             )
@@ -248,7 +248,7 @@ class ModelLinterTest {
     fun `handler demand includes the entire downstream path without retries or faults`() {
         val changed =
             chain.copy(
-                client = chain.client.copy(load = LoadProfile.constant(0.125)),
+                clients = listOf(chain.client.copy(classes = mapOf("default" to LoadProfile.constant(0.125)))),
                 services = listOf(service("c", 8.0, 1), service("a", 2.0, 1), service("b", 2.0, 2)),
                 calls = chain.calls.reversed().map { it.copy(network = fixed(1.0), attempts = 5) },
             )
@@ -282,7 +282,7 @@ class ModelLinterTest {
     fun `deadline includes entry processing and outgoing attempts without counting nested timeouts or network twice`() {
         val changed =
             chain.copy(
-                client = chain.client.copy(deadlineMs = 201.0),
+                clients = listOf(chain.client.copy(deadlineMs = 201.0)),
                 services = chain.services.reversed(),
                 calls = chain.calls.map { it.copy(attempts = 2, timeoutMs = it.timeoutMs + 0.125, network = fixed(1.0)) }.reversed(),
             )
@@ -293,7 +293,7 @@ class ModelLinterTest {
         assertThat(warning.path).isEqualTo("client")
         assertThat(warning.pointer).isEqualTo("/blocks/client/params/deadline")
         assertThat(warning.message).isEqualTo("Deadline 201 ms is below the entry call budget 201.25 ms")
-        assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = 201.25)), "LINT_DEADLINE_BUDGET")).isEmpty()
+        assertThat(warnings(changed.copy(clients = listOf(changed.client.copy(deadlineMs = 201.25))), "LINT_DEADLINE_BUDGET")).isEmpty()
     }
 
     @Test
@@ -306,12 +306,12 @@ class ModelLinterTest {
         ).forEach { (backoff, budget) ->
             val changed =
                 chain.copy(
-                    client = chain.client.copy(deadlineMs = budget),
+                    clients = listOf(chain.client.copy(deadlineMs = budget)),
                     calls = listOf(chain.calls[0].copy(attempts = 3, backoff = backoff), chain.calls[1]),
                 )
 
             assertThat(warnings(changed, "LINT_DEADLINE_BUDGET")).describedAs(backoff.toString()).isEmpty()
-            assertThat(warnings(changed.copy(client = changed.client.copy(deadlineMs = budget - 0.5)), "LINT_DEADLINE_BUDGET"))
+            assertThat(warnings(changed.copy(clients = listOf(changed.client.copy(deadlineMs = budget - 0.5))), "LINT_DEADLINE_BUDGET"))
                 .describedAs(backoff.toString())
                 .hasSize(1)
         }
@@ -321,22 +321,21 @@ class ModelLinterTest {
     fun `deadline for an entry without outgoing calls covers only its processing`() {
         val single =
             chain.copy(
+                clients = listOf(chain.client.copy(deadlineMs = 2.25)),
                 services = listOf(service("a", 2.5)),
                 calls = emptyList(),
-                client = chain.client.copy(deadlineMs = 2.25),
             )
 
         assertThat(warnings(single, "LINT_DEADLINE_BUDGET").single().message)
             .isEqualTo("Deadline 2.25 ms is below the entry call budget 2.5 ms")
-        assertThat(warnings(single.copy(client = single.client.copy(deadlineMs = 2.5)), "LINT_DEADLINE_BUDGET")).isEmpty()
+        assertThat(warnings(single.copy(clients = listOf(single.client.copy(deadlineMs = 2.5))), "LINT_DEADLINE_BUDGET")).isEmpty()
     }
 
     @Test
     fun `nested checkout timeouts fit within the entry budget and client deadline`() {
         val checkout =
             chain.copy(
-                client = chain.client.copy(deadlineMs = 10_000.0),
-                entry = "gateway",
+                clients = listOf((chain.client.copy(deadlineMs = 10_000.0)).copy(entry = "gateway")),
                 services = listOf(service("gateway", 2.0), service("order", 20.0), service("payment", 10.0), service("psp", 300.0)),
                 calls =
                     listOf(
@@ -353,13 +352,14 @@ class ModelLinterTest {
             )
 
         assertThat(linter.lint(experiment(checkout))).isEmpty()
-        assertThat(warnings(checkout.copy(client = checkout.client.copy(deadlineMs = 8_001.0)), "LINT_DEADLINE_BUDGET").single().message)
-            .isEqualTo("Deadline 8001 ms is below the entry call budget 8002 ms")
+        assertThat(
+            warnings(checkout.copy(clients = listOf(checkout.client.copy(deadlineMs = 8_001.0))), "LINT_DEADLINE_BUDGET").single().message,
+        ).isEqualTo("Deadline 8001 ms is below the entry call budget 8002 ms")
     }
 
     @Test
     fun `common warnings occur once while different warnings carry their variants`() {
-        val a = chain.copy(client = chain.client.copy(deadlineMs = 10.0))
+        val a = chain.copy(clients = listOf(chain.client.copy(deadlineMs = 10.0)))
         val b = a.copy(calls = a.calls.map { if (it.path == "a-b") it.copy(timeoutMs = 200.0) else it })
         val result =
             linter.lint(
@@ -385,9 +385,9 @@ class ModelLinterTest {
     fun `a single service has only the capacity rule`() {
         val single =
             chain.copy(
+                clients = listOf(chain.client.copy(classes = mapOf("default" to LoadProfile.constant(1.0)))),
                 services = listOf(service("a", 2.0, 1)),
                 calls = emptyList(),
-                client = chain.client.copy(load = LoadProfile.constant(1.0)),
             )
 
         assertThat(linter.lint(experiment(single)).map { it.code }).containsExactly("LINT_HANDLERS_LITTLE")

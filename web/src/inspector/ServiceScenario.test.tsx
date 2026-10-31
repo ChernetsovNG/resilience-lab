@@ -243,3 +243,15 @@ it("opens scenario help without collapsing the section", () => {
   expect(screen.getByText("Scenario", { exact: true }).closest("details")!.open).toBe(true);
   expect(screen.getByRole("tooltip").textContent).toContain("Alt+Up");
 });
+
+it("preserves request-class filters when changing step type and undoing", () => {
+  const initial = structuredClone(explicit);
+  Object.assign(initial.blocks.gateway.scenario![0], { classes: ["checkout"] });
+  render(<Editor initial={initial} />);
+  fireEvent.change(within(step(1)).getByRole("combobox", { name: "Step type" }), { target: { value: "call" } });
+  expect(scenario()?.[0]).toEqual({ type: "call", connection: "a-call", classes: ["checkout"] });
+  click("Undo");
+  expect(stored().model).toEqual(initial);
+  fireEvent.change(within(step(2)).getByRole("combobox", { name: "Step type" }), { target: { value: "process" } });
+  expect(scenario()?.[1]).toEqual({ type: "process" });
+});
