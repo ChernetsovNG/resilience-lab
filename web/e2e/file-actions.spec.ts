@@ -1,4 +1,5 @@
 import { selectExperiment } from "./fixtures";
+import { dragConnection } from "./connectionGestures";
 import { expect, test as base, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -144,7 +145,7 @@ test("creates an empty model and runs a system built from the palette", async ({
     await palette.getByRole("button", { name: "Client", exact: true }).dblclick();
     await palette.getByRole("button", { name: "Service", exact: true }).dblclick();
     await page.locator(".react-flow__controls-fitview").click();
-    await page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]').dragTo(
+    await dragConnection(page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]'),
       page.getByTestId("rf__node-service-1").locator('[data-handleid="in"]'));
     await expect(page.getByTestId("rf__edge-client-1-to-service-1")).toBeAttached();
     await expect(page.getByText("Add a client from the palette", { exact: true })).toHaveCount(0);

@@ -3,6 +3,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
 import { expect, test, type Locator, type Page } from "./fixtures";
+import { dragConnection } from "./connectionGestures";
 
 test.use({ viewport: { width: 1920, height: 1100 }, actionTimeout: 10_000 });
 
@@ -133,7 +134,7 @@ test("builds checkout-replicas from the palette, saves the example and exposes t
         ["order-service", "payment-service"], ["payment-service", "psp"],
       ]) {
         await page.locator(".react-flow__controls-fitview").click();
-        await page.getByTestId(`rf__node-${from}`).locator('[data-handleid="out"]').dragTo(
+        await dragConnection(page.getByTestId(`rf__node-${from}`).locator('[data-handleid="out"]'),
           page.getByTestId(`rf__node-${to}`).locator('[data-handleid="in"]'));
         await expect(page.getByTestId(`rf__edge-${from}-to-${to}`)).toBeAttached();
         if (from === "mobile-app") continue;

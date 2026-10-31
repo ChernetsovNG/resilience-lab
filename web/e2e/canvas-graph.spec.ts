@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
 import { selectExperiment } from "./fixtures";
+import { sharedEdgeLength } from "../src/test/sharedEdgeLength";
+import { dragConnection } from "./connectionGestures";
 
 const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
   graph: async ({ page }, provide) => {
@@ -51,12 +53,49 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
       await page.goto("/");
       await selectExperiment(page, `${directory}/graph.experiment.json`);
       await expect(page.getByTestId("block-node")).toHaveCount(6);
+      await expect(page.getByRole("combobox", { name: "Модель", exact: true })).toBeEnabled();
       await provide({ directory, layout });
     } finally { await rm(target, { recursive: true }); }
   },
 });
 
 test.use({ locale: "ru-RU", viewport: { width: 1280, height: 800 }, actionTimeout: 10_000 });
+
+test("checkout-replicas branches separate at ports and labels avoid other paths", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await selectExperiment(page, "checkout-replicas/checkout-replicas.experiment.json");
+  await expect(page.getByTestId("block-node")).toHaveCount(7);
+  await expect(page.getByTestId("canvas-edge-label-order-service-to-payment-service")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
+  await page.getByTestId("canvas-edge-label-order-service-to-pgbouncer").click();
+  const measure = () => page.locator(".react-flow").evaluate(element => {
+    const paths = [...element.querySelectorAll<SVGPathElement>(".react-flow__edge-path")].map(path => {
+      const coordinates = path.getAttribute("d")!.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)!.map(Number);
+      const points = Array.from({ length: coordinates.length / 2 }, (_, index) => ({ x: coordinates[index * 2], y: coordinates[index * 2 + 1] }));
+      const matrix = path.getScreenCTM()!;
+      return { id: path.closest(".react-flow__edge")!.getAttribute("data-id")!, points,
+        screen: points.map(point => new DOMPoint(point.x, point.y).matrixTransform(matrix).toJSON()) };
+    });
+    const crossings = [...element.querySelectorAll<HTMLElement>(".canvas-edge-label")].flatMap(label => {
+      const id = label.dataset.testid!.replace("canvas-edge-label-", "");
+      const rect = label.getBoundingClientRect();
+      return paths.filter(path => path.id !== id && path.screen.slice(1).some((end, index) => {
+        const start = path.screen[index];
+        return Math.abs(start.y - end.y) < 1e-6
+          ? start.y > rect.top && start.y < rect.bottom && Math.max(start.x, end.x) > rect.left && Math.min(start.x, end.x) < rect.right
+          : start.x > rect.left && start.x < rect.right && Math.max(start.y, end.y) > rect.top && Math.min(start.y, end.y) < rect.bottom;
+      })).map(path => [id, path.id]);
+    });
+    return { paths: paths.map(({ id, points }) => ({ id, points })), crossings };
+  });
+  await page.screenshot({ path: testInfo.outputPath("checkout-replicas.png") });
+  await expect.poll(async () => {
+    const { paths, crossings } = await measure();
+    const branches = paths.filter(path => ["order-service-to-payment-service", "order-service-to-pgbouncer"].includes(path.id));
+    return { count: branches.length, separated: branches.length === 2 && sharedEdgeLength(branches[0].points, branches[1].points) <= 12, crossings };
+  }).toEqual({ count: 2, separated: true, crossings: [] });
+  await page.screenshot({ path: testInfo.outputPath("checkout-replicas.png") });
+});
 
 async function geometry(page: Page) {
   return page.locator(".react-flow").evaluate(element => {
@@ -163,7 +202,7 @@ for (const count of [1, 2]) {
     }
     await page.getByTestId("canvas-edge-label-bypass-1").click();
     await expect(page.getByTestId("canvas-edge-label-bypass-1")).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("rf__node-client").locator('[data-handleid="out"]').dragTo(
+    await dragConnection(page.getByTestId("rf__node-client").locator('[data-handleid="out"]'),
       page.getByTestId("rf__node-middle").locator('[data-handleid="in"]'));
     await expect(page.locator('.react-flow__edge[data-id="client-to-middle"]')).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();

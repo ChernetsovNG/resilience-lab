@@ -1,4 +1,5 @@
 import { selectExperiment } from "./fixtures";
+import { dragConnection } from "./connectionGestures";
 import { expect, test as base, type Locator, type Page } from "./fixtures";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -456,7 +457,7 @@ async function move(page: Page, locator: Locator, dx: number, dy: number) {
 async function connect(page: Page, from: string, to: string, targetPort = "in") {
   const source = page.getByTestId(`rf__node-${from}`).locator('[data-handleid="out"]');
   const target = page.getByTestId(`rf__node-${to}`).locator(`[data-handleid="${targetPort}"]`);
-  await source.dragTo(target);
+  await dragConnection(source, target);
 }
 
 test("shows one palette tooltip for mouse hover or keyboard focus", async ({ page }) => {

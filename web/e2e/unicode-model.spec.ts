@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
+import { dragConnection } from "./connectionGestures";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -22,7 +23,7 @@ test("runs a Cyrillic model built from the palette", async ({ page }, testInfo) 
     await palette.getByRole("button", { name: "Клиент", exact: true }).dblclick();
     await palette.getByRole("button", { name: "Сервис", exact: true }).dblclick();
     await page.locator(".react-flow__controls-fitview").click();
-    await page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]').dragTo(
+    await dragConnection(page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]'),
       page.getByTestId("rf__node-service-1").locator('[data-handleid="in"]'));
     await expect(page.getByTestId("rf__edge-client-1-to-service-1")).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();

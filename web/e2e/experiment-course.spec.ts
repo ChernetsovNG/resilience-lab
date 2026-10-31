@@ -85,6 +85,7 @@ test("a real checkout result shares the course cursor with Timeline and playback
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 2 ·");
     await page.getByRole("tab", { name: "Findings", exact: true }).click();
     await page.getByTestId("run-conditions").scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: /fit view/i }).click();
     await expect.poll(async () => {
       const strip = (await page.locator(".course-expanded").boundingBox())!;
       const nodes = await page.getByTestId("block-node").all();

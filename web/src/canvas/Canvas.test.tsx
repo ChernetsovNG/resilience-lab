@@ -659,3 +659,32 @@ it("preserves the viewport after a palette drag and cancellation while keeping e
     expect(viewport()).not.toBe(reopened);
   } finally { height.mockRestore(); }
 });
+
+it("preserves the viewport after an explicit click on an edge label", async () => {
+  const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get");
+  try {
+    const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+    const { container } = render(<Canvas {...props} />);
+    const viewport = () => container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform;
+    const resize = async (value: number) => {
+      await act(async () => {
+        height.mockReturnValue(value);
+        fireEvent(window, new Event("resize"));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      });
+    };
+    await waitFor(() => { expect(viewport()).not.toContain("scale(1)"); });
+    const initial = viewport();
+    await resize(320);
+    expect(viewport()).not.toBe(initial);
+    const before = viewport();
+    const element = await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+    fireEvent.mouseDown(element);
+    fireEvent.mouseUp(element);
+    fireEvent.click(element);
+    await resize(160);
+    expect(viewport()).toBe(before);
+    fireEvent.click(screen.getByRole("button", { name: "Fit View" }));
+    await waitFor(() => { expect(viewport()).not.toBe(before); });
+  } finally { height.mockRestore(); }
+});

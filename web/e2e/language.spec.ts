@@ -1,4 +1,5 @@
 import { selectExperiment } from "./fixtures";
+import { waitForStablePorts } from "./connectionGestures";
 import { expect, test, type Page } from "./fixtures";
 import catalogSnapshot from "../src/test/catalog.json" with { type: "json" };
 
@@ -158,6 +159,7 @@ test("an existing canvas notice follows the selected language", async ({ page })
   await chooseLanguage(page, "en", "ru");
   const port = page.getByTestId("rf__node-gateway").locator(".react-flow__handle.source");
   await expect(port).toBeVisible();
+  await waitForStablePorts(port);
   const box = (await port.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();

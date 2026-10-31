@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { Rect, XYPosition } from "@xyflow/react";
 import { legacyCorridor } from "../test/legacyEdgeGeometry";
 import { corridor, layoutEdges, type EdgeLayoutInput } from "./edgeGeometry";
+import { sharedEdgeLength } from "../test/sharedEdgeLength";
 
 const epsilon = 1e-7;
 const overlaps = (a: Rect, b: Rect) => Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x) + epsilon &&
@@ -45,6 +46,13 @@ it("preserves corridor lengths on identical obstacles and safe deterministic lay
     const actual = layoutEdges(edges, nodes);
     const repeated = layoutEdges(structuredClone(edges), structuredClone(nodes));
     expect(JSON.stringify([...repeated]), `diagram ${trial}`).toBe(JSON.stringify([...actual]));
+    edges.forEach((edge, index) => {
+      for (const other of edges.slice(index + 1)) {
+        if (edge.from === other.from || edge.to === other.to) {
+          expect(sharedEdgeLength(actual.get(edge.id)!.points, actual.get(other.id)!.points), `diagram ${trial}, edges ${edge.id}/${other.id}`).toBeLessThanOrEqual(12);
+        }
+      }
+    });
     const labels = edges.map(edge => {
       const { label } = actual.get(edge.id)!;
       return { id: edge.id, x: label.x - edge.width / 2, y: label.y - edge.height / 2, width: edge.width, height: edge.height };

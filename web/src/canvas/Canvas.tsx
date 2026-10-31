@@ -76,7 +76,7 @@ export interface CanvasProps {
   onFault?: (index: number) => void;
   /** Reports viewport zoom after node initialization; an empty model reports immediately. */
   onZoomChange?: (zoom: number) => void;
-  /** Space covered by the open experiment course; fit the diagram above it. */
+  /** Space covered by the open experiment course; fit the diagram above it. Navigation stays above it too. */
   bottomInset?: number;
 }
 
@@ -100,7 +100,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     return observeResize([element], measure);
   }, [variant?.id]);
   const height = useStore((state) => state.height);
-  const shortCanvas = height > 0 && height < 240;
+  const shortCanvas = height > 0 && height - bottomInset < 240;
   const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
     ...baseFitViewOptions.padding,
     right: shortCanvas ? "252px" as const : baseFitViewOptions.padding.right,
@@ -335,6 +335,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   return (
     <div className={`model-canvas${variant === undefined ? "" : " variant-canvas"}`}
       onMouseDownCapture={event => {
+        manualViewport.current = true;
         if (variant === undefined || disabled || !(event.target instanceof Element)
           || event.target.closest("button, input, textarea, select, .inline-param") !== null
           || event.target.closest(".react-flow__node, .react-flow__handle") === null) return;
@@ -417,7 +418,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
           {notice.message}{notice.variant === undefined ? null : <>
           {" "}<a href="#model" onClick={event => { event.preventDefault(); setNotice(null); onModelPage?.(); }}>{t("editor.pages.model")}</a>
         </>}</div>}
-    <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}
+    <Panel position="bottom-right" className="canvas-navigation" style={{ bottom: bottomInset }} role="group" aria-label={t("editor.canvas.navigation")}
       onWheelCapture={() => { manualViewport.current = true; }}
       onPointerDownCapture={() => { manualViewport.current = true; }}>
       <Controls showInteractive={false} showFitView={false} orientation="horizontal"

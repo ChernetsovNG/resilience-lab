@@ -109,10 +109,19 @@ class Frontier {
   }
 }
 
-/** A* on obstacle boundaries; only horizontal/vertical segments in free space are connected. */
-export function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]): XYPosition[] {
-  const xs = [...new Set([start.x, end.x, ...obstacles.flatMap(rect => [rect.x, rect.x + rect.width])])].sort((a, b) => a - b);
-  const ys = [...new Set([start.y, end.y, ...obstacles.flatMap(rect => [rect.y, rect.y + rect.height])])].sort((a, b) => a - b);
+/** A* on obstacle boundaries; only horizontal/vertical segments in free space are connected.
+ * Occupied lines prohibit collinear reuse but allow perpendicular crossings. */
+export function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[], occupied: Rect[] = []): XYPosition[] {
+  const free = (a: XYPosition, b: XYPosition) => !blocked(a, b, obstacles) && !occupied.some(rect => a.y === b.y
+      ? rect.height === 0 && Math.abs(a.y - rect.y) < epsilon && Math.min(Math.max(a.x, b.x), rect.x + rect.width) > Math.max(Math.min(a.x, b.x), rect.x) + epsilon
+      : rect.width === 0 && Math.abs(a.x - rect.x) < epsilon && Math.min(Math.max(a.y, b.y), rect.y + rect.height) > Math.max(Math.min(a.y, b.y), rect.y) + epsilon);
+  for (const corner of [{ x: end.x, y: start.y }, { x: start.x, y: end.y }]) {
+    if (free(start, corner) && free(corner, end)) return simplify([start, corner, end]);
+  }
+  const xs = [...new Set([start.x, end.x, ...obstacles.flatMap(rect => [rect.x, rect.x + rect.width]),
+    ...occupied.flatMap(rect => rect.width === 0 ? [rect.x - pathGap, rect.x, rect.x + pathGap] : [rect.x, rect.x + rect.width])])].sort((a, b) => a - b);
+  const ys = [...new Set([start.y, end.y, ...obstacles.flatMap(rect => [rect.y, rect.y + rect.height]),
+    ...occupied.flatMap(rect => rect.height === 0 ? [rect.y - pathGap, rect.y, rect.y + pathGap] : [rect.y, rect.y + rect.height])])].sort((a, b) => a - b);
   const point = (index: number) => ({ x: xs[index % xs.length], y: ys[Math.floor(index / xs.length)] });
   const first = ys.indexOf(start.y) * xs.length + xs.indexOf(start.x);
   const last = ys.indexOf(end.y) * xs.length + xs.indexOf(end.x);
@@ -137,13 +146,16 @@ export function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]):
     const y = Math.floor(current / xs.length);
     const neighbors = [x + 1 < xs.length ? current + 1 : -1, y > 0 ? current - xs.length : -1,
       y + 1 < ys.length ? current + xs.length : -1, x > 0 ? current - 1 : -1];
+    const currentPoint = point(current);
     for (const next of neighbors) {
-      if (next < 0 || visited.has(next) || blocked(point(current), point(next), obstacles)) continue;
-      const cost = costs.get(current)! + distance(point(current), point(next));
+      if (next < 0 || visited.has(next)) continue;
+      const nextPoint = point(next);
+      if (!free(currentPoint, nextPoint)) continue;
+      const cost = costs.get(current)! + distance(currentPoint, nextPoint);
       if (cost >= (costs.get(next) ?? Infinity)) continue;
       costs.set(next, cost);
       previous.set(next, current);
-      open.push(next, cost, distance(point(next), end));
+      open.push(next, cost, distance(nextPoint, end));
     }
   }
   // Overlapping node footprints can enclose a port. Keep the edge selectable while the user moves them apart.
@@ -156,9 +168,29 @@ function pathBounds(points: XYPosition[]): Rect[] {
     height: Math.abs(points[index].y - end.y) + 2 }));
 }
 
+function occupiedPath(points: XYPosition[]): Rect[] {
+  const total = points.slice(1).reduce((sum, end, index) => sum + distance(points[index], end), 0);
+  if (total <= gap) return [];
+  const portGap = Math.min(gap, total / 3);
+  let travelled = 0;
+  return points.slice(1).flatMap((end, index) => {
+    const start = points[index];
+    const length = distance(start, end);
+    const from = Math.max(0, portGap - travelled);
+    const to = Math.min(length, total - portGap - travelled);
+    travelled += length;
+    if (to <= from + epsilon) return [];
+    const axis = start.y === end.y ? "x" : "y";
+    const sign = Math.sign(end[axis] - start[axis]);
+    const a = { ...start, [axis]: start[axis] + sign * from };
+    const b = { ...start, [axis]: start[axis] + sign * to };
+    return [{ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) }];
+  });
+}
+
 function placeLabel(points: XYPosition[], size: EdgeMeasurement, obstacles: Rect[]): XYPosition | undefined {
   const total = points.slice(1).reduce((sum, end, index) => sum + distance(points[index], end), 0);
-  const candidates: { point: XYPosition; cost: number }[] = [];
+  let best: { point: XYPosition; cost: number } | undefined;
   let travelled = 0;
   for (let index = 1; index < points.length; index++) {
     const start = points[index - 1];
@@ -172,16 +204,19 @@ function placeLabel(points: XYPosition[], size: EdgeMeasurement, obstacles: Rect
     const coordinates = [(start[axis] + end[axis]) / 2,
       start[axis] + Math.sign(end[axis] - start[axis]) * Math.max(0, Math.min(length, total / 2 - travelled)),
       ...obstacles.flatMap(rect => [rect[axis] - half, rect[axis] + (horizontal ? rect.width : rect.height) + half])];
-    for (const coordinate of coordinates) {
+    for (const coordinate of new Set(coordinates)) {
       if (coordinate < minimum || coordinate > maximum) continue;
       const point = { ...start, [axis]: coordinate };
-      if (!obstacles.some(rect => overlaps(labelRect(point, size), rect))) {
-        candidates.push({ point, cost: Math.abs(travelled + distance(start, point) - total / 2) });
+      const cost = Math.abs(travelled + distance(start, point) - total / 2);
+      if (best !== undefined && cost >= best.cost) continue;
+      const candidate = labelRect(point, size);
+      if (!obstacles.some(rect => overlaps(candidate, rect))) {
+        best = { point, cost };
       }
     }
     travelled += length;
   }
-  return candidates.sort((a, b) => a.cost - b.cost)[0]?.point;
+  return best?.point;
 }
 
 /** Routes in document order so labels never depend on React render or observer delivery order. */
@@ -189,6 +224,8 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
   const geometries = new Map<string, EdgeGeometry>();
   const labels: Rect[] = [];
   const previousPaths: Rect[] = [];
+  const outgoing = new Map<string, Rect[][]>();
+  const incoming = new Map<string, Rect[][]>();
   const entries = [...nodes].filter(([, rect]) => rect.width > 0 && rect.height > 0);
   const bounds = entries.map(([, rect]) => rect);
   let diagramClearance = pathGap;
@@ -212,23 +249,33 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
       if (id !== edge.from) clearance = Math.min(clearance, separation(sourcePort, rect) / 3);
       if (id !== edge.to) clearance = Math.min(clearance, separation(targetPort, rect) / 3);
     }
-    const start = { x: sourcePort.x + clearance, y: source.y };
-    const end = { x: targetPort.x - clearance, y: target.y };
+    clearance = Math.min(clearance, Math.max(0, gap - (sourcePort.x - source.x)), Math.max(0, gap - (target.x - targetPort.x)));
+    const sourceRoutes = outgoing.get(edge.from) ?? [];
+    const targetRoutes = incoming.get(edge.to) ?? [];
+    const sourceClearance = clearance / (sourceRoutes.length + 1);
+    const targetClearance = clearance / (targetRoutes.length + 1);
+    const nodeClearance = Math.min(sourceClearance, targetClearance);
+    const start = { x: sourcePort.x + sourceClearance, y: source.y };
+    const end = { x: targetPort.x - targetClearance, y: target.y };
     // Leave the port corridor free: labels keep a larger node clearance than either routing margin.
-    const obstacles = [...bounds.map(rect => expand(rect, clearance)), ...labels.map(rect => expand(rect, 4))];
+    const obstacles = [...bounds.map(rect => expand(rect, nodeClearance)), ...labels.map(rect => expand(rect, 4))];
     const labelObstacles = [...bounds, ...labels, ...previousPaths].map(rect => expand(rect, gap));
-    let points = [source, ...corridor(start, end, obstacles), target];
+    // Reserve only sibling routes; up to 12 px at either end remain available for the common port.
+    const occupied = [...sourceRoutes.flat(), ...targetRoutes.flat()];
+    let points = [source, ...corridor(start, end, obstacles, occupied), target];
     let label = placeLabel(points, edge, labelObstacles);
     if (edge.width > 0 && edge.height > 0 && label === undefined) {
       // A wide label gets its own horizontal segment in the nearest free lane above or below obstacles.
       const center = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-      label = [center.y, ...labelObstacles.flatMap(rect => [rect.y - edge.height / 2, rect.y + rect.height + edge.height / 2])]
-        .map(y => ({ x: center.x, y })).filter(point => !labelObstacles.some(rect => overlaps(labelRect(point, edge), rect)))
-        .sort((a, b) => Math.abs(a.y - center.y) - Math.abs(b.y - center.y))[0];
+      label = [...new Set([center.y, ...labelObstacles.flatMap(rect => [rect.y - edge.height / 2, rect.y + rect.height + edge.height / 2])])]
+        .map(y => ({ x: center.x, y })).sort((a, b) => Math.abs(a.y - center.y) - Math.abs(b.y - center.y)).find(point => {
+          const candidate = labelRect(point, edge);
+          return !labelObstacles.some(rect => overlaps(candidate, rect));
+        })!;
       const left = { x: label.x - edge.width / 2 - (gap - pathGap), y: label.y };
       const right = { x: label.x + edge.width / 2 + (gap - pathGap), y: label.y };
       const [entry, exit] = start.x <= end.x ? [left, right] : [right, left];
-      points = [source, ...corridor(start, entry, obstacles), ...corridor(exit, end, obstacles), target];
+      points = [source, ...corridor(start, entry, obstacles, occupied), ...corridor(exit, end, obstacles, occupied), target];
     }
     points = simplify(points);
     geometries.set(edge.id, { points, label: label ?? source,
@@ -236,6 +283,9 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
       path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ") });
     if (edge.width > 0 && edge.height > 0) labels.push(labelRect(label!, edge));
     previousPaths.push(...pathBounds(points));
+    const reserved = occupiedPath(points);
+    outgoing.set(edge.from, [...sourceRoutes, reserved]);
+    incoming.set(edge.to, [...targetRoutes, reserved]);
   }
   return geometries;
 }

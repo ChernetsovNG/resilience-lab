@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Rect, XYPosition } from "@xyflow/react";
 import { diagramBounds, layoutEdges, type EdgeLayoutInput } from "./edgeGeometry";
+import { sharedEdgeLength } from "../test/sharedEdgeLength";
 
 const nodes = new Map<string, Rect>([
   ["gateway", { x: 0, y: 100, width: 180, height: 80 }],
@@ -24,11 +25,86 @@ function crosses(points: XYPosition[], rect: Rect) {
 }
 
 describe("edge geometry", () => {
+  it.each(["outgoing", "incoming"] as const)("separates two and three %s edges immediately at their shared port", direction => {
+    for (const heights of [[0, 100], [100, 300], [0, 300], [0, 100, 300], [-280, -140, 0], [300, 460, 620]]) {
+      const bounds = new Map<string, Rect>([["shared", { x: direction === "outgoing" ? 0 : 680, y: 100, width: 180, height: 80 }]]);
+      const edges = heights.map((y, index): EdgeLayoutInput => {
+        const id = `branch-${index}`;
+        bounds.set(id, { x: direction === "outgoing" ? 680 : 0, y, width: 180, height: 80 });
+        return { id, from: direction === "outgoing" ? "shared" : id, to: direction === "outgoing" ? id : "shared",
+          sourceX: 180, sourceY: direction === "outgoing" ? 140 : y + 40,
+          targetX: 680, targetY: direction === "outgoing" ? y + 40 : 140, width: 100, height: 30 };
+      });
+      const actual = layoutEdges(edges, bounds);
+      expect(actual).toEqual(layoutEdges(structuredClone(edges), structuredClone(bounds)));
+      const routes = [...actual.values()];
+      const labels = routes.map(route => ({ x: route.label.x - 50, y: route.label.y - 15, width: 100, height: 30 }));
+      routes.forEach((route, index) => {
+        for (const other of routes.slice(index + 1)) expect(sharedEdgeLength(route.points, other.points)).toBeLessThanOrEqual(12);
+        expect(route.points.slice(1).every((point, segment) => point.x === route.points[segment].x || point.y === route.points[segment].y)).toBe(true);
+        for (const node of bounds.values()) expect(crosses(route.points, node)).toBe(false);
+        for (const [other, label] of labels.entries()) if (other !== index) expect(crosses(route.points, label)).toBe(false);
+        expect(route.points.slice(1).some((end, segment) => {
+          const start = route.points[segment];
+          return route.label.x >= Math.min(start.x, end.x) && route.label.x <= Math.max(start.x, end.x) &&
+            route.label.y >= Math.min(start.y, end.y) && route.label.y <= Math.max(start.y, end.y);
+        })).toBe(true);
+      });
+    }
+  });
+
   it("routes through free corridors while keeping the actual ports", () => {
     const route = layoutEdges([bypass], nodes).get("bypass")!;
     expect(route.points[0]).toEqual({ x: 180, y: 140 });
     expect(route.points.at(-1)).toEqual({ x: 680, y: 140 });
     expect(crosses(route.points, nodes.get("middle")!)).toBe(false);
+  });
+
+  it("limits the common stub when the measured handle sits inside the node footprint", () => {
+    const edges = [bypass, { ...bypass, id: "second" }].map(edge => ({ ...edge, sourceX: 173.99989 }));
+    const routes = [...layoutEdges(edges, nodes).values()];
+    expect(sharedEdgeLength(routes[0].points, routes[1].points)).toBeLessThanOrEqual(12);
+    for (const route of routes) expect(route.points[0]).toEqual({ x: 173.99989, y: 140 });
+  });
+
+  it("separates short coincident routes whose port allowances overlap", () => {
+    const bounds = new Map<string, Rect>([
+      ["source", { x: 0, y: 100, width: 180, height: 80 }],
+      ["target", { x: 198, y: 100, width: 180, height: 80 }],
+    ]);
+    const edges = Array.from({ length: 3 }, (_, index) => ({ ...bypass, id: String(index), from: "source", to: "target",
+      targetX: 198, width: 0, height: 0 }));
+    const routes = [...layoutEdges(edges, bounds).values()];
+    routes.forEach((route, index) => {
+      for (const other of routes.slice(index + 1)) expect(sharedEdgeLength(route.points, other.points)).toBeLessThanOrEqual(12);
+    });
+  });
+
+  it.each(["outgoing", "incoming"] as const)("keeps dense %s branches orthogonal with inset handles", direction => {
+    for (const count of [4, 8]) {
+      const bounds = new Map<string, Rect>([["shared", { x: direction === "outgoing" ? 0 : 680, y: 100, width: 180, height: 80 }]]);
+      const edges = Array.from({ length: count }, (_, index): EdgeLayoutInput => {
+        const id = `branch-${index}`;
+        const y = 300 + index * 120;
+        bounds.set(id, { x: direction === "outgoing" ? 680 : 0, y, width: 180, height: 80 });
+        return { id, from: direction === "outgoing" ? "shared" : id, to: direction === "outgoing" ? id : "shared",
+          sourceX: direction === "outgoing" ? 174 : 180, sourceY: direction === "outgoing" ? 140 : y + 40,
+          targetX: direction === "outgoing" ? 680 : 686, targetY: direction === "outgoing" ? y + 40 : 140, width: 100, height: 30 };
+      });
+      const routes = [...layoutEdges(edges, bounds).values()];
+      const labels = routes.map(route => ({ x: route.label.x - 50, y: route.label.y - 15, width: 100, height: 30 }));
+      routes.forEach((route, index) => {
+        expect(route.points.slice(1).every((point, segment) => point.x === route.points[segment].x || point.y === route.points[segment].y)).toBe(true);
+        for (const other of routes.slice(index + 1)) expect(sharedEdgeLength(route.points, other.points)).toBeLessThanOrEqual(12);
+        for (const [id, node] of bounds) if (id !== edges[index].from && id !== edges[index].to) expect(crosses(route.points, node)).toBe(false);
+        for (const [other, label] of labels.entries()) if (other !== index) expect(crosses(route.points, label)).toBe(false);
+        expect(route.points.slice(1).some((end, segment) => {
+          const start = route.points[segment];
+          return route.label.x >= Math.min(start.x, end.x) && route.label.x <= Math.max(start.x, end.x) &&
+            route.label.y >= Math.min(start.y, end.y) && route.label.y <= Math.max(start.y, end.y);
+        })).toBe(true);
+      });
+    }
   });
 
   it("uses narrow gaps without crossing a nearby foreign node", () => {
@@ -101,12 +177,16 @@ describe("edge geometry", () => {
     })).toBe(true);
   });
 
-  it("separates labels of two calls with identical ports", () => {
-    const routes = [...layoutEdges([bypass, { ...bypass, id: "second" }], nodes).values()];
+  it.each([2, 3])("separates paths and labels of %s calls with identical ports", count => {
+    const routes = [...layoutEdges(Array.from({ length: count }, (_, index) => ({ ...bypass, id: String(index) })), nodes).values()];
     const labels = routes.map(route => ({ x: route.label.x - 50, y: route.label.y - 15, width: 100, height: 30 }));
     expect(overlaps(labels[0], labels[1])).toBe(false);
     for (const route of routes) expect(crosses(route.points, nodes.get("middle")!)).toBe(false);
     expect(crosses(routes[1].points, labels[0])).toBe(false);
+    routes.forEach((route, index) => {
+      for (const other of routes.slice(index + 1)) expect(sharedEdgeLength(route.points, other.points)).toBeLessThanOrEqual(12);
+      for (const [other, label] of labels.entries()) if (other !== index) expect(crosses(route.points, label)).toBe(false);
+    });
   });
 
   it("keeps a target port reachable beside an already placed label", () => {
