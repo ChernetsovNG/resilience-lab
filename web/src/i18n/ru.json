@@ -1,4 +1,6 @@
 {
+  "results.timeline.addReplica": "Добавить реплику #{replica} на график",
+  "results.timeline.replicaRange": "Разброс по репликам: {min}–{max}",
   "results.groups.summaryHelp": "Итоги измеряемого интервала по всем повторениям. Нажмите заголовок столбца для сортировки. p99 рассчитан по объединённым наблюдениям задержки. При отсутствии наблюдений показано «нет данных».",
   "results.groups.worst": " · худшая #{number}: {value}",
   "results.groups.selectedReplica": "Выбрана реплика #{number}",

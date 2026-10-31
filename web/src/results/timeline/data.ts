@@ -6,6 +6,26 @@ export type TimelineMetricValues = { startMs: number; durationMs: number } & Rec
 export interface TimelinePoint { window: number; startMs: number; value: number | null }
 export interface TimelineRegion { fromMs: number; toMs: number; label: string; kind: "warmup" | "fault" }
 
+/** Recorded replica bounds retain both extrema and missing-value gaps at the chart's pixel budget. */
+export function replicaBand(windows: readonly TimelineMetricValues[], bounds: readonly [string, string], scale: number, pixels: number) {
+  const ranges = windows.map(window => {
+    const min = window[bounds[0]], max = window[bounds[1]];
+    return min == null || max == null ? null : [min * scale, max * scale] as [number, number];
+  });
+  const points: { window: number; startMs: number; range: [number, number] | null }[] = [];
+  for (const [window, metrics] of windows.entries()) {
+    const range = ranges[window];
+    points.push({ window, startMs: metrics.startMs, range });
+    if (window === windows.length - 1 || (range !== null && ranges[window + 1] === null)) {
+      points.push({ window, startMs: metrics.startMs + metrics.durationMs, range });
+    }
+  }
+  const key = (point: { window: number; startMs: number }) => `${point.window}:${point.startMs}`;
+  const keep = new Set([0, 1].flatMap(bound => downsample(points.map(point => ({ ...point,
+    value: point.range?.[bound] ?? null })), pixels).map(key)));
+  return points.filter(point => keep.has(key(point)));
+}
+
 /** First, last, min and max per screen pixel, plus both edges of every missing-value gap. */
 export function downsample(points: readonly TimelinePoint[], pixels: number): TimelinePoint[] {
   if (points.length <= Math.max(1, pixels)) return [...points];

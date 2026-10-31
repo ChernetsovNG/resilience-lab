@@ -910,6 +910,7 @@ select {
 .timeline-readout > div { display: flex; justify-content: space-between; gap: 0.5rem; }
 .timeline-readout dt { min-width: 0; overflow-wrap: anywhere; }
 .timeline-readout dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.timeline-replica-range { display: block; color: #52616b; }
 .timeline-line-key { display: inline-block; width: 1.25rem; margin-right: 0.35rem; border-top: 2px solid; vertical-align: middle; }
 .timeline-line-key--comparison { border-top-style: dashed; }
 .timeline-line-key--latency { position: relative; }

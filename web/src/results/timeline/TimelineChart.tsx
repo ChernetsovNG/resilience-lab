@@ -1,8 +1,8 @@
 import { t } from "../../i18n";
 import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../../i18n/format";
 import { useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import { downsample, windowAt, type TimelinePoint, type TimelineRegion, type TimelineMetricValues } from "./data";
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { downsample, replicaBand, windowAt, type TimelinePoint, type TimelineRegion, type TimelineMetricValues } from "./data";
 
 export interface TimelineLine {
   id: string;
@@ -12,6 +12,7 @@ export interface TimelineLine {
   color: string;
   comparison: boolean;
   windows: readonly TimelineMetricValues[];
+  range?: readonly [string, string];
 }
 
 export interface TimelineThreshold {
@@ -55,7 +56,9 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
         points.push({ window, startMs: metrics.startMs + metrics.durationMs, value });
       }
     }
-    return { ...line, points: downsample(points, Math.max(1, width - 68)) };
+    const pixels = Math.max(1, width - 68);
+    return { ...line, points: downsample(points, pixels),
+      band: line.range === undefined ? [] : replicaBand(line.windows, line.range, line.scale, pixels) };
   }), [lines, width]);
   const active = hoverWindow ?? cursorWindow;
   const lastWindow = Math.ceil(endMs / windowMs) - 1;
@@ -67,13 +70,17 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
     <h3>{title} <span>{t("results.unitInParens", { unit: t(durationSeconds ? "results.units.s" : `results.units.${unit}`) })}</span></h3>
     <div className="timeline-plot">
       <ResponsiveContainer width="100%" height={176} minWidth={0} onResize={(next) => setWidth(next)}>
-        <LineChart margin={{ left: 0, right: 12, top: 12, bottom: 0 }} accessibilityLayer={false}>
+        <ComposedChart margin={{ left: 0, right: 12, top: 12, bottom: 0 }} accessibilityLayer={false}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e7eb" />
           <XAxis type="number" dataKey="startMs" domain={[0, endMs]} allowDataOverflow height={32} tickCount={6}
             tickFormatter={(value: number) => formatNumber(seconds ? value / 1000 : value)} />
           <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => formatNumber(durationSeconds ? value / 1000 : value)} />
           {regions.map((region, index) => <ReferenceArea key={index} x1={region.fromMs} x2={region.toMs}
             fill={region.kind === "warmup" ? "#94a3b8" : "#f59e0b"} fillOpacity={0.14} />)}
+          {sampled.filter(line => line.range !== undefined).map(line => <Area key={`${line.id}:range`}
+            data={line.band} dataKey="range" type="stepAfter" name={line.label} fill={line.color} fillOpacity={0.14}
+            stroke={line.color} strokeOpacity={0.35} strokeDasharray={line.comparison ? "6 4" : undefined}
+            connectNulls={false} dot={false} activeDot={false} isAnimationActive={false} />)}
           {sampled.map((line) => <Line key={line.id} data={line.points} dataKey="value" type="stepAfter"
             name={line.label} stroke={line.color} strokeWidth={1.6} strokeDasharray={line.comparison ? "6 4" : undefined}
             dot={unit === "ms" ? ({ cx, cy, payload, index }: { cx?: number; cy?: number; payload: TimelinePoint; index: number }) =>
@@ -88,7 +95,7 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
             stroke="#b91c1c" strokeDasharray={threshold.comparison ? "7 3" : "3 3"} ifOverflow="extendDomain" />)}
           {cursorWindow === null ? null : <ReferenceLine x={cursorWindow * windowMs} stroke="#111827" strokeWidth={2} />}
           {hoverWindow === null ? null : <ReferenceLine x={hoverWindow * windowMs} stroke="#475569" strokeDasharray="3 3" />}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
       <div className="timeline-interaction" role="slider" tabIndex={0} aria-label={t("results.timeline.timeCursor", { title })}
         aria-valuemin={0} aria-valuemax={lastWindow} aria-valuenow={cursorWindow ?? 0}
@@ -115,7 +122,12 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
         return <div key={line.id}>
           <dt><span className={`timeline-line-key${line.comparison ? " timeline-line-key--comparison" : ""}${unit === "ms" ? " timeline-line-key--latency" : ""}`}
             style={{ borderColor: line.color }} />{line.label}</dt>
-          <dd>{raw === null ? t("results.timeline.noValue") : format(raw * line.scale)}</dd>
+          <dd>{raw === null ? t("results.timeline.noValue") : format(raw * line.scale)}
+            {line.range === undefined ? null : <span className="timeline-replica-range">{t("results.timeline.replicaRange", {
+              min: active === null || line.windows[active]?.[line.range[0]] == null ? t("results.timeline.noValue") : format(line.windows[active][line.range[0]]! * line.scale),
+              max: active === null || line.windows[active]?.[line.range[1]] == null ? t("results.timeline.noValue") : format(line.windows[active][line.range[1]]! * line.scale),
+            })}</span>}
+          </dd>
         </div>;
       })}
     </dl>
