@@ -179,11 +179,29 @@ export function deleteElements(selection: string[]): EditorCommand {
   };
 }
 
-/** Renames a block or connection in place, including every document reference. */
+/** Renames an element and incident automatic connection ids, including every document reference, in one operation. */
 export function renameElement(id: string, next: string): EditorCommand {
   return (documents) => {
     if (id === next || elementOf(documents.model, id) === null || identifierError(documents.model, next, id) !== null) return documents;
-    const mapId = (value: string) => value === id ? next : value;
+    const ids = new Map([[id, next]]);
+    const mapId = (value: string) => ids.get(value) ?? value;
+    const automatic = documents.model.connections.flatMap(edge => {
+      const prefix = `${edge.from}-to-${edge.to}`;
+      const suffix = edge.id.slice(prefix.length);
+      return (edge.from === id || edge.to === id) && edge.id.startsWith(prefix) && (suffix === "" || /^-[1-9][0-9]*$/.test(suffix))
+        ? [{ edge, suffix }] : [];
+    });
+    const used = usedIds(documents.model);
+    used.delete(id);
+    for (const { edge } of automatic) used.delete(edge.id);
+    used.add(next);
+    for (const { edge, suffix } of automatic) {
+      const prefix = `${mapId(edge.from)}-to-${mapId(edge.to)}`;
+      const preferred = prefix + suffix;
+      const renamed = used.has(preferred) ? freeId(prefix, used, suffix !== "") : preferred;
+      used.add(renamed);
+      ids.set(edge.id, renamed);
+    }
     return {
       ...documents,
       model: { ...documents.model,

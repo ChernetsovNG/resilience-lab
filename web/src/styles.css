@@ -694,6 +694,7 @@ select {
 
 .inspector-execution .param-field > :not(label, .param-field-label, input, select),
 .inspector-faults .param-field > :not(label, .param-field-label, input, select) { grid-column: 1 / -1; }
+.inspector-faults .param-field[data-inspector-field$=".target"] { grid-template-columns: 1fr; }
 
 .inspector-type {
   margin: 0.25rem 0 0.375rem;

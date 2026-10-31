@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { BlockInstance, Catalog, Diagnostic, ModelFile } from "../api/apiTypes";
 import { HelpHint } from "../help/HelpHint";
 import { t } from "../i18n";
+import { elementLabel } from "../presentation/labels";
 import { formatNumber } from "../i18n/format";
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
@@ -101,12 +102,12 @@ export function ServiceScenario({ catalog, model, serviceId, editable, invalid, 
               </label>
               {step.type === "call" ? <label className="param-field" data-inspector-field={`${path}.connection`}>
                 {t("editor.scenario.connection")}
-                <select value={step.connection ?? ""} disabled={disabled}
+                <select value={step.connection ?? ""} disabled={disabled} title={elementLabel(step.connection ?? "", model)}
                   aria-invalid={diagnostics.some(finding => finding.severity === "ERROR") || undefined}
                   onChange={event => { if (!disabled) replace(index, { ...step, connection: event.target.value }); }}>
                   {outgoing.some(edge => edge.id === step.connection) ? null
-                    : <option value={step.connection ?? ""} disabled>{step.connection || t("editor.param.select")}</option>}
-                  {outgoing.map(edge => <option key={edge.id} value={edge.id}>{edge.id}</option>)}
+                    : <option value={step.connection ?? ""} disabled>{step.connection ? elementLabel(step.connection, model) : t("editor.param.select")}</option>}
+                  {outgoing.map(edge => <option key={edge.id} value={edge.id}>{elementLabel(edge.id, model)}</option>)}
                 </select>
               </label> : null}
               {step.type === "process" ? parameters.map(descriptor => {

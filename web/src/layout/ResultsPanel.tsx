@@ -11,7 +11,7 @@ import type { LoadedExperiment } from "../workspace/editor";
 import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
-import { diagnosticGroupContext, parameterLabel, variantLabel } from "../presentation/labels";
+import { diagnosticGroupContext, elementLabel, parameterLabel, variantLabel } from "../presentation/labels";
 import { sweepDiagnostics } from "../inspector/sweepDiagnostics";
 
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
@@ -140,7 +140,7 @@ export function ResultsPanel({
           {validationPending ? <p role="status">{t("results.problems.validating")}</p> : null}
           {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} context={diagnosticContext} />}
           {problemsElement === null ? null : <p className="problems-filter">
-            {t("results.problems.elementFilter", { element: problemsElement })}
+            {t("results.problems.elementFilter", { element: elementLabel(problemsElement, diagnosticModel) })}
             <button type="button" onClick={onClearProblemsElement}>{t("results.problems.showAll")}</button>
           </p>}
           <ul className="validation-problems">
@@ -156,9 +156,9 @@ export function ResultsPanel({
                     <span>
                       <span className="diagnostic-message">{sweepDiagnostics([{ ...diagnostic, variant: undefined }],
                         { grid: diagnosticGrid, variants: diagnosticVariants }, diagnosticLabels, catalog, diagnosticModel)[0].message}</span>
-                      <span className="diagnostic-context">{lint ? [diagnostic.path ?? target.element ?? t("common.experiment"),
+                      <span className="diagnostic-context">{lint ? [elementLabel(diagnostic.path ?? target.element ?? t("common.experiment"), diagnosticModel),
                         diagnosticGroupContext(group, diagnosticVariants)].filter(Boolean).join("; ") : t("results.problems.context", {
-                        element: target.element ?? t("common.experiment"),
+                        element: elementLabel(target.element ?? t("common.experiment"), diagnosticModel),
                         variant: target.variant == null ? "" : t("results.problems.variant", {
                           variant: variantLabel(diagnosticVariants.find(variant => variant.id === target.variant) ?? { id: target.variant }, diagnosticVariants),
                         }),

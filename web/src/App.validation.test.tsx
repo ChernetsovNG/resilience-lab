@@ -98,7 +98,7 @@ it("blocks Run on saved validation errors and navigates to an override's variant
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   fireEvent.click(await screen.findByRole("button", { name: /Invalid override timeout/ }));
   expect(screen.getByRole("tab", { name: "No retries" }).getAttribute("aria-selected")).toBe("true");
-  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "gateway → middle (gateway-to-middle)" })).toBeTruthy();
   expect(within(screen.getByRole("complementary", { name: "Inspector" })).getByText(/Invalid override timeout/).closest(".param-field")).toBeTruthy();
   expect(button("Run").disabled).toBe(true);
   expect(button("Run").title).toContain("validation errors");

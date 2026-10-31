@@ -792,6 +792,77 @@ test("extends the chain through real drag and ports, persists positions and comm
   await expect(node).toHaveCSS("transform", `matrix(1, 0, 0, 1, ${moved.positions["service-1"].x}, ${moved.positions["service-1"].y})`);
 });
 
+test("keeps automatic connection ids and references after building, renaming, saving and running a chain", async ({ page, files }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const source = (await stored(page, files.model)).content.model as ModelFile;
+  const execution = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify({
+    ...source, blocks: { client: source.blocks.client }, connections: [],
+  }));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout), JSON.stringify({ schemaVersion: 1, positions: { client: { x: 0, y: 100 } } }));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.experiment), JSON.stringify({
+    ...execution, variants: [{ id: "baseline", label: "Baseline", overrides: {} }], faults: [], grid: [],
+    execution: { ...execution.execution, replications: 2, warmup: "0ms", measurement: "300ms", window: "50ms" },
+  }));
+  await page.reload();
+  await expect(page.getByTestId("block-node")).toHaveCount(1);
+  const service = page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true });
+  await service.dblclick();
+  await service.dblclick();
+  await page.locator(".react-flow__controls-fitview").click();
+  await connect(page, "client", "service-1");
+  await connect(page, "service-1", "service-2");
+  await page.getByTestId("rf__node-service-1").locator(".block-node > strong").click();
+  await page.getByRole("button", { name: "Set custom scenario", exact: true }).click();
+  await page.getByTestId("canvas-edge-label-service-1-to-service-2").click();
+  await page.getByRole("button", { name: "Add fault", exact: true }).click();
+  for (const [id, next] of [["service-1", "catalog"], ["service-2", "pricing"]]) {
+    await page.getByTestId(`rf__node-${id}`).locator(".block-node > strong").click();
+    await page.getByLabel("Identifier", { exact: true }).fill(next);
+    await page.getByLabel("Identifier", { exact: true }).press("Enter");
+    await expect(page.getByTestId(`rf__node-${next}`)).toBeVisible();
+    if (id === "service-1") {
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      await expect(page.getByTestId("rf__edge-service-1-to-service-2")).toBeAttached();
+      await expect(page.getByTestId("rf__node-catalog")).toHaveCount(0);
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+    }
+  }
+  await save(page);
+  const savedModel = (await stored(page, files.model)).content.model as ModelFile;
+  const savedExperiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
+  expect(savedModel.connections.map(connection => connection.id)).toEqual(["client-to-catalog", "catalog-to-pricing"]);
+  expect(savedModel.blocks.catalog.scenario![1].connection).toBe("catalog-to-pricing");
+  expect(savedExperiment.faults[0].target).toBe("catalog-to-pricing");
+  expect(JSON.stringify([savedModel, savedExperiment])).not.toMatch(/service-[12]/);
+  await page.reload();
+  await expect(page.getByTestId("rf__edge-catalog-to-pricing")).toBeAttached();
+  await page.getByTestId("rf__node-catalog").locator(".block-node > strong").click();
+  await expect(page.getByRole("combobox", { name: "Connection", exact: true })).toHaveValue("catalog-to-pricing");
+  const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  const result: RunSummary = await (await response).json();
+  expect(result.variants[0].points[0].aggregate.connections["catalog-to-pricing"].totals.sentAttempts).toBeGreaterThan(0);
+  expect(result.variants[0].points[0].aggregate.connections).not.toHaveProperty("service-1-to-service-2");
+  await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+  await page.evaluate(() => localStorage.setItem("resilience-lab.language", "ru"));
+  await page.reload();
+  await page.getByRole("tab", { name: "Модель", exact: true }).click();
+  await page.getByTestId("rf__node-catalog").locator(".block-node > strong").click();
+  await page.locator(".inspector-parameters > summary").click();
+  await expect(page.getByRole("combobox", { name: "Связь", exact: true }).locator("option:checked"))
+    .toHaveText("catalog → pricing (catalog-to-pricing)");
+  await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
+  await page.mouse.move(700, 70);
+  await page.screenshot({ path: testInfo.outputPath("link-rename-scenario-ru.png") });
+  await page.getByRole("button", { name: "Настройки прогона", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Цель отказа", exact: true }).locator("option:checked"))
+    .toHaveText("catalog → pricing (catalog-to-pricing)");
+  await page.locator(".inspector-execution > summary").click();
+  await page.mouse.move(700, 70);
+  await page.screenshot({ path: testInfo.outputPath("link-rename-fault-ru.png") });
+});
+
 test("renames and deletes with experiment cascades, undo restores the complete saved documents", async ({ page, files }) => {
   await page.getByTestId("rf__node-dependency").click();
   await page.getByLabel("Identifier", { exact: true }).fill("storage");
@@ -801,7 +872,7 @@ test("renames and deletes with experiment cascades, undo restores the complete s
   const renamedModel = (await stored(page, files.model)).content.model as ModelFile;
   const renamedExperiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
   const renamedLayout = (await stored(page, files.layout)).content.layout as LayoutFile;
-  expect(renamedModel.connections.find((edge) => edge.id === "middle-to-dependency")!.to).toBe("storage");
+  expect(renamedModel.connections.find((edge) => edge.id === "middle-to-storage")!.to).toBe("storage");
   expect(renamedExperiment.faults[0].target).toBe("storage");
   expect(renamedLayout.positions.storage).toEqual({ x: 780, y: 100 });
   expect(renamedLayout.positions.dependency).toBeUndefined();
@@ -809,13 +880,13 @@ test("renames and deletes with experiment cascades, undo restores the complete s
   await page.keyboard.press("Delete");
   await expect(page.getByTestId("rf__node-middle")).toHaveCount(0);
   await expect(page.getByTestId("rf__edge-gateway-to-middle")).toHaveCount(0);
-  await expect(page.getByTestId("rf__edge-middle-to-dependency")).toHaveCount(0);
+  await expect(page.getByTestId("rf__edge-middle-to-storage")).toHaveCount(0);
   await save(page);
   const deletedExperiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
   expect(deletedExperiment.variants.find((variant) => variant.id === "no-retries")!.overrides).toEqual({});
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByTestId("rf__node-middle")).toBeVisible();
-  await expect(page.getByTestId("rf__edge-middle-to-dependency")).toBeAttached();
+  await expect(page.getByTestId("rf__edge-middle-to-storage")).toBeAttached();
   await save(page);
   expect((await stored(page, files.model)).content.model).toEqual(renamedModel);
   expect((await stored(page, files.experiment)).content.experiment).toEqual(renamedExperiment);

@@ -94,6 +94,8 @@ it("lists replica and outgoing-call copy targets while excluding client, router 
   expect(values).not.toEqual(expect.arrayContaining(["client"]));
   expect(values).not.toContain("router");
   expect(values).not.toContain("client-to-gateway");
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "gateway#2 → middle (gateway-to-middle#2)" }).value).toBe("gateway-to-middle#2");
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "router → gateway (route)" }).value).toBe("route");
 });
 
 it.each([
@@ -111,7 +113,7 @@ it("prevents moving capacity loss to a target without slots and bounds it by rep
     { target: "gateway#2", kind: "capacityLoss", from: "20s", to: "30s", capacity: 1 },
   ] }} />);
   const target = screen.getByRole("combobox", { name: "Fault target" });
-  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "route" }).disabled).toBe(true);
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "router → gateway (route)" }).disabled).toBe(true);
   const capacity = screen.getByRole("textbox", { name: "Available handlers" });
   fireEvent.change(capacity, { target: { value: "2" } });
   expect(capacity.getAttribute("aria-invalid")).toBe("true");

@@ -1,5 +1,6 @@
 import { Icon } from "../layout/Icon";
 import { t } from "../i18n";
+import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
 import { formatNumber } from "../i18n/format";
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type ReactNode, type Ref, type SetStateAction } from "react";
@@ -275,7 +276,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
       },
       className: summary === null ? undefined : `diagnostic--${summary.severity.toLowerCase()}`,
       selected: selected.includes(connection.id),
-      ariaLabel: connection.id,
+      ariaLabel: elementLabel(connection.id, model),
       domAttributes: { "aria-roledescription": t("editor.canvas.edgeRole") },
     };
   });

@@ -59,7 +59,7 @@ it.each([false, true])("shows group min–max and adds only the chosen replica (
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
   fireEvent.click(screen.getByRole("checkbox", { name: "Add replica #2 to chart" }));
   await waitFor(() => expect(utilization().getByText("97%")).toBeTruthy());
-  expect(utilization().getByText(`${id}#2 · ${connection ? "Connection pool utilization" : "Handler utilization"} · Baseline`)).toBeTruthy();
+  expect(utilization().getByText(`${connection ? "gateway#2 → middle (gateway-to-middle#2)" : `${id}#2`} · ${connection ? "Connection pool utilization" : "Handler utilization"} · Baseline`)).toBeTruthy();
   expect(requested()).toContain(`${id}#2`);
   expect(requested()).not.toContain(`${id}#1`);
   expect(requested()).not.toContain(`${id}#3`);

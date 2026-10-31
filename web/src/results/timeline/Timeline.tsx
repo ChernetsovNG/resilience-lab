@@ -11,7 +11,7 @@ import { useTimelineSeries } from "./useTimelineSeries";
 import { useConnectionSeries } from "./useConnectionSeries";
 import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
-import { variantLabel } from "../../presentation/labels";
+import { elementLabel, variantLabel } from "../../presentation/labels";
 import { policyOutputAvailable } from "../../workspace/policyParameters";
 
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
@@ -110,8 +110,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const overlayConnections = useConnectionSeries(seriesLoader, runId,
     enabled && metadata && !overlay.loading && !overlayTargets.loading ? compared?.id ?? null : null, pointId, replication, connectionIds, count);
   if (!enabled && hover !== null) setHover(null);
-  const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog),
-    [metadata, experiment, catalog]);
+  const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog, model),
+    [metadata, experiment, catalog, model]);
   const charts = useMemo(() => {
     const lineColor = (element: number, metric: number, comparison: boolean) => {
       // Disjoint palettes distinguish variants while keeping separate element/metric colors.
@@ -171,7 +171,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
             variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true,
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
-            const label = t("results.timeline.lineLabel", { node: connection.id, metric: metric.label,
+            const label = t("results.timeline.lineLabel", { node: elementLabel(connection.id, model), metric: metric.label,
               variant: variantLabel(source.variant, experiment.variants) });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
               metric: metric.id, scale: group.scale, color: lineColor(primaryNodes.length + connectionIndex, group.metrics.indexOf(metric), source.comparison),
@@ -198,7 +198,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       const timeout = connection.params.timeout ?? descriptor?.default;
       const value = typeof timeout === "string" ? canonicalOf(timeout, descriptor?.units ?? []) : null;
       return value === null ? [] : [{ id: `${source.id}:${connection.id}:timeout`, value, comparison: index === 1,
-        label: t("results.timeline.timeout", { connection: connection.id, variant: variantLabel(source, experiment.variants), id: source.id }) }];
+        label: t("results.timeline.timeout", { connection: elementLabel(connection.id, model), variant: variantLabel(source, experiment.variants), id: source.id }) }];
     });
   });
   if (!enabled) return null;
@@ -219,7 +219,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
       {elements.map(element => <fieldset key={element.id}>
         <legend><label><input type="checkbox" checked={nodes.includes(element.id)} onChange={event => setNodeChoice({ canvasKey,
-          ids: event.target.checked ? [...nodes, element.id] : nodes.filter(id => id !== element.id && !element.replicas.some(instance => instance.id === id)) })} />{element.id}</label>{t("results.timeline.elementType", { type: element.title })}</legend>
+          ids: event.target.checked ? [...nodes, element.id] : nodes.filter(id => id !== element.id && !element.replicas.some(instance => instance.id === id)) })} />{elementLabel(element.id, model)}</label>{t("results.timeline.elementType", { type: element.title })}</legend>
         {nodes.includes(element.id) ? element.groups.flatMap(group => group.metrics.map(metric => {
           const key = metricChoiceKey(element.id, metric.key);
           return <label key={key}><input type="checkbox" checked={metricKeys.includes(key)} onChange={event =>

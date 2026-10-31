@@ -27,19 +27,19 @@ it("opens the same changes list on the canvas and in variant properties and focu
   const banner = screen.getByTestId("variant-banner");
   expect(banner.textContent).toContain("No retries · Structure is read-only · 2 changes");
   fireEvent.click(banner.querySelector("summary")!);
-  const row = within(banner).getByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" });
-  expect(within(banner).getByRole("button", { name: "middle-to-dependency · Attempts: 3 → 1" })).toBeTruthy();
+  const row = within(banner).getByRole("button", { name: "gateway → middle (gateway-to-middle) · Attempts: 3 → 1" });
+  expect(within(banner).getByRole("button", { name: "middle → dependency (middle-to-dependency) · Attempts: 3 → 1" })).toBeTruthy();
   fireEvent.click(button("Collapse inspector"));
   fireEvent.click(row);
-  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "gateway → middle (gateway-to-middle)" })).toBeTruthy();
   expect(document.activeElement).toBe(screen.getByLabelText("Attempts"));
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   const inspector = screen.getByRole("complementary", { name: "Inspector" });
-  expect(within(inspector).getByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" })).toBeTruthy();
+  expect(within(inspector).getByRole("button", { name: "gateway → middle (gateway-to-middle) · Attempts: 3 → 1" })).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.getByTestId("variant-banner").textContent).toContain("Same as model");
-  expect(screen.queryByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "gateway → middle (gateway-to-middle) · Attempts: 3 → 1" })).toBeNull();
 });
 
 it("describes service and nested overrides with catalog titles and values", async () => {
@@ -55,7 +55,7 @@ it("describes service and nested overrides with catalog titles and values", asyn
   expect(within(banner).getByRole("button", { name: "gateway · Handlers: 4 → 1,234" })).toBeTruthy();
   fireEvent.click(within(banner).getByRole("button", { name: "gateway · Processing time · Mean: 1ms → 9ms" }));
   expect(document.activeElement).toBe(screen.getByLabelText("Mean"));
-  expect(within(banner).getByRole("button", { name: "gateway-to-middle · Network delay · Mean: 0.5ms → 7ms" })).toBeTruthy();
+  expect(within(banner).getByRole("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Mean: 0.5ms → 7ms" })).toBeTruthy();
 });
 
 it("focuses the first point field when a load-profile array override is selected", async () => {

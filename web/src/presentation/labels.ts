@@ -16,6 +16,13 @@ export interface DiagnosticPresentationContext {
 }
 type DiagnosticText = Pick<Diagnostic, "code" | "message" | "args" | "path"> & { requiresNewRun?: boolean };
 
+/** Connection endpoints identify the path; the original id distinguishes parallel connections and replica copies. */
+export function elementLabel(id: string, model?: Pick<ModelFile, "connections"> | null): string {
+  const replica = /^(.*)(#[1-9][0-9]*)$/.exec(id);
+  const connection = model?.connections.find(connection => connection.id === (replica?.[1] ?? id));
+  return connection === undefined ? id : `${t("editor.grid.connection", { from: connection.from + (replica?.[2] ?? ""), to: connection.to })} (${id})`;
+}
+
 /** Meaningful summary labels win; source documents distinguish explicit labels from generated fallbacks. */
 export function variantLabel(variant: NamedVariant | undefined, variants: readonly NamedVariant[] = []): string {
   if (variant === undefined) return t("results.variant");
@@ -70,6 +77,9 @@ export function diagnosticMessage(diagnostic: DiagnosticText, catalog?: Catalog 
   context?: Pick<DiagnosticPresentationContext, "variants" | "grid">): string {
   if (diagnostic.args == null) return backendMessage(diagnostic);
   const args = { ...diagnostic.args };
+  for (const key of ["connection", "target"]) {
+    if (typeof args[key] === "string") args[key] = elementLabel(args[key], model);
+  }
   const parameter = args.parameter;
   if (typeof parameter === "string" && diagnostic.path != null) {
     const root = parameter.split(".")[0];

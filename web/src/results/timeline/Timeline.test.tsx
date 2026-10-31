@@ -41,6 +41,18 @@ function stubSeries() {
 
 const shortManifest = { ...manifest, series: { ...manifest.series!, warmupMs: 10, measurementMs: 15 } };
 
+it("names connection choices, series, timeout lines and fault intervals by their endpoints", async () => {
+  stubSeries();
+  render(<Timeline runId="connection-labels" summary={summary} manifest={shortManifest} model={model}
+    experiment={{ ...experiment, faults: [{ kind: "slowdown", target: "gateway-to-middle", from: "0ms", to: "20ms", multiplier: 2 }] }}
+    catalog={catalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={0} selectedNodes={["gateway-to-middle"]} />);
+  expect(screen.getByRole("checkbox", { name: "gateway → middle (gateway-to-middle)" })).toBeTruthy();
+  const latency = await screen.findByRole("region", { name: "Latency" });
+  expect(within(latency).getByText("gateway → middle (gateway-to-middle) timeout · Baseline")).toBeTruthy();
+  expect(within(latency).getByText("gateway → middle (gateway-to-middle) · Mean latency · Baseline")).toBeTruthy();
+  expect(screen.getByLabelText("Time regions").textContent).toContain("Fault: gateway → middle (gateway-to-middle)");
+});
+
 it("names unlabeled stored variants in comparison choices, legends and chart labels", async () => {
   stubSeries();
   const run = structuredClone(summary);
@@ -81,24 +93,24 @@ it("shows a selected call's own rates, waiting state and response latency", asyn
     catalog={catalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={1} selectedNodes={["gateway-to-middle"]} />);
 
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
-  const choices = within(screen.getByRole("group", { name: "gateway-to-middle · Call" }));
+  const choices = within(screen.getByRole("group", { name: "gateway → middle (gateway-to-middle) · Call" }));
   for (const name of ["Retries", "Successes", "Timeouts", "Mean orphaned work", "Mean backoff", "p95 latency", "p99 latency"]) {
     fireEvent.click(choices.getByRole("checkbox", { name }));
   }
 
   const rates = await screen.findByRole("region", { name: "Rates" });
-  expect(within(rates).getByText("gateway-to-middle · Sent attempts · Baseline")).toBeTruthy();
+  expect(within(rates).getByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeTruthy();
   expect(within(rates).getByText("300 RPS")).toBeTruthy();
-  expect(within(rates).getByText("gateway-to-middle · Retries · Baseline")).toBeTruthy();
-  expect(within(rates).getByText("gateway-to-middle · Successes · Baseline")).toBeTruthy();
+  expect(within(rates).getByText("gateway → middle (gateway-to-middle) · Retries · Baseline")).toBeTruthy();
+  expect(within(rates).getByText("gateway → middle (gateway-to-middle) · Successes · Baseline")).toBeTruthy();
   const errors = screen.getByRole("region", { name: "Errors and rejections" });
-  expect(within(errors).getByText("gateway-to-middle · Timeouts · Baseline")).toBeTruthy();
+  expect(within(errors).getByText("gateway → middle (gateway-to-middle) · Timeouts · Baseline")).toBeTruthy();
   const state = screen.getByRole("region", { name: "Call state" });
   expect(within(state).getByText("2 requests")).toBeTruthy();
   expect(within(state).getByText("0.4 requests")).toBeTruthy();
   expect(within(state).getByText("0.5 requests")).toBeTruthy();
   const latency = screen.getByRole("region", { name: "Latency" });
-  expect(within(latency).getByText("gateway-to-middle · Mean latency · Baseline")).toBeTruthy();
+  expect(within(latency).getByText("gateway → middle (gateway-to-middle) · Mean latency · Baseline")).toBeTruthy();
   expect(within(latency).getByText("6 ms")).toBeTruthy();
   expect(within(latency).getAllByText("8 ms")).toHaveLength(2);
 });
@@ -108,13 +120,13 @@ it("keeps a Ctrl-selected service alongside a call and follows a replacement can
   const props = { runId: "run-mixed", summary, manifest: shortManifest, model, experiment, catalog,
     activeVariantId: "baseline", pointId: "p0", replication: 0, cursorWindow: 1 };
   const view = render(<Timeline {...props} selectedNodes={["gateway", "gateway-to-middle"]} />);
-  await screen.findByText("gateway-to-middle · Sent attempts · Baseline");
+  await screen.findByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline");
   expect(screen.getByText("gateway · Handler utilization · Baseline")).toBeTruthy();
   expect((screen.getByRole("checkbox", { name: "gateway" }) as HTMLInputElement).checked).toBe(true);
-  expect((screen.getByRole("checkbox", { name: "gateway-to-middle" }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "gateway → middle (gateway-to-middle)" }) as HTMLInputElement).checked).toBe(true);
 
   view.rerender(<Timeline {...props} selectedNodes={["middle-to-dependency"]} />);
-  await waitFor(() => expect(screen.queryByText("gateway-to-middle · Sent attempts · Baseline")).toBeNull());
+  await waitFor(() => expect(screen.queryByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeNull());
   expect(screen.queryByText("gateway · Handler utilization · Baseline")).toBeNull();
 });
 
@@ -129,10 +141,10 @@ it("shows each variant's effective timeout after applying the selected grid poin
     catalog={catalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={1} selectedNodes={["gateway-to-middle"]} />);
 
   const latency = await screen.findByRole("region", { name: "Latency" });
-  expect(within(latency).getByText("gateway-to-middle timeout · Baseline")).toBeTruthy();
+  expect(within(latency).getByText("gateway → middle (gateway-to-middle) timeout · Baseline")).toBeTruthy();
   expect(within(latency).getByText("25 ms")).toBeTruthy();
   fireEvent.change(screen.getByRole("combobox", { name: "Compare variant" }), { target: { value: "no-retries" } });
-  await waitFor(() => expect(within(latency).getByText("gateway-to-middle timeout · No retries")).toBeTruthy());
+  await waitFor(() => expect(within(latency).getByText("gateway → middle (gateway-to-middle) timeout · No retries")).toBeTruthy());
   expect(within(latency).getByText("70 ms")).toBeTruthy();
 });
 
@@ -142,11 +154,11 @@ it("restores an element hidden with Timeline checkboxes on a new Show on Timelin
   const props = { runId: "run-show", summary, manifest: shortManifest, model, experiment, catalog,
     activeVariantId: "baseline", pointId: "p0", replication: 0, cursorWindow: 1, selectedNodes: ["gateway-to-middle"] };
   const view = render(<Timeline {...props} selectionRequest={0} />);
-  await screen.findByText("gateway-to-middle · Sent attempts · Baseline");
-  fireEvent.click(screen.getByRole("checkbox", { name: "gateway-to-middle" }));
-  await waitFor(() => expect(screen.queryByText("gateway-to-middle · Sent attempts · Baseline")).toBeNull());
+  await screen.findByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline");
+  fireEvent.click(screen.getByRole("checkbox", { name: "gateway → middle (gateway-to-middle)" }));
+  await waitFor(() => expect(screen.queryByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeNull());
   view.rerender(<Timeline {...props} selectionRequest={1} />);
-  expect(await screen.findByText("gateway-to-middle · Sent attempts · Baseline")).toBeTruthy();
+  expect(await screen.findByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeTruthy();
 });
 
 it("groups only model outputs by element, without unrelated types or duplicate metric choices", async () => {
@@ -286,8 +298,8 @@ it("offers call policy outputs and degraded entries only on their configured pat
     selectedNodes={["client", "gateway-to-middle", "middle-to-dependency"]} />);
   await screen.findByRole("region", { name: "Rates" });
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
-  const enabled = within(screen.getByRole("group", { name: "gateway-to-middle · Call" }));
-  const disabled = within(screen.getByRole("group", { name: "middle-to-dependency · Call" }));
+  const enabled = within(screen.getByRole("group", { name: "gateway → middle (gateway-to-middle) · Call" }));
+  const disabled = within(screen.getByRole("group", { name: "middle → dependency (middle-to-dependency) · Call" }));
   for (const name of ["Circuit open share", "Circuit rejections", "Retries denied by budget", "Fallbacks"]) {
     expect(enabled.getByRole("checkbox", { name })).toBeTruthy();
     expect(disabled.queryByRole("checkbox", { name })).toBeNull();
@@ -323,8 +335,8 @@ it("uses distinct variant colors and readable variant names for node and connect
   expect(within(queue).getByText("gateway · Mean queue · Baseline")).toBeTruthy();
   expect(within(queue).getByText("gateway · Mean queue · No retries")).toBeTruthy();
   const rates = screen.getByRole("region", { name: "Rates" });
-  expect(within(rates).getByText("gateway-to-middle · Sent attempts · Baseline")).toBeTruthy();
-  expect(await within(rates).findByText("gateway-to-middle · Sent attempts · No retries")).toBeTruthy();
+  expect(within(rates).getByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeTruthy();
+  expect(await within(rates).findByText("gateway → middle (gateway-to-middle) · Sent attempts · No retries")).toBeTruthy();
   const primaryColors = [...rates.querySelectorAll<HTMLElement>(".timeline-line-key:not(.timeline-line-key--comparison)")].map(key => key.style.borderColor);
   const comparisonColors = [...rates.querySelectorAll<HTMLElement>(".timeline-line-key--comparison")].map(key => key.style.borderColor);
   expect(new Set(primaryColors).size).toBe(2);

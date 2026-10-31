@@ -14,7 +14,7 @@ it("labels and navigates a field applicable only in the variant", () => {
   render(<VariantChanges model={model} catalog={fullCatalog as Catalog} onSelect={onSelect} overrides={{
     "gateway-to-middle.network.kind": "lognormal", "gateway-to-middle.network.stdDev": "1ms",
   }} />);
-  const field = screen.getByRole<HTMLButtonElement>("button", { name: "gateway-to-middle · Network delay · Standard deviation: Not set → 1ms" });
+  const field = screen.getByRole<HTMLButtonElement>("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Standard deviation: Not set → 1ms" });
   expect(field.disabled).toBe(false);
   fireEvent.click(field);
   expect(onSelect).toHaveBeenCalledWith("gateway-to-middle", "network.stdDev");
@@ -37,7 +37,7 @@ it("keeps enough numeric precision to distinguish parameter overrides", () => {
   const connection = snapshot.connections.find(connection => connection.id === "gateway-to-middle")!;
   connection.params.backoff = { kind: "fixed", multiplier: 1.001 };
   render(<VariantChanges model={snapshot} catalog={catalog} overrides={{ "gateway-to-middle.backoff.multiplier": 1.002 }} />);
-  expect(screen.getByRole("button", { name: "gateway-to-middle · Backoff · Multiplier: 1.001 → 1.002" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "gateway → middle (gateway-to-middle) · Backoff · Multiplier: 1.001 → 1.002" })).toBeTruthy();
 });
 
 it("resolves defaults within absent objects and formats whole objects with catalog labels", () => {
@@ -46,7 +46,7 @@ it("resolves defaults within absent objects and formats whole objects with catal
   render(<VariantChanges model={snapshot} catalog={catalog} onSelect={vi.fn()} overrides={{
     "gateway-to-middle.backoff.base": "3ms", "gateway.processing": { kind: "fixed", mean: "5ms" },
   }} />);
-  expect(screen.getByRole("button", { name: "gateway-to-middle · Backoff · Base delay: 0ms → 3ms" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "gateway → middle (gateway-to-middle) · Backoff · Base delay: 0ms → 3ms" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "gateway · Processing time: Distribution: Fixed · Mean: 1ms → Distribution: Fixed · Mean: 5ms" })).toBeTruthy();
 });
 
