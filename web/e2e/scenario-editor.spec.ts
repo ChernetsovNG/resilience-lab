@@ -139,9 +139,12 @@ test("opens saves and runs a load profile without losing points", async ({ page,
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(profiled));
   await page.reload();
   await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
-  const points = page.getByRole("textbox", { name: "Load points" });
-  await expect(points).toHaveAttribute("readonly", "");
-  expect(JSON.parse(await points.inputValue())).toEqual(load.points);
+  const points = page.getByRole("table", { name: "Load points" }).locator("tbody tr");
+  await expect(points).toHaveCount(load.points.length);
+  for (const [index, point] of load.points.entries()) {
+    await expect(points.nth(index).getByRole("textbox", { name: "Time", exact: true })).toHaveValue(point.time);
+    await expect(points.nth(index).getByRole("textbox", { name: "Intensity", exact: true })).toHaveValue(point.rate);
+  }
   await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
   await page.getByLabel("Handlers", { exact: true }).fill("5");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
