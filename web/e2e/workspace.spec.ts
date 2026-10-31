@@ -336,7 +336,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
   });
 });
 
-test("preserves an absent optional field when editing an existing object override", async ({ page, request }) => {
+test("preserves an inapplicable field's absence when editing an existing object override", async ({ page, request }) => {
   const path = "variant-object/processing.experiment.json";
   await withExperimentFixture(path, (document) => {
     document.variants[1].overrides["gateway.processing"] = { kind: "fixed", mean: "3ms" };
@@ -352,12 +352,7 @@ test("preserves an absent optional field when editing an existing object overrid
     const mean = page.getByLabel("Mean", { exact: true });
     await mean.fill("4ms");
     await mean.press("Enter");
-    const deviation = page.getByLabel("Standard deviation", { exact: true });
-    await expect(deviation).toHaveValue("");
-    await deviation.fill("2ms");
-    await deviation.press("Enter");
-    await deviation.fill("");
-    await deviation.press("Enter");
+    await expect(page.getByLabel("Standard deviation", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toBeHidden();
     const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
