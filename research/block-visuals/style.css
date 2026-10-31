@@ -1,0 +1,155 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  background: #f3f7fa;
+  color: #163047;
+  font:
+    14px Arial,
+    sans-serif;
+}
+.react-flow__node-block {
+  border: 0;
+  background: none;
+}
+.block {
+  position: relative;
+}
+.silhouette,
+.card {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.card {
+  border: 1.7px solid #365269;
+  border-radius: 8px;
+}
+.content {
+  position: absolute;
+  left: 26px;
+  right: 20px;
+  top: 35px;
+}
+.person .content {
+  top: 47px;
+}
+.router .content {
+  top: calc(50% - 31px);
+  left: calc(50% - 51px);
+  right: auto;
+  width: 102px;
+}
+.router .title {
+  height: 20px;
+}
+.router input,
+.router .metric {
+  font-size: 11px;
+}
+.router .metric {
+  margin-top: 4px;
+}
+.title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  height: 25px;
+}
+input {
+  display: block;
+  border: 0;
+  border-bottom: 1px solid #36526944;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  font: 13px Arial;
+  padding: 2px 0;
+}
+.metric {
+  font-size: 13px;
+  white-space: nowrap;
+  margin-top: 6px;
+}
+.override {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  font-size: 22px;
+  color: #8a4914;
+}
+.selected {
+  position: absolute;
+  inset: 0;
+  outline: 3px solid #2463eb;
+  border-radius: 4px;
+  pointer-events: none;
+}
+.fontIcon {
+  font-family: BenchIcons;
+  font-weight: 900;
+  font-size: 24px;
+  width: 24px;
+}
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: #365269;
+  border: 0;
+}
+.react-flow__edge-path {
+  stroke: #8aa0b2;
+  stroke-width: 1;
+}
+canvas {
+  display: block;
+}
+body:has(.gallery) {
+  overflow: auto;
+}
+.gallery {
+  padding: 28px 40px;
+  max-width: 1280px;
+  margin: auto;
+}
+.gallery nav {
+  display: flex;
+  gap: 20px;
+}
+.gallery section {
+  margin: 30px 0;
+}
+.samples {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+}
+.gallery h2 {
+  font-size: 16px;
+}
+.gallery p {
+  font-size: 13px;
+}
+
+html:has(.gallery),
+body:has(.gallery),
+body:has(.gallery) #root {
+  height: auto;
+  overflow: visible;
+}
+.samples p {
+  margin: 6px 0;
+}
+
+.samples p {
+  font-size: inherit;
+}
