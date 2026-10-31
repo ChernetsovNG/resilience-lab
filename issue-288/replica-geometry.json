@@ -1,0 +1,24 @@
+{
+  "before": {
+    "canvas": {
+      "width": 1067,
+      "height": 673
+    },
+    "node": {
+      "width": 192,
+      "height": 180,
+      "bodyHeight": 180
+    }
+  },
+  "after": {
+    "canvas": {
+      "width": 1067,
+      "height": 673
+    },
+    "node": {
+      "width": 200,
+      "height": 188,
+      "bodyHeight": 180
+    }
+  }
+}
