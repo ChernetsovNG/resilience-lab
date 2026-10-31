@@ -89,7 +89,7 @@ select {
 .top-bar {
   grid-area: top;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   min-width: 0;
   gap: clamp(0.25rem, 0.7vw, 0.75rem);
@@ -115,12 +115,17 @@ select {
   flex: 1 1 12rem;
   width: 0;
   max-width: 32rem;
-  min-width: 14rem;
+  min-width: 0;
   padding: 0.3rem 0.5rem;
   border: 1px solid #9aa5b1;
   border-radius: 0.35rem;
   background: #fff;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 1280px) {
+  .top-bar { flex-wrap: wrap; }
+  .top-bar select { min-width: 14rem; }
 }
 
 .top-bar button {
@@ -141,10 +146,6 @@ select {
 .top-bar button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.view-menu {
-  margin-left: auto;
 }
 
 .view-menu > button {

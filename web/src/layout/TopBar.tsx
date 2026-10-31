@@ -100,11 +100,11 @@ export function TopBar(props: TopBarProps) {
         {t("app.topBar.redo")}
       </button>
       {dirty ? <span className="dirty-mark" title={t("app.topBar.unsavedChanges")}>{t("app.topBar.unsavedChanges")}</span> : null}
+      <div className="run-actions">
       <button type="button" onClick={onSave} disabled={(!dirty && !props.savePending) || invalid || conflict || saving || loading || props.backendError !== undefined}
         title={props.backendError ?? t("app.topBar.saveTitle")}>
         {t("app.topBar.save")}
       </button>
-      <div className="run-actions">
       <button type="button" onClick={props.onEstimate}
         disabled={experiment === null || loading || saving || invalid || running || props.estimating || props.backendError !== undefined}
         title={props.backendError}>
