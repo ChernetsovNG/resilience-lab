@@ -621,6 +621,47 @@ it("preserves the viewport when a keyboard node move expands diagram bounds", as
   expect(viewport.style.transform).toBe(before);
 });
 
+it("preserves explicit fitting when connection labels grow and refits only on the next request", async () => {
+  const observer = globalThis.ResizeObserver;
+  const deliveries = new Map<Element, () => void>();
+  globalThis.ResizeObserver = class extends observer {
+    private deliver: (target: Element) => void;
+    constructor(callback: ResizeObserverCallback) {
+      super(callback);
+      this.deliver = target => callback([{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry], this);
+    }
+    observe(target: Element) {
+      super.observe(target);
+      if (target.classList.contains("canvas-edge-label")) deliveries.set(target, () => this.deliver(target));
+    }
+  };
+  const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get");
+  let labelHeight = 80;
+  height.mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains("canvas-edge-label") ? labelHeight : 80;
+  });
+  try {
+    const { container } = render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]}
+      onSelect={vi.fn()} onCommand={vi.fn()} editable />);
+    const viewport = () => container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform;
+    await waitFor(() => { expect(viewport()).not.toContain("scale(1)"); });
+    await waitFor(() => { expect(deliveries.size).toBeGreaterThan(0); });
+    fireEvent.click(screen.getByRole("button", { name: "Fit View" }));
+    const fitted = viewport();
+    await act(async () => {
+      labelHeight = 240;
+      deliveries.forEach(deliver => deliver());
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    });
+    expect(viewport()).toBe(fitted);
+    fireEvent.click(screen.getByRole("button", { name: "Fit View" }));
+    await waitFor(() => { expect(viewport()).not.toBe(fitted); });
+  } finally {
+    height.mockRestore();
+    globalThis.ResizeObserver = observer;
+  }
+});
+
 it("preserves the viewport after a palette drag and cancellation while keeping explicit fitting available", async () => {
   const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get");
   try {

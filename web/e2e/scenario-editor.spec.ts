@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection, waitForStablePorts } from "./connectionGestures";
 import { expect, test as base, type Locator, type Page } from "./fixtures";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -446,14 +446,18 @@ async function save(page: Page) {
   await expect(page.getByText("Unsaved changes")).toBeHidden();
 }
 async function move(page: Page, locator: Locator, dx: number, dy: number) {
-  const box = await locator.locator(".block-node > strong").boundingBox();
+  const header = locator.locator(".block-node > strong");
+  const canvas = page.getByLabel("Model canvas", { exact: true });
+  await waitForStablePorts(header);
+  const box = await header.boundingBox();
+  const bounds = await canvas.boundingBox();
   expect(box).not.toBeNull();
-  const x = box!.x + box!.width / 2;
-  const y = box!.y + box!.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y + dy, { steps: 12 });
-  await page.mouse.up();
+  expect(bounds).not.toBeNull();
+  // Resolve the hit target at mousedown: automatic fitting can invalidate sampled screen coordinates.
+  await header.dragTo(canvas, {
+    targetPosition: { x: box!.x + box!.width / 2 + dx - bounds!.x, y: box!.y + box!.height / 2 + dy - bounds!.y },
+    steps: 12,
+  });
 }
 async function connect(page: Page, from: string, to: string, targetPort = "in") {
   const source = page.getByTestId(`rf__node-${from}`).locator('[data-handleid="out"]');
