@@ -15,7 +15,7 @@ import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks,
 import type { CourseFault } from "../experiment/course";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
-import { CallEdge } from "./CallEdge";
+import { CallEdge, EdgeLayoutProvider } from "./CallEdge";
 import { VariantChanges } from "./VariantChanges";
 import "@xyflow/react/dist/style.css";
 
@@ -225,7 +225,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     ariaLabel: id,
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
-  const nodeBounds = new Map(nodes.map(node => [node.id, { ...node.position,
+  const nodeBounds = new Map(nodes.filter(node => node.id !== pendingId).map(node => [node.id, { ...node.position,
     width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }]));
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
@@ -243,10 +243,6 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       data: {
         faults: faults.filter(fault => fault.elementId === connection.id), onFault,
         modelParams: baseModel === undefined ? undefined : elementOf(baseModel, connection.id)?.params, overrides,
-        labelNodes: [connection.from, connection.to].flatMap(id => {
-          const bounds = nodeBounds.get(id);
-          return bounds === undefined ? [] : [bounds];
-        }),
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         result: matched, connectionMetric,
         onSelect: (multiple: boolean) => {
@@ -343,6 +339,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       </summary>
       <VariantChanges model={baseModel ?? model} catalog={catalog} overrides={overrides} disabled={disabled} onSelect={onSelectChange} />
     </details>}
+    <EdgeLayoutProvider nodes={nodeBounds} connections={model.connections}>
     <ReactFlow
       aria-label={t("editor.canvas.label")}
       ariaLabelConfig={ariaLabelConfig()}
@@ -411,6 +408,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </Panel>
     </ReactFlow>
+    </EdgeLayoutProvider>
     </div>
   );
 }
