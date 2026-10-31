@@ -54,7 +54,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
       .find(element => element.dataset.inspectorField === focusField.path);
     const section = field?.closest<HTMLDetailsElement>(".inspector-section");
     if (section !== null && section !== undefined) section.open = true;
-    if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled)"))?.focus();
+    if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);

@@ -661,8 +661,10 @@ select {
 
 .param-field {
   display: grid;
+  position: relative;
   gap: 0.125rem;
   margin-bottom: 0.375rem;
+  padding-right: 2.5rem;
   font-size: var(--font-secondary);
 }
 
@@ -1128,6 +1130,20 @@ select {
   border: 0 !important;
   white-space: nowrap !important;
 }
+
+.field-feedback {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  width: 1.25rem;
+  height: 1rem;
+  flex: 0 0 1.25rem;
+  pointer-events: none;
+}
+.inspector .param-field > .field-feedback { position: absolute; top: 0; right: 0; grid-column: auto; }
+.inspector .param-field > .field-feedback--variants { right: 1.25rem; }
+.field-feedback .help-hint { pointer-events: auto; }
+.field-feedback .help-hint .help-hint-button { color: inherit; border-color: currentColor; }
 
 .field-diagnostics {
   margin: 0.2rem 0;
