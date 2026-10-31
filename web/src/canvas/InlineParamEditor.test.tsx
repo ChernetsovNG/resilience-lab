@@ -4,6 +4,8 @@ import { catalog } from "../test/fixtures";
 import { setLanguage } from "../i18n";
 import { localizeCatalog } from "../i18n/catalog";
 import { InlineParamEditor } from "./InlineParamEditor";
+import type { Catalog } from "../api/apiTypes";
+import fullCatalog from "../test/catalog.json";
 
 afterEach(() => { setLanguage("en"); localStorage.clear(); });
 
@@ -19,3 +21,20 @@ it("preserves a malformed draft for an absent required value while language chan
   expect(screen.getByRole("alert").textContent).toBe("Введите целое число");
   expect(props.onCommit).not.toHaveBeenCalled();
 });
+
+for (const language of ["en", "ru"] as const) {
+  it(`shows compact router policy values with full names for editing and help in ${language}`, () => {
+    setLanguage(language);
+    render(<InlineParamEditor catalog={localizeCatalog(fullCatalog as Catalog)} elementId="router" elementType="router"
+      params={{ policy: "leastInFlight" }} modelParams={{ policy: "roundRobin" }} path="policy" overridden editable
+      onCommit={vi.fn()} onValidity={vi.fn()} />);
+    const full = language === "en" ? "Fewest active requests" : "Меньше активных запросов";
+    const value = screen.getByRole("button");
+    expect(value.textContent).toBe(language === "en" ? "Fewest" : "Меньше");
+    expect(value.getAttribute("aria-label")).toContain(full);
+    expect(screen.getByText(language === "en" ? "Round" : "По кругу").closest("del")?.title)
+      .toContain(language === "en" ? "Round robin" : "По очереди");
+    fireEvent.doubleClick(value);
+    expect(screen.getByRole("option", { name: full })).toBeTruthy();
+  });
+}

@@ -451,7 +451,7 @@ select {
 .block-shape--type-router { width: 144px; height: 144px; min-width: 0; align-content: center; }
 .block-node--router .block-summary > span, .block-node--router .inline-param { font-size: 11px; column-gap: 2px; min-width: 0; }
 .block-node--router .inline-param { overflow: hidden; text-overflow: ellipsis; }
-.block-node--router .inline-param-model { flex: 0 1 35%; min-width: 0; margin-right: 2px; overflow: hidden; text-overflow: ellipsis; }
+.block-node--router .inline-param-model { flex: 0 0 auto; margin-right: 2px; }
 .block-node--router .inline-param-value, .block-node--router .inline-param-current { flex: 1; min-width: 24px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: inherit; }
 .block-node--router .inline-param-editor { flex: 1; min-width: 0; }
 .block-node--router .inline-param-editor select { width: 100%; min-width: 0; }
@@ -1110,6 +1110,8 @@ select {
 
 .block-node .diagnostic-badge,
 .canvas-edge-label .diagnostic-badge { padding: 1.6px 6.4px; }
+.block-node > .diagnostic-badge { position: absolute; bottom: calc(100% + 4px); left: 0; }
+.block-node > .diagnostic-badge--variants { left: auto; right: 0; }
 
 .react-flow__edgelabel-renderer {
   z-index: 1001;
@@ -1422,12 +1424,15 @@ select {
 }
 
 .block-results > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 18px;
 }
+.block-results .block-result-text { flex-shrink: 0; }
+.block-results .help-hint { margin-left: auto; }
 
 .canvas-metrics--pending { opacity: 0.5; }
 .canvas-metrics--empty { visibility: hidden; }

@@ -68,10 +68,10 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const status = page.getByRole("region", { name: "Status bar" });
     await expect(status).toContainText(`Cursor ${formatDuration(dependency[before].startMs)}`);
     await page.getByRole("button", { name: /fit view/i }).click();
-    await expect(metrics).toContainText(`Mean queue ${formatNumber(queue(before))}`);
+    await expect(metrics).toContainText(`Queue ${formatNumber(queue(before))}`);
     await expect(edge).toHaveText(`Attempts per request ${formatMultiplier(amplification(before))}`);
     await seek(slider, during);
-    await expect(metrics).toContainText(`Mean queue ${formatNumber(queue(during))}`);
+    await expect(metrics).toContainText(`Queue ${formatNumber(queue(during))}`);
     await expect(edge).toHaveText(`Attempts per request ${formatMultiplier(amplification(during))}`);
     await expect(edge).toHaveAttribute("title", /Window approximation/);
     const frame = { metrics: await metrics.locator("span").allTextContents(), edge: await edge.innerText() };

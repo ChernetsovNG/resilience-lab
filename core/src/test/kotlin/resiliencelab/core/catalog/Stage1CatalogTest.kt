@@ -165,10 +165,10 @@ class Stage1CatalogTest {
         val utilization = database.first { it.id == "utilization" }
         assertThat(utilization.title).isEqualTo("Connection utilization")
         assertThat(utilization.inspector!!.title).isEqualTo("Connection utilization")
-        assertThat(utilization.overlay!!.label).isEqualTo("Connection utilization {value}")
+        assertThat(utilization.overlay!!.label).isEqualTo("Connections {value}")
         val queue = database.first { it.id == "meanQueue" }
         assertThat(queue.timeline!!.groupTitle).isEqualTo("Query queue")
-        assertThat(queue.overlay!!.label).isEqualTo("Mean query queue {value}")
+        assertThat(queue.overlay!!.label).isEqualTo("Queue {value}")
         assertThat(databaseType.params.first { it.name == "maxConnections" }.title).isEqualTo("Maximum connections")
     }
 }

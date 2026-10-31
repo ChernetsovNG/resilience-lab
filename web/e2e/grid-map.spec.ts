@@ -71,7 +71,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 80ms/);
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Attempts · gateway → middle = 3/);
     const dependency = point.aggregate.services.dependency.totals;
-    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Mean queue ${formatNumber(dependency.slotPools.handlers.queueIntegralMs / dependency.measurementMs)}`);
+    await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Queue ${formatNumber(dependency.slotPools.handlers.queueIntegralMs / dependency.measurementMs)}`);
     await page.getByRole("combobox", { name: "Map metric", exact: true }).selectOption("handlerUtilization");
     await page.getByRole("combobox", { name: "Element on map", exact: true }).selectOption("dependency");
     await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(dependency.slotPools.handlers.busyIntegralMs / dependency.slotPools.handlers.capacityIntegralMs));

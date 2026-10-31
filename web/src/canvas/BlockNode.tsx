@@ -9,7 +9,7 @@ import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } f
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { isObject, isOverridden, type Params } from "../workspace/params";
-import { catalogParameter } from "../workspace/parameterValues";
+import { catalogParameter, formatParameterValue } from "../workspace/parameterValues";
 import { HelpHint } from "../help/HelpHint";
 import { BlockIcon } from "../layout/BlockIcon";
 import { BlockShape } from "./BlockShape";
@@ -110,9 +110,12 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
           {parameters.map(([path, label]) => {
             const parameter = catalogParameter(data.catalog, data.block.type, data.block.params, path);
             return parameter === undefined ? null : <span className="block-param" key={path}>
-              {t(label)}
+              {data.block.type === "router" ? null : t(label)}
               <InlineParamEditor {...editorProps} path={path} overridden={overridden(path)} onCommit={value => commit(path, value)} />
-              {data.block.type === "service" ? null : <HelpHint label={parameter.title}>{parameter.descriptor.description}</HelpHint>}
+              {data.block.type === "service" ? null : <HelpHint label={parameter.title}>
+                {data.block.type === "router" ? <><strong>{formatParameterValue(parameter.value, parameter.descriptor)}</strong><p>{parameter.descriptor.description}</p></>
+                  : parameter.descriptor.description}
+              </HelpHint>}
             </span>;
           })}
         </span>
@@ -122,11 +125,15 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
         data-testid={data.result === undefined ? undefined : `canvas-results-${data.id}`}>
         {outputs.map(output => {
           const worst = data.result?.worst?.[output.id];
-          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result?.values[output.id]) })
-            + (worst == null ? "" : t("results.groups.worst", { number: formatNumber(worst.replica), value: formatOutput(output, worst.value) }));
-          return <span key={output.id}
-            title={tooltip(`${text} ${t("editor.symbols.separator")} ${outputText(output.overlay!.description, { interval })}`)}>
-            {text}
+          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result?.values[output.id]) });
+          const worstArgs = worst == null ? undefined : { number: formatNumber(worst.replica), value: formatOutput(output, worst.value) };
+          const fullText = text + (worstArgs === undefined ? "" : t("results.groups.worst", worstArgs));
+          const description = tooltip(outputText(output.overlay!.description, { interval }));
+          return <span key={output.id} title={`${fullText} ${t("editor.symbols.separator")} ${description}`}>
+            <span className="block-result-text">{text}{worstArgs === undefined ? "" : t("results.groups.worstCompact", worstArgs)}</span>
+            <HelpHint label={output.overlay!.title}>
+              <strong>{output.overlay!.title}</strong><p>{fullText}</p><p>{description}</p>
+            </HelpHint>
           </span>;
         })}
       </div>}
