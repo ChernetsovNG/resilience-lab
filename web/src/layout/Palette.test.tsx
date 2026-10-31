@@ -19,7 +19,7 @@ describe("Palette", () => {
     } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
   });
 
-  it("shows catalog blocks as named icons and describes them on focus", () => {
+  it("shows named icons with title-only tooltips", () => {
     const localized = localizeCatalog(catalog);
     render(<Palette catalog={localized} editable onAdd={vi.fn()} />);
     const service = screen.getByRole("button", { name: "Service" });
@@ -27,7 +27,7 @@ describe("Palette", () => {
     fireEvent.focus(service);
     const tooltip = document.getElementById(service.getAttribute("aria-describedby")!);
     expect(tooltip?.getAttribute("role")).toBe("tooltip");
-    expect(tooltip?.textContent).toContain(localized.types.find(type => type.id === "service")!.description);
+    expect(tooltip?.textContent).toBe("Service");
     expect(screen.queryByText("Connections")).toBeNull();
     expect(screen.queryByText("Request")).toBeNull();
     expect(screen.queryByText("Call")).toBeNull();
@@ -53,6 +53,8 @@ describe("Palette", () => {
     fireEvent.click(service, { detail: 1 });
     const card = screen.getByRole("dialog", { name: "About Service" });
     expect(card.textContent).toContain(catalog.types.find(type => type.id === "service")!.description);
+    expect(document.getElementById(card.getAttribute("aria-describedby")!)?.textContent)
+      .toBe(catalog.types.find(type => type.id === "service")!.description);
     expect(service.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(service, { detail: 1 });
     expect(screen.queryByRole("dialog")).toBeNull();

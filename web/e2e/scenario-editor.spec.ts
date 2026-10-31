@@ -454,6 +454,66 @@ async function connect(page: Page, from: string, to: string, targetPort = "in") 
   await source.dragTo(target);
 }
 
+test("shows one palette tooltip for mouse hover or keyboard focus", async ({ page }) => {
+  await page.goto("/");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+  const palette = page.getByRole("complementary", { name: "Palette" });
+  const help = palette.getByRole("button", { name: "Connect blocks", exact: true });
+  const database = palette.getByRole("button", { name: "Database", exact: true });
+  const helpTooltip = palette.locator(".palette-help > .palette-tooltip");
+  const databaseTooltip = palette.locator(".palette-tooltip").filter({ hasText: /^Database/ });
+
+  await help.click();
+  await expect(helpTooltip).toBeVisible();
+  await database.hover();
+  await expect(help).toBeFocused();
+  await expect(helpTooltip).toBeHidden();
+  await expect(databaseTooltip).toBeVisible();
+  await expect(databaseTooltip).toHaveText("Database");
+  await expect(palette.getByRole("tooltip")).toHaveCount(1);
+  await database.click();
+  await expect(page.getByRole("dialog", { name: "About Database", exact: true })).toBeVisible();
+  await expect(databaseTooltip).toBeHidden();
+  await database.click();
+  await page.mouse.move(0, 0);
+  await expect(database).toBeFocused();
+  await expect(palette.getByRole("tooltip")).toHaveCount(0);
+
+  await database.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(database).toBeFocused();
+  await expect(databaseTooltip).toBeVisible();
+  await help.hover();
+  await expect(helpTooltip).toBeVisible();
+  await expect(databaseTooltip).toBeHidden();
+  await expect(palette.getByRole("tooltip")).toHaveCount(1);
+  await page.mouse.move(0, 0);
+  await expect(databaseTooltip).toBeVisible();
+  await help.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(help).toBeFocused();
+  await expect(helpTooltip).toBeVisible();
+  await expect(palette.getByRole("tooltip")).toHaveCount(1);
+  await help.click();
+  await page.mouse.move(0, 0);
+  await expect(help).toBeFocused();
+  await expect(palette.getByRole("tooltip")).toHaveCount(0);
+
+  await database.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(databaseTooltip).toBeVisible();
+  await database.click();
+  await database.click();
+  await page.mouse.move(0, 0);
+  await expect(database).toBeFocused();
+  await expect(palette.getByRole("tooltip")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "View", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(palette.getByRole("button", { name: "Client", exact: true })).toBeFocused();
+  await expect(palette.getByRole("tooltip", { name: "Client", exact: true })).toBeVisible();
+});
+
 test("inspects a palette block without changing the model and inserts it once with a double click", async ({ page, files }) => {
   const source = (await stored(page, files.model)).content.model as ModelFile;
   const service = page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true });
@@ -503,7 +563,7 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(palette).toHaveCSS("width", "48px");
   await expect(palette.getByText("Connections", { exact: true })).toHaveCount(0);
   await service.hover();
-  await expect(palette.getByRole("tooltip").filter({ hasText: "Blocking service" })).toBeVisible();
+  await expect(palette.getByRole("tooltip", { name: "Service", exact: true })).toBeVisible();
   await page.locator(".react-flow__controls-zoomout").click();
   const bounds = (await canvas.boundingBox())!;
   const pan = await canvas.evaluate(element => {
@@ -533,7 +593,7 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await expect(palette.getByRole("button", { name: "Client", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(service).toBeFocused();
-  await expect(palette.getByRole("tooltip").filter({ hasText: "Blocking service" })).toBeVisible();
+  await expect(palette.getByRole("tooltip", { name: "Service", exact: true })).toBeVisible();
   await page.keyboard.press("Enter");
   const node = page.getByTestId("rf__node-service-1");
   await expect(node).toHaveClass(/selected/);
