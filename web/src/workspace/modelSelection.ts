@@ -8,9 +8,11 @@ export function experimentsForModel(entries: readonly DocumentEntry[], modelPath
     resolveRef(entry.path, entry.modelRef) === modelPath).map(entry => entry.path).sort();
 }
 
+/** Prefer the remembered experiment, then the model's matching basename, then the first path. */
 export function preferredExperiment(entries: readonly DocumentEntry[], modelPath: string, last?: string): string | null {
   const paths = experimentsForModel(entries, modelPath);
-  return last !== undefined && paths.includes(last) ? last : paths[0] ?? null;
+  const main = modelPath.replace(/\.model\.json$/, ".experiment.json");
+  return last !== undefined && paths.includes(last) ? last : paths.includes(main) ? main : paths[0] ?? null;
 }
 
 /** After deletion, prefer the most recently opened surviving model, then the first path. */

@@ -553,6 +553,15 @@ export function App() {
         }
       }}>
         <div className="canvas-messages">
+          {loaded?.model.description?.trim() ? <div className="model-description">
+            <p>{loaded.model.description}</p>
+            <button type="button" disabled={invalid || loading} onClick={() => {
+              setAnalysis(false);
+              setSelection([]); setInspectorTarget("experiment");
+              setInspectorRequest(current => current + 1);
+              setFieldFocus(previous => ({ path: "model.notes", request: (previous?.request ?? 0) + 1 }));
+            }}>{t("app.canvas.fullNotes")}</button>
+          </div> : null}
           {invalid ? (
             <div className="banner" role="alert">
               {t("app.fields.invalid")}

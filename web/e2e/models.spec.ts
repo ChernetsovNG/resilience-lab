@@ -5,6 +5,32 @@ import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
 
+test("checkout opens its main experiment with a visible description and full notes in Russian", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("resilience-lab.language", "ru"));
+  await page.goto("/");
+  await page.getByLabel("Модель", { exact: true }).selectOption("checkout/checkout.model.json");
+  await expect(page.getByLabel("Эксперимент", { exact: true })).toHaveValue("checkout/checkout.experiment.json");
+  const description = page.locator(".model-description p");
+  await expect(description).toContainText("Оформление заказа");
+  await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
+  await expect(page.locator(".inspector-annotations")).not.toHaveAttribute("open");
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await expect(description).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Полные заметки", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: testInfo.outputPath(`checkout-description-ru-${viewport.width}.png`) });
+  }
+  await page.getByTestId("rf__node-api-gateway").locator(".block-node-header").click();
+  await page.getByRole("button", { name: "Свернуть инспектор", exact: true }).click();
+  await page.getByRole("button", { name: "Полные заметки", exact: true }).click();
+  const annotations = page.locator(".inspector-annotations");
+  await expect(annotations).toHaveAttribute("open");
+  await expect(annotations.getByRole("group", { name: "Модель", exact: true }).getByRole("textbox", { name: "Заметки", exact: true })).toBeFocused();
+  await expect(annotations.getByRole("group", { name: "Эксперимент", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить", exact: true })).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath("checkout-notes-ru.png") });
+});
+
 test("checkout keeps its diagram while switching its two questions and remembers the last one", async ({ page }, testInfo) => {
   await page.goto("/");
   const model = page.getByLabel("Model", { exact: true });
