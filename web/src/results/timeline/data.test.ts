@@ -1,6 +1,31 @@
 import { expect, it } from "vitest";
-import { downsample, timelineRegions, windowAt } from "./data";
+import { downsample, replicaBand, timelineRegions, windowAt } from "./data";
 import { catalog } from "../../test/fixtures";
+
+it("builds the replica band from recorded bounds, scales it and closes segments before gaps", () => {
+  const windows = [
+    { startMs: 0, durationMs: 10, min: 0.02, max: 0.97 },
+    { startMs: 10, durationMs: 10, min: null, max: null },
+    { startMs: 20, durationMs: 5, min: 0.1, max: 0.4 },
+  ];
+  expect(replicaBand(windows, ["min", "max"], 100, 100)).toEqual([
+    { window: 0, startMs: 0, range: [2, 97] },
+    { window: 0, startMs: 10, range: [2, 97] },
+    { window: 1, startMs: 10, range: null },
+    { window: 2, startMs: 20, range: [10, 40] },
+    { window: 2, startMs: 25, range: [10, 40] },
+  ]);
+});
+
+it("preserves peaks of both replica bounds when reducing a dense band", () => {
+  const windows = Array.from({ length: 1000 }, (_, index) => ({ startMs: index, durationMs: 1,
+    min: index === 501 ? 0.01 : 0.2, max: index === 502 ? 0.99 : 0.5 }));
+  const band = replicaBand(windows, ["min", "max"], 100, 20);
+  expect(band.length).toBeLessThan(160);
+  expect(band).toContainEqual({ window: 501, startMs: 501, range: [1, 50] });
+  expect(band).toContainEqual({ window: 502, startMs: 502, range: [20, 99] });
+  expect(band.at(-1)).toEqual({ window: 999, startMs: 1000, range: [20, 50] });
+});
 
 it("keeps first, last and extrema in time order in each pixel", () => {
   const values = [2, 9, -4, 3, 5, -8, 11, 6].map((value, index) => ({ window: index, startMs: index, value }));

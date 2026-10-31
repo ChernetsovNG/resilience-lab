@@ -18,7 +18,7 @@ it("opens a saturated replica from Answer, selects its group and keeps result na
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("button", { name: /gateway#2 first/ }));
   const inspector = screen.getByRole("complementary", { name: "Inspector" });
   expect(await within(inspector).findByRole("heading", { name: "gateway#2" })).toBeTruthy();
