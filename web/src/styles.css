@@ -290,6 +290,9 @@ select {
   opacity: 0.6;
 }
 
+.icon { display: inline-flex; width: 16px; height: 16px; }
+.icon > svg { width: 100%; height: 100%; }
+
 .palette-icon {
   width: 20px;
   height: 20px;
@@ -571,7 +574,7 @@ select {
   color: #4c1d95;
 }
 .variant-banner summary { padding: .3rem .5rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.variant-banner summary svg { vertical-align: text-bottom; margin-right: .35rem; }
+.variant-banner summary .icon { vertical-align: text-bottom; margin-right: .35rem; }
 .variant-changes { padding: .3rem .5rem; min-width: 0; }
 .variant-changes p, .variant-changes ul { margin: 0; }
 .variant-changes ul { list-style: none; padding: 0; }

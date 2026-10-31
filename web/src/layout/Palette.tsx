@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import type { Catalog, TypeDescriptor } from "../api/apiTypes";
@@ -65,9 +66,7 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
         ))}
         <li className="palette-help">
           <button type="button" aria-label={t("editor.palette.connectBlocks")} aria-describedby={`${tooltipId}-help`}>
-            <svg className="palette-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <circle cx="12" cy="12" r="9" /><path d="M12 10v7M12 6v1" />
-            </svg>
+            <Icon name="info" className="palette-icon" />
           </button>
           <span className="palette-tooltip" role="tooltip" id={`${tooltipId}-help`}>{t("editor.palette.connectionHint")}</span>
         </li>

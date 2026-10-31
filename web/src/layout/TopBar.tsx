@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import type { JobView } from "../api/apiTypes";
 import { useId, type ReactNode } from "react";
 import { t } from "../i18n";
@@ -88,10 +89,7 @@ export function TopBar(props: TopBarProps) {
       <button type="button" onClick={props.onInspectExperiment} disabled={experiment === null || loading || invalid}
         aria-pressed={props.runSettingsPressed}
         aria-label={t("app.topBar.runSettings")} title={t("app.topBar.runSettings")}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M10 2h4l.6 3 2.1 1.2 2.9-1 2 3.5-2.3 2v2.6l2.3 2-2 3.5-2.9-1-2.1 1.2L14 22h-4l-.6-3-2.1-1.2-2.9 1-2-3.5 2.3-2v-2.6l-2.3-2 2-3.5 2.9 1L9.4 5Z" />
-        </svg>
+        <Icon name="settings" />
       </button>
       <button type="button" onClick={onUndo} disabled={!canUndo || invalid || loading} title={t("app.topBar.undoTitle")}>
         {t("app.topBar.undo")}
