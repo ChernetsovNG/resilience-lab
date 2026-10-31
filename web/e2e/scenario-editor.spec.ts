@@ -691,13 +691,22 @@ test("extends the chain through real drag and ports, persists positions and comm
   const canvas = page.getByLabel("Model canvas", { exact: true });
   const bounds = await canvas.boundingBox();
   const targetPosition = { x: Math.round(bounds!.width * 0.55), y: Math.round(bounds!.height * 0.7) };
-  const expectedDrop = await canvas.evaluate((element, point) => {
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
-    return { x: Math.round((point.x - matrix.e) / matrix.a / 20) * 20,
-      y: Math.round((point.y - matrix.f) / matrix.d / 20) * 20 };
-  }, targetPosition);
+  // Automatic fitting can finish during dragTo; sample the actual drop before React handles it.
+  const drop = await canvas.evaluateHandle(element => {
+    const coordinates = { position: null as { x: number; y: number } | null };
+    element.addEventListener("drop", event => {
+      const { clientX, clientY } = event as DragEvent;
+      const bounds = element.getBoundingClientRect();
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
+      coordinates.position = { x: Math.round((clientX - bounds.left - matrix.e) / matrix.a / 20) * 20,
+        y: Math.round((clientY - bounds.top - matrix.f) / matrix.d / 20) * 20 };
+    }, { capture: true, once: true });
+    return coordinates;
+  });
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true })
     .dragTo(canvas, { targetPosition });
+  const expectedDrop = await drop.evaluate(coordinates => coordinates.position);
+  await drop.dispose();
   const node = page.getByTestId("rf__node-service-1");
   await expect(node).toBeVisible();
   await expect(node).toHaveClass(/selected/);
