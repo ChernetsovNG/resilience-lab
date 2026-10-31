@@ -78,7 +78,11 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
             name={line.label} stroke={line.color} strokeWidth={1.6} strokeDasharray={line.comparison ? "6 4" : undefined}
             dot={unit === "ms" ? ({ cx, cy, payload, index }: { cx?: number; cy?: number; payload: TimelinePoint; index: number }) =>
               payload.value !== null && payload.startMs === line.windows[payload.window].startMs
-                ? <circle key={index} className="timeline-latency-marker" cx={cx} cy={cy} r={2} fill="#fff" stroke={line.color} />
+                ? line.comparison
+                  ? <rect key={index} className="timeline-latency-marker timeline-latency-marker--comparison"
+                    x={cx === undefined ? undefined : cx - 2.5} y={cy === undefined ? undefined : cy - 2.5}
+                    width={5} height={5} fill="#fff" stroke={line.color} />
+                  : <circle key={index} className="timeline-latency-marker" cx={cx} cy={cy} r={2} fill="#fff" stroke={line.color} />
                 : <g key={index} /> : false} activeDot={false} connectNulls={false} isAnimationActive={false} />)}
           {thresholds.map((threshold) => <ReferenceLine key={threshold.id} y={threshold.value}
             stroke="#b91c1c" strokeDasharray={threshold.comparison ? "7 3" : "3 3"} ifOverflow="extendDomain" />)}
@@ -109,7 +113,7 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
       {lines.map((line) => {
         const raw = active === null ? null : line.windows[active]?.[line.metric] ?? null;
         return <div key={line.id}>
-          <dt><span className={`timeline-line-key${line.comparison ? " timeline-line-key--comparison" : ""}`}
+          <dt><span className={`timeline-line-key${line.comparison ? " timeline-line-key--comparison" : ""}${unit === "ms" ? " timeline-line-key--latency" : ""}`}
             style={{ borderColor: line.color }} />{line.label}</dt>
           <dd>{raw === null ? t("results.timeline.noValue") : format(raw * line.scale)}</dd>
         </div>;
