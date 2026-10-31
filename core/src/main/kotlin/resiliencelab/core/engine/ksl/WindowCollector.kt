@@ -25,6 +25,8 @@ internal class WindowCollector(
     private val windowMs: Double,
     connectionIds: List<String> = emptyList(),
     private val connectionPoolSizes: Map<String, Int> = emptyMap(),
+    private val clientIds: List<String> = listOf(clientId),
+    classIds: List<String> = listOf("default"),
     private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit,
 ) {
     private val totalWindows = windowCount(endMs, windowMs)
@@ -47,8 +49,9 @@ internal class WindowCollector(
                         it.pooler,
                         it.handlers,
                     )
-            } + (clientId to State(clientId, 0))
+            } + clientIds.map { it to State(it, 0) }
         ).toMap().toSortedMap()
+    private val classes = classIds.distinct().sorted().associateWith { State(it, 0) }
     private val connections = connectionIds.sorted().associateWith { ConnectionState(it) }
 
     fun connectionEvent(
@@ -133,19 +136,55 @@ internal class WindowCollector(
         if (acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT) row.waitTimeouts++
     }
 
-    fun originalArrival(timeMs: Double) {
-        if (advance(timeMs)) nodes.getValue(clientId).row.originalArrivals++
+    fun originalArrival(
+        timeMs: Double,
+        client: String = clientId,
+        requestClass: String = "default",
+    ) {
+        if (!advance(timeMs)) return
+        nodes.getValue(client).row.originalArrivals++
+        classes.getValue(requestClass).row.originalArrivals++
     }
 
     fun originalCompletion(
         timeMs: Double,
         latencyMs: Double,
         succeeded: Boolean,
+        client: String = clientId,
+        requestClass: String = "default",
+        reason: String? = if (succeeded) null else "error",
     ) {
         if (!advance(timeMs)) return
-        val row = nodes.getValue(clientId).row
-        row.latency.add(latencyMs)
-        if (succeeded) row.successes++ else row.failures++
+        listOf(nodes.getValue(client).row, classes.getValue(requestClass).row).forEach { row ->
+            row.latency.add(latencyMs)
+            if (succeeded) {
+                row.successes++
+            } else {
+                row.failures++
+                val code = requireNotNull(reason)
+                row.failuresByReason[code] = row.failuresByReason.getOrDefault(code, 0) + 1
+            }
+        }
+    }
+
+    fun failure(
+        id: String,
+        timeMs: Double,
+        reason: String,
+    ) {
+        if (!advance(timeMs)) return
+        val reasons = nodes.getValue(id).row.failuresByReason
+        reasons[reason] = reasons.getOrDefault(reason, 0) + 1
+    }
+
+    fun connectionFailure(
+        id: String,
+        timeMs: Double,
+        reason: String,
+    ) {
+        if (!advance(timeMs)) return
+        val reasons = connections.getValue(id).row.failuresByReason
+        reasons[reason] = reasons.getOrDefault(reason, 0) + 1
     }
 
     fun attemptEvent(
@@ -254,14 +293,19 @@ internal class WindowCollector(
                 it.integrateServerCapacity(boundary)
             }
             connections.values.forEach { it.integrate(boundary) }
+            val clientOriginalArrivals = clientIds.sumOf { nodes.getValue(it).row.originalArrivals }
             onWindow(
                 index,
-                nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs)) },
-                connections.map { (id, state) -> ConnectionWindow(id, state.snapshot(boundary - startMs)) },
+                nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals)) } +
+                    classes.map { (id, state) ->
+                        NodeWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals), isClass = true)
+                    },
+                connections.map { (id, state) -> ConnectionWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals)) },
             )
             index++
             startMs = boundary
             nodes.values.forEach { it.row = Row(it.id, index) }
+            classes.values.forEach { it.row = Row(it.id, index) }
             connections.values.forEach { it.row = ConnectionRow(it.id, index) }
         }
         return timeMs < endMs
@@ -303,15 +347,20 @@ internal class WindowCollector(
             lastServerCapacityMs = timeMs
         }
 
-        fun snapshot(duration: Double): WindowMetrics =
+        fun snapshot(
+            duration: Double,
+            clientOriginalArrivals: Int,
+        ): WindowMetrics =
             WindowMetrics(
                 startMs = startMs,
                 durationMs = duration,
+                clientOriginalArrivals = clientOriginalArrivals,
                 originalArrivals = row.originalArrivals,
                 offeredAttempts = row.offeredAttempts,
                 admittedAttempts = row.admittedAttempts,
                 successes = row.successes,
                 failures = row.failures,
+                failuresByReason = row.failuresByReason.toMap(),
                 timeouts = row.timeouts,
                 retries = row.retries,
                 latency = row.latency.snapshot(),
@@ -366,6 +415,7 @@ internal class WindowCollector(
         var admittedAttempts = 0
         var queueRejections = 0
         var successes = 0
+        val failuresByReason = sortedMapOf<String, Int>()
         var failures = 0
         var timeouts = 0
         var retries = 0
@@ -437,7 +487,10 @@ internal class WindowCollector(
             }
         }
 
-        fun snapshot(duration: Double): ConnectionWindowMetrics =
+        fun snapshot(
+            duration: Double,
+            clientOriginalArrivals: Int,
+        ): ConnectionWindowMetrics =
             ConnectionWindowMetrics(
                 startMs,
                 duration,
@@ -451,6 +504,8 @@ internal class WindowCollector(
                 row.orphanedIntegral,
                 row.backoffIntegral,
                 row.latency.snapshot(),
+                clientOriginalArrivals = clientOriginalArrivals,
+                failuresByReason = row.failuresByReason.toMap(),
                 slotPools =
                     if (id in connectionPoolSizes) {
                         mapOf(
@@ -478,6 +533,7 @@ internal class WindowCollector(
         var sentAttempts = 0
         var retries = 0
         var succeeded = 0
+        val failuresByReason = sortedMapOf<String, Int>()
         var failed = 0
         var timeouts = 0
         var orphaned = 0

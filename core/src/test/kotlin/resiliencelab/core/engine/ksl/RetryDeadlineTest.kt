@@ -94,7 +94,7 @@ class RetryDeadlineTest {
         assertThat(caller.work.processCompletionTime).isCloseTo(30.0, offset(0.0))
 
         val result = rig.result()
-        assertLatencies(result.successfulLatency, 30.0)
+        assertLatencies(result.entries.total.successfulLatency, 30.0)
         assertThat(result.services.getValue("entry").retries).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(3)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(2)
@@ -121,7 +121,7 @@ class RetryDeadlineTest {
         assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(caller.work.processCompletionTime).isCloseTo(0.0, offset(0.0))
         val result = rig.result()
-        assertLatencies(result.successfulLatency, 0.0)
+        assertLatencies(result.entries.total.successfulLatency, 0.0)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(2)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(2)
         assertThat(result.services.getValue("backend").failures).isEqualTo(1)
@@ -138,14 +138,14 @@ class RetryDeadlineTest {
             )
 
         val caller = rig.invocations.single()
-        assertThat(caller.outcome).isEqualTo(AttemptOutcome.DOWNSTREAM_FAILURE)
+        assertThat(caller.outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
         val result = rig.result()
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(5)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(5)
         assertThat(result.services.getValue("backend").failures).isEqualTo(5)
         assertThat(result.services.getValue("entry").retries).isEqualTo(4)
         assertThat(result.services.getValue("backend").retries).isZero()
-        assertLatencies(result.failedLatency, 0.0)
+        assertLatencies(result.entries.total.failedLatency, 0.0)
         assertDrained(rig)
     }
 
@@ -181,7 +181,13 @@ class RetryDeadlineTest {
         )
         assertThat(rig.invocations[1].work.processCompletionTime).isCloseTo(30.0, offset(0.0))
         assertThat(rig.invocations[2].work.processCompletionTime).isCloseTo(40.0, offset(0.0))
-        assertLatencies(rig.result().successfulLatency, 30.0, 35.0)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.successfulLatency,
+            30.0,
+            35.0,
+        )
         assertThat(
             rig
                 .result()
@@ -374,12 +380,12 @@ class RetryDeadlineTest {
         assertThat(caller.work.processCompletionTime).isCloseTo(40.0, offset(0.0))
 
         val result = rig.result()
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.successes).isEqualTo(1)
-        assertThat(result.failures).isZero()
-        assertLatencies(result.allLatency, 40.0)
-        assertLatencies(result.successfulLatency, 40.0)
-        assertThat(result.failedLatency.count).isZero()
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.successes).isEqualTo(1)
+        assertThat(result.entries.total.failures).isZero()
+        assertLatencies(result.entries.total.allLatency, 40.0)
+        assertLatencies(result.entries.total.successfulLatency, 40.0)
+        assertThat(result.entries.total.failedLatency.count).isZero()
         assertThat(result.services.getValue("entry").timeouts).isZero()
         assertDrained(rig)
     }
@@ -512,7 +518,12 @@ class RetryDeadlineTest {
         assertThat(secondAttempt!!.child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(secondAttempt.child.work.processCompletionTime).isCloseTo(15.0, offset(0.0))
         assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
-        assertLatencies(rig.result().successfulLatency, 15.0)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.successfulLatency,
+            15.0,
+        )
         assertThat(
             rig
                 .result()
@@ -625,12 +636,12 @@ class RetryDeadlineTest {
         result: ReplicationResult,
         latencyMs: Double,
     ) {
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.successes).isZero()
-        assertThat(result.failures).isEqualTo(1)
-        assertLatencies(result.allLatency, latencyMs)
-        assertThat(result.successfulLatency.count).isZero()
-        assertLatencies(result.failedLatency, latencyMs)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.successes).isZero()
+        assertThat(result.entries.total.failures).isEqualTo(1)
+        assertLatencies(result.entries.total.allLatency, latencyMs)
+        assertThat(result.entries.total.successfulLatency.count).isZero()
+        assertLatencies(result.entries.total.failedLatency, latencyMs)
     }
 
     private fun assertDrained(rig: SimulationRig) {
@@ -713,7 +724,9 @@ class RetryDeadlineTest {
                             activeDownstreamProcesses = reliabilityModel.activeDownstreamProcesses,
                             entryHandlerBusy = (model.getModelElement("entry") as ResourceWithQ).numBusy,
                             backendHandlerBusy = (model.getModelElement("backend") as ResourceWithQ).numBusy,
-                            originalCompletions = result.allLatency.count.toInt(),
+                            originalCompletions =
+                                result.entries.total.allLatency.count
+                                    .toInt(),
                         )
                     observedAttempts += created.lastOrNull()?.callAttempt
                 }

@@ -83,7 +83,7 @@ export const outputsOf = (catalog: Catalog, type: string): OutputDescriptor[] =>
 /** A connection output can require the called block and the original-arrival denominator of its windows. */
 export function outputsUseTarget(outputs: readonly OutputDescriptor[]): boolean {
   return outputs.some(output => [output.calculation.field, output.calculation.divisor, output.calculation.capacity]
-    .some(path => path?.startsWith("target.") || path?.startsWith("client.")));
+    .some(path => path?.startsWith("target.") || path?.startsWith("entries.total.")));
 }
 
 export function inspectorOutputs(outputs: readonly OutputDescriptor[], charts = false): OutputDescriptor[] {

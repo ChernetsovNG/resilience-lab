@@ -322,21 +322,37 @@ export interface components {
             timeoutRate?: components["schemas"]["MetricSummary"] | null;
             totals: components["schemas"]["ConnectionTotals"];
         };
+        AggregateEntries: {
+            classes: {
+                [key: string]: components["schemas"]["AggregateEntryMetrics"];
+            };
+            clients: {
+                [key: string]: components["schemas"]["AggregateEntryMetrics"];
+            };
+            total: components["schemas"]["AggregateEntryMetrics"];
+        };
+        AggregateEntryMetrics: {
+            degradedRate?: components["schemas"]["MetricSummary"] | null;
+            failuresByReason: {
+                [key: string]: components["schemas"]["MetricSummary"];
+            };
+            p95LatencyMs?: components["schemas"]["MetricSummary"] | null;
+            p99LatencyMs?: components["schemas"]["MetricSummary"] | null;
+            pooledLatency: components["schemas"]["LatencySummary"];
+            successRate?: components["schemas"]["MetricSummary"] | null;
+        };
         AggregateMetrics: {
             connections: {
                 [key: string]: components["schemas"]["AggregateConnectionMetrics"];
             };
+            entries: components["schemas"]["AggregateEntries"];
             groups: components["schemas"]["ReplicaGroup"][];
-            p95LatencyMs?: components["schemas"]["MetricSummary"] | null;
-            p99LatencyMs?: components["schemas"]["MetricSummary"] | null;
-            pooledLatency: components["schemas"]["LatencySummary"];
             poolers: {
                 [key: string]: components["schemas"]["AggregatePoolerMetrics"];
             };
             services: {
                 [key: string]: components["schemas"]["AggregateServiceMetrics"];
             };
-            successRate?: components["schemas"]["MetricSummary"] | null;
         };
         AggregatePoolerMetrics: {
             pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
@@ -412,8 +428,17 @@ export interface components {
         ConnectionTotals: {
             /** Format: double */
             backoffIntegralMs: number;
+            /** Format: double */
+            circuitOpenMs: number;
+            /** Format: int64 */
+            circuitRejections: number;
             /** Format: int64 */
             failed: number;
+            failuresByReason: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            fallbacks: number;
             /** Format: double */
             inFlightIntegralMs: number;
             /** Format: double */
@@ -424,6 +449,8 @@ export interface components {
             orphanedIntegralMs: number;
             /** Format: int64 */
             retries: number;
+            /** Format: int64 */
+            retriesDenied: number;
             /** Format: int64 */
             sentAttempts: number;
             slotPools: {
@@ -438,9 +465,20 @@ export interface components {
             /** Format: double */
             backoffIntegralMs: number;
             /** Format: double */
+            circuitOpenMs: number;
+            /** Format: int32 */
+            circuitRejections: number;
+            /** Format: int32 */
+            clientOriginalArrivals: number;
+            /** Format: double */
             durationMs: number;
             /** Format: int32 */
             failed: number;
+            failuresByReason: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            fallbacks: number;
             /** Format: double */
             inFlightIntegralMs: number;
             latency: components["schemas"]["LatencyStatistics"];
@@ -450,6 +488,8 @@ export interface components {
             orphanedIntegralMs: number;
             /** Format: int32 */
             retries: number;
+            /** Format: int32 */
+            retriesDenied: number;
             /** Format: int32 */
             sentAttempts: number;
             slotPools: {
@@ -933,6 +973,7 @@ export interface components {
             windowMs: number;
         };
         SeriesPart: {
+            classes: components["schemas"]["NodeSeries"][];
             connections: components["schemas"]["ConnectionSeries"][];
             /** Format: int32 */
             fromWindow: number;
@@ -946,6 +987,7 @@ export interface components {
             untilWindow: number;
         };
         SeriesPartReference: {
+            classes: string[];
             connections: string[];
             file: string;
             /** Format: int32 */
@@ -962,14 +1004,29 @@ export interface components {
         ServiceTotals: {
             /** Format: int64 */
             admittedAttempts: number;
+            /** Format: double */
+            ejectedMs: number;
+            /** Format: int64 */
+            ejections: number;
             /** Format: int64 */
             failures: number;
+            failuresByReason: {
+                [key: string]: number;
+            };
             /** Format: double */
             measurementMs: number;
+            /** Format: double */
+            notReadyMs: number;
             /** Format: int64 */
             offeredAttempts: number;
             /** Format: int64 */
             originalArrivals: number;
+            /** Format: int64 */
+            probeFailures: number;
+            /** Format: int64 */
+            probes: number;
+            /** Format: int64 */
+            rateLimited: number;
             /** Format: int64 */
             retries: number;
             slotPools: {
@@ -1053,16 +1110,33 @@ export interface components {
             /** Format: int32 */
             admittedAttempts: number;
             /** Format: int32 */
-            clientOriginalArrivals?: number | null;
+            clientOriginalArrivals: number;
+            /** Format: int32 */
+            degraded: number;
             /** Format: double */
             durationMs: number;
+            /** Format: double */
+            ejectedMs: number;
+            /** Format: int32 */
+            ejections: number;
             /** Format: int32 */
             failures: number;
+            failuresByReason: {
+                [key: string]: number;
+            };
             latency: components["schemas"]["LatencyStatistics"];
+            /** Format: double */
+            notReadyMs: number;
             /** Format: int32 */
             offeredAttempts: number;
             /** Format: int32 */
             originalArrivals: number;
+            /** Format: int32 */
+            probeFailures: number;
+            /** Format: int32 */
+            probes: number;
+            /** Format: int32 */
+            rateLimited: number;
             /** Format: int32 */
             retries: number;
             slotPools: {

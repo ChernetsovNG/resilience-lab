@@ -64,7 +64,8 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   if (outputs.length === 0) return null;
   const block = selection.category === "BLOCK";
   const aggregate = block
-    ? selection.kind === "pooler" ? ownEntry(point.aggregate.poolers, selection.id) : ownEntry(point.aggregate.services, selection.id)
+    ? selection.kind === "client" ? ownEntry(point.aggregate.entries.clients, selection.id)
+      : selection.kind === "pooler" ? ownEntry(point.aggregate.poolers, selection.id) : ownEntry(point.aggregate.services, selection.id)
     : ownEntry(point.aggregate.connections, selection.id);
   if (aggregate === undefined) return null;
   const descriptor = catalog.types.find(type => type.id === selection.kind)!;
@@ -78,7 +79,7 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const target = context.nodes?.find(node => node.id === selection.target);
   const frameContext = (index: number) => frames[index] === undefined ? undefined : {
     ...frames[index], params, target: target?.windows[index],
-    client: (block ? node?.windows[index] : target?.windows[index])?.client,
+    entries: (block ? node?.windows[index] : target?.windows[index])?.entries,
   };
   const metadata = manifest.series;
   const endMs = (metadata?.warmupMs ?? 0) + (metadata?.measurementMs ?? 0);

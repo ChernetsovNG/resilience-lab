@@ -58,8 +58,8 @@ class ChainModelTest {
 
         val first = run(chain, replication = 0)
 
-        assertThat(first.originalArrivals).isGreaterThan(0)
-        assertThat(first.successes + first.failures).isEqualTo(first.originalArrivals)
+        assertThat(first.entries.total.originalArrivals).isGreaterThan(0)
+        assertThat(first.entries.total.successes + first.entries.total.failures).isEqualTo(first.entries.total.originalArrivals)
         assertThat(first.services.keys).containsExactly("front", "back")
         assertThat(run(chain, replication = 0)).isEqualTo(first)
         assertThat(run(chain, replication = 1).arrivalTimesMs).isNotEqualTo(first.arrivalTimesMs)

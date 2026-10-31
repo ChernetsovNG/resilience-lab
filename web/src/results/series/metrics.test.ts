@@ -11,10 +11,13 @@ function window(values: Partial<RawWindow>): RawWindow {
   return { startMs: 0,
       durationMs: 10,
       originalArrivals: 0,
+      clientOriginalArrivals: values.originalArrivals ?? 0,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 0,
       failures: 0,
+      failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0,
+      probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0,
       timeouts: 0,
       retries: 0,
       latency: { count: 0, sumMs: 0, sketch: [0] },
@@ -22,7 +25,7 @@ function window(values: Partial<RawWindow>): RawWindow {
 }
 
 function part(nodes: RawPart["nodes"]): RawPart {
-  return { schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, connections: [] };
+  return { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, classes: [], connections: [] };
 }
 
 describe("window metrics", () => {
@@ -33,7 +36,7 @@ describe("window metrics", () => {
         window({ startMs: 10, durationMs: 5 }),
       ] },
       { id: "service", windows: [
-        window({ offeredAttempts: 30,
+        window({ offeredAttempts: 30, clientOriginalArrivals: 20,
       admittedAttempts: 24,
       successes: 18,
       failures: 6,
@@ -52,7 +55,7 @@ describe("window metrics", () => {
       successesPerSecond: 1500, failuresPerSecond: 500, meanLatencyMs: 5,
       p50LatencyMs: 1.0078125, p95LatencyMs: 1.0078125, p99LatencyMs: 1.0078125 });
     const frame = decoded.nodes[1].windows[0].metrics;
-    expect(calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: frame, client: frame.client })).toBe(1.2);
+    expect(calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: frame, entries: frame.entries })).toBe(1.2);
     expect(outputWindow(outputsOf(catalog, "service"), frame)).toMatchObject({
       startMs: 0,
       durationMs: 10,

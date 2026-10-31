@@ -71,9 +71,16 @@ class Stage1CatalogTest {
                     if (parts.first() == "params") {
                         assertThat(type.params.map { it.name }).contains(parts[1])
                     } else {
-                        val scoped = parts.first() in setOf("target", "client")
-                        var field: JsonElement? = if (scoped || type.category == TypeCategory.BLOCK) node else connection
-                        for (part in if (scoped) parts.drop(1) else parts) field = field?.jsonObject?.get(part)
+                        val scoped = parts.first() == "target"
+                        val entryTotal = parts.take(2) == listOf("entries", "total")
+                        var field: JsonElement? = if (scoped || entryTotal || type.category == TypeCategory.BLOCK) node else connection
+                        val fields =
+                            when {
+                                scoped -> parts.drop(1)
+                                entryTotal -> parts.drop(2)
+                                else -> parts
+                            }
+                        for (part in fields) field = field?.jsonObject?.get(part)
                         assertThat(field).describedAs("%s.%s references %s", type.id, output.id, path).isNotNull()
                     }
                 }

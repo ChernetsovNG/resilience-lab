@@ -1,6 +1,9 @@
 package resiliencelab.server.lab
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -78,6 +81,36 @@ class SeriesApiTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `summary exposes entry totals clients classes and original failure reasons`() {
+        val route = "/api/v1/runs/{id}/summary"
+        val response = mockMvc.perform(get(route, runId)).andReturn().response
+        assertThat(response.status).isEqualTo(200)
+        val document = Json.parseToJsonElement(response.contentAsString).jsonObject
+        val variants = document.getValue("variants").jsonArray
+        variants.forEach { variant ->
+            variant.jsonObject.getValue("points").jsonArray.forEach { point ->
+                val aggregate = point.jsonObject.getValue("aggregate").jsonObject
+                assertThat(aggregate.keys).doesNotContain("pooledLatency", "successRate", "p95LatencyMs", "p99LatencyMs")
+                val entries = aggregate.getValue("entries").jsonObject
+                val total = entries.getValue("total").jsonObject
+                assertThat(entries.getValue("clients").jsonObject.getValue("client")).isEqualTo(total)
+                assertThat(entries.getValue("classes").jsonObject.getValue("default")).isEqualTo(total)
+                assertThat(
+                    total
+                        .getValue("degradedRate")
+                        .jsonObject
+                        .getValue("mean")
+                        .jsonPrimitive
+                        .content,
+                ).isEqualTo("0.0")
+                assertThat(total.getValue("failuresByReason").jsonObject.keys).contains("timeout")
+                assertThat(total.keys).contains("pooledLatency", "successRate", "p95LatencyMs", "p99LatencyMs")
+            }
+        }
+        openApi.assertResponse("get", route, response)
     }
 
     @Test

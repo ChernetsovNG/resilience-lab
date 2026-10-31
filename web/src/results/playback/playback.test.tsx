@@ -21,7 +21,7 @@ function metric(index: number, meanQueueLength: number, amplification: number | 
       durationMs,
       offeredAttempts: durationMs / 5,
       admittedAttempts: durationMs * 0.15,
-      client: { originalArrivals: amplification == null ? 0 : durationMs * 0.15 / amplification },
+      entries: { total: { originalArrivals: amplification == null ? 0 : durationMs * 0.15 / amplification } },
       slotPools: { handlers: { busyIntegralMs: durationMs * 0.8, queueIntegralMs: meanQueueLength * durationMs, capacityIntegralMs: durationMs, waitCount: 0, totalWaitMs: 0, queueFullCount: durationMs / 20, waitLimitCount: 0 } } });
 }
 const series: NodeSeriesMetrics[] = [
@@ -220,7 +220,8 @@ it("uses the connection's own windows while playing a frame", async () => {
   const ownSummary: CanvasResults = { ...summary, connections: new Map([["call", {
     ...summary.connections.get("call")!, hasOwnSeries: true, values: { amplification: 1.2, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5 },
   }]]) };
-  const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{ startMs: 0,
+  const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,
@@ -282,7 +283,8 @@ it("prefetches the next node and connection ranges before the cursor reaches the
     load: async (request: SeriesLoadRequest) => { requests.push(request); return range(request); },
     loadConnections: async (request: ConnectionSeriesLoadRequest) => {
       connectionRequests.push(request);
-      return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({ startMs: 0,
+      return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({
+        clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,
@@ -345,6 +347,7 @@ it("starts node and connection requests together before either has resolved", as
 
 function connectionRange(request: ConnectionSeriesLoadRequest): DecodedConnection[] {
   return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, (_, offset) => ({
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
     startMs: (request.fromWindow + offset) * 100, durationMs: 100,
     sentAttempts: request.fromWindow + offset + 1, retries: 1, timeouts: 1, succeeded: 1, failed: 0, orphaned: 1,
     inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,

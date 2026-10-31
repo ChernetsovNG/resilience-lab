@@ -59,6 +59,6 @@ export function formatHeadroom(
     utilizationResource: headroom.utilization == null ? t("common.na") : backendMessage(headroom.utilization.label),
     queue: formatNumber(headroom.meanQueueLength?.value),
     queueResource: headroom.meanQueueLength == null ? t("common.na") : backendMessage(headroom.meanQueueLength.label),
-    p99: formatDuration(aggregate.pooledLatency.all?.p99Ms),
+    p99: formatDuration(aggregate.entries.total.pooledLatency.all?.p99Ms),
   });
 }

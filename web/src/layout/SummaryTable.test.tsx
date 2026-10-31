@@ -11,6 +11,23 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it("uses the total entry for Findings when clients and classes have different results", () => {
+    const run = structuredClone(summary);
+    const aggregate = run.variants[0].points[0].aggregate;
+    const metric = (mean: number) => ({ count: 2, mean, min: mean, max: mean });
+    const total = { pooledLatency: {}, successRate: metric(0.75), p95LatencyMs: metric(40),
+      p99LatencyMs: metric(80), failuresByReason: {}, degradedRate: metric(0) };
+    run.variants[0].points[0].aggregate = { groups: [], services: aggregate.services,
+      connections: {}, poolers: {}, entries: { total,
+        clients: { "mobile-app": { ...total, successRate: metric(0.5) }, "partner-api": { ...total, successRate: metric(1) } },
+        classes: { status: { ...total, successRate: metric(0.25) } },
+      } };
+    render(<SummaryTable summary={run} activeVariantId="baseline" />);
+    expect(cells("Success rate")[0].textContent).toContain("75%");
+    expect(cells("p95")[0].textContent).toContain("40 ms");
+    expect(cells("p99")[0].textContent).toContain("80 ms");
+    expect(screen.getByRole("region", { name: "Variant summary" }).textContent).toContain("Success rate: 75%.");
+  });
   it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Findings", locale => {
     setLanguage(locale);
     const run = structuredClone(summary);
@@ -26,7 +43,7 @@ describe("SummaryTable", () => {
 
   it("summarizes both variants without switching the active page", () => {
     const run = structuredClone(summary);
-    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: 0.5, min: 0.5, max: 0.5 };
+    run.variants[1].points[0].aggregate.entries.total.successRate = { count: 2, mean: 0.5, min: 0.5, max: 0.5 };
     run.variants[1].points[0].saturation = { ...noSaturation, withoutSaturation: 0,
       firstNodes: [{ node: "dependency", ...slotPoolResource("dependency"), replicationCount: 2, medianStartMs: 80, minStartMs: 70, maxStartMs: 90 }] };
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
@@ -39,10 +56,10 @@ describe("SummaryTable", () => {
   it("explains pooled and replication-mean p99 values in Russian", () => {
     setLanguage("ru");
     const run = structuredClone(summary);
-    run.variants[0].points[0].aggregate.pooledLatency.all = {
+    run.variants[0].points[0].aggregate.entries.total.pooledLatency.all = {
       meanMs: 22, p95Ms: 30, p99Ms: 54.1, statistics: { count: 2, sumMs: 44, sketch: [2] },
     };
-    run.variants[0].points[0].aggregate.p99LatencyMs!.mean = 55.4;
+    run.variants[0].points[0].aggregate.entries.total.p99LatencyMs!.mean = 55.4;
     render(<SummaryTable summary={run} />);
     const insight = screen.getByRole("region", { name: "Вывод о насыщении" });
     expect(insight.textContent?.match(/по объединённым данным/g)).toHaveLength(1);
@@ -78,8 +95,8 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     run.variants[0].replications = 5;
     run.variants[1].replications = 10;
-    run.variants[0].points[0].aggregate.successRate = { count: 5, mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
-    run.variants[1].points[0].aggregate.successRate = { count: 10, mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
+    run.variants[0].points[0].aggregate.entries.total.successRate = { count: 5, mean: 0.4, stdDev: 0.1, min: 0.3, max: 0.5 };
+    run.variants[1].points[0].aggregate.entries.total.successRate = { count: 10, mean: 0.55, stdDev: 0.1, min: 0.4, max: 0.7 };
     const original = structuredClone(run);
     render(<SummaryTable summary={run} />);
     const choice = screen.getByRole("combobox", { name: "Intervals" });
@@ -100,7 +117,7 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     run.variants = [run.variants[0]];
     run.variants[0].replications = 20;
-    run.variants[0].points[0].aggregate.successRate = { count: 2, mean: 0.375, stdDev: 0.1767766952966369,
+    run.variants[0].points[0].aggregate.entries.total.successRate = { count: 2, mean: 0.375, stdDev: 0.1767766952966369,
       min: 0.25, max: 0.5, ci95Low: -1.213275592021838, ci95High: 1.963275592021838 };
     render(<SummaryTable summary={run} />);
     const interval = cells("Success rate")[0].querySelector(".summary-interval")!;
@@ -112,8 +129,10 @@ describe("SummaryTable", () => {
   it("orders baseline first without mutating the document and compares means in matching units", () => {
     const run = structuredClone(summary);
     run.variants[1].points[0].aggregate = { groups: [],
-      pooledLatency: {}, services: {}, connections: {}, poolers: {}, successRate: { count: 2, mean: 0.995, min: 0.99, max: 1 },
-      p95LatencyMs: { count: 2, mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { count: 2, mean: 90, min: 89, max: 91 },
+      services: {}, connections: {}, poolers: {}, entries: { total: {
+        pooledLatency: {}, failuresByReason: {}, successRate: { count: 2, mean: 0.995, min: 0.99, max: 1 },
+        p95LatencyMs: { count: 2, mean: 31.25, min: 30, max: 32.5 }, p99LatencyMs: { count: 2, mean: 90, min: 89, max: 91 },
+      }, clients: {}, classes: {} },
     };
     run.variants.reverse();
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
@@ -133,7 +152,7 @@ describe("SummaryTable", () => {
     const run = structuredClone(summary);
     run.variants[0].id = "control";
     run.variants[0].label = "Control";
-    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: 0.975, min: 0.97, max: 0.98 };
+    run.variants[1].points[0].aggregate.entries.total.successRate = { count: 2, mean: 0.975, min: 0.97, max: 0.98 };
     render(<SummaryTable summary={run} />);
     expect(within(comparison()).getAllByRole("columnheader")[1].textContent).toContain("Control");
     expect(within(comparison()).getByRole("caption").textContent).toContain("Differences from Control");
@@ -146,8 +165,8 @@ describe("SummaryTable", () => {
     [0.5, 0.2, 0.35, 0.005, false], [0.15, null, 0.35, 0.005, false], [0.15, 0.005, 0.35, null, false],
   ])("marks separation only for disjoint complete intervals (means/spreads: %s, %s; %s, %s)", (mean, stdDev, otherMean, otherStdDev, separate) => {
     const run = structuredClone(summary);
-    run.variants[0].points[0].aggregate.successRate = { count: 2, mean, stdDev, min: 0.1, max: 0.2 };
-    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: otherMean, stdDev: otherStdDev, min: 0.3, max: 0.4 };
+    run.variants[0].points[0].aggregate.entries.total.successRate = { count: 2, mean, stdDev, min: 0.1, max: 0.2 };
+    run.variants[1].points[0].aggregate.entries.total.successRate = { count: 2, mean: otherMean, stdDev: otherStdDev, min: 0.3, max: 0.4 };
     render(<SummaryTable summary={run} />);
     expect(within(cells("Success rate")[1]).queryByText("Intervals do not overlap") !== null).toBe(separate);
     expect(within(cells("Success rate")[0]).queryByText("Intervals do not overlap")).toBeNull();
@@ -158,10 +177,10 @@ describe("SummaryTable", () => {
     run.variants = [run.variants[0]];
     run.variants[0].replications = 20;
     const aggregate = run.variants[0].points[0].aggregate;
-    aggregate.p95LatencyMs!.count = replications;
-    aggregate.p99LatencyMs!.count = replications;
+    aggregate.entries.total.p95LatencyMs!.count = replications;
+    aggregate.entries.total.p99LatencyMs!.count = replications;
     aggregate.services.gateway.admittedAmplification!.count = replications;
-    run.variants[0].points[0].aggregate.successRate = { count: replications, mean: 0.5, stdDev: 2, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
+    run.variants[0].points[0].aggregate.entries.total.successRate = { count: replications, mean: 0.5, stdDev: 2, min: 0, max: 1, ci95Low: -0.2, ci95High: 1.2 };
     render(<SummaryTable summary={run} />);
     expect(screen.queryByText("Unreliable interval: increase Replications.") !== null).toBe(replications < 5);
     const interval = cells("Success rate")[0].querySelector(".summary-interval");
@@ -251,7 +270,7 @@ describe("SummaryTable", () => {
       utilization: { node: "dependency", slotPool: "handlers", value: 0.9, label: slotPoolResource("dependency").label },
       meanQueueLength: { node: "middle", slotPool: "handlers", value: 0.75, label: slotPoolResource("middle").label },
     };
-    point.aggregate.pooledLatency.all = { meanMs: 22, p95Ms: 30, p99Ms: 123.4,
+    point.aggregate.entries.total.pooledLatency.all = { meanMs: 22, p95Ms: 30, p99Ms: 123.4,
       statistics: { count: 24, sumMs: 528, sketch: [24] } };
     const view = render(<SummaryTable summary={run} activeVariantId="baseline" />);
     const headroom = screen.getByText(/^Capacity headroom/);
@@ -290,7 +309,7 @@ describe("SummaryTable", () => {
     run.grid = [{ path: "gateway.handlers", values: [4, 6] }];
     const point = structuredClone(run.variants[0].points[0]);
     point.id = "p1";
-    point.aggregate.successRate!.mean = 0.5;
+    point.aggregate.entries.total.successRate!.mean = 0.5;
     run.variants[1].points.push(point);
     render(<SummaryTable summary={run} activeVariantId="baseline" selectedPointId="p1" />);
     expect(screen.getByText("No results for Baseline at Handlers · gateway = 6.")).toBeTruthy();

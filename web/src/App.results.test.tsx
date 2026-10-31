@@ -125,7 +125,7 @@ it("shares point, replication and time between the context row, Findings, Timeli
       admittedAttempts: 1.5,
       successes: 1,
       latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 },
-      client: { originalArrivals: 1 },
+      entries: { total: { originalArrivals: 1 } },
       slotPools: { handlers: { busyIntegralMs: cell === "p1" && replication === 1 ? 8 : 2, queueIntegralMs: replication === 1 ? 30 : 70, capacityIntegralMs: 10, waitCount: 0, totalWaitMs: 0, queueFullCount: 0.5, waitLimitCount: 0 } } })),
   })));
   server(url => url.endsWith("/summary") ? { body: run } : undefined);
@@ -235,7 +235,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
       admittedAttempts: 1,
       successes: 1,
       latency: { count: 1, sumMs: 5, meanMs: 5, p50Ms: 5, p95Ms: 7, p99Ms: 9 },
-      client: { originalArrivals: 1 },
+      entries: { total: { originalArrivals: 1 } },
       slotPools: { handlers: { busyIntegralMs: 5, queueIntegralMs: cell === "p2" && id === "gateway" ? 0
         : (id === "gateway" ? 80 : 40) / ((fromWindow + index) === 0 ? 1 : 2), capacityIntegralMs: 10, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })),
   })));

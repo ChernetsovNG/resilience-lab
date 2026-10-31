@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.Severity
@@ -52,16 +55,17 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 15
-    const val SERIES_SCHEMA = 6
-    const val REPLICATION_SCHEMA = 5
+    const val ARTIFACT_SCHEMA = 16
+    const val SERIES_SCHEMA = 7
+    const val REPLICATION_SCHEMA = 6
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
 class UnsupportedArtifactVersionException(
     val kind: String,
     val actual: Int?,
-) : IllegalArgumentException("Unsupported $kind schemaVersion ${actual ?: "missing"}; expected ${Versions.ARTIFACT_SCHEMA}; run again")
+    val expected: Int = Versions.ARTIFACT_SCHEMA,
+) : IllegalArgumentException("Unsupported $kind schemaVersion ${actual ?: "missing"}; expected $expected; run again")
 
 /**
  * Reproducibility record of a run (ADR 0008): versions, stream assignment, versions of the documents read,
@@ -220,6 +224,15 @@ class ArtifactWriter(
                                     GZIPInputStream(workspace.readBytes(path).inputStream())
                                         .bufferedReader(Charsets.UTF_8)
                                         .use { it.readText() }
+                                val version =
+                                    json
+                                        .parseToJsonElement(text)
+                                        .jsonObject["schemaVersion"]
+                                        ?.jsonPrimitive
+                                        ?.intOrNull
+                                if (version != Versions.REPLICATION_SCHEMA) {
+                                    throw UnsupportedArtifactVersionException("replication", version, Versions.REPLICATION_SCHEMA)
+                                }
                                 val artifact = json.decodeFromString(ReplicationArtifact.serializer(), text)
                                 require(
                                     artifact.schemaVersion == Versions.REPLICATION_SCHEMA &&

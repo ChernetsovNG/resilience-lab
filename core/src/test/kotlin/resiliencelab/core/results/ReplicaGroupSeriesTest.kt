@@ -44,7 +44,7 @@ class ReplicaGroupSeriesTest {
                 listOf("a", "b").map { id -> ReplicaGroup(id, ReplicaGroupKind.NODE, (1..3).map { ReplicaMember("$id#$it", it) }) } +
                     ReplicaGroup("call", ReplicaGroupKind.CONNECTION, (1..3).map { ReplicaMember("call#$it", it) })
             val directory = "series"
-            val writer = SeriesWriter(workspace, directory, 4.0, 1.0, maxPartBytes = 2400, groups = groups)
+            val writer = SeriesWriter(workspace, directory, 4.0, 1.0, maxPartBytes = 2700, groups = groups)
             val nodeIds =
                 listOf("client", "a", "b") +
                     groups.filter { it.kind == ReplicaGroupKind.NODE }.flatMap { it.instances.map { member -> member.id } }
@@ -62,7 +62,7 @@ class ReplicaGroupSeriesTest {
             assertThat(index.parts.filter { it.kind == SeriesPartKind.GROUP }.any { it.untilWindow - it.fromWindow > 1 }).isTrue()
             val coverage = mutableListOf<Pair<String, Int>>()
             index.parts.forEach { reference ->
-                assertThat(reference.uncompressedBytes).isLessThanOrEqualTo(2400)
+                assertThat(reference.uncompressedBytes).isLessThanOrEqualTo(2700)
                 val bytes = GZIPInputStream(workspace.readBytes("$directory/${reference.file}").inputStream()).use { it.readAllBytes() }
                 assertThat(bytes.size).isEqualTo(reference.uncompressedBytes)
                 val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))

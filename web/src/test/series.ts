@@ -5,13 +5,16 @@ export function recordedWindow(values: Partial<WindowMetricValues> = {}): Window
   return { startMs: 0,
       durationMs: 100,
       originalArrivals: 0,
+      clientOriginalArrivals: values.entries?.total.originalArrivals ?? values.originalArrivals ?? 0,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 0,
       failures: 0,
+      failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0,
+      probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0,
       timeouts: 0,
       retries: 0,
       latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
-      client: { originalArrivals: 0 },
+      entries: { total: { originalArrivals: 0 } },
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: values.durationMs ?? 100, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } }, ...values };
 }

@@ -126,7 +126,7 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
     if (connection.hasOwnSeries && frame === undefined) return null;
     const target = metrics.get(connection.to);
     connections.set(id, { ...connection,
-      values: valuesOf(connection.outputs, { ...frame, params: connection.params, target, client: target?.client }, true) });
+      values: valuesOf(connection.outputs, { ...frame, params: connection.params, target, entries: target?.entries }, true) });
   }
   return { services, connections, window };
 }

@@ -74,8 +74,9 @@ object ReplicaGroups {
         groups: List<ReplicaGroup>,
         nodes: List<NodeWindow>,
         clientId: String? = null,
+        clientIds: List<String> = listOfNotNull(clientId),
     ): List<NodeWindow> {
-        val rows = nodes.associate { it.id to it.metrics }
+        val rows = nodes.filterNot { it.isClass }.associate { it.id to it.metrics }
         return groups.filter { it.kind == ReplicaGroupKind.NODE }.map { group ->
             val values = group.instances.map { rows.getValue(it.id) }
             val first = values.first()
@@ -85,11 +86,29 @@ object ReplicaGroups {
                     startMs = first.startMs,
                     durationMs = first.durationMs,
                     originalArrivals = values.sumOf { it.originalArrivals },
-                    clientOriginalArrivals = clientId?.let { rows.getValue(it).originalArrivals },
+                    clientOriginalArrivals =
+                        if (clientIds.isNotEmpty()) {
+                            clientIds.sumOf {
+                                rows
+                                    .getValue(
+                                        it,
+                                    ).originalArrivals
+                            }
+                        } else {
+                            first.clientOriginalArrivals
+                        },
                     offeredAttempts = values.sumOf { it.offeredAttempts },
                     admittedAttempts = values.sumOf { it.admittedAttempts },
                     successes = values.sumOf { it.successes },
                     failures = values.sumOf { it.failures },
+                    failuresByReason = MetricsAggregator.sumReasons(values.map { it.failuresByReason }),
+                    degraded = values.sumOf { it.degraded },
+                    rateLimited = values.sumOf { it.rateLimited },
+                    probes = values.sumOf { it.probes },
+                    probeFailures = values.sumOf { it.probeFailures },
+                    notReadyMs = values.sumOf { it.notReadyMs },
+                    ejections = values.sumOf { it.ejections },
+                    ejectedMs = values.sumOf { it.ejectedMs },
                     timeouts = values.sumOf { it.timeouts },
                     retries = values.sumOf { it.retries },
                     latency = latency(values.map { it.latency }),
@@ -114,9 +133,15 @@ object ReplicaGroups {
                     startMs = first.startMs,
                     durationMs = first.durationMs,
                     sentAttempts = values.sumOf { it.sentAttempts },
+                    clientOriginalArrivals = first.clientOriginalArrivals,
                     retries = values.sumOf { it.retries },
                     succeeded = values.sumOf { it.succeeded },
                     failed = values.sumOf { it.failed },
+                    failuresByReason = MetricsAggregator.sumReasons(values.map { it.failuresByReason }),
+                    circuitOpenMs = values.sumOf { it.circuitOpenMs },
+                    circuitRejections = values.sumOf { it.circuitRejections },
+                    retriesDenied = values.sumOf { it.retriesDenied },
+                    fallbacks = values.sumOf { it.fallbacks },
                     timeouts = values.sumOf { it.timeouts },
                     orphaned = values.sumOf { it.orphaned },
                     inFlightIntegralMs = values.sumOf { it.inFlightIntegralMs },
@@ -155,6 +180,13 @@ object ReplicaGroups {
                                 timeouts = values.sumOf { it.timeouts },
                                 retries = values.sumOf { it.retries },
                                 failures = values.sumOf { it.failures },
+                                failuresByReason = MetricsAggregator.sumReasons(values.map { it.failuresByReason }),
+                                rateLimited = values.sumOf { it.rateLimited },
+                                probes = values.sumOf { it.probes },
+                                probeFailures = values.sumOf { it.probeFailures },
+                                notReadyMs = values.sumOf { it.notReadyMs },
+                                ejections = values.sumOf { it.ejections },
+                                ejectedMs = values.sumOf { it.ejectedMs },
                                 measurementMs = values.first().measurementMs,
                                 // Group queue integrals describe the sum; an instance queue histogram is not a group histogram.
                                 queueDurationsMs = emptyMap(),
@@ -172,6 +204,11 @@ object ReplicaGroups {
                                 retries = values.sumOf { it.retries },
                                 succeeded = values.sumOf { it.succeeded },
                                 failed = values.sumOf { it.failed },
+                                failuresByReason = MetricsAggregator.sumReasons(values.map { it.failuresByReason }),
+                                circuitOpenMs = values.sumOf { it.circuitOpenMs },
+                                circuitRejections = values.sumOf { it.circuitRejections },
+                                retriesDenied = values.sumOf { it.retriesDenied },
+                                fallbacks = values.sumOf { it.fallbacks },
                                 timeouts = values.sumOf { it.timeouts },
                                 orphaned = values.sumOf { it.orphaned },
                                 inFlightIntegralMs = values.sumOf { it.inFlightIntegralMs },

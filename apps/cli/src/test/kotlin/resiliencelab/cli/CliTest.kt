@@ -9,7 +9,10 @@ import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.execution.ExperimentEstimate
+import resiliencelab.core.experiment.AggregateEntries
+import resiliencelab.core.experiment.MetricSummary
 import resiliencelab.core.lab.Lab
+import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.FirstNodeSaturation
 import resiliencelab.core.results.SlotPoolLabel
 import resiliencelab.core.workspace.FileWorkspace
@@ -268,8 +271,8 @@ class CliTest {
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
         assertThat(lines[0]).isEqualTo(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1")
-        assertThat(lines[1]).startsWith("baseline/p0: success ").contains("p95 ", "p99 ")
-        assertThat(lines[2]).startsWith("no-retries/p0: success ")
+        assertThat(lines[1]).startsWith("baseline/p0: entry total: success ").contains("p95 ", "p99 ")
+        assertThat(lines[2]).startsWith("no-retries/p0: entry total: success ")
         assertThat(
             workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/manifest.json"),
         ).exists()
@@ -277,18 +280,88 @@ class CliTest {
     }
 
     @Test
-    fun `retry storm output stays unchanged with and without replica expansion`() {
+    fun `run and saved summary print sorted entry rows with the three leading failure reasons`() {
+        fun metric(value: Double) = MetricSummary(1, value, null, null, null, value, value)
+
+        val result =
+            execute(listOf("run", experiment)) { lab, path, id, _, _ ->
+                val run = lab.run(path, id)
+                val variant = run.summary.variants.first()
+                val point = variant.points.first()
+                val base = point.aggregate.entries.total
+
+                fun entry(
+                    success: Double,
+                    timeouts: Double,
+                ) = base.copy(
+                    successRate = metric(success),
+                    p95LatencyMs = metric(12.0),
+                    p99LatencyMs = metric(20.0),
+                    failuresByReason =
+                        linkedMapOf(
+                            "unavailable" to metric(0.05),
+                            "error" to metric(0.10),
+                            "timeout" to metric(timeouts),
+                            "queueFull" to metric(0.05),
+                            "deadline" to metric(0.10),
+                        ),
+                )
+
+                val entries =
+                    AggregateEntries(
+                        total = entry(0.4, 0.3),
+                        clients = linkedMapOf("partner" to entry(0.5, 0.2), "mobile" to entry(0.3, 0.4)),
+                        classes = linkedMapOf("write" to entry(0.2, 0.5), "read" to entry(0.6, 0.1)),
+                    )
+                val summary =
+                    run.summary.copy(
+                        variants =
+                            listOf(
+                                variant.copy(points = listOf(point.copy(aggregate = point.aggregate.copy(entries = entries)))),
+                            ),
+                    )
+                val manifest = ArtifactWriter(FileWorkspace(workspace)).rewrite(run.runDirectory, run.manifest, summary)
+                run.copy(summary = summary, manifest = manifest)
+            }
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines().filter { it.isNotBlank() }
+        assertThat(lines).hasSize(6)
+        assertThat(lines[1]).startsWith(
+            "baseline/p0: entry total: success 40.0%, p95 12.0 ms, p99 20.0 ms; " +
+                "failure reasons timeout 30.0%, deadline 10.0%, error 10.0%; ",
+        )
+        assertThat(lines.drop(2)).containsExactly(
+            "  entry client mobile: success 30.0%, p95 12.0 ms, p99 20.0 ms; " +
+                "failure reasons timeout 40.0%, deadline 10.0%, error 10.0%",
+            "  entry client partner: success 50.0%, p95 12.0 ms, p99 20.0 ms; " +
+                "failure reasons timeout 20.0%, deadline 10.0%, error 10.0%",
+            "  entry class read: success 60.0%, p95 12.0 ms, p99 20.0 ms; " +
+                "failure reasons deadline 10.0%, error 10.0%, timeout 10.0%",
+            "  entry class write: success 20.0%, p95 12.0 ms, p99 20.0 ms; " +
+                "failure reasons timeout 50.0%, deadline 10.0%, error 10.0%",
+        )
+        assertThat(result.stdout).doesNotContain("queueFull", "unavailable")
+
+        val saved = execute(listOf("summary", lines.first().substringAfterLast('/')))
+        assertThat(saved.exitCode).describedAs(saved.stderr).isZero()
+        assertThat(saved.stdout).isEqualTo(result.stdout)
+        assertThat(saved.stderr).isEmpty()
+    }
+
+    @Test
+    fun `retry storm preserves total metrics and saturation with and without replica expansion`() {
         val expected =
-            "baseline/p0: success 61.5%, p95 251.9 ms, p99 252.0 ms; " +
+            "baseline/p0: entry total: success 61.5%, p95 251.9 ms, p99 252.0 ms; " +
                 "first saturation: handlers dependency (dependency/handlers) in 10 of 10 replications, " +
                 "median start 225.0 ms, range 210.0–290.0 ms; without saturation: 0 of 10 replications\n" +
-                "no-retries/p0: success 51.4%, p95 184.0 ms, p99 219.0 ms; " +
+                "no-retries/p0: entry total: success 51.4%, p95 184.0 ms, p99 219.0 ms; " +
                 "first saturation: handlers dependency (dependency/handlers) in 10 of 10 replications, " +
                 "median start 225.0 ms, range 210.0–290.0 ms; without saturation: 0 of 10 replications\n"
         listOf(listOf("run", experiment), listOf("run", "--replicas", experiment)).forEach { args ->
             val result = execute(args)
             assertThat(result.exitCode).describedAs(result.stderr).isZero()
-            assertThat(result.stdout.substringAfter('\n')).isEqualTo(expected)
+            assertThat(result.stdout.substringAfter('\n').replace(Regex("; failure reasons [^;\\n]+"), "")).isEqualTo(expected)
             val saved =
                 execute(
                     listOf(
@@ -378,7 +451,8 @@ class CliTest {
         (1..3).forEach { replica ->
             assertThat(lines).contains("    replica worker#$replica: utilization 0.0%, mean queue 0.00, failures 0")
         }
-        assertThat(result.stdout).doesNotContain("NaN", "Infinity")
+        assertThat(lines[1]).startsWith("baseline/p0: entry total: success n/a, p95 n/a, p99 n/a; ")
+        assertThat(result.stdout).doesNotContain("entry client", "entry class", "failure reasons", "NaN", "Infinity")
     }
 
     @Test
@@ -488,10 +562,10 @@ class CliTest {
         assertThat(result.exitCode).describedAs(result.stderr).isZero()
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(5)
-        assertThat(lines[1]).startsWith("baseline/p0 [gateway-to-middle.timeout=\"40ms\"]: success ")
-        assertThat(lines[2]).startsWith("baseline/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
-        assertThat(lines[3]).startsWith("no-retries/p0 [gateway-to-middle.timeout=\"40ms\"]: success ")
-        assertThat(lines[4]).startsWith("no-retries/p1 [gateway-to-middle.timeout=\"80ms\"]: success ")
+        assertThat(lines[1]).startsWith("baseline/p0 [gateway-to-middle.timeout=\"40ms\"]: entry total: success ")
+        assertThat(lines[2]).startsWith("baseline/p1 [gateway-to-middle.timeout=\"80ms\"]: entry total: success ")
+        assertThat(lines[3]).startsWith("no-retries/p0 [gateway-to-middle.timeout=\"40ms\"]: entry total: success ")
+        assertThat(lines[4]).startsWith("no-retries/p1 [gateway-to-middle.timeout=\"80ms\"]: entry total: success ")
         assertThat(result.stderr).contains("Tasks 40/40")
     }
 

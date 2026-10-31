@@ -76,7 +76,7 @@ class FaultSimulationTest {
                     listOf(9.0, 10.0, 20.0),
                 )
             assertThat(rig.completions).describedAs(target).containsExactly(11.0, 10.0, 22.0)
-            assertThat(rig.outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.DOWNSTREAM_FAILURE, AttemptOutcome.SUCCEEDED)
+            assertThat(rig.outcomes).containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.UNAVAILABLE, AttemptOutcome.SUCCEEDED)
             assertThat(
                 rig.result.services
                     .getValue("backend")
@@ -130,8 +130,8 @@ class FaultSimulationTest {
                     listOf(9.0, 10.0, 20.0),
                 )
             assertThat(rig.completions).containsExactly(11.0, if (kind == FaultKind.BLACKHOLE) 15.0 else 10.0, 22.0)
-            assertThat(rig.result.originalArrivals).isEqualTo(3)
-            assertThat(rig.result.failures).isEqualTo(1)
+            assertThat(rig.result.entries.total.originalArrivals).isEqualTo(3)
+            assertThat(rig.result.entries.total.failures).isEqualTo(1)
         }
     }
 
@@ -151,7 +151,7 @@ class FaultSimulationTest {
                 )
             assertThat(rig.outcomes)
                 .describedAs(target)
-                .containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.DOWNSTREAM_FAILURE, AttemptOutcome.SUCCEEDED)
+                .containsExactly(AttemptOutcome.SUCCEEDED, AttemptOutcome.LOCAL_FAILURE, AttemptOutcome.SUCCEEDED)
             assertThat(
                 rig.result.services
                     .getValue("backend")
