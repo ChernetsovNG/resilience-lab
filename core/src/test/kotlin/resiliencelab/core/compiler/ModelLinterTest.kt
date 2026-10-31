@@ -17,6 +17,9 @@ import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.RouteEdge
+import resiliencelab.core.ir.RouterNode
+import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
 import java.time.Duration
@@ -29,7 +32,7 @@ class ModelLinterTest {
         chain: GraphIr,
     ) = CompiledVariant(id, label, listOf(CompiledPoint("p0", emptyMap(), chain)))
 
-    private val linter = ModelLinter()
+    private val linter = ModelLinter(timeoutBudgetTolerance = 0.0)
     private val noBackoff = Backoff(BackoffKind.NONE, 0.0, 0.0, 2.0)
     private val chain =
         GraphIr(
@@ -39,6 +42,107 @@ class ModelLinterTest {
             listOf(call("a-b", "a", "b", 100.0, 1, 1), call("b-c", "b", "c", 20.0, 1, 2)),
             emptyList(),
             RunSettings(5, 0.0, 1.0, 1L, 30L),
+        )
+
+    @Test
+    fun `three replicas receive their share of the client load`() {
+        val routed = replicaGraph(0.9, 16)
+
+        assertThat(warnings(routed, "LINT_HANDLERS_LITTLE")).isEmpty()
+        val overloaded = routed.copy(services = routed.services.map { it.copy(handlers = 10) })
+        val findings = warnings(overloaded, "LINT_HANDLERS_LITTLE")
+        assertThat(findings.map { it.path }).containsExactly("catalog#1", "catalog#2", "catalog#3")
+        assertThat(findings).allSatisfy {
+            assertThat(
+                it.args
+                    ?.get("ratePerSecond")
+                    ?.content
+                    ?.toDouble(),
+            ).isCloseTo(
+                300.0,
+                org.assertj.core.data.Offset
+                    .offset(0.000001),
+            )
+            assertThat(
+                it.args
+                    ?.get("demand")
+                    ?.content
+                    ?.toDouble(),
+            ).isCloseTo(
+                10.5,
+                org.assertj.core.data.Offset
+                    .offset(0.000001),
+            )
+        }
+    }
+
+    @Test
+    fun `random router distributes load by normalized output weights`() {
+        val routed = replicaGraph(1.0, 12)
+        val weighted =
+            routed.copy(
+                services = routed.services.take(2).map { it.copy(processing = fixed(40.0)) },
+                routers = routed.routers.map { it.copy(policy = RoutingPolicy.RANDOM) },
+                routes = routed.routes.take(2).mapIndexed { index, route -> route.copy(weight = if (index == 0) 3.0 else 1.0) },
+            )
+
+        val finding = warnings(weighted, "LINT_HANDLERS_LITTLE").single()
+        assertThat(finding.path).isEqualTo("catalog#1")
+        assertThat(finding.args).containsEntry("ratePerSecond", JsonPrimitive(750.0)).containsEntry("demand", JsonPrimitive(30.0))
+    }
+
+    @Test
+    fun `replica demand sums clients and classes after routing`() {
+        val routed = replicaGraph(0.9, 13)
+        val clients =
+            listOf(
+                routed.client.copy(classes = mapOf("read" to LoadProfile.constant(0.6), "write" to LoadProfile.constant(0.3))),
+                routed.client.copy(pathSegments = listOf("second"), classes = mapOf("read" to LoadProfile.constant(0.3))),
+            )
+
+        assertThat(warnings(routed.copy(clients = clients), "LINT_HANDLERS_LITTLE"))
+            .allSatisfy {
+                assertThat(
+                    it.args
+                        ?.get("demand")
+                        ?.content
+                        ?.toDouble(),
+                ).isCloseTo(
+                    14.0,
+                    org.assertj.core.data.Offset
+                        .offset(0.000001),
+                )
+            }.hasSize(3)
+    }
+
+    @Test
+    fun `initial one second timeouts do not warn about a small downstream reserve`() {
+        val initial =
+            chain.copy(
+                calls = chain.calls.map { it.copy(timeoutMs = 1_000.0, network = fixed(1.0)) },
+                services = chain.services.map { it.copy(processing = fixed(10.0)) },
+                clients = listOf(chain.client.copy(deadlineMs = 10_000.0)),
+            )
+
+        assertThat(ModelLinter().lint(experiment(initial))).isEmpty()
+        assertThat(
+            ModelLinter()
+                .lint(
+                    experiment(initial.copy(calls = initial.calls.map { if (it.path == "b-c") it.copy(timeoutMs = 1_100.0) else it })),
+                ).filter { it.code == "LINT_TIMEOUT_BUDGET" },
+        ).hasSize(1)
+    }
+
+    private fun replicaGraph(
+        rate: Double,
+        handlers: Int,
+    ): GraphIr =
+        chain.copy(
+            clients = listOf(chain.client.copy(entry = "catalog#lb", classes = mapOf("default" to LoadProfile.constant(rate)))),
+            services = (1..3).map { service("catalog#$it", 35.0, handlers) },
+            calls = emptyList(),
+            routers = listOf(RouterNode("catalog#lb", RoutingPolicy.ROUND_ROBIN)),
+            routes = (1..3).map { RouteEdge("route-$it", "catalog#lb", "catalog#$it") },
         )
 
     @Test
@@ -99,7 +203,7 @@ class ModelLinterTest {
         assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.pointer).isEqualTo("/connections/1/params/timeout")
         assertThat(warning.path).isEqualTo("a-b")
-        assertThat(warning.message).isEqualTo("Timeout 44 ms is below the downstream budget 46 ms")
+        assertThat(warning.message).contains("Timeout 44 ms", "estimated 46 ms", "increase this timeout")
         assertThat(Json.encodeToJsonElement(warning).jsonObject["args"])
             .isEqualTo(Json.parseToJsonElement("""{"timeoutMs":44.0,"requiredMs":46.0}"""))
         assertThat(
@@ -133,7 +237,7 @@ class ModelLinterTest {
             )
 
         assertThat(warnings(changed, "LINT_TIMEOUT_BUDGET").single().message)
-            .isEqualTo("Timeout 44.25 ms is below the downstream budget 46.125 ms")
+            .contains("Timeout 44.25 ms", "estimated 46.125 ms")
     }
 
     @Test
@@ -187,7 +291,7 @@ class ModelLinterTest {
         val result = assertTimeoutPreemptively<List<Diagnostic>>(Duration.ofSeconds(2)) { linter.lint(experiment(changed)) }
 
         val amplification = result.single { it.code == "LINT_RETRY_AMPLIFICATION" }
-        assertThat(amplification.message).isEqualTo("Retry amplification 4611686014132420609 exceeds threshold 10")
+        assertThat(amplification.message).contains("up to 4611686014132420609 attempts", "threshold of 10", "reduce attempts")
         assertThat(
             Json
                 .parseToJsonElement(Json.encodeToJsonElement(amplification).toString())
@@ -230,7 +334,7 @@ class ModelLinterTest {
         val warning = warnings(changed, "LINT_RETRY_AMPLIFICATION").single()
         val serialized = Json.parseToJsonElement(Json.encodeToJsonElement(warning).toString()).jsonObject
 
-        assertThat(warning.message).isEqualTo("Retry amplification $expected exceeds threshold 10")
+        assertThat(warning.message).contains("up to $expected attempts", "threshold of 10")
         assertThat(serialized["args"]?.jsonObject?.get("amplification")).isEqualTo(JsonPrimitive(expected))
     }
 
@@ -257,7 +361,9 @@ class ModelLinterTest {
 
         assertThat(warning.path).isEqualTo("a")
         assertThat(warning.pointer).isEqualTo("/blocks/a/params/handlers")
-        assertThat(warning.message).isEqualTo("Handlers 1 are below λ·W = 2 (λ = 125 requests/s, W = 16 ms; profile maximum, conservative)")
+        assertThat(
+            warning.message,
+        ).contains("Handlers: 1", "simultaneous demand: 2", "125 requests/s", "increase capacity").doesNotContain("λ")
         assertThat(warning.args).containsEntry("elementType", JsonPrimitive("service"))
         assertThat(
             warnings(
@@ -292,7 +398,7 @@ class ModelLinterTest {
         assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.path).isEqualTo("client")
         assertThat(warning.pointer).isEqualTo("/blocks/client/params/deadline")
-        assertThat(warning.message).isEqualTo("Deadline 201 ms is below the entry call budget 201.25 ms")
+        assertThat(warning.message).contains("Deadline 201 ms", "estimated 201.25 ms", "increase its deadline")
         assertThat(warnings(changed.copy(clients = listOf(changed.client.copy(deadlineMs = 201.25))), "LINT_DEADLINE_BUDGET")).isEmpty()
     }
 
@@ -327,7 +433,7 @@ class ModelLinterTest {
             )
 
         assertThat(warnings(single, "LINT_DEADLINE_BUDGET").single().message)
-            .isEqualTo("Deadline 2.25 ms is below the entry call budget 2.5 ms")
+            .contains("Deadline 2.25 ms", "estimated 2.5 ms")
         assertThat(warnings(single.copy(clients = listOf(single.client.copy(deadlineMs = 2.5))), "LINT_DEADLINE_BUDGET")).isEmpty()
     }
 
@@ -354,7 +460,7 @@ class ModelLinterTest {
         assertThat(linter.lint(experiment(checkout))).isEmpty()
         assertThat(
             warnings(checkout.copy(clients = listOf(checkout.client.copy(deadlineMs = 8_001.0))), "LINT_DEADLINE_BUDGET").single().message,
-        ).isEqualTo("Deadline 8001 ms is below the entry call budget 8002 ms")
+        ).contains("Deadline 8001 ms", "estimated 8002 ms")
     }
 
     @Test

@@ -14,6 +14,33 @@ export function mergeDiagnostics(...groups: (readonly Diagnostic[])[]): Diagnost
   return [...new Map(groups.flat().map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values()];
 }
 
+export interface DiagnosticGroup {
+  /** Normalized display value; navigation always uses an original member. */
+  diagnostic: Diagnostic;
+  members: Diagnostic[];
+}
+
+/** Collapse equivalent structured linter warnings across replicas and variants, preserving all source locations. */
+export function groupDiagnostics(diagnostics: readonly Diagnostic[]): DiagnosticGroup[] {
+  const groups = new Map<string, DiagnosticGroup>();
+  return diagnostics.flatMap((original, index) => {
+    const lint = original.severity === "WARNING" && original.code.startsWith("LINT_") && original.args != null;
+    const args = { ...original.args };
+    const replica = typeof args.replica === "number" ? args.replica : null;
+    const base = (path: string) => replica === null ? path : path.replace(/#\d+$/, "");
+    delete args.replica;
+    for (const name of ["service", "connection"]) if (typeof args[name] === "string") args[name] = base(args[name]);
+    const diagnostic = lint ? { ...original, path: original.path == null ? original.path : base(original.path), args } : original;
+    const key = lint ? JSON.stringify([diagnostic.severity, diagnostic.code, diagnostic.path ?? null,
+      Object.entries(args).sort(([a], [b]) => a.localeCompare(b))]) : String(index);
+    const existing = groups.get(key);
+    if (existing !== undefined) { existing.members.push(original); return []; }
+    const group = { diagnostic, members: [original] };
+    groups.set(key, group);
+    return [group];
+  });
+}
+
 /** A transport or launch failure without compiler diagnostics still counts as one visible error. */
 export function problemDiagnostics(problem: ApiProblem | null): readonly Diagnostic[] {
   if (problem === null) return [];
@@ -71,7 +98,7 @@ export function diagnosticTarget(
 /** Badge count and greatest severity; warnings alone never block running. */
 export function summarizeDiagnostics(diagnostics: readonly Diagnostic[]) {
   return diagnostics.length === 0 ? null : {
-    count: diagnostics.length,
+    count: groupDiagnostics(diagnostics).length,
     severity: diagnostics.some((diagnostic) => diagnostic.severity === "ERROR") ? "ERROR" as const : "WARNING" as const,
   };
 }

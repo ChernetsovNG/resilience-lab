@@ -1219,7 +1219,11 @@ select {
   list-style: none;
 }
 
-.validation-problems button {
+.validation-problems > li { display: flex; align-items: flex-start; gap: 0.4rem; }
+.validation-problems > li > button { flex: 1; min-width: 0; }
+.validation-problems > li > .help-hint { margin-top: 0.5rem; }
+
+.validation-problems > li > button {
   display: flex;
   gap: 0.6rem;
   width: 100%;
@@ -1236,6 +1240,7 @@ select {
 .validation-problems .diagnostic--error [role="img"] { color: #b91c1c; }
 .validation-problems .diagnostic--warning [role="img"] { color: #92400e; }
 .diagnostic-context, .diagnostic-details { color: #52606d; font-size: var(--font-secondary); }
+.validation-problems .diagnostic-context { display: block; margin-top: 0.15rem; }
 .diagnostic-details { display: block; margin-top: 0.15rem; }
 
 .status-bar {

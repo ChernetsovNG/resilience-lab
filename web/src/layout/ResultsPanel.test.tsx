@@ -5,6 +5,31 @@ import { catalog, experiment, model, summary } from "../test/fixtures";
 import { ResultsPanel, type ResultsPanelSize } from "./ResultsPanel";
 import { DiagnosticLabelContext } from "../presentation/diagnosticContext";
 
+it("groups equivalent linter rows, counts groups and keeps formulas and rule codes in help", () => {
+  const onDiagnostic = vi.fn();
+  const findings = ["baseline", "pool"].flatMap(variant => [1, 2, 3].map(replica => ({
+    code: "LINT_HANDLERS_LITTLE", severity: "WARNING" as const, message: "Capacity warning", path: `catalog#${replica}`,
+    document: "test.model.json", pointer: "/blocks/catalog/params/handlers", variant,
+    args: { elementType: "service", handlers: 16, demand: 31.5, ratePerSecond: 900, holdingMs: 35, replica, service: "catalog" },
+  })));
+  render(<ResultsPanel job={null} summary={null} problem={null} diagnostics={findings} onDiagnostic={onDiagnostic}
+    experiment={{ ...experiment, variants: [{ id: "baseline", label: "Baseline", overrides: {} }, { id: "pool", label: "Pool 16", overrides: {} }] }} />);
+  const tab = screen.getByRole("tab", { name: "Problems" });
+  expect(tab.textContent).toContain("1");
+  fireEvent.click(tab);
+  const rows = screen.getByRole("tabpanel").querySelectorAll(".validation-problems > li");
+  expect(rows).toHaveLength(1);
+  const navigation = rows[0].querySelector("button")!;
+  expect(navigation.textContent).toContain("#1–#3");
+  expect(navigation.textContent).toContain("Baseline, Pool 16");
+  expect(navigation.textContent).not.toMatch(/LINT_|λ|λ·W/);
+  fireEvent.click(navigation);
+  expect(onDiagnostic).toHaveBeenCalledWith(findings[0]);
+  fireEvent.click(within(rows[0] as HTMLElement).getByRole("button", { name: /How this warning is calculated/ }));
+  expect(screen.getByRole("tooltip").textContent).toContain("LINT_HANDLERS_LITTLE");
+  expect(screen.getByRole("tooltip").textContent).toContain("λ·W");
+});
+
 it("formats run errors with their saved grid and variants rather than the current editor context", () => {
   render(<DiagnosticLabelContext value={{ catalog, model, variants: [{ id: "variant-2", label: "Current label" }],
     grid: [{ path: "gateway.processing.mean", values: ["99ms", "100ms"] }] }}>

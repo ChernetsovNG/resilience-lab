@@ -4,6 +4,7 @@ import type { Diagnostic, HealthView, JobView } from "../api/apiTypes";
 import { HealthBadge } from "../components/HealthBadge";
 import { t } from "../i18n";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
+import { groupDiagnostics } from "../validation/diagnostics";
 
 export interface StatusBarProps {
   job: JobView | null;
@@ -20,8 +21,9 @@ export interface StatusBarProps {
 export function StatusBar({ job, health, healthError, diagnostics, stale, cursorMs, zoom, onProblems }: StatusBarProps) {
   const hintId = useId();
   const active = job?.status === "QUEUED" || job?.status === "RUNNING";
-  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "ERROR").length;
-  const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "WARNING").length;
+  const groups = groupDiagnostics(diagnostics);
+  const errors = groups.filter(({ diagnostic }) => diagnostic.severity === "ERROR").length;
+  const warnings = groups.filter(({ diagnostic }) => diagnostic.severity === "WARNING").length;
   const status = job === null ? t("status.ready") : t(`app.job.status.${job.status}`);
   const progress = active && job !== null ? t("status.progress", {
     status, completed: formatNumber(job.completedTasks), total: job.totalTasks === 0 ? t("results.unknownTotal") : formatNumber(job.totalTasks),

@@ -4,12 +4,14 @@ import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
-import { diagnosticTarget, locationOf } from "../validation/diagnostics";
+import { diagnosticTarget, groupDiagnostics, locationOf } from "../validation/diagnostics";
+import { LintDetails } from "../validation/DiagnosticDisplay";
+import { HelpHint } from "../help/HelpHint";
 import type { LoadedExperiment } from "../workspace/editor";
 import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
-import { parameterLabel, variantLabel } from "../presentation/labels";
+import { diagnosticGroupContext, parameterLabel, variantLabel } from "../presentation/labels";
 import { sweepDiagnostics } from "../inspector/sweepDiagnostics";
 
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
@@ -124,7 +126,7 @@ export function ResultsPanel({
         </button> : null}
         <button id={`${id}-problems`} type="button" role="tab" aria-label={t("results.problems.title")} aria-selected={active === "problems"}
           aria-controls={`${id}-panel`} onClick={() => { onClearProblemsElement?.(); selectView("problems"); }}>
-          {t("results.problems.count", { count: formatNumber(diagnostics.length) })}
+          {t("results.problems.count", { count: formatNumber(groupDiagnostics(diagnostics).length) })}
         </button>
         <span className="results-size-actions">
           {size === "normal" ? <button type="button" onClick={() => onSizeChange?.("collapsed")}>{t("results.collapse")}</button> : null}
@@ -142,26 +144,33 @@ export function ResultsPanel({
             <button type="button" onClick={onClearProblemsElement}>{t("results.problems.showAll")}</button>
           </p>}
           <ul className="validation-problems">
-            {[...visibleDiagnostics].sort((left, right) => Number(right.severity === "ERROR") - Number(left.severity === "ERROR"))
-              .map((diagnostic, index) => {
-                const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(diagnostic, diagnosticDocuments);
+            {groupDiagnostics(visibleDiagnostics).sort((left, right) => Number(right.diagnostic.severity === "ERROR") - Number(left.diagnostic.severity === "ERROR"))
+              .map((group, index) => {
+                const { diagnostic, members } = group;
+                const lint = diagnostic.code.startsWith("LINT_");
+                const original = members[0];
+                const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(original, diagnosticDocuments);
                 return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
-                  <button type="button" title={locationOf(diagnostic)} onClick={() => onDiagnostic?.(diagnostic)}>
+                  <button type="button" data-diagnostic-code={diagnostic.code} title={locationOf(original)} onClick={() => onDiagnostic?.(original)}>
                     <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}>{t(`results.problems.icon.${diagnostic.severity}`)}</span>
                     <span>
                       <span className="diagnostic-message">{sweepDiagnostics([{ ...diagnostic, variant: undefined }],
                         { grid: diagnosticGrid, variants: diagnosticVariants }, diagnosticLabels, catalog, diagnosticModel)[0].message}</span>
-                      <span className="diagnostic-context">{t("results.problems.context", {
+                      <span className="diagnostic-context">{lint ? [diagnostic.path ?? target.element ?? t("common.experiment"),
+                        diagnosticGroupContext(group, diagnosticVariants)].filter(Boolean).join("; ") : t("results.problems.context", {
                         element: target.element ?? t("common.experiment"),
                         variant: target.variant == null ? "" : t("results.problems.variant", {
                           variant: variantLabel(diagnosticVariants.find(variant => variant.id === target.variant) ?? { id: target.variant }, diagnosticVariants),
                         }),
                       })}</span>
-                      <span className="diagnostic-details">{t("results.problems.details", {
+                      {lint ? null : <span className="diagnostic-details">{t("results.problems.details", {
                         code: diagnostic.code, document: diagnostic.document ?? t("common.experiment"),
-                      })}</span>
+                      })}</span>}
                     </span>
                   </button>
+                  {lint ? <HelpHint label={t("results.problems.explanation")}><LintDetails diagnostic={diagnostic} />
+                    {[...new Set(members.map(locationOf))].map(location => <p key={location} className="diagnostic-details">{location}</p>)}
+                  </HelpHint> : null}
                 </li>;
               })}
           </ul>

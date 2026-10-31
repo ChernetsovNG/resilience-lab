@@ -1,11 +1,42 @@
 import { describe, expect, it } from "vitest";
 import type { Diagnostic } from "../api/apiTypes";
 import { experiment, experimentPath, model, modelPath } from "../test/fixtures";
-import { diagnosticTarget, summarizeDiagnostics } from "./diagnostics";
+import { diagnosticTarget, groupDiagnostics, summarizeDiagnostics } from "./diagnostics";
 
 const documents = { experiment, experimentPath, model, modelPath };
 const diagnostic = (document: string | null, pointer: string | null, path: string | null = null): Diagnostic => ({
   code: "PARAM_RANGE", severity: "ERROR", message: "Invalid value", document, pointer, path,
+});
+
+describe("linter grouping", () => {
+  const finding = (replica: number, variant: string, demand = 31.5): Diagnostic => ({
+    code: "LINT_HANDLERS_LITTLE", severity: "WARNING", message: `Replica catalog#${replica}`,
+    path: `catalog#${replica}`, document: variant === "baseline" ? modelPath : experimentPath,
+    pointer: variant === "baseline" ? "/blocks/catalog/params/handlers" : "/variants/1/overrides/catalog.handlers", variant,
+    args: { handlers: 16, demand, ratePerSecond: 900, holdingMs: 35, elementType: "service", replica, service: "catalog" },
+  });
+
+  it("shows one finding for equivalent replica and variant parameters while retaining every navigation origin", () => {
+    const findings = ["baseline", "pool"].flatMap(variant => [1, 2, 3].map(replica => finding(replica, variant)));
+    const groups = groupDiagnostics(findings);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members).toEqual(findings);
+    expect(groups[0].members[0]).toBe(findings[0]);
+    expect(groups[0].diagnostic.path).toBe("catalog");
+    expect(summarizeDiagnostics(findings)).toEqual({ count: 1, severity: "WARNING" });
+    expect(findings[0].args?.replica).toBe(1);
+  });
+
+  it("keeps different effective values, groups, classes and grid points separate", () => {
+    const original = finding(1, "baseline");
+    expect(groupDiagnostics([original, finding(2, "pool", 41.5),
+      { ...original, path: "other#1", args: { ...original.args, service: "other" } },
+      { ...original, args: { ...original.args, points: "p0" } },
+      { ...original, args: { ...original.args, points: "p1" } },
+    ])).toHaveLength(5);
+    const error = { ...original, code: "PARAM_RANGE", severity: "ERROR" as const };
+    expect(groupDiagnostics([error, { ...error, variant: "pool" }])).toHaveLength(2);
+  });
 });
 
 describe("diagnostic locations", () => {

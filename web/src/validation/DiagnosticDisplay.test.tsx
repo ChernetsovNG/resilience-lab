@@ -7,6 +7,15 @@ import { ProblemList } from "../layout/ProblemList";
 
 const findings = [{ code: "CAPACITY", severity: "WARNING" as const, message: "Increase capacity", variant: "variant-2" }];
 
+it("identifies an isolated replica warning in field help and canvas tooltips", () => {
+  const finding = { code: "LINT_HANDLERS_LITTLE", severity: "WARNING" as const, message: "Replica catalog#2", path: "catalog#2",
+    args: { elementType: "service", handlers: 16, demand: 30, ratePerSecond: 300, holdingMs: 100, service: "catalog", replica: 2 } };
+  render(<><DiagnosticBadge diagnostics={[finding]} /><DiagnosticMessages diagnostics={[finding]} /></>);
+  expect(screen.getByRole("img").title).toContain("replicas #2");
+  fireEvent.click(screen.getByRole("button", { name: "More about: 1 problems: warning" }));
+  expect(screen.getByRole("status").textContent).toContain("replicas #2");
+});
+
 it("names generated variants in badges and diagnostic navigation without changing their targets", () => {
   const onSelect = vi.fn();
   render(<><VariantDiagnosticBadge diagnostics={findings} /><VariantDiagnosticLinks diagnostics={findings} onSelect={onSelect} /></>);

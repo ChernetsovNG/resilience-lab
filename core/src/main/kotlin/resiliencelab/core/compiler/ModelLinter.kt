@@ -8,6 +8,7 @@ import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
 import java.math.BigInteger
@@ -18,14 +19,19 @@ import kotlin.math.pow
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
+ * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  */
 class ModelLinter(
     private val retryAmplificationThreshold: Int = 10,
     private val minimumReplications: Int = 5,
+    private val timeoutBudgetTolerance: Double = 0.05,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
         require(minimumReplications >= 1) { "minimumReplications must be at least 1" }
+        require(timeoutBudgetTolerance.isFinite() && timeoutBudgetTolerance >= 0.0) {
+            "timeoutBudgetTolerance must be finite and non-negative"
+        }
     }
 
     /**
@@ -84,8 +90,8 @@ class ModelLinter(
                         Diagnostic(
                             CoreMessage.LINT_FEW_REPLICATIONS,
                             Severity.WARNING,
-                            "Only ${experiment.run.replications} replications: 95% confidence intervals are unreliable; " +
-                                "use at least $minimumReplications replications",
+                            "Only ${experiment.run.replications} independent replications: 95% confidence intervals are unreliable; " +
+                                "use at least $minimumReplications replications before comparing results",
                             experiment.origin.document,
                             experiment.origin.pointer + "/execution/replications",
                             args =
@@ -107,6 +113,7 @@ class ModelLinter(
         graph.clients.forEach { client ->
             client.classes.forEach { (requestClass, load) ->
                 val holdingByService = mutableMapOf<String, Double>()
+                val shares = arrivalShares(graph, client, requestClass)
                 graph.entryServices(client, requestClass).forEach { entry ->
                     graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
                         val outgoing = calls.associateBy { it.from }
@@ -126,8 +133,9 @@ class ModelLinter(
                 }
                 val maximumRate = load.maximum(graph.run.warmupMs + graph.run.measurementMs)
                 holdingByService.forEach { (path, holdingMs) ->
-                    demands[path] = (demands[path] ?: 0.0) + maximumRate * holdingMs
-                    maximumRates[path] = (maximumRates[path] ?: 0.0) + maximumRate
+                    val rate = maximumRate * (shares[path] ?: 0.0)
+                    demands[path] = (demands[path] ?: 0.0) + rate * holdingMs
+                    maximumRates[path] = (maximumRates[path] ?: 0.0) + rate
                 }
             }
         }
@@ -139,7 +147,8 @@ class ModelLinter(
                 }.map { call ->
                     warning(
                         CoreMessage.LINT_BALANCING_IGNORED,
-                        "Balancing on connection '${call.path}' is ignored: the target has no replica group",
+                        "Balancing on connection '${call.path}' has no effect because its target is not a replica group. " +
+                            "Remove the setting or create target replicas; an explicit router uses its own policy.",
                         call.origin,
                         call.path,
                         "/params/balancing",
@@ -156,7 +165,8 @@ class ModelLinter(
                 graph.outgoingCalls(service.path).filter { it.path !in used }.map { call ->
                     warning(
                         CoreMessage.LINT_SCENARIO_UNUSED,
-                        "Outgoing connection '${call.path}' is not used in the scenario of service '${service.path}'",
+                        "Connection '${call.path}' is absent from service '${service.path}'s scenario, so no requests use it. " +
+                            "Add a call step or remove the connection.",
                         service.origin,
                         service.path,
                         "/scenario",
@@ -164,6 +174,46 @@ class ModelLinter(
                     )
                 }
             }
+    }
+
+    /**
+     * Static shares without retries or failures. Random routers use normalized eligible weights;
+     * round robin and least-in-flight assume equal conditions. As with the longest holding-path estimate,
+     * common services and repeated calls contribute at most once per client and class.
+     */
+    private fun arrivalShares(
+        graph: GraphIr,
+        client: ClientNode,
+        requestClass: String,
+    ): Map<String, Double> {
+        val shares = mutableMapOf(client.entry to 1.0)
+        val routers = graph.routers.associateBy { it.path }
+        val services = graph.services.associateBy { it.path }
+
+        fun add(
+            path: String,
+            share: Double,
+        ) {
+            shares[path] = minOf(1.0, (shares[path] ?: 0.0) + share)
+        }
+        graph.topologicalPaths.forEach { path ->
+            val share = shares[path] ?: 0.0
+            val router = routers[path]
+            if (router != null) {
+                val outputs = graph.outgoingRoutes(path, requestClass)
+                val scale = outputs.maxOfOrNull { it.weight } ?: return@forEach
+                val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
+                val total = weights.sum()
+                outputs.zip(weights).forEach { (route, weight) -> add(route.to, share * (weight / total)) }
+            } else {
+                graph
+                    .scenario(services.getValue(path), requestClass)
+                    .filterIsInstance<ServiceStep.Call>()
+                    .distinctBy { it.edge }
+                    .forEach { add(graph.call(it.edge).to, share) }
+            }
+        }
+        return shares
     }
 
     private fun processingMs(
@@ -189,10 +239,12 @@ class ModelLinter(
     ): Diagnostic? {
         val required =
             2.0 * call.network.meanMs + processingMs + (next?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
-        return if (call.timeoutMs < required) {
+        return if (call.timeoutMs * (1.0 + timeoutBudgetTolerance) < required) {
             warning(
                 CoreMessage.LINT_TIMEOUT_BUDGET,
-                "Timeout ${number(call.timeoutMs)} ms is below the downstream budget ${number(required)} ms",
+                "Timeout ${number(call.timeoutMs)} ms is shorter than the estimated ${number(required)} ms " +
+                    "for downstream processing and calls. " +
+                    "Replies may arrive too late; increase this timeout or reduce downstream timeouts and retries.",
                 call.origin,
                 call.path,
                 "/params/timeout",
@@ -216,7 +268,8 @@ class ModelLinter(
             val amplification = if (product.bitLength() <= 53) JsonPrimitive(product) else JsonPrimitive(product.toString())
             warning(
                 CoreMessage.LINT_RETRY_AMPLIFICATION,
-                "Retry amplification $product exceeds threshold $retryAmplificationThreshold",
+                "Nested retries allow up to $product attempts per request, above the warning threshold of $retryAmplificationThreshold. " +
+                    "Failures may overload dependencies; reduce attempts at one or more layers.",
                 firstCall.origin,
                 firstCall.path,
                 "/params/attempts",
@@ -250,10 +303,9 @@ class ModelLinter(
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
-                            "$resource ${service.handlers} are below λ·W = ${number(demand)} " +
-                                "(λ = ${number(
-                                    maximumRate * 1_000.0,
-                                )} requests/s, W = ${number(holdingMs)} ms; profile maximum, conservative)",
+                            "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand)} at " +
+                                "${number(maximumRate * 1_000.0)} requests/s. " +
+                                "Queues may grow; increase capacity or reduce load or processing time.",
                             service.origin,
                             service.path,
                             if (database) "/params/maxConnections" else "/params/handlers",
@@ -284,7 +336,8 @@ class ModelLinter(
         return if (client.deadlineMs < required) {
             warning(
                 CoreMessage.LINT_DEADLINE_BUDGET,
-                "Deadline ${number(client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
+                "Deadline ${number(client.deadlineMs)} ms is shorter than the entry service's estimated ${number(required)} ms. " +
+                    "The client may stop waiting before completion; increase its deadline or reduce the entry call's timeout and retries.",
                 client.origin,
                 client.path,
                 "/params/deadline",

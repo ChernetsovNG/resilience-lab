@@ -4,6 +4,7 @@ import { catalogText, localizeCatalog } from "../i18n/catalog";
 import { formatNumber } from "../i18n/format";
 import { catalogParameter, formatParameterValue } from "../workspace/parameterValues";
 import { backendMessage } from "../i18n/backendMessage";
+import type { DiagnosticGroup } from "../validation/diagnostics";
 
 export interface NamedVariant { id: string; label?: string | null }
 type GridAxis = RunSummary["grid"][number];
@@ -27,6 +28,24 @@ export function variantLabel(variant: NamedVariant | undefined, variants: readon
   const index = variants.findIndex(candidate => candidate.id === id);
   const number = generated === null ? index < 0 ? null : index + 1 : Number(generated[1]);
   return number === null ? t("results.variant") : t("editor.variant.newLabel", { number: formatNumber(number) });
+}
+
+/** List the affected replicas and named variants without exposing expanded instance identifiers. */
+export function diagnosticGroupContext(group: DiagnosticGroup, variants: readonly NamedVariant[]): string {
+  const replicas = [...new Set(group.members.flatMap(item => typeof item.args?.replica === "number" ? [item.args.replica] : []))].sort((a, b) => a - b);
+  const ranges: number[][] = [];
+  for (const replica of replicas) {
+    const last = ranges.at(-1);
+    if (last !== undefined && last.at(-1)! + 1 === replica) last.push(replica);
+    else ranges.push([replica]);
+  }
+  const ids = [...new Set(group.members.flatMap(item => item.variant == null ? variants.map(variant => variant.id) : [item.variant]))];
+  return [
+    ranges.length === 0 ? "" : t("results.problems.replicas", { replicas: ranges.map(range =>
+      range.length === 1 ? `#${formatNumber(range[0])}` : `#${formatNumber(range[0])}–#${formatNumber(range.at(-1)!)}`).join(", ") }),
+    ids.length === 0 ? "" : t("results.problems.variants", { variants: ids.map(id =>
+      variantLabel(variants.find(variant => variant.id === id) ?? { id }, variants)).join(", ") }),
+  ].filter(Boolean).join("; ");
 }
 
 /** Resolve parameter titles from the catalog; stored results remain readable without their documents. */

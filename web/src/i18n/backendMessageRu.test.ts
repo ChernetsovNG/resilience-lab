@@ -15,5 +15,5 @@ it("formats a Russian amplification message without losing digits beyond safe in
   setLanguage("ru");
   expect(backendMessage({ code: "LINT_RETRY_AMPLIFICATION", message: "legacy", args: {
     amplification: "4611686014132420609", threshold: 10,
-  } })).toBe("Усиление повторов: 4\u00a0611\u00a0686\u00a0014\u00a0132\u00a0420\u00a0609. Превышен порог: 10");
+  } })).toContain("до 4\u00a0611\u00a0686\u00a0014\u00a0132\u00a0420\u00a0609 попыток на запрос");
 });
