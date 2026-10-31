@@ -19,6 +19,7 @@ import { VariantChanges } from "./canvas/VariantChanges";
 import { useHealth } from "./components/useHealth";
 import { useConfirmation } from "./components/useConfirmation";
 import { DiagnosticLabelContext } from "./presentation/diagnosticContext";
+import { parameterLabel, variantLabel } from "./presentation/labels";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
 import { replicaMember } from "./results/groups";
 import { projectElementResults, resultSelection } from "./inspector/elementResultsData";
@@ -34,7 +35,7 @@ import { currentViewSettings } from "./layout/viewSettings";
 import { useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
 import { setVariantParam } from "./workspace/experimentCommands";
-import { documentValuesEqual, elementIdentity } from "./workspace/editor";
+import { documentValuesEqual, elementIdentity, setModelParam } from "./workspace/editor";
 import { applyOverrides, elementOf } from "./workspace/params";
 import { copySelection, deleteElements, pasteSelection, renameElement, type ClipboardFragment } from "./workspace/structure";
 import { useWorkspace } from "./workspace/useWorkspace";
@@ -130,6 +131,24 @@ export function App() {
   const structureEditable = editable && variant === undefined;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
+  const setModelParameter = async (id: string, name: string, value: unknown) => {
+    if (loaded === null || catalog === null) return;
+    const command = setModelParam(id, name, value, catalog);
+    const next = command(loaded);
+    const removed = [
+      ...(loaded.experiment.grid ?? []).flatMap((axis, index) => next.experiment.grid?.some(candidate => candidate.path === axis.path) ? []
+        : [t("app.confirm.removedAxis", { number: index + 1, parameter: parameterLabel(axis.path, catalog, loaded.model) })]),
+      ...loaded.experiment.variants.flatMap((variant, index) => Object.keys(variant.overrides)
+        .filter(path => !Object.hasOwn(next.experiment.variants[index].overrides, path))
+        .map(path => t("app.confirm.removedOverride", { variant: variantLabel(variant, variants), parameter: parameterLabel(path, catalog, loaded.model) }))),
+    ];
+    if (removed.length > 0 && !await confirm({
+      title: t("app.confirm.removeDependentSettings"),
+      message: t("app.confirm.dependentSettingsMessage", { settings: removed.join("\n") }),
+      confirmLabel: t("app.confirm.changeAction"), cancelLabel: t("file.cancel"),
+    })) return;
+    workspace.execute(command);
+  };
   const selectVariantChange = (id: string, path: string) => {
     if (invalid || loading) return;
     setAnalysis(false);
@@ -513,7 +532,7 @@ export function App() {
             onRename={(id, next) => {
               workspace.execute(renameElement(id, next));
             }}
-            onParam={workspace.setParam}
+            onParam={setModelParameter}
             onValidity={onValidity}
             fieldDiagnostics={fieldDiagnostics}
             variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined}
@@ -621,7 +640,7 @@ export function App() {
                 if (added.length > 0) { setSelection(added); setInspectorTarget("element"); setFieldFocus(null); }
               }}
               onParam={(id, path, value) => {
-                if (variant === undefined) workspace.setParam(id, path, value);
+                if (variant === undefined) void setModelParameter(id, path, value);
                 else workspace.execute(setVariantParam(variant.id, id, path, value ?? null, catalog));
               }}
               onValidity={(key, valid) => onValidity(`canvas:${key}`, valid)}
