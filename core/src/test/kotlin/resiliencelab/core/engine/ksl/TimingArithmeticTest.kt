@@ -48,8 +48,8 @@ class TimingArithmeticTest {
         val reliabilityModel = reliabilityModel(model)
         ArrivalGenerator(
             reliabilityModel = reliabilityModel,
-            entryServiceId = "entry",
-            load = LoadProfile.constant(1.0 / Double.MAX_VALUE),
+            client = TestChains.simple().client.copy(classes = mapOf("default" to LoadProfile.constant(1.0 / Double.MAX_VALUE))),
+            requestClass = "default",
             warmupMs = Double.MAX_VALUE,
             measurementMs = Double.MAX_VALUE,
             stream = TestChains.stream(42L, TestChains.CLIENT, StreamRole.ARRIVALS),

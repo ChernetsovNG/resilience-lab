@@ -23,10 +23,10 @@ internal class CallAttempt(
     fun onChildCompleted() {
         if (status != AttemptOutcome.PENDING || child.noResponse) return
         status =
-            if (child.outcome == AttemptOutcome.SUCCEEDED) {
-                AttemptOutcome.SUCCEEDED
-            } else {
-                AttemptOutcome.DOWNSTREAM_FAILURE
+            when (child.outcome) {
+                AttemptOutcome.SUCCEEDED -> AttemptOutcome.SUCCEEDED
+                AttemptOutcome.NO_ROUTE -> AttemptOutcome.NO_ROUTE
+                else -> AttemptOutcome.DOWNSTREAM_FAILURE
             }
         recordResponse(status == AttemptOutcome.SUCCEEDED)
         if (timeoutEvent.isScheduled) {

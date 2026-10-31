@@ -29,8 +29,11 @@ internal class RouterRuntime(
     fun select(
         tried: Set<String>,
         policy: RoutingPolicy = defaultPolicy,
-    ): RouteEdge {
-        val eligible = outputs.filterNot { it.path in tried }.ifEmpty { outputs }
+        requestClass: String = "default",
+    ): RouteEdge? {
+        val applicable = outputs.filter { it.classes == null || requestClass in it.classes }
+        if (applicable.isEmpty()) return null
+        val eligible = applicable.filterNot { it.path in tried }.ifEmpty { applicable }
         val selected =
             when (policy) {
                 RoutingPolicy.ROUND_ROBIN -> {
