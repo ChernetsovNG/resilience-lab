@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
-import { resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
+import { addFault, resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
+import { createFault, faultTargets, type FaultTarget } from "../workspace/faults";
 import { elementOf, isOverridden, ownEntry } from "../workspace/params";
 import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
@@ -13,6 +14,7 @@ import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
 import { LoadProfile } from "./LoadProfile";
+import { ReplicaTargetField } from "./ReplicaTargetField";
 import { variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
@@ -36,6 +38,8 @@ export interface InspectorProps {
   variantId?: string | null;
   invalid?: boolean;
   onCommand?: (command: EditorCommand) => void;
+  /** Reveal the newly appended shared fault in run settings. */
+  onOpenFault?: (index: number) => void;
   overrides: Record<string, unknown>;
   onRename?: (id: string, next: string) => void;
   onParam: (id: string, name: string, value: unknown) => void;
@@ -46,9 +50,28 @@ export interface InspectorProps {
   onVariantDiagnostic?: (variant: string, field: string) => void;
 }
 
+function AddFaultAction({ model, catalog, elementId, editable, disabled, onValidity, onAdd }: {
+  model: ModelFile; catalog: Catalog; elementId: string; editable: boolean; disabled: boolean;
+  onValidity: (path: string, valid: boolean) => void; onAdd: (target: FaultTarget) => void;
+}) {
+  const [selected, setSelected] = useState(elementId);
+  const targets = faultTargets(model, catalog, [selected]).filter(target => target.elementId === elementId);
+  const target = targets.find(target => target.id === selected);
+  return <div className="param-field">
+    {targets.length > 1 ? <label>{t("editor.fault.creationTarget")}
+      <select aria-label={t("editor.fault.creationTarget")} value={selected} disabled={disabled} onChange={event => setSelected(event.target.value)}>
+        {target === undefined ? <option value={selected} disabled>{selected}</option> : null}
+        {targets.map(target => <option key={target.id} value={target.id}>{target.id}</option>)}
+      </select>
+    </label> : null}
+    <ReplicaTargetField target={targets[0]} value={selected} path="new-fault.replica" editable={editable} onTarget={setSelected} onValidity={onValidity} />
+    <button type="button" disabled={disabled || target === undefined} onClick={() => { if (target !== undefined) onAdd(target); }}>{t("editor.fault.add")}</button>
+  </div>;
+}
+
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
-  hidden = false, variantId = null, invalid = false, onCommand, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
+  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
@@ -66,6 +89,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
     if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
+  const targets = faultTargets(model, catalog).filter(target => target.elementId === selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
   const showElement = (resultsOnly || target === "element") && element !== null;
   const variant = target === "variant" ? experiment.variants.find(candidate => candidate.id === variantId) : undefined;
@@ -150,6 +174,14 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
             onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
+          {targets.length > 0 && onCommand !== undefined ? <AddFaultAction key={`fault-${selected}`} model={model} catalog={catalog}
+            elementId={selected} editable={editable} onValidity={onValidity}
+            disabled={!editable || invalid || createFault(catalog, experiment, targets[0]) === null} onAdd={target => {
+              const fault = createFault(catalog, experiment, target);
+              if (fault === null) return;
+              onCommand(addFault(fault));
+              onOpenFault?.(experiment.faults.length);
+            }} /> : null}
         </>
       ) : null}
       {target === "experiment" ? <section className="experiment-settings">

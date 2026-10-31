@@ -482,6 +482,7 @@ export function App() {
             variantId={variant?.id ?? null}
             invalid={invalid}
             onCommand={workspace.execute}
+            onOpenFault={openFault}
             overrides={overrides}
             onRename={(id, next) => {
               workspace.execute(renameElement(id, next));

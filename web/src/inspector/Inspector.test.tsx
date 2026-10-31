@@ -55,6 +55,57 @@ function renderInspector(props: Partial<InspectorProps> = {}) {
 
 const input = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
 
+it.each(["gateway", "gateway-to-middle"])("adds a shared fault from %s and requests its run-settings field", selected => {
+  const documents = { model, experiment, layout };
+  const changes: EditorDocuments[] = [];
+  const onOpenFault = vi.fn();
+  renderInspector({ selected, onCommand: command => changes.push(command(documents)), onOpenFault });
+  fireEvent.click(screen.getByRole("button", { name: "Add fault" }));
+  expect(changes).toHaveLength(1);
+  expect(changes[0].experiment.faults.at(-1)).toMatchObject({ target: selected, kind: "slowdown", multiplier: 2 });
+  expect(changes[0].model).toEqual(model);
+  expect(onOpenFault).toHaveBeenCalledExactlyOnceWith(experiment.faults.length);
+});
+
+it.each(["gateway#2", "gateway-to-middle#2"])("adds a fault addressed to %s from the selected element", target => {
+  const replicaModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, replicas: 3 } },
+  } };
+  const documents = { model: replicaModel, experiment, layout };
+  const changes: EditorDocuments[] = [];
+  renderInspector({ model: replicaModel, selected: target.startsWith("gateway-to") ? "gateway-to-middle" : "gateway",
+    onCommand: command => changes.push(command(documents)), onOpenFault: vi.fn() });
+  fireEvent.change(screen.getByRole("combobox", { name: "Fault target" }), { target: { value: target } });
+  fireEvent.click(screen.getByRole("button", { name: "Add fault" }));
+  expect(changes[0].experiment.faults.at(-1)?.target).toBe(target);
+});
+
+it("selects a replica beyond the bounded menu from the element inspector", () => {
+  const sourceModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, replicas: 4294967296 } },
+  } };
+  const documents = { model: sourceModel, experiment, layout };
+  const changes: EditorDocuments[] = [];
+  renderInspector({ model: sourceModel, onCommand: command => changes.push(command(documents)), onOpenFault: vi.fn() });
+  const number = screen.getByRole("textbox", { name: "Replica number" });
+  fireEvent.change(number, { target: { value: "4294967296" } });
+  fireEvent.blur(number);
+  fireEvent.click(screen.getByRole("button", { name: "Add fault" }));
+  expect(changes[0].experiment.faults.at(-1)?.target).toBe("gateway#4294967296");
+});
+
+it.each([
+  { editable: false, invalid: false }, { editable: true, invalid: true },
+])("blocks fault creation with editable=$editable and invalid=$invalid", props => {
+  renderInspector({ ...props, onCommand: vi.fn(), onOpenFault: vi.fn() });
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add fault" }).disabled).toBe(true);
+});
+
+it.each(["client", "client-to-gateway"])("does not offer a fault for %s", selected => {
+  renderInspector({ selected, onCommand: vi.fn(), onOpenFault: vi.fn() });
+  expect(screen.queryByRole("button", { name: "Add fault" })).toBeNull();
+});
+
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
 function commit(label: string, value: string) {
@@ -106,7 +157,7 @@ describe("Inspector", () => {
 
   it.each([
     ["execution", "Run", "execution.seed", "Seed"],
-    ["faults", "Faults", "faults.0.multiplier", "Time multiplier"],
+    ["faults", "Faults", "faults.0.multiplier", "Processing time multiplier"],
     ["grid", "Parameter sweep", "grid.0.path", "Axis 1 parameter"],
   ])("opens collapsed %s when Problems requests its field", async (section, title, path, label) => {
     localStorage.setItem(`resilience-lab.inspector-${section}-open`, "false");
@@ -317,7 +368,7 @@ describe("Inspector", () => {
     expect((screen.getByLabelText("Fault target") as HTMLSelectElement).value).toBe("dependency");
     expect(input("Fault start").value).toBe("200ms");
     expect(input("Fault end").value).toBe("700ms");
-    expect(input("Time multiplier").value).toBe("6");
+    expect(input("Processing time multiplier").value).toBe("6");
   });
 
   it("keeps the series window unset and updates its default hint from measurement", () => {
@@ -424,7 +475,7 @@ describe("Inspector", () => {
     expect(screen.getByText(/Invalid replications/)).toBeTruthy();
     expect(screen.getByText(/Invalid series window/).closest(".param-field")).toBe(input("Series window").closest(".param-field"));
     expect(screen.getByText(/Invalid fault probability/)).toBeTruthy();
-    expect(screen.getByText(/Overlapping faults/)).toBeTruthy();
+    expect(screen.getByText("Overlapping faults", { exact: true })).toBeTruthy();
     expect(screen.getByText(/Empty fault/)).toBeTruthy();
   });
 });

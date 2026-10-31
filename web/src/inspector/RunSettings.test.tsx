@@ -1,25 +1,29 @@
 import { useReducer } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { dirtyDocuments, editorReducer, initialEditorState } from "../workspace/editor";
 import { RunSettings } from "./RunSettings";
 import { setLanguage } from "../i18n";
+import serverCatalog from "../test/catalog.json";
+import type { Catalog, ModelFile } from "../api/apiTypes";
 
 afterEach(() => { vi.restoreAllMocks(); setLanguage("en"); });
 
-function Settings({ editable = true, source = experiment } = {}) {
-  const documents = { model, layout, experiment: source };
+function Settings({ editable = true, source = experiment, sourceModel = model, sourceCatalog = catalog } = {}) {
+  const documents = { model: sourceModel, layout, experiment: source };
   const [state, dispatch] = useReducer(editorReducer, editorReducer(initialEditorState, { type: "open", loaded: {
     ...documents, saved: documents, experimentPath: "test.experiment.json", modelPath: "test.model.json",
     layoutPath: "test.layout.json", versions: { model: "m", layout: "l", experiment: "e" },
   } }));
   return <>
     <button onClick={() => dispatch({ type: "undo" })}>Undo</button>
-    <RunSettings catalog={catalog} model={model} experiment={state.loaded!.experiment} editable={editable} invalid={false}
+    <button onClick={() => dispatch({ type: "redo" })}>Redo</button>
+    <RunSettings catalog={sourceCatalog} model={sourceModel} experiment={state.loaded!.experiment} editable={editable} invalid={false}
       onCommand={(command) => dispatch({ type: "command", command })} onValidity={vi.fn()} />
     <output data-testid="history-size">{state.past.length}</output>
     <output data-testid="dirty">{String(dirtyDocuments(state.loaded).experiment)}</output>
+    <output data-testid="fault-document">{JSON.stringify(state.loaded!.experiment.faults)}</output>
   </>;
 }
 
@@ -32,6 +36,132 @@ it.each([
   fireEvent.click(screen.getByRole("button", { name: "Add fault" }));
   expect((document.querySelector('[data-inspector-field="faults.0.from"] input') as HTMLInputElement).value).toBe(from);
   expect((document.querySelector('[data-inspector-field="faults.0.to"] input') as HTMLInputElement).value).toBe(to);
+});
+
+it.each([
+  ["errors", { failureRate: "50%" }],
+  ["unavailable", {}],
+  ["blackhole", {}],
+  ["capacityLoss", { capacity: 2 }],
+] as const)("replaces slowdown fields with %s in one undoable edit", (kind, fields) => {
+  const initialCatalog = structuredClone(serverCatalog) as Catalog;
+  initialCatalog.types.find(type => type.id === "service")!.params.find(param => param.name === "failureRate")!.initial = "25%";
+  const fault = { target: "gateway", kind: "slowdown", from: "20s", to: "30s", multiplier: 8, delay: "300ms" };
+  render(<Settings sourceCatalog={initialCatalog} source={{ ...experiment, faults: [fault] }} />);
+  fireEvent.change(screen.getByRole("combobox", { name: "Fault kind" }), { target: { value: kind } });
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([{ target: "gateway", from: "20s", to: "30s", kind, ...fields }]);
+  expect(screen.getByTestId("history-size").textContent).toBe("1");
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([fault]);
+  expect(screen.getByTestId("history-size").textContent).toBe("0");
+  fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)[0]).toEqual({ target: "gateway", from: "20s", to: "30s", kind, ...fields });
+});
+
+it.each([1, 3.5, 17])("keeps fault defaults independent of catalog backoff multiplier %s", multiplier => {
+  const initialCatalog = structuredClone(serverCatalog) as Catalog;
+  initialCatalog.types.find(type => type.id === "call")!.params.find(param => param.name === "backoff")!
+    .fields.find(param => param.name === "multiplier")!.initial = multiplier;
+  render(<Settings sourceCatalog={initialCatalog} source={{ ...experiment, faults: [
+    { target: "gateway", kind: "errors", from: "20s", to: "30s", failureRate: "90%" },
+  ] }} />);
+  fireEvent.change(screen.getByRole("combobox", { name: "Fault kind" }), { target: { value: "slowdown" } });
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([
+    { target: "gateway", from: "20s", to: "30s", kind: "slowdown", multiplier: 2 },
+  ]);
+  fireEvent.change(screen.getByRole("combobox", { name: "Fault kind" }), { target: { value: "errors" } });
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([
+    { target: "gateway", from: "20s", to: "30s", kind: "errors", failureRate: "50%" },
+  ]);
+});
+
+const replicaModel: ModelFile = { ...model, blocks: {
+  ...model.blocks,
+  gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, replicas: 3 }, replicaOverrides: { "2": { handlers: 1 } } },
+  router: { type: "router", params: {} },
+  db: { type: "database", params: { maxConnections: 7 } },
+  pooler: { type: "pooler", params: { poolSize: 5 } },
+}, connections: [...model.connections,
+  { id: "route", type: "route", from: "router", to: "gateway", params: {} },
+  { id: "pooled-call", type: "call", from: "gateway", to: "db", params: { pool: { size: 3 } } },
+] };
+
+it("lists replica and outgoing-call copy targets while excluding client, router and request", () => {
+  render(<Settings sourceModel={replicaModel} />);
+  const target = screen.getByRole("combobox", { name: "Fault target" });
+  const values = within(target).getAllByRole<HTMLOptionElement>("option").map(option => option.value);
+  expect(values).toEqual(expect.arrayContaining(["gateway", "gateway#1", "gateway#2", "gateway#3", "gateway-to-middle#2", "pooled-call#3", "route", "db", "pooler"]));
+  expect(values).not.toEqual(expect.arrayContaining(["client"]));
+  expect(values).not.toContain("router");
+  expect(values).not.toContain("client-to-gateway");
+});
+
+it.each([
+  ["gateway-to-middle", true], ["route", true], ["pooled-call#2", false],
+  ["gateway#2", false], ["db", false], ["pooler", false],
+] as const)("limits capacity-loss availability for %s", (target, disabled) => {
+  render(<Settings sourceModel={replicaModel} sourceCatalog={serverCatalog as Catalog} source={{ ...experiment, faults: [
+    { target, kind: "blackhole", from: "20s", to: "30s" },
+  ] }} />);
+  expect(within(screen.getByRole("combobox", { name: "Fault kind" })).getByRole<HTMLOptionElement>("option", { name: "Capacity loss" }).disabled).toBe(disabled);
+});
+
+it("prevents moving capacity loss to a target without slots and bounds it by replica capacity", () => {
+  render(<Settings sourceModel={replicaModel} sourceCatalog={serverCatalog as Catalog} source={{ ...experiment, faults: [
+    { target: "gateway#2", kind: "capacityLoss", from: "20s", to: "30s", capacity: 1 },
+  ] }} />);
+  const target = screen.getByRole("combobox", { name: "Fault target" });
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "route" }).disabled).toBe(true);
+  const capacity = screen.getByRole("textbox", { name: "Available handlers" });
+  fireEvent.change(capacity, { target: { value: "2" } });
+  expect(capacity.getAttribute("aria-invalid")).toBe("true");
+});
+
+it("bounds group capacity only by effective replicas when all override the base upward", () => {
+  const sourceModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, replicas: 2 },
+      replicaOverrides: { "1": { handlers: 8 }, "2": { handlers: 10 } } },
+  } };
+  render(<Settings sourceModel={sourceModel} source={{ ...experiment, faults: [
+    { target: "gateway", kind: "capacityLoss", from: "200ms", to: "700ms", capacity: 8 },
+  ] }} />);
+  const capacity = screen.getByRole("textbox", { name: "Available handlers" });
+  expect(capacity.getAttribute("aria-invalid")).toBeNull();
+  fireEvent.change(capacity, { target: { value: "9" } });
+  expect(capacity.getAttribute("aria-invalid")).toBe("true");
+});
+
+it("keeps very large replica groups bounded and selects an arbitrary copy by number with Undo", () => {
+  const sourceModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    gateway: { ...model.blocks.gateway, params: { ...model.blocks.gateway.params, replicas: 4294967296 } },
+  } };
+  render(<Settings sourceModel={sourceModel} source={{ ...experiment, faults: [
+    { target: "gateway-to-middle", kind: "blackhole", from: "200ms", to: "700ms" },
+  ] }} />);
+  const target = screen.getByRole("combobox", { name: "Fault target" });
+  expect(within(target).getAllByRole("option").length).toBeLessThan(250);
+  const number = screen.getByRole("textbox", { name: "Replica number" });
+  fireEvent.change(number, { target: { value: "4294967296" } });
+  fireEvent.blur(number);
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)[0].target).toBe("gateway-to-middle#4294967296");
+  expect(screen.getByTestId("history-size").textContent).toBe("1");
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)[0].target).toBe("gateway-to-middle");
+});
+
+it.each([
+  ["en", "Processing time multiplier", "Network delay multiplier", "More about: ", "sample × multiplier + delay"],
+  ["ru", "Множитель времени обработки", "Множитель сетевой задержки", "Подробнее: ", "время × множитель + задержка"],
+] as const)("labels slowdown by its target and explains the formula in %s", (language, blockLabel, callLabel, prefix, formula) => {
+  setLanguage(language);
+  render(<Settings />);
+  const multiplier = screen.getByRole("textbox", { name: blockLabel });
+  fireEvent.click(screen.getByRole("button", { name: prefix + blockLabel }));
+  expect(screen.getByRole("tooltip").textContent).toContain(formula);
+  expect(multiplier.getAttribute("aria-describedby")).toContain(screen.getByRole("tooltip").id);
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.change(screen.getByRole("combobox", { name: language === "ru" ? "Цель отказа" : "Fault target" }), { target: { value: "gateway-to-middle" } });
+  expect(screen.getByRole("textbox", { name: callLabel })).toBeTruthy();
 });
 
 it.each([
