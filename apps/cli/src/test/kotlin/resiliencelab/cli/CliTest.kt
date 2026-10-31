@@ -215,7 +215,7 @@ class CliTest {
         assertThat(result.stderr).contains("baseline · $model#/connections/1/params/timeout").doesNotContain("variants:", "no-retries")
         assertThat(result.stderr)
             .doesNotContain("LINT_FEW_REPLICATIONS", "LINT_DEADLINE_BUDGET")
-            .contains("Timeout 80 ms is below the downstream budget 189 ms")
+            .contains("Timeout 80 ms", "estimated 189 ms")
     }
 
     @Test

@@ -158,7 +158,7 @@ it("shows variant warnings on Model, filters Problems by badge and links fields 
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   expect(edge.getByRole("img", { name: "1 problems: warning" })).toBeTruthy();
   fireEvent.click(button("Errors: 0 · Warnings: 5"));
-  expect(within(screen.getByRole("tabpanel")).getAllByRole("button")).toHaveLength(5);
+  expect(screen.getByRole("tabpanel").querySelectorAll(".validation-problems > li")).toHaveLength(5);
 });
 
 it("keeps model diagnostics ordinary beside muted variant errors and counts severities accurately", async () => {

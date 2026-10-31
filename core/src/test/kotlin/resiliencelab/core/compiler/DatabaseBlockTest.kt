@@ -56,7 +56,7 @@ class DatabaseBlockTest {
 
         assertThat(warning.path).isEqualTo("db")
         assertThat(warning.pointer).isEqualTo("/blocks/db/params/maxConnections")
-        assertThat(warning.message).startsWith("Connections 1 are below λ·W = 2").doesNotContain("Handler", "handler")
+        assertThat(warning.message).startsWith("Connections: 1; estimated simultaneous demand: 2").doesNotContain("Handler", "handler")
         assertThat(warning.args).containsEntry("elementType", JsonPrimitive("database"))
     }
 

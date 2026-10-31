@@ -112,6 +112,6 @@ class GraphIrTest {
                 .filter { it.code == "LINT_RETRY_AMPLIFICATION" }
         assertThat(warnings).hasSize(1)
         assertThat(warnings.single().path).isEqualTo("ac")
-        assertThat(warnings.single().message).contains("Retry amplification 6 ")
+        assertThat(warnings.single().message).contains("up to 6 attempts per request")
     }
 }

@@ -70,16 +70,16 @@ describe("backend messages", () => {
   it("formats amplification beyond the browser safe integer range without changing its digits", () => {
     expect(backendMessage({ code: "LINT_RETRY_AMPLIFICATION", message: "legacy", args: {
       amplification: "4611686014132420609", threshold: 10,
-    } })).toBe("Retry amplification 4,611,686,014,132,420,609 exceeds threshold 10");
+    } })).toContain("up to 4,611,686,014,132,420,609 attempts per request");
   });
 
   it("keeps very large amplification localized without overflowing to Infinity", () => {
     const text = backendMessage({ code: "LINT_RETRY_AMPLIFICATION", message: "legacy", args: {
       amplification: "1" + "0".repeat(314), threshold: 10,
     } });
-    expect(text).toMatch(/^Retry amplification 100,000,000,/);
-    expect(text).toMatch(/,000 exceeds threshold 10$/);
-    expect(text.split(" exceeds ")[0].replace(/[^0-9]/g, "")).toBe("1" + "0".repeat(314));
+    expect(text).toMatch(/^Nested retries allow up to 100,000,000,/);
+    expect(text).toContain(",000 attempts per request, above the warning threshold of 10");
+    expect(text.split(" attempts ")[0].replace(/[^0-9]/g, "")).toBe("1" + "0".repeat(314));
   });
 
   it("keeps resume recovery guidance around translated failures", () => {

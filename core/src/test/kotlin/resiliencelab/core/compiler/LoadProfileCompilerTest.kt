@@ -136,6 +136,6 @@ class LoadProfileCompilerTest {
 
         val warning = ModelLinter().lint(result.experiment!!).single { it.code == "LINT_HANDLERS_LITTLE" }
         assertThat(warning.args).containsEntry("ratePerSecond", JsonPrimitive(20_000.0))
-        assertThat(warning.message).contains("profile maximum", "conservative")
+        assertThat(warning.message).contains("estimated simultaneous demand", "20000 requests/s")
     }
 }

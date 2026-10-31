@@ -554,7 +554,7 @@ class LabTest {
             assertThat(it.message).doesNotContain("variants:")
         }
         assertThat(report.diagnostics.single { it.code == "LINT_TIMEOUT_BUDGET" }.message)
-            .isEqualTo("Timeout 80 ms is below the downstream budget 189 ms")
+            .contains("Timeout 80 ms", "estimated 189 ms")
         assertThat(report.valid).isTrue()
     }
 

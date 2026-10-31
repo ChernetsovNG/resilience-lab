@@ -1,11 +1,21 @@
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import type { Diagnostic } from "../api/apiTypes";
-import { summarizeDiagnostics } from "./diagnostics";
+import { groupDiagnostics, summarizeDiagnostics } from "./diagnostics";
 import { HelpHint } from "../help/HelpHint";
 import { useContext } from "react";
 import { DiagnosticLabelContext } from "../presentation/diagnosticContext";
-import { diagnosticMessage, variantLabel } from "../presentation/labels";
+import { diagnosticGroupContext, diagnosticMessage, variantLabel } from "../presentation/labels";
+import { backendMessage } from "../i18n/backendMessage";
+
+/** Calculation details and stable rule identity stay behind the help control. */
+export function LintDetails({ diagnostic }: { diagnostic: Diagnostic }) {
+  const args = { ...diagnostic.args };
+  delete args.points;
+  delete args.replica;
+  const details = backendMessage({ code: `${diagnostic.code}_DETAILS`, args, message: "" });
+  return <>{details ? <p>{details}</p> : null}<code className="diagnostic-code">{diagnostic.code}</code></>;
+}
 
 /** Compact element badge with a count and the greatest severity. */
 export function DiagnosticBadge({ diagnostics }: { diagnostics: readonly Diagnostic[] }) {
@@ -13,7 +23,10 @@ export function DiagnosticBadge({ diagnostics }: { diagnostics: readonly Diagnos
   const summary = summarizeDiagnostics(diagnostics);
   if (summary === null) return null;
   return <span className={`diagnostic-badge diagnostic--${summary.severity.toLowerCase()}`} role="img"
-    aria-label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: t(`results.problems.severity.${summary.severity}`).toLowerCase() })} title={diagnostics.map(item => diagnosticMessage(item, context.catalog, context.model, context)).join("\n")}>
+    aria-label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: t(`results.problems.severity.${summary.severity}`).toLowerCase() })} title={groupDiagnostics(diagnostics).map(group => [
+      diagnosticMessage(group.diagnostic, context.catalog, context.model, context),
+      group.diagnostic.code.startsWith("LINT_") ? diagnosticGroupContext(group, context.variants) : "",
+    ].filter(Boolean).join("; ")).join("\n")}>
     {t("editor.diagnostics.badge", { symbol: summary.severity === "ERROR" ? t("editor.symbols.error") : t("editor.symbols.warning"), count: formatNumber(summary.count) })}
   </span>;
 }
@@ -27,11 +40,12 @@ export function DiagnosticMessages({ diagnostics = [], id }: { diagnostics?: rea
       label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: t(`results.problems.severity.${summary.severity}`).toLowerCase() })}
       symbol={t(summary.severity === "ERROR" ? "editor.symbols.error" : "editor.symbols.warning")}>
       <ul className="field-diagnostics">
-        {diagnostics.map((diagnostic, index) => <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}
+        {groupDiagnostics(diagnostics).map((group, index) => { const { diagnostic } = group; return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}
           role={diagnostic.severity === "ERROR" ? "alert" : "status"}>
           <span>{diagnosticMessage(diagnostic, context.catalog, context.model, context)}</span>
-          <code className="diagnostic-code">{diagnostic.code}</code>
-        </li>)}
+          {diagnostic.code.startsWith("LINT_") ? <span className="diagnostic-context">{diagnosticGroupContext(group, context.variants)}</span> : null}
+          {diagnostic.code.startsWith("LINT_") ? <LintDetails diagnostic={diagnostic} /> : <code className="diagnostic-code">{diagnostic.code}</code>}
+        </li>; })}
       </ul>
     </HelpHint>}
   </span>;
@@ -71,7 +85,7 @@ export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = 
       symbol={t(summary.severity === "ERROR" ? "editor.symbols.error" : "editor.symbols.warning")}>
     {[...variants].map(([variant, findings]) => {
     const counts = (["ERROR", "WARNING"] as const).flatMap(severity => {
-      const count = findings.filter(finding => finding.severity === severity).length;
+      const count = groupDiagnostics(findings.filter(finding => finding.severity === severity)).length;
       return count === 0 ? [] : [t(`editor.diagnostics.variantCount.${severity}.${count === 1 ? "one" : "other"}`, { count: formatNumber(count) })];
     });
     return <p key={variant} className="variant-diagnostic-hint">

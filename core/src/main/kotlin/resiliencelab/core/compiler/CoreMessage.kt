@@ -124,7 +124,7 @@ internal enum class CoreMessage(
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,
-        "{elementType} {handlers} are below λ·W = {demand} (λ = {ratePerSecond} requests/s, W = {holdingMs} ms; profile maximum, conservative)",
+        "{elementType}: {handlers}; estimated simultaneous demand: {demand} at {ratePerSecond} requests/s",
     ),
     LINT_DEADLINE_BUDGET("LINT_DEADLINE_BUDGET", null, "Deadline {deadlineMs} ms is below the entry call budget {requiredMs} ms"),
     LINT_FEW_REPLICATIONS(

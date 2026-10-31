@@ -17,7 +17,7 @@ for (const locale of locales) {
       await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
       await page.getByRole("button", { name: label("results.restore"), exact: true }).click();
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
-      const lint = page.getByRole("tabpanel").getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
+      const lint = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_BUDGET"]');
       await expect(lint).toContainText(locale.startsWith("ru") ? /Таймаут 80 мс/ : "Timeout 80 ms");
       await expect(lint).toContainText("189");
 

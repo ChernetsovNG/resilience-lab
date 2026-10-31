@@ -89,9 +89,9 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
-  const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
+  const warning = problems.locator('button[data-diagnostic-code="LINT_TIMEOUT_BUDGET"]');
   await expect(warning).toContainText("Baseline");
-  await expect(problems.getByRole("button", { name: /LINT_DEADLINE_BUDGET/ })).toHaveCount(0);
+  await expect(problems.locator('button[data-diagnostic-code="LINT_DEADLINE_BUDGET"]')).toHaveCount(0);
   await warning.click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(timeout).toHaveValue("80ms");
@@ -118,7 +118,7 @@ test("summarizes a warning from the only variant override on Model and opens its
     await expect(handlers.locator("..").getByRole("link", { name: "In variants: Solo — 1 warning", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
-    const warning = page.getByRole("tabpanel").getByRole("button", { name: /LINT_HANDLERS_LITTLE/ });
+    const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_HANDLERS_LITTLE"]');
     await expect(warning).toContainText("Solo");
     await warning.click();
     await expect(page.getByRole("tab", { name: "Solo", exact: true })).toHaveAttribute("aria-selected", "true");

@@ -160,16 +160,23 @@ test("creates an empty model and runs a system built from the palette", async ({
     const palette = page.getByRole("complementary", { name: "Palette" });
     await palette.getByRole("button", { name: "Client", exact: true }).dblclick();
     await palette.getByRole("button", { name: "Service", exact: true }).dblclick();
+    await palette.getByRole("button", { name: "Service", exact: true }).dblclick();
+    await palette.getByRole("button", { name: "Service", exact: true }).dblclick();
     await page.locator(".react-flow__controls-fitview").click();
     await dragConnection(page.getByTestId("rf__node-client-1").locator('[data-handleid="out"]'),
       page.getByTestId("rf__node-service-1").locator('[data-handleid="in"]'));
     await expect(page.getByTestId("rf__edge-client-1-to-service-1")).toBeAttached();
+    await dragConnection(page.getByTestId("rf__node-service-1").locator('[data-handleid="out"]'),
+      page.getByTestId("rf__node-service-2").locator('[data-handleid="in"]'));
+    await dragConnection(page.getByTestId("rf__node-service-2").locator('[data-handleid="out"]'),
+      page.getByTestId("rf__node-service-3").locator('[data-handleid="in"]'));
     await expect(page.getByText("Add a client from the palette", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     const report = await (await page.request.post("/api/v1/validate", { data: { experiment: path } })).json();
     expect(report.valid).toBe(true);
+    expect(report.diagnostics).toEqual([]);
     const experiment = JSON.parse(await readFile(resolve(root, path), "utf8"));
     experiment.execution = { ...experiment.execution, warmup: "0ms", measurement: "300ms", replications: 2, window: "50ms" };
     await writeFile(resolve(root, path), JSON.stringify(experiment));
