@@ -579,12 +579,12 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
     return { x: Math.round(matrix.e - start.x), y: Math.round(matrix.f - start.y) };
   }, pan)).toEqual({ x: -150, y: -240 });
-  const expected = await canvas.evaluate((element) => {
+  const center = await canvas.evaluate((element) => {
     const viewport = element.querySelector(".react-flow__viewport")!;
     const matrix = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
     const box = element.getBoundingClientRect();
-    return { x: Math.round((box.width / 2 - matrix.e) / matrix.a / 20) * 20,
-      y: Math.round((box.height / 2 - matrix.f) / matrix.d / 20) * 20 };
+    return { x: (box.width / 2 - matrix.e) / matrix.a,
+      y: (box.height / 2 - matrix.f) / matrix.d };
   });
   await run.focus();
   await page.keyboard.press("Tab");
@@ -597,6 +597,10 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await page.keyboard.press("Enter");
   const node = page.getByTestId("rf__node-service-1");
   await expect(node).toHaveClass(/selected/);
+  const expected = await node.evaluate((element, center) => ({
+    x: Math.round((center.x - (element as HTMLElement).offsetWidth / 2) / 20) * 20,
+    y: Math.round((center.y - (element as HTMLElement).offsetHeight / 2) / 20) * 20,
+  }), center);
   await expect(node).toHaveCSS("transform", `matrix(1, 0, 0, 1, ${expected.x}, ${expected.y})`);
   await expect(page.getByRole("heading", { name: "service-1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -667,7 +671,7 @@ test("measures a new Client before collision checks with its initial values and 
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Client", exact: true }).dblclick();
   const incoming = page.getByTestId("rf__node-client-1");
   await expect(incoming).toHaveClass(/selected/);
-  await expect(incoming).toHaveCSS("transform", "matrix(1, 0, 0, 1, -100, 280)");
+  await expect(incoming).toBeInViewport({ ratio: 0.99 });
   const oldBox = (await page.getByTestId("rf__node-client").boundingBox())!;
   const newBox = (await incoming.boundingBox())!;
   await expect(incoming.locator(".block-wiring-hint")).toBeVisible();

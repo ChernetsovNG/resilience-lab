@@ -3,13 +3,14 @@ import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
-import type { Edge, EdgeProps } from "@xyflow/react";
+import type { Edge, EdgeProps, Rect } from "@xyflow/react";
 import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import type { ConnectionCanvasResults, ConnectionOverlayMetric } from "../results/canvasResults";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { isOverridden, type Params } from "../workspace/params";
+import { useLayoutEffect, useRef, useState } from "react";
 
 export type CallEdgeType = Edge<{
   connection: ConnectionInstance;
@@ -27,7 +28,7 @@ export type CallEdgeType = Edge<{
   result?: ConnectionCanvasResults;
   resultsPending?: string;
   resultsEmpty?: boolean;
-  labelY?: number;
+  labelNodes?: Rect[];
   connectionMetric?: ConnectionOverlayMetric;
   onSelect?: (multiple: boolean) => void;
   windowed?: boolean;
@@ -38,7 +39,7 @@ export type CallEdgeType = Edge<{
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, selected, data }: EdgeProps<CallEdgeType>) {
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect, labelY: badgeY } = data!;
+  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     modelParams: data?.modelParams, editable: parametersEditable, disabled, onValidity };
@@ -47,12 +48,31 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
   const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
+  const labelled = connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
+  const label = useRef<HTMLDivElement>(null);
+  const [labelSize, setLabelSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const element = label.current;
+    if (element === null) return;
+    const measure = () => setLabelSize(current => current.width === element.offsetWidth && current.height === element.offsetHeight
+      ? current : { width: element.offsetWidth, height: element.offsetHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [labelled]);
+  const raised = data?.labelNodes?.some(node => labelX - labelSize.width / 2 < node.x + node.width &&
+    labelX + labelSize.width / 2 > node.x && labelY - labelSize.height / 2 < node.y + node.height &&
+    labelY + labelSize.height / 2 > node.y);
+  const below = (data?.labelNodes?.[0]?.y ?? 0) > (data?.labelNodes?.[1]?.y ?? 0);
+  const labelBoundary = below ? Math.max(...(data?.labelNodes ?? []).map(node => node.y + node.height)) + 8
+    : Math.min(...(data?.labelNodes ?? []).map(node => node.y)) - 8;
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
         style={selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : undefined} />
-      {connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0 ? <EdgeLabelRenderer>
-        <div
+      {labelled ? <EdgeLabelRenderer>
+        <div ref={label}
           className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${overridden ? " canvas-edge-label--overridden" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
           data-testid={`canvas-edge-label-${connection.id}`}
           role="button" tabIndex={0} aria-label={connection.id} aria-pressed={selected}
@@ -62,7 +82,9 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
               event.preventDefault(); event.stopPropagation(); onSelect?.(event.ctrlKey || event.metaKey || event.shiftKey);
             }
           }}
-          style={{ pointerEvents: "all", transform: `translate(-50%, -100%) translate(${labelX}px,${badgeY ?? labelY - 36}px)` }}
+          style={{ pointerEvents: "all", transform: raised
+            ? `translate(-50%, ${below ? "0%" : "-100%"}) translate(${labelX}px,${labelBoundary}px)`
+            : `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
         >
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />

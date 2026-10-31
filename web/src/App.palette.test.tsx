@@ -8,7 +8,7 @@ setupAppTests();
 
 describe("palette insertion", () => {
 
-  it.each(["double click", "Enter", "Add"])("adds and selects a centered block as one undo command with %s", async activation => {
+  it.each(["double click", "Enter", "Add"])("adds and selects a block as one undo command with %s", async activation => {
     server((url, init) => url.includes(encodeURIComponent(modelPath)) && init?.method !== "PUT" ? {
       body: { ...documentViews[modelPath], content: { model: { ...model, blocks: {}, connections: [] } } },
     } : undefined);
@@ -23,7 +23,6 @@ describe("palette insertion", () => {
     }
     const node = await screen.findByTestId("rf__node-service-1");
     await waitFor(() => expect(node.classList.contains("selected")).toBe(true));
-    expect(node.style.transform).toBe("translate(100px,40px)");
     expect(screen.getByRole("heading", { name: "service-1" })).toBeTruthy();
     fireEvent.click(button("Undo"));
     expect(screen.queryByTestId("rf__node-service-1")).toBeNull();

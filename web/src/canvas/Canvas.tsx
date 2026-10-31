@@ -98,15 +98,21 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     observer.observe(element);
     return () => observer.disconnect();
   }, [variant?.id]);
-  const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
-    ...baseFitViewOptions.padding, bottom: `${Math.max(80, bottomInset + 16)}px` as `${number}px`,
-    top: `${Math.max(64, variantVisible ? bannerHeight + 16 : 0)}px` as `${number}px`,
-  } }), [bottomInset, bannerHeight, variantVisible]);
-  const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
-  const { screenToFlowPosition, fitView, getViewport, getNodes } = useReactFlow();
-  const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
+  const shortCanvas = height > 0 && height < 240;
+  const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
+    ...baseFitViewOptions.padding,
+    right: shortCanvas ? "252px" as const : baseFitViewOptions.padding.right,
+    bottom: `${Math.max(shortCanvas ? 16 : 80, bottomInset + 16)}px` as `${number}px`,
+    top: `${Math.max(shortCanvas ? 16 : 64, variantVisible ? bannerHeight + (shortCanvas ? 16 : 48) : 0)}px` as `${number}px`,
+  } }), [bottomInset, bannerHeight, variantVisible, shortCanvas]);
+  const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
+  const { screenToFlowPosition, fitView, getViewport, getNodes, setViewport } = useReactFlow();
+  const manualViewport = useRef(false);
+  const width = useStore((state) => state.width);
   const zoom = useStore((state) => state.transform[2]);
+  const initialized = useNodesInitialized();
+  const hasNodes = Object.keys(model.blocks).length > 0;
   const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } | null }[]>([]);
   const [measurement, setMeasurement] = useState<{
     request: (typeof insertions)[number]; size: { width: number; height: number };
@@ -125,15 +131,13 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       if (!editable) { structureHint(); return; }
       if (disabled) return;
       const viewport = getViewport();
-      const center = width > 0 && height > 0
+      const center = width > 0 && height > 0 && (initialized || !hasNodes)
         ? { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom } : null;
       if (catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) {
         setInsertions((current) => [...current, { type, center }]);
       }
     },
   }));
-  const initialized = useNodesInitialized();
-  const hasNodes = Object.keys(model.blocks).length > 0;
   if (pending?.center === null && width > 0 && height > 0 && (initialized || !hasNodes)) {
     const viewport = getViewport();
     const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
@@ -144,22 +148,37 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   useEffect(() => {
-    if (insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
+    if (!manualViewport.current && insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
   }, [fitView, fitViewOptions, initialized, width, height, sizes, insertions.length]);
   useEffect(() => {
     if (pending === undefined || pending.center === null || measurement?.request !== pending) return;
-    const center = pending.center;
     // Commit outside ResizeObserver delivery and cancel if the canvas or active document changes first.
     const frame = requestAnimationFrame(() => {
       setInsertions((current) => current.slice(1));
       if (editable && !disabled) {
         const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ ...node.position,
           width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }));
-        onCommand(addBlock(catalog, pending.type, insertionPosition(center, occupied, measurement.size, gridStep, snapToGrid)));
+        const viewport = getViewport();
+        const size = measurement.size;
+        const available = { width: Math.max(1, width - 32), height: Math.max(1, height - bottomInset - 32) };
+        const zoom = Math.min(viewport.zoom, available.width / size.width, available.height / size.height);
+        const center = { x: (width / 2 - viewport.x) / viewport.zoom,
+          y: ((height - bottomInset) / 2 - viewport.y) / viewport.zoom };
+        const bounds = { x: center.x - available.width / zoom / 2, y: center.y - available.height / zoom / 2,
+          width: available.width / zoom, height: available.height / zoom };
+        const position = insertionPosition({ x: center.x - size.width / 2, y: center.y - size.height / 2 },
+          occupied, size, gridStep, snapToGrid, bounds);
+        manualViewport.current = true;
+        onCommand(addBlock(catalog, pending.type, position));
+        if (zoom !== viewport.zoom || position.x < bounds.x || position.y < bounds.y ||
+          position.x + size.width > bounds.x + bounds.width || position.y + size.height > bounds.y + bounds.height) {
+          void setViewport({ zoom, x: width / 2 - (position.x + size.width / 2) * zoom,
+            y: (height - bottomInset) / 2 - (position.y + size.height / 2) * zoom });
+        }
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, onCommand, gridStep, snapToGrid]);
+  }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, getViewport, setViewport, onCommand, gridStep, snapToGrid, width, height, bottomInset]);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
@@ -198,7 +217,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
       ports: catalog.types.find((type) => type.id === block.type)?.ports ?? [],
-      editable: id !== pendingId && editable, parametersEditable: id !== pendingId && parametersEditable, disabled: id === pendingId || disabled,
+      editable: id !== pendingId && editable, parametersEditable, disabled: id === pendingId || disabled,
       onParam: (elementId, path, value) => onParam?.(elementId, path, value),
       onValidity: (key, valid) => onValidity?.(key, valid),
     },
@@ -207,6 +226,8 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     ariaLabel: id,
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
+  const nodeBounds = new Map(nodes.map(node => [node.id, { ...node.position,
+    width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }]));
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
     const matched = result?.from === connection.from && result.to === connection.to && result.type === connection.type
@@ -223,7 +244,10 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       data: {
         faults: faults.filter(fault => fault.elementId === connection.id), onFault,
         modelParams: baseModel === undefined ? undefined : elementOf(baseModel, connection.id)?.params, overrides,
-        labelY: Math.min(...nodes.map(node => node.position.y)) - 16,
+        labelNodes: [connection.from, connection.to].flatMap(id => {
+          const bounds = nodeBounds.get(id);
+          return bounds === undefined ? [] : [bounds];
+        }),
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         result: matched, connectionMetric,
         onSelect: (multiple: boolean) => {
@@ -327,7 +351,6 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       edges={edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
-      fitView
       fitViewOptions={fitViewOptions}
       minZoom={0.05}
       snapToGrid={snapToGrid}
@@ -336,6 +359,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       nodesConnectable={editable}
       elementsSelectable={!disabled}
       deleteKeyCode={null}
+      onMoveStart={event => { if (event !== null) manualViewport.current = true; }}
       onNodesChange={onNodesChange}
       onEdgesChange={selectionChanges}
       onNodeClick={(event, node) => select(event, node.id)}
@@ -378,8 +402,12 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
           {notice.message}{notice.variant === undefined ? null : <>
           {" "}<a href="#model" onClick={event => { event.preventDefault(); setNotice(null); onModelPage?.(); }}>{t("editor.pages.model")}</a>
         </>}</div>}
-    <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}>
-      <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions} />
+    <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}
+      onWheelCapture={() => { manualViewport.current = true; }}
+      onPointerDownCapture={() => { manualViewport.current = true; }}>
+      <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions}
+        onZoomIn={() => { manualViewport.current = true; }} onZoomOut={() => { manualViewport.current = true; }}
+        onFitView={() => { manualViewport.current = true; }} />
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </Panel>
     </ReactFlow>

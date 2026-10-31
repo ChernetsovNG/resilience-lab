@@ -1,7 +1,7 @@
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
-import { formatOutput, outputField, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
+import { formatOutput, outputField, outputText, outputsOf, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
@@ -67,6 +67,8 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     modelParams: data.modelBlock?.params, editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   const overridden = (path: string) => isOverridden(data.overrides ?? {}, data.id, path);
+  const outputs = outputsOf(data.catalog, data.block.type).filter(output => output.overlay != null)
+    .sort((a, b) => a.overlay!.order - b.overlay!.order);
   return (
     <div className={`block-node block-node--${data.block.type}${data.overridden ? " block-node--overridden" : ""}`} data-testid="block-node"
       style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
@@ -95,11 +97,11 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         </span>
       ) : <span>{data.overridden && data.modelBlock !== undefined && data.block.type === "client"
         ? <del className="inline-param-model">{summaryOf(data.modelBlock)}</del> : null}{summaryOf(data.block)}</span>}
-      {data.result === undefined ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
-        aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.resultsEmpty || undefined}
-        data-testid={`canvas-results-${data.id}`}>
-        {data.result.outputs.map(output => {
-          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result!.values[output.id]) });
+      {outputs.length === 0 ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.result === undefined || data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
+        aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.result === undefined || data.resultsEmpty || undefined}
+        data-testid={data.result === undefined ? undefined : `canvas-results-${data.id}`}>
+        {outputs.map(output => {
+          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result?.values[output.id]) });
           return <span key={output.id}
             title={tooltip(`${text} ${t("editor.symbols.separator")} ${outputText(output.overlay!.description, { interval })}`)}>
             {text}

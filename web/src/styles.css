@@ -1321,6 +1321,7 @@ select {
 
 .block-results {
   display: grid;
+  contain: inline-size;
   min-width: 0;
   gap: 1.6px;
   border-top: 1px solid #9aa5b1;

@@ -177,3 +177,14 @@ it("reserves the course footer in the minimum canvas allocation", () => {
   expect(height()).toBe(540);
   expect(Number(screen.getByRole("separator").getAttribute("aria-valuemax"))).toBe(540);
 });
+
+it("reserves canvas messages and tabs in addition to the usable diagram height", () => {
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+    return new DOMRect(0, 0, 1440, this.classList.contains("canvas-messages") ? 40 : this.tagName === "NAV" ? 36 : 800);
+  });
+  render(<ResultsWorkspace view="answer" collapsed={false} analysis canvasFooterHeight={32}>
+    <main className="canvas-area"><div className="canvas-messages" /><div className="canvas" /><nav /></main>
+  </ResultsWorkspace>);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });
+  expect(height()).toBe(396);
+});
