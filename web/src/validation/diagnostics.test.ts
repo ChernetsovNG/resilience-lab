@@ -12,6 +12,9 @@ describe("diagnostic locations", () => {
   it.each([
     [modelPath, "/blocks/gateway/params/handlers", "gateway", "handlers", null],
     [modelPath, "/blocks/gateway/params/processing/mean", "gateway", "processing.mean", null],
+    [modelPath, "/blocks/gateway/scenario/1/connection", "gateway", "scenario.1.connection", null],
+    [modelPath, "/blocks/gateway/scenario/0/processing/mean", "gateway", "scenario.0.processing.mean", null],
+    [modelPath, "/blocks/gateway/scenario", "gateway", "scenario", null],
     [modelPath, "/connections/1/params/backoff/base", "gateway-to-middle", "backoff.base", null],
     [experimentPath, "/variants/1/overrides/gateway-to-middle.timeout", "gateway-to-middle", "timeout", "no-retries"],
     [experimentPath, "/variants/0/overrides/gateway.processing/mean", "gateway", "processing.mean", "baseline"],
@@ -32,6 +35,11 @@ describe("diagnostic locations", () => {
     expect(diagnosticTarget(diagnostic("other.model.json", "/blocks/gateway/params/handlers", "gateway"), documents))
       .toEqual({ element: null, field: null, variant: null });
     expect(diagnosticTarget(diagnostic(modelPath, "/connections/999/params/timeout"), documents).element).toBeNull();
+  });
+
+  it("routes a missing scenario on the block itself to the scenario section", () => {
+    expect(diagnosticTarget({ ...diagnostic(modelPath, "/blocks/gateway"), code: "SCENARIO_REQUIRED" }, documents))
+      .toEqual({ element: "gateway", field: "scenario", variant: null });
   });
 
   it("uses a valid element path for topology diagnostics without a field pointer", () => {
