@@ -289,12 +289,32 @@ private fun printSummary(
             val aggregate = point.aggregate
             val coordinates = point.coordinates.entries.joinToString(", ") { (path, value) -> "$path=$value" }
             val suffix = if (coordinates.isEmpty()) "" else " [$coordinates]"
-            stdout.appendLine(
+            stdout.append(
                 "${variant.id}/${point.id}$suffix: success ${percent(aggregate.successRate)}, " +
-                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}; " +
-                    "capacity headroom: utilization ${headroom(point.headroom.utilization, true)}, " +
-                    "mean queue ${headroom(point.headroom.meanQueueLength, false)}",
+                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}; ",
             )
+            val saturation = point.saturation
+            saturation.firstNodes.forEach { first ->
+                stdout.append(
+                    "first saturation: ${first.label.message} (${first.node}/${first.slotPool}) " +
+                        "in ${first.replicationCount} of ${variant.replications} replications, " +
+                        String.format(
+                            Locale.ROOT,
+                            "median start %.1f ms, range %.1f–%.1f ms; ",
+                            first.medianStartMs,
+                            first.minStartMs,
+                            first.maxStartMs,
+                        ),
+                )
+            }
+            stdout.append("without saturation: ${saturation.withoutSaturation} of ${variant.replications} replications")
+            if (saturation.withoutSaturation == variant.replications) {
+                stdout.append(
+                    "; capacity headroom (pooled over measurement): utilization ${headroom(point.headroom.utilization, true)}, " +
+                        "mean queue ${headroom(point.headroom.meanQueueLength, false)}",
+                )
+            }
+            stdout.appendLine()
             printGroups(aggregate, stdout, replicas)
         }
     }
