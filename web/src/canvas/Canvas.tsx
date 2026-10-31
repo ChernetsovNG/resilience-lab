@@ -225,8 +225,14 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     ariaLabel: id,
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
-  const nodeBounds = new Map(nodes.filter(node => node.id !== pendingId).map(node => [node.id, { ...node.position,
+  const nextBounds = new Map(nodes.filter(node => node.id !== pendingId).map(node => [node.id, { ...node.position,
     width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }]));
+  const [nodeBounds, setNodeBounds] = useState(nextBounds);
+  if (nodeBounds.size !== nextBounds.size || [...nextBounds].some(([id, bounds]) => {
+    const previous = nodeBounds.get(id);
+    return previous === undefined || !Object.is(previous.x, bounds.x) || !Object.is(previous.y, bounds.y) ||
+      !Object.is(previous.width, bounds.width) || !Object.is(previous.height, bounds.height);
+  })) setNodeBounds(nextBounds);
   const edges: Edge[] = model.connections.map((connection) => {
     const result = results?.connections.get(connection.id);
     const matched = result?.from === connection.from && result.to === connection.to && result.type === connection.type

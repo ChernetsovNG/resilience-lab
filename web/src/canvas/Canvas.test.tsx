@@ -15,8 +15,29 @@ import fullCatalog from "../test/catalog.json";
 import { setViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
 import { applyOverrides } from "../workspace/params";
+import * as edgeGeometry from "./edgeGeometry";
 
 beforeAll(mockReactFlowDom);
+
+it("reuses edge geometry when node bounds and label sizes have not changed", async () => {
+  const calculate = vi.spyOn(edgeGeometry, "layoutEdges");
+  try {
+    const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn() };
+    const { container, rerender } = render(<Canvas {...props} />);
+    await waitFor(() => {
+      const paths = [...container.querySelectorAll(".react-flow__edge-path")];
+      expect(paths).toHaveLength(model.connections.length);
+      expect(paths.every(path => !path.getAttribute("d")!.includes("C"))).toBe(true);
+    });
+    const count = calculate.mock.calls.length;
+    rerender(<Canvas {...props} layout={structuredClone(layout)} selected={["gateway-to-middle"]} />);
+    expect(calculate).toHaveBeenCalledTimes(count);
+    const moved = structuredClone(layout);
+    moved.positions.middle.x += 40;
+    rerender(<Canvas {...props} layout={moved} />);
+    expect(calculate.mock.calls.length).toBeGreaterThan(count);
+  } finally { calculate.mockRestore(); }
+});
 
 it("shows database connections on its node without an internal type name", async () => {
   const snapshot = structuredClone(model);

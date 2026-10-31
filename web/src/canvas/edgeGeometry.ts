@@ -50,8 +50,56 @@ function simplify(points: XYPosition[]): XYPosition[] {
   });
 }
 
+interface FrontierEntry { index: number; cost: number; estimate: number }
+// Lowest f first, then highest g, then lowest grid-cell index: identical inputs choose the same path.
+const compareEntries = (a: FrontierEntry, b: FrontierEntry) =>
+  a.estimate - b.estimate || b.cost - a.cost || a.index - b.index;
+
+class Frontier {
+  private entries: FrontierEntry[] = [];
+  private positions = new Map<number, number>();
+
+  get size() { return this.entries.length; }
+
+  push(index: number, cost: number, heuristic: number) {
+    const existing = this.positions.get(index);
+    const entry = { index, cost, estimate: cost + heuristic };
+    let position = existing ?? this.entries.length;
+    if (existing === undefined) this.entries.push(entry);
+    while (position > 0) {
+      const parent = (position - 1) >>> 1;
+      if (compareEntries(this.entries[parent], entry) <= 0) break;
+      this.entries[position] = this.entries[parent];
+      this.positions.set(this.entries[position].index, position);
+      position = parent;
+    }
+    this.entries[position] = entry;
+    this.positions.set(index, position);
+  }
+
+  pop(): FrontierEntry {
+    const first = this.entries[0];
+    const last = this.entries.pop()!;
+    this.positions.delete(first.index);
+    if (this.entries.length > 0) {
+      let position = 0;
+      while (position * 2 + 1 < this.entries.length) {
+        let child = position * 2 + 1;
+        if (child + 1 < this.entries.length && compareEntries(this.entries[child + 1], this.entries[child]) < 0) child++;
+        if (compareEntries(last, this.entries[child]) <= 0) break;
+        this.entries[position] = this.entries[child];
+        this.positions.set(this.entries[position].index, position);
+        position = child;
+      }
+      this.entries[position] = last;
+      this.positions.set(last.index, position);
+    }
+    return first;
+  }
+}
+
 /** A* on obstacle boundaries; only horizontal/vertical segments in free space are connected. */
-function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]): XYPosition[] {
+export function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]): XYPosition[] {
   const xs = [...new Set([start.x, end.x, ...obstacles.flatMap(rect => [rect.x, rect.x + rect.width])])].sort((a, b) => a - b);
   const ys = [...new Set([start.y, end.y, ...obstacles.flatMap(rect => [rect.y, rect.y + rect.height])])].sort((a, b) => a - b);
   const point = (index: number) => ({ x: xs[index % xs.length], y: ys[Math.floor(index / xs.length)] });
@@ -60,11 +108,10 @@ function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]): XYPosi
   const costs = new Map([[first, 0]]);
   const previous = new Map<number, number>();
   const visited = new Set<number>();
-  const open = [first];
-  while (open.length > 0) {
-    // ponytail: sorted frontier is sufficient for canvas-sized graphs; use a heap if profiling warrants it.
-    open.sort((a, b) => costs.get(a)! + distance(point(a), end) - costs.get(b)! - distance(point(b), end) || costs.get(b)! - costs.get(a)!);
-    const current = open.shift()!;
+  const open = new Frontier();
+  open.push(first, 0, distance(start, end));
+  while (open.size > 0) {
+    const current = open.pop().index;
     if (visited.has(current)) continue;
     if (current === last) {
       const path = [end];
@@ -85,7 +132,7 @@ function corridor(start: XYPosition, end: XYPosition, obstacles: Rect[]): XYPosi
       if (cost >= (costs.get(next) ?? Infinity)) continue;
       costs.set(next, cost);
       previous.set(next, current);
-      open.push(next);
+      open.push(next, cost, distance(point(next), end));
     }
   }
   // Overlapping node footprints can enclose a port. Keep the edge selectable while the user moves them apart.
