@@ -1311,5 +1311,13 @@
   "editor.grid.count.runs.one": "{count} run",
   "editor.grid.count.runs.few": "{count} runs",
   "editor.grid.count.runs.many": "{count} runs",
-  "editor.grid.count.runs.other": "{count} runs"
+  "editor.grid.count.runs.other": "{count} runs",
+  "messages.RUN_ID": "Run id '{id}' must match {pattern}",
+  "messages.EXECUTION_REAL_TIME_LIMIT": "Replication exceeded its real-time cap before full drain (limit: {seconds} s)",
+  "messages.EXECUTION_DRAIN": "Replication ended before the workload fully drained",
+  "messages.EXECUTION_TIME.arrival": "Invocation arrival time must be finite",
+  "messages.EXECUTION_TIME.deadline": "Original request deadline must be finite",
+  "messages.EXECUTION_TIME.nextArrival": "Next arrival time must be finite",
+  "messages.SERIES_PART_LIMIT": "Element '{id}', window {window}: series part exceeds {maximum} bytes",
+  "messages.executionTask": "Variant '{variant}', point '{point}', replication {replication}: {message}"
 }

@@ -202,22 +202,30 @@ class CliTest {
         assertThat(result.exitCode).describedAs(result.stderr).isZero()
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
-        assertThat(lines[0]).isEqualTo(".results/retry-storm/run-1")
+        assertThat(lines[0]).isEqualTo(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1")
         assertThat(lines[1]).startsWith("baseline/p0: success ").contains("p95 ", "p99 ")
         assertThat(lines[2]).startsWith("no-retries/p0: success ")
-        assertThat(workspace.resolve(".results/retry-storm/run-1/manifest.json")).exists()
+        assertThat(
+            workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/manifest.json"),
+        ).exists()
         assertThat(result.stderr).contains("Tasks 20/20").doesNotContain("LINT_FEW_REPLICATIONS")
     }
 
     @Test
     fun `worker count does not change the result`() {
         execute(listOf("run", experiment))
-        val first = workspace.resolve(".results/retry-storm/run-1/summary.json").readText()
+        val first =
+            workspace
+                .resolve(
+                    ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/summary.json",
+                ).readText()
 
         val result = execute(listOf("run", "--workers", "1", experiment))
 
         assertThat(result.exitCode).isZero()
-        assertThat(workspace.resolve(".results/retry-storm/run-2/summary.json").readText()).isEqualTo(first)
+        assertThat(
+            workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2/summary.json").readText(),
+        ).isEqualTo(first)
     }
 
     @Test
@@ -282,7 +290,9 @@ class CliTest {
 
     @Test
     fun `resume by absolute directory matches continuous artifact bytes`() {
-        assertResumeMatchesContinuous(workspace.resolve(".results/retry-storm/run-2").toString())
+        assertResumeMatchesContinuous(
+            workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2").toString(),
+        )
     }
 
     @Test
@@ -312,8 +322,10 @@ class CliTest {
 
         assertThat(status).isEqualTo(130)
         assertThat(stdout.toString()).isEmpty()
-        assertThat(stderr.toString()).contains("Cancelled: .results/retry-storm/run-2")
-        assertThat(workspace.resolve(".results/retry-storm/run-2/manifest.json").readText()).contains("\"complete\": false")
+        assertThat(stderr.toString()).contains("Cancelled: .results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2")
+        assertThat(
+            workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2/manifest.json").readText(),
+        ).contains("\"complete\": false")
     }
 
     @Test
@@ -331,9 +343,13 @@ class CliTest {
                 .lines()
                 .filter { it.isNotBlank() }
                 .first(),
-        ).isEqualTo(".results/retry-storm/installed-resume")
-        assertThat(workspace.resolve(".results/retry-storm/installed-resume/manifest.json").readText())
-            .contains("\"complete\": true")
+        ).isEqualTo(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/installed-resume")
+        assertThat(
+            workspace
+                .resolve(
+                    ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/installed-resume/manifest.json",
+                ).readText(),
+        ).contains("\"complete\": true")
     }
 
     @Test
@@ -375,7 +391,9 @@ class CliTest {
         assertThat(result.exitCode).describedAs(result.stderr).isZero()
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
-        assertThat(lines[0]).matches("""\.results/retry-storm/\d{8}-\d{6}-\d{3}-[0-9a-f]{4}""")
+        assertThat(
+            lines[0],
+        ).matches("""\.results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/\d{8}-\d{6}-\d{3}-[0-9a-f]{4}""")
         assertThat(workspace.resolve(lines[0]).resolve("manifest.json")).exists()
     }
 
@@ -490,10 +508,15 @@ class CliTest {
 
     private fun assertResumeMatchesContinuous(argument: String) {
         assertThat(execute(listOf("run", experiment)).exitCode).isZero()
-        val expectedDirectory = ".results/retry-storm/run-1"
+        val expectedDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1"
         val expected = artifactBytes(expectedDirectory)
         createIncomplete("run-2")
-        val missing = FileWorkspace(workspace).listFiles(".results/retry-storm/run-2").first { it.endsWith("/replication.json.gz") }
+        val missing =
+            FileWorkspace(
+                workspace,
+            ).listFiles(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2").first {
+                it.endsWith("/replication.json.gz")
+            }
         Files.delete(workspace.resolve(missing))
 
         val result = execute(listOf("resume", argument))
@@ -501,9 +524,9 @@ class CliTest {
         assertThat(result.exitCode).describedAs(result.stderr).isZero()
         val lines = result.stdout.lines().filter { it.isNotBlank() }
         assertThat(lines).hasSize(3)
-        assertThat(lines[0]).isEqualTo(".results/retry-storm/run-2")
+        assertThat(lines[0]).isEqualTo(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2")
         assertThat(result.stderr).contains("Tasks ")
-        val actual = artifactBytes(".results/retry-storm/run-2")
+        val actual = artifactBytes(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-2")
         assertThat(actual.keys).isEqualTo(expected.keys)
         expected.forEach { (path, bytes) ->
             assertThat(actual.getValue(path)).describedAs(path).containsExactly(*bytes)
@@ -519,7 +542,7 @@ class CliTest {
                 }
             }
         }.isInstanceOf(CancellationException::class.java)
-        val directory = workspace.resolve(".results/retry-storm/$runId")
+        val directory = workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/$runId")
         assertThat(directory.resolve("manifest.json").readText()).contains("\"complete\": false")
         assertThat(directory.resolve("summary.json")).doesNotExist()
     }

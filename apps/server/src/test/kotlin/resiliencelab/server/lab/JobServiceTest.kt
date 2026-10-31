@@ -37,7 +37,34 @@ class JobServiceTest {
         assertThat(job.runId).isEqualTo("run-1")
         assertThat(job.completedTasks).isEqualTo(20)
         assertThat(job.totalTasks).isEqualTo(20)
-        assertThat(root.resolve(".results/retry-storm/run-1/manifest.json")).exists()
+        assertThat(root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/manifest.json")).exists()
+    }
+
+    @Test
+    fun `runs an experiment whose directory and filename contain Cyrillic and spaces`() {
+        val directory = root.resolve("Платёжный контур")
+        Files.move(root.resolve("retry-storm"), directory)
+        Files.move(directory.resolve("retry-storm.experiment.json"), directory.resolve("Платёжный контур.experiment.json"))
+        val path = "Платёжный контур/Платёжный контур.experiment.json"
+
+        val job = service().submit(path)
+
+        assertThat(job.status).isEqualTo(JobStatus.COMPLETED)
+        val run = RunCatalog(FileWorkspace(root)).entry(job.runId)!!
+        assertThat(run.experiment).isEqualTo(path)
+        assertThat(run.directory).matches("\\.results/[a-f0-9]{64}/run-1")
+        assertThat(root.resolve(run.directory).resolve("manifest.json")).exists()
+    }
+
+    @Test
+    fun `invalid run identifier reports a structured known cause`() {
+        val job = JobService(lab, Executor { it.run() }) { "../invalid" }.submit(experiment)
+
+        assertThat(job.status).isEqualTo(JobStatus.FAILED)
+        val diagnostic = job.diagnostics.single()
+        assertThat(diagnostic.code).isEqualTo("RUN_ID")
+        assertThat(diagnostic.args).containsEntry("id", JsonPrimitive("../invalid"))
+        assertThat(root.resolve(".results")).doesNotExist()
     }
 
     @Test
@@ -77,6 +104,35 @@ class JobServiceTest {
         assertThat(body["errorCode"]).isEqualTo(JsonPrimitive("EXPERIMENT_EXECUTION_FAILED"))
         assertThat(body["errorArgs"]).isEqualTo(Json.parseToJsonElement("{}"))
         assertThat(job.diagnostics).isEmpty()
+    }
+
+    @Test
+    fun `execution cap exposes its known cause and task arguments`() {
+        val file = root.resolve(experiment)
+        val original = Files.readString(file)
+        val json = Json.parseToJsonElement(original).jsonObject.toMutableMap()
+        val execution = json.getValue("execution").jsonObject.toMutableMap()
+        execution["replications"] = JsonPrimitive(1)
+        execution["warmup"] = JsonPrimitive("0ms")
+        execution["measurement"] = JsonPrimitive("100s")
+        execution["maxRealTime"] = JsonPrimitive("1s")
+        json["execution"] = kotlinx.serialization.json.JsonObject(execution)
+        Files.writeString(
+            file,
+            kotlinx.serialization.json
+                .JsonObject(json)
+                .toString(),
+        )
+        val model = root.resolve("retry-storm/retry-storm.model.json")
+        Files.writeString(model, Files.readString(model).replace("120/s", "1000000/s"))
+
+        val job = service().submit(experiment)
+
+        assertThat(job.status).isEqualTo(JobStatus.FAILED)
+        assertThat(job.errorCode).isEqualTo("EXECUTION_REAL_TIME_LIMIT")
+        assertThat(job.errorArgs).containsAllEntriesOf(
+            mapOf("seconds" to JsonPrimitive(1), "point" to JsonPrimitive("p0"), "replication" to JsonPrimitive(1)),
+        )
     }
 
     @Test
@@ -174,7 +230,9 @@ class JobServiceTest {
         assertThat(queued).hasSize(3)
         queued.drop(1).forEach { it.run() }
         listOf(first, second, late).forEach { job ->
-            assertThat(root.resolve(".results/retry-storm/${job.runId}")).doesNotExist()
+            assertThat(
+                root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/${job.runId}"),
+            ).doesNotExist()
         }
     }
 
@@ -205,7 +263,7 @@ class JobServiceTest {
                 if (done == 1) cancelled.set(true)
             }
         }.isInstanceOf(CancellationException::class.java)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val entry = RunCatalog(FileWorkspace(root)).entry("cancelled")!!
         val before = artifactHashes(runDirectory)
         val queued = mutableListOf<Runnable>()

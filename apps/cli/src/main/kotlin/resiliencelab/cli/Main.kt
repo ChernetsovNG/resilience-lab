@@ -180,7 +180,7 @@ private fun run(
                 synchronized(stderr) { stderr.appendLine("Tasks $completed/$total") }
             }
         } catch (error: CancellationException) {
-            return cancellation(workspaceRoot, ResultsLayout.runDirectory(experiment, runId), stderr)
+            return cancellation(workspaceRoot, ResultsLayout.runDirectory(lab.canonicalPath(experiment), runId), stderr)
         } catch (error: InvalidExperimentException) {
             return validationError(stderr, error.diagnostics)
         } catch (error: Exception) {

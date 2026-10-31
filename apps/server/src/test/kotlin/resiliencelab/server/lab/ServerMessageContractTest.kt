@@ -29,10 +29,13 @@ class ServerMessageContractTest {
     fun `every emitted job error has a registered code and structured arguments`() {
         sources.forEach { (path, source) ->
             val errors = Regex("\\berror\\s*=").findAll(source).count()
-            val codes = Regex("\\berrorCode\\s*=\\s*ServerMessage\\.([A-Z_]+)\\.code").findAll(source).map { it.groupValues[1] }.toList()
+            val codes =
+                Regex(
+                    "\\berrorCode\\s*=\\s*(ServerMessage\\.[A-Z_]+|diagnostic)\\.code",
+                ).findAll(source).map { it.groupValues[1] }.toList()
             val arguments =
                 Regex(
-                    "\\berrorArgs\\s*=\\s*ServerMessage\\.([A-Z_]+)\\.args\\(",
+                    "\\berrorArgs\\s*=\\s*(ServerMessage\\.[A-Z_]+|diagnostic)\\.args(?:\\(|,)",
                 ).findAll(source).map { it.groupValues[1] }.toList()
             assertThat(codes).describedAs("$path: every legacy error needs a stable code").hasSize(errors)
             assertThat(arguments).describedAs("$path: codes and arguments must use the same message definitions").isEqualTo(codes)

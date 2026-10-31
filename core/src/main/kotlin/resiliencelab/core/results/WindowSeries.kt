@@ -5,6 +5,8 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.experiment.LatencySketch
@@ -227,7 +229,11 @@ class SeriesWriter(
             if (baseBytes + row.singleWindowBytes > maxPartBytes) {
                 flushPending(kind)
                 val kind = if (connection) "connection" else "node"
-                throw ExperimentExecutionException("$kind=${row.id} window=$index: part size limit $maxPartBytes bytes")
+                throw ExperimentExecutionException(
+                    CoreMessage.SERIES_PART_LIMIT,
+                    "$kind=${row.id} window=$index: part size limit $maxPartBytes bytes",
+                    mapOf("id" to JsonPrimitive(row.id), "window" to JsonPrimitive(index), "maximum" to JsonPrimitive(maxPartBytes)),
+                )
             }
             val group = if (connection) window.connections else window.nodes
             val separator = if (group.isEmpty()) 0 else 1

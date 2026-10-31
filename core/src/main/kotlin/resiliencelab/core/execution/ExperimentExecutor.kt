@@ -1,6 +1,7 @@
 package resiliencelab.core.execution
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import ksl.simulation.Model
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
@@ -209,7 +210,23 @@ class ExperimentExecutor internal constructor(
                         } catch (failure: ExperimentExecutionException) {
                             val id = experiment.variants[variant].id
                             val message = "Variant '$id', point '${compiledPoint.id}', replication ${replication + 1}: ${failure.message}"
-                            throw ExperimentExecutionException(message, failure)
+                            throw ExperimentExecutionException(
+                                message,
+                                failure,
+                                failure.diagnostic?.let { diagnostic ->
+                                    diagnostic.copy(
+                                        message = message,
+                                        variant = id,
+                                        args =
+                                            diagnostic.args.orEmpty() +
+                                                mapOf(
+                                                    "variant" to JsonPrimitive(id),
+                                                    "point" to JsonPrimitive(compiledPoint.id),
+                                                    "replication" to JsonPrimitive(replication + 1),
+                                                ),
+                                    )
+                                },
+                            )
                         }
                     checkCancellation(isCancelled)
                     onReplication(compiledVariant.id, compiledPoint.id, replication, result)

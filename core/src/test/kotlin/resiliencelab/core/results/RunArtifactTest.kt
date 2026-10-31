@@ -11,6 +11,7 @@ import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.LatencySummary
 import resiliencelab.core.experiment.ReplicationResult
+import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.DocumentExistsException
@@ -59,21 +60,39 @@ class RunArtifactTest {
     }
 
     @Test
-    fun `places runs under the results directory by experiment name`() {
+    fun `places runs under the results directory by full experiment path`() {
         assertThat(ResultsLayout.runDirectory("examples/retry-storm.experiment.json", "run-1"))
-            .isEqualTo(".results/retry-storm/run-1")
-        assertThat(ResultsLayout.runDirectory("plain.json", "r")).isEqualTo(".results/plain.json/r")
+            .isEqualTo(".results/06d2796e6e00ece390d4392ff92bb9fdab18859fecead1c363d8158781195ef9/run-1")
+        assertThat(
+            ResultsLayout.runDirectory("plain.json", "r"),
+        ).isEqualTo(".results/2ddf0080b644f7448b80e31614b00b7670e8822683e09939030a32f634575ddd/r")
     }
 
     @Test
-    fun `rejects run ids and experiment names that leave the results directory`() {
+    fun `rejects run ids that leave the results directory`() {
         listOf("../..", "..", ".", "a/b", "", ".hidden").forEach { runId ->
             assertThatThrownBy { ResultsLayout.runDirectory("e.experiment.json", runId) }
                 .describedAs(runId)
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(InvalidExperimentException::class.java)
         }
-        assertThatThrownBy { ResultsLayout.runDirectory("..experiment.json", "run-1") }
-            .isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `accepts Unicode experiment names without using them as directory segments`() {
+        assertThat(ResultsLayout.runDirectory("Платёжный контур/Платёжный контур.experiment.json", "run-1"))
+            .matches("\\.results/[a-f0-9]{64}/run-1")
+    }
+
+    @Test
+    fun `different full experiment paths never share a results group`() {
+        val paths =
+            listOf(
+                "one/shared.experiment.json",
+                "two/shared.experiment.json",
+                "Платёжный контур/Платёжный контур.experiment.json",
+                "Платежный контур/Платежный контур.experiment.json",
+            )
+        assertThat(paths.map { ResultsLayout.runDirectory(it, "same-run") }).doesNotHaveDuplicates()
     }
 
     @Test

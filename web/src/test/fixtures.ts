@@ -205,7 +205,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 14,
+  schemaVersion: 15,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -246,7 +246,7 @@ export const summary: RunSummary = {
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 14,
+  schemaVersion: 15,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",

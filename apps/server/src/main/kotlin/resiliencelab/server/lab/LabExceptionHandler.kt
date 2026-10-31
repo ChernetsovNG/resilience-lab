@@ -69,6 +69,8 @@ class Conflict(
  * Run deletion uses `RUN_NOT_FOUND` (404), `RUN_ACTIVE` (409) and `RUN_PATH` (400).
  * Experiment document deletion uses `EXPERIMENT_ACTIVE` (409) while its Run/Resume is queued or running.
  * Job failures use `JOB_QUEUE_FULL`, `EXPERIMENT_INVALID`, and `EXPERIMENT_EXECUTION_FAILED` in [JobView.errorCode].
+ * Known execution failures retain `EXECUTION_REAL_TIME_LIMIT`, `EXECUTION_DRAIN`, `EXECUTION_TIME`, and `SERIES_PART_LIMIT`.
+ * Invalid run identifiers are reported as an `EXPERIMENT_INVALID` job with a `RUN_ID` core diagnostic.
  */
 @RestControllerAdvice(basePackageClasses = [LabExceptionHandler::class])
 class LabExceptionHandler {

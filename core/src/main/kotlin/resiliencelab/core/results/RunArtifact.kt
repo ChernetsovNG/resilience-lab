@@ -3,6 +3,10 @@ package resiliencelab.core.results
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import resiliencelab.core.compiler.CoreMessage
+import resiliencelab.core.compiler.Diagnostic
+import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.GridAxis
 import resiliencelab.core.experiment.AggregateMetrics
@@ -10,6 +14,7 @@ import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.MetricsAggregator
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
@@ -47,7 +52,7 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 14
+    const val ARTIFACT_SCHEMA = 15
     const val SERIES_SCHEMA = 6
     const val REPLICATION_SCHEMA = 5
 }
@@ -143,17 +148,28 @@ object ResultsLayout {
     private val segment = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
     /**
-     * `.results/<experiment name without .experiment.json>/<runId>`. Both parts must be single plain path segments, so
-     * an artifact can never be written outside `.results/`.
+     * `.results/<SHA-256 of the canonical workspace-relative experiment path>/<runId>`.
+     * Document names are unrestricted by the results layout; the hash and validated run ID are plain path segments.
+     * Callers resolve path aliases through [Workspace.canonicalPath] before deriving the directory.
      */
     fun runDirectory(
         experimentPath: String,
         runId: String,
     ): String {
-        val name = experimentPath.substringAfterLast('/').removeSuffix(".experiment.json")
-        require(segment.matches(name)) { "Experiment name '$name' cannot name a results directory" }
-        require(segment.matches(runId)) { "Run id '$runId' must match ${segment.pattern}" }
-        return ".results/$name/$runId"
+        if (!segment.matches(runId)) {
+            throw InvalidExperimentException(
+                listOf(
+                    Diagnostic(
+                        CoreMessage.RUN_ID,
+                        Severity.ERROR,
+                        "Run id '$runId' must match ${segment.pattern}",
+                        experimentPath,
+                        args = mapOf("id" to JsonPrimitive(runId), "pattern" to JsonPrimitive(segment.pattern)),
+                    ),
+                ),
+            )
+        }
+        return ".results/${DocumentVersion.of(experimentPath)}/$runId"
     }
 }
 

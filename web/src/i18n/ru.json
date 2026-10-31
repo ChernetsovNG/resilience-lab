@@ -1311,5 +1311,13 @@
   "editor.grid.count.runs.one": "{count} прогон",
   "editor.grid.count.runs.few": "{count} прогона",
   "editor.grid.count.runs.many": "{count} прогонов",
-  "editor.grid.count.runs.other": "{count} прогона"
+  "editor.grid.count.runs.other": "{count} прогона",
+  "messages.RUN_ID": "Идентификатор прогона «{id}» должен соответствовать {pattern}",
+  "messages.EXECUTION_REAL_TIME_LIMIT": "Повторение превысило лимит реального времени {seconds} с до завершения всей работы",
+  "messages.EXECUTION_DRAIN": "Повторение завершилось до окончания всей работы",
+  "messages.EXECUTION_TIME.arrival": "Время поступления вызова вышло за допустимый числовой диапазон",
+  "messages.EXECUTION_TIME.deadline": "Общий срок выполнения запроса вышел за допустимый числовой диапазон",
+  "messages.EXECUTION_TIME.nextArrival": "Время следующего запроса вышло за допустимый числовой диапазон",
+  "messages.SERIES_PART_LIMIT": "Элемент «{id}», окно {window}: часть рядов превышает {maximum} байт",
+  "messages.executionTask": "Вариант «{variant}», точка «{point}», повторение {replication}: {message}"
 }

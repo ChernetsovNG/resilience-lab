@@ -48,6 +48,30 @@ class LabTest {
     }
 
     @Test
+    fun `Unicode experiment paths run and resume in a safe results directory`() {
+        val root = exampleWorkspace()
+        val directory = root.resolve("Платёжный контур")
+        Files.move(root.resolve("retry-storm"), directory)
+        Files.move(directory.resolve("retry-storm.experiment.json"), directory.resolve("Платёжный контур.experiment.json"))
+        val path = "Платёжный контур/Платёжный контур.experiment.json"
+        val cancelled = AtomicBoolean()
+        Lab(FileWorkspace(root)).use { lab ->
+            assertThatThrownBy {
+                lab.run(path, "unicode", isCancelled = cancelled::get) { done, _ ->
+                    if (done == 1) cancelled.set(true)
+                }
+            }.isInstanceOf(CancellationException::class.java)
+            val run =
+                resiliencelab.core.results
+                    .RunCatalog(FileWorkspace(root))
+                    .entry("unicode")!!
+            assertThat(run.directory).matches("\\.results/[a-f0-9]{64}/unicode")
+            assertThat(root.resolve(run.directory).normalize()).startsWith(root.resolve(".results"))
+            assertThat(lab.resume(run.directory).manifest.complete).isTrue()
+        }
+    }
+
+    @Test
     fun `missing document diagnostics preserve legacy text and expose its path`() {
         Lab(FileWorkspace(temp)).use { lab ->
             val diagnostic = lab.validate("missing.experiment.json").diagnostics.single()
@@ -159,7 +183,7 @@ class LabTest {
                     }
                 }.isInstanceOf(CancellationException::class.java)
             }
-            val runDirectory = ".results/retry-storm/cancelled"
+            val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
             val corrupt = FileWorkspace(actualRoot).listFiles(runDirectory).first { it.endsWith("/$fileName") }
             val original = Files.readAllBytes(actualRoot.resolve(corrupt))
             Files.write(actualRoot.resolve(corrupt), original.copyOf(original.size - 4))
@@ -167,7 +191,7 @@ class LabTest {
             val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
 
             assertThat(resumed.manifest.complete).isTrue()
-            val expectedDirectory = ".results/retry-storm/run-1"
+            val expectedDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1"
             val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
             val actualFiles = FileWorkspace(actualRoot).listFiles(runDirectory).map { it.removePrefix("$runDirectory/") }
             assertThat(actualFiles).containsExactlyElementsOf(expectedFiles)
@@ -186,7 +210,7 @@ class LabTest {
         val modelPath = root.resolve(model)
         val decoded = (DocumentCodec.decodeModel(Files.readString(modelPath), model) as DecodeResult.Ok).value
         Files.writeString(modelPath, DocumentCodec.encodeModel(decoded.copy(connections = decoded.connections.reversed())))
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
 
         Lab(FileWorkspace(root)).use { lab ->
             assertThat(lab.validateResume(runDirectory).complete).isFalse()
@@ -198,7 +222,7 @@ class LabTest {
     fun `resume rejects changed documents without mutating the artifact`() {
         val root = exampleWorkspace()
         createIncomplete(root)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val modelFile = root.resolve(model)
         Files.writeString(modelFile, Files.readString(modelFile).replace("\"handlers\": 4", "\"handlers\": 5"))
         val before = artifactHashes(FileWorkspace(root), runDirectory)
@@ -215,7 +239,7 @@ class LabTest {
     fun `resume preflight preserves a valid incomplete artifact and does not execute tasks`() {
         val root = exampleWorkspace()
         createIncomplete(root)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val before = artifactHashes(FileWorkspace(root), runDirectory)
         val calls = AtomicInteger()
         val executor =
@@ -235,7 +259,7 @@ class LabTest {
     @Test
     fun `resume preflight rejects a complete artifact without mutating it`() {
         val root = exampleWorkspace()
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
         val before = artifactHashes(FileWorkspace(root), runDirectory)
 
@@ -250,7 +274,7 @@ class LabTest {
     fun `resume preflight rejects changed documents without mutating the artifact`() {
         val root = exampleWorkspace()
         createIncomplete(root)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val modelFile = root.resolve(model)
         Files.writeString(modelFile, Files.readString(modelFile).replace("\"handlers\": 4", "\"handlers\": 5"))
         val before = artifactHashes(FileWorkspace(root), runDirectory)
@@ -266,7 +290,7 @@ class LabTest {
     fun `resume rejects an incompatible application without mutating the artifact`() {
         val root = exampleWorkspace()
         createIncomplete(root)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val manifest = root.resolve("$runDirectory/manifest.json")
         Files.writeString(manifest, Files.readString(manifest).replace("0.1.0", "0.2.0"))
         val before = artifactHashes(FileWorkspace(root), runDirectory)
@@ -281,7 +305,7 @@ class LabTest {
     @Test
     fun `resume rebuilds summary without executing valid tasks`() {
         val root = exampleWorkspace()
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
         val originalManifest = Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))
         val originalSummary = Files.readAllBytes(root.resolve("$runDirectory/summary.json"))
@@ -310,7 +334,7 @@ class LabTest {
     fun `cancellation during resume leaves a resumable artifact without summary`() {
         val root = exampleWorkspace()
         createIncomplete(root)
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val missing = FileWorkspace(root).listFiles(runDirectory).first { it.endsWith("/replication.json.gz") }
         Files.delete(root.resolve(missing))
         val cancelled = AtomicBoolean()
@@ -332,7 +356,7 @@ class LabTest {
     @Test
     fun `concurrent resumes serialize and the second sees a completed run`() {
         val root = exampleWorkspace()
-        val runDirectory = ".results/retry-storm/cancelled"
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         Lab(FileWorkspace(root)).use { it.run(experiment, "cancelled") }
         val manifestPath = root.resolve("$runDirectory/manifest.json")
         Files.writeString(manifestPath, Files.readString(manifestPath).replace("\"complete\": true", "\"complete\": false"))
@@ -482,7 +506,7 @@ class LabTest {
 
         assertIncomplete(cancelledRoot)
         listOf("manifest.json", "summary.json").forEach { file ->
-            val relative = ".results/retry-storm/run-1/$file"
+            val relative = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/$file"
             assertThat(
                 Files.readAllBytes(actualRoot.resolve(relative)),
             ).containsExactly(*Files.readAllBytes(expectedRoot.resolve(relative)))
@@ -511,10 +535,10 @@ class LabTest {
         }
 
     private fun assertIncomplete(root: Path) {
-        val directory = root.resolve(".results/retry-storm/cancelled")
+        val directory = root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled")
         assertThat(Files.readString(directory.resolve("manifest.json"))).contains("\"complete\": false")
         assertThat(directory.resolve("summary.json")).doesNotExist()
-        assertThat(FileWorkspace(root).listFiles(".results/retry-storm/cancelled"))
+        assertThat(FileWorkspace(root).listFiles(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"))
             .anyMatch { it.endsWith("/replication.json.gz") }
     }
 
@@ -684,7 +708,7 @@ class LabTest {
     fun `refuses run ids that would leave the results directory before computing`() {
         val root = exampleWorkspace()
 
-        assertThatThrownBy { Lab(FileWorkspace(root)).run(experiment, "../..") }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { Lab(FileWorkspace(root)).run(experiment, "../..") }.isInstanceOf(InvalidExperimentException::class.java)
         assertThat(root.resolve(".results")).doesNotExist()
         assertThat(root.resolve("summary.json")).doesNotExist()
     }
@@ -709,14 +733,17 @@ class LabTest {
             Lab(FileWorkspace(parallelRoot), executor = executor).use { it.run(experiment, "run-1") }
         }
 
-        assertThat(outcome.runDirectory).isEqualTo(".results/retry-storm/run-1")
+        assertThat(outcome.runDirectory).isEqualTo(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1")
         assertThat(outcome.summary.variants.map { it.id }).containsExactly("baseline", "no-retries")
         assertThat(outcome.summary.variants.map { it.label }).containsExactly("Baseline", "No retries")
-        val writtenSummary = Files.readString(sequentialRoot.resolve(".results/retry-storm/run-1/summary.json"))
+        val writtenSummary =
+            Files.readString(
+                sequentialRoot.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/summary.json"),
+            )
         assertThat(writtenSummary).contains("\"label\": \"No retries\"")
         assertThat(outcome.manifest.documents.keys).containsExactly(experiment, model)
         listOf("summary.json", "manifest.json").forEach { file ->
-            val relative = ".results/retry-storm/run-1/$file"
+            val relative = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/$file"
             assertThat(Files.readString(parallelRoot.resolve(relative))).isEqualTo(Files.readString(sequentialRoot.resolve(relative)))
         }
     }
@@ -738,7 +765,7 @@ class LabTest {
         Lab(FileWorkspace(originalRoot)).use { it.run(experiment, "run-1") }
         Lab(FileWorkspace(reorderedRoot)).use { it.run(experiment, "run-1") }
 
-        val summary = ".results/retry-storm/run-1/summary.json"
+        val summary = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/summary.json"
         assertThat(Files.readString(reorderedRoot.resolve(summary))).isEqualTo(Files.readString(originalRoot.resolve(summary)))
     }
 
@@ -746,8 +773,8 @@ class LabTest {
     fun `preserves existing artifact when run id is repeated`() {
         val root = exampleWorkspace()
         val lab = Lab(FileWorkspace(root))
-        val summaryPath = root.resolve(".results/retry-storm/run-1/summary.json")
-        val manifestPath = root.resolve(".results/retry-storm/run-1/manifest.json")
+        val summaryPath = root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/summary.json")
+        val manifestPath = root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/manifest.json")
         lab.use {
             it.run(experiment, "run-1")
             val originalSummary = Files.readAllBytes(summaryPath)

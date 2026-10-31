@@ -157,19 +157,22 @@ class RunCleanupApiTest {
                 override fun listDirectories(directory: String): List<String> {
                     if (directory == ".results" && submitted.compareAndSet(false, true)) {
                         jobs.submit(experiment)
-                        workspace.write(".results/retry-storm/queued-run/part.gz", "unfinished")
+                        workspace.write(
+                            ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/queued-run/part.gz",
+                            "unfinished",
+                        )
                     }
                     return workspace.listDirectories(directory)
                 }
             }
         val entries = RunController(RunCatalog(racingWorkspace), jobs).listObsoleteRuns()
         assertThat(entries).isEmpty()
-        assertThat(root.resolve(".results/retry-storm/queued-run/part.gz")).exists()
+        assertThat(root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/queued-run/part.gz")).exists()
     }
 
     @Test
     fun `a run that becomes readable while its size is collected is not offered for cleanup`() {
-        val directory = ".results/retry-storm/finishing"
+        val directory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/finishing"
         Files.createDirectories(root.resolve(directory))
         val finished = AtomicBoolean()
         val racingWorkspace =
@@ -286,7 +289,9 @@ class RunCleanupApiTest {
         assertThatThrownBy { jobs.resume(runs.entry("resume-me")!!) }.isInstanceOf(Conflict::class.java)
         val blocked = mvc.perform(delete("/api/v1/runs/resume-me")).andReturn().response
         assertThat(blocked.status).isEqualTo(409)
-        assertThat(root.resolve(".results/retry-storm/resume-me/manifest.json")).exists()
+        assertThat(
+            root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/resume-me/manifest.json"),
+        ).exists()
         jobs.cancel(job.id)
         assertThat(
             mvc
