@@ -30,9 +30,9 @@ for (const language of ["en", "ru"] as const) {
       onCommit={vi.fn()} onValidity={vi.fn()} />);
     const full = language === "en" ? "Fewest active requests" : "Меньше активных запросов";
     const value = screen.getByRole("button");
-    expect(value.textContent).toBe(language === "en" ? "Fewest" : "Меньше");
+    expect(value.textContent).toBe(language === "en" ? "Least in flight" : "Мин. в работе");
     expect(value.getAttribute("aria-label")).toContain(full);
-    expect(screen.getByText(language === "en" ? "Round" : "По кругу").closest("del")?.title)
+    expect(screen.getByText(language === "en" ? "Round robin" : "По кругу").closest("del")?.title)
       .toContain(language === "en" ? "Round robin" : "По очереди");
     fireEvent.doubleClick(value);
     expect(screen.getByRole("option", { name: full })).toBeTruthy();

@@ -181,7 +181,7 @@ for (const language of ["en", "ru"] as const) {
     await policy.locator("select").press("Escape");
     await page.getByRole("button", { name: language === "en" ? "Undo" : "Отменить действие", exact: true }).click();
     await expect(policy.locator("del")).toHaveCount(0);
-    await expect(policy).toHaveText(language === "en" ? "Round" : "По кругу");
+    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По кругу");
     await save(page, language);
     expect((await experiment()).variants[0].overrides ?? {}).toEqual({});
     const stored = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
@@ -218,7 +218,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(row.getByRole("tooltip")).toContainText(full[value]);
       await page.keyboard.press("Escape");
     };
-    for (const base of ["random", "leastInFlight", "roundRobin"]) {
+    for (const base of ["random", "roundRobin", "leastInFlight"]) {
       await page.getByRole("tab", { name: ru ? "Модель" : "Model", exact: true }).click();
       await choosePolicy(base);
       await page.getByRole("tab", { name: "Типы блоков", exact: true }).click();

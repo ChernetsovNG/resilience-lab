@@ -1430,7 +1430,7 @@
   "editor.canvas.deadline": "deadline: ",
   "editor.canvas.pool": "pool",
   "results.groups.worstCompact": " · max #{number}: {value}",
-  "editor.canvas.policy.roundRobin": "Round",
+  "editor.canvas.policy.roundRobin": "Round robin",
   "editor.canvas.policy.random": "Random",
-  "editor.canvas.policy.leastInFlight": "Fewest"
+  "editor.canvas.policy.leastInFlight": "Least in flight"
 }

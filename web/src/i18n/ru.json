@@ -1431,6 +1431,6 @@
   "editor.canvas.pool": "пул",
   "results.groups.worstCompact": " · макс. #{number}: {value}",
   "editor.canvas.policy.roundRobin": "По кругу",
-  "editor.canvas.policy.random": "Случ.",
-  "editor.canvas.policy.leastInFlight": "Меньше"
+  "editor.canvas.policy.random": "Случайно",
+  "editor.canvas.policy.leastInFlight": "Мин. в работе"
 }
