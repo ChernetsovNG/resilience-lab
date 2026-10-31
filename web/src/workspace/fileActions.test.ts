@@ -65,7 +65,7 @@ describe("workspace file actions", () => {
     const before = structuredClone(loaded);
     expect(newExperiment(loaded, "capacity")).toEqual([{ path: "retry-storm/capacity.experiment.json", content: { experiment: {
       schemaVersion: 2, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json",
-      execution: { replications: 10, seed: 1, warmup: "0ms", measurement: "1s", maxRealTime: "30s" },
+      execution: { replications: 10, seed: 1, warmup: "10s", measurement: "60s", maxRealTime: "30s" },
       faults: [], grid: [], variants: [{ id: "baseline", label: "Baseline", overrides: {} }],
     } } }]);
     expect(loaded).toEqual(before);
@@ -124,7 +124,7 @@ describe("workspace file actions", () => {
     expect(drafts[0].content.model?.schemaVersion).toBe(5);
     expect(drafts[0].content.model?.connections).toEqual([]);
     expect(drafts[2].content.experiment).toMatchObject({
-      modelRef: "my-lab.model.json", layoutRef: "my-lab.layout.json", execution: { replications: 10 },
+      modelRef: "my-lab.model.json", layoutRef: "my-lab.layout.json", execution: { replications: 10, warmup: "10s", measurement: "60s" },
     });
   });
 

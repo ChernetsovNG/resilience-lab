@@ -1,5 +1,5 @@
 import type { JobView } from "../api/apiTypes";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { t } from "../i18n";
 import { ViewMenu } from "./ViewMenu";
 
@@ -40,6 +40,8 @@ export interface TopBarProps {
   onCancel: () => void;
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
+  /** A failed save is explained beside Run; another attempt may retry it. */
+  runProblem?: string;
   job: JobView | null;
   estimatePanel?: ReactNode;
   fileMenu?: ReactNode;
@@ -47,12 +49,14 @@ export interface TopBarProps {
 
 /**
  * Top bar (stage 1 design §6.1): model and its experiment, unsaved changes, save, estimate, run/resume/cancel; job status and backend health belong to the status bar. Switching waits
- * for opening, saving, running and invalid drafts; saving and running wait for valid drafts and saved changes.
+ * for opening, saving, running and invalid drafts; Run saves valid document edits before submitting.
  */
 export function TopBar(props: TopBarProps) {
   const { experiments, experiment, onExperiment, loading, dirty, invalid, conflict, saving, onSave, running, onRun, onCancel, job, canUndo, canRedo, onUndo, onRedo } =
     props;
   const active = job !== null && (job.status === "QUEUED" || job.status === "RUNNING");
+  const reasonId = useId();
+  const reason = props.backendError ?? (conflict ? t("app.topBar.reloadBeforeRun") : invalid ? t("app.topBar.fixInvalid") : props.runBlockedReason) ?? props.runProblem;
   return (
     <header className="top-bar">
       <h1 title={t("app.name")}>{t("app.name")}</h1>
@@ -97,7 +101,7 @@ export function TopBar(props: TopBarProps) {
       </button>
       {dirty ? <span className="dirty-mark" title={t("app.topBar.unsavedChanges")}>{t("app.topBar.unsavedChanges")}</span> : null}
       <button type="button" onClick={onSave} disabled={(!dirty && !props.savePending) || invalid || conflict || saving || loading || props.backendError !== undefined}
-        title={props.backendError}>
+        title={props.backendError ?? t("app.topBar.saveTitle")}>
         {t("app.topBar.save")}
       </button>
       <div className="run-actions">
@@ -106,15 +110,19 @@ export function TopBar(props: TopBarProps) {
         title={props.backendError}>
         {t("app.estimate.label")}
       </button>
+      {/* Keep focus until onRun commits the draft and queues validation. */}
       <button
         type="button"
         className="primary"
+        onMouseDown={event => event.preventDefault()}
         onClick={onRun}
-        disabled={experiment === null || loading || saving || dirty || invalid || running || props.estimating || props.runBlockedReason !== undefined || props.backendError !== undefined}
-        title={props.backendError ?? props.runBlockedReason ?? (invalid ? t("app.topBar.fixInvalid") : dirty ? t("app.topBar.saveBeforeRun") : undefined)}
+        disabled={experiment === null || loading || saving || conflict || invalid || running || props.estimating || props.runBlockedReason !== undefined || props.backendError !== undefined}
+        title={reason ?? t("app.topBar.runTitle")}
+        aria-describedby={reason === undefined ? undefined : reasonId}
       >
         {t("app.topBar.run")}
       </button>
+      {reason === undefined ? null : <span id={reasonId} className="run-blocked-reason" role="status">{reason}</span>}
       {props.canResume ? <button type="button" onClick={props.onResume}
         disabled={loading || saving || dirty || invalid || running || props.estimating}
         title={dirty ? t("app.topBar.saveBeforeResume") : undefined}>{t("app.topBar.resume")}</button> : null}

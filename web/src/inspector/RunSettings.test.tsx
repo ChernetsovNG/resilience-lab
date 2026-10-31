@@ -8,8 +8,8 @@ import { setLanguage } from "../i18n";
 
 afterEach(() => { vi.restoreAllMocks(); setLanguage("en"); });
 
-function Settings({ editable = true } = {}) {
-  const documents = { model, layout, experiment };
+function Settings({ editable = true, source = experiment } = {}) {
+  const documents = { model, layout, experiment: source };
   const [state, dispatch] = useReducer(editorReducer, editorReducer(initialEditorState, { type: "open", loaded: {
     ...documents, saved: documents, experimentPath: "test.experiment.json", modelPath: "test.model.json",
     layoutPath: "test.layout.json", versions: { model: "m", layout: "l", experiment: "e" },
@@ -22,6 +22,17 @@ function Settings({ editable = true } = {}) {
     <output data-testid="dirty">{String(dirtyDocuments(state.loaded).experiment)}</output>
   </>;
 }
+
+it.each([
+  { warmup: "10s", measurement: "60s", from: "40000ms", to: "55000ms" },
+  { warmup: "1min", measurement: "120s", from: "120000ms", to: "150000ms" },
+  { warmup: "0ms", measurement: "1s", from: "500ms", to: "750ms" },
+])("adds a fault inside measurement with $warmup warmup and $measurement measurement", ({ warmup, measurement, from, to }) => {
+  render(<Settings source={{ ...experiment, faults: [], execution: { ...experiment.execution, warmup, measurement } }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add fault" }));
+  expect((document.querySelector('[data-inspector-field="faults.0.from"] input') as HTMLInputElement).value).toBe(from);
+  expect((document.querySelector('[data-inspector-field="faults.0.to"] input') as HTMLInputElement).value).toBe(to);
+});
 
 it.each([
   { words: [0, 0], expected: 0 },

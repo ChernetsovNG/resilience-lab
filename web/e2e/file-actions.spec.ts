@@ -130,7 +130,7 @@ test("creates an empty model and runs a system built from the palette", async ({
     const path = `${target}/${target}.experiment.json`;
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(path);
     await expect(page.getByTestId("block-node")).toHaveCount(0);
-    await expect(page.getByText("Add a client from the palette", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Add a client from the palette", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${target}/${target}.model.json`);
     expect((await stored(page, path)).content.experiment).toMatchObject({ schemaVersion: 2, execution: { replications: 10 } });
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();

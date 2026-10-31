@@ -35,6 +35,28 @@ async function run() {
 }
 
 describe("useRun", () => {
+  it("retains a coherent completed snapshot until replacement artifacts arrive", async () => {
+    const gate = deferred();
+    let submissions = 0;
+    const secondDocuments = { ...documents, experiment: { ...experiment, execution: { ...experiment.execution, seed: 42 } } };
+    stubFetch(async url => {
+      if (url === "/api/v1/jobs") return { status: 202, body: job("COMPLETED", ++submissions === 1 ? {} : { id: "job-2", runId: "run-2" }) };
+      if (url.includes("/runs/run-2/")) await gate.promise;
+      return { body: url.endsWith("/summary") ? summary : manifest };
+    });
+    const result = await run();
+    const first = result.current.result;
+    expect(first).toMatchObject({ runId: "run-1", jobId: "job-1", summary, manifest, documents });
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.run(experimentPath, secondDocuments); });
+    await waitFor(() => expect(result.current.job?.id).toBe("job-2"));
+    expect(result.current.result).toBe(first);
+    await act(async () => { gate.release(); await pending; });
+    expect(result.current.result).toMatchObject({ runId: "run-2", jobId: "job-2", documents: secondDocuments });
+    act(() => result.current.reset());
+    expect(result.current.result).toBeNull();
+  });
+
   it("submits the experiment, polls queued/running jobs and loads run artifacts", async () => {
     const statuses: JobView["status"][] = ["RUNNING", "COMPLETED"];
     const fetchMock = stubFetch((url, init) => {
@@ -177,7 +199,7 @@ describe("useRun", () => {
     }
   });
 
-  it("clears previous results as soon as a newer submission starts", async () => {
+  it("keeps previous results while a newer submission is pending", async () => {
     const gate = deferred();
     let submissions = 0;
     stubFetch(async (url) => {
@@ -189,7 +211,7 @@ describe("useRun", () => {
     let pending!: Promise<void>;
     act(() => { pending = result.current.run(experimentPath, documents); });
     expect(result.current.job).toBeNull();
-    expect(result.current.summary).toBeNull();
+    expect(result.current.summary).toEqual(summary);
     expect(result.current.problem).toBeNull();
     expect(result.current.running).toBe(true);
     gate.release();
