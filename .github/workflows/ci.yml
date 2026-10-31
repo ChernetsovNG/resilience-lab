@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes its running checks; main and manual runs always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # build and e2e are required checks, so a docs-only pull request skips them
   # at job level: a skipped job satisfies the check, a skipped workflow does not.
