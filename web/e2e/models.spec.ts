@@ -43,13 +43,21 @@ test("a model without experiment or layout creates its baseline on the first Run
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${directory}/system.experiment.json`);
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     expect(await readdir(target)).toEqual(["system.model.json"]);
+    const submitted = page.waitForResponse(response => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Run", exact: true }).click();
-    await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
+    const submission = await submitted;
+    expect(submission.ok()).toBe(true);
+    const job = await submission.json();
+    await expect.poll(async () => (await (await page.request.get(`/api/v1/jobs/${job.id}`)).json()).status).toBe("RUNNING");
     const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/system.experiment.json`)}`);
+    expect(response.ok()).toBe(true);
     expect((await response.json()).content.experiment).toMatchObject({
-      modelRef: "system.model.json", execution: { replications: 10 }, variants: [{ id: "baseline" }],
+      modelRef: "system.model.json", execution: { warmup: "10s", measurement: "60s", replications: 10 }, variants: [{ id: "baseline" }],
     });
     expect((await readdir(target)).sort()).toEqual(["system.experiment.json", "system.model.json"]);
+    const cancelled = await page.request.post(`/api/v1/jobs/${job.id}/cancel`);
+    expect(cancelled.ok()).toBe(true);
+    await expect(page.getByTestId("job-status")).toHaveText(/^CANCELLED\b/);
   } finally { await rm(target, { recursive: true, force: true }); }
 });
 

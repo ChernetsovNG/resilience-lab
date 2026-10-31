@@ -152,6 +152,10 @@ test("creates an empty model and runs a system built from the palette", async ({
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     const report = await (await page.request.post("/api/v1/validate", { data: { experiment: path } })).json();
     expect(report.valid).toBe(true);
+    const experiment = JSON.parse(await readFile(resolve(root, path), "utf8"));
+    experiment.execution = { ...experiment.execution, warmup: "0ms", measurement: "300ms", replications: 2, window: "50ms" };
+    await writeFile(resolve(root, path), JSON.stringify(experiment));
+    await page.reload();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");

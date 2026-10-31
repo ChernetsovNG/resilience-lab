@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { selectExperiment } from "./fixtures";
-import { rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ locale: "ru-RU", viewport: { width: 1280, height: 800 }, actionTimeout: 10_000 });
@@ -27,6 +27,12 @@ test("runs a Cyrillic model built from the palette", async ({ page }, testInfo) 
     await expect(page.getByTestId("rf__edge-client-1-to-service-1")).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
     const run = page.getByRole("button", { name: "Запустить", exact: true });
+    await expect(run).toBeEnabled();
+    const file = resolve("../apps/server/build/e2e-workspace", path);
+    const experiment = JSON.parse(await readFile(file, "utf8"));
+    experiment.execution = { ...experiment.execution, warmup: "0ms", measurement: "300ms", replications: 2, window: "50ms" };
+    await writeFile(file, JSON.stringify(experiment));
+    await page.reload();
     await expect(run).toBeEnabled();
     await run.click();
     const status = page.getByTestId("job-status");
