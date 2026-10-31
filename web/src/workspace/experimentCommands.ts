@@ -142,6 +142,11 @@ export function addFault(fault: Fault): EditorCommand {
   return editExperiment((experiment) => ({ ...experiment, faults: [...experiment.faults, fault] }));
 }
 
+/** Replace a fault, including all kind-specific fields, in one history entry. */
+export function replaceFault(index: number, fault: Fault): EditorCommand {
+  return editExperiment(experiment => ({ ...experiment, faults: experiment.faults.map((current, position) => position === index ? fault : current) }));
+}
+
 /** Edit one shared fault field; clearing an optional field removes it. */
 export function setFaultParam<K extends keyof Fault>(index: number, name: K, value: Fault[K] | undefined): EditorCommand {
   return editExperiment((experiment) => ({ ...experiment, faults: experiment.faults.map((fault, position) => {

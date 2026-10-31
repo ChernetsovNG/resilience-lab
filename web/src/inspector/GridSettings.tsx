@@ -8,7 +8,7 @@ import type { Catalog, Diagnostic, ExperimentFile, ModelFile, ParamDescriptor } 
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
 import { setGridAxes } from "../workspace/experimentCommands";
-import { isObject } from "../workspace/params";
+import { isObject, ownEntry } from "../workspace/params";
 import { ParamField } from "./ParamField";
 import { parameterLabel } from "../presentation/labels";
 import { parseParam } from "../workspace/paramParsing";
@@ -38,7 +38,8 @@ function parametersOf(model: ModelFile, catalog: Catalog) {
       : descriptor.sweepable ? [{ path, title: title.join(t("editor.symbols.separator")), descriptor, value: value as GridAxis["values"][number] }] : [];
   });
   return [...Object.entries(model.blocks), ...model.connections.map((connection) => [connection.id, connection] as const)]
-    .flatMap(([id, element]) => leaves(catalog.types.find((type) => type.id === element.type)?.params ?? [], id, element.params)
+    .flatMap(([id, element]) => leaves((catalog.types.find((type) => type.id === element.type)?.params ?? []).filter(param =>
+      !(element.type === "call" && "from" in element && ownEntry(model.blocks, element.from)?.type === "pooler" && param.name === "pool")), id, element.params)
       .map(parameter => ({ ...parameter, heading: parameterLabel(parameter.path, catalog, model) })));
 }
 

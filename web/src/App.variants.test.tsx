@@ -215,8 +215,8 @@ it("edits shared execution and fault settings from a variant and preserves inval
   fireEvent.change(screen.getByLabelText("Fault target"), { target: { value: "middle" } });
   editField("Fault start", "100ms");
   editField("Fault end", "500ms");
-  editField("Time multiplier", "4");
-  editField("Delay added", "50ms");
+  editField("Processing time multiplier", "4");
+  editField("Additional processing time", "50ms");
   editField("Seed", "9007199254740992");
   expect(button("Save").disabled).toBe(true);
   expect((screen.getByRole("tab", { name: "Model" }) as HTMLButtonElement).disabled).toBe(true);
@@ -275,12 +275,12 @@ it("shows every fault kind and saves its untouched parameters after an execution
     body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, schemaVersion: 2, faults } } },
   } : undefined);
   await open();
-  expect(screen.getAllByLabelText("Fault kind").map(field => (field as HTMLInputElement).value))
+  expect(screen.getAllByLabelText("Fault kind").map(field => (field as HTMLSelectElement).selectedOptions[0].textContent))
     .toEqual(["Slowdown", "Errors", "Fast unavailability", "Black hole", "Capacity loss"]);
-  expect((screen.getByLabelText("Time multiplier") as HTMLInputElement).value).toBe("3");
-  expect((screen.getByLabelText("Delay added") as HTMLInputElement).value).toBe("200ms");
+  expect((screen.getByLabelText("Processing time multiplier") as HTMLInputElement).value).toBe("3");
+  expect((screen.getByLabelText("Additional processing time") as HTMLInputElement).value).toBe("200ms");
   expect((screen.getByLabelText("Fault failure rate") as HTMLInputElement).value).toBe("25%");
-  expect((screen.getByLabelText("Capacity during fault") as HTMLInputElement).value).toBe("0");
+  expect((screen.getByLabelText("Available handlers") as HTMLInputElement).value).toBe("0");
   editField("Seed", "42");
   fireEvent.click(button("Save"));
   await waitFor(() => expect(button("Save").disabled).toBe(true));

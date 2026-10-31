@@ -309,7 +309,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
       await field.press("Enter");
     }
     const fault = page.getByRole("group", { name: "Fault 1", exact: true });
-    for (const [name, value] of [["Fault start", "100ms"], ["Fault end", "500ms"], ["Time multiplier", "2"]]) {
+    for (const [name, value] of [["Fault start", "100ms"], ["Fault end", "500ms"], ["Processing time multiplier", "2"]]) {
       const field = fault.getByLabel(name, { exact: true });
       await field.fill(value);
       await field.press("Enter");

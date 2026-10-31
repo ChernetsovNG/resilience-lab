@@ -1,7 +1,8 @@
 import { useReducer } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { Catalog, ExperimentFile } from "../api/apiTypes";
+import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
+import serverCatalog from "../test/catalog.json";
 import { setLanguage } from "../i18n";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { editorReducer, initialEditorState } from "../workspace/editor";
@@ -14,8 +15,8 @@ for (const param of gridCatalog.types.find((type) => type.id === "call")!.params
 gridCatalog.types.find((type) => type.id === "service")!.params.find((param) => param.name === "processing")!
   .fields.find((param) => param.name === "mean")!.sweepable = true;
 
-function Settings({ initialExperiment = experiment, initialCatalog = gridCatalog }: { initialExperiment?: ExperimentFile; initialCatalog?: Catalog }) {
-  const documents = { model, layout, experiment: initialExperiment };
+function Settings({ initialExperiment = experiment, initialCatalog = gridCatalog, initialModel = model }: { initialExperiment?: ExperimentFile; initialCatalog?: Catalog; initialModel?: ModelFile }) {
+  const documents = { model: initialModel, layout, experiment: initialExperiment };
   const [state, dispatch] = useReducer(editorReducer, editorReducer(initialEditorState, { type: "open", loaded: {
     ...documents, saved: documents, experimentPath: "test.experiment.json", modelPath: "test.model.json",
     layoutPath: "test.layout.json", versions: { model: "m", layout: "l", experiment: "e" },
@@ -23,11 +24,25 @@ function Settings({ initialExperiment = experiment, initialCatalog = gridCatalog
   return <>
     <button onClick={() => dispatch({ type: "undo" })}>Undo</button>
     <button onClick={() => dispatch({ type: "redo" })}>Redo</button>
-    <RunSettings catalog={initialCatalog} model={model} experiment={state.loaded!.experiment} editable invalid={false}
+    <RunSettings catalog={initialCatalog} model={initialModel} experiment={state.loaded!.experiment} editable invalid={false}
       onCommand={(command) => dispatch({ type: "command", command })} onValidity={vi.fn()} />
     <output data-testid="grid-document">{JSON.stringify(state.loaded!.experiment.grid)}</output>
   </>;
 }
+
+it("excludes the outgoing pooler's forbidden call pool from sweep parameters", () => {
+  const initialModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    pooler: { type: "pooler", params: { poolSize: 3 } }, database: { type: "database", params: { maxConnections: 10 } },
+  }, connections: [...model.connections,
+    { id: "pooler-call", type: "call", from: "pooler", to: "database", params: { timeout: "1s" } },
+  ] };
+  render(<Settings initialCatalog={serverCatalog as Catalog} initialModel={initialModel} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
+  const paths = [...screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).options].map(option => option.value);
+  expect(paths).toContain("pooler-call.timeout");
+  expect(paths).toContain("gateway-to-middle.pool.size");
+  expect(paths.some(path => path.startsWith("pooler-call.pool."))).toBe(false);
+});
 
 it.each([
   { path: "gateway-to-middle.attempts", values: [3], expected: [3, 4, 5] },
