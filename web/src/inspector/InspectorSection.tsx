@@ -4,7 +4,7 @@ const unsaved = new Map<string, boolean>();
 
 /** Disclosure preferences belong to the browser; collapsed fields stay mounted, retaining their drafts. */
 export function InspectorSection({ name, title, defaultOpen = true, children }: {
-  name: "parameters" | "execution" | "faults" | "grid";
+  name: "parameters" | "scenario" | "execution" | "faults" | "grid";
   title: ReactNode;
   defaultOpen?: boolean;
   children: ReactNode;

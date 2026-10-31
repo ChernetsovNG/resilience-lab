@@ -50,6 +50,8 @@ export function diagnosticTarget(
     if (tokens[0] === "blocks") target.element ??= existingElement(tokens[1]);
     if (tokens[0] === "connections") target.element ??= existingElement(documents.model.connections[Number(tokens[1])]?.id);
     if (target.element !== null && tokens[2] === "params") target.field = tokens.slice(3).join(".") || null;
+    if (target.element !== null && tokens[2] === "scenario") target.field = tokens.slice(2).join(".");
+    if (target.element !== null && diagnostic.code === "SCENARIO_REQUIRED") target.field = "scenario";
   } else if (diagnostic.document === documents.experimentPath) {
     if (tokens[0] === "variants") {
       if (diagnostic.variant === undefined) target.variant = documents.experiment.variants[Number(tokens[1])]?.id ?? null;
