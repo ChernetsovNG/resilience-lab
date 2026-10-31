@@ -31,16 +31,33 @@ export function positionOf(model: ModelFile, layout: LayoutFile | null, id: stri
     ?? { x: Object.keys(model.blocks).indexOf(id) * 260, y: 100 };
 }
 
-/** Snaps the viewport center to the selected grid when enabled and offsets by two grid steps until measured block footprints are clear. */
+/** Snaps the insertion position to the selected grid when enabled and offsets by two grid steps until measured block footprints are clear.
+ * Prefers a free position inside the supplied bounds; the caller reveals the fallback when the visible area is full.
+ */
 export function insertionPosition(center: Position, occupied: readonly (Position & { width: number; height: number })[],
-  { width, height }: { width: number; height: number }, gridStep = 20, snapToGrid = true): Position {
+  { width, height }: { width: number; height: number }, gridStep = 20, snapToGrid = true,
+  bounds?: Position & { width: number; height: number }): Position {
+  const overlaps = (position: Position) => occupied.some(node => position.x < node.x + (node.width || width) && position.x + width > node.x &&
+    position.y < node.y + (node.height || height) && position.y + height > node.y);
   const position = gridPosition(center, gridStep, snapToGrid);
-  while (occupied.some((node) => position.x < node.x + (node.width || width) && position.x + width > node.x &&
-    position.y < node.y + (node.height || height) && position.y + height > node.y)) {
+  while (overlaps(position)) {
     position.x += 2 * gridStep;
     position.y += 2 * gridStep;
   }
-  return position;
+  if (bounds === undefined || (position.x >= bounds.x && position.y >= bounds.y &&
+    position.x + width <= bounds.x + bounds.width && position.y + height <= bounds.y + bounds.height)) return position;
+  let nearest: Position | undefined;
+  let distance = Infinity;
+  const left = snapToGrid ? Math.ceil(bounds.x / gridStep) * gridStep : bounds.x;
+  const top = snapToGrid ? Math.ceil(bounds.y / gridStep) * gridStep : bounds.y;
+  for (let y = top; y + height <= bounds.y + bounds.height; y += gridStep) {
+    for (let x = left; x + width <= bounds.x + bounds.width; x += gridStep) {
+      const candidate = { x, y };
+      const squared = (x - center.x) ** 2 + (y - center.y) ** 2;
+      if (squared < distance && !overlaps(candidate)) { nearest = candidate; distance = squared; }
+    }
+  }
+  return nearest ?? position;
 }
 
 function gridPosition(point: Position, gridStep: number, snapToGrid: boolean): Position {

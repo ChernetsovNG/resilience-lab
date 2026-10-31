@@ -347,6 +347,15 @@ describe("structure commands", () => {
 
 
 describe("block insertion position", () => {
+  it("finds a visible free position when diagonal offsets leave the viewport", () => {
+    const position = insertionPosition({ x: 100, y: 100 }, [{ x: 100, y: 100, width: 180, height: 100 }],
+      { width: 180, height: 100 }, 20, true, { x: 0, y: 0, width: 300, height: 200 });
+    expect(position.x).toBeGreaterThanOrEqual(0);
+    expect(position.y).toBeGreaterThanOrEqual(0);
+    expect(position.x + 180).toBeLessThanOrEqual(300);
+    expect(position.y + 100).toBeLessThanOrEqual(200);
+    expect(position.y).toBe(0);
+  });
   it.each([
     [10, { x: 90, y: 50 }],
     [20, { x: 100, y: 40 }],

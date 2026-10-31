@@ -49,6 +49,7 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
     if (inspectorContent.current !== null) inspectorContent.current.scrollTop = 0;
   }, [analysis, inspectorSelection, inspectorRequest]);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [canvasChromeHeight, setCanvasChromeHeight] = useState(0);
   const [heights, setHeights] = useState(storedHeights);
   const [inspectorSize, setInspectorSize] = useState(storedInspector);
   const [lastInspectorRequest, setLastInspectorRequest] = useState(inspectorRequest);
@@ -67,6 +68,17 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  useLayoutEffect(() => {
+    const canvas = workspace.current!.querySelector(".canvas-area");
+    if (canvas === null) return;
+    const chrome = [...canvas.children].filter(child => !child.classList.contains("canvas"));
+    const measure = () => setCanvasChromeHeight(chrome.reduce((height, child) => height + child.getBoundingClientRect().height, 0));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    chrome.forEach(child => observer.observe(child));
+    return () => observer.disconnect();
+  }, [canvasFooterHeight]);
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(heights));
@@ -82,9 +94,10 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
     }
   }, [inspectorSize]);
   const available = Math.max(0, size.height - 8);
-  const cramped = available < 380 + canvasFooterHeight;
+  const minimumCanvas = (analysis ? 288 : 220) + canvasFooterHeight + canvasChromeHeight;
+  const cramped = available < 160 + minimumCanvas;
   const minimum = cramped ? available / 2 : 160;
-  const maximum = cramped ? available / 2 : available - 220 - canvasFooterHeight;
+  const maximum = cramped ? available / 2 : available - minimumCanvas;
   const clamp = (value: number) => Math.max(minimum, Math.min(maximum, value));
   const key = (analysis ? "analysis:" : "normal:") + view;
   const fraction = analysis ? 0.62 : view === "timeline" ? 0.55 : 0.32;

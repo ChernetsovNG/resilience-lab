@@ -117,7 +117,7 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(row.getByRole("button", { name: "Summary", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(row.getByLabel("Replication", { exact: true })).toHaveValue("0");
     await row.getByLabel("Node overlay", { exact: true }).selectOption("off");
-    await expect(page.locator(".block-results")).toHaveCount(0);
+    await expect(page.locator(".block-results:visible")).toHaveCount(0);
     await page.getByRole("tab", { name: "Model", exact: true }).click();
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();

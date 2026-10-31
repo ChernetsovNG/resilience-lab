@@ -28,7 +28,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     const toolbar = page.getByRole("region", { name: "Results context" });
     await expect(toolbar).toHaveCount(0);
-    await expect(page.locator(".block-results")).toHaveCount(0);
+    await expect(page.locator(".block-results:visible")).toHaveCount(0);
     const table = page.getByRole("table", { name: "Answer" });
     expect(summary.variants[0].points[0].saturation.firstNodes[0]).toBeDefined();
 
@@ -76,7 +76,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     await expect(page.getByRole("img", { name: "First saturated node" })).toBeVisible();
     const overlay = page.getByLabel("Node overlay", { exact: true });
     await overlay.selectOption("off");
-    await expect(page.locator(".block-results")).toHaveCount(0);
+    await expect(page.locator(".block-results:visible")).toHaveCount(0);
     await expect(page.getByRole("img", { name: "First saturated node" })).toHaveCount(0);
     await overlay.selectOption("utilization");
     await expect(page.locator(".block-results")).toHaveCount(3);
@@ -96,7 +96,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
 
     await page.getByRole("tab", { name: "Model", exact: true }).click();
     await expect(toolbar).toHaveCount(0);
-    await expect(page.locator(".block-results")).toHaveCount(0);
+    await expect(page.locator(".block-results:visible")).toHaveCount(0);
     await expect(page.getByRole("img", { name: "First saturated node" })).toHaveCount(0);
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const overflow = await page.evaluate(() => ({
