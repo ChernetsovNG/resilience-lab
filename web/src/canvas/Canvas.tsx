@@ -335,6 +335,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
   return (
     <div className={`model-canvas${variant === undefined ? "" : " variant-canvas"}`}
       onMouseDownCapture={event => {
+        manualViewport.current = true;
         if (variant === undefined || disabled || !(event.target instanceof Element)
           || event.target.closest("button, input, textarea, select, .inline-param") !== null
           || event.target.closest(".react-flow__node, .react-flow__handle") === null) return;

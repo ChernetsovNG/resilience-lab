@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
 import { selectExperiment } from "./fixtures";
 import { sharedEdgeLength } from "../src/test/sharedEdgeLength";
+import { dragConnection } from "./connectionGestures";
 
 const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
   graph: async ({ page }, provide) => {
@@ -52,6 +53,7 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
       await page.goto("/");
       await selectExperiment(page, `${directory}/graph.experiment.json`);
       await expect(page.getByTestId("block-node")).toHaveCount(6);
+      await expect(page.getByRole("combobox", { name: "Модель", exact: true })).toBeEnabled();
       await provide({ directory, layout });
     } finally { await rm(target, { recursive: true }); }
   },
@@ -60,7 +62,6 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
 test.use({ locale: "ru-RU", viewport: { width: 1280, height: 800 }, actionTimeout: 10_000 });
 
 test("checkout-replicas branches separate at ports and labels avoid other paths", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await selectExperiment(page, "checkout-replicas/checkout-replicas.experiment.json");
   await expect(page.getByTestId("block-node")).toHaveCount(7);
@@ -201,7 +202,7 @@ for (const count of [1, 2]) {
     }
     await page.getByTestId("canvas-edge-label-bypass-1").click();
     await expect(page.getByTestId("canvas-edge-label-bypass-1")).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("rf__node-client").locator('[data-handleid="out"]').dragTo(
+    await dragConnection(page.getByTestId("rf__node-client").locator('[data-handleid="out"]'),
       page.getByTestId("rf__node-middle").locator('[data-handleid="in"]'));
     await expect(page.locator('.react-flow__edge[data-id="client-to-middle"]')).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
