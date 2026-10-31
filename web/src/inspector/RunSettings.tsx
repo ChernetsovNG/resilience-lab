@@ -133,7 +133,7 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
               const kind = event.target.value;
               if (!faultKinds.some(candidate => candidate === kind) || (kind === "capacityLoss" && target?.capacity == null)) return;
               const { target: targetId, from, to } = fault;
-              onCommand(replaceFault(index, { target: targetId, from, to, kind, ...initialFaultFields(kind, catalog, target) }));
+              onCommand(replaceFault(index, { target: targetId, from, to, kind, ...initialFaultFields(kind, target) }));
             }}>
               {kindKnown ? null : <option value={fault.kind} disabled>{fault.kind}</option>}
               {faultKinds.map(kind => <option key={kind} value={kind} disabled={kind === "capacityLoss" && target?.capacity == null}>{t(`faults.kinds.${kind}`)}</option>)}

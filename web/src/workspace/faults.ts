@@ -1,5 +1,4 @@
 import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
-import { initialParams } from "./initialParams";
 import { isObject, ownEntry } from "./params";
 import { canonicalOf } from "./quantities";
 
@@ -58,15 +57,12 @@ export function faultTargets(model: ModelFile, catalog: Catalog, selected: reado
   return [...blocks, ...connections];
 }
 
-/** Reuse catalog initial values for shared parameter meanings; capacity loss starts at half the effective slot pool. */
-export function initialFaultFields(kind: string, catalog: Catalog, target?: FaultTarget): Partial<Fault> {
-  if (kind === "slowdown") {
-    const backoff = catalog.types.find(type => type.id === "call")?.params.find(param => param.name === "backoff");
-    return { multiplier: initialParams(backoff?.fields ?? []).multiplier as number };
-  }
-  if (kind === "errors") {
-    return { failureRate: initialParams(catalog.types.find(type => type.id === "service")?.params ?? []).failureRate as string };
-  }
+/** Faults have no descriptors in the catalog, so their initial values are defined here. */
+const INITIAL_FAULT_FIELDS = { slowdown: { multiplier: 2 }, errors: { failureRate: "50%" } } as const;
+
+/** Capacity loss starts at half the effective slot pool; other kinds use explicit fault defaults. */
+export function initialFaultFields(kind: string, target?: FaultTarget): Partial<Fault> {
+  if (kind === "slowdown" || kind === "errors") return { ...INITIAL_FAULT_FIELDS[kind] };
   if (kind === "capacityLoss") return { capacity: Math.floor((target?.capacity ?? 0) / 2) };
   return {};
 }
@@ -79,5 +75,5 @@ export function createFault(catalog: Catalog, experiment: ExperimentFile, target
   const warmup = canonicalOf(experiment.execution.warmup, units);
   if (unit === undefined || measurement === null || measurement <= 0 || warmup === null || warmup < 0) return null;
   const time = (fraction: number) => `${((warmup + measurement * fraction) * unit.denominator) / unit.numerator}${unit.symbol}`;
-  return { target: target.id, from: time(0.5), to: time(0.75), kind: "slowdown", ...initialFaultFields("slowdown", catalog, target) };
+  return { target: target.id, from: time(0.5), to: time(0.75), kind: "slowdown", ...initialFaultFields("slowdown", target) };
 }

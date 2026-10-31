@@ -39,7 +39,7 @@ it.each([
 });
 
 it.each([
-  ["errors", { failureRate: "25%" }],
+  ["errors", { failureRate: "50%" }],
   ["unavailable", {}],
   ["blackhole", {}],
   ["capacityLoss", { capacity: 2 }],
@@ -58,16 +58,20 @@ it.each([
   expect(JSON.parse(screen.getByTestId("fault-document").textContent!)[0]).toEqual({ target: "gateway", from: "20s", to: "30s", kind, ...fields });
 });
 
-it("uses the catalog multiplier when switching to slowdown and removes error fields", () => {
+it.each([1, 3.5, 17])("keeps fault defaults independent of catalog backoff multiplier %s", multiplier => {
   const initialCatalog = structuredClone(serverCatalog) as Catalog;
   initialCatalog.types.find(type => type.id === "call")!.params.find(param => param.name === "backoff")!
-    .fields.find(param => param.name === "multiplier")!.initial = 3.5;
+    .fields.find(param => param.name === "multiplier")!.initial = multiplier;
   render(<Settings sourceCatalog={initialCatalog} source={{ ...experiment, faults: [
     { target: "gateway", kind: "errors", from: "20s", to: "30s", failureRate: "90%" },
   ] }} />);
   fireEvent.change(screen.getByRole("combobox", { name: "Fault kind" }), { target: { value: "slowdown" } });
   expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([
-    { target: "gateway", from: "20s", to: "30s", kind: "slowdown", multiplier: 3.5 },
+    { target: "gateway", from: "20s", to: "30s", kind: "slowdown", multiplier: 2 },
+  ]);
+  fireEvent.change(screen.getByRole("combobox", { name: "Fault kind" }), { target: { value: "errors" } });
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)).toEqual([
+    { target: "gateway", from: "20s", to: "30s", kind: "errors", failureRate: "50%" },
   ]);
 });
 
