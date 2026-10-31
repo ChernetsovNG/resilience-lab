@@ -7,7 +7,7 @@ import { seriesLoader } from "./results/series";
 
 setupAppTests();
 
-it("opens a saturated replica from Answer, selects its group and keeps result navigation out of Undo", async () => {
+it("opens a saturated replica from Findings, selects its group and keeps result navigation out of Undo", async () => {
   const { run, runModel } = replicaFixture();
   vi.spyOn(seriesLoader, "load").mockResolvedValue([]);
   vi.spyOn(seriesLoader, "loadConnections").mockResolvedValue([]);
