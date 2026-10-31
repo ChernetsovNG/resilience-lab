@@ -21,7 +21,7 @@ test("confidence updates retry-storm success intervals without another run and s
   expect(baseline.replications).toBe(10);
   expect(metric.count).toBe(10);
   const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
-  const success = page.getByRole("table", { name: "Answer", exact: true })
+  const success = page.getByRole("table", { name: "Findings", exact: true })
     .getByRole("row", { name: /Success rate/ }).locator("td").first();
   const interval = success.locator(".summary-interval");
   await expect(interval).toContainText(`95% CI ${percent.format(metric.ci95Low!)}–${percent.format(metric.ci95High!)}`);
@@ -49,7 +49,7 @@ test("confidence updates retry-storm success intervals without another run and s
   await page.getByRole("button", { name: "Вид", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Интервалы", exact: true })).toHaveValue("99");
   await page.getByRole("combobox", { name: "Интервалы", exact: true }).selectOption("90");
-  await expect(page.getByRole("table", { name: "Ответ", exact: true }).getByRole("row", { name: /Доля успешных/ })
+  await expect(page.getByRole("table", { name: "Выводы", exact: true }).getByRole("row", { name: /Доля успешных/ })
     .locator("td").first()).toContainText(/90\s*% CI/);
   expect(jobs).toBe(1);
   await page.screenshot({ path: testInfo.outputPath("answer-confidence-ru-1280x720.png") });

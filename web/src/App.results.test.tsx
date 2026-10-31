@@ -16,7 +16,7 @@ describe("diagram results", () => {
     expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Answer" });
+    await screen.findByRole("table", { name: "Findings" });
     expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     const region = screen.getByRole("region", { name: "Results context" });
@@ -69,7 +69,7 @@ describe("diagram results", () => {
     server((url) => url.endsWith("/summary") ? { body: run } : undefined);
     await open();
     fireEvent.click(button("Run"));
-    await screen.findByRole("table", { name: "Answer" });
+    await screen.findByRole("table", { name: "Findings" });
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     fireEvent.change(screen.getByLabelText("Grid point"), { target: { value: "p1" } });
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
@@ -90,7 +90,7 @@ it("colors nodes and labels the scale for the selected overlay metric", async ()
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   const node = screen.getByTestId("rf__node-gateway").querySelector<HTMLElement>(".block-node")!;
   const utilization = node.style.backgroundColor;
@@ -108,7 +108,7 @@ it("colors nodes and labels the scale for the selected overlay metric", async ()
   expect(node.style.backgroundColor).toBe("");
 });
 
-it("shares point, replication and time between the context row, Answer, Timeline and canvas", async () => {
+it("shares point, replication and time between the context row, Findings, Timeline and canvas", async () => {
   const run = structuredClone(summary);
   run.grid = [{ path: "gateway.handlers", values: [4, 1000] }];
   const point = structuredClone(run.variants[0].points[0]);
@@ -131,7 +131,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   server(url => url.endsWith("/summary") ? { body: run } : undefined);
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   expect(screen.queryByLabelText("Grid point")).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   const row = screen.getByRole("region", { name: "Results context" });
@@ -181,7 +181,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   expect(within(row).getByRole("button", { name: "Summary" }).getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
-  fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · Handlers · gateway = 1,000");
   expect(button("Save").disabled).toBe(true);
   expect(button("Undo").disabled).toBe(true);
@@ -196,7 +196,7 @@ it("reserves empty metric rows without borrowing pooled values while a Time fram
   server();
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("50%");
   fireEvent.click(button("Time"));
@@ -250,7 +250,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "meanQueue" } });
   const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;

@@ -54,14 +54,14 @@ test("keeps status in one place and reveals warnings and new errors without page
   await page.getByRole("button", { name: "Zoom In", exact: true }).click();
   await expect(zoom).not.toHaveText(initialZoom!);
   await expect(status.getByRole("button", { name: "Errors: 0 · Warnings: 1" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Findings", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toBeHidden();
   await status.getByRole("button", { name: "Errors: 0 · Warnings: 1" }).click();
   await expect(page.getByRole("tab", { name: "Problems", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toContainText("LINT_TIMEOUT_BUDGET");
   await page.screenshot({ path: testInfo.outputPath("status-problems.png") });
 
-  await page.getByRole("tab", { name: "Answer", exact: true }).click();
+  await page.getByRole("tab", { name: "Findings", exact: true }).click();
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await page.getByTestId("rf__node-gateway").click();
   const handlers = page.getByLabel("Handlers", { exact: true });
@@ -78,12 +78,12 @@ test("keeps status in one place and reveals warnings and new errors without page
   await page.screenshot({ path: testInfo.outputPath("status-error.png") });
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(run).toBeEnabled();
-  await page.getByRole("tab", { name: "Answer", exact: true }).click();
+  await page.getByRole("tab", { name: "Findings", exact: true }).click();
   await run.click();
   await expect(status.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });
   await expect(page.getByText("COMPLETED", { exact: true })).toHaveCount(1);
   await expect(page.locator(".top-bar")).not.toContainText("Backend");
-  await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Findings", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("status-completed.png") });
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await page.getByRole("button", { name: "Analysis", exact: true }).click();

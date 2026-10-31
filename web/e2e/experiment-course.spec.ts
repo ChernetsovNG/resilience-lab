@@ -83,7 +83,7 @@ test("a real checkout result shares the course cursor with Timeline and playback
     await playback.fill("2");
     await expect(page.getByTestId("course-cursor")).toHaveAttribute("data-cursor-window", "2");
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 2 ·");
-    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    await page.getByRole("tab", { name: "Findings", exact: true }).click();
     await page.getByTestId("run-conditions").scrollIntoViewIfNeeded();
     await expect.poll(async () => {
       const strip = (await page.locator(".course-expanded").boundingBox())!;

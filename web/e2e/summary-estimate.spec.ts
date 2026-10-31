@@ -22,14 +22,14 @@ async function noOverflow(page: Page) {
   }))).toEqual({ horizontal: false, vertical: false, results: false });
 }
 
-test("Answer and all service metrics fit at 1440 px without editing documents", async ({ page, request }, testInfo) => {
+test("Findings and all service metrics fit at 1440 px without editing documents", async ({ page, request }, testInfo) => {
   const modelUrl = "/api/v1/workspace/document?path=retry-storm/retry-storm.model.json";
   const original = await (await request.get(modelUrl)).json();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toBeVisible();
   await page.getByRole("button", { name: "Run", exact: true }).click();
-  await expect(page.getByRole("tab", { name: "Answer", exact: true })).toHaveAttribute("aria-selected", "true");
-  const table = page.getByRole("table", { name: "Answer", exact: true });
+  await expect(page.getByRole("tab", { name: "Findings", exact: true })).toHaveAttribute("aria-selected", "true");
+  const table = page.getByRole("table", { name: "Findings", exact: true });
   await expect(table).toBeVisible();
   const insight = page.getByRole("region", { name: "Saturation insight", exact: true });
   await expect(insight.locator(".saturation-insight > p").first()).toContainText("dependency first");
@@ -109,11 +109,11 @@ test("failed estimation starts a real run only after explicit confirmation", asy
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(run).toBeEnabled();
   expect(jobs).toBe(0);
-  await expect(page.getByRole("table", { name: "Answer", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "Findings", exact: true })).toHaveCount(0);
   await run.click();
   await expect(confirmation).toContainText("without an estimate");
   await confirmation.getByRole("button", { name: "Start run", exact: true }).click();
-  await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Findings", exact: true })).toBeVisible();
   await expect(page.getByTestId("job-status")).toContainText("COMPLETED");
   expect(jobs).toBe(1);
   await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);

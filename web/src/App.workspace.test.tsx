@@ -245,8 +245,8 @@ describe("App stage 1 integration", () => {
     expect(experimentSelect().disabled).toBe(true);
     expect(button("Run").disabled).toBe(true);
     await act(async () => { gate.release(); });
-    await screen.findByRole("table", { name: "Answer" });
-    expect(within(screen.getByRole("table", { name: "Answer" })).getByText(/97\.5%/)).toBeTruthy();
+    await screen.findByRole("table", { name: "Findings" });
+    expect(within(screen.getByRole("table", { name: "Findings" })).getByText(/97\.5%/)).toBeTruthy();
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(screen.queryByRole("table")).toBeNull();

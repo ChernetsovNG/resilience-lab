@@ -29,7 +29,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     const toolbar = page.getByRole("region", { name: "Results context" });
     await expect(toolbar).toHaveCount(0);
     await expect(page.locator(".block-results:visible")).toHaveCount(0);
-    const table = page.getByRole("table", { name: "Answer" });
+    const table = page.getByRole("table", { name: "Findings" });
     expect(summary.variants[0].points[0].saturation.firstNodes[0]).toBeDefined();
 
     for (const variant of summary.variants) {

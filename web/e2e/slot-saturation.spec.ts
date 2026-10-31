@@ -4,7 +4,7 @@ import { selectExperiment } from "./fixtures";
 for (const locale of ["en-US", "ru-RU"]) {
   test.describe(`slot saturation (${locale})`, () => {
     test.use({ locale });
-    test("Answer names the connection pool from a real run", async ({ page, request }) => {
+    test("Findings names the connection pool from a real run", async ({ page, request }) => {
       const name = `slot-saturation-${locale}`;
       const model = { schemaVersion: 5, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0ms", rate: "300/s" }] }, deadline: "10s" } },

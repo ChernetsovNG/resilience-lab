@@ -12,7 +12,7 @@ async function run(page: Page) {
   const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));
   await page.getByRole("button", { name: "Run", exact: true }).click();
   const runId = /\/runs\/([^/]+)\/summary$/.exec((await response).url())![1];
-  await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Findings", exact: true })).toBeVisible();
   return runId;
 }
 

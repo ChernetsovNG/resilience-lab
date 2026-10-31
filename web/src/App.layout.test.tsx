@@ -95,13 +95,13 @@ it("remembers separate heights for all five result tabs across remounts", async 
   server(url => url.endsWith("/summary") ? { body: grid } : undefined);
   let view = await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   const height = () => Number(screen.getByRole("separator", { name: "Resize results panel" }).getAttribute("aria-valuenow"));
   const answer = height();
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
   await waitFor(() => expect(height()).toBeGreaterThan(answer));
   const sizes = new Map<string, number>();
-  for (const [index, tab] of ["Answer", "Timeline", "Assumptions", "Map", "Problems"].entries()) {
+  for (const [index, tab] of ["Findings", "Timeline", "Assumptions", "Map", "Problems"].entries()) {
     fireEvent.click(screen.getByRole("tab", { name: tab }));
     fireEvent.keyDown(screen.getByRole("separator", { name: "Resize results panel" }), { key: "Home" });
     for (let step = 0; step <= index; step++) fireEvent.keyDown(screen.getByRole("separator", { name: "Resize results panel" }), { key: "ArrowUp" });
@@ -110,7 +110,7 @@ it("remembers separate heights for all five result tabs across remounts", async 
   view.unmount();
   view = await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   for (const [tab, size] of sizes) {
     fireEvent.click(screen.getByRole("tab", { name: tab }));
     await waitFor(() => expect(height()).toBe(size));
@@ -124,7 +124,7 @@ it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving
   expect(screen.queryByRole("button", { name: "Analysis" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Answer" });
+  await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(button("Analysis"));
   expect(button("Analysis").getAttribute("aria-pressed")).toBe("true");
   expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(true);

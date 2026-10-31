@@ -81,7 +81,7 @@ test("Russian browser gets translated controls, catalog and results; language pr
   await page.screenshot({ path: testInfo.outputPath("russian-before-run.png") });
 
   await page.getByRole("button", { name: "Запустить", exact: true }).click();
-  const answer = page.getByRole("table", { name: "Ответ", exact: true });
+  const answer = page.getByRole("table", { name: "Выводы", exact: true });
   await expect(answer).toBeVisible();
   await expect(answer.getByRole("row", { name: /Доля успешных/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "Вывод о насыщении", exact: true })).toContainText("dependency");
@@ -149,7 +149,7 @@ test("View remains accessible on narrow screens during a run", async ({ page }) 
     await expect(view).toBeFocused();
   }
   hold = false;
-  await expect(page.getByRole("table", { name: "Ответ", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
 });
 
 test("an existing canvas notice follows the selected language", async ({ page }) => {

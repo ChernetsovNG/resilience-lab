@@ -92,7 +92,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
 });
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
-  test(`example, Run, Answer, Time and Timeline at ${viewport.width}×${viewport.height}${viewport.width === 1440 ? " with 125% text" : ""}`, async ({ page }, testInfo) => {
+  test(`example, Run, Findings, Time and Timeline at ${viewport.width}×${viewport.height}${viewport.width === 1440 ? " with 125% text" : ""}`, async ({ page }, testInfo) => {
     const directory = resolve(`../apps/server/build/e2e-workspace/responsive-${viewport.width}`);
     await mkdir(directory);
     try {
@@ -124,7 +124,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       await expect(run).toBeEnabled();
       await run.click();
       await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
-      await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
+      await expect(page.getByRole("table", { name: "Findings", exact: true })).toBeVisible();
       await expectDesktopLayout(page);
       await page.screenshot({ path: testInfo.outputPath(`answer-${viewport.width}.png`) });
 
