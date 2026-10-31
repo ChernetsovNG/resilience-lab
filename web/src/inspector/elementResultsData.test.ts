@@ -10,7 +10,7 @@ const window = (startMs: number, durationMs: number, meanLatencyMs: number | nul
       admittedAttempts: durationMs * 0.19,
       latency: { count: meanLatencyMs == null ? 0 : 1, sumMs: meanLatencyMs ?? 0, meanMs: meanLatencyMs,
     p50Ms: meanLatencyMs, p95Ms: meanLatencyMs, p99Ms: meanLatencyMs },
-      client: { originalArrivals: durationMs * 0.19 / 2.25 },
+      entries: { total: { originalArrivals: durationMs * 0.19 / 2.25 } },
       slotPools: { handlers: { busyIntegralMs: durationMs * 0.75, queueIntegralMs: durationMs * 2, capacityIntegralMs: durationMs, waitCount: 0, totalWaitMs: 0, queueFullCount: durationMs / 100, waitLimitCount: 0 } } });
 function fixture(): ElementResultsContext {
   const run = structuredClone(summary);
@@ -21,7 +21,8 @@ function fixture(): ElementResultsContext {
   run.variants[0].points[0].coordinates = { "gateway-to-middle.timeout": "150ms" };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     slotPoolSummaries: {},
-    totals: { measurementMs: 2000,
+    totals: {
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, measurementMs: 2000,
       sentAttempts: 30,
       retries: 10,
       succeeded: 20,
@@ -43,7 +44,8 @@ function fixture(): ElementResultsContext {
   return { summary: run, manifest: { ...manifest, series: { ...manifest.series!, measurementMs: 1025, windowMs: 100 } },
     runModel: model, currentModel: model, experiment, catalog, variantId: "baseline", pointId: "p0", replication: 0,
     window: null, selected: "gateway", nodes,
-    connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({ startMs,
+    connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 25,
       sentAttempts: 4,
       retries: 1,
@@ -60,6 +62,27 @@ function fixture(): ElementResultsContext {
 const values = (context: ElementResultsContext) => projectElementResults(context)!.values;
 
 describe("element results sources", () => {
+  it("resolves client summary bindings from the selected client's actual ID", () => {
+    const context = fixture();
+    const runModel = { ...model, blocks: { ...model.blocks,
+      "mobile-app": model.blocks.client, "partner-api": model.blocks.client } };
+    context.runModel = runModel;
+    context.currentModel = runModel;
+    context.selected = "partner-api";
+    const client = catalog.types.find(type => type.id === "client")!;
+    context.catalog = { ...catalog, types: catalog.types.map(type => type.id !== "client" ? type : {
+      ...client, outputs: [{ ...client.outputs[0], id: "successRate", unit: "PERCENT", kind: "RATIO",
+        calculation: { kind: "RATIO", field: "successes", divisor: "originalArrivals" },
+        summary: { source: "POOLED", intervalField: "successRate", calculation: { kind: "VALUE", field: "successRate.mean" } },
+        inspector: { order: 0, title: "Success rate", showValue: true } }],
+    }) };
+    const entry = (mean: number) => ({ pooledLatency: {}, failuresByReason: {},
+      successRate: { count: 2, mean, min: mean, max: mean } });
+    context.summary.variants[0].points[0].aggregate.entries.clients = {
+      "mobile-app": entry(0.5), "partner-api": entry(0.9),
+    };
+    expect(projectElementResults(context)?.values.successRate).toMatchObject({ value: 0.9, source: "replications" });
+  });
   it("uses pooled service totals and sample-weighted measurement-window latency of the selected replication", () => {
     const result = values(fixture());
     expect(result.utilization).toMatchObject({ value: 0.5, source: "pooled" });

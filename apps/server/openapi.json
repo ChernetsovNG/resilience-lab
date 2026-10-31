@@ -1722,19 +1722,41 @@
         },
         "required" : [ "slotPoolSummaries", "totals" ]
       },
-      "AggregateMetrics" : {
+      "AggregateEntries" : {
         "type" : "object",
         "properties" : {
-          "connections" : {
+          "classes" : {
             "type" : "object",
             "additionalProperties" : {
-              "$ref" : "#/components/schemas/AggregateConnectionMetrics"
+              "$ref" : "#/components/schemas/AggregateEntryMetrics"
             }
           },
-          "groups" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/ReplicaGroup"
+          "clients" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateEntryMetrics"
+            }
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/AggregateEntryMetrics"
+          }
+        },
+        "required" : [ "classes", "clients", "total" ]
+      },
+      "AggregateEntryMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "degradedRate" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "failuresByReason" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/MetricSummary"
             }
           },
           "p95LatencyMs" : {
@@ -1754,6 +1776,34 @@
           "pooledLatency" : {
             "$ref" : "#/components/schemas/LatencySummary"
           },
+          "successRate" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "failuresByReason", "pooledLatency" ]
+      },
+      "AggregateMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "connections" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateConnectionMetrics"
+            }
+          },
+          "entries" : {
+            "$ref" : "#/components/schemas/AggregateEntries"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicaGroup"
+            }
+          },
           "poolers" : {
             "type" : "object",
             "additionalProperties" : {
@@ -1765,16 +1815,9 @@
             "additionalProperties" : {
               "$ref" : "#/components/schemas/AggregateServiceMetrics"
             }
-          },
-          "successRate" : {
-            "oneOf" : [ {
-              "$ref" : "#/components/schemas/MetricSummary"
-            }, {
-              "type" : "null"
-            } ]
           }
         },
-        "required" : [ "connections", "groups", "pooledLatency", "poolers", "services" ]
+        "required" : [ "connections", "entries", "groups", "poolers", "services" ]
       },
       "AggregatePoolerMetrics" : {
         "type" : "object",
@@ -2032,7 +2075,26 @@
             "type" : "number",
             "format" : "double"
           },
+          "circuitOpenMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "circuitRejections" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "failed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failuresByReason" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "fallbacks" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -2056,6 +2118,10 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "retriesDenied" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "sentAttempts" : {
             "type" : "integer",
             "format" : "int64"
@@ -2075,7 +2141,7 @@
             "format" : "int64"
           }
         },
-        "required" : [ "backoffIntegralMs", "failed", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "slotPools", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "circuitOpenMs", "circuitRejections", "failed", "failuresByReason", "fallbacks", "inFlightIntegralMs", "measurementMs", "orphaned", "orphanedIntegralMs", "retries", "retriesDenied", "sentAttempts", "slotPools", "succeeded", "timeouts" ]
       },
       "ConnectionWindowMetrics" : {
         "type" : "object",
@@ -2084,11 +2150,30 @@
             "type" : "number",
             "format" : "double"
           },
+          "circuitOpenMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "circuitRejections" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "durationMs" : {
             "type" : "number",
             "format" : "double"
           },
           "failed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "failuresByReason" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "fallbacks" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -2108,6 +2193,10 @@
             "format" : "double"
           },
           "retries" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "retriesDenied" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -2134,7 +2223,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "backoffIntegralMs", "durationMs", "failed", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "sentAttempts", "slotPools", "startMs", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "circuitOpenMs", "circuitRejections", "durationMs", "failed", "failuresByReason", "fallbacks", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "retriesDenied", "sentAttempts", "slotPools", "startMs", "succeeded", "timeouts" ]
       },
       "Diagnostic" : {
         "type" : "object",
@@ -3433,6 +3522,12 @@
       "SeriesPart" : {
         "type" : "object",
         "properties" : {
+          "classes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/NodeSeries"
+            }
+          },
           "connections" : {
             "type" : "array",
             "items" : {
@@ -3465,11 +3560,17 @@
             "format" : "int32"
           }
         },
-        "required" : [ "connections", "fromWindow", "kind", "nodes", "profile", "schemaVersion", "untilWindow" ]
+        "required" : [ "classes", "connections", "fromWindow", "kind", "nodes", "profile", "schemaVersion", "untilWindow" ]
       },
       "SeriesPartReference" : {
         "type" : "object",
         "properties" : {
+          "classes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
           "connections" : {
             "type" : "array",
             "items" : {
@@ -3505,7 +3606,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "connections", "file", "fromWindow", "kind", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
+        "required" : [ "classes", "connections", "file", "fromWindow", "kind", "nodes", "sha256", "uncompressedBytes", "untilWindow" ]
       },
       "ServiceTotals" : {
         "type" : "object",
@@ -3514,11 +3615,30 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "ejectedMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "ejections" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "failures" : {
             "type" : "integer",
             "format" : "int64"
           },
+          "failuresByReason" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
           "measurementMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "notReadyMs" : {
             "type" : "number",
             "format" : "double"
           },
@@ -3527,6 +3647,18 @@
             "format" : "int64"
           },
           "originalArrivals" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "probeFailures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "probes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rateLimited" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -3545,7 +3677,7 @@
             "format" : "int64"
           }
         },
-        "required" : [ "admittedAttempts", "failures", "measurementMs", "offeredAttempts", "originalArrivals", "retries", "slotPools", "timeouts" ]
+        "required" : [ "admittedAttempts", "ejectedMs", "ejections", "failures", "failuresByReason", "measurementMs", "notReadyMs", "offeredAttempts", "originalArrivals", "probeFailures", "probes", "rateLimited", "retries", "slotPools", "timeouts" ]
       },
       "SlotPoolLabel" : {
         "type" : "object",
@@ -3764,22 +3896,57 @@
             "type" : [ "integer", "null" ],
             "format" : "int32"
           },
+          "degraded" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "durationMs" : {
             "type" : "number",
             "format" : "double"
+          },
+          "ejectedMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "ejections" : {
+            "type" : "integer",
+            "format" : "int32"
           },
           "failures" : {
             "type" : "integer",
             "format" : "int32"
           },
+          "failuresByReason" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
           "latency" : {
             "$ref" : "#/components/schemas/LatencyStatistics"
+          },
+          "notReadyMs" : {
+            "type" : "number",
+            "format" : "double"
           },
           "offeredAttempts" : {
             "type" : "integer",
             "format" : "int32"
           },
           "originalArrivals" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "probeFailures" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "probes" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "rateLimited" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -3806,7 +3973,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "admittedAttempts", "durationMs", "failures", "latency", "offeredAttempts", "originalArrivals", "retries", "slotPools", "startMs", "successes", "timeouts" ]
+        "required" : [ "admittedAttempts", "degraded", "durationMs", "ejectedMs", "ejections", "failures", "failuresByReason", "latency", "notReadyMs", "offeredAttempts", "originalArrivals", "probeFailures", "probes", "rateLimited", "retries", "slotPools", "startMs", "successes", "timeouts" ]
       },
       "WorkspaceChangeView" : {
         "type" : "object",

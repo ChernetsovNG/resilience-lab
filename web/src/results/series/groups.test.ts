@@ -9,9 +9,10 @@ const extrema = {
 };
 function groupPart() {
   return {
-    schemaVersion: 6, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1",
-    fromWindow: 0, untilWindow: 1, nodes: [],
+    schemaVersion: 7, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1",
+    fromWindow: 0, untilWindow: 1, nodes: [], classes: [],
     connections: [{ id: "worker-to-db", windows: [{
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
       startMs: 0, durationMs: 10, sentAttempts: 5, retries: 1, succeeded: 2,
       failed: 1, timeouts: 2, orphaned: 1, inFlightIntegralMs: 24,
       orphanedIntegralMs: 4, backoffIntegralMs: 3,
@@ -37,11 +38,12 @@ describe("replica group series", () => {
     const instance = { ...group, kind: "INSTANCE", connections: group.connections.map(row => ({ ...row, id: "worker-to-db#1" })) };
     const texts = [JSON.stringify(instance), JSON.stringify(group)];
     const index = {
-      schemaVersion: 6, endMs: 10, windowMs: 10,
+      schemaVersion: 7, endMs: 10, windowMs: 10,
       groups: [{ id: "worker-to-db", kind: "CONNECTION", instances: [
         { id: "worker-to-db#1", replica: 1 }, { id: "worker-to-db#2", replica: 2 }, { id: "worker-to-db#3", replica: 3 },
       ] }],
       parts: [instance, group].map((part, number) => ({
+        classes: [],
         file: `part-${number}.json.gz`, kind: part.kind, nodes: [],
         connections: part.connections.map(row => row.id), fromWindow: 0, untilWindow: 1,
         uncompressedBytes: texts[number].length, sha256: String(number).repeat(64),
@@ -66,26 +68,27 @@ describe("replica group series", () => {
     expect(downloaded).toEqual([1]);
   });
   it("rejects the previous schema instead of interpreting it as the new format", () => {
-    expect(() => decodeSeriesPart(JSON.stringify({ ...groupPart(), schemaVersion: 5 }))).toThrow(/schema version/i);
+    expect(() => decodeSeriesPart(JSON.stringify({ ...groupPart(), schemaVersion: 6 }))).toThrow(/schema version/i);
   });
 });
 
 it.each([false, true])("loads a service group and shared client context without extra instance parts (selected replica: %s)", async (withReplica) => {
-  const window = { startMs: 0, durationMs: 10, originalArrivals: 0, offeredAttempts: 15,
+  const window = {
+    failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs: 0, durationMs: 10, originalArrivals: 0, offeredAttempts: 15,
     admittedAttempts: 14, successes: 12, failures: 2, timeouts: 0, retries: 1,
     latency: { count: 3, sumMs: 3, sketch: [1, 0, 1, 64, 1] },
     slotPools: { handlers: { busyIntegralMs: 18, queueIntegralMs: 30, capacityIntegralMs: 30,
       waitCount: 2, totalWaitMs: 4, queueFullCount: 0, waitLimitCount: 1, replicaExtrema: extrema } } };
-  const group = { schemaVersion: 6, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
-    nodes: [{ id: "workers", windows: [{ ...window, clientOriginalArrivals: 7 }] }], connections: [] };
+  const group = { schemaVersion: 7, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
+    nodes: [{ id: "workers", windows: [{ ...window, clientOriginalArrivals: 7 }] }], classes: [], connections: [] };
   const instance = { ...group, kind: "INSTANCE", nodes: [{ id: "workers#1", windows: [window] }] };
   const client = { ...group, kind: "INSTANCE", nodes: [{ id: "client", windows: [{ ...window, originalArrivals: 7, slotPools: {} }] }] };
   const parts = [instance, group, client];
   const texts = parts.map(part => JSON.stringify(part));
-  const index = { schemaVersion: 6, endMs: 10, windowMs: 10,
+  const index = { schemaVersion: 7, endMs: 10, windowMs: 10,
     groups: [{ id: "workers", kind: "NODE", instances: [1, 2, 3].map(replica => ({ id: `workers#${replica}`, replica })) }],
     parts: parts.map((part, number) => ({ file: `part-${number}.json.gz`, kind: part.kind,
-      nodes: part.nodes.map(node => node.id), connections: [], fromWindow: 0, untilWindow: 1,
+      nodes: part.nodes.map(node => node.id), classes: [], connections: [], fromWindow: 0, untilWindow: 1,
       uncompressedBytes: texts[number].length, sha256: String(number).repeat(64) })),
   } as SeriesIndex;
   const downloaded: number[] = [];
@@ -98,6 +101,6 @@ it.each([false, true])("loads a service group and shared client context without 
   }, decoderFactory: () => ({ decode: async texts => texts.map(decodeSeriesPart), close: () => undefined }) });
   const result = await loader.load({ runId: "run", variant: "baseline", cell: "p0", replication: 0,
     nodes: withReplica ? ["workers", "workers#1"] : ["workers"], fromWindow: 0, untilWindow: 1 });
-  for (const node of result) expect(node.windows[0].client).toEqual({ originalArrivals: 7 });
+  for (const node of result) expect(node.windows[0].entries.total).toEqual({ originalArrivals: 7 });
   expect(downloaded).toEqual(withReplica ? [0, 1] : [1]);
 });

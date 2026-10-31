@@ -290,7 +290,7 @@ internal object Stage1Outputs {
             "Attempts admitted by the destination per original client request; values below 1 mean that not every request reached it.",
             OutputUnit.MULTIPLIER,
             OutputKind.RATIO,
-            ratio("target.admittedAttempts", "client.originalArrivals"),
+            ratio("target.admittedAttempts", "entries.total.originalArrivals"),
             OutputSummary(
                 calculation(OutputCalculationKind.VALUE, "target.admittedAmplification.mean"),
                 intervalField = "target.admittedAmplification",

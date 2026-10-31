@@ -9,8 +9,9 @@ import { setConfidenceLevel } from "../layout/confidenceLevel";
 import { SummaryTable } from "../layout/SummaryTable";
 
 const raw: SeriesPart = {
-  schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
-  nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({ startMs,
+  schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
+  nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({
+    failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs,
       durationMs: 100,
       originalArrivals: 0,
       admittedAttempts: 8,
@@ -21,7 +22,9 @@ const raw: SeriesPart = {
       timeouts: 1,
       latency: { count: index === 2 ? 9 : 1, sumMs: [999, 30, 180][index], sketch: [index === 2 ? 9 : 1] },
       slotPools: { handlers: { busyIntegralMs: 100, queueIntegralMs: 100, capacityIntegralMs: (2) * (100), waitCount: 0, totalWaitMs: 0, queueFullCount: 2, waitLimitCount: 0 } } })) })),
-  connections: [{ id: "gateway-to-middle", windows: [0, 100, 200].map(startMs => ({ startMs,
+  classes: [],
+  connections: [{ id: "gateway-to-middle", windows: [0, 100, 200].map(startMs => ({
+    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,
@@ -37,7 +40,7 @@ const raw: SeriesPart = {
 };
 const decoded = decodeSeriesPart(JSON.stringify(raw));
 const decodedNodes = decoded.nodes.map(node => ({ id: node.id,
-  windows: node.windows.map(frame => ({ ...frame.metrics, client: { originalArrivals: frame.admittedAttempts / 2.5 } })), latency: node.windows.map(frame => frame.latency),
+  windows: node.windows.map(frame => ({ ...frame.metrics, entries: { total: { originalArrivals: frame.admittedAttempts / 2.5 } } })), latency: node.windows.map(frame => frame.latency),
 }));
 function props(): ElementResultsProps {
   const run = structuredClone(summary);
@@ -47,7 +50,8 @@ function props(): ElementResultsProps {
   };
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     slotPoolSummaries: {},
-    totals: { measurementMs: 2000,
+    totals: {
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, measurementMs: 2000,
       sentAttempts: 30,
       retries: 10,
       succeeded: 20,

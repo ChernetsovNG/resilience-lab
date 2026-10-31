@@ -17,7 +17,7 @@ enum class OutputCalculationKind { VALUE, RATE, RATIO, NORMALIZED_RATIO, MEAN, Q
 /**
  * References existing artifact fields by dotted paths. Window paths are relative to the element's row;
  * summary paths are relative to its aggregate. `target` refers to a connection's target block,
- * `client` to original-arrival counts for the same window, `params` to effective run parameters.
+ * `entries.total` to all clients' original-arrival counts for the same window, `params` to effective run parameters.
  * `measurementLatency` and `replications` are the selected replication's covered-window statistics and run count.
  * NORMALIZED_RATIO divides [field] by the product of [divisor] and [capacity]; zero divisors mean no value.
  * MEAN and QUANTILE refer to a latency object; only QUANTILE uses [percentile].

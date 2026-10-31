@@ -67,7 +67,7 @@ class DegradationRunoutTest {
             AttemptOutcome.LOCAL_FAILURE,
             AttemptOutcome.SUCCEEDED,
         )
-        assertThat(rig.result.originalArrivals).isZero()
+        assertThat(rig.result.entries.total.originalArrivals).isZero()
         assertThat(
             rig.result.services
                 .getValue("entry")
@@ -95,9 +95,9 @@ class DegradationRunoutTest {
 
         assertArrivalTimes(expected, rig.result.arrivalTimesMs)
         assertThat(rig.result.arrivalTimesMs).allMatch { it >= 0.0 && it < 25.0 }
-        assertThat(rig.result.originalArrivals).isEqualTo(expected.size)
-        assertThat(rig.result.successes).isEqualTo(expected.size)
-        assertThat(rig.result.failures).isZero()
+        assertThat(rig.result.entries.total.originalArrivals).isEqualTo(expected.size)
+        assertThat(rig.result.entries.total.successes).isEqualTo(expected.size)
+        assertThat(rig.result.entries.total.failures).isZero()
         assertThat(
             rig.result.services
                 .getValue("entry")
@@ -150,10 +150,10 @@ class DegradationRunoutTest {
         assertThat(warmup.originalArrivals).isZero()
         assertThat(warmup.offeredAttempts).containsExactlyEntriesOf(mapOf("entry" to 0, "backend" to 0))
         assertArrivalTimes(measurementArrivals, rig.result.arrivalTimesMs)
-        assertThat(rig.result.originalArrivals).isEqualTo(measurementArrivals.size)
-        assertThat(rig.result.successes).isEqualTo(measurementArrivals.size)
-        assertThat(rig.result.failures).isZero()
-        assertThat(rig.result.allLatency.count).isEqualTo(measurementArrivals.size.toLong())
+        assertThat(rig.result.entries.total.originalArrivals).isEqualTo(measurementArrivals.size)
+        assertThat(rig.result.entries.total.successes).isEqualTo(measurementArrivals.size)
+        assertThat(rig.result.entries.total.failures).isZero()
+        assertThat(rig.result.entries.total.allLatency.count).isEqualTo(measurementArrivals.size.toLong())
         for (serviceId in listOf("entry", "backend")) {
             assertThat(
                 rig.result.services
@@ -178,7 +178,7 @@ class DegradationRunoutTest {
         }
         val bins =
             resiliencelab.core.experiment.LatencySketch
-                .fromBins(rig.result.allLatency.sketch)
+                .fromBins(rig.result.entries.total.allLatency.sketch)
         assertThat(bins.percentile(0.00001)!!).isGreaterThanOrEqualTo(40.0 * (1 - 1.0 / 128))
         assertThat(rig.result.arrivalTimesMs).allMatch { it + 40.0 > 15.0 }
         assertDrained(rig.reliabilityModel)
@@ -204,10 +204,10 @@ class DegradationRunoutTest {
         val rig = simulateOpen(chain, execution)
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
-        assertThat(rig.result.originalArrivals).isEqualTo(1)
-        assertThat(rig.result.successes).isZero()
-        assertThat(rig.result.failures).isEqualTo(1)
-        assertLatencies(rig.result.failedLatency, gapMs * 0.75)
+        assertThat(rig.result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(rig.result.entries.total.successes).isZero()
+        assertThat(rig.result.entries.total.failures).isEqualTo(1)
+        assertLatencies(rig.result.entries.total.failedLatency, gapMs * 0.75)
         assertThat(
             rig.result.services
                 .getValue("entry")
@@ -261,7 +261,7 @@ class DegradationRunoutTest {
         val rig = simulateOpen(chain, execution, manualInvocations = listOf(blocker))
 
         assertArrivalTimes(listOf(window.firstMs), rig.result.arrivalTimesMs)
-        assertLatencies(rig.result.failedLatency, 10.0)
+        assertLatencies(rig.result.entries.total.failedLatency, 10.0)
         assertThat(
             rig.result.services
                 .getValue("entry")
@@ -483,7 +483,7 @@ class DegradationRunoutTest {
                         Observation(
                             timeMs = time,
                             activeOriginalRequests = reliabilityModel.activeOriginalRequests,
-                            originalArrivals = result.originalArrivals,
+                            originalArrivals = result.entries.total.originalArrivals,
                             entryHandlersBusy = (model.getModelElement("entry") as ResourceWithQ).numBusy,
                             offeredAttempts = result.services.mapValues { (_, metrics) -> metrics.offeredAttempts },
                         )

@@ -120,13 +120,23 @@ class ConnectionAggregationTest {
 
     private fun replication(connection: ConnectionMetrics): ReplicationResult =
         ReplicationResult(
-            allLatency = LatencyStatistics(),
-            successfulLatency = LatencyStatistics(),
-            failedLatency = LatencyStatistics(),
-            originalArrivals = 1,
-            successes = 0,
-            failures = 1,
+            entries =
+                ReplicationEntries(
+                    EntryMetrics(
+                        allLatency = LatencyStatistics(),
+                        successfulLatency = LatencyStatistics(),
+                        failedLatency = LatencyStatistics(),
+                        originalArrivals = 1,
+                        successes = 0,
+                        failures = 1,
+                    ),
+                    emptyMap(),
+                    emptyMap(),
+                ),
             services = emptyMap(),
-            connections = mapOf("call" to connection),
+            connections =
+                mapOf(
+                    "call" to connection,
+                ),
         )
 }

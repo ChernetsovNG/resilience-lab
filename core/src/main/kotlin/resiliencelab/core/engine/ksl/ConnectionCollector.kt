@@ -37,6 +37,16 @@ internal class ConnectionCollector(
         states.getValue(id).record(timeMs, event, measured, latencyMs)
     }
 
+    fun failure(
+        id: String,
+        reason: String,
+        measured: Boolean,
+    ) {
+        if (!measured) return
+        val reasons = states.getValue(id).failuresByReason
+        reasons[reason] = reasons.getOrDefault(reason, 0) + 1
+    }
+
     fun poolState(
         id: String,
         timeMs: Double,
@@ -106,6 +116,7 @@ internal class ConnectionCollector(
         var sentAttempts = 0
         var retries = 0
         var succeeded = 0
+        val failuresByReason = sortedMapOf<String, Int>()
         var failed = 0
         var timeouts = 0
         var orphaned = 0
@@ -191,6 +202,7 @@ internal class ConnectionCollector(
                 backoffSeries.integral,
                 endMs - startMs,
                 latency.snapshot(),
+                failuresByReason = failuresByReason.toMap(),
                 slotPools =
                     if (ownsPool) {
                         mapOf(

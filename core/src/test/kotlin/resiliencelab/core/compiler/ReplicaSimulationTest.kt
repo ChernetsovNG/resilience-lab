@@ -197,9 +197,9 @@ class ReplicaSimulationTest {
             }
         val graph = documents.graph(source, fault)
         val (result, outcomes) = run(graph)
-        assertThat(outcomes).containsOnly(AttemptOutcome.DOWNSTREAM_FAILURE)
+        assertThat(outcomes).containsOnly(AttemptOutcome.LOCAL_FAILURE)
         assertThat(result.services.getValue("tail").offeredAttempts).isZero()
-        assertThat(result.failures).isEqualTo(3)
+        assertThat(result.entries.total.failures).isEqualTo(3)
         for (number in 1..3) {
             assertThat(result.connections.getValue("worker-to-tail#$number").sentAttempts).isEqualTo(2)
             assertThat(result.connections.getValue("worker-to-tail#$number").retries).isEqualTo(1)
@@ -227,7 +227,7 @@ class ReplicaSimulationTest {
         val (result, outcomes) = run(graph)
         assertThat(outcomes).containsOnly(AttemptOutcome.SUCCEEDED)
         assertThat((1..3).map { result.services.getValue("gateway#$it").offeredAttempts }).containsExactly(1, 1, 1)
-        assertThat(result.successes).isEqualTo(3)
+        assertThat(result.entries.total.successes).isEqualTo(3)
     }
 
     private fun roundRobin() =

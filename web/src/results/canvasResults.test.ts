@@ -165,7 +165,8 @@ it("projects connection totals independently of the target service", () => {
   const run = fixture();
   run.variants[0].points[0].aggregate.connections["gateway-to-middle"] = {
     slotPoolSummaries: {},
-    totals: { sentAttempts: 40,
+    totals: {
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, sentAttempts: 40,
       retries: 10,
       succeeded: 20,
       failed: 10,
@@ -188,13 +189,14 @@ it("projects connection totals independently of the target service", () => {
   const frame = windowCanvasResults(result, [
     { id: "gateway", windows: [recordedWindow({ offeredAttempts: 9999,
       admittedAttempts: 99,
-      client: { originalArrivals: 1 },
+      entries: { total: { originalArrivals: 1 } },
       slotPools: { handlers: { busyIntegralMs: 50, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
     { id: "middle", windows: [recordedWindow({ offeredAttempts: 9999,
       admittedAttempts: 77,
-      client: { originalArrivals: 1 },
+      entries: { total: { originalArrivals: 1 } },
       slotPools: { handlers: { busyIntegralMs: 50, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
-  ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{ startMs: 0,
+  ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
+    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 2,
       retries: 1,

@@ -12,7 +12,7 @@ internal class CallAttempt(
     val timeoutEvent: KSLEvent<*>,
     private val caller: ReliabilityModel.ServiceInvocation,
     private val recordTimeout: (Boolean) -> Unit,
-    private val recordResponse: (Boolean) -> Unit,
+    private val recordResponse: (AttemptOutcome) -> Unit,
     private val recordOrphanCompleted: () -> Unit,
 ) {
     var status: AttemptOutcome = AttemptOutcome.PENDING
@@ -22,13 +22,8 @@ internal class CallAttempt(
 
     fun onChildCompleted() {
         if (status != AttemptOutcome.PENDING || child.noResponse) return
-        status =
-            when (child.outcome) {
-                AttemptOutcome.SUCCEEDED -> AttemptOutcome.SUCCEEDED
-                AttemptOutcome.NO_ROUTE -> AttemptOutcome.NO_ROUTE
-                else -> AttemptOutcome.DOWNSTREAM_FAILURE
-            }
-        recordResponse(status == AttemptOutcome.SUCCEEDED)
+        status = child.outcome
+        recordResponse(status)
         if (timeoutEvent.isScheduled) {
             timeoutEvent.cancel = true
         }

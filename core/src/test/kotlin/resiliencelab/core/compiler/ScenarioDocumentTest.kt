@@ -136,11 +136,11 @@ class ScenarioDocumentTest {
         val compiled = compile(source).experiment!!
         val result = ExperimentExecutor(1).use { it.run(compiled) }
         result.variants.single().points.single().replications.forEach { replication ->
-            assertThat(replication.originalArrivals).isPositive()
-            assertThat(replication.successes).isEqualTo(replication.originalArrivals)
-            assertThat(replication.allLatency.sumMs).isCloseTo(7.0 * replication.originalArrivals, offset(1e-9))
-            assertThat(replication.connections.getValue("db").sentAttempts).isEqualTo(2 * replication.originalArrivals)
-            assertThat(replication.connections.getValue("payment").sentAttempts).isEqualTo(replication.originalArrivals)
+            assertThat(replication.entries.total.originalArrivals).isPositive()
+            assertThat(replication.entries.total.successes).isEqualTo(replication.entries.total.originalArrivals)
+            assertThat(replication.entries.total.allLatency.sumMs).isCloseTo(7.0 * replication.entries.total.originalArrivals, offset(1e-9))
+            assertThat(replication.connections.getValue("db").sentAttempts).isEqualTo(2 * replication.entries.total.originalArrivals)
+            assertThat(replication.connections.getValue("payment").sentAttempts).isEqualTo(replication.entries.total.originalArrivals)
             assertThat(replication.connections.getValue("db").retries).isZero()
         }
     }
@@ -173,8 +173,10 @@ class ScenarioDocumentTest {
                 ).experiment!!
         for ((compiled, duration, succeeds) in listOf(Triple(inherited, 5.0, false), Triple(explicit, 3.0, true))) {
             ExperimentExecutor(1).use { it.run(compiled) }.variants.single().points.single().replications.forEach { replication ->
-                assertThat(replication.successes).isEqualTo(if (succeeds) replication.originalArrivals else 0)
-                assertThat(replication.allLatency.sumMs).isCloseTo(duration * replication.originalArrivals, offset(1e-9))
+                assertThat(replication.entries.total.successes).isEqualTo(if (succeeds) replication.entries.total.originalArrivals else 0)
+                assertThat(
+                    replication.entries.total.allLatency.sumMs,
+                ).isCloseTo(duration * replication.entries.total.originalArrivals, offset(1e-9))
             }
         }
     }
@@ -191,9 +193,9 @@ class ScenarioDocumentTest {
             )
         val run = ExperimentExecutor(1).use { it.run(compile(source).experiment!!) }
         run.variants.single().points.single().replications.forEach { result ->
-            assertThat(result.originalArrivals).isPositive()
-            assertThat(result.failures).isEqualTo(result.originalArrivals)
-            assertThat(result.allLatency.sumMs).isCloseTo(7.0 * result.originalArrivals, offset(1e-9))
+            assertThat(result.entries.total.originalArrivals).isPositive()
+            assertThat(result.entries.total.failures).isEqualTo(result.entries.total.originalArrivals)
+            assertThat(result.entries.total.allLatency.sumMs).isCloseTo(7.0 * result.entries.total.originalArrivals, offset(1e-9))
             assertThat(result.connections.values).allSatisfy { assertThat(it.sentAttempts).isZero() }
         }
     }

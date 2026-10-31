@@ -1,15 +1,18 @@
 package resiliencelab.core.results
-
 import kotlinx.serialization.json.Json
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.io.TempDir
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.execution.ExperimentTask
+import resiliencelab.core.experiment.AggregateEntries
+import resiliencelab.core.experiment.AggregateEntryMetrics
 import resiliencelab.core.experiment.AggregateMetrics
+import resiliencelab.core.experiment.EntryMetrics
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.LatencySummary
+import resiliencelab.core.experiment.ReplicationEntries
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
@@ -17,9 +20,11 @@ import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.FileWorkspace
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.test.Test
 
 class RunArtifactTest {
@@ -32,13 +37,20 @@ class RunArtifactTest {
         val directory = ".results/e/run-1/series/baseline/p0/rep-0"
         val result =
             ReplicationResult(
+                entries =
+                    ReplicationEntries(
+                        EntryMetrics(
+                            allLatency = LatencyStatistics(count = 2, sumMs = 30.0),
+                            successfulLatency = LatencyStatistics(count = 1, sumMs = 10.0),
+                            failedLatency = LatencyStatistics(count = 1, sumMs = 20.0),
+                            originalArrivals = 2,
+                            successes = 1,
+                            failures = 1,
+                        ),
+                        emptyMap(),
+                        emptyMap(),
+                    ),
                 arrivalTimesMs = listOf(1.0, 2.0),
-                allLatency = LatencyStatistics(count = 2, sumMs = 30.0),
-                successfulLatency = LatencyStatistics(count = 1, sumMs = 10.0),
-                failedLatency = LatencyStatistics(count = 1, sumMs = 20.0),
-                originalArrivals = 2,
-                successes = 1,
-                failures = 1,
                 services = emptyMap(),
             )
 
@@ -52,7 +64,10 @@ class RunArtifactTest {
         val artifact = Json.decodeFromString(ReplicationArtifact.serializer(), text)
         assertThat(artifact.result).isEqualTo(result.copy(arrivalTimesMs = emptyList()))
         assertThat(text).isEqualTo(
-            DocumentCodec.encode(ReplicationArtifact.serializer(), ReplicationArtifact(5, LatencySketch.PROFILE, "ms", result)),
+            DocumentCodec.encode(
+                ReplicationArtifact.serializer(),
+                ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result),
+            ),
         )
         assertThat(text).doesNotContain("arrivalTimesMs")
         val written = writer.write(".results/e/run-1", manifest(), summary())
@@ -255,6 +270,34 @@ class RunArtifactTest {
         assertThat(invalid).containsExactly(target)
     }
 
+    @Test
+    fun `old replication version is rejected before decoding its obsolete result shape`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/old"
+        val bytes =
+            ByteArrayOutputStream()
+                .also { buffer ->
+                    GZIPOutputStream(buffer).use { it.write("{\"schemaVersion\":5,\"result\":{}}".toByteArray()) }
+                }.toByteArray()
+        workspace.createBytes("$directory/series/baseline/p0/rep-0/replication.json.gz", bytes)
+        assertThatThrownBy {
+            ArtifactWriter(workspace).summarize(
+                directory,
+                "e.experiment.json",
+                listOf("baseline" to "Baseline"),
+                1,
+                listOf(GridPoint("p0", emptyMap())),
+                emptyList(),
+                emptyList(),
+            )
+        }.isInstanceOf(UnsupportedArtifactVersionException::class.java)
+            .hasMessageContaining("replication schemaVersion 5")
+            .hasMessageContaining("expected 6")
+            .hasMessageContaining("run again")
+    }
+
     private fun exampleTasks() =
         listOf("baseline", "no-retries").flatMap { variant ->
             (0 until 2).map { replication -> ExperimentTask(variant, "p0", replication) }
@@ -286,7 +329,15 @@ class RunArtifactTest {
                             PointSummary(
                                 "p0",
                                 emptyMap(),
-                                AggregateMetrics(LatencySummary(null, null, null), null, null, null, emptyMap()),
+                                AggregateMetrics(
+                                    entries =
+                                        AggregateEntries(
+                                            AggregateEntryMetrics(LatencySummary(null, null, null), null, null, null),
+                                            emptyMap(),
+                                            emptyMap(),
+                                        ),
+                                    services = emptyMap(),
+                                ),
                                 SaturationSummary(
                                     SaturationRule(),
                                     2,

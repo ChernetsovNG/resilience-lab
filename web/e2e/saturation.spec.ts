@@ -47,7 +47,7 @@ test("shows the retry-storm saturation conclusion from the real summary for each
           await expect(insight).toContainText("No saturation.");
           await expect(insight.getByText(/^Capacity headroom/)).toBeVisible();
           await expect(insight).toContainText("largest mean number of queued requests");
-          await expect(insight).toContainText(`entry p99 ${formatDuration(point.aggregate.pooledLatency.all?.p99Ms)}`);
+          await expect(insight).toContainText(`entry p99 ${formatDuration(point.aggregate.entries.total.pooledLatency.all?.p99Ms)}`);
         } else {
           expect(first).toBeDefined();
           await expect(insight).toContainText(`${first.label.message} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);

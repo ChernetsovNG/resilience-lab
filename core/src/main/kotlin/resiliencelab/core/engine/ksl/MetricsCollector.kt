@@ -1,8 +1,10 @@
 package resiliencelab.core.engine.ksl
 
+import resiliencelab.core.experiment.EntryMetrics
 import resiliencelab.core.experiment.LatencyAccumulator
 import resiliencelab.core.experiment.ReplicaGroup
 import resiliencelab.core.experiment.ReplicaGroups
+import resiliencelab.core.experiment.ReplicationEntries
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.TimeWeightedSeries
@@ -22,6 +24,8 @@ class MetricsCollector(
     private val measurementEndMs: Double,
     private val currentTimeMs: () -> Double,
     private val clientId: String = "client",
+    private val clientIds: List<String> = listOf(clientId),
+    private val classIds: List<String> = listOf("default"),
     private val windowMs: Double = (measurementEndMs - measurementStartMs) / 100.0,
     private val connectionIds: List<String> = emptyList(),
     private val connectionPoolSizes: Map<String, Int> = emptyMap(),
@@ -29,21 +33,29 @@ class MetricsCollector(
     private val onWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { _, _, _ -> },
 ) {
     private val arrivalTimesMs = mutableListOf<Double>()
-    private var allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
-    private var successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
-    private var failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
+    private var totalEntry = EntryCollector("total")
+    private var clientEntries = clientIds.sorted().associateWith { EntryCollector("client=$it") }
+    private var classEntries = classIds.distinct().sorted().associateWith { EntryCollector("class=$it") }
     private val groupedWindow: (Int, List<NodeWindow>, List<ConnectionWindow>) -> Unit = { index, nodes, calls ->
         onWindow(
             index,
-            nodes + ReplicaGroups.nodeWindows(groups, nodes, clientId),
+            nodes + ReplicaGroups.nodeWindows(groups, nodes, clientIds = clientIds),
             calls + ReplicaGroups.connectionWindows(groups, calls),
         )
     }
-    private var windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, groupedWindow)
+    private var windows =
+        WindowCollector(
+            clientId,
+            services,
+            measurementEndMs,
+            windowMs,
+            connectionIds,
+            connectionPoolSizes,
+            clientIds,
+            classIds,
+            groupedWindow,
+        )
     private var connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
-    private var originalArrivals = 0
-    private var successes = 0
-    private var failures = 0
     private var poolerMetrics = newPoolerMetrics()
     private val serviceMetrics =
         services.filter { it.pooler == null }.associateTo(linkedMapOf()) { service ->
@@ -59,12 +71,12 @@ class MetricsCollector(
             groups,
             ReplicationResult(
                 arrivalTimesMs = arrivalTimesMs.toList(),
-                allLatency = allLatency.snapshot(),
-                successfulLatency = successfulLatency.snapshot(),
-                failedLatency = failedLatency.snapshot(),
-                originalArrivals = originalArrivals,
-                successes = successes,
-                failures = failures,
+                entries =
+                    ReplicationEntries(
+                        totalEntry.snapshot(),
+                        clientEntries.mapValues { it.value.snapshot() },
+                        classEntries.mapValues { it.value.snapshot() },
+                    ),
                 services = serviceMetrics.mapValues { (_, metrics) -> metrics.snapshot() },
                 connections = connections.snapshot(),
                 poolers = poolerMetrics.mapValues { it.value.snapshot() },
@@ -74,14 +86,22 @@ class MetricsCollector(
 
     internal fun reset() {
         arrivalTimesMs.clear()
-        allLatency = LatencyAccumulator(context = "node=$clientId window=cohort all")
-        successfulLatency = LatencyAccumulator(context = "node=$clientId window=cohort successful")
-        failedLatency = LatencyAccumulator(context = "node=$clientId window=cohort failed")
-        windows = WindowCollector(clientId, services, measurementEndMs, windowMs, connectionIds, connectionPoolSizes, groupedWindow)
+        totalEntry = EntryCollector("total")
+        clientEntries = clientIds.sorted().associateWith { EntryCollector("client=$it") }
+        classEntries = classIds.distinct().sorted().associateWith { EntryCollector("class=$it") }
+        windows =
+            WindowCollector(
+                clientId,
+                services,
+                measurementEndMs,
+                windowMs,
+                connectionIds,
+                connectionPoolSizes,
+                clientIds,
+                classIds,
+                groupedWindow,
+            )
         connections = ConnectionCollector(connectionIds, measurementStartMs, measurementEndMs, connectionPoolSizes)
-        originalArrivals = 0
-        successes = 0
-        failures = 0
         serviceMetrics.values.forEach { it.reset() }
         poolerMetrics = newPoolerMetrics()
     }
@@ -203,11 +223,13 @@ class MetricsCollector(
     internal fun recordOriginalArrival(
         timeMs: Double,
         measured: Boolean = true,
+        clientId: String = this.clientId,
+        requestClass: String = "default",
     ) {
-        windows.originalArrival(timeMs)
+        windows.originalArrival(timeMs, clientId, requestClass)
         if (measured) {
             arrivalTimesMs += timeMs
-            originalArrivals++
+            listOf(totalEntry, clientEntries.getValue(clientId), classEntries.getValue(requestClass)).forEach { it.originalArrivals++ }
         }
     }
 
@@ -216,18 +238,36 @@ class MetricsCollector(
         completionTimeMs: Double,
         succeeded: Boolean,
         measured: Boolean = true,
+        clientId: String = this.clientId,
+        requestClass: String = "default",
+        failureReason: String? = if (succeeded) null else "error",
     ) {
         val latencyMs = completionTimeMs - arrivalTimeMs
-        windows.originalCompletion(completionTimeMs, latencyMs, succeeded)
+        windows.originalCompletion(completionTimeMs, latencyMs, succeeded, clientId, requestClass, failureReason)
         if (!measured) return
-        allLatency.add(latencyMs)
-        if (succeeded) {
-            successfulLatency.add(latencyMs)
-            successes++
-        } else {
-            failedLatency.add(latencyMs)
-            failures++
+        listOf(totalEntry, clientEntries.getValue(clientId), classEntries.getValue(requestClass)).forEach {
+            it.complete(latencyMs, succeeded, failureReason)
         }
+    }
+
+    internal fun recordServiceFailure(
+        serviceId: String,
+        outcome: AttemptOutcome,
+        measured: Boolean,
+    ) {
+        val reason = outcome.failureReason ?: return
+        windows.failure(serviceId, currentTimeMs(), reason)
+        if (measured) serviceMetrics[serviceId]?.failuresByReason?.let { it[reason] = it.getOrDefault(reason, 0) + 1 }
+    }
+
+    internal fun recordConnectionFailure(
+        id: String,
+        outcome: AttemptOutcome,
+        measured: Boolean,
+    ) {
+        val reason = outcome.failureReason ?: return
+        windows.connectionFailure(id, currentTimeMs(), reason)
+        connections.failure(id, reason, measured)
     }
 
     internal fun recordOffered(
@@ -344,6 +384,46 @@ class MetricsCollector(
         if (measured) poolerMetrics.getValue(id).waitCompleted(acquisition)
     }
 
+    private class EntryCollector(
+        context: String,
+    ) {
+        private val allLatency = LatencyAccumulator(context = "$context cohort all")
+        private val successfulLatency = LatencyAccumulator(context = "$context cohort successful")
+        private val failedLatency = LatencyAccumulator(context = "$context cohort failed")
+        var originalArrivals = 0
+        private var successes = 0
+        private var failures = 0
+        private val reasons = sortedMapOf<String, Int>()
+
+        fun complete(
+            latencyMs: Double,
+            succeeded: Boolean,
+            reason: String?,
+        ) {
+            allLatency.add(latencyMs)
+            if (succeeded) {
+                successfulLatency.add(latencyMs)
+                successes++
+            } else {
+                failedLatency.add(latencyMs)
+                failures++
+                val code = requireNotNull(reason)
+                reasons[code] = reasons.getOrDefault(code, 0) + 1
+            }
+        }
+
+        fun snapshot() =
+            EntryMetrics(
+                allLatency.snapshot(),
+                successfulLatency.snapshot(),
+                failedLatency.snapshot(),
+                originalArrivals,
+                successes,
+                failures,
+                failuresByReason = reasons.toMap(),
+            )
+    }
+
     private class MutableServiceMetrics(
         private val configuredHandlers: Int,
         private val measurementStartMs: Double,
@@ -356,6 +436,7 @@ class MetricsCollector(
         var timeouts = 0
         var retries = 0
         var failures = 0
+        val failuresByReason = sortedMapOf<String, Int>()
         var queueRejections = 0
         var queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
@@ -368,6 +449,7 @@ class MetricsCollector(
             timeouts = 0
             retries = 0
             failures = 0
+            failuresByReason.clear()
             queueRejections = 0
             queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
@@ -386,6 +468,7 @@ class MetricsCollector(
                 timeouts = timeouts,
                 retries = retries,
                 failures = failures,
+                failuresByReason = failuresByReason.toMap(),
                 measurementMs = measurementEndMs - measurementStartMs,
                 queueDurationsMs = queueLengthSeries.durations,
                 latency = latency.snapshot(),

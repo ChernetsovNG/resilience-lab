@@ -24,7 +24,7 @@ it("shows axis names and actual coordinates without raw paths or point IDs", () 
 it.each([false, true])("updates Map intervals and descriptions without changing the mean (two axes: %s)", twoAxes => {
   const run = gridSummary(twoAxes);
   run.variants[0].replications = 20;
-  run.variants[0].points[0].aggregate.successRate = { count: 10, mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
+  run.variants[0].points[0].aggregate.entries.total.successRate = { count: 10, mean: 0.5, stdDev: 0.1, min: 0.3, max: 0.7 };
   render(<><SummaryTable summary={run} /><GridMap summary={run} activeVariantId="baseline" pointId="p0" /></>);
   const points = screen.getByRole(twoAxes ? "table" : "list", { name: twoAxes ? "Parameter heatmap" : "Map points" });
   const point = within(points).getAllByRole("button")[0] as HTMLButtonElement;
@@ -45,7 +45,9 @@ function gridSummary(twoAxes = true) {
   result.variants[0].points = Array.from({ length: twoAxes ? 6 : 3 }, (_, index) => ({
     ...template, id: `p${index}`, coordinates: {}, aggregate: {
       ...template.aggregate,
-      successRate: { count: 2, mean: index / 10, stdDev: 0.02, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
+      entries: { ...template.aggregate.entries, total: { ...template.aggregate.entries.total,
+        successRate: { count: 2, mean: index / 10, stdDev: 0.02, min: 0, max: 1, ci95Low: index / 10 - 0.2, ci95High: index / 10 + 0.2 },
+      } },
     },
   }));
   return result;
@@ -55,7 +57,7 @@ describe("Map summary data", () => {
   it("places the first axis on rows, preserving unsorted values and duplicates by point ID", () => {
     const grid = gridSummary();
     const cells = gridCells(grid.grid, [...grid.variants[0].points].reverse());
-    expect(cells.map((cell) => [cell.id, cell.row, cell.column, cell.point?.aggregate.successRate?.mean])).toEqual([
+    expect(cells.map((cell) => [cell.id, cell.row, cell.column, cell.point?.aggregate.entries.total.successRate?.mean])).toEqual([
       ["p0", 0, 0, 0], ["p1", 0, 1, 0.1], ["p2", 1, 0, 0.2],
       ["p3", 1, 1, 0.3], ["p4", 2, 0, 0.4], ["p5", 2, 1, 0.5],
     ]);

@@ -55,8 +55,11 @@ class SketchAccuracyIntegrationTest {
                             if (succeeded) successful += latency else failed += latency
                         },
                     ).runReplication()
-                listOf(result.allLatency to all, result.successfulLatency to successful, result.failedLatency to failed)
-                    .forEach { (statistics, exact) -> assertAccuracy(statistics, exact) }
+                listOf(
+                    result.entries.total.allLatency to all,
+                    result.entries.total.successfulLatency to successful,
+                    result.entries.total.failedLatency to failed,
+                ).forEach { (statistics, exact) -> assertAccuracy(statistics, exact) }
             }
         }
     }
@@ -95,8 +98,8 @@ class SketchAccuracyIntegrationTest {
         val client = windows.map { rows -> rows.single { it.id == "client" }.metrics }
         assertThat(client.sumOf { it.successes }).isEqualTo(1)
         assertThat(client.sumOf { it.originalArrivals }).isEqualTo(3)
-        assertThat(result.successes).isEqualTo(2)
-        assertThat(result.originalArrivals).isEqualTo(2)
+        assertThat(result.entries.total.successes).isEqualTo(2)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(2)
         assertThat(client.last().durationMs).isEqualTo(5.0)
         val services = windows.map { rows -> rows.single { it.id == "service" }.metrics }
         assertThat(services.sumOf { it.slotPools.getValue("handlers").busyIntegralMs }).isEqualTo(25.0)

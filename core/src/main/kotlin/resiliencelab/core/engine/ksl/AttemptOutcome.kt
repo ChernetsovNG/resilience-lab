@@ -1,17 +1,22 @@
 package resiliencelab.core.engine.ksl
 
 /**
- * Describes invocation and caller-side attempt states; timeout and deadline outcomes do not imply cancellation
- * of work already accepted downstream.
+ * Invocation and caller-side attempt states mapped to the fixed artifact failure codes.
+ * Timeout and deadline outcomes do not cancel accepted downstream work.
  */
-enum class AttemptOutcome {
+enum class AttemptOutcome(
+    val failureReason: String? = null,
+) {
     PENDING,
     SUCCEEDED,
-    LOCAL_FAILURE,
-    DOWNSTREAM_FAILURE,
-    NO_ROUTE,
-    TIMED_OUT,
-    ACQUIRE_TIMED_OUT,
-    QUEUE_REJECTED,
-    DEADLINE_EXCEEDED,
+    LOCAL_FAILURE("error"),
+    UNAVAILABLE("unavailable"),
+    NO_ROUTE("noRoute"),
+    TIMED_OUT("timeout"),
+    ACQUIRE_TIMED_OUT("waitLimit"),
+    QUEUE_REJECTED("queueFull"),
+    DEADLINE_EXCEEDED("deadline"),
+    CIRCUIT_OPEN("circuitOpen"),
+    RATE_LIMITED("rateLimited"),
+    NO_READY_TARGET("noReadyTarget"),
 }

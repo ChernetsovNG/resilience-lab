@@ -205,7 +205,7 @@ export const noSaturation = {
 };
 
 export const summary: RunSummary = {
-  schemaVersion: 15,
+  schemaVersion: 16,
   grid: [],
   experiment: experimentPath,
   variants: [
@@ -214,17 +214,21 @@ export const summary: RunSummary = {
       label: "Baseline",
       replications: 2,
       points: [{ id: "p0", coordinates: {}, saturation: noSaturation, headroom: {}, aggregate: { groups: [],
-        pooledLatency: {},
+        entries: { total: {
+          pooledLatency: {},
+          successRate: { count: 2, mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
+          p95LatencyMs: { count: 2, mean: 41.25, min: 40, max: 42.5 },
+          p99LatencyMs: { count: 2, mean: 80, min: 79, max: 81 },
+          degradedRate: { count: 2, mean: 0, min: 0, max: 0 }, failuresByReason: {},
+        }, clients: {}, classes: {} },
         connections: {},
         poolers: {},
-        successRate: { count: 2, mean: 0.975, stdDev: 0.01, ci95Low: 0.95, ci95High: 1, min: 0.97, max: 0.98 },
-        p95LatencyMs: { count: 2, mean: 41.25, min: 40, max: 42.5 },
-        p99LatencyMs: { count: 2, mean: 80, min: 79, max: 81 },
         services: {
           gateway: {
             slotPoolSummaries: {},
             admittedAmplification: { count: 2, mean: 1.2, min: 1.1, max: 1.3 },
-            totals: { originalArrivals: 200,
+            totals: {
+              failuresByReason: {}, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, originalArrivals: 200,
       offeredAttempts: 260,
       admittedAttempts: 240,
       timeouts: 20,
@@ -240,13 +244,13 @@ export const summary: RunSummary = {
       id: "no-retries",
       label: "No retries",
       replications: 2,
-      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, headroom: {}, aggregate: { groups: [], pooledLatency: {}, services: {}, connections: {}, poolers: {} } }],
+      points: [{ id: "p0", coordinates: {}, saturation: noSaturation, headroom: {}, aggregate: { groups: [], entries: { total: { pooledLatency: {}, failuresByReason: {} }, clients: {}, classes: {} }, services: {}, connections: {}, poolers: {} } }],
     },
   ],
 };
 
 export const manifest: RunManifest = {
-  schemaVersion: 15,
+  schemaVersion: 16,
   applicationVersion: "test-app",
   kslVersion: "R1.8.1",
   streamAssignment: "sha256-substreams-v1",
