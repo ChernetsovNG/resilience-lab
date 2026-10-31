@@ -32,6 +32,18 @@ tasks.test {
     dependsOn("installDist")
     useJUnitPlatform()
     workingDir = rootProject.projectDir
+    inputs
+        .dir(rootProject.file("examples"))
+        .withPropertyName("exampleWorkspace")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .files(rootProject.fileTree("schemas") { include("*.schema.json") })
+        .withPropertyName("documentSchemas")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .files(tasks.installDist)
+        .withPropertyName("installedCli")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 tasks.run {
