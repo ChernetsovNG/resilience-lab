@@ -72,6 +72,7 @@ test("service and call inspectors share Summary, Time and Timeline, including An
   await expect(page.getByLabel("Timeout", { exact: true })).toBeHidden();
   await expect(page.locator(".palette")).toBeHidden();
   await expect(page.getByRole("separator", { name: "Resize inspector", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /fit view/i }).click();
   await page.screenshot({ path: testInfo.outputPath("analysis-results.png") });
 
   // The invisible path is clickable outside the visible stroke and away from the badge.
