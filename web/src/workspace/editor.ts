@@ -1,6 +1,7 @@
 import type { Catalog, DocumentDraft, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
-import { elementOf, isObject, ownEntry, withParam } from "./params";
+import { applyOverrides, elementOf, isObject, ownEntry, withParam, type Params } from "./params";
 import { reconcileParameter } from "./parameterApplicability";
+import { catalogParameter } from "./parameterValues";
 
 /** Document content only: selection, pages and panels do not belong in the history. */
 export interface EditorDocuments {
@@ -104,7 +105,7 @@ export function documentDrafts(loaded: LoadedExperiment): DocumentDraft[] {
     .map((kind) => ({ path: loaded[`${kind}Path`], content: { [kind]: loaded[kind] } }));
 }
 
-/** Edits one model parameter and reconciles kind-dependent fields in the same snapshot; other documents are untouched. */
+/** Edits a model parameter and removes newly inapplicable fields, grid axes and variant overrides in one snapshot. */
 export function setModelParam(id: string, name: string, value: unknown, catalog?: Catalog): EditorCommand {
   return (documents) => {
     let model = withParam(documents.model, id, name, value);
@@ -116,7 +117,25 @@ export function setModelParam(id: string, name: string, value: unknown, catalog?
       const reconciled = reconcileParameter(descriptor, element?.params[root], next);
       if (reconciled !== next) model = withParam(model, id, root, reconciled);
     }
-    return { ...documents, model };
+    let experiment = documents.experiment;
+    if (catalog !== undefined && element !== null) {
+      const keep = (path: string, before: Params, after: Params): boolean => {
+        if (!path.startsWith(`${id}.`)) return true;
+        const relative = path.slice(id.length + 1);
+        return catalogParameter(catalog, element.type, before, relative) === undefined
+          || catalogParameter(catalog, element.type, after, relative) !== undefined;
+      };
+      const grid = experiment.grid?.filter(axis => keep(axis.path, element.params, elementOf(model, id)!.params));
+      const variants = experiment.variants.map(variant => {
+        const before = elementOf(applyOverrides(documents.model, variant.overrides, catalog), id)!.params;
+        const after = elementOf(applyOverrides(model, variant.overrides, catalog), id)!.params;
+        const entries = Object.entries(variant.overrides).filter(([path]) => keep(path, before, after));
+        return entries.length === Object.keys(variant.overrides).length ? variant : { ...variant, overrides: Object.fromEntries(entries) };
+      });
+      if (grid?.length !== experiment.grid?.length) experiment = { ...experiment, grid };
+      if (variants.some((variant, index) => variant !== experiment.variants[index])) experiment = { ...experiment, variants };
+    }
+    return { ...documents, model, experiment };
   };
 }
 

@@ -159,13 +159,12 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
       {descriptor.kind === "CHOICE" ? (
         <select
           id={id}
-          value={draft}
+          value={shown}
           disabled={!editable}
           aria-invalid={hasError || undefined}
           aria-describedby={describedBy}
           onChange={(event) => {
             if (!editable) return;
-            setDraft(event.target.value);
             commitValue(event.target.value === "" ? undefined : event.target.value);
           }}
         >
