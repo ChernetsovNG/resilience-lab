@@ -55,6 +55,7 @@ export interface CanvasProps {
   overrides?: Record<string, unknown>;
   results?: CanvasResults | null;
   nodeMetric?: NodeOverlayMetric;
+  replicaSelection?: { groupId: string; replica: number } | null;
   connectionMetric?: ConnectionOverlayMetric;
   layout: LayoutFile | null;
   catalog: Catalog;
@@ -85,7 +86,7 @@ export function Canvas(props: CanvasProps) {
 
 function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
-  nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
+  replicaSelection, nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
   const { gridStep, snapToGrid, showGrid } = useViewSettings();
   const variantVisible = variant !== undefined;
   const banner = useRef<HTMLDetailsElement>(null);
@@ -206,7 +207,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     data: {
       result: results?.services.get(id),
       resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
-      nodeMetric,
+      nodeMetric, selectedReplica: replicaSelection?.groupId === id ? replicaSelection.replica : undefined,
       incomingConnections: incoming.get(id) ?? 0,
       outgoingConnections: outgoing.get(id)?.length ?? 0,
       needsConnection: block.type === "client"

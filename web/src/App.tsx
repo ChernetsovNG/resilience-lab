@@ -20,7 +20,8 @@ import { useHealth } from "./components/useHealth";
 import { useConfirmation } from "./components/useConfirmation";
 import { DiagnosticLabelContext } from "./presentation/diagnosticContext";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
-import { projectElementResults } from "./inspector/elementResultsData";
+import { replicaMember } from "./results/groups";
+import { projectElementResults, resultSelection } from "./inspector/elementResultsData";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
@@ -154,11 +155,34 @@ export function App() {
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
   const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
+  const resultVariantId = variantId ?? summary?.variants[0]?.id;
+  const resultPoint = summary?.variants.find(candidate => candidate.id === resultVariantId)?.points.find(point => point.id === selectedPointId);
+  const resultGroups = resultPoint?.aggregate.groups ?? [];
+  const member = results.selection.replicaId == null ? null : replicaMember(resultGroups, results.selection.replicaId);
+  const selectedReplica = member?.group.id === selected && resultDocuments !== null && loaded !== null
+    && resultSelection(resultDocuments.model, loaded.model, member.instance.id, resultGroups) !== null ? member.instance : null;
+  const replicaModel = selectedReplica === null || resultDocuments === null || catalog === null ? undefined : applyOverrides(
+    applyOverrides(resultDocuments.model, resultDocuments.experiment.variants.find(variant => variant.id === resultVariantId)?.overrides ?? {}, catalog),
+    resultPoint?.coordinates ?? {}, catalog);
+  const selectResultElement = (id: string) => {
+    if (loaded === null || resultDocuments === null || invalid || loading) return;
+    const replica = replicaMember(resultGroups, id);
+    const previous = elementOf(resultDocuments.model, replica?.group.id ?? id);
+    if (previous === null) return;
+    const elements = [...Object.entries(loaded.model.blocks), ...loaded.model.connections.map(edge => [edge.id, edge] as const)];
+    const current = elements.find(([, element]) => elementIdentity(element) === elementIdentity(previous));
+    if (current === undefined) return;
+    if (variantId === null && resultVariantId !== undefined) selectVariant(resultVariantId);
+    setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null);
+    results.select({ replicaId: replica?.instance.id ?? null });
+    setInspectorRequest(current => current + 1);
+  };
   const elementResults: ElementResultsProps | null = selected === null || !ownRun || resultRunId === null || summary === null || resultManifest === null || resultDocuments === null || variant === undefined || catalog === null ? null : {
     runId: resultRunId, summary: summary, manifest: resultManifest,
     runModel: resultDocuments.model, currentModel: loaded.model, experiment: resultDocuments.experiment,
     catalog, variantId: variant.id, pointId: selectedPointId, replication: results.selection.replication,
-    window: results.selection.window, selected,
+    window: results.selection.window, selected: selectedReplica?.id ?? selected,
+    onSelectReplica: selectResultElement,
     onShowTimeline: () => {
       setSelection([selected]);
       setResultsSize("normal"); setTimelineRequest(current => current + 1);
@@ -476,6 +500,8 @@ export function App() {
             experiment={loaded.experiment}
             experimentPath={loaded.experimentPath}
             selected={selected}
+            selectedReplica={selectedReplica}
+            replicaModel={replicaModel}
             target={target}
             focusField={fieldFocus}
             editable={editable}
@@ -582,6 +608,7 @@ export function App() {
               onZoomChange={setCanvasZoom}
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
+              replicaSelection={selectedReplica === null || selected === null ? null : { groupId: selected, replica: selectedReplica.replica }}
               nodeMetric={nodeMetric === "off" ? "utilization" : nodeMetric}
               connectionMetric={connectionMetric}
               editable={structureEditable && !invalid}
@@ -599,7 +626,7 @@ export function App() {
               }}
               onValidity={(key, valid) => onValidity(`canvas:${key}`, valid)}
               onSelect={(next) => {
-                if (!invalid) { setSelection(next); setInspectorTarget("element"); setFieldFocus(null); }
+                if (!invalid) { setSelection(next); setInspectorTarget("element"); setFieldFocus(null); results.select({ replicaId: null }); }
               }}
             />
           )}
@@ -654,14 +681,7 @@ export function App() {
         timelineRequest={timelineRequest}
         validationPending={validation.pending}
         validationProblem={validation.problem}
-        onElement={id => {
-          if (loaded === null || resultDocuments === null || invalid || loading) return;
-          const previous = elementOf(resultDocuments.model, id);
-          if (previous === null) return;
-          const elements = [...Object.entries(loaded.model.blocks), ...loaded.model.connections.map(edge => [edge.id, edge] as const)];
-          const current = elements.find(([, element]) => elementIdentity(element) === elementIdentity(previous));
-          if (current !== undefined) { setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null); }
-        }}
+        onElement={selectResultElement}
         onDiagnostic={(diagnostic) => {
           if (loaded === null || invalid || loading) return;
           setAnalysis(false);

@@ -1,4 +1,11 @@
 {
+  "results.groups.summaryHelp": "Итоги измеряемого интервала по всем повторениям. Нажмите заголовок столбца для сортировки. p99 рассчитан по объединённым наблюдениям задержки. При отсутствии наблюдений показано «нет данных».",
+  "results.groups.worst": " · худшая #{number}: {value}",
+  "results.groups.selectedReplica": "Выбрана реплика #{number}",
+  "results.groups.metrics": "Группа: {group}",
+  "results.groups.replicas": "Реплики · {group}",
+  "results.groups.meanQueue": "Средняя очередь",
+  "results.groups.rejections": "Отказы",
   "editor.load.title": "Нагрузка",
   "editor.load.points": "Точки нагрузки",
   "editor.load.actions": "Действия",

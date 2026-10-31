@@ -1,4 +1,11 @@
 {
+  "results.groups.summaryHelp": "Measured interval across all replications. Click a column heading to sort. p99 comes from merged latency observations, not averaged replica percentiles. Missing observations appear as n/a.",
+  "results.groups.worst": " · worst #{number}: {value}",
+  "results.groups.selectedReplica": "Replica #{number} selected",
+  "results.groups.metrics": "Group: {group}",
+  "results.groups.replicas": "Replicas · {group}",
+  "results.groups.meanQueue": "Mean queue",
+  "results.groups.rejections": "Rejections",
   "editor.load.title": "Load",
   "editor.load.points": "Load points",
   "editor.load.actions": "Actions",

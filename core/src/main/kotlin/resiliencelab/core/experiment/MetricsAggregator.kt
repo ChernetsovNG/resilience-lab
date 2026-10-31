@@ -27,6 +27,12 @@ object MetricsAggregator {
             metricSummary(
                 replications.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.99) },
             )
+        val groupedServiceIds =
+            replications
+                .flatMap { it.groups }
+                .filter { it.kind == ReplicaGroupKind.NODE }
+                .flatMap { group -> listOf(group.id) + group.instances.map { it.id } }
+                .toSet()
         val serviceIds = replications.flatMap { it.services.keys }.distinct()
         val services =
             serviceIds.associateWith { serviceId ->
@@ -41,12 +47,7 @@ object MetricsAggregator {
                         ),
                     totals = serviceTotals(replications, serviceId),
                     pooledLatency =
-                        if (isGroup(
-                                replications,
-                                serviceId,
-                                ReplicaGroupKind.NODE,
-                            )
-                        ) {
+                        if (serviceId in groupedServiceIds) {
                             latencyDistribution(
                                 replications.mapNotNull {
                                     it.services[serviceId]?.latency

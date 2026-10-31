@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { slotPoolResource, noSaturation } from "../test/fixtures";
 import { SaturationInsight } from "./SaturationInsight";
 
@@ -46,4 +46,9 @@ describe("SaturationInsight", () => {
     expect(screen.getByText("2 of 2 replications without saturation.")).toBeTruthy();
     expect(screen.queryByText(/dependency/)).toBeNull();
   });
+});
+
+it("keeps the no-saturation conclusion as text when element navigation is available", () => {
+  render(<SaturationInsight saturation={noSaturation} replications={2} onElement={vi.fn()} />);
+  expect(screen.getByText("No saturation.").closest("button")).toBeNull();
 });

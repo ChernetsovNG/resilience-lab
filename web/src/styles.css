@@ -1577,3 +1577,16 @@ select {
 .type-help-outputs > div { margin: .6rem 0; }
 .type-help-outputs dt { font-weight: 600; }
 .type-help-outputs dd { margin: .15rem 0 0; color: #52606d; }
+
+.block-selected-replica { position: absolute; right: 0; bottom: 100%; padding: .1rem .3rem; border-radius: 3px; background: #e0efff; font-size: var(--font-secondary); white-space: nowrap; }
+.replica-results-scroll { overflow-x: auto; }
+.element-results .replica-results { font-size: var(--font-secondary); table-layout: fixed; }
+.element-results .replica-results th { width: auto; }
+.replica-results button { padding: .15rem; font-size: inherit; }
+.replica-results tr[aria-selected="true"] { background: #e0efff; }
+.replica-results tbody tr { cursor: pointer; }
+.summary-services .summary-services { margin-left: 1rem; }
+.map-replicas label { display: inline-flex; align-items: center; gap: .25rem; margin: .25rem .75rem .25rem 0; }
+.result-element-link { border: 0; padding: 0; background: none; color: inherit; font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
+
+.block-shape--replicas .block-node { width: 256px; }

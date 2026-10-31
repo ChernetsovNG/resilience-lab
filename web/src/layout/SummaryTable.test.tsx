@@ -331,7 +331,7 @@ describe("ProblemList", () => {
   });
 });
 
-it("keeps replica group aggregates out of the existing instance comparison tables", () => {
+it("shows group aggregates with instance comparison tables nested inside", () => {
   const run = structuredClone(summary);
   const aggregate = run.variants[0].points[0].aggregate;
   const base = aggregate.services.gateway;
@@ -339,6 +339,8 @@ it("keeps replica group aggregates out of the existing instance comparison table
   aggregate.services.workers = base;
   for (const replica of [1, 2, 3]) aggregate.services[`workers#${replica}`] = base;
   render(<SummaryTable summary={run} activeVariantId="baseline" />);
-  expect(screen.queryByRole("table", { name: /workers$/ })).toBeNull();
+  expect(screen.getByRole("table", { name: /workers$/ })).toBeTruthy();
+  const group = screen.getByText("Group: workers").closest("details")!;
+  expect(group.querySelectorAll(".summary-services")).toHaveLength(3);
   expect(screen.getByRole("table", { name: /workers#1$/ })).toBeTruthy();
 });

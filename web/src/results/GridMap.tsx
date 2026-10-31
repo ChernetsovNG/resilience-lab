@@ -1,4 +1,4 @@
-import { instanceServiceEntries } from "./instances";
+import { serviceResultRows } from "./groups";
 import { t } from "../i18n";
 import { formatInterval, formatNumber, formatPercent } from "../i18n/format";
 import { useState } from "react";
@@ -18,6 +18,7 @@ interface Props {
   catalog?: Catalog | null;
   model?: ModelFile | null;
   variants?: readonly NamedVariant[];
+  onElement?: (id: string) => void;
 }
 
 const mapMetrics = (): { id: MapMetric; title: string }[] => [
@@ -28,7 +29,7 @@ const mapMetrics = (): { id: MapMetric; title: string }[] => [
 const label = (value: unknown) => typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value);
 
 /** A view of the saved summary; selecting a cell only changes the shared results context. */
-export function GridMap({ summary, activeVariantId, pointId, onPointChange, catalog, model, variants = summary.variants }: Props) {
+export function GridMap({ summary, activeVariantId, pointId, onPointChange, catalog, model, variants = summary.variants, onElement }: Props) {
   const level = useConfidenceLevel();
   const metrics = mapMetrics();
   const [metric, setMetric] = useState<MapMetric>("successRate");
@@ -39,8 +40,9 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
   const name = variantLabel(variant, variants);
   const axisLabel = (path: string) => parameterLabel(path, catalog, model);
   const pointName = (id: string) => pointLabel(id, grid, variant.points.find(point => point.id === id)?.coordinates, catalog, model);
-  const services = [...new Set(variant.points.flatMap((point) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
-  const service = services.includes(chosenService) ? chosenService : services[0] ?? "";
+  const services = serviceResultRows(variant.points.map(point => point.aggregate));
+  const selectedService = services.find(service => service.id === chosenService || service.instances.some(instance => instance.id === chosenService)) ?? services[0];
+  const service = selectedService?.instances.some(instance => instance.id === chosenService) ? chosenService : selectedService?.id ?? "";
   const serviceMetric = metric === "admittedAmplification" || metric === "handlerUtilization";
   const cells = gridCells(grid, variant.points).map((cell) => {
     const value = cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service);
@@ -71,11 +73,17 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
       <label>{t("results.map.metric")} <select value={metric} onChange={(event) => setMetric(event.target.value as MapMetric)}>
         {metrics.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
       </select></label>
-      {serviceMetric ? <label>{t("results.map.service")} <select value={service} disabled={services.length === 0} onChange={(event) => setService(event.target.value)}>
-        {services.map((id) => <option key={id} value={id}>{id}</option>)}
+      {serviceMetric ? <label>{t("results.map.service")} <select value={selectedService?.id ?? ""} disabled={services.length === 0} onChange={(event) => setService(event.target.value)}>
+        {services.map(({ id }) => <option key={id} value={id}>{id}</option>)}
       </select></label> : null}
       <span>{t("results.map.context", { variant: name, point: pointName(pointId) })}</span>
     </div>
+    {!serviceMetric || selectedService === undefined || selectedService.instances.length === 0 ? null : <details className="map-replicas" key={selectedService.id}>
+      <summary>{t("results.groups.replicas", { group: selectedService.id })}</summary>
+      {[{ id: selectedService.id }, ...selectedService.instances].map(instance => <label key={instance.id}>
+        <input type="radio" name="map-replica" checked={service === instance.id} onChange={() => { setService(instance.id); onElement?.(instance.id); }} />
+        {instance.id}</label>)}
+    </details>}
     <p className="map-note">{metric === "handlerUtilization" ? t("results.map.utilizationNote")
       : t("results.map.meansNote", { level: formatPercent(level / 100) })}</p>
     {grid.length === 2 ? <>
