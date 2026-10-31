@@ -4,15 +4,39 @@ import { t } from "../i18n";
 import { observeResize } from "../layout/observeResize";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
-import type { Edge, EdgeProps, Rect } from "@xyflow/react";
+import type { Edge, EdgeProps } from "@xyflow/react";
 import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import type { ConnectionCanvasResults, ConnectionOverlayMetric } from "../results/canvasResults";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
-import { isObject, isOverridden, type Params } from "../workspace/params";
+import { isObject, isOverridden, ownEntry, type Params } from "../workspace/params";
 import { catalogOption } from "../i18n/catalog";
-import { useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Rect } from "@xyflow/react";
+import { layoutEdges, type EdgeGeometry, type EdgeMeasurement } from "./edgeGeometry";
+
+const EdgeLayoutContext = createContext<{ geometries: Map<string, EdgeGeometry>;
+  onMeasure: (id: string, measurement: EdgeMeasurement) => void } | null>(null);
+
+/** Edge measurements update edges without sending measured nodes through another React Flow update. */
+export function EdgeLayoutProvider({ nodes, connections, children }: {
+  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[]; children: ReactNode;
+}) {
+  const [measurements, setMeasurements] = useState<Record<string, EdgeMeasurement>>({});
+  const onMeasure = useCallback((id: string, measurement: EdgeMeasurement) => {
+    setMeasurements(current => {
+      const previous = ownEntry(current, id);
+      return previous !== undefined && Object.entries(measurement).every(([key, value]) => previous[key as keyof EdgeMeasurement] === value)
+        ? current : { ...current, [id]: measurement };
+    });
+  }, []);
+  const geometries = useMemo(() => layoutEdges(connections.flatMap(connection => {
+    const measurement = ownEntry(measurements, connection.id);
+    return measurement === undefined ? [] : [{ ...measurement, id: connection.id, from: connection.from, to: connection.to }];
+  }), nodes), [connections, measurements, nodes]);
+  return <EdgeLayoutContext value={{ geometries, onMeasure }}>{children}</EdgeLayoutContext>;
+}
 
 export type CallEdgeType = Edge<{
   connection: ConnectionInstance;
@@ -30,7 +54,6 @@ export type CallEdgeType = Edge<{
   result?: ConnectionCanvasResults;
   resultsPending?: string;
   resultsEmpty?: boolean;
-  labelNodes?: Rect[];
   connectionMetric?: ConnectionOverlayMetric;
   onSelect?: (multiple: boolean) => void;
   windowed?: boolean;
@@ -41,7 +64,11 @@ export type CallEdgeType = Edge<{
 
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, selected, data }: EdgeProps<CallEdgeType>) {
-  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const layout = useContext(EdgeLayoutContext);
+  const geometry = layout?.geometries.get(id);
+  const [initialPath, initialX, initialY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const path = geometry?.path ?? initialPath;
+  const { x: labelX, y: labelY } = geometry?.label ?? { x: initialX, y: initialY };
   const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect } = data!;
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
@@ -53,21 +80,20 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
   const labelled = connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
   const label = useRef<HTMLDivElement>(null);
-  const [labelSize, setLabelSize] = useState({ width: 0, height: 0 });
+  const onMeasure = layout?.onMeasure;
+  const measure = useEffectEvent(() => {
+    const element = label.current;
+    onMeasure?.(id, { sourceX, sourceY, targetX, targetY,
+      width: element?.offsetWidth ?? 0, height: element?.offsetHeight ?? 0 });
+  });
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => measure());
+    return () => cancelAnimationFrame(frame);
+  }, [id, sourceX, sourceY, targetX, targetY, labelled, onMeasure]);
   useLayoutEffect(() => {
     const element = label.current;
-    if (element === null) return;
-    const measure = () => setLabelSize(current => current.width === element.offsetWidth && current.height === element.offsetHeight
-      ? current : { width: element.offsetWidth, height: element.offsetHeight });
-    measure();
-    return observeResize([element], measure);
+    if (element !== null) return observeResize([element], () => measure());
   }, [labelled]);
-  const raised = data?.labelNodes?.some(node => labelX - labelSize.width / 2 < node.x + node.width &&
-    labelX + labelSize.width / 2 > node.x && labelY - labelSize.height / 2 < node.y + node.height &&
-    labelY + labelSize.height / 2 > node.y);
-  const below = (data?.labelNodes?.[0]?.y ?? 0) > (data?.labelNodes?.[1]?.y ?? 0);
-  const labelBoundary = below ? Math.max(...(data?.labelNodes ?? []).map(node => node.y + node.height)) + 8
-    : Math.min(...(data?.labelNodes ?? []).map(node => node.y)) - 8;
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
@@ -83,9 +109,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
               event.preventDefault(); event.stopPropagation(); onSelect?.(event.ctrlKey || event.metaKey || event.shiftKey);
             }
           }}
-          style={{ pointerEvents: "all", transform: raised
-            ? `translate(-50%, ${below ? "0%" : "-100%"}) translate(${labelX}px,${labelBoundary}px)`
-            : `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
+          style={{ pointerEvents: "all", transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
         >
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />

@@ -7,6 +7,10 @@ import { selectExperiment } from "./fixtures";
 
 const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
   graph: async ({ page }, provide) => {
+    // Capture observer errors before Vite's error overlay can consume the window event.
+    await page.addInitScript(() => window.addEventListener("error", event => {
+      if (event.message.startsWith("ResizeObserver")) console.error(event.message);
+    }));
     const directory = `canvas-graph-${randomUUID()}`;
     const target = resolve("../apps/server/build/e2e-workspace", directory);
     await mkdir(target);
@@ -79,6 +83,8 @@ async function geometry(page: Page) {
       });
       const id = label.dataset.testid!.replace("canvas-edge-label-", "");
       return { id, rect: rect.toJSON(), nearest: distances.sort((a, b) => a.distance - b.distance)[0].id,
+        nodeOverlaps: rectangles.filter(node => Math.min(rect.right, node.rect.right) > Math.max(rect.left, node.rect.left) &&
+          Math.min(rect.bottom, node.rect.bottom) > Math.max(rect.top, node.rect.top)).map(node => node.id),
         bannerOverlap: banner !== undefined && Math.min(rect.right, banner.right) > Math.max(rect.left, banner.left) &&
           Math.min(rect.bottom, banner.bottom) > Math.max(rect.top, banner.top) };
     });
@@ -114,6 +120,57 @@ test("branch labels follow their edges and node footprints survive a real run", 
   const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
   expect((await response.json()).content.layout).toEqual(graph.layout);
 });
+
+for (const count of [1, 2]) {
+  test(`${count} bypass calls avoid the middle node and keep their labels clear`, async ({ page, graph }, testInfo) => {
+    const target = resolve("../apps/server/build/e2e-workspace", graph.directory);
+    const model: ModelFile = JSON.parse(await readFile("../examples/retry-storm/retry-storm.model.json", "utf8"));
+    const bypasses = Array.from({ length: count }, (_, index) => ({ id: `bypass-${index + 1}`, type: "call",
+      from: "gateway", to: "dependency", params: { timeout: "80ms", attempts: 3 } }));
+    model.connections.push(...bypasses);
+    const layout: LayoutFile = { schemaVersion: 1, positions: {
+      client: { x: 0, y: 100 }, gateway: { x: 340, y: 100 }, middle: { x: 680, y: 100 }, dependency: { x: 1020, y: 100 },
+    } };
+    await writeFile(resolve(target, "graph.model.json"), JSON.stringify(model));
+    await writeFile(resolve(target, "graph.layout.json"), JSON.stringify(layout));
+    await page.reload();
+    await expect(page.getByTestId("block-node")).toHaveCount(4);
+    await expect(page.getByTestId("canvas-edge-label-bypass-1")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`bypass-${count}.png`) });
+    for (const { id } of bypasses) {
+      const crossings = await page.locator(`.react-flow__edge[data-id="${id}"] .react-flow__edge-path`).evaluate(pathElement => {
+        const path = pathElement as SVGPathElement;
+        const matrix = path.getScreenCTM()!;
+        const nodes = [...document.querySelectorAll<HTMLElement>(".react-flow__node")]
+          .filter(node => !["gateway", "dependency"].includes(node.dataset.id!));
+        const length = path.getTotalLength();
+        return nodes.filter(node => {
+          const rect = node.getBoundingClientRect();
+          for (let index = 0; index <= Math.ceil(length); index++) {
+            const point = path.getPointAtLength(length * index / Math.ceil(length)).matrixTransform(matrix);
+            if (point.x > rect.left && point.x < rect.right && point.y > rect.top && point.y < rect.bottom) return true;
+          }
+          return false;
+        }).map(node => node.dataset.id);
+      });
+      expect.soft(crossings, id).toEqual([]);
+    }
+    const measured = await geometry(page);
+    expect.soft(measured.labelOverlaps).toEqual([]);
+    for (const label of measured.labels) {
+      expect.soft(label.nodeOverlaps, label.id).toEqual([]);
+      expect.soft(label.nearest, label.id).toBe(label.id);
+    }
+    await page.getByTestId("canvas-edge-label-bypass-1").click();
+    await expect(page.getByTestId("canvas-edge-label-bypass-1")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("rf__node-client").locator('[data-handleid="out"]').dragTo(
+      page.getByTestId("rf__node-middle").locator('[data-handleid="in"]'));
+    await expect(page.locator('.react-flow__edge[data-id="client-to-middle"]')).toBeAttached();
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    expect((await response.json()).content.layout).toEqual(layout);
+  });
+}
 
 test("manual viewport survives results and Analysis keeps a usable canvas", async ({ page, graph }, testInfo) => {
   void graph;
