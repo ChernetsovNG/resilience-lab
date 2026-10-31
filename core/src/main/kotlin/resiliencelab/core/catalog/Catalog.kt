@@ -42,10 +42,18 @@ data class ConnectionRule(
     val toTypes: List<String>,
 )
 
+/** Applies only when [field], a sibling in the same object, has one of [values], including its catalog default. */
+@Serializable
+data class ParamApplicability(
+    val field: String,
+    val values: List<String>,
+)
+
 /**
  * One parameter of a type. Ranges of [ParamKind.QUANTITY] are in canonical units of [dimension], and [units] lists the
  * units a document may write with their scales, so UI checks ranges as the core does; [default] is used when a
  * document omits the parameter. [initial] is written explicitly when creating an element; readers never apply it.
+ * A null [appliesWhen] means the parameter is always applicable; otherwise its sibling condition controls visibility.
  */
 @Serializable
 data class ParamDescriptor(
@@ -64,6 +72,7 @@ data class ParamDescriptor(
     val options: List<String> = emptyList(),
     val fields: List<ParamDescriptor> = emptyList(),
     val sweepable: Boolean = false,
+    val appliesWhen: ParamApplicability? = null,
 )
 
 /** A computable block or connection type; the single source for palette, forms, checks and CLI help (ADR 0001). */

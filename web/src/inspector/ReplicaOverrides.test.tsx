@@ -86,6 +86,42 @@ it("edits and deletes a replica with one Undo per action, preserving other rows 
   expect(stored()).toEqual({ model: initial, layout, experiment });
 });
 
+it("changes a replica distribution and its dependent fields in one Undo entry", () => {
+  render(<Editor initial={withOverrides({ "2": { processing: { mean: "13ms" } } })} />);
+  const replica = within(row("2"));
+  fireEvent.change(replica.getByRole("combobox", { name: "Distribution" }), { target: { value: "lognormal" } });
+  expect(overrides()?.["2"].processing).toEqual({ kind: "lognormal", mean: "13ms", stdDev: "13ms" });
+  history(1);
+  fireEvent.change(replica.getByRole("combobox", { name: "Distribution" }), { target: { value: "fixed" } });
+  expect(overrides()?.["2"].processing).toEqual({ kind: "fixed", mean: "13ms" });
+  history(2);
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(overrides()?.["2"].processing).toEqual({ kind: "lognormal", mean: "13ms", stdDev: "13ms" });
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(overrides()).toEqual({ "2": { processing: { mean: "13ms" } } });
+});
+
+it("suppresses a group deviation when a replica switches to fixed", () => {
+  const input = structuredClone(withOverrides({ "2": { processing: { mean: "13ms" } } }));
+  input.blocks.gateway.params.processing = { kind: "lognormal", mean: "2ms", stdDev: "1ms" };
+  render(<Editor initial={input} />);
+  fireEvent.change(within(row("2")).getByRole("combobox", { name: "Distribution" }), { target: { value: "fixed" } });
+  expect(overrides()?.["2"].processing).toEqual({ kind: "fixed", mean: "13ms", stdDev: null });
+  expect(stored().model.blocks.gateway.params.processing).toEqual({ kind: "lognormal", mean: "2ms", stdDev: "1ms" });
+  expect(within(row("2")).queryByRole("textbox", { name: "Standard deviation" })).toBeNull();
+  history(1);
+});
+
+it("suppresses an inherited deviation when adding an exponential replica override", () => {
+  const initial = structuredClone(source);
+  initial.blocks.gateway.params.processing = { kind: "lognormal", mean: "2ms", stdDev: "1ms" };
+  render(<Editor initial={initial} />);
+  fireEvent.change(section().getByRole("spinbutton", { name: "Replica number" }), { target: { value: "2" } });
+  click("Add override");
+  expect(overrides()?.["2"].processing).toEqual({ kind: "exponential", mean: "10ms", stdDev: null });
+  history(1);
+});
+
 it("keeps inherited processing fields absent when editing a sparse override", () => {
   render(<Editor initial={withOverrides({ "2": { processing: { mean: "13ms" } } })} />);
   const replica = within(row("2"));

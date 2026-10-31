@@ -7,6 +7,7 @@ import { DiagnosticMessages, VariantDiagnosticLinks } from "../validation/Diagno
 import { isObject } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { parseParam } from "../workspace/paramParsing";
+import { parameterApplies, reconcileParameter } from "../workspace/parameterApplicability";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -81,7 +82,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, isSwept,
           }}>
             {t("editor.param.enable", { title: descriptor.title })}
           </button> : null}</>
-        : descriptor.fields.map((field) => (
+        : descriptor.fields.filter(field => parameterApplies(field, current, descriptor.fields)).map((field) => (
         <ParamField
           key={`${field.name}-${resetCount}`}
           descriptor={field}
@@ -101,7 +102,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, isSwept,
             const updated = { ...current };
             if (next === undefined) delete updated[field.name];
             else updated[field.name] = next;
-            onCommit(updated);
+            onCommit(reconcileParameter(descriptor, current, updated));
           }}
         />
       ))}

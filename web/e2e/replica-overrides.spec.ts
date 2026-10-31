@@ -56,6 +56,14 @@ for (const language of ["en", "ru"] as const) {
         replicaOverrides: { "2": { processing: { kind: "exponential", mean: "35ms" } } },
       } } };
       expect((await document("model")).model).toEqual(expected);
+      for (const kind of ["lognormal", "fixed", "exponential"]) {
+        await row.getByRole("combobox", { name: ru ? "Распределение" : "Distribution", exact: true }).selectOption(kind);
+        await save();
+        expect((await document("model")).model.blocks.gateway.replicaOverrides["2"].processing)
+          .toEqual({ kind, mean: "35ms", ...(kind === "lognormal" ? { stdDev: "35ms" } : {}) });
+        await expect(run).toBeEnabled();
+      }
+      expect((await document("model")).model).toEqual(expected);
       await page.reload();
       await node.locator(".block-node > strong").click();
       await expect(mean).toHaveValue("35ms");

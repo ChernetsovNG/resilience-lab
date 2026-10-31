@@ -2,8 +2,9 @@ import type { Catalog, ParamDescriptor } from "../api/apiTypes";
 import { language, t } from "../i18n";
 import { catalogOption } from "../i18n/catalog";
 import { isObject, type Params } from "./params";
+import { parameterApplies } from "./parameterApplicability";
 
-/** Resolve a catalog parameter and its effective value, including defaults along nested paths. */
+/** Resolve an applicable catalog parameter and its effective value, including defaults along nested paths. */
 export function catalogParameter(catalog: Catalog, type: string, params: Params, path: string) {
   const [root, ...fields] = path.split(".");
   let descriptor = catalog.types.find(candidate => candidate.id === type)?.params.find(param => param.name === root);
@@ -15,8 +16,9 @@ export function catalogParameter(catalog: Catalog, type: string, params: Params,
       value = Array.isArray(value) ? value[Number(field)] : undefined;
       continue;
     }
-    descriptor = descriptor.fields.find(param => param.name === field);
-    if (descriptor === undefined) return undefined;
+    const siblings: ParamDescriptor[] = descriptor.fields;
+    descriptor = siblings.find(param => param.name === field);
+    if (descriptor === undefined || !parameterApplies(descriptor, isObject(value) ? value : {}, siblings)) return undefined;
     value = (isObject(value) ? value[field] : undefined) ?? descriptor.default;
     titles.push(descriptor.title);
   }
@@ -35,6 +37,7 @@ export function formatParameterValue(value: unknown, descriptor?: ParamDescripto
     const keys = new Set([...(descriptor?.fields.map(field => field.name) ?? []), ...Object.keys(current)]);
     return [...keys].flatMap(key => {
       const child = descriptor?.fields.find(param => param.name === key);
+      if (child !== undefined && !parameterApplies(child, current, descriptor?.fields ?? [])) return [];
       if (!Object.hasOwn(current, key) && child?.default == null && !child?.required) return [];
       return [`${child?.title ?? key}: ${formatParameterValue(current[key], child)}`];
     }).join(t("editor.symbols.separator"));

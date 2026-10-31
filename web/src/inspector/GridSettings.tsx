@@ -12,6 +12,7 @@ import { isObject, ownEntry } from "../workspace/params";
 import { ParamField } from "./ParamField";
 import { parameterLabel } from "../presentation/labels";
 import { parseParam } from "../workspace/paramParsing";
+import { parameterApplies } from "../workspace/parameterApplicability";
 import { canonicalOf, equivalentQuantities } from "../workspace/quantities";
 
 type GridAxis = NonNullable<ExperimentFile["grid"]>[number];
@@ -31,6 +32,7 @@ function parametersOf(model: ModelFile, catalog: Catalog) {
   const leaves = (params: ParamDescriptor[], prefix: string, values: unknown, titles: string[] = []): {
     path: string; title: string; descriptor: ParamDescriptor; value: GridAxis["values"][number];
   }[] => params.flatMap((descriptor) => {
+    if (!parameterApplies(descriptor, isObject(values) ? values : {}, params)) return [];
     const path = `${prefix}.${descriptor.name}`;
     const value = (isObject(values) ? values[descriptor.name] : undefined) ?? descriptor.default ?? null;
     const title = [...titles, descriptor.title];

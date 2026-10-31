@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { setLanguage } from "../i18n";
 import { localizeCatalog } from "../i18n/catalog";
@@ -8,6 +8,17 @@ import type { Catalog } from "../api/apiTypes";
 import { VariantChanges } from "./VariantChanges";
 
 afterEach(() => { setLanguage("en"); localStorage.clear(); });
+
+it("labels and navigates a field applicable only in the variant", () => {
+  const onSelect = vi.fn();
+  render(<VariantChanges model={model} catalog={fullCatalog as Catalog} onSelect={onSelect} overrides={{
+    "gateway-to-middle.network.kind": "lognormal", "gateway-to-middle.network.stdDev": "1ms",
+  }} />);
+  const field = screen.getByRole<HTMLButtonElement>("button", { name: "gateway-to-middle · Network delay · Standard deviation: Not set → 1ms" });
+  expect(field.disabled).toBe(false);
+  fireEvent.click(field);
+  expect(onSelect).toHaveBeenCalledWith("gateway-to-middle", "network.stdDev");
+});
 
 it("shows effective defaults for omitted and null fields of whole-object overrides", () => {
   const snapshot = structuredClone(model);

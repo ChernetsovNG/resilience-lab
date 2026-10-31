@@ -3,6 +3,7 @@ import type { Catalog, ExperimentFile, ModelFile, ParamDescriptor, Variant } fro
 import type { EditorCommand } from "./editor";
 import { applyOverrides, elementOf, isObject, type Params } from "./params";
 import { equivalentQuantities } from "./quantities";
+import { reconcileParameter } from "./parameterApplicability";
 
 type Fault = ExperimentFile["faults"][number];
 type Execution = ExperimentFile["execution"];
@@ -69,7 +70,8 @@ function leafDifferences(path: string, base: unknown, effective: unknown, descri
   } else if (!sameValue(base, effective, descriptor)) result[path] = effective ?? null;
 }
 
-/** Edit one precise path. Matching model values (including catalog defaults) remove the override. */
+/** Edit a precise path; kind changes may replace its enclosing object to reconcile dependent fields atomically.
+ * Matching model values (including catalog defaults) remove the override. */
 export function setVariantParam(variantId: string, id: string, path: string, value: unknown, catalog: Catalog): EditorCommand {
   return (documents) => editExperiment((experiment) => ({
     ...experiment,
@@ -87,6 +89,16 @@ export function setVariantParam(variantId: string, id: string, path: string, val
       for (const existing of Object.keys(overrides)) if (existing === key || existing.startsWith(`${key}.`)) delete overrides[existing];
       const base = parameter(documents.model, catalog, id, path);
       if (value !== undefined && !sameValue(base.value, value ?? base.descriptor?.default, base.descriptor)) overrides[key] = value;
+      const root = path.split(".")[0];
+      const original = parameter(applyOverrides(documents.model, variant.overrides, catalog), catalog, id, root);
+      const updated = parameter(applyOverrides(documents.model, overrides, catalog), catalog, id, root);
+      const reconciled = updated.descriptor === undefined ? updated.value : reconcileParameter(updated.descriptor, original.value, updated.value);
+      if (reconciled !== updated.value) {
+        const rootKey = `${id}.${root}`;
+        for (const existing of Object.keys(overrides)) if (existing === rootKey || existing.startsWith(`${rootKey}.`)) delete overrides[existing];
+        const modelValue = parameter(documents.model, catalog, id, root);
+        if (!sameValue(modelValue.value, reconciled, updated.descriptor)) overrides[rootKey] = reconciled;
+      }
       return { ...variant, overrides: overrides as Variant["overrides"] };
     }),
   }))(documents);

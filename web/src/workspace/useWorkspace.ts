@@ -318,8 +318,8 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
     if (!loadInFlight.current) dispatch({ type: "command", command });
   }, []);
   const setParam = useCallback((id: string, name: string, value: unknown) => {
-    execute(setModelParam(id, name, value));
-  }, [execute]);
+    execute(setModelParam(id, name, value, catalog ?? undefined));
+  }, [execute, catalog]);
   const undo = useCallback(() => {
     if (!loadInFlight.current) dispatch({ type: "undo" });
   }, []);
