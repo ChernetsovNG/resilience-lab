@@ -18,6 +18,11 @@ describe("localized display formats", () => {
     expect(formatRate(1200)).toBe("1,200 RPS");
     expect(formatMultiplier(0.9)).toBe("0.9×");
   });
+  it.each([[999, "999 ms"], [1000, "1 s"], [10040.7, "10.04 s"], [-2000, "-2 s"]])(
+    "uses seconds for durations of at least a second (%s)", (value, expected) => {
+      expect(formatDuration(value)).toBe(expected);
+    },
+  );
   it("formats binary sizes consistently, including the MiB boundary", () => {
     expect(formatSize(819200)).toBe("800 KiB");
     expect(formatSize(1048576)).toBe("1 MiB");

@@ -63,7 +63,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await page.getByRole("tab", { name: "Timeline", exact: true }).click();
   await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
   await expect(page.getByLabel("Replication", { exact: true })).toHaveValue("0");
-  await expect(page.getByLabel("Time regions")).toContainText("Fault: dependency: 200–700 ms");
+  await expect(page.getByLabel("Time regions")).toContainText("Fault: dependency: 200 ms–700 ms");
   const queue = page.getByRole("region", { name: "Queue", exact: true });
   const errors = page.getByRole("region", { name: "Errors and rejections", exact: true });
   const queueSlider = queue.getByRole("slider");
@@ -133,7 +133,7 @@ test("grid point and replication persist across views; warmup and the last short
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const runId = await run(page);
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
-    await expect(page.getByLabel("Time regions")).toContainText("Warmup: 0–100 ms");
+    await expect(page.getByLabel("Time regions")).toContainText("Warmup: 0 ms–100 ms");
     const pointRequest = page.waitForResponse((response) => response.url().includes(`/runs/${runId}/series/baseline/p1/0`));
     await page.getByLabel("Grid point", { exact: true }).selectOption("p1");
     await pointRequest;
@@ -141,11 +141,11 @@ test("grid point and replication persist across views; warmup and the last short
     const slider = page.getByRole("region", { name: "Queue", exact: true }).getByRole("slider");
     await slider.focus();
     await slider.press("End");
-    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1,080–1,100 ms");
+    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1.08 s–1.1 s");
     await page.getByRole("tab", { name: "Answer", exact: true }).click();
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p1");
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
-    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1,080–1,100 ms");
+    await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1.08 s–1.1 s");
   } finally {
     await rm(folder, { recursive: true, force: true });
   }

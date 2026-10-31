@@ -26,6 +26,6 @@ it("formats core headroom even when a different browser-side maximum could be in
   const aggregate = summary.variants[0].points[0].aggregate;
   const text = formatHeadroom(aggregate, { utilization: { node: "to-pgbouncer#2", slotPool: "pool", value: 0.91, label },
     meanQueueLength: null });
-  expect(text).toContain("91% at connection pool order-service#2 → pgbouncer");
+  expect(text).toContain("91% (connection pool order-service#2 → pgbouncer)");
   expect(text).not.toContain("50%");
 });

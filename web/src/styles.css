@@ -934,10 +934,19 @@ select {
   margin-bottom: 0.5rem;
 }
 
-.answer-insight h3 {
+.answer-insight h3,
+.answer-variants h3 {
   margin: 0 0 0.2rem;
   font-size: var(--font-ui);
   color: #334e68;
+}
+
+.answer-variants {
+  margin-bottom: 0.75rem;
+}
+
+.answer-variants p {
+  margin: 0 0 0.2rem;
 }
 
 .answer-insight .saturation-insight > p:first-child {

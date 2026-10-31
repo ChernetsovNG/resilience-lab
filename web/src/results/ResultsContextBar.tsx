@@ -39,7 +39,7 @@ export function ResultsContextBar({ catalog, model, summary, variant, selection,
   })]));
   const time = selection.window !== null;
   const context = time ? t("app.canvas.windowContext", {
-    window: formatNumber(selection.window), start: formatNumber(selection.window! * windowMs, 1),
+    window: formatNumber(selection.window), start: formatDuration(selection.window! * windowMs),
     end: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)), replication: formatNumber(selection.replication),
     variant: variant.label ?? variant.id, pointId: selection.pointId,
   }) : t("app.canvas.summaryContext", { variant: variant.label ?? variant.id, pointId: selection.pointId });
@@ -73,7 +73,7 @@ export function ResultsContextBar({ catalog, model, summary, variant, selection,
     {time ? <>
       <PlaybackControls playback={playback} window={selection.window} windowCount={windowCount} disabled={metric === "off"} />
       <span className="results-context-time" title={context}>{t("results.context.windowTime", {
-        from: formatNumber(selection.window! * windowMs, 1), to: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)),
+        from: formatDuration(selection.window! * windowMs), to: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)),
       })}</span>
     </> : null}
     <select aria-label={t("results.context.overlay")} title={output?.overlay?.title ?? t("results.context.metric.off")}

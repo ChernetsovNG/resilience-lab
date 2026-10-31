@@ -23,7 +23,7 @@ it("shows shared assumptions, only used model types and manifest run conditions"
   expect(condition("Replications")).toBe("2");
   expect(condition("Seed")).toBe("20,261,025");
   expect(condition("Warmup")).toBe("100 ms");
-  expect(condition("Measurement")).toBe("1,000 ms");
+  expect(condition("Measurement")).toBe("1 s");
   expect(condition("Series window")).toBe("10 ms");
   expect(condition("Sketch profile")).toBe("ddsketch-bitwise6-rational-v1");
   expect(condition("Application version")).toBe("test-app");

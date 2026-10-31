@@ -44,7 +44,7 @@ it("labels replicas and copied connections and marks their owning diagram elemen
 
 it.each([
   [{ kind: "slowdown", multiplier: 6, delay: "250ms" }, "Slowdown 6× +250 ms"],
-  [{ kind: "slowdown", delay: "1s" }, "Slowdown +1,000 ms"],
+  [{ kind: "slowdown", delay: "1s" }, "Slowdown +1 s"],
   [{ kind: "errors", failureRate: "25%" }, "Errors 25%"],
   [{ kind: "unavailable" }, "Fast unavailability"],
   [{ kind: "blackhole" }, "Black hole"],

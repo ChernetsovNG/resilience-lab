@@ -11,6 +11,34 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it("summarizes both variants without switching the active page", () => {
+    const run = structuredClone(summary);
+    run.variants[1].points[0].aggregate.successRate = { count: 2, mean: 0.5, min: 0.5, max: 0.5 };
+    run.variants[1].points[0].saturation = { ...noSaturation, withoutSaturation: 0,
+      firstNodes: [{ node: "dependency", ...slotPoolResource("dependency"), replicationCount: 2, medianStartMs: 80, minStartMs: 70, maxStartMs: 90 }] };
+    render(<SummaryTable summary={run} activeVariantId="baseline" />);
+    const overview = screen.getByRole("region", { name: "Variant summary" });
+    expect(overview.textContent).toContain("Baseline: no saturation. Success rate: 97.5%.");
+    expect(overview.textContent).toContain("No retries: first saturation at handlers dependency. Success rate: 50%.");
+    expect(overview.compareDocumentPosition(comparison()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("explains pooled and replication-mean p99 values in Russian", () => {
+    setLanguage("ru");
+    const run = structuredClone(summary);
+    run.variants[0].points[0].aggregate.pooledLatency.all = {
+      meanMs: 22, p95Ms: 30, p99Ms: 54.1, statistics: { count: 2, sumMs: 44, sketch: [2] },
+    };
+    run.variants[0].points[0].aggregate.p99LatencyMs!.mean = 55.4;
+    render(<SummaryTable summary={run} />);
+    const insight = screen.getByRole("region", { name: "Вывод о насыщении" });
+    expect(insight.textContent?.match(/по объединённым данным/g)).toHaveLength(1);
+    expect(insight.textContent).toContain("54,1 мс");
+    const table = screen.getByRole("table", { name: "Ответ" });
+    expect(table.textContent).toContain("55,4 мс");
+    expect(within(table).getByRole("caption").textContent).toContain("p95 и p99 — средние квантилей отдельных повторений");
+    expect(insight.textContent).not.toContain("Запросов:");
+  });
   it.each([
     { language: "en" as const, label: "Intervals", explanation: "No new run is needed: only the display changes." },
     { language: "ru" as const, label: "Интервалы", explanation: "Новый прогон не нужен: меняется только показ." },
@@ -174,11 +202,11 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={run} activeVariantId="no-retries" selectedPointId="p1" />);
     const insight = screen.getByRole("region", { name: "Saturation insight" });
     expect(within(insight).getByRole("heading").textContent).toContain("No retries");
-    expect(insight.textContent).toContain("handlers dependency first in 1 of 2 replications; median start 80 ms, range 70–90 ms.");
+    expect(insight.textContent).toContain("handlers dependency first in 1 of 2 replications; median start 80 ms, range 70 ms–90 ms.");
     expect(insight.textContent).toContain("1 of 2 replications without saturation.");
     expect(insight.textContent).toContain("How saturation is detected");
     fireEvent.click(within(insight).getByText("Degradation paths"));
-    expect(within(insight).getByText("Replication 0: handlers dependency at 80 ms")).toBeTruthy();
+    expect(within(insight).getByText("handlers dependency at 80 ms — 1 of 2 replications")).toBeTruthy();
     expect(insight.compareDocumentPosition(comparison()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -213,11 +241,11 @@ describe("SummaryTable", () => {
     point.aggregate.pooledLatency.all = { meanMs: 22, p95Ms: 30, p99Ms: 123.4,
       statistics: { count: 24, sumMs: 528, sketch: [24] } };
     const view = render(<SummaryTable summary={run} activeVariantId="baseline" />);
-    const headroom = screen.getByText(/^Capacity headroom:/);
-    expect(headroom.textContent).toBe("Capacity headroom: highest utilization (pooled) 90% at handlers dependency; largest mean queue (pooled) 0.75 requests at handlers middle; entry p99 (pooled) 123.4 ms.");
+    const headroom = screen.getByText(/^Capacity headroom/);
+    expect(headroom.textContent).toBe("Capacity headroom (pooled): highest utilization 90% (handlers dependency); largest mean number of queued requests 0.75 (handlers middle); entry p99 123.4 ms.");
     expect(headroom.textContent).not.toContain("80 ms");
     view.rerender(<SummaryTable summary={run} activeVariantId="no-retries" />);
-    expect(screen.getByText(/^Capacity headroom:/).textContent).toBe("Capacity headroom: highest utilization (pooled) n/a; largest mean queue (pooled) n/a; entry p99 (pooled) n/a.");
+    expect(screen.getByText(/^Capacity headroom/).textContent).toBe("Capacity headroom (pooled): highest utilization n/a (n/a); largest mean number of queued requests n/a (n/a); entry p99 n/a.");
   });
 
   it.each([[2, 1], [0, 0]])("hides headroom when any replication saturated or none ran (%s, %s)", (replications, withoutSaturation) => {
@@ -225,7 +253,7 @@ describe("SummaryTable", () => {
     run.variants[0].replications = replications;
     run.variants[0].points[0].saturation.withoutSaturation = withoutSaturation;
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
-    expect(screen.queryByText(/^Capacity headroom:/)).toBeNull();
+    expect(screen.queryByText(/^Capacity headroom/)).toBeNull();
   });
 
   it("does not infer headroom from zero denominators or replication-mean p99", () => {
@@ -233,7 +261,7 @@ describe("SummaryTable", () => {
     Object.assign(run.variants[0].points[0].aggregate.services.gateway.totals, { measurementMs: 0,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } });
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
-    expect(screen.getByText(/^Capacity headroom:/).textContent).toBe("Capacity headroom: highest utilization (pooled) n/a; largest mean queue (pooled) n/a; entry p99 (pooled) n/a.");
+    expect(screen.getByText(/^Capacity headroom/).textContent).toBe("Capacity headroom (pooled): highest utilization n/a (n/a); largest mean number of queued requests n/a (n/a); entry p99 n/a.");
   });
 
   it("uses the first document variant for the model-page insight, regardless of baseline column order", () => {

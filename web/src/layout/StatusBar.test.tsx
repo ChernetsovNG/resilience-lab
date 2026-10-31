@@ -41,7 +41,7 @@ it("shows diagnostic counts, stale results, cursor time, backend version and can
   fireEvent.click(screen.getByRole("button", { name: "Errors: 1 · Warnings: 2" }));
   expect(onProblems).toHaveBeenCalledOnce();
   expect(screen.getByText("Results outdated")).toBeTruthy();
-  expect(screen.getByText("Cursor 1,200 ms")).toBeTruthy();
+  expect(screen.getByText("Cursor 1.2 s")).toBeTruthy();
   expect(screen.getByText("Zoom 65.7%")).toBeTruthy();
   expect(screen.getByText("Backend healthy · v1.2.3 · KSL R1.3.1")).toBeTruthy();
   view.rerender(<StatusBar {...props} />);
