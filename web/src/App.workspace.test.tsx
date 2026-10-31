@@ -67,13 +67,13 @@ describe("App stage 1 integration", () => {
     const nativeConfirm = vi.spyOn(window, "confirm");
     await open(); await selectGateway(); editHandlers("5");
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(experimentSelect().value).toBe(experimentPath);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherPath)))).toBe(false);
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Don't save" }));
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(experimentSelect().value).toBe(otherPath);
     expect(screen.queryByLabelText("Handlers")).toBeNull();
@@ -103,8 +103,8 @@ describe("App stage 1 integration", () => {
     const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Model" });
     select.focus();
     fireEvent.change(select, { target: { value: otherModel } });
-    const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
-    const stay = within(dialog).getByRole("button", { name: "Stay" });
+    const dialog = await screen.findByRole("dialog", { name: "Unsaved changes" });
+    const stay = within(dialog).getByRole("button", { name: "Cancel" });
     expect(document.activeElement).toBe(stay);
     fireEvent.click(stay);
     expect(select.value).toBe(modelPath);
@@ -113,7 +113,7 @@ describe("App stage 1 integration", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherModel)))).toBe(false);
 
     fireEvent.change(select, { target: { value: otherModel } });
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Don't save" }));
     await waitFor(() => expect(select.value).toBe(otherModel));
     await selectGateway();
     expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "4");

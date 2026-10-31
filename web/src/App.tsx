@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "./components/useBeforeUnload";
 import { ExperimentCourse } from "./experiment/ExperimentCourse";
 import { courseData } from "./experiment/course";
 import { backendMessage } from "./i18n/backendMessage";
@@ -131,6 +132,7 @@ export function App() {
   const structureEditable = editable && variant === undefined;
   const model = loaded === null || catalog === null ? null : applyOverrides(loaded.model, overrides, catalog);
   const invalid = invalidFields.size > 0;
+  useBeforeUnload(workspace.dirty || invalid);
   const setModelParameter = async (id: string, name: string, value: unknown) => {
     if (loaded === null || catalog === null) return;
     const command = setModelParam(id, name, value, catalog);
@@ -365,6 +367,12 @@ export function App() {
     return estimate.request();
   };
 
+  const confirmDocumentSwitch = () => confirm({
+    title: t("app.topBar.unsavedChanges"), message: t("app.confirm.saveBeforeSwitch"),
+    confirmLabel: t("app.confirm.dontSave"), cancelLabel: t("app.confirm.cancelSwitch"),
+    save: { label: t("app.confirm.saveAndSwitch"), action: workspace.save },
+  });
+
   const resetExperimentView = () => {
     setCommand(null);
     setEstimatePanel(null);
@@ -435,8 +443,7 @@ export function App() {
         onNewExperiment={() => { void fileMenu.current?.start("newExperiment"); }}
         onModel={async path => {
           if (invalid || loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !await confirm({ title: t("app.confirm.discardChanges"),
-            confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
+          if (workspace.dirty && !await confirmDocumentSwitch()) return;
           resetExperimentView();
           void workspace.openModel(path, true);
         }}
@@ -444,8 +451,7 @@ export function App() {
         experiment={loaded?.experimentPath ?? null}
         onExperiment={async (path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !await confirm({ title: t("app.confirm.discardChanges"),
-            confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
+          if (workspace.dirty && !await confirmDocumentSwitch()) return;
           resetExperimentView();
           void workspace.open(path, true);
         }}

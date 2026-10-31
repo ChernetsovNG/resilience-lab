@@ -124,3 +124,8 @@ it.each(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"] as const)("kee
   expect(screen.queryByTestId("job-status")).toBeNull();
   expect(screen.queryByText(/Checking backend/)).toBeNull();
 });
+
+it.each([{}, { dirty: true }, { savePending: true }])("explains persistence before Run with %j", (state) => {
+  render(<TopBar {...props(state)} />);
+  expect(button("Run").title).toBe("Saves changes before running (Ctrl/Cmd+Enter)");
+});
