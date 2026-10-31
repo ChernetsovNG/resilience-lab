@@ -1365,5 +1365,13 @@
   "file.replaceAction": "Replace documents",
   "file.keepDocumentsAction": "Keep documents",
   "file.saveAndExportAction": "Save and export",
-  "file.cancelExportAction": "Cancel export"
+  "file.cancelExportAction": "Cancel export",
+  "editor.canvas.queryMean": "query mean: ",
+  "editor.canvas.clientConnections": "clients: ",
+  "editor.canvas.serverPool": "server pool: ",
+  "editor.canvas.waitTimeout": "wait limit: ",
+  "editor.canvas.routingPolicy": "policy: ",
+  "editor.canvas.intensity": "intensity: ",
+  "editor.canvas.deadline": "deadline: ",
+  "editor.canvas.pool": "pool"
 }

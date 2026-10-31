@@ -255,6 +255,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
         },
         variantDiagnostics: variantElementDiagnostics?.get(connection.id), onProblems: () => onProblems?.(connection.id),
         windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
+        targetGroup: Number(ownEntry(model.blocks, connection.to)?.params.replicas ?? 1) > 1,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
       },

@@ -8,14 +8,16 @@ import type { Catalog } from "../api/apiTypes";
 import { Palette } from "./Palette";
 
 describe("Palette", () => {
-  it.each(["en", "ru"] as const)("shows a router line icon in %s", language => {
+  it.each(["en", "ru"] as const)("shows line icons for router, database and pooler in %s", language => {
     setLanguage(language);
     try {
       const localized = localizeCatalog(fullCatalog as Catalog);
       render(<Palette catalog={localized} editable onAdd={vi.fn()} />);
-      const router = screen.getByRole("button", { name: localized.types.find(type => type.id === "router")!.title });
-      expect(router.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");
-      expect(router.textContent).toBe("");
+      for (const id of ["router", "database", "pooler"]) {
+        const button = screen.getByRole("button", { name: localized.types.find(type => type.id === id)!.title });
+        expect(button.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");
+        expect(button.textContent).toBe("");
+      }
     } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
   });
 

@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { catalogOption } from "../i18n/catalog";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Catalog } from "../api/apiTypes";
 import type { Params } from "../workspace/params";
@@ -61,15 +62,29 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
 
   return (
     <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`}
-      data-element-id={elementId} data-param-path={path} onDoubleClick={begin}>
+      data-element-id={elementId} data-param-path={path} onDoubleClick={begin}
+      title={descriptor.kind === "CHOICE" ? displayed : undefined}>
       {overridden && modelValue !== undefined ? <del className="inline-param-model"
         title={t("editor.variant.modelValue", { value: formatParameterValue(modelValue.value, descriptor) })}>
         {formatParameterValue(modelValue.value, descriptor)}
       </del> : null}
       {editing ? (
-        <form className="inline-param-editor nodrag nopan" onSubmit={(event) => { event.preventDefault(); commit(); }}>
+        <form className="inline-param-editor nodrag nopan" onSubmit={(event) => { event.preventDefault(); commit(); }}
+          onKeyDown={event => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            setDraft(shown);
+            setEditing(false);
+          }}>
           <label className="visually-hidden" htmlFor={id}>{descriptor.title}</label>
-          <input
+          {descriptor.kind === "CHOICE" ? <select id={id} value={draft} autoFocus
+            onChange={event => {
+              const value = event.target.value;
+              if (value !== shown) onCommit(value);
+              setEditing(false);
+            }} onBlur={commit}>
+            {descriptor.options.map(option => <option key={option} value={option}>{catalogOption(option)}</option>)}
+          </select> : <input
             id={id}
             type="text"
             inputMode={descriptor.kind === "QUANTITY" ? "text" : "decimal"}
@@ -79,13 +94,7 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
             aria-describedby={parsed.ok ? undefined : `${id}-error`}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={commit}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              event.preventDefault();
-              setDraft(shown);
-              setEditing(false);
-            }}
-          />
+          />}
           <button className="visually-hidden" type="submit">{t("editor.param.apply", { title: descriptor.title })}</button>
           {parsed.ok ? null : <span className="inline-param-error" id={`${id}-error`} role="alert">{parsed.message}</span>}
         </form>
@@ -95,7 +104,7 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
           className="inline-param-value nodrag nopan"
           aria-label={t("editor.param.valueLabel", { title: descriptor.title, value: displayed })}
           aria-disabled={disabled || undefined}
-          title={t("editor.param.editHint")}
+          title={descriptor.kind === "CHOICE" ? `${displayed}${t("editor.symbols.separator")}${t("editor.param.editHint")}` : t("editor.param.editHint")}
           onClick={(event) => { if (event.detail === 0) begin(); }}
         >{displayed}</button>
       ) : displayed}
