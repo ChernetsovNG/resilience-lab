@@ -91,7 +91,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   const routed = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
   expect((await routed.json()).content.model.blocks.router.params.policy).toBe("leastInFlight");
   const bounds = await policy.evaluate(element => {
-    const body = element.closest(".block-node")!.getBoundingClientRect();
+    const body = element.closest(".block-shape")!.getBoundingClientRect();
     const value = element.getBoundingClientRect();
     const hint = element.parentElement!.querySelector(".help-hint-button")!.getBoundingClientRect();
     return { bodyRight: body.right, valueRight: value.right, hintRight: hint.right,
@@ -125,7 +125,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   await expect(page.getByTestId("job-status")).toHaveText("ЗАВЕРШЕНО");
   await expect(page.getByTestId("canvas-results-database")).toBeVisible();
   for (const id of ["entry", "service", "database"]) {
-    await expect.poll(() => page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate(node => (node as HTMLElement).style.backgroundColor)).not.toBe("");
+    await expect.poll(() => page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate(node => (node as HTMLElement).style.getPropertyValue("--node-fill"))).not.toBe("");
   }
   const after = await geometry(page);
   expect(after.nodes).toEqual(before.nodes);
@@ -135,7 +135,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   expect(router.height).toBeLessThanOrEqual(service.height);
   await page.screenshot({ path: testInfo.outputPath("types-results-ru.png") });
   await page.getByLabel("Показатели узлов", { exact: true }).selectOption("serverUtilization");
-  await expect.poll(() => page.getByTestId("rf__node-pooler").locator(".block-node").evaluate(node => (node as HTMLElement).style.backgroundColor)).not.toBe("");
+  await expect.poll(() => page.getByTestId("rf__node-pooler").locator(".block-node").evaluate(node => (node as HTMLElement).style.getPropertyValue("--node-fill"))).not.toBe("");
   await page.screenshot({ path: testInfo.outputPath("types-pooler-ru.png") });
 
   await connections.dblclick();

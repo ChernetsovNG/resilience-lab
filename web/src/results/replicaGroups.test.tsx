@@ -20,9 +20,7 @@ it("shows recorded pooled and worst utilization, coloring the group by its worst
     results={canvasResults(run, runModel, "baseline", "p0", catalog, runModel, runExperiment)} />);
   const metrics = await screen.findByTestId("canvas-results-gateway");
   expect(metrics.textContent).toContain("Utilization 34% · worst #2: 97%");
-  const style = document.createElement("div").style;
-  style.backgroundColor = utilizationColor(0.97);
-  expect(metrics.closest<HTMLElement>(".block-node")!.style.backgroundColor).toBe(style.backgroundColor);
+  expect(metrics.closest<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill")).toBe(utilizationColor(0.97));
   expect(screen.getByRole("img", { name: "First saturated node" })).toBeTruthy();
 });
 
@@ -98,9 +96,7 @@ it.each([
   render(<Canvas catalog={catalog} model={runModel} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()}
     nodeMetric={metric} results={canvasResults(run, runModel, "baseline", "p0", catalog, runModel, runExperiment)} />);
   const metrics = await screen.findByTestId("canvas-results-gateway");
-  const style = document.createElement("div").style;
-  style.backgroundColor = utilizationColor(value);
-  expect(metrics.closest<HTMLElement>(".block-node")!.style.backgroundColor).toBe(style.backgroundColor);
+  expect(metrics.closest<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill")).toBe(utilizationColor(value));
 });
 
 it("shows a copied connection's own results without a service-replica table", () => {

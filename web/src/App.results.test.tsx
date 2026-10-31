@@ -30,10 +30,10 @@ describe("diagram results", () => {
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
 
     const node = screen.getByTestId("rf__node-gateway").querySelector<HTMLElement>(".block-node")!;
-    expect(node.style.backgroundColor).not.toBe("");
+    expect(node.style.getPropertyValue("--node-fill")).not.toBe("");
     fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "off" } });
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
-    expect(node.style.backgroundColor).toBe("");
+    expect(node.style.getPropertyValue("--node-fill")).toBe("");
     expect(button("Save").disabled).toBe(true);
     expect(button("Undo").disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "utilization" } });
@@ -93,19 +93,19 @@ it("colors nodes and labels the scale for the selected overlay metric", async ()
   await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   const node = screen.getByTestId("rf__node-gateway").querySelector<HTMLElement>(".block-node")!;
-  const utilization = node.style.backgroundColor;
+  const utilization = node.style.getPropertyValue("--node-fill");
   const overlay = screen.getByLabelText("Node overlay");
   fireEvent.change(overlay, { target: { value: "meanQueue" } });
-  expect(node.style.backgroundColor).not.toBe(utilization);
+  expect(node.style.getPropertyValue("--node-fill")).not.toBe(utilization);
   expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue fill: 0%–100%");
-  const queue = node.style.backgroundColor;
+  const queue = node.style.getPropertyValue("--node-fill");
   fireEvent.change(overlay, { target: { value: "queueRejections" } });
-  expect(node.style.backgroundColor).not.toBe(queue);
+  expect(node.style.getPropertyValue("--node-fill")).not.toBe(queue);
   expect(screen.getByLabelText("Node color scale").textContent).toContain("Queue rejections: 0%–100%");
   fireEvent.change(overlay, { target: { value: "off" } });
   expect(screen.queryByLabelText("Node color scale")).toBeNull();
   expect(screen.queryByTestId("canvas-edge-label-client-to-gateway")).toBeNull();
-  expect(node.style.backgroundColor).toBe("");
+  expect(node.style.getPropertyValue("--node-fill")).toBe("");
 });
 
 it("shares point, replication and time between the context row, Findings, Timeline and canvas", async () => {
@@ -253,7 +253,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   await screen.findByRole("table", { name: "Findings" });
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "meanQueue" } });
-  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill");
   expect(color("gateway")).not.toBe("");
   expect(color("gateway")).toBe(color("middle"));
   const halfFull = color("gateway");

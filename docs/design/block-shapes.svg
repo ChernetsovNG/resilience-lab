@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="2120" viewBox="0 0 1040 2120" font-family="system-ui, sans-serif" font-size="13" fill="#1f2933">
+  <title>Фигуры блоков: узкий, обычный и высокий размеры</title>
+  <desc>Сгенерировано из web/src/canvas/blockGeometry.ts. Точки показывают порты на видимом контуре.</desc>
+  <rect width="1040" height="2120" fill="#f5f7fa"/>
+  <text x="24" y="28" font-size="20" font-weight="600">Геометрия блоков</text>
+  <text x="174" y="54" text-anchor="middle">Узкий</text><text x="514" y="54" text-anchor="middle">Обычный</text><text x="854" y="54" text-anchor="middle">Высокий</text>
+  <text x="24" y="80" font-size="14" font-weight="600">Клиент / Person</text>
+  <text x="24" y="420" font-size="14" font-weight="600">Сервис</text>
+  <text x="24" y="760" font-size="14" font-weight="600">База данных / цилиндр</text>
+  <text x="24" y="1100" font-size="14" font-weight="600">Пулер / двойная рамка</text>
+  <text x="24" y="1440" font-size="14" font-weight="600">Маршрутизатор / круг</text>
+  <text x="24" y="1780" font-size="14" font-weight="600">Группа реплик / стопка</text>
+  <g>
+      <svg x="99" y="92" width="150" height="220" viewBox="0 0 150 220">
+        <g fill="#fff" stroke="#0ea5e9" stroke-width="1"><path d="M 46.5 30.5 a 28.5 28.5 0 1 0 57 0 a 28.5 28.5 0 1 0 -57 0 Z"/><path d="M 39.5 40 H 110.5 A 37.5 37.5 0 0 1 148 77.5 V 210 A 8 8 0 0 1 140 218 H 10 A 8 8 0 0 1 2 210 V 77.5 A 37.5 37.5 0 0 1 39.5 40 Z"/></g>
+        <g fill="none" stroke="#0ea5e9"></g>
+        <text x="13.8" y="99.5" font-weight="600" fill="#1f2933">Клиент</text>
+        <text x="13.8" y="119.5" font-size="12" fill="#52606d">Нагрузка: 30/s</text><text x="13.8" y="139.5" font-size="12" fill="#52606d">Дедлайн: 10s</text>
+
+        <circle cx="148" cy="143.75" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="330" text-anchor="middle" font-size="11" fill="#64748b">150 × 220</text>
+    </g>
+  <g>
+      <svg x="418" y="92" width="192" height="189" viewBox="0 0 192 189">
+        <g fill="#fff" stroke="#0ea5e9" stroke-width="1"><path d="M 59.519999999999996 38.480000000000004 a 36.480000000000004 36.480000000000004 0 1 0 72.96000000000001 0 a 36.480000000000004 36.480000000000004 0 1 0 -72.96000000000001 0 Z"/><path d="M 50 50.64000000000001 H 142 A 48 48 0 0 1 190 98.64000000000001 V 179 A 8 8 0 0 1 182 187 H 10 A 8 8 0 0 1 2 179 V 98.64000000000001 A 48 48 0 0 1 50 50.64000000000001 Z"/></g>
+        <g fill="none" stroke="#0ea5e9"></g>
+        <text x="13.8" y="120.64000000000001" font-weight="600" fill="#1f2933">Клиент</text>
+        <text x="13.8" y="140.64000000000001" font-size="12" fill="#52606d">Нагрузка: 30/s</text><text x="13.8" y="160.64000000000001" font-size="12" fill="#52606d">Дедлайн: 10s</text>
+
+        <circle cx="190" cy="138.82" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="299" text-anchor="middle" font-size="11" fill="#64748b">192 × 189</text>
+    </g>
+  <g>
+      <svg x="758" y="92" width="192" height="280" viewBox="0 0 192 280">
+        <g fill="#fff" stroke="#0ea5e9" stroke-width="1"><path d="M 59.519999999999996 38.480000000000004 a 36.480000000000004 36.480000000000004 0 1 0 72.96000000000001 0 a 36.480000000000004 36.480000000000004 0 1 0 -72.96000000000001 0 Z"/><path d="M 50 50.64000000000001 H 142 A 48 48 0 0 1 190 98.64000000000001 V 270 A 8 8 0 0 1 182 278 H 10 A 8 8 0 0 1 2 270 V 98.64000000000001 A 48 48 0 0 1 50 50.64000000000001 Z"/></g>
+        <g fill="none" stroke="#0ea5e9"></g>
+        <text x="13.8" y="120.64000000000001" font-weight="600" fill="#1f2933">Клиент</text>
+        <text x="13.8" y="140.64000000000001" font-size="12" fill="#52606d">Нагрузка: 30/s</text><text x="13.8" y="160.64000000000001" font-size="12" fill="#52606d">Дедлайн: 10s</text>
+
+        <circle cx="190" cy="184.32" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="390" text-anchor="middle" font-size="11" fill="#64748b">192 × 280</text>
+    </g>
+  <g>
+      <svg x="99" y="432" width="150" height="220" viewBox="0 0 150 220">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 9 1 H 141 A 8 8 0 0 1 149 9 V 211 A 8 8 0 0 1 141 219 H 9 A 8 8 0 0 1 1 211 V 9 A 8 8 0 0 1 9 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Очередь: 16</text>
+
+        <circle cx="1" cy="110" r="3" fill="#64748b"/><circle cx="149" cy="110" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="670" text-anchor="middle" font-size="11" fill="#64748b">150 × 220</text>
+    </g>
+  <g>
+      <svg x="418" y="432" width="192" height="180" viewBox="0 0 192 180">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 9 1 H 183 A 8 8 0 0 1 191 9 V 171 A 8 8 0 0 1 183 179 H 9 A 8 8 0 0 1 1 171 V 9 A 8 8 0 0 1 9 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Очередь: 16</text>
+
+        <circle cx="1" cy="90" r="3" fill="#64748b"/><circle cx="191" cy="90" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="630" text-anchor="middle" font-size="11" fill="#64748b">192 × 180</text>
+    </g>
+  <g>
+      <svg x="758" y="432" width="192" height="280" viewBox="0 0 192 280">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 9 1 H 183 A 8 8 0 0 1 191 9 V 271 A 8 8 0 0 1 183 279 H 9 A 8 8 0 0 1 1 271 V 9 A 8 8 0 0 1 9 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Очередь: 16</text>
+
+        <circle cx="1" cy="140" r="3" fill="#64748b"/><circle cx="191" cy="140" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="730" text-anchor="middle" font-size="11" fill="#64748b">192 × 280</text>
+    </g>
+  <g>
+      <svg x="99" y="772" width="150" height="220" viewBox="0 0 150 220">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 9 A 74 8 0 0 1 149 9 V 211 A 74 8 0 0 1 1 211 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 1 9 A 74 8 0 0 0 149 9"/></g>
+        <text x="13.8" y="36" font-weight="600" fill="#1f2933">База данных</text>
+        <text x="13.8" y="56" font-size="12" fill="#52606d">Соединения: 3</text><text x="13.8" y="76" font-size="12" fill="#52606d">Очередь: 4</text>
+
+        <circle cx="1" cy="110" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="1010" text-anchor="middle" font-size="11" fill="#64748b">150 × 220</text>
+    </g>
+  <g>
+      <svg x="418" y="772" width="192" height="180" viewBox="0 0 192 180">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 9 A 95 8 0 0 1 191 9 V 171 A 95 8 0 0 1 1 171 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 1 9 A 95 8 0 0 0 191 9"/></g>
+        <text x="13.8" y="36" font-weight="600" fill="#1f2933">База данных</text>
+        <text x="13.8" y="56" font-size="12" fill="#52606d">Соединения: 3</text><text x="13.8" y="76" font-size="12" fill="#52606d">Очередь: 4</text>
+
+        <circle cx="1" cy="90" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="970" text-anchor="middle" font-size="11" fill="#64748b">192 × 180</text>
+    </g>
+  <g>
+      <svg x="758" y="772" width="192" height="280" viewBox="0 0 192 280">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 9 A 95 8 0 0 1 191 9 V 271 A 95 8 0 0 1 1 271 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 1 9 A 95 8 0 0 0 191 9"/></g>
+        <text x="13.8" y="36" font-weight="600" fill="#1f2933">База данных</text>
+        <text x="13.8" y="56" font-size="12" fill="#52606d">Соединения: 3</text><text x="13.8" y="76" font-size="12" fill="#52606d">Очередь: 4</text>
+
+        <circle cx="1" cy="140" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="1070" text-anchor="middle" font-size="11" fill="#64748b">192 × 280</text>
+    </g>
+  <g>
+      <svg x="99" y="1112" width="150" height="220" viewBox="0 0 150 220">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 1 H 149 V 219 H 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 7 7 H 143 V 213 H 7 Z"/></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Пулер</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Пул: 20</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Ожидание: 50ms</text>
+
+        <circle cx="1" cy="110" r="3" fill="#64748b"/><circle cx="149" cy="110" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="1350" text-anchor="middle" font-size="11" fill="#64748b">150 × 220</text>
+    </g>
+  <g>
+      <svg x="418" y="1112" width="192" height="180" viewBox="0 0 192 180">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 1 H 191 V 179 H 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 7 7 H 185 V 173 H 7 Z"/></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Пулер</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Пул: 20</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Ожидание: 50ms</text>
+
+        <circle cx="1" cy="90" r="3" fill="#64748b"/><circle cx="191" cy="90" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="1310" text-anchor="middle" font-size="11" fill="#64748b">192 × 180</text>
+    </g>
+  <g>
+      <svg x="758" y="1112" width="192" height="280" viewBox="0 0 192 280">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 1 H 191 V 279 H 1 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"><path d="M 7 7 H 185 V 273 H 7 Z"/></g>
+        <text x="13.8" y="24.6" font-weight="600" fill="#1f2933">Пулер</text>
+        <text x="13.8" y="44.6" font-size="12" fill="#52606d">Пул: 20</text><text x="13.8" y="64.6" font-size="12" fill="#52606d">Ожидание: 50ms</text>
+
+        <circle cx="1" cy="140" r="3" fill="#64748b"/><circle cx="191" cy="140" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="1410" text-anchor="middle" font-size="11" fill="#64748b">192 × 280</text>
+    </g>
+  <g>
+      <svg x="114" y="1452" width="120" height="180" viewBox="0 0 120 180">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 90 a 59 59 0 1 0 118 0 a 59 59 0 1 0 -118 0 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="9.850000000000001" y="77.45" font-weight="600" fill="#1f2933">router</text>
+        <text x="9.850000000000001" y="97.45" font-size="12" fill="#52606d">По очереди</text>
+
+        <circle cx="1" cy="90" r="3" fill="#64748b"/><circle cx="119" cy="90" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="1650" text-anchor="middle" font-size="11" fill="#64748b">120 × 180</text>
+    </g>
+  <g>
+      <svg x="442" y="1452" width="144" height="144" viewBox="0 0 144 144">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 72 a 71 71 0 1 0 142 0 a 71 71 0 1 0 -142 0 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="11.649999999999999" y="54.05" font-weight="600" fill="#1f2933">router</text>
+        <text x="11.649999999999999" y="74.05" font-size="12" fill="#52606d">По очереди</text>
+
+        <circle cx="1" cy="72" r="3" fill="#64748b"/><circle cx="143" cy="72" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="1614" text-anchor="middle" font-size="11" fill="#64748b">144 × 144</text>
+    </g>
+  <g>
+      <svg x="782" y="1452" width="144" height="280" viewBox="0 0 144 280">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 1 140 a 71 71 0 1 0 142 0 a 71 71 0 1 0 -142 0 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="11.649999999999999" y="122.05" font-weight="600" fill="#1f2933">router</text>
+        <text x="11.649999999999999" y="142.05" font-size="12" fill="#52606d">По очереди</text>
+
+        <circle cx="1" cy="140" r="3" fill="#64748b"/><circle cx="143" cy="140" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="1750" text-anchor="middle" font-size="11" fill="#64748b">144 × 280</text>
+    </g>
+  <g>
+      <svg x="84" y="1792" width="180" height="220" viewBox="0 0 180 220">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 17 1 H 171 A 8 8 0 0 1 179 9 V 203 A 8 8 0 0 1 171 211 H 17 A 8 8 0 0 1 9 203 V 9 A 8 8 0 0 1 17 1 Z"/><path d="M 13 5 H 167 A 8 8 0 0 1 175 13 V 207 A 8 8 0 0 1 167 215 H 13 A 8 8 0 0 1 5 207 V 13 A 8 8 0 0 1 13 5 Z"/><path d="M 9 9 H 163 A 8 8 0 0 1 171 17 V 211 A 8 8 0 0 1 163 219 H 9 A 8 8 0 0 1 1 211 V 17 A 8 8 0 0 1 9 9 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="32.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="52.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="72.6" font-size="12" fill="#52606d">Очередь: 16</text>
+        <text x="158.20000000000002" y="32.6" text-anchor="end" fill="#52606d">×3</text>
+        <circle cx="1" cy="114" r="3" fill="#64748b"/><circle cx="171" cy="114" r="3" fill="#64748b"/>
+      </svg>
+      <text x="174" y="2030" text-anchor="middle" font-size="11" fill="#64748b">180 × 220</text>
+    </g>
+  <g>
+      <svg x="382" y="1792" width="264" height="188" viewBox="0 0 264 188">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 17 1 H 255 A 8 8 0 0 1 263 9 V 171 A 8 8 0 0 1 255 179 H 17 A 8 8 0 0 1 9 171 V 9 A 8 8 0 0 1 17 1 Z"/><path d="M 13 5 H 251 A 8 8 0 0 1 259 13 V 175 A 8 8 0 0 1 251 183 H 13 A 8 8 0 0 1 5 175 V 13 A 8 8 0 0 1 13 5 Z"/><path d="M 9 9 H 247 A 8 8 0 0 1 255 17 V 179 A 8 8 0 0 1 247 187 H 9 A 8 8 0 0 1 1 179 V 17 A 8 8 0 0 1 9 9 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="32.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="52.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="72.6" font-size="12" fill="#52606d">Очередь: 16</text>
+        <text x="242.20000000000002" y="32.6" text-anchor="end" fill="#52606d">×3</text>
+        <circle cx="1" cy="98" r="3" fill="#64748b"/><circle cx="255" cy="98" r="3" fill="#64748b"/>
+      </svg>
+      <text x="514" y="1998" text-anchor="middle" font-size="11" fill="#64748b">264 × 188</text>
+    </g>
+  <g>
+      <svg x="722" y="1792" width="264" height="280" viewBox="0 0 264 280">
+        <g fill="#fff" stroke="#9aa5b1" stroke-width="1"><path d="M 17 1 H 255 A 8 8 0 0 1 263 9 V 263 A 8 8 0 0 1 255 271 H 17 A 8 8 0 0 1 9 263 V 9 A 8 8 0 0 1 17 1 Z"/><path d="M 13 5 H 251 A 8 8 0 0 1 259 13 V 267 A 8 8 0 0 1 251 275 H 13 A 8 8 0 0 1 5 267 V 13 A 8 8 0 0 1 13 5 Z"/><path d="M 9 9 H 247 A 8 8 0 0 1 255 17 V 271 A 8 8 0 0 1 247 279 H 9 A 8 8 0 0 1 1 271 V 17 A 8 8 0 0 1 9 9 Z"/></g>
+        <g fill="none" stroke="#9aa5b1"></g>
+        <text x="13.8" y="32.6" font-weight="600" fill="#1f2933">Сервис</text>
+        <text x="13.8" y="52.6" font-size="12" fill="#52606d">Обработчики: 4</text><text x="13.8" y="72.6" font-size="12" fill="#52606d">Очередь: 16</text>
+        <text x="242.20000000000002" y="32.6" text-anchor="end" fill="#52606d">×3</text>
+        <circle cx="1" cy="144" r="3" fill="#64748b"/><circle cx="255" cy="144" r="3" fill="#64748b"/>
+      </svg>
+      <text x="854" y="2090" text-anchor="middle" font-size="11" fill="#64748b">264 × 280</text>
+    </g>
+</svg>

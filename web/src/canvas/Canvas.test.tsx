@@ -98,7 +98,7 @@ it("marks only overridden elements and shows their model values while preserving
   expect(screen.getByTestId("canvas-param-gateway-to-middle-attempts").querySelector("del")?.textContent).toBe("3");
   const results = canvasResults(summary, model, "baseline", "p0", catalog)!;
   rerender(<Canvas {...props} results={results} />);
-  expect((gateway.querySelector(".block-node") as HTMLElement).style.backgroundColor).not.toBe("");
+  expect((gateway.querySelector(".block-node") as HTMLElement).style.getPropertyValue("--node-fill")).not.toBe("");
   expect(gateway.querySelector(".block-node--overridden")).not.toBeNull();
 });
 
@@ -154,7 +154,7 @@ it("one shared utilization choice colors both services and databases", async () 
   render(<Canvas catalog={extended} model={snapshot} layout={layout} onCommand={vi.fn()} onSelect={vi.fn()} selected={[]}
     results={canvasResults(run, snapshot, "baseline", "p0", extended)} nodeMetric={choices[0].key} />);
   await screen.findByTestId("canvas-results-middle");
-  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill");
   expect(color("gateway")).not.toBe("");
   expect(color("middle")).toBe(color("gateway"));
 });
@@ -174,7 +174,7 @@ it("applies colliding output ids only to the type selected in the overlay", asyn
     results: canvasResults(run, snapshot, "baseline", "p0", extended) };
   const view = render(<Canvas {...props} nodeMetric={choices[0].key} />);
   await screen.findByTestId("canvas-results-middle");
-  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.backgroundColor;
+  const color = (id: string) => screen.getByTestId(`rf__node-${id}`).querySelector<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill");
   expect(color("gateway")).not.toBe("");
   expect(color("middle")).toBe("");
   expect(screen.getByTestId("canvas-results-middle").textContent).toContain("Pool throughput 120 RPS");
