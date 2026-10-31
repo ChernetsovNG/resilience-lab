@@ -12,16 +12,16 @@ import { InlineParamEditor } from "./InlineParamEditor";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { isObject, isOverridden, ownEntry, type Params } from "../workspace/params";
 import { catalogOption } from "../i18n/catalog";
-import { createContext, useCallback, useContext, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Rect } from "@xyflow/react";
-import { layoutEdges, type EdgeGeometry, type EdgeMeasurement } from "./edgeGeometry";
+import { diagramBounds, layoutEdges, type EdgeGeometry, type EdgeMeasurement } from "./edgeGeometry";
 
 const EdgeLayoutContext = createContext<{ geometries: Map<string, EdgeGeometry>;
   onMeasure: (id: string, measurement: EdgeMeasurement) => void } | null>(null);
 
 /** Edge measurements update edges without sending measured nodes through another React Flow update. */
-export function EdgeLayoutProvider({ nodes, connections, children }: {
-  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[]; children: ReactNode;
+export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
+  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[]; onBounds?: (bounds: Rect | null) => void; children: ReactNode;
 }) {
   const [measurements, setMeasurements] = useState<Record<string, EdgeMeasurement>>({});
   const onMeasure = useCallback((id: string, measurement: EdgeMeasurement) => {
@@ -35,6 +35,11 @@ export function EdgeLayoutProvider({ nodes, connections, children }: {
     const measurement = ownEntry(measurements, connection.id);
     return measurement === undefined ? [] : [{ ...measurement, id: connection.id, from: connection.from, to: connection.to }];
   }), nodes), [connections, measurements, nodes]);
+  const bounds = useMemo(() => diagramBounds([
+    ...[...nodes.values()].filter(node => node.width > 0 && node.height > 0),
+    ...[...geometries.values()].map(geometry => geometry.bounds),
+  ]), [nodes, geometries]);
+  useEffect(() => { onBounds?.(bounds); }, [onBounds, bounds]);
   return <EdgeLayoutContext value={{ geometries, onMeasure }}>{children}</EdgeLayoutContext>;
 }
 

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { Icon, type IconName } from "./Icon";
 
-const names: IconName[] = ["client", "service", "router", "database", "pooler", "info", "lock", "settings", "view-settings", "dice"];
+const names: IconName[] = ["client", "service", "router", "database", "pooler", "info", "lock", "settings", "view-settings", "dice", "fit-view"];
 
 it.each(names)("loads the %s asset as a decorative currentColor icon", name => {
   const { container } = render(<Icon name={name} />);

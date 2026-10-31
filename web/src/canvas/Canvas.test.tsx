@@ -596,3 +596,23 @@ it("marks only fault targets including replica groups and connection copies", as
   fireEvent.click(badge);
   expect(onFault).toHaveBeenCalledWith(1);
 });
+
+it("preserves the viewport when a keyboard node move expands diagram bounds", async () => {
+  const onCommand = vi.fn();
+  const props = { catalog, model, layout, selected: ["dependency"], onSelect: vi.fn(), onCommand, editable: true };
+  const { container, rerender } = render(<Canvas {...props} />);
+  const node = await screen.findByTestId("rf__node-dependency");
+  const viewport = container.querySelector<HTMLElement>(".react-flow__viewport")!;
+  await waitFor(() => { expect(viewport.style.transform).not.toContain("scale(1)"); });
+  const before = viewport.style.transform;
+  fireEvent.keyDown(node, { key: "ArrowRight" });
+  expect(onCommand).toHaveBeenCalled();
+  const moved = structuredClone(layout);
+  moved.positions.dependency = { x: 1200, y: 100 };
+  await act(async () => {
+    rerender(<Canvas {...props} layout={moved} />);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+  expect(node.style.transform).toContain("1200px");
+  expect(viewport.style.transform).toBe(before);
+});

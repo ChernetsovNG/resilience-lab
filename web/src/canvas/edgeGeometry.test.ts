@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Rect, XYPosition } from "@xyflow/react";
-import { layoutEdges, type EdgeLayoutInput } from "./edgeGeometry";
+import { diagramBounds, layoutEdges, type EdgeLayoutInput } from "./edgeGeometry";
 
 const nodes = new Map<string, Rect>([
   ["gateway", { x: 0, y: 100, width: 180, height: 80 }],
@@ -158,5 +158,36 @@ describe("edge geometry", () => {
     expect(crosses(route.points, bounds.get("middle")!)).toBe(false);
     expect(route).toEqual(layoutEdges([edge], bounds).get("bypass"));
     expect(bounds.get("middle")).toEqual({ x: 260, y: -200, width: 300, height: 420 });
+  });
+});
+
+describe("diagram fitting bounds", () => {
+  it("includes a connection label below the measured Person and service rectangles", () => {
+    expect(diagramBounds([
+      { x: 0, y: 100, width: 192, height: 186 },
+      { x: 780, y: 100, width: 192, height: 180 },
+      { x: 404, y: 292, width: 163, height: 72 },
+    ])).toEqual({ x: 0, y: 100, width: 972, height: 264 });
+  });
+
+  it("keeps negative and fractional origins without rounding off content", () => {
+    expect(diagramBounds([
+      { x: -25.5, y: -40.25, width: 100, height: 80 },
+      { x: 120, y: 60, width: 50.5, height: 20.75 },
+    ])).toEqual({ x: -25.5, y: -40.25, width: 196, height: 121 });
+    expect(diagramBounds([])).toBeNull();
+  });
+
+  it("reports the routed path and full label rectangle for viewport fitting", () => {
+    const route = layoutEdges([bypass], nodes).get("bypass")!;
+    const label = { x: route.label.x - 50, y: route.label.y - 15, width: 100, height: 30 };
+    const fit = route.bounds;
+    expect(fit).toBeDefined();
+    for (const point of [...route.points, { x: label.x, y: label.y }, { x: label.x + label.width, y: label.y + label.height }]) {
+      expect(point.x).toBeGreaterThanOrEqual(fit.x);
+      expect(point.x).toBeLessThanOrEqual(fit.x + fit.width);
+      expect(point.y).toBeGreaterThanOrEqual(fit.y);
+      expect(point.y).toBeLessThanOrEqual(fit.y + fit.height);
+    }
   });
 });

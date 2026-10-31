@@ -463,7 +463,13 @@ select {
 
 .block-summary {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
+
+/* Constrain fields to the shape's content rectangle, including long localized values. */
+.block-summary .inline-param, .block-summary .inline-param-editor { min-width: 0; }
+.block-summary .inline-param-value, .block-summary .inline-param-current { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.block-summary .inline-param-editor input { min-width: 0; max-width: 100%; }
 
 .block-summary > span {
   display: flex;
