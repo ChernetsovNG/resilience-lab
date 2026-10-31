@@ -1033,6 +1033,7 @@ export interface components {
             valid: boolean;
         };
         Variant: {
+            description?: string | null;
             id: string;
             label?: string | null;
             overrides: {

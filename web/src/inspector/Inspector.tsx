@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnnotationFields } from "./AnnotationFields";
+import { setAnnotation } from "../workspace/annotations";
 import { t } from "../i18n";
 import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
@@ -129,6 +131,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
           )}
+          <AnnotationFields key={`annotations-${selected}`} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
+            editable={editable && variantId === null && onCommand !== undefined}
+            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
+            onCommit={(field, value) => onCommand?.(setAnnotation({ element: selected }, field, value))} />
           {type === undefined ? <p>{t("help.type.unknown", { type: element.type })}</p> : null}
           {type?.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : null}
           {parameters?.map((descriptor) => (
@@ -189,6 +195,17 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
       {target === "experiment" ? <section className="experiment-settings">
         <RunSettings catalog={catalog} model={model} experiment={experiment} editable={editable && onCommand !== undefined}
           invalid={invalid} fieldDiagnostics={fieldDiagnostics} onCommand={(command) => onCommand?.(command)} onValidity={onValidity} />
+        <InspectorSection name="annotations" title={t("editor.annotations.title")} defaultOpen={false}>
+          <fieldset className="annotation-group"><legend>{t("editor.annotations.model")}</legend>
+            <AnnotationFields value={model} prefix="model." editable={editable && variantId === null && onCommand !== undefined}
+              readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
+              onCommit={(field, value) => onCommand?.(setAnnotation("model", field, value))} />
+          </fieldset>
+          <fieldset className="annotation-group"><legend>{t("editor.annotations.experiment")}</legend>
+            <AnnotationFields value={experiment} prefix="experiment." editable={editable && onCommand !== undefined}
+              onCommit={(field, value) => onCommand?.(setAnnotation("experiment", field, value))} />
+          </fieldset>
+        </InspectorSection>
       </section> : null}
       </div>
       {variantId !== null && (resultsOnly || (target === "element" && !prioritizeResults)) ? results : null}

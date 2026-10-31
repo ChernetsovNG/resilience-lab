@@ -691,6 +691,12 @@
     "resiliencelab.core.document.Variant": {
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -754,7 +760,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 2,
+          "const": 3,
           "type": "integer"
         },
         {

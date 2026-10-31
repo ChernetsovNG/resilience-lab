@@ -1,3 +1,4 @@
+import { HelpHint } from "../help/HelpHint";
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
@@ -83,7 +84,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
   const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
-  const labelled = connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
+  const labelled = Boolean(connection.description) || connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
   const label = useRef<HTMLDivElement>(null);
   const onMeasure = layout?.onMeasure;
   const measure = useEffectEvent(() => {
@@ -116,6 +117,9 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           }}
           style={{ pointerEvents: "all", transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
         >
+          {connection.description ? <div className="canvas-edge-name">{connection.id}
+            <HelpHint label={connection.id}><span className="annotation-text">{connection.description}</span></HelpHint>
+          </div> : null}
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />
             <span>{t("editor.symbols.separator")}</span>

@@ -3715,6 +3715,9 @@
       "Variant" : {
         "type" : "object",
         "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
           "id" : {
             "type" : "string"
           },

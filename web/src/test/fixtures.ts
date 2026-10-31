@@ -170,7 +170,7 @@ export const modelPath = "retry-storm/retry-storm.model.json";
 export const layoutPath = "retry-storm/retry-storm.layout.json";
 
 export const experiment: ExperimentFile = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   modelRef: "retry-storm.model.json",
   layoutRef: "retry-storm.layout.json",
   execution: { replications: 2, warmup: "0ms", measurement: "1s", seed: 20261025, maxRealTime: "30s" },
