@@ -87,7 +87,8 @@ export function ResultsPanel({
   const id = useId();
   const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
     (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
-  const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
+  const staleNotice = running && summary !== null ? <p className="banner" role="status">{t("results.staleRunning")}</p>
+    : stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   const conditionVariant = activeVariantId ?? summary?.variants[0]?.id;
   const faults = model === null || experiment === null || catalog === null ? [] : courseData(model, experiment, catalog).faults;
   const conditions = model === null || experiment === null || catalog === null ? null : runConditions(
@@ -156,7 +157,7 @@ export function ResultsPanel({
         </> : active === "timeline" ? <>
           {staleNotice}
           {summary === null || manifest === null || model === null || experiment === null || catalog === null || runId === null ?
-            <p className="results-empty">{t("results.timeline.empty")}</p> : null}
+            <p className="results-empty" role={running ? "status" : undefined}>{t(running ? "results.awaitingSummary" : "results.timeline.empty")}</p> : null}
         </> : active === "map" && summary !== null ? <>
           {staleNotice}
           <Suspense fallback={<p role="status">{t("results.map.loading")}</p>}><GridMap summary={summary} activeVariantId={activeVariantId}
@@ -167,16 +168,16 @@ export function ResultsPanel({
             <Assumptions catalog={catalog} model={model} manifest={manifest} />}
         </> : <>
           {staleNotice}
-          {problem !== null ? null : job?.status === "CANCELLED" ? (
-            <p className="results-empty">{t("results.cancelled")}</p>
-          ) : summary !== null ? (
+          {summary !== null ? (
             <>
               {conditions === null ? null : <p className="run-conditions" data-testid="run-conditions" title={conditions}>{conditions}</p>}
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement}
                 faults={faults} windowMs={manifest?.series?.windowMs} />
             </>
+          ) : problem !== null ? null : job?.status === "CANCELLED" ? (
+            <p className="results-empty">{t("results.cancelled")}</p>
           ) : (
-            <p className="results-empty">{job === null ? t("results.empty") : t("results.awaitingSummary")}</p>
+            <p className="results-empty" role={running ? "status" : undefined}>{job === null && !running ? t("results.empty") : t("results.awaitingSummary")}</p>
           )}
         </>}
         {(timelineOpened || timelineRequest > 0) && summary !== null && manifest !== null && model !== null && experiment !== null && catalog !== null && runId !== null ?

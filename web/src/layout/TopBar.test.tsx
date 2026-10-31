@@ -34,14 +34,20 @@ describe("TopBar", () => {
     expect(state.onSave).not.toHaveBeenCalled();
   });
 
-  it("allows saving valid edits but requires saving before running", () => {
+  it("allows running with valid unsaved edits", () => {
     const state = props({ dirty: true });
     render(<TopBar {...state} />);
     expect(button("Save").disabled).toBe(false);
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
-    expect(button("Run").disabled).toBe(true);
+    expect(button("Run").disabled).toBe(false);
     fireEvent.click(button("Save"));
     expect(state.onSave).toHaveBeenCalledOnce();
+  });
+
+  it("advertises save and run shortcuts in button tooltips", () => {
+    render(<TopBar {...props({ dirty: true })} />);
+    expect(button("Save").title).toContain("Ctrl/Cmd+S");
+    expect(button("Run").title).toContain("Ctrl/Cmd+Enter");
   });
 
   it.each(["invalid", "loading", "running", "saving"] as const)("prevents running while %s", (flag) => {

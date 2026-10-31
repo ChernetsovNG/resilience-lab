@@ -48,9 +48,16 @@ export function App() {
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
+  const runInFlight = useRef(false);
+  const [command, setCommand] = useState<"save" | "run" | null>(null);
+  const startingRun = runPending || command === "run";
+  const summary = run.result?.summary ?? null;
+  const resultDocuments = run.result?.documents ?? run.documents;
+  const resultManifest = run.result?.manifest ?? run.manifest;
+  const resultRunId = run.result?.runId ?? run.job?.runId ?? null;
   /** Selection follows variant identity across list edits and its ID across rename/undo/redo; null shows the model. */
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
-  const results = useResultsSelection(run.job?.id ?? null);
+  const results = useResultsSelection(run.result?.jobId ?? null);
   const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
   const [connectionMetric, setConnectionMetric] = useState<ConnectionOverlayMetric>("amplification");
   const [timelineRequest, setTimelineRequest] = useState(0);
@@ -127,26 +134,26 @@ export function App() {
     setFieldFocus(previous => ({ path, request: (previous?.request ?? 0) + 1 }));
   };
   const ownRun = loaded !== null && run.experiment === loaded.experimentPath;
-  const staleResults = ownRun && loaded !== null && run.documents !== null && (
-    !documentValuesEqual(loaded.model, run.documents.model) || !documentValuesEqual(loaded.experiment, run.documents.experiment)
+  const staleResults = ownRun && loaded !== null && resultDocuments !== null && (
+    !documentValuesEqual(loaded.model, resultDocuments.model) || !documentValuesEqual(loaded.experiment, resultDocuments.experiment)
   );
   const selectedPointId = results.selection.pointId;
-  const summaryDiagramResults = ownRun && run.summary !== null && run.documents !== null && variant !== undefined && catalog !== null
-    ? canvasResults(run.summary, run.documents.model, variant.id, selectedPointId, catalog, loaded.model, run.documents.experiment) : null;
-  const seriesMetadata = ownRun ? run.manifest?.series : null;
+  const summaryDiagramResults = ownRun && summary !== null && resultDocuments !== null && variant !== undefined && catalog !== null
+    ? canvasResults(summary, resultDocuments.model, variant.id, selectedPointId, catalog, loaded.model, resultDocuments.experiment) : null;
+  const seriesMetadata = ownRun ? resultManifest?.series : null;
   const endMs = (seriesMetadata?.warmupMs ?? 0) + (seriesMetadata?.measurementMs ?? 0);
   const windowMs = seriesMetadata?.windowMs ?? 1;
   const windowCount = Math.ceil(endMs / windowMs);
   const playback = usePlayback({
-    runId: run.job?.runId ?? "", variant: showDiagramResults ? variant?.id ?? null : null,
+    runId: resultRunId ?? "", variant: showDiagramResults ? variant?.id ?? null : null,
     pointId: selectedPointId, replication: results.selection.replication, window: results.selection.window,
-    windowCount, nodes: ownRun && run.documents !== null ? Object.keys(run.documents.model.blocks) : [],
+    windowCount, nodes: ownRun && resultDocuments !== null ? Object.keys(resultDocuments.model.blocks) : [],
     results: summaryDiagramResults, onWindowChange: (window) => results.select({ window }),
   });
   const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
-  const elementResults: ElementResultsProps | null = selected === null || !ownRun || run.job?.status !== "COMPLETED" || run.summary === null || run.manifest === null || run.documents === null || variant === undefined || catalog === null ? null : {
-    runId: run.job.runId!, summary: run.summary, manifest: run.manifest,
-    runModel: run.documents.model, currentModel: loaded.model, experiment: run.documents.experiment,
+  const elementResults: ElementResultsProps | null = selected === null || !ownRun || resultRunId === null || summary === null || resultManifest === null || resultDocuments === null || variant === undefined || catalog === null ? null : {
+    runId: resultRunId, summary: summary, manifest: resultManifest,
+    runModel: resultDocuments.model, currentModel: loaded.model, experiment: resultDocuments.experiment,
     catalog, variantId: variant.id, pointId: selectedPointId, replication: results.selection.replication,
     window: results.selection.window, selected,
     onShowTimeline: () => {
@@ -227,10 +234,20 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (invalid || loading || event.defaultPrevented || event.altKey) return;
+      if (event.defaultPrevented || event.altKey) return;
       const target = event.target;
-      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
       const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && (key === "s" || key === "enter") &&
+        !(target instanceof Element && target.closest("textarea, [contenteditable]:not([contenteditable='false']), dialog, [role='dialog']"))) {
+        event.preventDefault();
+        if (!event.repeat) {
+          if (target instanceof HTMLInputElement) target.blur();
+          setCommand(key === "s" ? "save" : "run");
+        }
+        return;
+      }
+      if (invalid || loading) return;
+      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
       if (structureEditable && loaded !== null) {
         if ((key === "delete" || key === "backspace") && selection.length > 0) {
           event.preventDefault();
@@ -292,7 +309,7 @@ export function App() {
     setInspectorRequest(current => current + 1);
   };
   const courseModel = model === null || catalog === null ? null : applyOverrides(model,
-    ownRun && !staleResults ? run.summary?.variants.find(candidate => candidate.id === variantId)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {} : {}, catalog);
+    ownRun && !staleResults ? summary?.variants.find(candidate => candidate.id === variantId)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {} : {}, catalog);
   const courseFaults = loaded === null || courseModel === null || catalog === null ? [] : courseData(courseModel, loaded.experiment, catalog).faults;
   const courseTime = ownRun && !staleResults && variant !== undefined && seriesMetadata != null;
 
@@ -303,6 +320,7 @@ export function App() {
   };
 
   const resetExperimentView = () => {
+    setCommand(null);
     setEstimatePanel(null);
     setProblemsElement(null);
     setResultsSize("collapsed");
@@ -315,6 +333,48 @@ export function App() {
     run.reset();
   };
 
+  const startRun = useCallback(async () => {
+    if (loaded === null || invalid || loading || workspace.saving || workspace.conflict || run.running ||
+      runInFlight.current || estimate.pending || runBlockedReason !== undefined || health.error !== null) return;
+    runInFlight.current = true;
+    if (resultsSize === "collapsed") setResultsSize("normal");
+    setRunPending(true);
+    setEstimatePanel(null);
+    try {
+      const cost = await estimate.request();
+      if (cost === null) return;
+      if (cost.problem !== null || cost.value.warnings.some(warning =>
+        warning.code === "ESTIMATE_UI_CACHE" || warning.code === "ESTIMATE_EXTRAPOLATION")) {
+        setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
+      }
+      if (cost.problem !== null) {
+        if (!window.confirm(t("app.confirm.estimateFailed", { message: backendMessage(cost.problem) }))) return;
+      } else {
+        const budgets = cost.value.warnings.filter(warning => warning.code === "ESTIMATE_UI_CACHE");
+        if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map(warning => backendMessage(warning)).join("\n") }))) return;
+      }
+      const documents = { model: loaded.model, experiment: loaded.experiment };
+      if ((workspace.dirty || loaded.versions.experiment === null) && !await workspace.save()) return;
+      setLaunchDocuments(documents);
+      await run.run(loaded.experimentPath, documents);
+    } finally {
+      runInFlight.current = false;
+      setRunPending(false);
+    }
+  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize]);
+
+  useEffect(() => {
+    if (command === null) return;
+    // A field commits on blur/Enter; its new snapshot must pass validation before keyboard Run.
+    if (command === "run" && validation.pending && !invalid && !loading && !runInFlight.current) return;
+    const timer = window.setTimeout(() => {
+      setCommand(null);
+      if (command === "run") void startRun();
+      else if (!invalid && !loading && !workspace.saving && !workspace.conflict && health.error === null) void workspace.save();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [command, validation.pending, invalid, loading, startRun, workspace, health.error]);
+
   return (
     <div className={`app app--results-${resultsSize}`}>
       <TopBar
@@ -323,7 +383,7 @@ export function App() {
         onNewModel={() => { void fileMenu.current?.start("new"); }}
         onNewExperiment={() => { void fileMenu.current?.start("newExperiment"); }}
         onModel={path => {
-          if (invalid || loading || workspace.saving || run.running || runPending || estimate.pending) return;
+          if (invalid || loading || workspace.saving || run.running || startingRun || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           resetExperimentView();
           void workspace.openModel(path, true);
@@ -331,7 +391,7 @@ export function App() {
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
         onExperiment={(path) => {
-          if (invalid || workspace.loading || workspace.saving || run.running || estimate.pending) return;
+          if (invalid || workspace.loading || workspace.saving || run.running || startingRun || estimate.pending) return;
           if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
           resetExperimentView();
           void workspace.open(path, true);
@@ -353,14 +413,15 @@ export function App() {
         backendError={health.error === null ? undefined : t("app.health.unavailable", { error: health.error })}
         onSave={() => void workspace.save()}
         fileMenu={<FileMenu ref={fileMenu} workspace={workspace}
-          disabled={invalid || loading || workspace.saving || run.running || runPending || estimate.pending}
+          disabled={invalid || loading || workspace.saving || run.running || startingRun || estimate.pending}
           onOpened={resetExperimentView} />}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
         onUndo={workspace.undo}
         onRedo={workspace.redo}
-        running={run.running || runPending}
+        running={run.running || startingRun}
         runBlockedReason={runBlockedReason}
+        runProblem={workspace.problem === null ? undefined : backendMessage(workspace.problem)}
         estimating={estimate.pending}
         onEstimate={() => void requestEstimate()}
         canResume={ownRun && run.manifest?.complete === false && (run.job?.status === "CANCELLED" || run.job?.status === "FAILED")}
@@ -371,27 +432,8 @@ export function App() {
           void run.resume();
         }}
         onRun={() => {
-          if (loaded === null) return;
-          if (resultsSize === "collapsed") setResultsSize("normal");
-          setRunPending(true);
-          setEstimatePanel(null);
-          void estimate.request().then(async (cost) => {
-            if (cost === null) return;
-            if (cost.problem !== null || cost.value.warnings.some(warning =>
-              warning.code === "ESTIMATE_UI_CACHE" || warning.code === "ESTIMATE_EXTRAPOLATION")) {
-              setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
-            }
-            if (cost.problem !== null) {
-              if (!window.confirm(t("app.confirm.estimateFailed", { message: backendMessage(cost.problem) }))) return;
-            } else {
-              const budgets = cost.value.warnings.filter((warning) => warning.code === "ESTIMATE_UI_CACHE");
-              if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map((warning) => backendMessage(warning)).join("\n") }))) return;
-            }
-            const documents = { model: loaded.model, experiment: loaded.experiment };
-            if (loaded.versions.experiment === null && !await workspace.save()) return;
-            setLaunchDocuments(documents);
-            await run.run(loaded.experimentPath, documents);
-          }).finally(() => setRunPending(false));
+          if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur();
+          setCommand("run");
         }}
         onCancel={() => {
           if (loaded !== null) setLaunchDocuments({ model: loaded.model, experiment: loaded.experiment });
@@ -487,9 +529,9 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
-          {!ownRun || run.summary === null || variant === undefined || catalog === null || model === null ? null : <ResultsContextBar
-            catalog={catalog} model={model} summary={run.summary} variant={variant} selection={results.selection} onSelect={results.select}
-            replications={run.manifest?.replications ?? run.summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
+          {!ownRun || summary === null || variant === undefined || catalog === null || model === null ? null : <ResultsContextBar
+            catalog={catalog} model={model} summary={summary} variant={variant} selection={results.selection} onSelect={results.select}
+            replications={resultManifest?.replications ?? summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
             playback={playback} windowCount={windowCount} windowMs={windowMs} endMs={endMs}
             metric={nodeMetric} onMetricChange={setNodeMetric} connectionMetric={connectionMetric}
             onConnectionMetricChange={setConnectionMetric} stale={staleResults}
@@ -572,19 +614,19 @@ export function App() {
           }} />
       </main>
       <ResultsPanel
-        running={runPending || (ownRun && run.running)}
+        running={startingRun || (ownRun && run.running)}
         job={ownRun ? run.job : null}
-        summary={ownRun ? run.summary : null}
+        summary={ownRun ? summary : null}
         problem={launchIsCurrent ? run.problem : null}
         catalog={catalog}
-        model={ownRun ? run.documents?.model ?? null : null}
-        manifest={ownRun ? run.manifest : null}
+        model={ownRun ? resultDocuments?.model ?? null : null}
+        manifest={ownRun ? resultManifest : null}
         stale={staleResults}
         activeVariantId={variant?.id ?? null}
         selectedPointId={results.selection.pointId}
         onPointChange={(pointId) => results.select({ pointId })}
-        runId={ownRun ? run.job?.runId ?? null : null}
-        experiment={ownRun ? run.documents?.experiment ?? null : null}
+        runId={ownRun ? resultRunId : null}
+        experiment={ownRun ? resultDocuments?.experiment ?? null : null}
         selectedNodes={selection}
         replication={results.selection.replication}
         cursorWindow={results.selection.window}
@@ -601,8 +643,8 @@ export function App() {
         validationPending={validation.pending}
         validationProblem={validation.problem}
         onElement={id => {
-          if (loaded === null || run.documents === null || invalid || loading) return;
-          const previous = elementOf(run.documents.model, id);
+          if (loaded === null || resultDocuments === null || invalid || loading) return;
+          const previous = elementOf(resultDocuments.model, id);
           if (previous === null) return;
           const elements = [...Object.entries(loaded.model.blocks), ...loaded.model.connections.map(edge => [edge.id, edge] as const)];
           const current = elements.find(([, element]) => elementIdentity(element) === elementIdentity(previous));

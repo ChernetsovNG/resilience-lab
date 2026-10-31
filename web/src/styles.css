@@ -1238,6 +1238,22 @@ select {
   gap: 0.5rem;
 }
 
+.run-blocked-reason {
+  position: absolute;
+  inset-block-start: calc(100% + 0.375rem);
+  inset-inline-end: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 24rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #f0c181;
+  border-radius: 0.35rem;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: var(--font-secondary);
+  white-space: normal;
+}
+
 .estimate-popover {
   position: absolute;
   inset-block-start: calc(100% + 0.5rem);

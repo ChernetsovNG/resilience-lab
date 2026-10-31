@@ -10,6 +10,14 @@ it("offers Timeline and explains that it needs a run", () => {
   expect(screen.getByRole("tabpanel").textContent).toContain("Run the experiment to see the timeline.");
 });
 
+it("shows waiting instead of an invitation to run while the first run is starting", () => {
+  render(<ResultsPanel job={null} summary={null} problem={null} running />);
+  expect(screen.getByRole("tabpanel").textContent).toContain("Waiting for run results.");
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+  expect(screen.getByRole("tabpanel").textContent).toContain("Waiting for run results.");
+  expect(screen.queryByText("Run the experiment to see the timeline.")).toBeNull();
+});
+
 it("offers Map only for the summary grid and returns to Summary after a run without a grid", async () => {
   const grid = structuredClone(summary);
   grid.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];

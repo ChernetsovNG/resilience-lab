@@ -11,6 +11,15 @@ export interface RunDocuments {
 
 type RunProblem = ApiProblem & { requiresNewRun?: boolean };
 
+/** One completed artifact and the exact documents submitted for it; independent of the next job. */
+export interface RunResult {
+  runId: string;
+  jobId: string;
+  summary: RunSummary;
+  manifest: RunManifest;
+  documents: RunDocuments;
+}
+
 export interface Run {
   /** The experiment the state below belongs to. */
   experiment: string | null;
@@ -18,6 +27,7 @@ export interface Run {
   summary: RunSummary | null;
   manifest: RunManifest | null;
   documents: RunDocuments | null;
+  result: RunResult | null;
   problem: RunProblem | null;
   running: boolean;
   run: (experimentPath: string, documents: RunDocuments) => Promise<void>;
@@ -32,7 +42,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function useRun(pollMs = 500): Run {
   const [experiment, setExperiment] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
-  const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [result, setResult] = useState<RunResult | null>(null);
   const [manifest, setManifest] = useState<RunManifest | null>(null);
   const [documents, setDocuments] = useState<RunDocuments | null>(null);
   const [problem, setProblem] = useState<RunProblem | null>(null);
@@ -52,17 +62,16 @@ export function useRun(pollMs = 500): Run {
     generation.current += 1;
     setExperiment(null);
     setJob(null);
-    setSummary(null);
+    setResult(null);
     setManifest(null);
     setDocuments(null);
     setProblem(null);
     setRunning(false);
   }, []);
 
-  const track = useCallback(async (submit: () => Promise<JobView>, resuming = false) => {
+  const track = useCallback(async (submit: () => Promise<JobView>, submitted: RunDocuments, resuming = false) => {
     const current = ++generation.current;
     const live = () => current === generation.current;
-    setSummary(null);
     setProblem(null);
     setRunning(true);
     try {
@@ -80,7 +89,7 @@ export function useRun(pollMs = 500): Run {
       if (next.status === "COMPLETED") {
         const [loadedSummary, loadedManifest] = await Promise.all([api.runSummary(next.runId), api.runManifest(next.runId)]);
         if (live()) {
-          setSummary(loadedSummary);
+          setResult({ runId: next.runId, jobId: next.id, summary: loadedSummary, manifest: loadedManifest, documents: submitted });
           setManifest(loadedManifest);
         }
       } else {
@@ -111,17 +120,18 @@ export function useRun(pollMs = 500): Run {
   }, [pollMs, publishJob]);
 
   const run = useCallback(async (experimentPath: string, submitted: RunDocuments) => {
+    if (experimentPath !== experiment) setResult(null);
     setExperiment(experimentPath);
     setJob(null);
     setManifest(null);
     setDocuments(submitted);
-    await track(() => api.submitJob(experimentPath));
-  }, [track]);
+    await track(() => api.submitJob(experimentPath), submitted);
+  }, [experiment, track]);
 
   const resume = useCallback(async () => {
-    if (job === null || manifest?.complete !== false || (job.status !== "CANCELLED" && job.status !== "FAILED")) return;
-    await track(() => api.resumeRun(job.runId), true);
-  }, [job, manifest, track]);
+    if (job === null || documents === null || manifest?.complete !== false || (job.status !== "CANCELLED" && job.status !== "FAILED")) return;
+    await track(() => api.resumeRun(job.runId), documents, true);
+  }, [job, manifest, documents, track]);
 
   const cancel = useCallback(async () => {
     if (job === null || (job.status !== "QUEUED" && job.status !== "RUNNING")) return;
@@ -145,5 +155,5 @@ export function useRun(pollMs = 500): Run {
     }
   }, [job, publishJob]);
 
-  return { experiment, job, summary, manifest, documents, problem, running, run, resume, cancel, reset };
+  return { experiment, job, summary: result?.summary ?? null, manifest, documents, result, problem, running, run, resume, cancel, reset };
 }

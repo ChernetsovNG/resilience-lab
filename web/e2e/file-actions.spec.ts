@@ -130,7 +130,7 @@ test("creates an empty model and runs a system built from the palette", async ({
     const path = `${target}/${target}.experiment.json`;
     await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(path);
     await expect(page.getByTestId("block-node")).toHaveCount(0);
-    await expect(page.getByText("Add a client from the palette", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Add a client from the palette", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${target}/${target}.model.json`);
     expect((await stored(page, path)).content.experiment).toMatchObject({ schemaVersion: 2, execution: { replications: 10 } });
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
@@ -152,6 +152,10 @@ test("creates an empty model and runs a system built from the palette", async ({
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     const report = await (await page.request.post("/api/v1/validate", { data: { experiment: path } })).json();
     expect(report.valid).toBe(true);
+    const experiment = JSON.parse(await readFile(resolve(root, path), "utf8"));
+    experiment.execution = { ...experiment.execution, warmup: "0ms", measurement: "300ms", replications: 2, window: "50ms" };
+    await writeFile(resolve(root, path), JSON.stringify(experiment));
+    await page.reload();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");

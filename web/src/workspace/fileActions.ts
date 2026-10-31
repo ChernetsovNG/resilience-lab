@@ -40,7 +40,7 @@ function parseDocument(text: string, name: string): Record<string, unknown> {
 export function defaultExperiment(modelRef: string, layoutRef: string | null): ExperimentFile {
   return {
     schemaVersion: 2, modelRef, layoutRef,
-    execution: { replications: 10, seed: 1, warmup: "0ms", measurement: "1s", maxRealTime: "30s" },
+    execution: { replications: 10, seed: 1, warmup: "10s", measurement: "60s", maxRealTime: "30s" },
     faults: [], grid: [], variants: [{ id: "baseline", label: t("file.baseline"), overrides: {} }],
   };
 }

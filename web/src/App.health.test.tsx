@@ -45,7 +45,7 @@ describe("backend availability", () => {
     unavailable = true;
     await advance(500);
 
-    expect(screen.getByText(`Backend unavailable: ${reason}`)).toBeTruthy();
+    expect(screen.getAllByText(`Backend unavailable: ${reason}`).length).toBeGreaterThan(0);
     expect(button("Run").disabled).toBe(true);
     expect(button("Estimate").disabled).toBe(true);
     fireEvent.click(screen.getByTestId("rf__node-gateway"));
@@ -68,7 +68,7 @@ describe("backend availability", () => {
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("8");
     expect(button("Save").disabled).toBe(false);
     expect(button("Estimate").disabled).toBe(false);
-    expect(button("Run").disabled).toBe(true);
+    expect(button("Run").disabled).toBe(false);
     fireEvent.click(button("Undo"));
     await advance(500);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");

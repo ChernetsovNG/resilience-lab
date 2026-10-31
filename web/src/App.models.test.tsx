@@ -16,7 +16,7 @@ it("guides a model without a client instead of showing structural errors", async
     ] } };
   });
   render(<App />);
-  await screen.findByText("Add a client from the palette");
+  await screen.findAllByText("Add a client from the palette");
   expect(button("Run").disabled).toBe(true);
   expect(button("Run").title).toBe("Add a client from the palette");
   expect(screen.queryByText("No client")).toBeNull();

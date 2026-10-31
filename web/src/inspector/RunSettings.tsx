@@ -119,10 +119,12 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
             onClick={() => onCommand(removeFault(index))}>{t("editor.fault.remove")}</button>
         </fieldset>
       ))}
-      <button type="button" disabled={!editable || invalid || targets.length === 0} onClick={() => onCommand(addFault({
-        target: targets[0], from: `0${duration("from", "").units[0]?.symbol ?? ""}`,
-        to: experiment.execution.measurement, kind: "slowdown", multiplier: 2,
-      }))}>{t("editor.fault.add")}</button>
+      <button type="button" disabled={!editable || invalid || targets.length === 0 || measurement === null || unit === undefined} onClick={() => {
+        if (measurement === null || unit === undefined) return;
+        const warmup = canonicalOf(experiment.execution.warmup, seriesWindow.units) ?? 0;
+        const time = (fraction: number) => `${((warmup + measurement * fraction) * unit.denominator) / unit.numerator}${unit.symbol}`;
+        onCommand(addFault({ target: targets[0], from: time(0.5), to: time(0.75), kind: "slowdown", multiplier: 2 }));
+      }}>{t("editor.fault.add")}</button>
       </div>
       </InspectorSection>
       <GridSettings catalog={catalog} model={model} experiment={experiment} editable={editable} invalid={invalid}
