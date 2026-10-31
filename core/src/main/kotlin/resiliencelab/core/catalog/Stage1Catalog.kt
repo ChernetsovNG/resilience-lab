@@ -175,7 +175,9 @@ object Stage1Catalog {
                         name = "queue",
                         kind = ParamKind.INTEGER,
                         title = "Queue capacity",
-                        description = "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
+                        description =
+                            "Waiting places in the FIFO queue. " +
+                                "0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
                         default = JsonPrimitive(0),
                         initial = JsonPrimitive(100),
                         minimum = 0.0,
@@ -248,7 +250,9 @@ object Stage1Catalog {
                         name = "waitTimeout",
                         kind = ParamKind.QUANTITY,
                         title = "Server connection wait timeout",
-                        description = "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Initially 5s.",
+                        description =
+                            "Maximum FIFO wait for a server connection. " +
+                                "0 means no waiting: if no server connection is free, the attempt is rejected immediately. Initially 5s.",
                         required = true,
                         initial = JsonPrimitive("5s"),
                         dimension = Dimension.DURATION,
@@ -364,7 +368,9 @@ object Stage1Catalog {
                                     name = "acquireTimeout",
                                     kind = ParamKind.QUANTITY,
                                     title = "Acquisition timeout",
-                                    description = "Maximum connection wait, also bounded by the remaining deadline; zero does not wait.",
+                                    description =
+                                        "Maximum wait for a free connection, also bounded by the remaining deadline. " +
+                                            "0 means no waiting: if no connection is free, the attempt fails immediately.",
                                     default = JsonPrimitive("30s"),
                                     dimension = Dimension.DURATION,
                                     minimum = 0.0,
@@ -509,7 +515,9 @@ object Stage1Catalog {
                                 param.copy(
                                     initial = JsonPrimitive(0),
                                     title = "Queue capacity",
-                                    description = "Waiting queries; zero disables queueing. Initially 0.",
+                                    description =
+                                        "Waiting queries. " +
+                                            "0 means no queue: when all connections are busy, a query is rejected immediately. Initially 0.",
                                 )
                             "processing" ->
                                 param.copy(

@@ -302,7 +302,7 @@
                     }
                   ],
                   "default": 0,
-                  "description": "Waiting queries; zero disables queueing. Initially 0.",
+                  "description": "Waiting queries. 0 means no queue: when all connections are busy, a query is rejected immediately. Initially 0.",
                   "title": "Queue capacity"
                 }
               },
@@ -459,7 +459,7 @@
                   "title": "Pooler delay"
                 },
                 "waitTimeout": {
-                  "description": "Maximum FIFO wait for a server connection; zero permits immediate acquisition only. Initially 5s. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                  "description": "Maximum FIFO wait for a server connection. 0 means no waiting: if no server connection is free, the attempt is rejected immediately. Initially 5s. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
                   "title": "Server connection wait timeout",
                   "type": "string",
@@ -720,7 +720,7 @@
                     }
                   ],
                   "default": 0,
-                  "description": "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
+                  "description": "Waiting places in the FIFO queue. 0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
                   "title": "Queue capacity"
                 },
                 "replicas": {
@@ -899,7 +899,7 @@
                       }
                     ],
                     "default": 0,
-                    "description": "Waiting places in the FIFO queue; zero disables queueing. Initially 100.",
+                    "description": "Waiting places in the FIFO queue. 0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
                     "title": "Queue capacity"
                   }
                 },
@@ -1241,7 +1241,7 @@
                             }
                           ],
                           "default": "30s",
-                          "description": "Maximum connection wait, also bounded by the remaining deadline; zero does not wait. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "description": "Maximum wait for a free connection, also bounded by the remaining deadline. 0 means no waiting: if no connection is free, the attempt fails immediately. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
                           "title": "Acquisition timeout"
                         },
                         "size": {
