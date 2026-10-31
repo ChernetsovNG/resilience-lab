@@ -23,6 +23,7 @@ jobs:
     outputs:
       code: ${{ steps.diff.outputs.code }}
       jvm: ${{ steps.diff.outputs.jvm }}
+      web: ${{ steps.diff.outputs.web }}
     steps:
       - name: Check out repository
         if: github.event_name == 'pull_request'
@@ -38,6 +39,7 @@ jobs:
           if [ "$EVENT_NAME" != "pull_request" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "jvm=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
@@ -51,6 +53,12 @@ jobs:
             echo "jvm=true" >> "$GITHUB_OUTPUT"
           else
             echo "jvm=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The CLI is not part of the web app or the E2E server.
+          if printf '%s\n' "$changed" | grep -v -E '^apps/cli/|^docs/|\.md$' | grep -q .; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
           fi
 
   build-jvm:
@@ -98,7 +106,7 @@ jobs:
 
   build-web:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -169,6 +177,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           JVM_REQUIRED: ${{ needs.changes.outputs.jvm }}
           JVM_RESULT: ${{ needs.build-jvm.result }}
+          WEB_REQUIRED: ${{ needs.changes.outputs.web }}
           WEB_RESULT: ${{ needs.build-web.result }}
         run: |
           test "$CHANGES_RESULT" = success
@@ -176,11 +185,14 @@ jobs:
             true:success|false:skipped) ;;
             *) exit 1 ;;
           esac
-          test "$WEB_RESULT" = success
+          case "$WEB_REQUIRED:$WEB_RESULT" in
+            true:success|false:skipped) ;;
+            *) exit 1 ;;
+          esac
 
   e2e-server:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -212,7 +224,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -301,7 +313,7 @@ jobs:
 
   e2e:
     needs: [changes, e2e-server, e2e-shard]
-    if: ${{ always() && needs.changes.outputs.code != 'false' }}
+    if: ${{ always() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
