@@ -24,10 +24,25 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    systemProperty("resilience-lab.project-root", rootProject.projectDir.absolutePath)
-    inputs.files(rootProject.fileTree("schemas") { include("*.schema.json") })
-    inputs.dir(rootProject.file("examples"))
-    inputs.files(rootProject.fileTree("web/src/results/series/fixtures") { include("*.json") })
-    inputs.property("updateSchemas", providers.environmentVariable("UPDATE_SCHEMAS").orElse(""))
-    inputs.property("updateSeriesGolden", providers.environmentVariable("UPDATE_SERIES_GOLDEN").orElse(""))
+    systemProperty("resilience-lab.project-root", "..")
+    inputs
+        .files(rootProject.fileTree("schemas") { include("*.schema.json") })
+        .withPropertyName("documentSchemas")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .dir(rootProject.file("examples"))
+        .withPropertyName("exampleWorkspace")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .files(rootProject.fileTree("web/src/results/series/fixtures") { include("*.json") })
+        .withPropertyName("webSeriesFixtures")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .file(rootProject.file("web/src/test/catalog.json"))
+        .withPropertyName("webCatalog")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .dir("src/main/kotlin")
+        .withPropertyName("contractSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
