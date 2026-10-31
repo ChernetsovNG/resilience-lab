@@ -134,7 +134,7 @@ test("creates an empty model and runs a system built from the palette", async ({
     await expect(page.getByTestId("block-node")).toHaveCount(0);
     await expect(page.getByRole("main").getByText("Add a client from the palette", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Model", { exact: true })).toHaveValue(`${target}/${target}.model.json`);
-    expect((await stored(page, path)).content.experiment).toMatchObject({ schemaVersion: 2, execution: { replications: 10 } });
+    expect((await stored(page, path)).content.experiment).toMatchObject({ schemaVersion: 3, execution: { replications: 10 } });
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toHaveAttribute("title", "Add a client from the palette");
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
@@ -173,7 +173,7 @@ test("creates a new question for the current model without changing its source e
   await expect(page.getByLabel("Experiment", { exact: true })).toHaveValue(`${directory}/capacity.experiment.json`);
   await expect(page.getByTestId("block-node")).toHaveCount(4);
   expect((await stored(page, `${directory}/capacity.experiment.json`)).content.experiment).toMatchObject({
-    schemaVersion: 2, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json", execution: { replications: 10 },
+    schemaVersion: 3, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json", execution: { replications: 10 },
     faults: [], grid: [], variants: [{ id: "baseline", overrides: {} }],
   });
   expect(await readFile(source, "utf8")).toBe(before);

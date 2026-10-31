@@ -217,7 +217,7 @@ class FaultCompilerTest {
     ): ExperimentFile {
         val decoded =
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":2,"modelRef":"m.model.json","execution":{"replications":1,"warmup":"$warmup","measurement":"1s","seed":1},"faults":$faults,"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":1,"warmup":"$warmup","measurement":"1s","seed":1},"faults":$faults,"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             )
         assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)

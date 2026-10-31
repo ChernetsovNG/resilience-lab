@@ -40,7 +40,7 @@ class GridExperimentTest {
         Files.writeString(
             root.resolve("e.experiment.json"),
             """
-            {"schemaVersion":2,"modelRef":"m.model.json",
+            {"schemaVersion":3,"modelRef":"m.model.json",
              "execution":{"replications":2,"warmup":"0ms","measurement":"120ms","window":"20ms","seed":42},
              "variants":[{"id":"baseline","overrides":$overrides}]
              ${axes?.let { ",\"grid\":$it" }.orEmpty()}}

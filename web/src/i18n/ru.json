@@ -1,4 +1,9 @@
 {
+  "editor.annotations.title": "Описания и заметки",
+  "editor.annotations.model": "Модель",
+  "editor.annotations.experiment": "Эксперимент",
+  "editor.annotations.description": "Описание",
+  "editor.annotations.notes": "Заметки",
   "results.timeline.addReplica": "Добавить реплику #{replica} на график",
   "results.timeline.replicaRange": "Разброс по репликам: {min}–{max}",
   "results.groups.summaryHelp": "Итоги измеряемого интервала по всем повторениям. Нажмите заголовок столбца для сортировки. p99 рассчитан по объединённым наблюдениям задержки. При отсутствии наблюдений показано «нет данных».",

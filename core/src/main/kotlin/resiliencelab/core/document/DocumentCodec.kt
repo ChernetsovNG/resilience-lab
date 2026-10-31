@@ -26,7 +26,7 @@ sealed interface DecodeResult<out T> {
 
 /** Strict reading and deterministic writing of workspace documents (ADR 0005, items 4 and 7). */
 object DocumentCodec {
-    const val EXPERIMENT_SCHEMA_VERSION = 2
+    const val EXPERIMENT_SCHEMA_VERSION = 3
     const val LAYOUT_SCHEMA_VERSION = 1
     const val MODEL_SCHEMA_VERSION = 6
 

@@ -25,7 +25,7 @@ class ClientClassesCompilerTest {
         extra: String = "",
     ): CompileResult {
         val model = """{"schemaVersion":${DocumentCodec.MODEL_SCHEMA_VERSION},"blocks":{$blocks},"connections":[$connections]}"""
-        val experiment = """{"schemaVersion":2,"modelRef":"m.model.json",
+        val experiment = """{"schemaVersion":3,"modelRef":"m.model.json",
             "execution":{"replications":5,"warmup":"0s","measurement":"1s","seed":42},
             "variants":$variants $extra}"""
         return ModelCompiler().compile(
