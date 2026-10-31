@@ -191,6 +191,15 @@ it("adds, copies, renames and confirms deletion of a variant while keeping its p
   expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
 });
 
+it("ignores the second activation of a double click on Add variant", async () => {
+  server();
+  await open();
+  fireEvent.click(button("Add variant"), { detail: 1 });
+  fireEvent.click(button("Add variant"), { detail: 2 });
+  expect(screen.getByRole("tab", { name: "Variant 1" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.queryByRole("tab", { name: "Variant 2" })).toBeNull();
+});
+
 it("edits shared execution and fault settings from a variant and preserves invalid drafts", async () => {
   const fetchMock = server();
   await open();

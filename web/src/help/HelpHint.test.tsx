@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { costEstimate } from "../test/fixtures";
 import { CostEstimate } from "../run/CostEstimate";
 import { EstimatePopover } from "../run/EstimatePopover";
+import { HelpHint } from "./HelpHint";
 
 it.each(["hover", "focus", "click"])("opens field help by %s with an accessible name", action => {
   render(<CostEstimate estimate={costEstimate} />);
@@ -32,6 +33,20 @@ it("closes help on an outside click", () => {
   fireEvent.click(screen.getByRole("button", { name: "More about: Tasks" }));
   fireEvent.pointerDown(document.body);
   expect(screen.queryByRole("tooltip")).toBeNull();
+});
+
+it("returns focus to the diagnostic button when Escape closes interactive details", () => {
+  render(<HelpHint label="Variant warnings" interactive symbol="⚠"><a href="#variant-baseline">Baseline</a></HelpHint>);
+  const trigger = screen.getByRole("button", { name: "More about: Variant warnings" });
+  act(() => trigger.focus());
+  const dialog = screen.getByRole("dialog", { name: "Variant warnings" });
+  const link = screen.getByRole("link", { name: "Baseline" });
+  act(() => link.focus());
+  expect(document.activeElement).toBe(link);
+  expect(trigger.getAttribute("aria-controls")).toBe(dialog.id);
+  fireEvent.keyDown(link, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
 });
 
 it("explains every Estimate value", () => {

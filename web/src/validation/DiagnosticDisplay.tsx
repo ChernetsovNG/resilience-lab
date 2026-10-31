@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import type { Diagnostic } from "../api/apiTypes";
 import { summarizeDiagnostics } from "./diagnostics";
+import { HelpHint } from "../help/HelpHint";
 
 /** Compact element badge with a count and the greatest severity. */
 export function DiagnosticBadge({ diagnostics }: { diagnostics: readonly Diagnostic[] }) {
@@ -16,13 +17,19 @@ export function DiagnosticBadge({ diagnostics }: { diagnostics: readonly Diagnos
 
 /** Compiler messages next to a catalog or experiment field; warnings and errors remain distinguishable. */
 export function DiagnosticMessages({ diagnostics = [], id }: { diagnostics?: readonly Diagnostic[]; id?: string }) {
-  if (diagnostics.length === 0) return null;
-  return <ul id={id} className="field-diagnostics">
-    {diagnostics.map((diagnostic, index) => <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}
-      role={diagnostic.severity === "ERROR" ? "alert" : "status"}>
-      {t("editor.diagnostics.message", { code: diagnostic.code, message: backendMessage(diagnostic) })}
-    </li>)}
-  </ul>;
+  const summary = summarizeDiagnostics(diagnostics);
+  return <span className={`field-feedback${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}>
+    {summary === null ? null : <HelpHint id={id}
+      label={t("editor.diagnostics.countLabel", { count: formatNumber(summary.count), severity: t(`results.problems.severity.${summary.severity}`).toLowerCase() })}
+      symbol={t(summary.severity === "ERROR" ? "editor.symbols.error" : "editor.symbols.warning")}>
+      <ul className="field-diagnostics">
+        {diagnostics.map((diagnostic, index) => <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}
+          role={diagnostic.severity === "ERROR" ? "alert" : "status"}>
+          {t("editor.diagnostics.message", { code: diagnostic.code, message: backendMessage(diagnostic) })}
+        </li>)}
+      </ul>
+    </HelpHint>}
+  </span>;
 }
 
 
@@ -48,7 +55,12 @@ export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = 
   for (const diagnostic of diagnostics) {
     if (diagnostic.variant != null) variants.set(diagnostic.variant, [...(variants.get(diagnostic.variant) ?? []), diagnostic]);
   }
-  return <>{[...variants].map(([variant, findings]) => {
+  const summary = summarizeDiagnostics([...variants.values()].flat());
+  return <span className={`field-feedback field-feedback--variants${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}>
+    {summary === null ? null : <HelpHint interactive
+      label={t(`editor.diagnostics.variants.${summary.severity}`, { variants: [...variants.keys()].join(", ") })}
+      symbol={t(summary.severity === "ERROR" ? "editor.symbols.error" : "editor.symbols.warning")}>
+    {[...variants].map(([variant, findings]) => {
     const counts = (["ERROR", "WARNING"] as const).flatMap(severity => {
       const count = findings.filter(finding => finding.severity === severity).length;
       return count === 0 ? [] : [t(`editor.diagnostics.variantCount.${severity}.${count === 1 ? "one" : "other"}`, { count: formatNumber(count) })];
@@ -59,5 +71,7 @@ export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = 
         {t("editor.diagnostics.inVariants", { variant, counts: counts.join(", ") })}
       </a>
     </p>;
-  })}</>;
+    })}
+    </HelpHint>}
+  </span>;
 }

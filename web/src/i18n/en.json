@@ -274,6 +274,7 @@
   "editor.symbols.separator": " · ",
   "editor.symbols.warning": "⚠",
   "editor.variant.add": "Add variant",
+  "editor.variant.creating": "Creating variant…",
   "editor.variant.copy": "Duplicate",
   "editor.variant.copyLabel": "{label} copy",
   "editor.variant.delete": "Delete",

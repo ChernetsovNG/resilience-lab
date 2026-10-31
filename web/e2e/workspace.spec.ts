@@ -70,6 +70,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
   await expect(callLabel.getByRole("button", { name: "Warnings in variants: baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
+  await timeout.locator("..").locator(".field-feedback--variants button").click();
   await expect(timeout.locator("..").getByRole("link", { name: "In variants: baseline — 1 warning", exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
@@ -113,6 +114,7 @@ test("summarizes a warning from the only variant override on Model and opens its
     await expect(fieldMessages).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: solo", exact: true })).toBeVisible();
+    await handlers.locator("..").locator(".field-feedback--variants button").click();
     await expect(handlers.locator("..").getByRole("link", { name: "In variants: solo — 1 warning", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();

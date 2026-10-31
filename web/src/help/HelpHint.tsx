@@ -2,7 +2,9 @@ import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { t } from "../i18n";
 
 /** Field help in the browser top layer, shared by editable fields, estimates and progress. */
-export function HelpHint({ label, children, id: suppliedId }: { label: string; children: ReactNode; id?: string }) {
+export function HelpHint({ label, children, id: suppliedId, symbol, interactive = false }: {
+  label: string; children: ReactNode; id?: string; symbol?: ReactNode; interactive?: boolean;
+}) {
   const generatedId = useId();
   const id = suppliedId ?? generatedId;
   const [open, setOpen] = useState(false);
@@ -33,6 +35,7 @@ export function HelpHint({ label, children, id: suppliedId }: { label: string; c
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
+      if (interactive) button.current?.focus();
       setOpen(false);
     };
     // Capture before surrounding popovers and workspace shortcuts see Escape.
@@ -49,7 +52,7 @@ export function HelpHint({ label, children, id: suppliedId }: { label: string; c
       window.removeEventListener("resize", position);
       document.removeEventListener("scroll", position, true);
     };
-  }, [open, children]);
+  }, [open, children, interactive]);
 
   return <span ref={root} className="help-hint"
     onMouseEnter={() => { clearTimeout(leave.current); setOpen(true); }}
@@ -60,8 +63,10 @@ export function HelpHint({ label, children, id: suppliedId }: { label: string; c
     }}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
     <button ref={button} type="button" className="help-hint-button"
-      aria-label={t("help.more", { field: label })} aria-describedby={id} aria-expanded={open}
-      onFocus={() => setOpen(true)} onClick={() => setOpen(true)}>{t("help.symbol")}</button>
-    <div ref={panel} id={id} role="tooltip" popover="manual" hidden={!open} className="help-hint-popover">{children}</div>
+      aria-label={t("help.more", { field: label })} aria-describedby={interactive ? undefined : id} aria-expanded={open}
+      aria-controls={interactive ? id : undefined} aria-haspopup={interactive ? "dialog" : undefined}
+      onFocus={() => setOpen(true)} onClick={() => setOpen(true)}>{symbol ?? t("help.symbol")}</button>
+    <div ref={panel} id={id} role={interactive ? "dialog" : "tooltip"} aria-label={interactive ? label : undefined}
+      popover="manual" hidden={!open} className="help-hint-popover">{children}</div>
   </span>;
 }

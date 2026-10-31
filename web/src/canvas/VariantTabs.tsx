@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import type { Variant } from "../api/apiTypes";
@@ -20,7 +20,9 @@ export interface VariantTabsProps {
  * Pages below the canvas, as in draw.io (product vision §5.5): the model page first, then one page per variant. Only
  * the model page edits the model; a variant page edits its overrides, even when there are none yet.
  */
-export function VariantTabs({ variants, active, disabled = false, onSelect, onInspect, onCommand }: VariantTabsProps) {
+export function VariantTabs({ variants, active, disabled: navigationDisabled = false, onSelect, onInspect, onCommand }: VariantTabsProps) {
+  const [creating, startCreating] = useTransition();
+  const disabled = navigationDisabled || creating;
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; tab: HTMLButtonElement } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const explanationId = useId();
@@ -43,9 +45,11 @@ export function VariantTabs({ variants, active, disabled = false, onSelect, onIn
   const add = (source?: Variant) => {
     if (disabled) return;
     const id = nextVariantId(variants);
-    onCommand(addVariant(id, source === undefined ? t("editor.variant.newLabel", { number: id.slice(8) })
-      : t("editor.variant.copyLabel", { label: source.label ?? source.id }), source?.id));
-    onInspect(id);
+    startCreating(() => {
+      onCommand(addVariant(id, source === undefined ? t("editor.variant.newLabel", { number: id.slice(8) })
+        : t("editor.variant.copyLabel", { label: source.label ?? source.id }), source?.id));
+      onInspect(id);
+    });
   };
   return (
     <>
@@ -83,8 +87,9 @@ export function VariantTabs({ variants, active, disabled = false, onSelect, onIn
             {variant.label ?? variant.id}
           </button>
         ))}
-        <button type="button" disabled={disabled} aria-label={t("editor.variant.add")} onClick={() => add()}>
-          {t("editor.pages.add")}
+        <button type="button" disabled={disabled} aria-busy={creating} aria-label={t("editor.variant.add")}
+          onClick={event => { if (event.detail <= 1) add(); }}>
+          {t(creating ? "editor.variant.creating" : "editor.pages.add")}
         </button>
       </div>
       {menu === null || variant === undefined || disabled ? null : createPortal(

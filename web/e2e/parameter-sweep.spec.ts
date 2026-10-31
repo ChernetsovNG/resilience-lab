@@ -29,6 +29,8 @@ for (const language of ["en", "ru"] as const) {
     await expect(warning).toHaveCount(1);
     await expect(warning).toContainText("Baseline, hello");
     await expect(warning).not.toContainText(/p[0-9]/);
+    await axis.locator(":scope > .field-feedback").last().getByRole("button").focus();
+    await expect(warning).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`parameter-sweep-${language}.png`) });
 
     await page.getByTestId("canvas-edge-label-order-service-to-payment-service").click();

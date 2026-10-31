@@ -49,7 +49,14 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(problems).not.toContainText("LINT_DEADLINE_BUDGET");
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   const hint = inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true });
+  const trigger = inspector.locator('[data-inspector-field="timeout"] .field-feedback--variants button');
+  await trigger.click();
   await expect(hint).toBeVisible();
+  await hint.focus();
+  await hint.press("Escape");
+  await expect(trigger).toBeFocused();
+  await expect(hint).toBeHidden();
+  await trigger.press("Enter");
   await hint.scrollIntoViewIfNeeded();
   await expect(inspector.locator(".field-diagnostics")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("model-field-and-problems.png") });
@@ -57,9 +64,11 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(inspector.getByLabel("Timeout", { exact: true })).toBeFocused();
   await expect(inspector.locator(".field-diagnostics")).toContainText("LINT_TIMEOUT_BUDGET");
+  await expect(inspector.locator('[data-inspector-field="timeout"] .field-feedback button')).toHaveCSS("color", "rgb(146, 64, 14)");
   await expect(edge.locator(".diagnostic-badge--variants")).toHaveCount(0);
   await expect(client.getByRole("img", { name: "1 problems: warning", exact: true })).toBeVisible();
-  await inspector.locator(".field-diagnostics").scrollIntoViewIfNeeded();
+  await inspector.locator('[data-inspector-field="timeout"] .field-feedback button').focus();
+  await expect(inspector.getByRole("tooltip")).toContainText("LINT_TIMEOUT_BUDGET");
   await page.screenshot({ path: testInfo.outputPath("variant-field-warning.png") });
   await model.click();
   await clientBadge.click();
@@ -69,6 +78,7 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(problems.locator(".validation-problems > li")).toHaveCount(1);
   await expect(problems).toContainText("LINT_DEADLINE_BUDGET");
   await expect(inspector.getByLabel("Deadline", { exact: true }).locator("..")).toContainText("In variants: baseline — 1 warning");
+  await inspector.locator('[data-inspector-field="deadline"] .field-feedback--variants button').focus();
   await inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("model-client-warning.png") });
   await problems.getByRole("button", { name: "Show all problems", exact: true }).click();
