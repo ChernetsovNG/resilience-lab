@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "../components/useBeforeUnload";
 import { useState } from "react";
 import { t } from "../i18n";
 import type { AnnotationField, Annotations } from "../workspace/annotations";
@@ -9,6 +10,7 @@ function AnnotationText({ field, value, editable, path, onCommit }: {
   const [draft, setDraft] = useState(value);
   const [previous, setPrevious] = useState(value);
   if (previous !== value) { setPrevious(value); setDraft(value); }
+  useBeforeUnload(editable && draft !== value);
   return <div className="param-field annotation-field" data-inspector-field={path}>
     <label>{t(`editor.annotations.${field}`)}
       <textarea value={draft} readOnly={!editable} rows={field === "notes" ? 4 : 2}

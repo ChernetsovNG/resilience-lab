@@ -17,7 +17,7 @@ export interface FileMenuHandle {
 
 /** File commands use server workspace documents; native File/Blob transfer copies to and from the browser. */
 export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Workspace; disabled: boolean; onOpened: () => void; ref?: Ref<FileMenuHandle> }) {
-  const { confirm, confirmationDialog } = useConfirmation();
+  const { confirm, confirmDocumentSwitch, confirmationDialog } = useConfirmation();
   const menu = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [action, setAction] = useState<FileAction | null>(null);
@@ -46,7 +46,9 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
     if (next === "newExperiment" && workspace.loaded === null) return;
     menu.current?.hidePopover?.();
     const deleting = next === "deleteModel" || next === "deleteExperiment";
-    if ((next === "new" || next === "newExperiment" || deleting) && workspace.dirty &&
+    if ((next === "new" || next === "newExperiment") && workspace.dirty &&
+      !await confirmDocumentSwitch(workspace.save)) return;
+    if (deleting && workspace.dirty &&
       !await confirm({ title: t("app.confirm.discardChanges"),
         confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
     setDirectory(""); setFiles([]); setDeletion([]); setRunDeletion([]); setAction(next);

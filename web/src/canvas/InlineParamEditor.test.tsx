@@ -38,3 +38,19 @@ for (const language of ["en", "ru"] as const) {
     expect(screen.getByRole("option", { name: full })).toBeTruthy();
   });
 }
+
+it("protects an edited inline draft before commit and removes protection on Escape", () => {
+  render(<InlineParamEditor catalog={catalog} elementId="gateway" elementType="service" params={{ handlers: 4 }}
+    path="handlers" editable onCommit={vi.fn()} onValidity={vi.fn()} />);
+  const unload = () => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  expect(unload()).toBe(false);
+  fireEvent.doubleClick(screen.getByRole("button", { name: "Handlers: 4" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Handlers" }), { target: { value: "5" } });
+  expect(unload()).toBe(true);
+  fireEvent.keyDown(screen.getByRole("textbox", { name: "Handlers" }), { key: "Escape" });
+  expect(unload()).toBe(false);
+});

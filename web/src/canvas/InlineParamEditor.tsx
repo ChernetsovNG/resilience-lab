@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "../components/useBeforeUnload";
 import { t } from "../i18n";
 import { catalogOption, catalogText } from "../i18n/catalog";
 import { useEffect, useId, useRef, useState } from "react";
@@ -50,6 +51,7 @@ function InlineValue({ catalog, elementId, elementType, modelParams, overridden 
   const documentValue = parseParam(descriptor, draft, false);
   const key = `${elementId}.${path}`;
   const valid = !editable || !editing || documentValue.ok || draft === shown;
+  useBeforeUnload(editable && editing && draft !== shown);
   const validityRef = useRef(onValidity);
 
   useEffect(() => {

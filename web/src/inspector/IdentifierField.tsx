@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "../components/useBeforeUnload";
 import { t } from "../i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ModelFile } from "../api/apiTypes";
@@ -15,6 +16,7 @@ interface IdentifierFieldProps {
 export function IdentifierField({ model, identifier, editable, onRename, onValidity }: IdentifierFieldProps) {
   const inputId = useId();
   const [draft, setDraft] = useState(identifier);
+  useBeforeUnload(editable && draft !== identifier);
   const error = editable ? identifierError(model, draft, identifier) : null;
   const validity = useRef(onValidity);
   useEffect(() => { validity.current = onValidity; }, [onValidity]);

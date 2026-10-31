@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "../components/useBeforeUnload";
 import { t } from "../i18n";
 import { HelpHint } from "../help/HelpHint";
 import { catalogOption } from "../i18n/catalog";
@@ -126,6 +127,7 @@ function ScalarField({ descriptor, value, path, editable, inputAction, isOverrid
   const documentValue = parseParam(descriptor, draft, false);
   // Missing document values stay undoable; only unsaved unparseable text blocks navigation.
   const validDraft = documentValue.ok || draft === shown;
+  useBeforeUnload(editable && draft !== shown);
   const validityRef = useRef(onValidity);
 
   useEffect(() => {

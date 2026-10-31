@@ -399,8 +399,9 @@ test("keeps a draft when external model reload is dismissed and reloads after co
   await expect(alert).toContainText("Reload will discard unsaved changes", { timeout: 5000 });
 
   await alert.getByRole("button", { name: "Reload", exact: true }).click();
-  await page.getByRole("dialog", { name: "Reload and discard unsaved changes to the documents?", exact: true })
-    .getByRole("button", { name: "Stay", exact: true }).click();
+  const reloadConfirmation = page.getByRole("dialog", { name: "Reload and discard unsaved changes to the documents?", exact: true });
+  await expect(reloadConfirmation.getByRole("button")).toHaveText(["Stay", "Reload and discard edits"]);
+  await reloadConfirmation.getByRole("button", { name: "Stay", exact: true }).click();
   await expect(handlers).toHaveValue("6");
   await expect(alert).toBeVisible();
 

@@ -1,3 +1,4 @@
+import { useBeforeUnload } from "../components/useBeforeUnload";
 import { AnnotationFields } from "./AnnotationFields";
 import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
@@ -47,6 +48,7 @@ function VariantText({ label, path, value, editable, error, onCommit, onValidity
   const [previous, setPrevious] = useState(value);
   if (previous !== value) { setPrevious(value); setDraft(value); }
   const message = error?.(draft) ?? null;
+  useBeforeUnload(editable && draft !== value);
   const validity = useRef(onValidity);
   useEffect(() => { validity.current = onValidity; }, [onValidity]);
   useEffect(() => { validity.current(label, !editable || draft === value || message === null); }, [label, editable, draft, value, message]);
