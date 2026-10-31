@@ -10,6 +10,8 @@ import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Stage1Catalog
 import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.lab.Lab
+import resiliencelab.core.results.FirstNodeSaturation
+import resiliencelab.core.results.SlotPoolLabel
 import resiliencelab.core.workspace.FileWorkspace
 import java.io.File
 import java.nio.file.Files
@@ -54,7 +56,14 @@ class CliTest {
                                         variant.copy(
                                             points =
                                                 variant.points.map { point ->
-                                                    point.copy(headroom = resiliencelab.core.results.CapacityHeadroom(peak))
+                                                    point.copy(
+                                                        headroom = resiliencelab.core.results.CapacityHeadroom(peak),
+                                                        saturation =
+                                                            point.saturation.copy(
+                                                                withoutSaturation = variant.replications,
+                                                                firstNodes = emptyList(),
+                                                            ),
+                                                    )
                                                 },
                                         )
                                     },
@@ -63,7 +72,58 @@ class CliTest {
                 },
             )
         assertThat(status).isZero()
-        assertThat(stdout.toString()).contains("91.00% at connection pool order-service#2 → pgbouncer", "mean queue n/a")
+        assertThat(stdout.toString())
+            .contains(
+                "without saturation: 10 of 10 replications; capacity headroom (pooled over measurement): " +
+                    "utilization 91.00% at connection pool order-service#2 → pgbouncer, mean queue n/a",
+            ).doesNotContain("first saturation:")
+    }
+
+    @Test
+    fun `prints every recorded first slot set and hides headroom when some replications saturate`() {
+        val firstNodes =
+            listOf(
+                FirstNodeSaturation(
+                    "db-proxy",
+                    6,
+                    12.5,
+                    0.0,
+                    25.0,
+                    "clientConnections",
+                    SlotPoolLabel("RESULT_SLOT_POOLER_CLIENT", "client connections db-proxy", emptyMap()),
+                ),
+                FirstNodeSaturation(
+                    "db-proxy",
+                    3,
+                    100.0,
+                    90.0,
+                    120.0,
+                    "serverConnections",
+                    SlotPoolLabel("RESULT_SLOT_POOLER_SERVER", "server connections db-proxy", emptyMap()),
+                ),
+            )
+        val result =
+            execute(listOf("run", experiment)) { lab, path, id, _, _ ->
+                val run = lab.run(path, id)
+                val variant = run.summary.variants.first()
+                val point = variant.points.first()
+                val saturation = point.saturation.copy(firstNodes = firstNodes, withoutSaturation = 1)
+                run.copy(
+                    summary =
+                        run.summary.copy(
+                            variants = listOf(variant.copy(points = listOf(point.copy(saturation = saturation)))),
+                        ),
+                )
+            }
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        assertThat(result.stdout)
+            .contains(
+                "first saturation: client connections db-proxy (db-proxy/clientConnections) in 6 of 10 replications, " +
+                    "median start 12.5 ms, range 0.0–25.0 ms; " +
+                    "first saturation: server connections db-proxy (db-proxy/serverConnections) in 3 of 10 replications, " +
+                    "median start 100.0 ms, range 90.0–120.0 ms; without saturation: 1 of 10 replications\n",
+            ).doesNotContain("capacity headroom")
     }
 
     @TempDir
@@ -220,9 +280,11 @@ class CliTest {
     fun `retry storm output stays unchanged with and without replica expansion`() {
         val expected =
             "baseline/p0: success 61.5%, p95 251.9 ms, p99 252.0 ms; " +
-                "capacity headroom: utilization 84.73% at handlers dependency, mean queue 7.51 at handlers gateway\n" +
+                "first saturation: handlers dependency (dependency/handlers) in 10 of 10 replications, " +
+                "median start 225.0 ms, range 210.0–290.0 ms; without saturation: 0 of 10 replications\n" +
                 "no-retries/p0: success 51.4%, p95 184.0 ms, p99 219.0 ms; " +
-                "capacity headroom: utilization 78.98% at handlers dependency, mean queue 3.90 at handlers gateway\n"
+                "first saturation: handlers dependency (dependency/handlers) in 10 of 10 replications, " +
+                "median start 225.0 ms, range 210.0–290.0 ms; without saturation: 0 of 10 replications\n"
         listOf(listOf("run", experiment), listOf("run", "--replicas", experiment)).forEach { args ->
             val result = execute(args)
             assertThat(result.exitCode).describedAs(result.stderr).isZero()
