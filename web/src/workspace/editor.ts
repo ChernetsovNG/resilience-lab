@@ -1,5 +1,6 @@
-import type { DocumentDraft, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
-import { isObject, ownEntry, withParam } from "./params";
+import type { Catalog, DocumentDraft, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
+import { elementOf, isObject, ownEntry, withParam } from "./params";
+import { reconcileParameter } from "./parameterApplicability";
 
 /** Document content only: selection, pages and panels do not belong in the history. */
 export interface EditorDocuments {
@@ -103,9 +104,20 @@ export function documentDrafts(loaded: LoadedExperiment): DocumentDraft[] {
     .map((kind) => ({ path: loaded[`${kind}Path`], content: { [kind]: loaded[kind] } }));
 }
 
-/** Edits a parameter without filling defaults or touching the other documents. */
-export function setModelParam(id: string, name: string, value: unknown): EditorCommand {
-  return (documents) => ({ ...documents, model: withParam(documents.model, id, name, value) });
+/** Edits one model parameter and reconciles kind-dependent fields in the same snapshot; other documents are untouched. */
+export function setModelParam(id: string, name: string, value: unknown, catalog?: Catalog): EditorCommand {
+  return (documents) => {
+    let model = withParam(documents.model, id, name, value);
+    const root = name.split(".")[0];
+    const element = elementOf(documents.model, id);
+    const descriptor = catalog?.types.find(type => type.id === element?.type)?.params.find(param => param.name === root);
+    if (descriptor !== undefined) {
+      const next = elementOf(model, id)!.params[root];
+      const reconciled = reconcileParameter(descriptor, element?.params[root], next);
+      if (reconciled !== next) model = withParam(model, id, root, reconciled);
+    }
+    return { ...documents, model };
+  };
 }
 
 /** Commands and history share the same document snapshots; saves update only persistence metadata. */

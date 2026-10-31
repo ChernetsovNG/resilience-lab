@@ -725,7 +725,12 @@ export interface components {
             /** Format: int32 */
             order: number;
         };
+        ParamApplicability: {
+            field: string;
+            values: string[];
+        };
         ParamDescriptor: {
+            appliesWhen?: components["schemas"]["ParamApplicability"] | null;
             default?: unknown[] | boolean | number | null | {
                 [key: string]: unknown;
             } | string;

@@ -30,6 +30,22 @@ function Settings({ initialExperiment = experiment, initialCatalog = gridCatalog
   </>;
 }
 
+it.each(["fixed", "lognormal"])("offers only applicable sweep fields for %s", kind => {
+  const conditional = structuredClone(serverCatalog) as Catalog;
+  conditional.types.find(type => type.id === "service")!.params.find(param => param.name === "processing")!
+    .fields.find(field => field.name === "stdDev")!.sweepable = true;
+  const initialModel = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway,
+    params: { ...model.blocks.gateway.params, processing: { kind, mean: "1ms", ...(kind === "lognormal" ? { stdDev: "1ms" } : {}) } },
+  } }, connections: model.connections.map(edge => edge.id === "gateway-to-middle"
+    ? { ...edge, params: { ...edge.params, backoff: { kind: "none" } } } : edge) };
+  render(<Settings initialCatalog={conditional} initialModel={initialModel} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
+  const paths = [...screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).options].map(option => option.value);
+  expect(paths.includes("gateway.processing.stdDev")).toBe(kind === "lognormal");
+  expect(paths).not.toContain("gateway-to-middle.backoff.base");
+  expect(paths).toContain("middle-to-dependency.backoff.base");
+});
+
 it("excludes the outgoing pooler's forbidden call pool from sweep parameters", () => {
   const initialModel: ModelFile = { ...model, blocks: { ...model.blocks,
     pooler: { type: "pooler", params: { poolSize: 3 } }, database: { type: "database", params: { maxConnections: 10 } },

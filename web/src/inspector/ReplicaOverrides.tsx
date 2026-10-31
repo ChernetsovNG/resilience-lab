@@ -6,6 +6,7 @@ import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
 import { initialParams } from "../workspace/initialParams";
 import { isObject, ownEntry, setField, type Params } from "../workspace/params";
+import { reconcileParameter } from "../workspace/parameterApplicability";
 import { InspectorSection } from "./InspectorSection";
 import { ParamField } from "./ParamField";
 
@@ -39,7 +40,25 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
     onCommand(documents => {
       const block = documents.model.blocks[serviceId];
       const replicaOverrides = { ...block.replicaOverrides };
-      const params = update(ownEntry(replicaOverrides, number));
+      const current = ownEntry(replicaOverrides, number);
+      let params = update(current);
+      for (const descriptor of parameters) {
+        const name = descriptor.name;
+        if (descriptor.kind !== "OBJECT" || !isObject(params?.[name])) continue;
+        const inherited = block.params[name];
+        const group = isObject(inherited) ? inherited : {};
+        const effective = (params: Params | undefined) => {
+          const own = params?.[name];
+          return { ...group, ...(isObject(own) ? own : {}) };
+        };
+        const after = effective(params);
+        const reconciled = reconcileParameter(descriptor, effective(current), after);
+        if (reconciled === after || !isObject(reconciled)) continue;
+        const patch = { ...reconciled };
+        // Replica objects merge with the group; null suppresses an inherited field without changing the group.
+        for (const field of Object.keys(group)) if (!Object.hasOwn(patch, field)) patch[field] = null;
+        params = { ...params, [name]: patch };
+      }
       if (params === undefined || Object.keys(params).length === 0) delete replicaOverrides[number];
       else replicaOverrides[number] = params;
       const updated: typeof block = { ...block, replicaOverrides };

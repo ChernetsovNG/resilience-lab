@@ -21,9 +21,16 @@ export interface InlineParamEditorProps {
 }
 
 /** A catalog-backed value on the canvas; only malformed drafts remain open and block loss-prone navigation. */
-export function InlineParamEditor({ catalog, elementId, elementType, params, modelParams, overridden = false, path, editable, disabled = false, onCommit, onValidity }: InlineParamEditorProps) {
+export function InlineParamEditor(props: InlineParamEditorProps) {
+  const parameter = catalogParameter(props.catalog, props.elementType, props.params, props.path);
+  return parameter === undefined ? null : <InlineValue {...props} parameter={parameter} />;
+}
+
+function InlineValue({ catalog, elementId, elementType, modelParams, overridden = false, path, editable, disabled = false, onCommit, onValidity, parameter }: InlineParamEditorProps & {
+  parameter: NonNullable<ReturnType<typeof catalogParameter>>;
+}) {
   const id = useId();
-  const { descriptor, value } = catalogParameter(catalog, elementType, params, path)!;
+  const { descriptor, value } = parameter;
   const shown = value == null ? "" : String(value);
   const format = (value: unknown) => elementType === "router" && path === "policy"
     ? catalogText(`editor.canvas.policy.${value}`, formatParameterValue(value, descriptor))

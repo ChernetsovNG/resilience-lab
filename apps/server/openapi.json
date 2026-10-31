@@ -2866,9 +2866,31 @@
         },
         "required" : [ "group", "groupOrder", "groupTitle", "order" ]
       },
+      "ParamApplicability" : {
+        "type" : "object",
+        "properties" : {
+          "field" : {
+            "type" : "string"
+          },
+          "values" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "field", "values" ]
+      },
       "ParamDescriptor" : {
         "type" : "object",
         "properties" : {
+          "appliesWhen" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ParamApplicability"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "default" : {
             "type" : [ "array", "boolean", "integer", "null", "number", "object", "string" ],
             "additionalProperties" : true

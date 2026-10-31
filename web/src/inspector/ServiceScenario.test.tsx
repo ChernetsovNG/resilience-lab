@@ -49,6 +49,20 @@ const click = (name: string, root?: HTMLElement) => fireEvent.click((root ? with
 const history = (size: number) => expect(screen.getByTestId("history").textContent).toBe(String(size));
 afterEach(() => localStorage.clear());
 
+it("reconciles the distribution of a scenario-local process in one Undo", () => {
+  const initial = { ...explicit, blocks: { ...explicit.blocks, gateway: { ...explicit.blocks.gateway,
+    scenario: [{ type: "process", processing: { kind: "fixed", mean: "3ms" } }, { type: "call", connection: "gateway-to-middle" }],
+  } } };
+  render(<Editor initial={initial} />);
+  const own = within(step(1));
+  expect(own.queryByRole("textbox", { name: "Standard deviation" })).toBeNull();
+  fireEvent.change(own.getByRole("combobox", { name: "Distribution" }), { target: { value: "lognormal" } });
+  expect(scenario()?.[0].processing).toEqual({ kind: "lognormal", mean: "3ms", stdDev: "3ms" });
+  history(1);
+  click("Undo");
+  expect(scenario()?.[0].processing).toEqual({ kind: "fixed", mean: "3ms" });
+});
+
 it("materializes the implicit scenario in core connection-ID order with one Undo", () => {
   render(<Editor />);
   expect(within(step(1)).getByRole<HTMLSelectElement>("combobox", { name: "Step type" }).value).toBe("process");

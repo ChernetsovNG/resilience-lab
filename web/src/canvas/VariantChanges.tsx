@@ -23,9 +23,9 @@ export function VariantChanges({ model, catalog, overrides, disabled = false, on
         const current = elementOf(effective, id);
         const before = element === null ? undefined : catalogParameter(catalog, element.type, element.params, path);
         const after = current === null ? undefined : catalogParameter(catalog, current.type, current.params, path);
-        return <li key={key}><button type="button" disabled={disabled || element === null || before === undefined}
+        return <li key={key}><button type="button" disabled={disabled || element === null || after === undefined}
           onClick={() => onSelect?.(id, path)}>
-          {t("editor.variant.change", { element: id, parameter: before?.title ?? path,
+          {t("editor.variant.change", { element: id, parameter: after?.title ?? before?.title ?? path,
             model: formatParameterValue(before?.value, before?.descriptor),
             variant: formatParameterValue(after?.value ?? overrides[key], after?.descriptor) })}
         </button></li>;
