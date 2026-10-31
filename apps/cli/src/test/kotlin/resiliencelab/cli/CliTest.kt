@@ -94,6 +94,11 @@ class CliTest {
             listOf("run"),
             listOf("estimate"),
             listOf("resume"),
+            listOf("summary"),
+            listOf("summary", "--replicas"),
+            listOf("summary", "run-1", "extra"),
+            listOf("run", "--replicas", "--replicas", experiment),
+            listOf("validate", "--replicas", experiment),
             listOf("estimate", experiment, "extra"),
             listOf("resume", "run-1", "extra"),
             listOf("run", experiment, "extra"),
@@ -209,6 +214,189 @@ class CliTest {
             workspace.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1/manifest.json"),
         ).exists()
         assertThat(result.stderr).contains("Tasks 20/20").doesNotContain("LINT_FEW_REPLICATIONS")
+    }
+
+    @Test
+    fun `retry storm output stays unchanged with and without replica expansion`() {
+        val expected =
+            "baseline/p0: success 61.5%, p95 251.9 ms, p99 252.0 ms; " +
+                "capacity headroom: utilization 84.73% at handlers dependency, mean queue 7.51 at handlers gateway\n" +
+                "no-retries/p0: success 51.4%, p95 184.0 ms, p99 219.0 ms; " +
+                "capacity headroom: utilization 78.98% at handlers dependency, mean queue 3.90 at handlers gateway\n"
+        listOf(listOf("run", experiment), listOf("run", "--replicas", experiment)).forEach { args ->
+            val result = execute(args)
+            assertThat(result.exitCode).describedAs(result.stderr).isZero()
+            assertThat(result.stdout.substringAfter('\n')).isEqualTo(expected)
+            val saved =
+                execute(
+                    listOf(
+                        "summary",
+                        result.stdout
+                            .lineSequence()
+                            .first()
+                            .substringAfterLast('/'),
+                    ),
+                )
+            assertThat(saved.exitCode).describedAs(saved.stderr).isZero()
+            assertThat(saved.stdout).isEqualTo(result.stdout)
+        }
+    }
+
+    @Test
+    fun `run prints services before groups with the worst replica and hides children`() {
+        replicaModel()
+
+        val result = execute(listOf("run", "replicas.experiment.json"))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        assertThat(result.stdout).contains("  service gateway:", "  group worker:")
+        val lines = result.stdout.lines()
+        val service = lines.single { it.startsWith("  service gateway:") }
+        val group = lines.single { it.startsWith("  group worker:") }
+        assertThat(lines.indexOf(service)).isLessThan(lines.indexOf(group))
+        assertThat(service).matches("""  service gateway: utilization \d+\.\d+%, mean queue \d+\.\d+, failures \d+""")
+        assertThat(group).contains("utilization ", "mean queue ", "failures ", "p99 ", "worst replica worker#2:")
+        assertThat(result.stdout).doesNotContain("    replica ", "service worker#", "#lb")
+    }
+
+    @Test
+    fun `replicas flag combines with workers and saved summary expands the same children`() {
+        replicaModel()
+
+        val result = execute(listOf("run", "--replicas", "--workers", "1", "replicas.experiment.json"))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val rows = result.stdout.lines().filter { it.startsWith("    replica ") }
+        assertThat(rows).hasSize(3)
+        rows.forEachIndexed { index, row ->
+            assertThat(row)
+                .matches("""    replica worker#${index + 1}: utilization \d+\.\d+%, mean queue \d+\.\d+, failures \d+""")
+        }
+        val runId =
+            result.stdout
+                .lineSequence()
+                .first()
+                .substringAfterLast('/')
+        val saved = launch(listOf("summary", "--replicas", runId))
+        assertThat(saved.exitCode).describedAs(saved.stderr).isZero()
+        assertThat(saved.stdout).isEqualTo(result.stdout)
+        assertThat(saved.stderr).isEmpty()
+    }
+
+    @Test
+    fun `summary needs no input documents and leaves the artifact unchanged`() {
+        replicaModel()
+        val result = execute(listOf("run", "replicas.experiment.json"))
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val directory = result.stdout.lineSequence().first()
+        val before = artifactBytes(directory)
+        Files.delete(workspace.resolve("replicas.model.json"))
+        Files.delete(workspace.resolve("replicas.experiment.json"))
+
+        val saved = execute(listOf("summary", directory.substringAfterLast('/')))
+
+        assertThat(saved.exitCode).describedAs(saved.stderr).isZero()
+        assertThat(saved.stdout).isEqualTo(result.stdout)
+        assertThat(saved.stderr).isEmpty()
+        val after = artifactBytes(directory)
+        assertThat(after.keys).isEqualTo(before.keys)
+        before.forEach { (path, bytes) -> assertThat(after.getValue(path)).describedAs(path).containsExactly(*bytes) }
+    }
+
+    @Test
+    fun `group with no observations prints unavailable latency`() {
+        replicaModel(rate = "0/s")
+
+        val result = execute(listOf("run", "--replicas", "replicas.experiment.json"))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines()
+        assertThat(lines.single { it.startsWith("  group worker:") }).contains("p99 n/a")
+        assertThat(lines).contains("  service gateway: utilization 0.0%, mean queue 0.00, failures 0")
+        (1..3).forEach { replica ->
+            assertThat(lines).contains("    replica worker#$replica: utilization 0.0%, mean queue 0.00, failures 0")
+        }
+        assertThat(result.stdout).doesNotContain("NaN", "Infinity")
+    }
+
+    @Test
+    fun `zero capacity leaves utilization undefined while queue stays numeric`() {
+        replicaModel(rate = "0/s")
+        val file = workspace.resolve("replicas.experiment.json")
+        file.writeText(
+            file.readText().replace(
+                """"target":"worker#2","from":"0ms","to":"1s","kind":"slowdown","multiplier":10""",
+                """"target":"worker","from":"0ms","to":"1s","kind":"capacityLoss","capacity":0""",
+            ),
+        )
+
+        val result = execute(listOf("run", "--replicas", "replicas.experiment.json"))
+
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val lines = result.stdout.lines()
+        assertThat(lines.single { it.startsWith("  group worker:") }).contains("worst replica n/a: utilization n/a")
+        (1..3).forEach { replica ->
+            assertThat(lines).contains("    replica worker#$replica: utilization n/a, mean queue 0.00, failures 0")
+        }
+        assertThat(result.stdout).doesNotContain("NaN", "Infinity")
+    }
+
+    @Test
+    fun `summary reports missing incomplete and unsupported artifacts without stdout`() {
+        val missing = execute(listOf("summary", "missing"))
+        assertThat(missing.exitCode).isEqualTo(2)
+        assertThat(missing.stdout).isEmpty()
+        assertThat(missing.stderr).contains("Run not found: missing")
+
+        createIncomplete("unfinished")
+        val incomplete = execute(listOf("summary", "unfinished"))
+        assertThat(incomplete.exitCode).isEqualTo(2)
+        assertThat(incomplete.stdout).isEmpty()
+        assertThat(incomplete.stderr).containsIgnoringCase("incomplete")
+
+        val result = execute(listOf("run", experiment))
+        assertThat(result.exitCode).describedAs(result.stderr).isZero()
+        val directory = workspace.resolve(result.stdout.lineSequence().first())
+        listOf("manifest.json", "summary.json").forEach { name ->
+            val file = directory.resolve(name)
+            val original = file.readText()
+            file.writeText(original.replace(Regex("\"schemaVersion\": \\d+"), "\"schemaVersion\": 0"))
+            val unsupported = execute(listOf("summary", directory.fileName.toString()))
+            assertThat(unsupported.exitCode).describedAs(name).isEqualTo(2)
+            assertThat(unsupported.stdout).isEmpty()
+            assertThat(unsupported.stderr).containsIgnoringCase("version").doesNotContain("\tat ")
+            file.writeText(original)
+        }
+    }
+
+    private fun replicaModel(rate: String = "300/s") {
+        workspace.resolve("replicas.model.json").writeText(
+            """
+            {
+              "schemaVersion": 5,
+              "blocks": {
+                "client": {"type":"client","params":{"deadline":"1s","load":{"points":[{"time":"0ms","rate":"$rate"}]}}},
+                "gateway": {"type":"service","params":{"handlers":100,"queue":100,"processing":{"kind":"fixed","mean":"1ms"}}},
+                "worker": {"type":"service","params":{"replicas":3,"handlers":1,"queue":100,"processing":{"kind":"fixed","mean":"2ms"}}}
+              },
+              "connections": [
+                {"id":"entry","type":"request","from":"client","to":"gateway"},
+                {"id":"call","type":"call","from":"gateway","to":"worker","params":{"timeout":"1s","attempts":1}}
+              ]
+            }
+            """.trimIndent(),
+        )
+        workspace.resolve("replicas.experiment.json").writeText(
+            """
+            {
+              "schemaVersion": 2,
+              "modelRef": "replicas.model.json",
+              "execution": {"seed":42,"warmup":"0ms","measurement":"1s","replications":2},
+              "variants": [{"id":"baseline"}],
+              "faults": [{"target":"worker#2","from":"0ms","to":"1s","kind":"slowdown","multiplier":10}]
+            }
+            """.trimIndent(),
+        )
     }
 
     @Test

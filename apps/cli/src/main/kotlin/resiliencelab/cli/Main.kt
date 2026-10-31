@@ -7,13 +7,17 @@ import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.document.DocumentSchemas
 import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.execution.ExperimentExecutor
+import resiliencelab.core.experiment.AggregateMetrics
+import resiliencelab.core.experiment.AggregateServiceMetrics
 import resiliencelab.core.experiment.MetricSummary
+import resiliencelab.core.experiment.ReplicaGroupKind
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.lab.RunIds
 import resiliencelab.core.lab.RunOutcome
 import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.RunCatalog
+import resiliencelab.core.results.RunSummary
 import resiliencelab.core.results.SlotPoolPeak
 import resiliencelab.core.workspace.DocumentNotFoundException
 import resiliencelab.core.workspace.FileWorkspace
@@ -25,8 +29,8 @@ import java.util.concurrent.CancellationException
 import kotlin.system.exitProcess
 
 private const val USAGE =
-    "Usage: validate <experiment.json> | estimate <experiment.json> | run [--workers N] <experiment.json> | " +
-        "resume <run> | catalog | schema <model|layout|experiment>"
+    "Usage: validate <experiment.json> | estimate <experiment.json> | run [--workers N] [--replicas] <experiment.json> | " +
+        "resume [--replicas] <run> | summary [--replicas] <run-id> | catalog | schema <model|layout|experiment>"
 
 private val apiJson = Json { encodeDefaults = true }
 private val documentKinds = setOf("model", "layout", "experiment")
@@ -56,8 +60,9 @@ internal typealias ExperimentRun = (
 /**
  * Executes one CLI command against the workspace at [workspaceRoot] (stage 1 design §5.3). Returns 0 on success,
  * 2 for usage errors and invalid experiments, 1 for execution failures, 130 for cancellation. `run` and `resume` write
- * progress to [stderr] and the run directory followed by one summary line per variant to [stdout]. `estimate` prints
+ * progress to [stderr] and the run directory followed by point summaries and service groups to [stdout]. `estimate` prints
  * core JSON; `catalog` and `schema` print core-generated JSON without opening the workspace.
+ * `summary` reads a finished run by ID; `--replicas` expands service groups in the shared summary output.
  */
 internal fun runCommand(
     args: List<String>,
@@ -77,7 +82,7 @@ internal fun runCommand(
     val command = Command.parse(args) ?: return usage(stderr)
     val root = workspaceRoot.toAbsolutePath().normalize()
     val argument =
-        if (command.kind == CommandKind.RESUME) {
+        if (command.kind == CommandKind.RESUME || command.kind == CommandKind.SUMMARY) {
             command.argument
         } else {
             relativePath(root, command.argument)
@@ -90,8 +95,9 @@ internal fun runCommand(
         when (command.kind) {
             CommandKind.VALIDATE -> validate(lab, argument, stderr)
             CommandKind.ESTIMATE -> estimate(lab, argument, stdout, stderr)
-            CommandKind.RUN -> run(lab, argument, newRunId(), root, stdout, stderr, isCancelled, execute)
-            CommandKind.RESUME -> resume(lab, workspace, argument, root, stdout, stderr, isCancelled)
+            CommandKind.RUN -> run(lab, argument, newRunId(), root, stdout, stderr, isCancelled, execute, command.replicas)
+            CommandKind.RESUME -> resume(lab, workspace, argument, root, stdout, stderr, isCancelled, command.replicas)
+            CommandKind.SUMMARY -> summary(workspace, argument, stdout, stderr, command.replicas)
         }
     }
 }
@@ -114,24 +120,32 @@ private enum class CommandKind {
     ESTIMATE,
     RUN,
     RESUME,
+    SUMMARY,
 }
 
 private class Command(
     val kind: CommandKind,
     val argument: String,
     val workers: Int?,
+    val replicas: Boolean = false,
 ) {
     companion object {
-        fun parse(args: List<String>): Command? =
-            when {
-                args.size == 2 && args[0] == "validate" -> Command(CommandKind.VALIDATE, args[1], null)
-                args.size == 2 && args[0] == "estimate" -> Command(CommandKind.ESTIMATE, args[1], null)
-                args.size == 2 && args[0] == "run" -> Command(CommandKind.RUN, args[1], null)
-                args.size == 2 && args[0] == "resume" -> Command(CommandKind.RESUME, args[1], null)
-                args.size == 4 && args[0] == "run" && args[1] == "--workers" ->
-                    args[2].toIntOrNull()?.takeIf { it >= 1 }?.let { Command(CommandKind.RUN, args[3], it) }
+        fun parse(args: List<String>): Command? {
+            val replicaFlags = args.count { it == "--replicas" }
+            if (replicaFlags > 1 || replicaFlags == 1 && args.firstOrNull() !in listOf("run", "resume", "summary")) return null
+            val arguments = args.filterNot { it == "--replicas" }
+            val replicas = replicaFlags == 1
+            return when {
+                arguments.size == 2 && arguments[0] == "validate" -> Command(CommandKind.VALIDATE, arguments[1], null)
+                arguments.size == 2 && arguments[0] == "estimate" -> Command(CommandKind.ESTIMATE, arguments[1], null)
+                arguments.size == 2 && arguments[0] == "run" -> Command(CommandKind.RUN, arguments[1], null, replicas)
+                arguments.size == 2 && arguments[0] == "resume" -> Command(CommandKind.RESUME, arguments[1], null, replicas)
+                arguments.size == 2 && arguments[0] == "summary" -> Command(CommandKind.SUMMARY, arguments[1], null, replicas)
+                arguments.size == 4 && arguments[0] == "run" && arguments[1] == "--workers" ->
+                    arguments[2].toIntOrNull()?.takeIf { it >= 1 }?.let { Command(CommandKind.RUN, arguments[3], it, replicas) }
                 else -> null
             }
+        }
     }
 }
 
@@ -173,6 +187,7 @@ private fun run(
     stderr: Appendable,
     isCancelled: () -> Boolean,
     execute: ExperimentRun,
+    replicas: Boolean,
 ): Int {
     val outcome =
         try {
@@ -187,7 +202,7 @@ private fun run(
             stderr.appendLine("Execution failed: ${firstLine(error)}")
             return 1
         }
-    printOutcome(outcome, stdout)
+    printSummary(outcome.runDirectory, outcome.summary, stdout, replicas)
     return 0
 }
 
@@ -199,6 +214,7 @@ private fun resume(
     stdout: Appendable,
     stderr: Appendable,
     isCancelled: () -> Boolean,
+    replicas: Boolean,
 ): Int {
     val entry = RunCatalog(workspace).entry(argument)
     val directory =
@@ -224,7 +240,25 @@ private fun resume(
             stderr.appendLine("Execution failed: ${firstLine(error)}")
             return 1
         }
-    printOutcome(outcome, stdout)
+    printSummary(outcome.runDirectory, outcome.summary, stdout, replicas)
+    return 0
+}
+
+private fun summary(
+    workspace: FileWorkspace,
+    runId: String,
+    stdout: Appendable,
+    stderr: Appendable,
+    replicas: Boolean,
+): Int {
+    try {
+        val catalog = RunCatalog(workspace)
+        val entry = catalog.entry(runId) ?: return inputError(stderr, "Run not found: $runId")
+        val summary = catalog.summary(runId) ?: return inputError(stderr, "Run not found: $runId")
+        printSummary(entry.directory, summary, stdout, replicas)
+    } catch (error: Exception) {
+        return inputError(stderr, "Cannot read summary: ${firstLine(error)}")
+    }
     return 0
 }
 
@@ -243,12 +277,14 @@ private fun cancellation(
     return 130
 }
 
-private fun printOutcome(
-    outcome: RunOutcome,
+private fun printSummary(
+    runDirectory: String,
+    summary: RunSummary,
     stdout: Appendable,
+    replicas: Boolean,
 ) {
-    stdout.appendLine(outcome.runDirectory)
-    outcome.summary.variants.forEach { variant ->
+    stdout.appendLine(runDirectory)
+    summary.variants.forEach { variant ->
         variant.points.forEach { point ->
             val aggregate = point.aggregate
             val coordinates = point.coordinates.entries.joinToString(", ") { (path, value) -> "$path=$value" }
@@ -259,9 +295,56 @@ private fun printOutcome(
                     "capacity headroom: utilization ${headroom(point.headroom.utilization, true)}, " +
                     "mean queue ${headroom(point.headroom.meanQueueLength, false)}",
             )
+            printGroups(aggregate, stdout, replicas)
         }
     }
 }
+
+private fun printGroups(
+    aggregate: AggregateMetrics,
+    stdout: Appendable,
+    replicas: Boolean,
+) {
+    val groups = aggregate.groups.filter { it.kind == ReplicaGroupKind.NODE }
+    if (groups.isEmpty()) return
+    val groupedIds = groups.flatMap { group -> listOf(group.id) + group.instances.map { it.id } }.toSet()
+    aggregate.services.filterKeys { it !in groupedIds }.forEach { (id, metrics) ->
+        stdout.appendLine("  service $id: ${serviceMetrics(metrics)}")
+    }
+    groups.forEach { group ->
+        val metrics = aggregate.services.getValue(group.id)
+        val extrema = metrics.totals.slotPools["handlers"]?.replicaExtrema
+        val worst = group.instances.find { it.replica == extrema?.maxUtilizationReplica }?.id ?: "n/a"
+        stdout.appendLine(
+            "  group ${group.id}: ${serviceMetrics(metrics)}, p99 ${format(metrics.pooledLatency?.p99Ms, "%.1f ms")}; " +
+                "worst replica $worst: " +
+                "utilization ${format(extrema?.maxUtilization?.times(100), "%.1f%%")}",
+        )
+        if (replicas) {
+            group.instances.sortedBy { it.replica }.forEach { member ->
+                stdout.appendLine("    replica ${member.id}: ${serviceMetrics(aggregate.services.getValue(member.id))}")
+            }
+        }
+    }
+}
+
+private fun serviceMetrics(metrics: AggregateServiceMetrics): String {
+    val handlers = metrics.slotPoolSummaries["handlers"]
+    val totals = metrics.totals
+    val pool = totals.slotPools["handlers"]
+    val utilization =
+        handlers?.utilization?.mean
+            ?: pool?.takeIf { it.capacityIntegralMs > 0 }?.let { it.busyIntegralMs / it.capacityIntegralMs }
+    val meanQueue =
+        handlers?.meanQueueLength?.mean
+            ?: pool?.takeIf { totals.measurementMs > 0 }?.let { it.queueIntegralMs / totals.measurementMs }
+    return "utilization ${format(utilization?.times(100), "%.1f%%")}, mean queue ${format(meanQueue)}, failures ${totals.failures}"
+}
+
+private fun format(
+    value: Double?,
+    pattern: String = "%.2f",
+): String = value?.let { String.format(Locale.ROOT, pattern, it) } ?: "n/a"
 
 private fun headroom(
     peak: SlotPoolPeak?,
