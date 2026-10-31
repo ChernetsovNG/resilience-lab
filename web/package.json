@@ -48,6 +48,7 @@
     "@typescript/old": "npm:typescript@6.0.2",
     "openapi-typescript": {
       "typescript": "$typescript"
-    }
+    },
+    "minimatch": "^11.0.3"
   }
 }
