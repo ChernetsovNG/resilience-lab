@@ -10,6 +10,8 @@ test("one context row gives the diagram more height and shares time with Timelin
   await mkdir(directory);
   try {
     await copySmallExperiment(directory, "retry-storm.experiment.json", "3ms");
+    const clockStart = Date.now();
+    await page.clock.install({ time: clockStart });
     await page.goto("/");
     await selectExperiment(page, "results-context/retry-storm.experiment.json");
     const row = page.getByRole("region", { name: "Results context", exact: true });
@@ -37,10 +39,19 @@ test("one context row gives the diagram more height and shares time with Timelin
     await row.getByRole("button", { name: "Time", exact: true }).click();
     const window = row.getByRole("slider", { name: "Playback window", exact: true });
     await expect(window).toHaveValue("0");
+    // Keep the Pause button from becoming Play before a delayed click is dispatched.
+    await page.clock.pauseAt(clockStart + 3_600_000);
+    await expect(page.getByTestId("canvas-results-dependency")).not.toHaveAttribute("aria-busy", "true");
     await row.getByLabel("Playback speed", { exact: true }).selectOption("4");
     await row.getByRole("button", { name: "Play run", exact: true }).click();
+    await page.clock.runFor(320);
     await expect.poll(async () => Number(await window.inputValue())).toBeGreaterThan(0);
     await row.getByRole("button", { name: "Pause run", exact: true }).click();
+    await expect(row.getByRole("button", { name: "Play run", exact: true })).toBeVisible();
+    const firstPausedWindow = await window.inputValue();
+    await page.clock.runFor(1000);
+    await expect(window).toHaveValue(firstPausedWindow);
+    await page.clock.resume();
     await window.focus();
     await window.press("Home");
     await window.press("ArrowRight");
@@ -56,13 +67,20 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(page.locator(".inspector").getByRole("textbox")).toHaveCount(0);
     await expect(canvas).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("region", { name: "Latency", exact: true })).toBeInViewport({ ratio: 0.5 });
+    await page.clock.pauseAt(clockStart + 7_200_000);
     await window.fill("19");
     await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
+    await expect(page.getByTestId("canvas-results-dependency")).not.toHaveAttribute("aria-busy", "true");
     const beforePlayback = await page.getByTestId("canvas-results-dependency").textContent();
     await row.getByRole("button", { name: "Play run", exact: true }).click();
-    await expect.poll(async () => Number(await window.inputValue())).toBeGreaterThanOrEqual(25);
+    await page.clock.runFor(360);
+    await expect.poll(async () => Number(await window.inputValue())).toBeGreaterThanOrEqual(32);
     await row.getByRole("button", { name: "Pause run", exact: true }).click();
+    await expect(row.getByRole("button", { name: "Play run", exact: true })).toBeVisible();
     const playedWindow = await window.inputValue();
+    await page.clock.runFor(1000);
+    await expect(window).toHaveValue(playedWindow);
+    await page.clock.resume();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window " + playedWindow + " ·");
     await expect(page.getByTestId("canvas-results-dependency")).not.toHaveText(beforePlayback!);
     await expect(page.getByTestId("canvas-results-dependency")).toBeVisible();
