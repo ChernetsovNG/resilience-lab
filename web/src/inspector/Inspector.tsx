@@ -10,6 +10,7 @@ import { ParamField } from "./ParamField";
 import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
+import { ServiceScenario } from "./ServiceScenario";
 import { variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
@@ -51,8 +52,11 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
   useEffect(() => {
     if (hidden || focusField == null) return;
-    const field = [...(panel.current?.querySelectorAll<HTMLElement>("[data-inspector-field]") ?? [])]
-      .find(element => element.dataset.inspectorField === focusField.path);
+    const fields = [...(panel.current?.querySelectorAll<HTMLElement>("[data-inspector-field]") ?? [])];
+    // A malformed step can have diagnostics for controls hidden by its current type.
+    const step = focusField.path.startsWith("scenario.") ? focusField.path.split(".").slice(0, 2).join(".") : null;
+    const field = fields.find(element => element.dataset.inspectorField === focusField.path)
+      ?? (step === null ? undefined : fields.find(element => element.dataset.inspectorField === step));
     const section = field?.closest<HTMLDetailsElement>(".inspector-section");
     if (section !== null && section !== undefined) section.open = true;
     if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
@@ -122,6 +126,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             />
           ))}
           </InspectorSection>
+          {element.type === "service" ? <ServiceScenario key={selected} catalog={catalog} model={model} serviceId={selected}
+            editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
+            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
+            onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
         </>
       ) : null}
       {target === "experiment" ? <section className="experiment-settings">
