@@ -5,6 +5,7 @@ import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.ServiceNode
@@ -100,24 +101,37 @@ class ModelLinter(
 
     private fun lintGraph(graph: GraphIr): List<Diagnostic> {
         val services = graph.services.associateBy { it.path }
-        if (graph.entry !in services) {
-            return graph.entryServices.flatMap { lintGraph(graph.copy(entry = it.path)) }.distinct()
-        }
-        return graph
-            .callPaths()
-            .flatMap { calls ->
-                val outgoing = calls.associateBy { it.from }
-                val ordered = (listOf(graph.entry) + calls.map { it.to }).map { services.getValue(it) }
-                buildList {
-                    calls.forEach { call ->
-                        timeoutBudget(call, services.getValue(call.to), outgoing[call.to])?.let(::add)
+        val diagnostics = mutableListOf<Diagnostic>()
+        val demands = mutableMapOf<String, Double>()
+        val maximumRates = mutableMapOf<String, Double>()
+        graph.clients.forEach { client ->
+            client.classes.forEach { (requestClass, load) ->
+                val holdingByService = mutableMapOf<String, Double>()
+                graph.entryServices(client, requestClass).forEach { entry ->
+                    graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
+                        val outgoing = calls.associateBy { it.from }
+                        val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
+                        calls.forEach { call ->
+                            timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
+                                ?.let(diagnostics::add)
+                        }
+                        retryAmplification(calls, calls.firstOrNull())?.let(diagnostics::add)
+                        deadlineBudget(client, processingMs(graph, entry, requestClass), calls.firstOrNull())?.let(diagnostics::add)
+                        var holdingMs = 0.0
+                        ordered.asReversed().forEach { service ->
+                            holdingMs += processingMs(graph, service, requestClass) + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
+                            holdingByService[service.path] = maxOf(holdingByService[service.path] ?: 0.0, holdingMs)
+                        }
                     }
-                    retryAmplification(calls, calls.firstOrNull())?.let(::add)
-                    addAll(handlerDemand(graph, ordered, outgoing))
-                    deadlineBudget(graph, calls.firstOrNull())?.let(::add)
                 }
-            }.distinct()
-            .toList() +
+                val maximumRate = load.maximum(graph.run.warmupMs + graph.run.measurementMs)
+                holdingByService.forEach { (path, holdingMs) ->
+                    demands[path] = (demands[path] ?: 0.0) + maximumRate * holdingMs
+                    maximumRates[path] = (maximumRates[path] ?: 0.0) + maximumRate
+                }
+            }
+        }
+        return diagnostics.distinct() + handlerDemand(graph.services, demands, maximumRates) +
             graph.calls
                 .filter { call ->
                     call.balancing != null &&
@@ -152,6 +166,16 @@ class ModelLinter(
             }
     }
 
+    private fun processingMs(
+        graph: GraphIr,
+        service: ServiceNode,
+        requestClass: String,
+    ): Double =
+        graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
+            it.processing?.meanMs
+                ?: service.processing.meanMs
+        }
+
     /**
      * An incoming attempt covers both network directions and the target's local processing before its next call.
      * Required budget = 2 × incoming network mean + target processing mean + next attempts × next timeout
@@ -160,11 +184,11 @@ class ModelLinter(
      */
     private fun timeoutBudget(
         call: CallEdge,
-        target: ServiceNode,
+        processingMs: Double,
         next: CallEdge?,
     ): Diagnostic? {
         val required =
-            2.0 * call.network.meanMs + target.processing.meanMs + (next?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
+            2.0 * call.network.meanMs + processingMs + (next?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (call.timeoutMs < required) {
             warning(
                 CoreMessage.LINT_TIMEOUT_BUDGET,
@@ -208,18 +232,18 @@ class ModelLinter(
      * + 2 × outgoing network mean + W(next service). A leaf's W is its processing mean.
      * The service holds its handler while waiting downstream, and releases it before its own response network delay.
      * Compare handlers with the maximum client profile intensity × W: a conservative estimate before timeout truncation.
+     * Sum demand from clients and classes; each source contributes its longest applicable path only once per service.
      */
     private fun handlerDemand(
-        graph: GraphIr,
-        ordered: List<ServiceNode>,
-        outgoing: Map<String, CallEdge>,
-    ): List<Diagnostic> {
-        var holdingMs = 0.0
-        val maximumRate = graph.client.load.maximum(graph.run.warmupMs + graph.run.measurementMs)
-        return buildList {
-            ordered.asReversed().forEach { service ->
-                holdingMs += service.processing.meanMs + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
-                val demand = maximumRate * holdingMs
+        services: List<ServiceNode>,
+        demands: Map<String, Double>,
+        maximumRates: Map<String, Double>,
+    ): List<Diagnostic> =
+        buildList {
+            services.forEach { service ->
+                val demand = demands[service.path] ?: 0.0
+                val maximumRate = maximumRates[service.path] ?: 0.0
+                val holdingMs = if (maximumRate == 0.0) 0.0 else demand / maximumRate
                 if (service.pooler == null && service.handlers < demand) {
                     val database = service.type == "database"
                     val resource = if (database) "Connections" else "Handlers"
@@ -245,7 +269,6 @@ class ModelLinter(
                 }
             }
         }
-    }
 
     /**
      * Compare the client deadline with entry processing mean + outgoing attempts × timeout + maximum backoffs.
@@ -253,19 +276,19 @@ class ModelLinter(
      * An entry without an outgoing call needs only its own processing. The client's request edge adds no budget.
      */
     private fun deadlineBudget(
-        graph: GraphIr,
+        client: ClientNode,
+        processingMs: Double,
         call: CallEdge?,
     ): Diagnostic? {
-        val entry = graph.services.first { it.path == graph.entry }
-        val required = entry.processing.meanMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
-        return if (graph.client.deadlineMs < required) {
+        val required = processingMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
+        return if (client.deadlineMs < required) {
             warning(
                 CoreMessage.LINT_DEADLINE_BUDGET,
-                "Deadline ${number(graph.client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
-                graph.client.origin,
-                graph.client.path,
+                "Deadline ${number(client.deadlineMs)} ms is below the entry call budget ${number(required)} ms",
+                client.origin,
+                client.path,
                 "/params/deadline",
-                mapOf("deadlineMs" to messageNumber(graph.client.deadlineMs), "requiredMs" to messageNumber(required)),
+                mapOf("deadlineMs" to messageNumber(client.deadlineMs), "requiredMs" to messageNumber(required)),
             )
         } else {
             null

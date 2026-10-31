@@ -21,6 +21,46 @@ import kotlin.test.Test
 
 class DocumentSchemasTest {
     @Test
+    fun `client class profiles and structural filters follow the model six schema`() {
+        val load = """{"points":[{"time":"0s","rate":"10/s"}]}"""
+        val classes = """[{"id":"read","load":$load}]"""
+        val source = """{"schemaVersion":6,"blocks":{
+            "client":{"type":"client","params":{"deadline":"1s","classes":$classes}},
+            "service":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"1ms"}},
+                "scenario":[{"type":"process","classes":["read"]}]},
+            "router":{"type":"router","params":{"policy":"random"}}
+        },"connections":[{"id":"route","type":"route","from":"router","to":"service","classes":["read"]}]}"""
+        assertThat(validate("model", source)).isEmpty()
+        listOf(
+            source.replace("\"classes\":$classes", "\"classes\":$classes,\"load\":$load"),
+            source.replace("\"classes\":$classes", "\"classes\":[]"),
+            source.replace("\"id\":\"read\"", "\"id\":42"),
+            source.replace("\"classes\":[\"read\"]", "\"classes\":[]"),
+            source.replace("\"classes\":[\"read\"]", "\"classes\":[\"read\",\"read\"]"),
+            source.replace("\"type\":\"route\"", "\"type\":\"request\""),
+            source.replace("\"schemaVersion\":6", "\"schemaVersion\":5"),
+        ).forEach { invalid ->
+            assertThat(validate("model", invalid)).describedAs(invalid).isNotEmpty()
+        }
+        val decoded = DocumentCodec.decodeModel(source, "classes.model.json") as DecodeResult.Ok
+        val encoded = DocumentCodec.encodeModel(decoded.value)
+        val roundTrip = DocumentCodec.decodeModel(encoded, "classes.model.json") as DecodeResult.Ok
+        assertThat(roundTrip.value).isEqualTo(decoded.value)
+        assertThat(
+            roundTrip.value.connections
+                .single()
+                .classes,
+        ).containsExactly("read")
+        assertThat(
+            roundTrip.value.blocks
+                .getValue("service")
+                .scenario!!
+                .single()
+                .classes,
+        ).containsExactly("read")
+    }
+
+    @Test
     fun `fault schema accepts kind parameters and rejects missing or unrelated values`() {
         fun withFault(fields: String) =
             experiment().replace(
@@ -144,8 +184,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":5", "\"schemaVersion\":5,\"extra\":1"),
-                model.replace("\"schemaVersion\":5", "\"schemaVersion\":1"),
+                model.replace("\"schemaVersion\":6", "\"schemaVersion\":6,\"extra\":1"),
+                model.replace("\"schemaVersion\":6", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -324,5 +364,5 @@ class DocumentSchemasTest {
         """{"schemaVersion":2,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":5,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":6,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

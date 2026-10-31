@@ -23,7 +23,7 @@ class CatalogApplicabilityTest {
     private val catalog = Stage1Catalog.catalog
     private val source =
         """
-        {"schemaVersion":5,"blocks":{
+        {"schemaVersion":6,"blocks":{
           "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"1/s"}]},"deadline":"1s"}},
           "service":{"type":"service","params":{"handlers":4,"processing":{"kind":"fixed","mean":"5ms"}}},
           "pooler":{"type":"pooler","params":{"maxClientConnections":4,"poolSize":2,"waitTimeout":"20ms","processing":{"kind":"fixed","mean":"5ms"}}},

@@ -43,15 +43,33 @@ data class Origin(
 /** Source of original requests; [pathSegments] is the canonical instance identity. */
 data class ClientNode(
     val pathSegments: List<String>,
-    val load: LoadProfile,
+    val classes: Map<String, LoadProfile>,
     val deadlineMs: Double,
+    val entry: String,
     val origin: Origin = Origin.UNSPECIFIED,
 ) {
+    /** Construct a client without explicit classes for stage-1 callers. */
+    constructor(pathSegments: List<String>, load: LoadProfile, deadlineMs: Double, origin: Origin = Origin.UNSPECIFIED) :
+        this(pathSegments, mapOf("default" to load), deadlineMs, "", origin)
+
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(path: String, arrivalRatePerMs: Double, deadlineMs: Double, origin: Origin = Origin.UNSPECIFIED) :
         this(path.split('/'), LoadProfile.constant(arrivalRatePerMs), deadlineMs, origin)
 
     val path: String get() = displayPath(pathSegments)
+
+    /** Sum of class intensities; a single profile is retained exactly for the stage-1 engine. */
+    val load: LoadProfile
+        get() {
+            if (classes.size == 1) return classes.values.single()
+            val times =
+                classes.values
+                    .flatMap { it.points }
+                    .map { it.timeMs }
+                    .distinct()
+                    .sorted()
+            return LoadProfile(times.map { time -> LoadPoint(time, classes.values.sumOf { it.rateAt(time) }) })
+        }
 }
 
 /** Transaction server pool; the executable node's handlers are the client connection limit, with no client queue. */
@@ -96,15 +114,20 @@ data class ServiceNode(
 
 /** Ordered local processing and synchronous calls of one service invocation. */
 sealed interface ServiceStep {
+    /** Null applies to every request class. */
+    val classes: Set<String>?
+
     /** Omitted processing and failure probability use the effective service parameters. */
     data class Process(
         val processing: Distribution? = null,
         val failureProbability: Double? = null,
+        override val classes: Set<String>? = null,
     ) : ServiceStep
 
     /** Invoke the outgoing edge identified by [edge]. */
     data class Call(
         val edge: String,
+        override val classes: Set<String>? = null,
     ) : ServiceStep
 }
 
@@ -171,9 +194,16 @@ data class RouteEdge(
     val to: String,
     val weight: Double = 1.0,
     val origin: Origin = Origin.UNSPECIFIED,
+    val classes: Set<String>? = null,
 ) {
-    constructor(path: String, from: String, to: String, weight: Double = 1.0, origin: Origin = Origin.UNSPECIFIED) :
-        this(path.split('/'), from, to, weight, origin)
+    constructor(
+        path: String,
+        from: String,
+        to: String,
+        weight: Double = 1.0,
+        origin: Origin = Origin.UNSPECIFIED,
+        classes: Set<String>? = null,
+    ) : this(path.split('/'), from, to, weight, origin, classes)
 
     val path: String get() = displayPath(pathSegments)
 }
@@ -245,13 +275,12 @@ data class RunSettings(
 )
 
 /**
- * Engine-neutral acyclic call graph of one variant (ADR 0002, ADR 0012), rooted at [client] and [entry].
+ * Engine-neutral acyclic call graph of one variant (ADR 0002, ADR 0012), rooted at the inputs in [clients].
  * The compiler stores services and calls in topological order, breaking ties by instance path.
  * String paths address results and diagnostics; path segments identify instances without losing boundaries.
  */
 data class GraphIr(
-    val client: ClientNode,
-    val entry: String,
+    val clients: List<ClientNode>,
     val services: List<ServiceNode>,
     val calls: List<CallEdge>,
     val faults: List<FaultSpan>,
@@ -259,30 +288,62 @@ data class GraphIr(
     val routers: List<RouterNode> = emptyList(),
     val routes: List<RouteEdge> = emptyList(),
 ) {
+    /** Source-level adapter for the unchanged single-client engine and hand-built stage-1 IR. */
+    constructor(
+        client: ClientNode,
+        entry: String,
+        services: List<ServiceNode>,
+        calls: List<CallEdge>,
+        faults: List<FaultSpan>,
+        run: RunSettings,
+        routers: List<RouterNode> = emptyList(),
+        routes: List<RouteEdge> = emptyList(),
+    ) : this(listOf(client.copy(entry = entry)), services, calls, faults, run, routers, routes)
+
+    /** The stage-1 engine consumes one client until its multi-client implementation is introduced. */
+    val client: ClientNode get() = clients.single()
+    val entry: String get() = client.entry
+
+    /** Request-class identifiers shared by all inputs. */
+    val classes: Set<String> get() = clients.flatMap { it.classes.keys }.toSortedSet()
+
     private val servicesByPath = services.associateBy { it.path }
     private val callsByPath = calls.associateBy { it.path }
     private val outgoing = calls.groupBy { it.from }
     private val routing = routes.groupBy { it.from }
 
     /** Router outputs in deterministic instance-path order. */
-    fun outgoingRoutes(from: String): List<RouteEdge> =
-        routing[from].orEmpty().sortedWith { left, right -> comparePaths(left.pathSegments, right.pathSegments) }
+    fun outgoingRoutes(
+        from: String,
+        requestClass: String? = null,
+    ): List<RouteEdge> =
+        routing[from].orEmpty().filter { requestClass == null || it.classes == null || requestClass in it.classes }.sortedWith {
+            left,
+            right,
+            ->
+            comparePaths(left.pathSegments, right.pathSegments)
+        }
 
-    /** Leaf services reachable through the entry's zero-delay replica routers. */
-    val entryServices: List<ServiceNode>
-        get() {
-            val pending = ArrayDeque<String>()
-            val visited = mutableSetOf<String>()
-            pending.add(entry)
-            return buildList {
-                while (pending.isNotEmpty()) {
-                    val path = pending.removeFirst()
-                    if (!visited.add(path)) continue
-                    val service = servicesByPath[path]
-                    if (service != null) add(service) else outgoingRoutes(path).forEach { pending.addLast(it.to) }
-                }
+    /** Leaf services reachable through every input's zero-delay replica routers. */
+    val entryServices: List<ServiceNode> get() = clients.flatMap { entryServices(it) }.distinctBy { it.path }
+
+    /** Leaf services reached by one client and, optionally, one request class. */
+    fun entryServices(
+        client: ClientNode,
+        requestClass: String? = null,
+    ): List<ServiceNode> {
+        val pending = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        pending.add(client.entry)
+        return buildList {
+            while (pending.isNotEmpty()) {
+                val path = pending.removeFirst()
+                if (!visited.add(path)) continue
+                val service = servicesByPath[path]
+                if (service != null) add(service) else outgoingRoutes(path, requestClass).forEach { pending.addLast(it.to) }
             }
         }
+    }
 
     /** All outgoing edges in path order; no single-successor assumption. */
     fun outgoingCalls(from: String): List<CallEdge> =
@@ -298,7 +359,11 @@ data class GraphIr(
     }
 
     /** Effective steps, also available for IR constructed directly in code. */
-    fun scenario(service: ServiceNode): List<ServiceStep> = service.scenario ?: defaultScenario(service)
+    fun scenario(
+        service: ServiceNode,
+        requestClass: String? = null,
+    ): List<ServiceStep> =
+        (service.scenario ?: defaultScenario(service)).filter { requestClass == null || it.classes == null || requestClass in it.classes!! }
 
     /** Kahn order uses path segments to break ties and does not recurse on deep graphs. */
     val topologicalPaths: List<String> by lazy {
@@ -342,43 +407,56 @@ data class GraphIr(
 
     /** Root-to-leaf paths for the stage-1 advisory rules; branch-specific semantics remain a linter extension. */
     fun callPaths(): Sequence<List<CallEdge>> =
-        sequence {
-            val pending = ArrayDeque<Iterator<CallEdge>>()
-            val path = mutableListOf<CallEdge>()
+        clients.asSequence().flatMap { client ->
+            client.classes.keys
+                .asSequence()
+                .flatMap { callPaths(client, it) }
+        }
 
-            fun callsFrom(node: String): List<CallEdge> =
-                scenario(servicesByPath.getValue(node)).filterIsInstance<ServiceStep.Call>().flatMap { step ->
-                    val edge = call(step.edge)
-                    val targets = ArrayDeque<String>()
-                    targets.add(edge.to)
-                    buildList {
-                        while (targets.isNotEmpty()) {
-                            val target = targets.removeFirst()
-                            if (target in servicesByPath) {
-                                add(if (target == edge.to) edge else edge.copy(to = target))
-                            } else {
-                                outgoingRoutes(target).forEach { targets.addLast(it.to) }
+    /** Paths reachable by this client and class, following only applicable steps and routes. */
+    fun callPaths(
+        client: ClientNode,
+        requestClass: String,
+    ): Sequence<List<CallEdge>> =
+        entryServices(client, requestClass).asSequence().flatMap { root ->
+            sequence {
+                val pending = ArrayDeque<Iterator<CallEdge>>()
+                val path = mutableListOf<CallEdge>()
+
+                fun callsFrom(node: String): List<CallEdge> =
+                    scenario(servicesByPath.getValue(node), requestClass).filterIsInstance<ServiceStep.Call>().flatMap { step ->
+                        val edge = call(step.edge)
+                        val targets = ArrayDeque<String>()
+                        targets.add(edge.to)
+                        buildList {
+                            while (targets.isNotEmpty()) {
+                                val target = targets.removeFirst()
+                                if (target in servicesByPath) {
+                                    add(if (target == edge.to) edge else edge.copy(to = target))
+                                } else {
+                                    outgoingRoutes(target, requestClass).forEach { targets.addLast(it.to) }
+                                }
                             }
                         }
                     }
-                }
-            pending.addLast(callsFrom(entry).iterator())
-            if (!pending.last().hasNext()) yield(emptyList())
-            while (pending.isNotEmpty()) {
-                val edges = pending.last()
-                if (!edges.hasNext()) {
-                    pending.removeLast()
-                    if (path.isNotEmpty()) path.removeAt(path.lastIndex)
-                    continue
-                }
-                val edge = edges.next()
-                path.add(edge)
-                val next = callsFrom(edge.to)
-                if (next.isEmpty()) {
-                    yield(path.toList())
-                    path.removeAt(path.lastIndex)
-                } else {
-                    pending.addLast(next.iterator())
+                pending.addLast(callsFrom(root.path).iterator())
+                if (!pending.last().hasNext()) yield(emptyList())
+                while (pending.isNotEmpty()) {
+                    val edges = pending.last()
+                    if (!edges.hasNext()) {
+                        pending.removeLast()
+                        if (path.isNotEmpty()) path.removeAt(path.lastIndex)
+                        continue
+                    }
+                    val edge = edges.next()
+                    path.add(edge)
+                    val next = callsFrom(edge.to)
+                    if (next.isEmpty()) {
+                        yield(path.toList())
+                        path.removeAt(path.lastIndex)
+                    } else {
+                        pending.addLast(next.iterator())
+                    }
                 }
             }
         }

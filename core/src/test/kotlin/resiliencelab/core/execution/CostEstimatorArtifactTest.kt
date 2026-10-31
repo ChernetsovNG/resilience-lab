@@ -110,7 +110,7 @@ class CostEstimatorArtifactTest {
 
     companion object {
         internal fun model(replicas: Int): String =
-            """{"schemaVersion":5,"blocks":{
+            """{"schemaVersion":6,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0ms","rate":"100/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":20,"processing":{"kind":"fixed","mean":"1ms"}}},
               "router":{"type":"router","params":{"policy":"roundRobin"}},

@@ -75,7 +75,7 @@ data class CompileResult(
 /**
  * Compiles a model and an experiment into one graph IR per variant and grid point (ADR 0002; stage 1 design §3–4):
  * variant overrides and then grid values are applied by path, parameters are read against the catalog and the call graph topology —
- * one client, one request, reachable services and no cycles — is checked.
+ * one request per client, class-restricted paths, reachable services and no cycles — is checked.
  */
 class ModelCompiler(
     private val catalog: Catalog = Stage1Catalog.catalog,
@@ -107,8 +107,7 @@ class ModelCompiler(
                         run?.let {
                             val expanded =
                                 GraphIr(
-                                    parts.client,
-                                    parts.entry,
+                                    parts.clients,
                                     parts.services,
                                     parts.calls,
                                     emptyList(),
@@ -225,8 +224,7 @@ class ModelCompiler(
     }
 
     private class GraphParts(
-        val client: ClientNode,
-        val entry: String,
+        val clients: List<ClientNode>,
         val services: List<ServiceNode>,
         val calls: List<CallEdge>,
         val routers: List<RouterNode>,
@@ -285,6 +283,15 @@ class ModelCompiler(
         val used = model.blocks.keys.toMutableSet()
         model.connections.forEachIndexed { index, connection ->
             val pointer = JsonPointer.of("connections", index)
+            if (connection.classes != null && connection.type != "route") {
+                sink.error(
+                    CoreMessage.CLASS_CONNECTION,
+                    "Only route connections may define a classes filter",
+                    document,
+                    "$pointer/classes",
+                    connection.id,
+                )
+            }
             if (!ID.matches(connection.id)) {
                 val message = "Connection id '${connection.id}' must match ${ID.pattern}"
                 sink.error(
@@ -410,9 +417,9 @@ class ModelCompiler(
                 )
                 return@forEach
             }
-            if (patch.pathPointer.startsWith("/grid/") && typeId == "client" && paramPath.first() == "load") {
+            if (patch.pathPointer.startsWith("/grid/") && typeId == "client" && paramPath.first() in setOf("load", "classes")) {
                 sink.error(
-                    CoreMessage.GRID_LOAD_PROFILE,
+                    if (paramPath.first() == "classes") CoreMessage.GRID_CLASSES else CoreMessage.GRID_LOAD_PROFILE,
                     "Load profile '$path' does not support grid sweeps; compare profiles in variants",
                     document,
                     patch.pathPointer,
@@ -473,6 +480,7 @@ class ModelCompiler(
         val services = model.blocks.filterValues { it.type in setOf("service", "database", "pooler") }.toSortedMap()
         val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink, run) }
+        val classIds = clientNodes.filterNotNull().flatMap { it.classes.keys }.toSet()
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
             services.map { (id, block) ->
@@ -530,7 +538,7 @@ class ModelCompiler(
                         if (block.type ==
                             "service"
                         ) {
-                            readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), document, sink)
+                            readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), classIds, document, sink)
                         } else {
                             null
                         }
@@ -556,10 +564,10 @@ class ModelCompiler(
         val callEdges = calls.map { (index, connection) -> readCall(index, connection, document, origins[connection.id], sink) }
         val routes = indexed.filter { it.value.type == "route" }.sortedBy { it.value.id }
         val routeEdges = routes.map { (index, connection) -> readRoute(index, connection, document, origins[connection.id], sink) }
-        if (clients.size != 1) {
+        if (clients.isEmpty()) {
             sink.error(
                 CoreMessage.TOPOLOGY_CLIENT,
-                "The model must contain exactly one client block; found ${clients.size}",
+                "The model must contain at least one client block; found ${clients.size}",
                 document,
                 "/blocks",
                 args =
@@ -568,22 +576,47 @@ class ModelCompiler(
                     ),
             )
         }
-        if (requests.size != 1 || requests.single().value.from !in clients) {
-            sink.error(CoreMessage.GRAPH_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
+        clients.keys.forEach { id ->
+            val found = requests.count { it.value.from == id }
+            if (found != 1) {
+                sink.error(
+                    CoreMessage.CLIENT_REQUEST,
+                    "Client '$id' must have exactly one request connection; found $found",
+                    document,
+                    JsonPointer.of("blocks", id),
+                    id,
+                    args = mapOf("client" to JsonPrimitive(id), "found" to JsonPrimitive(found)),
+                )
+            }
         }
-        val entry = requests.singleOrNull()?.value?.to
+        val entries = requests.map { it.value.to }.filter { it in services }.toSet()
         checkGraph(
-            entry?.takeIf { it in services },
+            entries,
             (services + routers).mapValues { it.value.type },
             routers.keys,
             calls + routes,
             document,
             sink,
         )
+        val inputs =
+            clientNodes.filterNotNull().map { client ->
+                client.copy(
+                    entry =
+                        requests
+                            .singleOrNull { it.value.from == client.path }
+                            ?.value
+                            ?.to
+                            .orEmpty(),
+                )
+            }
+        routes.forEach { (index, route) ->
+            checkClassFilter(route.classes, classIds, document, JsonPointer.of("connections", index, "classes"), route.id, sink)
+        }
         if (!structureOk || sink.errorCount() > before) return null
+        checkRouterClasses(inputs, serviceNodes.filterNotNull(), callEdges.filterNotNull(), routeEdges.filterNotNull(), document, sink)
+        if (sink.errorCount() > before) return null
         return GraphParts(
-            clientNodes.single()!!,
-            entry!!,
+            inputs,
             serviceNodes.map {
                 it!!
             },
@@ -594,7 +627,7 @@ class ModelCompiler(
     }
 
     private fun checkGraph(
-        entry: String?,
+        entries: Set<String>,
         types: Map<String, String>,
         routers: Set<String>,
         calls: List<IndexedValue<ConnectionInstance>>,
@@ -625,7 +658,8 @@ class ModelCompiler(
                 )
             }
         }
-        calls.filter { it.value.to == entry }.forEach { (index, call) ->
+        calls.filter { it.value.to in entries }.forEach { (index, call) ->
+            val entry = call.to
             sink.error(
                 CoreMessage.GRAPH_ENTRY,
                 "Entry service '$entry' must not receive calls",
@@ -676,10 +710,10 @@ class ModelCompiler(
                 }
             }
         }
-        if (entry == null) return
+        if (entries.isEmpty()) return
         val reachable = mutableSetOf<String>()
         val pending = ArrayDeque<String>()
-        pending.addLast(entry)
+        entries.sorted().forEach(pending::addLast)
         while (pending.isNotEmpty()) {
             val current = pending.removeFirst()
             if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.value.to) }
@@ -688,7 +722,7 @@ class ModelCompiler(
             val type = types.getValue(it)
             sink.error(
                 CoreMessage.GRAPH_UNREACHABLE,
-                "${type.replaceFirstChar(Char::uppercaseChar)} '$it' is not reachable from the client",
+                "${type.replaceFirstChar(Char::uppercaseChar)} '$it' is not reachable from any client",
                 document,
                 JsonPointer.of("blocks", it),
                 it,
@@ -705,6 +739,7 @@ class ModelCompiler(
         id: String,
         steps: List<ScenarioStep>?,
         outgoing: Set<String>,
+        classIds: Set<String>,
         document: String,
         sink: Diagnostics,
     ): List<ServiceStep>? {
@@ -733,6 +768,7 @@ class ModelCompiler(
         }
         return steps.mapIndexedNotNull { index, step ->
             val location = "$pointer/scenario/$index"
+            val classes = checkClassFilter(step.classes, classIds, document, "$location/classes", id, sink)
             val invalidFields =
                 when (step.type) {
                     "process" -> listOfNotNull(step.connection?.let { "connection" })
@@ -769,6 +805,7 @@ class ModelCompiler(
                     ServiceStep.Process(
                         step.processing?.let { reader.obj("processing")?.let(::distribution) },
                         step.failureRate?.let { reader.quantity("failureRate") },
+                        classes,
                     )
                 }
                 "call" -> {
@@ -784,7 +821,7 @@ class ModelCompiler(
                         )
                         null
                     } else {
-                        ServiceStep.Call(requireNotNull(connection))
+                        ServiceStep.Call(requireNotNull(connection), classes)
                     }
                 }
                 else -> {
@@ -813,30 +850,85 @@ class ModelCompiler(
         val reader =
             reader("client", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
                 ?: return null
-        val loadReader = reader.obj("load")
-        val pointReaders = loadReader?.objects("points")
+        val hasLoad = reader.has("load")
+        val hasClasses = reader.has("classes")
+        if (hasLoad == hasClasses) {
+            return reader.fail(
+                CoreMessage.CLIENT_LOAD,
+                if (hasClasses) "classes" else "load",
+                "Client '$id' must declare either load or classes",
+                dependsOn = if (hasClasses) "load" else "classes",
+                args = mapOf("client" to JsonPrimitive(id)),
+            )
+        }
+        val deadline = reader.quantity("deadline")
+        val profiles = linkedMapOf<String, LoadProfile>()
+        if (hasClasses) {
+            reader.objects("classes")?.forEach { item ->
+                val classId = item.string("id")
+                if (classId != null) {
+                    when {
+                        !ID.matches(classId) ->
+                            item.fail<Unit>(
+                                CoreMessage.CLASS_ID,
+                                "id",
+                                "Class id '$classId' must match ${ID.pattern}",
+                                args =
+                                    mapOf(
+                                        "id" to JsonPrimitive(classId),
+                                        "pattern" to JsonPrimitive(ID.pattern),
+                                    ),
+                            )
+                        classId == "default" ->
+                            item.fail<Unit>(
+                                CoreMessage.CLASS_RESERVED,
+                                "id",
+                                "Class id 'default' is reserved for clients without explicit classes",
+                            )
+                        classId in profiles ->
+                            item.fail<Unit>(
+                                CoreMessage.CLASS_DUPLICATE,
+                                "id",
+                                "Class id '$classId' is repeated in client '$id'",
+                                args =
+                                    mapOf(
+                                        "id" to JsonPrimitive(classId),
+                                        "client" to JsonPrimitive(id),
+                                    ),
+                            )
+                    }
+                }
+                val load = readLoad(item, run)
+                if (classId != null && load != null) profiles[classId] = load
+            }
+        } else {
+            readLoad(reader, run)?.let { profiles["default"] = it }
+        }
+        if (profiles.isEmpty() || deadline == null) return null
+        return ClientNode(id.split('/'), profiles.toSortedMap(), deadline, "", Origin(document, JsonPointer.of("blocks", id)))
+    }
+
+    private fun readLoad(
+        reader: ParamReader,
+        run: RunSettings?,
+    ): LoadProfile? {
+        val pointReaders = reader.obj("load")?.objects("points") ?: return null
         val points =
-            pointReaders?.map { point ->
+            pointReaders.map { point ->
                 val time = point.quantity("time")
                 val rate = point.quantity("rate")
                 if (time == null || rate == null) null else LoadPoint(time, rate)
             }
-        pointReaders?.forEachIndexed { index, point ->
-            if (index > 0 &&
-                points?.get(index) != null &&
-                points[index - 1] != null &&
-                points[index]!!.timeMs <= points[index - 1]!!.timeMs
-            ) {
+        pointReaders.forEachIndexed { index, point ->
+            if (index > 0 && points[index] != null && points[index - 1] != null && points[index]!!.timeMs <= points[index - 1]!!.timeMs) {
                 point.fail<Unit>(CoreMessage.LOAD_POINT_ORDER, "time", "Load point times must be strictly increasing")
             }
         }
-        val deadline = reader.quantity("deadline")
-        if (points == null || points.any { it == null } || deadline == null) return null
+        if (points.any { it == null }) return null
         if (points.filterNotNull().zipWithNext().any { (a, b) -> a.timeMs >= b.timeMs }) return null
         val load = LoadProfile(points.filterNotNull())
         if (run != null) {
-            val end = run.warmupMs + run.measurementMs
-            val maximum = load.maximum(end)
+            val maximum = load.maximum(run.warmupMs + run.measurementMs)
             if (!maximum.isFinite() || (maximum > 0.0 && !(1.0 / maximum).isFinite())) {
                 return reader.fail(
                     CoreMessage.LOAD_RANGE,
@@ -846,7 +938,88 @@ class ModelCompiler(
                 )
             }
         }
-        return ClientNode(id.split('/'), load, deadline, Origin(document, JsonPointer.of("blocks", id)))
+        return load
+    }
+
+    private fun checkClassFilter(
+        classes: List<String>?,
+        declared: Set<String>,
+        document: String,
+        pointer: String,
+        path: String,
+        sink: Diagnostics,
+    ): Set<String>? {
+        if (classes == null) return null
+        if (classes.isEmpty() || classes.distinct().size != classes.size) {
+            sink.error(
+                CoreMessage.CLASS_FILTER,
+                "Class filters must be non-empty lists of unique class identifiers",
+                document,
+                pointer,
+                path,
+            )
+        }
+        classes.forEachIndexed { index, id ->
+            if (id !in declared) {
+                sink.error(
+                    CoreMessage.CLASS_UNKNOWN,
+                    "Request class '$id' is not declared by any client",
+                    document,
+                    "$pointer/$index",
+                    path,
+                    args =
+                        mapOf(
+                            "id" to JsonPrimitive(id),
+                        ),
+                )
+            }
+        }
+        return classes.toSet()
+    }
+
+    private fun checkRouterClasses(
+        clients: List<ClientNode>,
+        services: List<ServiceNode>,
+        calls: List<CallEdge>,
+        routes: List<RouteEdge>,
+        document: String,
+        sink: Diagnostics,
+    ) {
+        val servicesByPath = services.associateBy { it.path }
+        val outgoingCalls = calls.groupBy { it.from }
+        val callsByPath = calls.associateBy { it.path }
+        val outputs = routes.groupBy { it.from }
+        val visited = mutableSetOf<Pair<String, String>>()
+        val pending = ArrayDeque<Pair<String, String>>()
+        clients.forEach { client -> client.classes.keys.forEach { pending.addLast(client.entry to it) } }
+        while (pending.isNotEmpty()) {
+            val (path, requestClass) = pending.removeFirst()
+            if (!visited.add(path to requestClass)) continue
+            val service = servicesByPath[path]
+            if (service != null) {
+                val steps = service.scenario ?: outgoingCalls[path].orEmpty().map { ServiceStep.Call(it.path) }
+                steps.filterIsInstance<ServiceStep.Call>().filter { it.classes == null || requestClass in it.classes }.forEach { step ->
+                    pending.addLast(callsByPath.getValue(step.edge).to to requestClass)
+                }
+            } else {
+                val available = outputs[path].orEmpty().filter { it.classes == null || requestClass in it.classes }
+                if (available.isEmpty()) {
+                    sink.error(
+                        CoreMessage.ROUTER_CLASS,
+                        "Router '$path' has no route for request class '$requestClass'",
+                        document,
+                        JsonPointer.of("blocks", path),
+                        path,
+                        args =
+                            mapOf(
+                                "router" to JsonPrimitive(path),
+                                "id" to JsonPrimitive(requestClass),
+                            ),
+                    )
+                }
+                available.forEach { pending.addLast(it.to to requestClass) }
+            }
+        }
     }
 
     private fun routingPolicy(value: String): RoutingPolicy =
@@ -1066,7 +1239,14 @@ class ModelCompiler(
                 overrides,
             ) ?: return null
         val weight = reader.number("weight") ?: return null
-        return RouteEdge(connection.id, connection.from, connection.to, weight, Origin(document, JsonPointer.of("connections", index)))
+        return RouteEdge(
+            connection.id,
+            connection.from,
+            connection.to,
+            weight,
+            Origin(document, JsonPointer.of("connections", index)),
+            connection.classes?.toSet(),
+        )
     }
 
     private fun distribution(reader: ParamReader): Distribution? {

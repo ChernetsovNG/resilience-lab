@@ -33,6 +33,8 @@ data class ScenarioStep(
     val processing: JsonObject? = null,
     val failureRate: String? = null,
     val connection: String? = null,
+    /** Classes that execute this step; null applies to every class. */
+    val classes: List<String>? = null,
 )
 
 /** One connection from a source block to a target block. */
@@ -45,6 +47,8 @@ data class ConnectionInstance(
     val params: JsonObject = JsonObject(emptyMap()),
     val description: String? = null,
     val notes: String? = null,
+    /** Structural class restriction of route connections; null allows every class. */
+    val classes: List<String>? = null,
 )
 
 /** `*.layout.json`: canvas positions by block path. */

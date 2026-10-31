@@ -40,10 +40,10 @@ for (const language of ["en", "ru"] as const) {
       await steps.nth(3).getByRole("combobox", { name: connection, exact: true }).selectOption("gateway-to-middle");
       await expect(steps).toHaveCount(4);
       const expected = [
-        { type: "process", connection: null, processing: null, failureRate: null },
-        { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
-        { type: "call", connection: "gateway-to-dependency", processing: null, failureRate: null },
-        { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null },
+        { type: "process", connection: null, processing: null, failureRate: null, classes: null },
+        { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
+        { type: "call", connection: "gateway-to-dependency", processing: null, failureRate: null, classes: null },
+        { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
       ];
       const after = await canvas.boundingBox();
       expect({ width: after!.width, height: after!.height }).toEqual({ width: before!.width, height: before!.height });

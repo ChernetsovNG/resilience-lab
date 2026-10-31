@@ -65,7 +65,7 @@ class ConnectionMetricsTest {
     @Test
     fun `deadline shortened timeout remains a timeout and never starts another attempt`() {
         val base = chain(processingMs = 80.0, timeoutMs = 200.0, attempts = 3)
-        val rig = simulate(base.copy(client = base.client.copy(deadlineMs = 30.0)))
+        val rig = simulate(base.copy(clients = listOf(base.client.copy(deadlineMs = 30.0))))
         val connection = rig.result.connections.getValue(CALL)
         assertThat(connection.timeouts).isEqualTo(1)
         assertThat(connection.orphaned).isEqualTo(1)

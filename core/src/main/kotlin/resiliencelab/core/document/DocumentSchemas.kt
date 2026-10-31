@@ -116,6 +116,7 @@ class DocumentSchemas(
                                     "properties",
                                     buildJsonObject {
                                         put("type", buildJsonObject { put("const", "process") })
+                                        put("classes", classFilter())
                                         put("connection", buildJsonObject { put("type", "null") })
                                         processDescriptors.forEach { put(it.name, parameter(it.copy(required = false))) }
                                     },
@@ -129,6 +130,7 @@ class DocumentSchemas(
                                     "properties",
                                     buildJsonObject {
                                         put("type", buildJsonObject { put("const", "call") })
+                                        put("classes", classFilter())
                                         put("processing", buildJsonObject { put("type", "null") })
                                         put("failureRate", buildJsonObject { put("type", "null") })
                                         put(
@@ -153,7 +155,7 @@ class DocumentSchemas(
                     val specialized =
                         shape.properties(
                             "type" to buildJsonObject { put("const", type.id) },
-                            "params" to parameters(type.params),
+                            "params" to if (type.id == "client") clientParameters(type.params) else parameters(type.params),
                         )
                     val withScenario =
                         if (category == TypeCategory.BLOCK) {
@@ -190,7 +192,9 @@ class DocumentSchemas(
                                     },
                             )
                         } else {
-                            specialized
+                            specialized.properties(
+                                "classes" to if (type.id == "route") classFilter() else buildJsonObject { put("type", "null") },
+                            )
                         }
                     buildJsonObject {
                         withScenario.forEach { (key, value) -> put(key, value) }
@@ -206,6 +210,35 @@ class DocumentSchemas(
         return JsonObject(schema + ("\$defs" to JsonObject(definitions)))
     }
 
+    private fun classFilter(): JsonObject =
+        buildJsonObject {
+            put("type", JsonArray(listOf(JsonPrimitive("array"), JsonPrimitive("null"))))
+            put("minItems", 1)
+            put("uniqueItems", true)
+            put("items", buildJsonObject { put("type", "string") })
+        }
+
+    private fun clientParameters(descriptors: List<ParamDescriptor>): JsonObject =
+        JsonObject(
+            parameters(descriptors) + (
+                "oneOf" to
+                    JsonArray(
+                        listOf("load" to "classes", "classes" to "load").map { (selected, other) ->
+                            buildJsonObject {
+                                put("required", JsonArray(listOf(JsonPrimitive(selected))))
+                                put(
+                                    "properties",
+                                    buildJsonObject {
+                                        put(selected, buildJsonObject { put("not", buildJsonObject { put("type", "null") }) })
+                                        put(other, buildJsonObject { put("type", "null") })
+                                    },
+                                )
+                            }
+                        },
+                    )
+            ),
+        )
+
     private fun parameters(descriptors: List<ParamDescriptor>): JsonObject =
         buildJsonObject {
             put("type", "object")
@@ -220,6 +253,7 @@ class DocumentSchemas(
     private fun parameter(descriptor: ParamDescriptor): JsonObject {
         val value =
             when (descriptor.kind) {
+                ParamKind.STRING -> buildJsonObject { put("type", "string") }
                 ParamKind.INTEGER, ParamKind.NUMBER ->
                     buildJsonObject {
                         put("type", if (descriptor.kind == ParamKind.INTEGER) "integer" else "number")

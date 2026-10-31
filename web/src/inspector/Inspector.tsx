@@ -157,7 +157,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             />
           ))}
           </InspectorSection> : null}
-          {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
+          {element.type === "client" && element.params.classes == null && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
             catalog={catalog} model={model} experiment={experiment} clientId={selected}
             descriptor={type.params.find(param => param.name === "load")!}
             editable={editable && (variantId === null || onCommand !== undefined)} invalid={invalid}

@@ -106,7 +106,7 @@ class GraphScenarioTest {
             val rig =
                 simulate(
                     base.copy(
-                        client = base.client.copy(deadlineMs = deadline),
+                        clients = listOf(base.client.copy(deadlineMs = deadline)),
                         services =
                             base.services.map {
                                 if (it.path ==

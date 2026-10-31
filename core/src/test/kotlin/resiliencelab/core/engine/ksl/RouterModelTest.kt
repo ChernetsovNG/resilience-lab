@@ -167,7 +167,7 @@ class RouterModelTest {
     private fun graph(policy: RoutingPolicy = RoutingPolicy.ROUND_ROBIN): GraphIr {
         val base = TestChains.simple()
         return base.copy(
-            entry = "gateway",
+            clients = listOf(base.client.copy(entry = "gateway")),
             services =
                 listOf(ServiceNode("gateway", 100, 0, TestChains.fixed(0.0), 0.0)) +
                     listOf("a", "b", "c").map { ServiceNode(it, 100, 0, TestChains.fixed(1.0), 0.0) },

@@ -31,7 +31,7 @@ function inspect(typeId: string, locale: Language = "en") {
 }
 
 it.each(["en", "ru"] as const)("builds help for every catalog type in %s", locale => {
-  const counts: Record<string, number> = { client: 5, service: 8, request: 0, call: 16, router: 1, route: 1, database: 7, pooler: 7 };
+  const counts: Record<string, number> = { client: 11, service: 8, request: 0, call: 16, router: 1, route: 1, database: 7, pooler: 7 };
   for (const [typeId, count] of Object.entries(counts)) {
     const type = inspect(typeId, locale)!;
     const dialog = screen.getByRole("dialog");
@@ -53,8 +53,13 @@ it.each(["en", "ru"] as const)("builds help for every catalog type in %s", local
 it("shows nested array fields and parameter bounds, without treating initial values as defaults", () => {
   inspect("client");
   const dialog = screen.getByRole("dialog");
-  expect(within(dialog).getByRole("row", { name: /^Time / }).textContent).toContain("≥ 0 ms");
-  expect(within(dialog).getByRole("row", { name: /^Intensity / }).textContent).toContain("≥ 0 /ms");
+  const times = within(dialog).getAllByRole("row", { name: /^Time / });
+  const intensities = within(dialog).getAllByRole("row", { name: /^Intensity / });
+  expect(times).toHaveLength(2);
+  expect(intensities).toHaveLength(2);
+  for (const row of times) expect(row.textContent).toContain("≥ 0 ms");
+  for (const row of intensities) expect(row.textContent).toContain("≥ 0 /ms");
+  expect(within(dialog).getByRole("row", { name: /^Class id / }).textContent).toContain("Required");
 });
 
 it("shows defaults, required values, exclusive bounds and output explanations", () => {

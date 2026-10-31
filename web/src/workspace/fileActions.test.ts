@@ -121,7 +121,7 @@ describe("workspace file actions", () => {
       "my-lab/my-lab.model.json", "my-lab/my-lab.layout.json", "my-lab/my-lab.experiment.json",
     ]);
     expect(drafts[0].content.model?.blocks).toEqual({});
-    expect(drafts[0].content.model?.schemaVersion).toBe(5);
+    expect(drafts[0].content.model?.schemaVersion).toBe(6);
     expect(drafts[0].content.model?.connections).toEqual([]);
     expect(drafts[2].content.experiment).toMatchObject({
       modelRef: "my-lab.model.json", layoutRef: "my-lab.layout.json", execution: { replications: 10, warmup: "10s", measurement: "60s" },
@@ -238,7 +238,7 @@ describe("workspace file actions", () => {
   });
 
   it("exports the server canonical text verbatim instead of serializing the loaded objects", async () => {
-    const canonical = '{\n  "schemaVersion": 5\n}\n';
+    const canonical = '{\n  "schemaVersion": 6\n}\n';
     vi.spyOn(api, "documentText").mockResolvedValue({ text: canonical, etag: "version" });
     const files = await exportDocuments(loaded);
     expect(files.map(file => file.name)).toEqual(["retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json"]);

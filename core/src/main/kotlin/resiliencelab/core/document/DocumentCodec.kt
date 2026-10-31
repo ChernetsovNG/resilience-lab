@@ -28,7 +28,7 @@ sealed interface DecodeResult<out T> {
 object DocumentCodec {
     const val EXPERIMENT_SCHEMA_VERSION = 2
     const val LAYOUT_SCHEMA_VERSION = 1
-    const val MODEL_SCHEMA_VERSION = 5
+    const val MODEL_SCHEMA_VERSION = 6
 
     @OptIn(ExperimentalSerializationApi::class)
     private val reader =

@@ -84,7 +84,7 @@ class TimingArithmeticTest {
             base.copy(
                 services = listOf(base.services.first()),
                 calls = emptyList(),
-                client = base.client.copy(deadlineMs = requestDeadlineMs),
+                clients = listOf(base.client.copy(deadlineMs = requestDeadlineMs)),
             )
         return TestChains.reliabilityModel(model, chain.copy(run = execution()))
     }

@@ -74,22 +74,22 @@ class DocumentCodecTest {
 
     @Test
     fun `decodes a model and reports shape and version problems`() {
-        val text = """{"schemaVersion": 5, "blocks": {"c": {"type": "client"}}, "connections": []}"""
+        val text = """{"schemaVersion": 6, "blocks": {"c": {"type": "client"}}, "connections": []}"""
         val decoded = DocumentCodec.decodeModel(text, "m.model.json")
         assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
         assertThat((decoded as DecodeResult.Ok).value.blocks.keys).containsExactly("c")
 
-        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 5, "blocks": {}, "extra": 1}""", "m.model.json")
+        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 6, "blocks": {}, "extra": 1}""", "m.model.json")
         assertThat((unknownField as DecodeResult.Failed).diagnostics.single().code).isEqualTo("DOCUMENT_SHAPE")
 
-        for (version in listOf(1, 4)) {
+        for (version in listOf(1, 4, 5)) {
             val wrongVersion = DocumentCodec.decodeModel("""{"schemaVersion":$version,"oldShape":{}}""", "m.model.json")
             val diagnostic = (wrongVersion as DecodeResult.Failed).diagnostics.single()
             assertThat(diagnostic.code).isEqualTo("SCHEMA_VERSION")
             assertThat(diagnostic.pointer).isEqualTo("/schemaVersion")
-            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 5")
+            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 6")
             assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
-                .isEqualTo(Json.parseToJsonElement("""{"actual":$version,"expected":5}"""))
+                .isEqualTo(Json.parseToJsonElement("""{"actual":$version,"expected":6}"""))
         }
     }
 
@@ -97,7 +97,7 @@ class DocumentCodecTest {
     fun `writes canonical text with sorted keys, two-space indent and a final newline`() {
         val model =
             ModelFile(
-                schemaVersion = 5,
+                schemaVersion = 6,
                 blocks =
                     linkedMapOf(
                         "b" to
@@ -130,7 +130,7 @@ class DocumentCodecTest {
                   "type": "service"
                 }
               },
-              "schemaVersion": 5
+              "schemaVersion": 6
             }
 
             """.trimIndent(),
@@ -160,7 +160,7 @@ class DocumentCodecTest {
     fun `keeps descriptions and notes of documents, blocks and connections`() {
         val model =
             ModelFile(
-                schemaVersion = 5,
+                schemaVersion = 6,
                 description = "Chain",
                 notes = "Calibrated on staging",
                 blocks = mapOf("a" to BlockInstance(type = "client", description = "Load", notes = "Peak hour")),

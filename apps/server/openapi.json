@@ -1961,6 +1961,12 @@
       "ConnectionInstance" : {
         "type" : "object",
         "properties" : {
+          "classes" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string"
+            }
+          },
           "description" : {
             "type" : [ "string", "null" ]
           },
@@ -2918,7 +2924,7 @@
           },
           "kind" : {
             "type" : "string",
-            "enum" : [ "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT", "ARRAY" ]
+            "enum" : [ "STRING", "INTEGER", "NUMBER", "QUANTITY", "CHOICE", "OBJECT", "ARRAY" ]
           },
           "maximum" : {
             "type" : [ "number", "null" ],
@@ -3333,6 +3339,12 @@
       "ScenarioStep" : {
         "type" : "object",
         "properties" : {
+          "classes" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string"
+            }
+          },
           "connection" : {
             "type" : [ "string", "null" ]
           },

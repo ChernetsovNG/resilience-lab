@@ -88,7 +88,11 @@ export function ServiceScenario({ catalog, model, serviceId, editable, invalid, 
               <legend>{t("editor.scenario.step", { number: formatNumber(index + 1) })}</legend>
               <label className="param-field" data-inspector-field={`${path}.type`}>{t("editor.scenario.type")}
                 <select value={step.type} disabled={disabled} onChange={event => {
-                  if (!disabled) replace(index, newStep(event.target.value));
+                  if (!disabled) {
+                    const next = newStep(event.target.value);
+                    if (step.classes !== undefined) next.classes = step.classes;
+                    replace(index, next);
+                  }
                 }}>
                   {step.type === "process" || step.type === "call" ? null : <option value={step.type} disabled>{step.type}</option>}
                   <option value="process">{t("editor.scenario.process")}</option>

@@ -65,6 +65,13 @@ internal class ParamReader(
 
     fun has(name: String): Boolean = params[name].let { it != null && it !is JsonNull }
 
+    /** A catalog-described free string; identifiers receive their domain checks in the compiler. */
+    fun string(name: String): String? {
+        val element = valueOf(descriptor(name)) ?: return null
+        return (element as? JsonPrimitive)?.takeIf { it.isString }?.content
+            ?: fail(CoreMessage.PARAM_STRING, name, "Parameter '$name' must be a string")
+    }
+
     fun int(name: String): Int? {
         val descriptor = descriptor(name)
         val element = valueOf(descriptor) ?: return null

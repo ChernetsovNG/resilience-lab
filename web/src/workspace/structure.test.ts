@@ -446,3 +446,24 @@ describe("catalog initial values", () => {
     expect(source).toEqual(outputCatalog);
   });
 });
+
+it("retains request classes and structural filters when renaming and copying graph elements", () => {
+  const before = documents();
+  before.model.blocks.client.params = { deadline: "2s", classes: [
+    { id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }] } },
+  ] };
+  before.model.blocks.router = { type: "router", params: { policy: "roundRobin" } };
+  before.model.blocks.gateway.scenario = [{ type: "call", connection: "gateway-to-middle" }];
+  Object.assign(before.model.blocks.gateway.scenario[0], { classes: ["checkout"] });
+  before.model.connections[1].to = "router";
+  before.model.connections.push({ id: "checkout-route", type: "route", from: "router", to: "middle", params: {} });
+  Object.assign(before.model.connections.at(-1)!, { classes: ["checkout"] });
+  const renamed = roundTrip(before, renameElement("gateway-to-middle", "rpc"));
+  expect(renamed.model.blocks.gateway.scenario).toEqual([{ type: "call", connection: "rpc", classes: ["checkout"] }]);
+  const copied = roundTrip(renamed, pasteSelection(copySelection(renamed, ["gateway", "router", "middle"])));
+  expect(copied.model.blocks["service-1"].scenario).toEqual([
+    { type: "call", connection: "service-1-to-router-1", classes: ["checkout"] },
+  ]);
+  expect(copied.model.connections.at(-1)).toMatchObject({ id: "router-1-to-service-2", classes: ["checkout"] });
+  expect(copied.model.blocks.client).toEqual(before.model.blocks.client);
+});

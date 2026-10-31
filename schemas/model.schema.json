@@ -20,7 +20,148 @@
             },
             "params": {
               "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "classes": {
+                      "type": "null"
+                    },
+                    "load": {
+                      "not": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "required": [
+                    "load"
+                  ]
+                },
+                {
+                  "properties": {
+                    "classes": {
+                      "not": {
+                        "type": "null"
+                      }
+                    },
+                    "load": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "classes"
+                  ]
+                }
+              ],
               "properties": {
+                "classes": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "description": "Unique block-style identifier; default is reserved.",
+                            "title": "Class id",
+                            "type": "string"
+                          },
+                          "load": {
+                            "additionalProperties": false,
+                            "description": "Piecewise-linear intensity for this request class, including warm-up.",
+                            "properties": {
+                              "points": {
+                                "description": "Increasing times with linear interpolation; the nearest rate is held outside the points.",
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "rate": {
+                                      "description": "Non-negative arrival intensity. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                                      "title": "Intensity",
+                                      "type": "string",
+                                      "x-quantity": {
+                                        "dimension": "RATE",
+                                        "minimum": 0.0,
+                                        "units": [
+                                          {
+                                            "denominator": 1.0,
+                                            "numerator": 1.0,
+                                            "symbol": "/ms"
+                                          },
+                                          {
+                                            "denominator": 1000.0,
+                                            "numerator": 1.0,
+                                            "symbol": "/s"
+                                          },
+                                          {
+                                            "denominator": 60000.0,
+                                            "numerator": 1.0,
+                                            "symbol": "/min"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "time": {
+                                      "description": "Time from simulation start, including warm-up. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                      "title": "Time",
+                                      "type": "string",
+                                      "x-quantity": {
+                                        "dimension": "DURATION",
+                                        "minimum": 0.0,
+                                        "units": [
+                                          {
+                                            "denominator": 1.0,
+                                            "numerator": 1.0,
+                                            "symbol": "ms"
+                                          },
+                                          {
+                                            "denominator": 1.0,
+                                            "numerator": 1000.0,
+                                            "symbol": "s"
+                                          },
+                                          {
+                                            "denominator": 1.0,
+                                            "numerator": 60000.0,
+                                            "symbol": "min"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "rate",
+                                    "time"
+                                  ],
+                                  "type": "object"
+                                },
+                                "minItems": 1,
+                                "title": "Load points",
+                                "type": "array"
+                              }
+                            },
+                            "required": [
+                              "points"
+                            ],
+                            "title": "Load profile",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "load"
+                        ],
+                        "type": "object"
+                      },
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Per-class load profiles; use either load or classes. Variants replace the entire list; grids are not supported.",
+                  "title": "Request classes"
+                },
                 "deadline": {
                   "description": "End-to-end deadline of each original request. Initially 10s. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
@@ -49,90 +190,96 @@
                   }
                 },
                 "load": {
-                  "additionalProperties": false,
-                  "description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants. Initially one point at 0s with 10/s.",
-                  "properties": {
-                    "points": {
-                      "description": "Increasing times with linear interpolation; the nearest rate is held outside the points.",
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "rate": {
-                            "description": "Non-negative arrival intensity. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
-                            "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
-                            "title": "Intensity",
-                            "type": "string",
-                            "x-quantity": {
-                              "dimension": "RATE",
-                              "minimum": 0.0,
-                              "units": [
-                                {
-                                  "denominator": 1.0,
-                                  "numerator": 1.0,
-                                  "symbol": "/ms"
-                                },
-                                {
-                                  "denominator": 1000.0,
-                                  "numerator": 1.0,
-                                  "symbol": "/s"
-                                },
-                                {
-                                  "denominator": 60000.0,
-                                  "numerator": 1.0,
-                                  "symbol": "/min"
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "points": {
+                          "description": "Increasing times with linear interpolation; the nearest rate is held outside the points.",
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "rate": {
+                                "description": "Non-negative arrival intensity. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
+                                "title": "Intensity",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "RATE",
+                                  "minimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/ms"
+                                    },
+                                    {
+                                      "denominator": 1000.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/s"
+                                    },
+                                    {
+                                      "denominator": 60000.0,
+                                      "numerator": 1.0,
+                                      "symbol": "/min"
+                                    }
+                                  ]
                                 }
-                              ]
-                            }
+                              },
+                              "time": {
+                                "description": "Time from simulation start, including warm-up. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                                "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                                "title": "Time",
+                                "type": "string",
+                                "x-quantity": {
+                                  "dimension": "DURATION",
+                                  "minimum": 0.0,
+                                  "units": [
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1.0,
+                                      "symbol": "ms"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 1000.0,
+                                      "symbol": "s"
+                                    },
+                                    {
+                                      "denominator": 1.0,
+                                      "numerator": 60000.0,
+                                      "symbol": "min"
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "rate",
+                              "time"
+                            ],
+                            "type": "object"
                           },
-                          "time": {
-                            "description": "Time from simulation start, including warm-up. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
-                            "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
-                            "title": "Time",
-                            "type": "string",
-                            "x-quantity": {
-                              "dimension": "DURATION",
-                              "minimum": 0.0,
-                              "units": [
-                                {
-                                  "denominator": 1.0,
-                                  "numerator": 1.0,
-                                  "symbol": "ms"
-                                },
-                                {
-                                  "denominator": 1.0,
-                                  "numerator": 1000.0,
-                                  "symbol": "s"
-                                },
-                                {
-                                  "denominator": 1.0,
-                                  "numerator": 60000.0,
-                                  "symbol": "min"
-                                }
-                              ]
-                            }
-                          }
-                        },
-                        "required": [
-                          "rate",
-                          "time"
-                        ],
-                        "type": "object"
+                          "minItems": 1,
+                          "title": "Load points",
+                          "type": "array"
+                        }
                       },
-                      "minItems": 1,
-                      "title": "Load points",
-                      "type": "array"
+                      "required": [
+                        "points"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "points"
                   ],
-                  "title": "Load profile",
-                  "type": "object"
+                  "description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants. Initially one point at 0s with 10/s.",
+                  "title": "Load profile"
                 }
               },
               "required": [
-                "deadline",
-                "load"
+                "deadline"
               ],
               "type": "object"
             },
@@ -943,6 +1090,9 @@
           "additionalProperties": false,
           "description": "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
           "properties": {
+            "classes": {
+              "type": "null"
+            },
             "description": {
               "type": [
                 "string",
@@ -1334,6 +1484,9 @@
           "additionalProperties": false,
           "description": "Delivers original requests from the client to the entry service without delay or retries.",
           "properties": {
+            "classes": {
+              "type": "null"
+            },
             "description": {
               "type": [
                 "string",
@@ -1378,6 +1531,17 @@
           "additionalProperties": false,
           "description": "One router output to a callable block.",
           "properties": {
+            "classes": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ],
+              "uniqueItems": true
+            },
             "description": {
               "type": [
                 "string",
@@ -1440,6 +1604,17 @@
         {
           "additionalProperties": false,
           "properties": {
+            "classes": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ],
+              "uniqueItems": true
+            },
             "connection": {
               "type": "null"
             },
@@ -1571,6 +1746,17 @@
         {
           "additionalProperties": false,
           "properties": {
+            "classes": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ],
+              "uniqueItems": true
+            },
             "connection": {
               "minLength": 1,
               "type": "string"
@@ -1625,7 +1811,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 5,
+          "const": 6,
           "type": "integer"
         },
         {

@@ -119,7 +119,7 @@ internal object CostEstimator {
                 val sourceMessage =
                     "Main storage contributor: ${perReplication.storageSource.description} (${perReplication.sourceRows} rows per replication)"
                 if (duration >= 3_600_000.0) {
-                    val arrivals = graph.client.load.average(duration) * duration
+                    val arrivals = expectedArrivals(graph)
                     warnings[CoreMessage.ESTIMATE_LONG_MODEL_TIME] =
                         EstimateWarning(
                             CoreMessage.ESTIMATE_LONG_MODEL_TIME,
@@ -175,16 +175,31 @@ internal object CostEstimator {
     /** Configured attempts give a conservative event estimate; stochastic queue wakeups are not predicted exactly. */
     private fun expectedEvents(graph: GraphIr): Double {
         val duration = graph.run.warmupMs + graph.run.measurementMs
-        val arrivals = graph.client.load.average(duration) * duration
-        val visits = mutableMapOf(graph.entry to 1.0)
+        val events =
+            graph.clients.sumOf { client ->
+                client.classes.entries.sumOf { (requestClass, load) ->
+                    load.average(duration) * duration * expectedEventsPerRequest(graph, client.entry, requestClass)
+                }
+            }
+        val fixedEvents = windowCount(duration, graph.run.windowMs).toDouble() + 3.0 + 2.0 * graph.faults.size
+        return events + fixedEvents
+    }
+
+    private fun expectedEventsPerRequest(
+        graph: GraphIr,
+        entry: String,
+        requestClass: String,
+    ): Double {
+        val visits = mutableMapOf(entry to 1.0)
         val services = graph.services.associateBy { it.path }
         val routers = graph.routers.associateBy { it.path }
         var perOriginalRequest = 2.0
         graph.topologicalPaths.forEach { path ->
             val count = visits[path] ?: 0.0
+            if (count == 0.0) return@forEach
             val router = routers[path]
             if (router != null) {
-                val outputs = graph.outgoingRoutes(path)
+                val outputs = graph.outgoingRoutes(path, requestClass)
                 val scale = outputs.maxOf { it.weight }
                 val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
                 val total = weights.sum()
@@ -194,10 +209,10 @@ internal object CostEstimator {
                 return@forEach
             }
             val service = services.getValue(path)
-            if (service.path != graph.entry) perOriginalRequest += 2.0 * count
+            if (service.path != entry) perOriginalRequest += 2.0 * count
             // Pooler processing delay is already a Process step; the additional server pool can acquire, expire, and wake.
             if (service.pooler != null) perOriginalRequest += 3.0 * count
-            graph.scenario(service).forEach { step ->
+            graph.scenario(service, requestClass).forEach { step ->
                 when (step) {
                     is ServiceStep.Process -> perOriginalRequest += 3.0 * count
                     is ServiceStep.Call -> {
@@ -211,10 +226,12 @@ internal object CostEstimator {
                 }
             }
         }
-        val fixedEvents =
-            windowCount(graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs).toDouble() +
-                3.0 + 2.0 * graph.faults.size
-        return arrivals * perOriginalRequest + fixedEvents
+        return perOriginalRequest
+    }
+
+    private fun expectedArrivals(graph: GraphIr): Double {
+        val duration = graph.run.warmupMs + graph.run.measurementMs
+        return graph.clients.sumOf { client -> client.classes.values.sumOf { it.average(duration) * duration } }
     }
 
     private fun estimateTask(graph: GraphIr): TaskEstimate {
@@ -237,7 +254,7 @@ internal object CostEstimator {
         val calls = graph.calls.associateBy { it.path }
         val rowKinds =
             buildList {
-                add(StorageRow(BYTES_PER_NODE_WINDOW, StorageSource.NODES))
+                graph.clients.forEach { add(StorageRow(BYTES_PER_NODE_WINDOW, StorageSource.NODES)) }
                 graph.services.forEach { service ->
                     val sets = if (service.pooler == null) 1 else 2
                     val source = if (service.path in replicaNodes) StorageSource.REPLICAS else StorageSource.NODES
@@ -279,9 +296,7 @@ internal object CostEstimator {
             }
         val compressedBytes = ceil(rawBytes * GZIP_RATIO).toLong()
         // Replication and summary sketches use a capped population term; actual sketch occupancy is unknown before execution.
-        val arrivals =
-            graph.client.load.average(graph.run.warmupMs + graph.run.measurementMs) *
-                (graph.run.warmupMs + graph.run.measurementMs)
+        val arrivals = expectedArrivals(graph)
         val bytesPerElement = METADATA_BYTES_PER_ELEMENT + ceil(minOf(arrivals, 2_000.0) * 4).toLong()
         val metadataBytes = Math.multiplyExact(rowKinds.size.toLong(), bytesPerElement)
         // Totals are gzip per replication; each point's aggregate summary remains plain JSON and is counted once.
