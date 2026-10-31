@@ -21,8 +21,10 @@ export function formatPercent(value: Value): string {
 
 /** The caller selects the input unit explicitly; no document quantity is rewritten. */
 export function formatDuration(value: Value, unit: "ms" | "s" = "ms"): string {
-  return missing(value) ? t("common.na") : t(unit === "ms" ? "common.durationMs" : "common.durationS", {
-    value: formatNumber(value, unit === "ms" ? 1 : 3),
+  if (missing(value)) return t("common.na");
+  const seconds = unit === "s" || Math.abs(value) >= 1000;
+  return t(seconds ? "common.durationS" : "common.durationMs", {
+    value: formatNumber(unit === "ms" && seconds ? value / 1000 : value, unit === "s" ? 3 : seconds ? 2 : 1),
   });
 }
 

@@ -1,4 +1,4 @@
-import { runConditions } from "../experiment/course";
+import { courseData, runConditions } from "../experiment/course";
 import { applyOverrides } from "../workspace/params";
 import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
@@ -89,6 +89,7 @@ export function ResultsPanel({
     (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
   const staleNotice = stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   const conditionVariant = activeVariantId ?? summary?.variants[0]?.id;
+  const faults = model === null || experiment === null || catalog === null ? [] : courseData(model, experiment, catalog).faults;
   const conditions = model === null || experiment === null || catalog === null ? null : runConditions(
     applyOverrides(applyOverrides(model, experiment.variants.find(variant => variant.id === conditionVariant)?.overrides ?? {}, catalog),
       summary?.variants.find(variant => variant.id === conditionVariant)?.points.find(point => point.id === selectedPointId)?.coordinates ?? {}, catalog), experiment, catalog);
@@ -171,7 +172,8 @@ export function ResultsPanel({
           ) : summary !== null ? (
             <>
               {conditions === null ? null : <p className="run-conditions" data-testid="run-conditions" title={conditions}>{conditions}</p>}
-              <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement} />
+              <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement}
+                faults={faults} windowMs={manifest?.series?.windowMs} />
             </>
           ) : (
             <p className="results-empty">{job === null ? t("results.empty") : t("results.awaitingSummary")}</p>

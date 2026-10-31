@@ -38,6 +38,9 @@ interface TimelineChartProps {
 /** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
 export function TimelineChart({ title, unit, lines, regions, thresholds = [], endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
   const [width, setWidth] = useState(640);
+  const seconds = endMs >= 1000;
+  const durationSeconds = unit === "ms" && (thresholds.some(threshold => Math.abs(threshold.value) >= 1000)
+    || lines.some(line => line.windows.some(window => Math.abs((window[line.metric] ?? 0) * line.scale) >= 1000)));
   const format = (value: number) => unit === "ms" ? formatDuration(value) : unit === "RPS" ? formatRate(value)
     : unit === "%" ? formatPercent(value / 100) : unit === "×" ? formatMultiplier(value)
       : t("results.timeline.valueWithUnit", { value: formatNumber(value), unit: t(`results.units.${unit}`) });
@@ -61,14 +64,14 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
     return windowAt((event.clientX - bounds.left) / bounds.width * endMs, windowMs, endMs);
   };
   return <section className="timeline-chart" aria-label={title}>
-    <h3>{title} <span>{t("results.unitInParens", { unit: t(`results.units.${unit}`) })}</span></h3>
+    <h3>{title} <span>{t("results.unitInParens", { unit: t(durationSeconds ? "results.units.s" : `results.units.${unit}`) })}</span></h3>
     <div className="timeline-plot">
       <ResponsiveContainer width="100%" height={176} minWidth={0} onResize={(next) => setWidth(next)}>
         <LineChart margin={{ left: 0, right: 12, top: 12, bottom: 0 }} accessibilityLayer={false}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e7eb" />
           <XAxis type="number" dataKey="startMs" domain={[0, endMs]} allowDataOverflow height={32} tickCount={6}
-            tickFormatter={(value: number) => formatNumber(value)} />
-          <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => formatNumber(value)} />
+            tickFormatter={(value: number) => formatNumber(seconds ? value / 1000 : value)} />
+          <YAxis width={56} domain={[0, "auto"]} tickFormatter={(value: number) => formatNumber(durationSeconds ? value / 1000 : value)} />
           {regions.map((region, index) => <ReferenceArea key={index} x1={region.fromMs} x2={region.toMs}
             fill={region.kind === "warmup" ? "#94a3b8" : "#f59e0b"} fillOpacity={0.14} />)}
           {sampled.map((line) => <Line key={line.id} data={line.points} dataKey="value" type="stepAfter"
@@ -96,7 +99,7 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
           if (next !== null) { event.preventDefault(); onCursor(next); }
         }} />
     </div>
-    <p className="timeline-axis">{t("results.timeline.timeAxis")}</p>
+    <p className="timeline-axis">{t(seconds ? "results.timeline.timeAxisSeconds" : "results.timeline.timeAxis")}</p>
     {unit === "ms" ? <p className="timeline-latency-note">{t("results.timeline.latencyNote")}</p> : null}
     <dl className="timeline-readout">
       {thresholds.map((threshold) => <div key={threshold.id}>

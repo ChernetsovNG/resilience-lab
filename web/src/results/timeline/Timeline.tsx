@@ -185,14 +185,14 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     </details>
     <div className="timeline-regions" aria-label={t("results.timeline.regions")}>
       {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}>
-        {t("results.timeline.region", { label: region.label, from: formatNumber(region.fromMs, 1), to: formatDuration(region.toMs) })}
+        {t("results.timeline.region", { label: region.label, from: formatDuration(region.fromMs), to: formatDuration(region.toMs) })}
       </span>)}
       <span>{t("results.timeline.solid", { variant: variant.id, comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: compared.id }) })}</span>
     </div>
     <p className="timeline-cursor" role="status" data-testid="timeline-cursor">
       {activeWindow === null ? t("results.timeline.inspect")
         : t("results.timeline.window", {
-          window: formatNumber(activeWindow), from: formatNumber(activeWindow * windowMs, 1),
+          window: formatNumber(activeWindow), from: formatDuration(activeWindow * windowMs),
           to: formatDuration(Math.min(endMs, (activeWindow + 1) * windowMs)), replication: formatNumber(replication),
           pinned: hover === null && cursorWindow !== null ? t("results.timeline.pinned") : "",
         })}

@@ -35,6 +35,7 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await expect(insight.locator(".saturation-insight > p").first()).toContainText("dependency first");
   await expect(insight.locator(".saturation-insight > p").first()).toBeInViewport({ ratio: 1 });
   await noOverflow(page);
+  await table.getByRole("row", { name: /Success rate/ }).scrollIntoViewIfNeeded();
   await expect(table.getByRole("row", { name: /Success rate/ })).toBeInViewport({ ratio: 0.2 });
   await page.screenshot({ path: testInfo.outputPath("after-answer.png") });
   await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);

@@ -458,7 +458,7 @@ test("shows summary and assumptions in resizable and Analysis layouts without pa
   await expect(panel).toContainText("Run conditions");
   await expect(panel).toContainText("Replications");
   await expect(panel).toContainText("20,261,025");
-  await expect(panel).toContainText("1,000 ms");
+  await expect(panel).toContainText("1 s");
   await expect(panel).toContainText("10 ms");
   await expect(panel).toContainText("ddsketch-bitwise6-rational-v1");
   await expect(panel).toContainText("Application version");

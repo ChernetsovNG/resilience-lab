@@ -16,7 +16,7 @@ describe("SaturationInsight", () => {
       ],
     };
     render(<SaturationInsight saturation={saturation} replications={2} />);
-    expect(screen.getByText("handlers dependency first in 1 of 2 replications; median start 80 ms, range 80–80 ms.")).toBeTruthy();
+    expect(screen.getByText("handlers dependency first in 1 of 2 replications; median start 80 ms, range 80 ms–80 ms.")).toBeTruthy();
     expect(screen.getByText("1 of 2 replications without saturation.")).toBeTruthy();
     expect(screen.getByText(/futureDurationMs = 125/)).toBeTruthy();
     const rule = screen.getByText("How saturation is detected").closest("details")!;
@@ -30,8 +30,8 @@ describe("SaturationInsight", () => {
     expect(details.open).toBe(false);
     fireEvent.click(screen.getByText("Degradation paths"));
     expect(details.open).toBe(true);
-    expect(screen.getByText("Replication 0: handlers dependency at 80 ms → handlers middle at 100 ms")).toBeTruthy();
-    expect(screen.getByText("Replication 1: no saturation.")).toBeTruthy();
+    expect(screen.getByText("handlers dependency at 80 ms → handlers middle at 100 ms — 1 of 2 replications")).toBeTruthy();
+    expect(screen.getByText("no saturation — 1 of 2 replications")).toBeTruthy();
   });
 
   it("replaces the previous conclusion and paths when another point has no saturation", () => {

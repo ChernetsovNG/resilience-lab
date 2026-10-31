@@ -4,6 +4,8 @@ import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatP
 import { useId, type ReactNode } from "react";
 import { HelpHint } from "../help/HelpHint";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
+import type { CourseFault } from "../experiment/course";
+import { backendMessage } from "../i18n/backendMessage";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
@@ -44,10 +46,12 @@ interface SummaryTableProps {
   activeVariantId?: string | null;
   selectedPointId?: string;
   onElement?: (id: string) => void;
+  faults?: readonly CourseFault[];
+  windowMs?: number;
 }
 
 /** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
-export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement }: SummaryTableProps) {
+export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement, faults = [], windowMs = 0 }: SummaryTableProps) {
   const level = useConfidenceLevel();
   const confidenceHelpId = useId();
   const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
@@ -77,6 +81,15 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     </tr>
   );
   return <div className="answer">
+    <section className="answer-variants" aria-label={t("results.answer.variants")}>
+      <h3>{t("results.answer.variants")}</h3>
+      {columns.map(({ variant, point }) => <p key={variant.id}>
+        {t(point.saturation.firstNodes.length === 0 ? "results.answer.variantUnsaturated" : "results.answer.variantSaturated", {
+          variant: variant.label, resources: point.saturation.firstNodes.map(first => backendMessage(first.label)).join(", "),
+          success: formatPercent(point.aggregate.successRate?.mean),
+        })}
+      </p>)}
+    </section>
     <section className="answer-insight" aria-label={t("results.saturation.title")}>
       <header className="answer-heading">
         <h3>{coordinates === "" ? variantLabel : t("results.answer.forVariant", { variant: variantLabel, point: coordinates })}</h3>
@@ -91,7 +104,8 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       </header>
       {activePoint === undefined || activeVariant === undefined ?
         <p>{t("results.answer.noPoint", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</p> :
-        <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom} />}
+        <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom}
+          faults={faults} windowMs={windowMs} />}
     </section>
     {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: baseline.label, point: selectedPointId })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>

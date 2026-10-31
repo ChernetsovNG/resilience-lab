@@ -45,15 +45,15 @@ test("shows the retry-storm saturation conclusion from the real summary for each
           expect(point.saturation.firstNodes).toEqual([]);
           expect(point.saturation.withoutSaturation).toBe(variant.replications);
           await expect(insight).toContainText("No saturation.");
-          await expect(insight.getByText(/^Capacity headroom:/)).toBeVisible();
-          await expect(insight).toContainText("largest mean queue (pooled)");
-          await expect(insight).toContainText(`entry p99 (pooled) ${formatDuration(point.aggregate.pooledLatency.all?.p99Ms)}`);
+          await expect(insight.getByText(/^Capacity headroom/)).toBeVisible();
+          await expect(insight).toContainText("largest mean number of queued requests");
+          await expect(insight).toContainText(`entry p99 ${formatDuration(point.aggregate.pooledLatency.all?.p99Ms)}`);
         } else {
           expect(first).toBeDefined();
           await expect(insight).toContainText(`${first.label.message} first in ${formatNumber(first.replicationCount)} of ${formatNumber(variant.replications)} replications`);
           await expect(insight).toContainText(`median start ${formatDuration(first.medianStartMs)}`);
-          await expect(insight).toContainText(`range ${formatNumber(first.minStartMs, 1)}–${formatDuration(first.maxStartMs)}`);
-          await expect(insight.getByText(/^Capacity headroom:/)).toHaveCount(0);
+          await expect(insight).toContainText(`range ${formatDuration(first.minStartMs)}–${formatDuration(first.maxStartMs)}`);
+          await expect(insight.getByText(/^Capacity headroom/)).toHaveCount(0);
         }
         await expect(insight).toContainText(`${formatNumber(point.saturation.withoutSaturation)} of ${formatNumber(variant.replications)} replications without saturation.`);
         await page.screenshot({ path: testInfo.outputPath(`answer-${variant.id}.png`) });
