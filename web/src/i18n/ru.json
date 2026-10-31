@@ -1,4 +1,10 @@
 {
+  "editor.load.title": "Нагрузка",
+  "editor.load.points": "Точки нагрузки",
+  "editor.load.actions": "Действия",
+  "editor.load.add": "Добавить точку",
+  "editor.load.delete": "Удалить",
+  "editor.load.deletePoint": "Удалить точку {number}",
   "editor.scenario.title": "Сценарий",
   "editor.scenario.description": "Шаги выполняются по порядку. По умолчанию: обработка, затем исходящие вызовы в порядке идентификаторов связей. Вызов можно повторять. Переставляйте шаги кнопками или Alt+↑ / Alt+↓. Если вызов завершился ошибкой после всех повторов, оставшиеся шаги не выполняются.",
   "editor.scenario.customize": "Задать свой сценарий",
