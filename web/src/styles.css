@@ -323,8 +323,8 @@ select {
   pointer-events: none;
 }
 
-.palette li:not(.palette-item--open):hover > .palette-tooltip,
-.palette li:not(.palette-item--open):focus-within > .palette-tooltip {
+.palette li:not(.palette-item--open) > button:hover + .palette-tooltip,
+.palette:not([data-pointer-focus]):not(:has(> ul > li > button:hover)) li:not(.palette-item--open) > button:focus-visible + .palette-tooltip {
   visibility: visible;
 }
 

@@ -27,6 +27,8 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
   onAdd: (type: string) => void;
 }) {
   const tooltipId = useId();
+  // Clicking an already-focused button can retain :focus-visible.
+  const [pointerFocus, setPointerFocus] = useState(false);
   const [details, setDetails] = useState<{ type: string; anchor: HTMLButtonElement } | null>(null);
   const close = useCallback((restoreFocus = false) => {
     setDetails(null);
@@ -40,7 +42,11 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
     onAdd(type);
   };
   return (
-    <aside hidden={hidden} className="palette" aria-label={t("editor.palette.label")}>
+    <aside hidden={hidden} className="palette" aria-label={t("editor.palette.label")}
+      data-pointer-focus={pointerFocus || undefined}
+      onPointerDownCapture={() => setPointerFocus(true)}
+      onKeyDownCapture={() => setPointerFocus(false)}
+      onBlurCapture={() => setPointerFocus(false)}>
       <ul>
         {types.map((type) => (
           <li key={type.id} className={details?.type === type.id ? "palette-item--open" : undefined}>
@@ -65,7 +71,7 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
               <BlockIcon type={type} />
             </button>
             <span className="palette-tooltip" role="tooltip" id={`${tooltipId}-type-${type.id}`}>
-              <strong>{type.title}</strong><span>{type.description}</span>
+              <strong>{type.title}</strong>
             </span>
             {details?.type !== type.id || catalog === null ? null : <PaletteDetails id={`${tooltipId}-card`}
               catalog={catalog} type={type} anchor={details.anchor} editable={editable} onAdd={() => add(type.id)} onClose={close} />}
@@ -123,9 +129,10 @@ function PaletteDetails({ id, catalog, type, anchor, editable, onAdd, onClose }:
   }, [anchor, onClose]);
 
   return <div ref={panel} id={id} popover="manual" role="dialog" aria-label={t("editor.palette.details", { type: type.title })}
+    aria-describedby={`${id}-description`}
     className="palette-card">
     <h3>{type.title}</h3>
-    <p>{type.description}</p>
+    <p id={`${id}-description`}>{type.description}</p>
     <div className="palette-card-actions">
       <button type="button" disabled={!editable} onClick={onAdd}>{t("editor.palette.add")}</button>
       <TypeHelp catalog={catalog} typeId={type.id}>{t("editor.palette.help")}</TypeHelp>
