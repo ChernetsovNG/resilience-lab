@@ -11,6 +11,10 @@ export function catalogParameter(catalog: Catalog, type: string, params: Params,
   let value = params[root] ?? descriptor.default;
   const titles = [descriptor.title];
   for (const field of fields) {
+    if (descriptor.kind === "ARRAY" && /^\d+$/.test(field)) {
+      value = Array.isArray(value) ? value[Number(field)] : undefined;
+      continue;
+    }
     descriptor = descriptor.fields.find(param => param.name === field);
     if (descriptor === undefined) return undefined;
     value = (isObject(value) ? value[field] : undefined) ?? descriptor.default;

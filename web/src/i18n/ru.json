@@ -1365,5 +1365,13 @@
   "file.replaceAction": "Заменить документы",
   "file.keepDocumentsAction": "Оставить документы",
   "file.saveAndExportAction": "Сохранить и экспортировать",
-  "file.cancelExportAction": "Отменить экспорт"
+  "file.cancelExportAction": "Отменить экспорт",
+  "editor.canvas.queryMean": "запрос: ",
+  "editor.canvas.clientConnections": "клиенты: ",
+  "editor.canvas.serverPool": "серверный пул: ",
+  "editor.canvas.waitTimeout": "ожидание: ",
+  "editor.canvas.routingPolicy": "политика: ",
+  "editor.canvas.intensity": "интенсивность: ",
+  "editor.canvas.deadline": "дедлайн: ",
+  "editor.canvas.pool": "пул"
 }

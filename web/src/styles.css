@@ -424,6 +424,7 @@ select {
 }
 
 .block-node {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 3.2px;
@@ -434,9 +435,51 @@ select {
   background: #fff;
 }
 
-.block-node--service {
+.block-node--service, .block-node--client, .block-node--database, .block-node--pooler {
   width: 192px;
 }
+
+.block-shape { position: relative; }
+.block-shape--person { padding-top: 28px; }
+.block-shape--person::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(50% - 12px);
+  width: 22px;
+  height: 22px;
+  border: 1px solid #0ea5e9;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+.block-shape--cylinder { padding-top: 7px; }
+.block-shape--cylinder::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  border: 1px solid #9aa5b1;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+.block-node--database { border-radius: 0 0 12px 12px; padding-top: 14px; }
+.block-node--pooler { border-width: 3px; border-style: double; padding: 7.6px 10.8px; }
+.block-node--router { width: 144px; height: 144px; min-width: 0; border-radius: 50%; padding: 30px 10px; align-content: center; }
+.block-node--router .block-summary > span, .block-node--router .inline-param { font-size: 11px; column-gap: 2px; min-width: 0; }
+.block-node--router .inline-param { overflow: hidden; text-overflow: ellipsis; }
+.block-node--router .inline-param-model { flex: 0 1 35%; min-width: 0; margin-right: 2px; overflow: hidden; text-overflow: ellipsis; }
+.block-node--router .inline-param-value, .block-node--router .inline-param-current { flex: 1; min-width: 24px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: inherit; }
+.block-node--router .inline-param-editor { flex: 1; min-width: 0; }
+.block-node--router .inline-param-editor select { width: 100%; min-width: 0; }
+.block-node-header { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.block-node .block-node-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-size: inherit; }
+.block-node .block-type-icon { display: inline-flex; flex: 0 0 18px; color: inherit; }
+.block-type-icon .palette-icon { width: 18px; height: 18px; }
+.block-param .help-hint { margin-left: auto; }
 
 .block-summary {
   display: grid;
@@ -1403,6 +1446,7 @@ select {
   display: flex;
   align-items: center;
   gap: 2.4px;
+  white-space: nowrap;
 }
 
 .canvas-edge-results {

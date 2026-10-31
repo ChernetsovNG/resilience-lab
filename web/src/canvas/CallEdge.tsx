@@ -10,7 +10,8 @@ import { summarizeDiagnostics } from "../validation/diagnostics";
 import type { ConnectionCanvasResults, ConnectionOverlayMetric } from "../results/canvasResults";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
-import { isOverridden, type Params } from "../workspace/params";
+import { isObject, isOverridden, type Params } from "../workspace/params";
+import { catalogOption } from "../i18n/catalog";
 import { useLayoutEffect, useRef, useState } from "react";
 
 export type CallEdgeType = Edge<{
@@ -33,6 +34,7 @@ export type CallEdgeType = Edge<{
   connectionMetric?: ConnectionOverlayMetric;
   onSelect?: (multiple: boolean) => void;
   windowed?: boolean;
+  targetGroup?: boolean;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "call">;
@@ -90,6 +92,12 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
             <span>{t("editor.symbols.separator")}</span>
             <span>{t("editor.symbols.multiplier")}</span>
             <InlineParamEditor {...editorProps} path="attempts" overridden={isOverridden(data?.overrides ?? {}, connection.id, "attempts")} onCommit={(value) => onParam(connection.id, "attempts", value)} />
+            {isObject(connection.params.pool) ? <span>{t("editor.symbols.separator")}{t("editor.canvas.pool")} <InlineParamEditor {...editorProps}
+              path="pool.size" overridden={isOverridden(data?.overrides ?? {}, connection.id, "pool.size")}
+              onCommit={value => onParam(connection.id, "pool.size", value)} /></span> : null}
+            {data?.targetGroup && connection.params.balancing != null ? <span>
+              {t("editor.symbols.separator")}{catalogOption(String(connection.params.balancing))}
+            </span> : null}
             {overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}
           </div> : overridden ? <div className="canvas-edge-parameters">
             {catalog.types.find(type => type.id === connection.type)?.params

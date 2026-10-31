@@ -9,6 +9,9 @@ import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } f
 import { DiagnosticBadge, VariantDiagnosticBadge } from "../validation/DiagnosticDisplay";
 import { InlineParamEditor } from "./InlineParamEditor";
 import { isObject, isOverridden, type Params } from "../workspace/params";
+import { catalogParameter } from "../workspace/parameterValues";
+import { HelpHint } from "../help/HelpHint";
+import { BlockIcon } from "../layout/BlockIcon";
 
 export type BlockNodeType = Node<{
   id: string;
@@ -37,17 +40,13 @@ export type BlockNodeType = Node<{
   onValidity: (key: string, valid: boolean) => void;
 }, "block">;
 
-function summaryOf(block: BlockInstance, catalog: Catalog): string {
-  const params = block.params;
-  if (block.type === "client") {
-    const load = isObject(params.load) ? params.load : {};
-    const points = Array.isArray(load.points) ? load.points : [];
-    const rate = points.length === 1 && isObject(points[0])
-      ? String(points[0].rate) : t("editor.canvas.loadProfile");
-    return t("editor.canvas.clientSummary", { rate, deadline: String(params.deadline ?? t("editor.canvas.deadlineRequired")) });
-  }
-  return catalog.types.find(type => type.id === block.type)?.title ?? block.type;
-}
+const keyParameters = new Map<string, readonly [string, string][]>([
+  ["service", [["handlers", "editor.canvas.handlers"], ["queue", "editor.canvas.handlersQueue"], ["processing.mean", "editor.canvas.processingMean"]]],
+  ["database", [["maxConnections", "editor.canvas.connections"], ["queue", "editor.canvas.handlersQueue"], ["processing.mean", "editor.canvas.queryMean"]]],
+  ["pooler", [["maxClientConnections", "editor.canvas.clientConnections"], ["poolSize", "editor.canvas.serverPool"], ["waitTimeout", "editor.canvas.waitTimeout"]]],
+  ["router", [["policy", "editor.canvas.routingPolicy"]]],
+]);
+const shapes = new Map([["client", "person"], ["database", "cylinder"], ["pooler", "double"], ["router", "circle"]]);
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
 export function BlockNode({ data }: NodeProps<BlockNodeType>) {
@@ -67,40 +66,54 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
     modelParams: data.modelBlock?.params, editable: data.parametersEditable, disabled: data.disabled, onValidity: data.onValidity };
   const overridden = (path: string) => isOverridden(data.overrides ?? {}, data.id, path);
-  const database = data.block.type === "database";
+  const type = data.catalog.types.find(type => type.id === data.block.type) ?? { id: data.block.type, title: data.block.type };
+  const load = isObject(data.block.params.load) ? data.block.params.load : {};
+  const points = Array.isArray(load.points) ? load.points : [];
+  const singlePoint = points.length === 1 && isObject(points[0]);
+  const parameters: readonly [string, string][] = data.block.type === "client"
+    ? [...(singlePoint ? [["load.points.0.rate", "editor.canvas.intensity"] as [string, string]] : []), ["deadline", "editor.canvas.deadline"]]
+    : keyParameters.get(data.block.type) ?? [];
+  const commit = (path: string, value: unknown) => {
+    if (path === "load.points.0.rate") {
+      data.onParam(data.id, "load", { ...load, points: [{ ...points[0] as Params, rate: value }] });
+    } else data.onParam(data.id, path, value);
+  };
   const outputs = outputsOf(data.catalog, data.block.type).filter(output => output.overlay != null)
     .sort((a, b) => a.overlay!.order - b.overlay!.order);
   return (
+    <div className={`block-shape block-shape--${shapes.get(data.block.type) ?? "card"}`}>
     <div className={`block-node block-node--${data.block.type}${data.overridden ? " block-node--overridden" : ""}`} data-testid="block-node"
       style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
       {data.ports.map((port) => (
         <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
           position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
       ))}
-      <strong>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</strong>
+      <strong className="block-node-header">
+        <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
+        <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
+      </strong>
       <FaultBadge faults={data.faults} onOpen={data.onFault} disabled={data.disabled} />
       <DiagnosticBadge diagnostics={diagnostics.filter(diagnostic => !isWiringHint(diagnostic))} />
       {wiringHint ? <span className="block-wiring-hint" role="status">{t("editor.canvas.connectBlock")}</span> : null}
       <VariantDiagnosticBadge diagnostics={data.variantDiagnostics} onOpen={data.onProblems} disabled={data.disabled} />
       {data.result?.firstSaturation == null ? null : <span className="saturation-badge" role="img" aria-label={t("editor.canvas.firstSaturatedNode")}
         title={data.result.firstSaturation}>{t("editor.symbols.saturation")}</span>}
-      {data.block.type === "service" ? (
+      {parameters.length > 0 ? (
         <span className="block-summary">
-          <span>{t("editor.canvas.handlers")}
-            <InlineParamEditor {...editorProps} path="handlers" overridden={overridden("handlers")} onCommit={(value) => data.onParam(data.id, "handlers", value)} />
-          </span>
-          <span>{t("editor.canvas.handlersQueue")}
-            <InlineParamEditor {...editorProps} path="queue" overridden={overridden("queue")} onCommit={(value) => data.onParam(data.id, "queue", value)} />
-          </span>
-          <span>{t("editor.canvas.processingMean")}
-            <InlineParamEditor {...editorProps} path="processing.mean" overridden={overridden("processing.mean")} onCommit={(value) => data.onParam(data.id, "processing.mean", value)} />
-          </span>
+          {data.block.type === "client" && !singlePoint ? <span className="block-param">
+            {t("editor.canvas.loadProfile")}
+            <HelpHint label={type.title}>{catalogParameter(data.catalog, data.block.type, data.block.params, "load")?.descriptor.description}</HelpHint>
+          </span> : null}
+          {parameters.map(([path, label]) => {
+            const parameter = catalogParameter(data.catalog, data.block.type, data.block.params, path);
+            return parameter === undefined ? null : <span className="block-param" key={path}>
+              {t(label)}
+              <InlineParamEditor {...editorProps} path={path} overridden={overridden(path)} onCommit={value => commit(path, value)} />
+              {data.block.type === "service" ? null : <HelpHint label={parameter.title}>{parameter.descriptor.description}</HelpHint>}
+            </span>;
+          })}
         </span>
-      ) : database ? <span>{summaryOf(data.block, data.catalog)}{t("editor.symbols.separator")}{t("editor.canvas.connections")}
-        <InlineParamEditor {...editorProps} path="maxConnections" overridden={overridden("maxConnections")}
-          onCommit={(value) => data.onParam(data.id, "maxConnections", value)} />
-      </span> : <span>{data.overridden && data.modelBlock !== undefined && data.block.type === "client"
-        ? <del className="inline-param-model">{summaryOf(data.modelBlock, data.catalog)}</del> : null}{summaryOf(data.block, data.catalog)}</span>}
+      ) : null}
       {outputs.length === 0 ? null : <div className={`block-results${data.resultsPending === undefined ? "" : " canvas-metrics--pending"}${data.result === undefined || data.resultsEmpty ? " canvas-metrics--empty" : ""}`}
         aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.result === undefined || data.resultsEmpty || undefined}
         data-testid={data.result === undefined ? undefined : `canvas-results-${data.id}`}>
@@ -112,6 +125,7 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
           </span>;
         })}
       </div>}
+    </div>
     </div>
   );
 }

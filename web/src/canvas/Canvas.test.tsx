@@ -25,10 +25,10 @@ it("shows database connections on its node without an internal type name", async
     onSelect={vi.fn()} onCommand={vi.fn()} />);
   const node = await screen.findByTestId("rf__node-middle");
   expect(node.textContent).toContain("connections:");
-  expect(node.textContent).toContain("Database");
+  expect(node.querySelector(".block-type-icon")?.getAttribute("title")).toBe("Database");
   expect(screen.getByTestId("canvas-param-middle-maxConnections").textContent).toBe("3");
   expect(node.textContent).not.toContain("handlers");
-  expect(node.textContent).not.toContain("database");
+  expect(node.querySelector(".block-summary")?.childElementCount).toBe(3);
 });
 
 it("retains an insertion activated before the viewport has its initial dimensions", async () => {
@@ -240,7 +240,8 @@ describe("Canvas", () => {
     expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
     expect(screen.getByTestId("canvas-param-gateway-queue").textContent).toBe("16");
     expect(screen.getByTestId("canvas-param-gateway-processing.mean").textContent).toBe("1ms");
-    expect(screen.getByText("120/s · deadline 250ms")).toBeTruthy();
+    expect(screen.getByTestId("canvas-param-client-load.points.0.rate").textContent).toBe("120/s");
+    expect(screen.getByTestId("canvas-param-client-deadline").textContent).toBe("250ms");
     fireEvent.click(screen.getByTestId("rf__node-gateway"));
     expect(onSelect).toHaveBeenCalledWith(["gateway"]);
   });
