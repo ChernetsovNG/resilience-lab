@@ -293,11 +293,14 @@ internal class WindowCollector(
                 it.integrateServerCapacity(boundary)
             }
             connections.values.forEach { it.integrate(boundary) }
+            val clientOriginalArrivals = clientIds.sumOf { nodes.getValue(it).row.originalArrivals }
             onWindow(
                 index,
-                nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs)) } +
-                    classes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs), isClass = true) },
-                connections.map { (id, state) -> ConnectionWindow(id, state.snapshot(boundary - startMs)) },
+                nodes.map { (id, state) -> NodeWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals)) } +
+                    classes.map { (id, state) ->
+                        NodeWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals), isClass = true)
+                    },
+                connections.map { (id, state) -> ConnectionWindow(id, state.snapshot(boundary - startMs, clientOriginalArrivals)) },
             )
             index++
             startMs = boundary
@@ -344,10 +347,14 @@ internal class WindowCollector(
             lastServerCapacityMs = timeMs
         }
 
-        fun snapshot(duration: Double): WindowMetrics =
+        fun snapshot(
+            duration: Double,
+            clientOriginalArrivals: Int,
+        ): WindowMetrics =
             WindowMetrics(
                 startMs = startMs,
                 durationMs = duration,
+                clientOriginalArrivals = clientOriginalArrivals,
                 originalArrivals = row.originalArrivals,
                 offeredAttempts = row.offeredAttempts,
                 admittedAttempts = row.admittedAttempts,
@@ -480,7 +487,10 @@ internal class WindowCollector(
             }
         }
 
-        fun snapshot(duration: Double): ConnectionWindowMetrics =
+        fun snapshot(
+            duration: Double,
+            clientOriginalArrivals: Int,
+        ): ConnectionWindowMetrics =
             ConnectionWindowMetrics(
                 startMs,
                 duration,
@@ -494,6 +504,7 @@ internal class WindowCollector(
                 row.orphanedIntegral,
                 row.backoffIntegral,
                 row.latency.snapshot(),
+                clientOriginalArrivals = clientOriginalArrivals,
                 failuresByReason = row.failuresByReason.toMap(),
                 slotPools =
                     if (id in connectionPoolSizes) {

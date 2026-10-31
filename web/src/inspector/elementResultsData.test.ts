@@ -45,7 +45,7 @@ function fixture(): ElementResultsContext {
     runModel: model, currentModel: model, experiment, catalog, variantId: "baseline", pointId: "p0", replication: 0,
     window: null, selected: "gateway", nodes,
     connections: [{ id: "gateway-to-middle", windows: [0, 100, 200, 1100].map(startMs => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 25,
       sentAttempts: 4,
       retries: 1,

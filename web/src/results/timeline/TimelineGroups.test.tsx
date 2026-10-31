@@ -28,7 +28,7 @@ function setup(connection = false) {
       ...(replica ? {} : { replicaExtrema: extrema }) } } });
   const nodes = [id, `${id}#2`].map((id, index) => ({ id, windows: [window(index > 0)] }));
   const connections = nodes.map(node => ({ id: node.id, windows: node.windows.map(window => ({
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
     startMs: window.startMs, durationMs: window.durationMs, sentAttempts: 10, succeeded: 10, failed: 0,
     retries: 0, timeouts: 0, orphaned: 0, inFlightIntegralMs: 20, orphanedIntegralMs: 0,
     backoffIntegralMs: 0, latency: window.latency, slotPools: window.slotPools,
@@ -118,7 +118,7 @@ it.each([false, true])("shows a compared group's range when the primary has one 
   props.summary.variants[0].points[0].aggregate.groups = [];
   if (connection) {
     loadConnections.mockImplementation(async request => [{ id, windows: [{
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 100,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 100,
       sentAttempts: 10, succeeded: 10, failed: 0, retries: 0, timeouts: 0, orphaned: 0,
       inFlightIntegralMs: 20, orphanedIntegralMs: 0, backoffIntegralMs: 0, latency: nodes[0].windows[0].latency,
       slotPools: { pool: { ...nodes[0].windows[0].slotPools.pool,

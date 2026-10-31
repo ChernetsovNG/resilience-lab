@@ -12,7 +12,7 @@ function groupPart() {
     schemaVersion: 7, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1",
     fromWindow: 0, untilWindow: 1, nodes: [], classes: [],
     connections: [{ id: "worker-to-db", windows: [{
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+      clientOriginalArrivals: 7, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
       startMs: 0, durationMs: 10, sentAttempts: 5, retries: 1, succeeded: 2,
       failed: 1, timeouts: 2, orphaned: 1, inFlightIntegralMs: 24,
       orphanedIntegralMs: 4, backoffIntegralMs: 3,
@@ -28,7 +28,7 @@ describe("replica group series", () => {
   it("preserves pooled statistics and replica extrema when decoding a group part", () => {
     const decoded = decodeSeriesPart(JSON.stringify(groupPart()));
     expect(decoded.connections[0].windows[0]).toMatchObject({
-      sentAttempts: 5, durationMs: 10,
+      sentAttempts: 5, durationMs: 10, clientOriginalArrivals: 7,
       latency: { count: 3, sumMs: 3, meanMs: 1, p99Ms: 2.015625 },
       slotPools: { pool: { busyIntegralMs: 18, capacityIntegralMs: 30, replicaExtrema: extrema } },
     });
@@ -64,7 +64,7 @@ describe("replica group series", () => {
       runId: "run", variant: "baseline", cell: "p0", replication: 0,
       connections: ["worker-to-db"], fromWindow: 0, untilWindow: 1,
     });
-    expect(result[0].windows[0]).toMatchObject({ sentAttempts: 5, slotPools: { pool: { replicaExtrema: extrema } } });
+    expect(result[0].windows[0]).toMatchObject({ sentAttempts: 5, clientOriginalArrivals: 7, slotPools: { pool: { replicaExtrema: extrema } } });
     expect(downloaded).toEqual([1]);
   });
   it("rejects the previous schema instead of interpreting it as the new format", () => {
@@ -74,7 +74,7 @@ describe("replica group series", () => {
 
 it.each([false, true])("loads a service group and shared client context without extra instance parts (selected replica: %s)", async (withReplica) => {
   const window = {
-    failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs: 0, durationMs: 10, originalArrivals: 0, offeredAttempts: 15,
+    failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs: 0, durationMs: 10, originalArrivals: 0, clientOriginalArrivals: 7, offeredAttempts: 15,
     admittedAttempts: 14, successes: 12, failures: 2, timeouts: 0, retries: 1,
     latency: { count: 3, sumMs: 3, sketch: [1, 0, 1, 64, 1] },
     slotPools: { handlers: { busyIntegralMs: 18, queueIntegralMs: 30, capacityIntegralMs: 30,

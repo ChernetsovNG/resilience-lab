@@ -12,7 +12,7 @@ function window(values: Partial<RawWindow> = {}): RawWindow {
       retries: 0,
       succeeded: 0,
       failed: 0,
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
       timeouts: 0,
       orphaned: 0,
       inFlightIntegralMs: 0,
@@ -41,7 +41,7 @@ describe("connection window decoding", () => {
       waitCount: 2, totalWaitMs: 4, queueFullCount: 0, waitLimitCount: 1 };
     const raw = { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
       nodes: [], classes: [], connections: [{ id: "pooled", windows: [{
-        failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 10,
+        clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 10,
         sentAttempts: 1, retries: 0, succeeded: 1, failed: 0, timeouts: 0, orphaned: 0,
         inFlightIntegralMs: 8, orphanedIntegralMs: 0, backoffIntegralMs: 0,
         latency: { count: 0, sumMs: 0, sketch: [0] }, slotPools: { pool: slot } }] }] };
@@ -53,7 +53,7 @@ describe("connection window decoding", () => {
       retries: 1,
       succeeded: 2,
       failed: 1,
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
       timeouts: 2,
       orphaned: 1,
       inFlightIntegralMs: 24,
@@ -73,7 +73,7 @@ describe("connection window decoding", () => {
       retries: 1,
       succeeded: 2,
       failed: 1,
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
       timeouts: 2,
       orphaned: 1,
       inFlightIntegralMs: 24,
@@ -98,7 +98,7 @@ describe("connection window decoding", () => {
     const raw = part();
     raw.nodes = [{ id: "client", windows: [{ startMs: 0,
       durationMs: 10,
-      originalArrivals: 2,
+      originalArrivals: 2, clientOriginalArrivals: 2,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 1,

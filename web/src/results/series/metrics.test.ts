@@ -11,6 +11,7 @@ function window(values: Partial<RawWindow>): RawWindow {
   return { startMs: 0,
       durationMs: 10,
       originalArrivals: 0,
+      clientOriginalArrivals: values.originalArrivals ?? 0,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 0,
@@ -35,7 +36,7 @@ describe("window metrics", () => {
         window({ startMs: 10, durationMs: 5 }),
       ] },
       { id: "service", windows: [
-        window({ offeredAttempts: 30,
+        window({ offeredAttempts: 30, clientOriginalArrivals: 20,
       admittedAttempts: 24,
       successes: 18,
       failures: 6,

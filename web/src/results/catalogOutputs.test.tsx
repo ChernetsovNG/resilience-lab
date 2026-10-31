@@ -98,7 +98,7 @@ it("loads a target dependency for a catalog-defined call chart and formats its m
   vi.spyOn(seriesLoader, "load").mockImplementation(async request => request.nodes.includes("middle")
     ? [{ id: "middle", windows: [recordedWindow({ admittedAttempts: 6, entries: { total: { originalArrivals: 3 } } })] }] : []);
   vi.spyOn(seriesLoader, "loadConnections").mockResolvedValue([{ id: "gateway-to-middle", windows: [{
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 6,
       retries: 0,

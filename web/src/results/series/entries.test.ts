@@ -4,7 +4,7 @@ import { SeriesLoader } from "./loader";
 import type { SeriesIndex } from "../../api/apiTypes";
 
 const entryWindow = (originalArrivals: number) => ({
-  startMs: 0, durationMs: 10, originalArrivals, offeredAttempts: 0, admittedAttempts: 0,
+  startMs: 0, durationMs: 10, originalArrivals, clientOriginalArrivals: 10, offeredAttempts: 0, admittedAttempts: 0,
   successes: originalArrivals - 1, failures: 1, failuresByReason: { deadline: 1 },
   degraded: 0, timeouts: 0, retries: 0, rateLimited: 0, probes: 0, probeFailures: 0,
   notReadyMs: 0, ejections: 0, ejectedMs: 0,
@@ -23,7 +23,7 @@ const part = {
   ],
   classes: [{ id: "status", windows: [entryWindow(4)] }, { id: "purchase", windows: [entryWindow(6)] }],
   connections: [{ id: "checkout-to-worker", windows: [{
-    startMs: 0, durationMs: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 2,
+    startMs: 0, durationMs: 10, clientOriginalArrivals: 10, sentAttempts: 3, retries: 1, succeeded: 1, failed: 2,
     failuresByReason: { error: 1, waitLimit: 1 }, timeouts: 0, orphaned: 0,
     inFlightIntegralMs: 5, orphanedIntegralMs: 0, backoffIntegralMs: 0,
     circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
@@ -42,13 +42,13 @@ describe("entry series", () => {
       probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0,
     });
     expect(decoded.connections[0].windows[0]).toMatchObject({
-      failuresByReason: { error: 1, waitLimit: 1 }, circuitOpenMs: 0,
+      failuresByReason: { error: 1, waitLimit: 1 }, clientOriginalArrivals: 10, circuitOpenMs: 0,
       circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
     });
     expect(decoded.nodes[2].windows[0].metrics.entries.total.originalArrivals).toBe(10);
   });
 
-  it.each([false, true])("sums split clients once in amplification context (reverse parts: %s)", async reverse => {
+  it.each([false, true])("loads only the selected replica with two clients in separate parts (reverse parts: %s)", async reverse => {
     const [mobile, partner, service] = part.nodes;
     const parts = [
       { ...part, nodes: [service], classes: [], connections: [] },
@@ -56,17 +56,24 @@ describe("entry series", () => {
       { ...part, nodes: [partner], classes: [], connections: [] },
     ];
     if (reverse) parts.reverse();
+    const selectedId = "checkout#2";
+    parts.find(value => value.nodes.includes(service))!.nodes = [{ ...service, id: selectedId }];
     const texts = parts.map(value => JSON.stringify(value));
     const index = { schemaVersion: 7, endMs: 10, windowMs: 10, groups: [], parts: parts.map((value, number) => ({
       file: `part-${number}.json.gz`, kind: "INSTANCE", nodes: value.nodes.map(node => node.id),
       classes: value.classes.map(row => row.id), connections: [], fromWindow: 0, untilWindow: 1,
       uncompressedBytes: texts[number].length, sha256: String(number).repeat(64),
     })) } as SeriesIndex;
+    const downloaded: number[] = [];
     const loader = new SeriesLoader({ api: { seriesIndex: async () => index,
-      seriesPart: async (_run, _variant, _cell, _replication, number) => ({ text: texts[number], etag: `"${index.parts[number].sha256}"` }),
+      seriesPart: async (_run, _variant, _cell, _replication, number) => {
+        downloaded.push(number);
+        return { text: texts[number], etag: `"${index.parts[number].sha256}"` };
+      },
     }, decoderFactory: () => ({ decode: async values => values.map(decodeSeriesPart), close: () => undefined }) });
     const [result] = await loader.load({ runId: "run", variant: "baseline", cell: "p0", replication: 0,
-      nodes: ["checkout"], fromWindow: 0, untilWindow: 1 });
+      nodes: [selectedId], fromWindow: 0, untilWindow: 1 });
+    expect(downloaded).toEqual([index.parts.findIndex(reference => reference.nodes.includes(selectedId))]);
     expect(result.windows[0].entries.total.originalArrivals).toBe(10);
     expect(result.windows[0].admittedAttempts / result.windows[0].entries.total.originalArrivals).toBe(1.5);
   });

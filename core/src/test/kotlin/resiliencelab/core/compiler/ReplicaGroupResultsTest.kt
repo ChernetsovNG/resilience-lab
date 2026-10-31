@@ -79,7 +79,7 @@ class ReplicaGroupResultsTest {
             insideSlowdown.filter { it.id in listOf("worker#1", "worker#2", "worker#3") }.sumOf { it.metrics.originalArrivals },
         )
         insideSlowdown.filter { it.id != "worker" }.forEach { row ->
-            assertThat(row.metrics.clientOriginalArrivals).isNull()
+            assertThat(row.metrics.clientOriginalArrivals).isEqualTo(clientArrivals)
         }
         val slots = group.slotPools.getValue("handlers")
         assertThat(group.startMs + group.durationMs).isLessThan(900.0)

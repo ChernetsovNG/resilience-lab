@@ -221,7 +221,7 @@ it("uses the connection's own windows while playing a frame", async () => {
     ...summary.connections.get("call")!, hasOwnSeries: true, values: { amplification: 1.2, sentAttemptsPerSecond: 999, timeoutRate: 0.8, meanOrphaned: 5 },
   }]]) };
   const loader = { load: async () => series, loadConnections: async () => [{ id: "call", windows: [{
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,
@@ -284,7 +284,7 @@ it("prefetches the next node and connection ranges before the cursor reaches the
     loadConnections: async (request: ConnectionSeriesLoadRequest) => {
       connectionRequests.push(request);
       return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, () => ({
-        failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
+        clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,
@@ -347,7 +347,7 @@ it("starts node and connection requests together before either has resolved", as
 
 function connectionRange(request: ConnectionSeriesLoadRequest): DecodedConnection[] {
   return [{ id: "call", windows: Array.from({ length: request.untilWindow - request.fromWindow }, (_, offset) => ({
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
     startMs: (request.fromWindow + offset) * 100, durationMs: 100,
     sentAttempts: request.fromWindow + offset + 1, retries: 1, timeouts: 1, succeeded: 1, failed: 0, orphaned: 1,
     inFlightIntegralMs: 20, orphanedIntegralMs: 50, backoffIntegralMs: 10,

@@ -11,7 +11,7 @@ import { SummaryTable } from "../layout/SummaryTable";
 const raw: SeriesPart = {
   schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
   nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({
-    failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs,
+    clientOriginalArrivals: 0, failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs,
       durationMs: 100,
       originalArrivals: 0,
       admittedAttempts: 8,
@@ -24,7 +24,7 @@ const raw: SeriesPart = {
       slotPools: { handlers: { busyIntegralMs: 100, queueIntegralMs: 100, capacityIntegralMs: (2) * (100), waitCount: 0, totalWaitMs: 0, queueFullCount: 2, waitLimitCount: 0 } } })) })),
   classes: [],
   connections: [{ id: "gateway-to-middle", windows: [0, 100, 200].map(startMs => ({
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 100,
       sentAttempts: 4,
       retries: 1,

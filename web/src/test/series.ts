@@ -5,6 +5,7 @@ export function recordedWindow(values: Partial<WindowMetricValues> = {}): Window
   return { startMs: 0,
       durationMs: 100,
       originalArrivals: 0,
+      clientOriginalArrivals: values.entries?.total.originalArrivals ?? values.originalArrivals ?? 0,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 0,

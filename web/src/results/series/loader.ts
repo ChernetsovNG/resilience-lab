@@ -124,27 +124,7 @@ export class SeriesLoader {
     const connectionRequest = "connections" in request;
     const selected = selectSeriesParts(index, connectionRequest ? [] : request.nodes,
       request.fromWindow, request.untilWindow, connectionRequest ? request.connections : []);
-    const parts = await this.loadReferences(request, selected, getDecoder);
-    if (!connectionRequest) await this.ensureClients(index, parts, request, getDecoder);
-    return parts;
-  }
-
-  private async ensureClients(
-    index: SeriesIndex,
-    parts: Map<string, DecodedSeriesPart>,
-    request: SeriesLoadRequest,
-    getDecoder: () => SeriesDecoder,
-  ): Promise<void> {
-    const missing = missingClientWindows(parts, request, false);
-    if (missing.size === 0) return;
-    // Without an embedded total, every overlapping instance part can contain another client.
-    const references = index.parts.filter(reference => reference.kind === "INSTANCE"
-      && !parts.has(reference.file) && overlapsAny(reference, missing));
-    const extra = await this.loadReferences(request, references, getDecoder);
-    for (const [file, part] of extra) parts.set(file, part);
-    if (missingClientWindows(parts, request, true).size > 0) {
-      throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.missingClients"));
-    }
+    return this.loadReferences(request, selected, getDecoder);
   }
 
   /** A cancelled view releases only its own interest in a part another view still needs. */
@@ -244,34 +224,7 @@ function estimatedBytes(reference: SeriesPartReference, part: DecodedSeriesPart)
   return Math.max(reference.uncompressedBytes, decodedEstimate);
 }
 
-function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest, includeClientRows: boolean): Set<number> {
-  const requested = new Set(request.nodes);
-  const covered = new Set<number>();
-  const services = new Set<number>();
-  for (const part of parts.values()) {
-    for (const node of part.nodes) {
-      const client = node.windows.every((window) => !window.hasSlots);
-      for (const [offset, window] of node.windows.entries()) {
-        const index = part.fromWindow + offset;
-        if (index < request.fromWindow || index >= request.untilWindow) continue;
-        if ((includeClientRows && client) || window.metrics.clientOriginalArrivals != null) covered.add(index);
-        else if (requested.has(node.id) && window.hasSlots) services.add(index);
-      }
-    }
-  }
-  return new Set([...services].filter((index) => !covered.has(index)));
-}
-
-function overlapsAny(reference: SeriesPartReference, windows: ReadonlySet<number>): boolean {
-  for (const window of windows) {
-    if (reference.fromWindow <= window && window < reference.untilWindow) return true;
-  }
-  return false;
-}
-
 function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): NodeSeriesMetrics[] {
-  const arrivals = new Map<number, Map<string, number>>();
-  const embeddedArrivals = new Map<number, number>();
   const selected = new Map<string, Map<number, DecodedWindow>>();
   const requested = new Set(request.nodes);
   for (const part of parts.values()) {
@@ -279,13 +232,6 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        let clientRows = arrivals.get(index);
-        if (clientRows === undefined) {
-          clientRows = new Map();
-          arrivals.set(index, clientRows);
-        }
-        clientRows.set(node.id, window.originalArrivals);
-        if (window.metrics.clientOriginalArrivals != null) embeddedArrivals.set(index, window.metrics.clientOriginalArrivals);
         if (!requested.has(node.id)) continue;
         let windows = selected.get(node.id);
         if (windows === undefined) {
@@ -300,13 +246,7 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
     const selectedWindows = selected.get(id);
     if (selectedWindows === undefined) return [];
     const ordered = [...selectedWindows.entries()].sort(([a], [b]) => a - b);
-    const windows = ordered.map(([index, window]) => {
-      const metrics = { ...window.metrics };
-      const denominator = window.metrics.clientOriginalArrivals ?? embeddedArrivals.get(index)
-        ?? [...(arrivals.get(index)?.values() ?? [])].reduce((sum, value) => sum + value, 0);
-      metrics.entries = { total: { originalArrivals: denominator } };
-      return metrics;
-    });
+    const windows = ordered.map(([, window]) => ({ ...window.metrics }));
     return [{ id, windows, latency: ordered.map(([, window]) => window.latency) }];
   });
 }

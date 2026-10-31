@@ -39,8 +39,8 @@ data class WindowMetrics(
     val retries: Int = 0,
     val latency: LatencyStatistics = LatencyStatistics(),
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
-    /** Shared client original-request denominator for independently loaded group rows; never a summed group counter. */
-    val clientOriginalArrivals: Int? = null,
+    /** All clients' original requests in this window, available on every independently loaded row; never a summed group counter. */
+    @EncodeDefault val clientOriginalArrivals: Int = 0,
     @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
     @EncodeDefault val degraded: Int = 0,
     @EncodeDefault val rateLimited: Int = 0,
@@ -92,6 +92,8 @@ data class ConnectionWindowMetrics(
     @EncodeDefault val circuitRejections: Int = 0,
     @EncodeDefault val retriesDenied: Int = 0,
     @EncodeDefault val fallbacks: Int = 0,
+    /** All clients' original requests in this window; copied-call groups retain the same denominator. */
+    @EncodeDefault val clientOriginalArrivals: Int = 0,
 )
 
 /** One connection in a closed window, passed directly to the artifact writer. */

@@ -14,6 +14,7 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
   return { startMs: 0,
       durationMs: 10,
       originalArrivals: 0,
+      clientOriginalArrivals: values.originalArrivals ?? 0,
       offeredAttempts: 0,
       admittedAttempts: 0,
       successes: 0,
@@ -36,10 +37,10 @@ function fixture() {
     window({ startMs: 10, originalArrivals: 20 }),
   ] }]);
   const service = part([{ id: "service", windows: [
-    window({ admittedAttempts: 15,
+    window({ admittedAttempts: 15, clientOriginalArrivals: 10,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
     window({ startMs: 10,
-      admittedAttempts: 40,
+      admittedAttempts: 40, clientOriginalArrivals: 20,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }),
   ] }]);
   const texts = [JSON.stringify(client), JSON.stringify(service)];
@@ -79,7 +80,7 @@ function request(nodes: string[], signal?: AbortSignal) {
 describe("series loader", () => {
   it("returns each connection's own windows from connection-only and mixed parts", async () => {
     const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: startMs === 20 ? 5 : 10,
       sentAttempts,
       retries: 1,
@@ -134,7 +135,7 @@ describe("series loader", () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
     mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -163,7 +164,7 @@ describe("series loader", () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
     mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -205,7 +206,7 @@ describe("series loader", () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
     mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -276,7 +277,7 @@ describe("series loader", () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 })] }]);
     mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 1,
       retries: 0,
@@ -299,11 +300,11 @@ describe("series loader", () => {
     expect(cache.estimatedBytes).toBe(0);
   });
 
-  it("passes connection-only split parts while finding the client denominator", async () => {
+  it("loads a service without unrelated connection or client parts", async () => {
     const { index, texts } = fixture();
     const connection = part([]);
     connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
-      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+      clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 1,
       retries: 0,
@@ -332,7 +333,8 @@ describe("series loader", () => {
     const result = await loader.load(request(["service"]));
 
     expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
-    expect(cache.get({ runId: "run", variant: "baseline", cell: "p0", replication: 0, part: 0 })?.connections[0].id).toBe("call");
+    expect(api.seriesPart.mock.calls.map(call => call[4])).toEqual([1]);
+    expect(cache.get({ runId: "run", variant: "baseline", cell: "p0", replication: 0, part: 0 })).toBeUndefined();
   });
 
   it("loads only requested parts and reuses decoded cache entries", async () => {
@@ -352,7 +354,7 @@ describe("series loader", () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
-  it("loads all overlapping instance parts and reuses one decoder during fallback", async () => {
+  it("loads only requested service parts and reuses one decoder", async () => {
     const { index, texts } = fixture();
     const unrelated = part([{ id: "unrelated", windows: [window({ slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }), window({ startMs: 10,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] }]);
@@ -382,18 +384,18 @@ describe("series loader", () => {
     expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(factory).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
-    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1, 0, 2]);
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1]);
   });
 
-  it("finds a missing client window after a full window and a split window", async () => {
+  it("uses each selected window denominator across mixed and split parts", async () => {
     const parts = [
       part([
         { id: "client", windows: [window({ originalArrivals: 10 })] },
-        { id: "service", windows: [window({ admittedAttempts: 15,
+        { id: "service", windows: [window({ admittedAttempts: 15, clientOriginalArrivals: 10,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
       ], 0, 1),
       part([{ id: "service", windows: [window({ startMs: 10,
-      admittedAttempts: 40,
+      admittedAttempts: 40, clientOriginalArrivals: 20,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (2) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] }], 1, 2),
       part([{ id: "client", windows: [window({ startMs: 10, originalArrivals: 20 })] }], 1, 2),
     ];
@@ -414,7 +416,7 @@ describe("series loader", () => {
     const result = await loader.load(request(["service"]));
 
     expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
-    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1, 2]);
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1]);
   });
 
   it("rejects an ETag that does not match the index checksum", async () => {

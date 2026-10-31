@@ -468,6 +468,8 @@ export interface components {
             circuitOpenMs: number;
             /** Format: int32 */
             circuitRejections: number;
+            /** Format: int32 */
+            clientOriginalArrivals: number;
             /** Format: double */
             durationMs: number;
             /** Format: int32 */
@@ -1107,7 +1109,7 @@ export interface components {
             /** Format: int32 */
             admittedAttempts: number;
             /** Format: int32 */
-            clientOriginalArrivals?: number | null;
+            clientOriginalArrivals: number;
             /** Format: int32 */
             degraded: number;
             /** Format: double */

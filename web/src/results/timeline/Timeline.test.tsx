@@ -22,7 +22,7 @@ function stubSeries() {
       entries: { total: { originalArrivals: 4 / 1.2 } },
       slotPools: { handlers: { busyIntegralMs: 7.5, queueIntegralMs: 10, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 1, waitLimitCount: 0 } } })) }];
   const connections: DecodedConnection[] = [{ id: "gateway-to-middle", windows: [0, 10, 20].map((startMs) => ({
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: startMs === 20 ? 5 : 10,
       sentAttempts: startMs === 20 ? 0 : 3,
       retries: 1,

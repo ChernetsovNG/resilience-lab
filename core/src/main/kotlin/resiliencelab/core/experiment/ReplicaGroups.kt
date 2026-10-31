@@ -86,7 +86,17 @@ object ReplicaGroups {
                     startMs = first.startMs,
                     durationMs = first.durationMs,
                     originalArrivals = values.sumOf { it.originalArrivals },
-                    clientOriginalArrivals = clientIds.takeIf { it.isNotEmpty() }?.sumOf { rows.getValue(it).originalArrivals },
+                    clientOriginalArrivals =
+                        if (clientIds.isNotEmpty()) {
+                            clientIds.sumOf {
+                                rows
+                                    .getValue(
+                                        it,
+                                    ).originalArrivals
+                            }
+                        } else {
+                            first.clientOriginalArrivals
+                        },
                     offeredAttempts = values.sumOf { it.offeredAttempts },
                     admittedAttempts = values.sumOf { it.admittedAttempts },
                     successes = values.sumOf { it.successes },
@@ -123,6 +133,7 @@ object ReplicaGroups {
                     startMs = first.startMs,
                     durationMs = first.durationMs,
                     sentAttempts = values.sumOf { it.sentAttempts },
+                    clientOriginalArrivals = first.clientOriginalArrivals,
                     retries = values.sumOf { it.retries },
                     succeeded = values.sumOf { it.succeeded },
                     failed = values.sumOf { it.failed },

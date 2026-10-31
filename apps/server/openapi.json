@@ -2158,6 +2158,10 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "clientOriginalArrivals" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "durationMs" : {
             "type" : "number",
             "format" : "double"
@@ -2223,7 +2227,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "backoffIntegralMs", "circuitOpenMs", "circuitRejections", "durationMs", "failed", "failuresByReason", "fallbacks", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "retriesDenied", "sentAttempts", "slotPools", "startMs", "succeeded", "timeouts" ]
+        "required" : [ "backoffIntegralMs", "circuitOpenMs", "circuitRejections", "clientOriginalArrivals", "durationMs", "failed", "failuresByReason", "fallbacks", "inFlightIntegralMs", "latency", "orphaned", "orphanedIntegralMs", "retries", "retriesDenied", "sentAttempts", "slotPools", "startMs", "succeeded", "timeouts" ]
       },
       "Diagnostic" : {
         "type" : "object",
@@ -3893,7 +3897,7 @@
             "format" : "int32"
           },
           "clientOriginalArrivals" : {
-            "type" : [ "integer", "null" ],
+            "type" : "integer",
             "format" : "int32"
           },
           "degraded" : {
@@ -3973,7 +3977,7 @@
             "format" : "int32"
           }
         },
-        "required" : [ "admittedAttempts", "degraded", "durationMs", "ejectedMs", "ejections", "failures", "failuresByReason", "latency", "notReadyMs", "offeredAttempts", "originalArrivals", "probeFailures", "probes", "rateLimited", "retries", "slotPools", "startMs", "successes", "timeouts" ]
+        "required" : [ "admittedAttempts", "clientOriginalArrivals", "degraded", "durationMs", "ejectedMs", "ejections", "failures", "failuresByReason", "latency", "notReadyMs", "offeredAttempts", "originalArrivals", "probeFailures", "probes", "rateLimited", "retries", "slotPools", "startMs", "successes", "timeouts" ]
       },
       "WorkspaceChangeView" : {
         "type" : "object",

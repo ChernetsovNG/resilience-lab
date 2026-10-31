@@ -196,7 +196,7 @@ it("projects connection totals independently of the target service", () => {
       entries: { total: { originalArrivals: 1 } },
       slotPools: { handlers: { busyIntegralMs: 50, queueIntegralMs: 0, capacityIntegralMs: 0, waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] },
   ] as Parameters<typeof windowCanvasResults>[1], 0, 0, [{ id: "gateway-to-middle", windows: [{
-    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
+    clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0,
       durationMs: 100,
       sentAttempts: 2,
       retries: 1,
