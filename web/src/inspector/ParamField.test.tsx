@@ -2,6 +2,15 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { ParamField } from "./ParamField";
+import catalog from "../test/catalog.json";
+import { initialParams } from "../workspace/initialParams";
+
+it.each(["circuitBreaker", "retryBudget", "fallback"])("keeps %s read-only until the policy editor is available", name => {
+  const descriptor = catalog.types.find(type => type.id === "call")!.params.find(param => param.name === name)! as ParamDescriptor;
+  render(<ParamField descriptor={descriptor} value={initialParams(descriptor.fields)} path={name} editable
+    isOverridden={() => false} onCommit={vi.fn()} onValidity={vi.fn()} />);
+  for (const input of screen.getAllByRole("textbox")) expect(input).toHaveProperty("readOnly", true);
+});
 
 it("shows catalog arrays as read-only JSON without committing a lossy string", () => {
   const entries = [{ name: "first" }, { name: "second" }];

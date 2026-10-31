@@ -5,6 +5,7 @@ import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SpecVersion.VersionFlag
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
@@ -358,7 +359,14 @@ class DocumentSchemasTest {
                 assertThat(property.getValue("description").toString()).contains("Canonical value", "checked by the core")
             }
             if (descriptor.kind == ParamKind.OBJECT) assertAnnotations(descriptor.fields, value.properties())
-            if (descriptor.kind == ParamKind.ARRAY) assertAnnotations(descriptor.fields, value.getValue("items").jsonObject.properties())
+            if (descriptor.kind == ParamKind.ARRAY) {
+                val items = value.getValue("items").jsonObject
+                if (descriptor.options.isEmpty()) {
+                    assertAnnotations(descriptor.fields, items.properties())
+                } else {
+                    assertThat(items["enum"]).isEqualTo(JsonArray(descriptor.options.map(::JsonPrimitive)))
+                }
+            }
         }
     }
 

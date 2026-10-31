@@ -67,7 +67,7 @@ class CatalogInitialValuesTest {
                         ParamKind.QUANTITY -> reader.quantity(param.name)
                         ParamKind.CHOICE -> reader.choice(param.name)
                         ParamKind.OBJECT -> reader.obj(param.name)
-                        ParamKind.ARRAY -> reader.objects(param.name)
+                        ParamKind.ARRAY -> if (param.options.isEmpty()) reader.objects(param.name) else reader.choices(param.name)
                     }
                 }
                 check(param.fields, "$path/${param.name}")

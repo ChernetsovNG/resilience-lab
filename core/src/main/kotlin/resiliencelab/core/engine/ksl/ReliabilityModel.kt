@@ -89,7 +89,20 @@ class ReliabilityModel(
                 )
             }.associateBy { it.serviceId }
 
-    private val callRuntimes = graph.topologicalCalls.associate { it.path to CallRuntime(it, streams) }
+    private val callRuntimes = graph.topologicalCalls.associate { it.path to createCallRuntime(it) }
+
+    private fun createCallRuntime(call: CallEdge): CallRuntime =
+        CallRuntime(call, streams) { open ->
+            metrics.recordCircuitState(call.path, open)
+            if (open) {
+                schedule(
+                    eventAction = ModelElement.EventActionIfc<Nothing> { callRuntimes.getValue(call.path).circuitBreaker?.halfOpen() },
+                    timeToEvent = requireNotNull(call.circuitBreaker).openDurationMs,
+                    priority = KSLEvent.DEFAULT_PRIORITY - 1,
+                )
+            }
+        }
+
     private val connectionPools =
         graph.topologicalCalls
             .mapNotNull { call ->
@@ -405,6 +418,7 @@ class ReliabilityModel(
         private var admitted = false
         private var routingCompleted = false
         private var serviceOutcomeRecorded = false
+        private var degraded = false
         internal var incomingAttempt: CallAttempt? = null
         internal var noResponse: Boolean = false
             private set
@@ -486,6 +500,7 @@ class ReliabilityModel(
                 clientId = request.clientId,
                 requestClass = request.requestClass,
                 failureReason = completedOutcome.failureReason,
+                degraded = degraded,
             )
             if (measurementCohort) onOriginalCompletion?.invoke(time - arrivalTimeMs, succeeded)
         }
@@ -515,51 +530,51 @@ class ReliabilityModel(
         }
 
         private suspend fun KSLProcessBuilder.executeCall(callRuntime: CallRuntime): AttemptOutcome {
+            val outcome = executeAttempts(callRuntime)
+            val fallback = callRuntime.edge.fallback ?: return outcome
+            if (outcome == AttemptOutcome.SUCCEEDED ||
+                outcome == AttemptOutcome.DEADLINE_EXCEEDED ||
+                outcome.failureReason !in fallback.on
+            ) {
+                return outcome
+            }
+            if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
+            val remainingMs = originalDeadlineMs - time
+            delay(minOf(fallback.processingMs, remainingMs))
+            if (fallback.processingMs > remainingMs) return AttemptOutcome.DEADLINE_EXCEEDED
+            metrics.recordConnection(callRuntime.edge.path, ConnectionEvent.FALLBACK, measurementCohort)
+            degraded = true
+            return AttemptOutcome.SUCCEEDED
+        }
+
+        private suspend fun KSLProcessBuilder.executeAttempts(callRuntime: CallRuntime): AttemptOutcome {
             val call = callRuntime.edge
-            val pool = connectionPools[call.path]
             var attemptNumber = 1
+            var lastOutcome = AttemptOutcome.PENDING
             val triedOutputs = mutableMapOf<String, MutableSet<String>>()
             while (true) {
                 if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
                 if (attemptNumber > 1) {
+                    if (callRuntime.retryBudget?.allowsRetry(time) == false) {
+                        metrics.recordConnection(call.path, ConnectionEvent.RETRY_DENIED, measurementCohort)
+                        return lastOutcome
+                    }
                     metrics.recordRetry(runtime.serviceId, measurementCohort)
                 }
-                val acquisition =
-                    pool?.let { slots ->
-                        with(slots) { acquire(minOf(requireNotNull(call.pool).acquireTimeoutMs, originalDeadlineMs - time)) }
-                    }
-                if (acquisition?.outcome in listOf(SlotAcquisitionOutcome.WAITED, SlotAcquisitionOutcome.WAIT_LIMIT)) {
-                    metrics.recordPoolWait(
-                        call.path,
-                        measurementCohort,
-                        requireNotNull(acquisition).waitMs,
-                        acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT && time < originalDeadlineMs,
-                    )
-                }
+                val breaker = callRuntime.circuitBreaker
+                val permit = breaker?.acquire()
                 val outcome =
-                    if (pool != null && acquisition?.allocation == null) {
-                        if (time >= originalDeadlineMs) AttemptOutcome.DEADLINE_EXCEEDED else AttemptOutcome.ACQUIRE_TIMED_OUT
+                    if (breaker != null && permit == null) {
+                        metrics.recordConnection(call.path, ConnectionEvent.CIRCUIT_REJECTED, measurementCohort)
+                        metrics.recordConnectionFailure(call.path, AttemptOutcome.CIRCUIT_OPEN, measurementCohort)
+                        AttemptOutcome.CIRCUIT_OPEN
                     } else {
-                        try {
-                            if (time >= originalDeadlineMs) {
-                                AttemptOutcome.DEADLINE_EXCEEDED
-                            } else {
-                                val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
-                                callAttempt = attempt
-                                blockUntilCompleted(attempt.child.work)
-                                if (attempt.status == AttemptOutcome.PENDING && attempt.child.noResponse) {
-                                    awaitAttemptTimeout()
-                                }
-                                if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
-                                attempt.status
-                            }
-                        } finally {
-                            acquisition?.allocation?.let { release(it) }
+                        callRuntime.retryBudget?.recordAttempt(time, retry = attemptNumber > 1)
+                        executeAttempt(callRuntime, attemptNumber, triedOutputs).also { result ->
+                            if (permit != null) breaker.complete(permit, result == AttemptOutcome.SUCCEEDED)
                         }
                     }
-                if (pool != null && acquisition?.allocation == null) {
-                    metrics.recordConnectionFailure(call.path, outcome, measurementCohort)
-                }
+                lastOutcome = outcome
                 if (outcome == AttemptOutcome.SUCCEEDED) return outcome
                 if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
                 if (attemptNumber == call.attempts) return outcome
@@ -576,6 +591,47 @@ class ReliabilityModel(
                     metrics.recordConnection(call.path, ConnectionEvent.BACKOFF_COMPLETED, measurementCohort)
                 }
                 attemptNumber++
+            }
+        }
+
+        private suspend fun KSLProcessBuilder.executeAttempt(
+            callRuntime: CallRuntime,
+            attemptNumber: Int,
+            triedOutputs: MutableMap<String, MutableSet<String>>,
+        ): AttemptOutcome {
+            val call = callRuntime.edge
+            val pool = connectionPools[call.path]
+            val acquisition =
+                pool?.let { slots ->
+                    with(slots) { acquire(minOf(requireNotNull(call.pool).acquireTimeoutMs, originalDeadlineMs - time)) }
+                }
+            if (acquisition?.outcome in listOf(SlotAcquisitionOutcome.WAITED, SlotAcquisitionOutcome.WAIT_LIMIT)) {
+                metrics.recordPoolWait(
+                    call.path,
+                    measurementCohort,
+                    requireNotNull(acquisition).waitMs,
+                    acquisition.outcome == SlotAcquisitionOutcome.WAIT_LIMIT && time < originalDeadlineMs,
+                )
+            }
+            if (pool != null && acquisition?.allocation == null) {
+                val outcome = if (time >= originalDeadlineMs) AttemptOutcome.DEADLINE_EXCEEDED else AttemptOutcome.ACQUIRE_TIMED_OUT
+                metrics.recordConnectionFailure(call.path, outcome, measurementCohort)
+                return outcome
+            }
+            return try {
+                if (time >= originalDeadlineMs) {
+                    AttemptOutcome.DEADLINE_EXCEEDED
+                } else {
+                    val attempt = startAttempt(callRuntime, selectTarget(call, attemptNumber), attemptNumber, triedOutputs)
+                    callAttempt = attempt
+                    blockUntilCompleted(attempt.child.work)
+                    if (attempt.status == AttemptOutcome.PENDING && attempt.child.noResponse) awaitAttemptTimeout()
+                    if (attempt.status == AttemptOutcome.PENDING) attempt.onChildCompleted()
+                    if (attempt.status == AttemptOutcome.SUCCEEDED && attempt.child.degraded) degraded = true
+                    attempt.status
+                }
+            } finally {
+                acquisition?.allocation?.let { release(it) }
             }
         }
 

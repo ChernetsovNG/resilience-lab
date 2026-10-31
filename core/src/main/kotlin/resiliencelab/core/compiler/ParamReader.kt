@@ -128,6 +128,22 @@ internal class ParamReader(
         return ParamReader(value, descriptor.fields, document, childPointer, path, diagnostics, overrides, "$prefix$name.")
     }
 
+    /** Non-empty arrays of string choices described by [ParamDescriptor.options]. */
+    fun choices(name: String): Set<String>? {
+        val descriptor = descriptor(name)
+        val element = valueOf(descriptor) ?: return null
+        val values = (element as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { it.isString }?.content }
+        if (values.isNullOrEmpty() || values.any { it !in descriptor.options }) {
+            return fail(
+                CoreMessage.PARAM_CHOICES,
+                name,
+                "Parameter '$name' must be a non-empty array of ${descriptor.options.joinToString()}",
+                args = mapOf("options" to JsonPrimitive(descriptor.options.joinToString())),
+            )
+        }
+        return values.filterNotNull().toSet()
+    }
+
     /** Non-empty arrays of catalog-described objects; diagnostics retain each array index. */
     fun objects(name: String): List<ParamReader>? {
         val descriptor = descriptor(name)

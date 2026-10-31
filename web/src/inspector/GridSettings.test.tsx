@@ -30,6 +30,29 @@ function Settings({ initialExperiment = experiment, initialCatalog = gridCatalog
   </>;
 }
 
+it.each([
+  { path: "gateway-to-middle.circuitBreaker.minimumCalls", values: [5, 10] },
+  { path: "gateway-to-middle.retryBudget.ratio", values: ["10%", "20%"] },
+  { path: "gateway-to-middle.fallback.processing", values: ["1ms", "2ms"] },
+])("preserves imported policy axis $path read-only and excludes policies from new choices", axis => {
+  render(<Settings initialCatalog={serverCatalog as Catalog} initialExperiment={{ ...experiment, grid: [axis] }} />);
+  expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).disabled).toBe(true);
+  expect(screen.getByLabelText<HTMLInputElement>("Axis 1 value 1").readOnly).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add value to axis 1" }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove axis 1 value 1" }).disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove grid axis 1" }).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
+  const second = screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 2 parameter" });
+  expect([...second.options].some(option => /\.(circuitBreaker|retryBudget|fallback)\./.test(option.value))).toBe(false);
+  fireEvent.change(second, { target: { value: "gateway-to-middle.timeout" } });
+  const value = screen.getByLabelText("Axis 2 value 1");
+  fireEvent.change(value, { target: { value: "70ms" } });
+  fireEvent.blur(value);
+  expect(JSON.parse(screen.getByTestId("grid-document").textContent!)).toEqual([
+    axis, { path: "gateway-to-middle.timeout", values: ["70ms"] },
+  ]);
+});
+
 it.each(["fixed", "lognormal"])("offers only applicable sweep fields for %s", kind => {
   const conditional = structuredClone(serverCatalog) as Catalog;
   conditional.types.find(type => type.id === "service")!.params.find(param => param.name === "processing")!

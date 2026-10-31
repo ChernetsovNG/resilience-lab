@@ -12,7 +12,7 @@ async function stored(page: Page, path: string): Promise<ModelFile> {
   return (await response.json()).content.model;
 }
 
-test("preserves v6 clients, request classes and structural filters through editing and saving", async ({ page }) => {
+test("preserves v6 clients, classes, filters and call policies through editing and saving", async ({ page }) => {
   const directory = `request-classes-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const modelPath = `${directory}/retry-storm.model.json`;
@@ -32,6 +32,13 @@ test("preserves v6 clients, request classes and structural filters through editi
       { type: "process", classes: ["checkout"] },
       { type: "call", connection: "gateway-to-middle", classes: ["checkout"] },
     ];
+    const policies = {
+      circuitBreaker: { failureRate: "40%", minimumCalls: 5, window: 10, openDuration: "20ms", halfOpenCalls: 2 },
+      retryBudget: { ratio: "20%", minPerSecond: "0/s", window: "100ms" },
+      fallback: { on: ["circuitOpen", "timeout"], processing: "2ms" },
+    };
+    const call = source.connections.find(edge => edge.id === "gateway-to-middle")!;
+    call.params = { ...call.params, ...policies };
     source.connections.find(edge => edge.id === "middle-to-dependency")!.to = "router";
     source.connections.push(
       { id: "partner-to-gateway", type: "request", from: "partner", to: "gateway", params: {} },
@@ -40,6 +47,8 @@ test("preserves v6 clients, request classes and structural filters through editi
     const experiment: ExperimentFile = JSON.parse(await readFile(resolve(target, "retry-storm.experiment.json"), "utf8"));
     const override = [{ id: "status", load: { points: [{ time: "0s", rate: "100/s" }] } }, classes[1]];
     experiment.variants[1].overrides["client.classes"] = override;
+    experiment.variants[1].overrides["gateway-to-middle.retryBudget.ratio"] = "35%";
+    experiment.grid = [{ path: "gateway-to-middle.retryBudget.ratio", values: ["10%", "20%"] }];
     await writeFile(resolve(target, "retry-storm.model.json"), JSON.stringify(source));
     await writeFile(resolve(target, "retry-storm.experiment.json"), JSON.stringify(experiment));
     await page.goto("/");
@@ -47,6 +56,7 @@ test("preserves v6 clients, request classes and structural filters through editi
     await expect(page.getByTestId("block-node")).toHaveCount(6);
     const expected = await stored(page, modelPath);
     expect(expected.blocks.client.params.classes).toEqual(classes);
+    expect(expected.connections.find(edge => edge.id === "gateway-to-middle")!.params).toMatchObject(policies);
     expect(expected.connections.find(edge => edge.id === "checkout-route")!.classes).toEqual(["checkout"]);
 
     await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
@@ -70,7 +80,11 @@ test("preserves v6 clients, request classes and structural filters through editi
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
     expect(await stored(page, modelPath)).toEqual(expected);
     const savedExperiment = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`);
-    expect((await savedExperiment.json()).content.experiment.variants[1].overrides["client.classes"]).toEqual(override);
+    const savedExperimentContent = (await savedExperiment.json()).content.experiment;
+    expect(savedExperimentContent.grid).toEqual(experiment.grid);
+    const savedOverrides = savedExperimentContent.variants[1].overrides;
+    expect(savedOverrides["client.classes"]).toEqual(override);
+    expect(savedOverrides["gateway-to-middle.retryBudget.ratio"]).toBe("35%");
     const validation = await page.request.post("/api/v1/validate", { data: { experiment: experimentPath } });
     expect(validation.ok()).toBe(true);
     expect((await validation.json()).valid).toBe(true);

@@ -269,7 +269,17 @@ class DocumentSchemas(
                     buildJsonObject {
                         put("type", "array")
                         put("minItems", 1)
-                        put("items", parameters(descriptor.fields))
+                        put(
+                            "items",
+                            if (descriptor.options.isEmpty()) {
+                                parameters(descriptor.fields)
+                            } else {
+                                buildJsonObject {
+                                    put("type", "string")
+                                    put("enum", JsonArray(descriptor.options.map(::JsonPrimitive)))
+                                }
+                            },
+                        )
                     }
                 ParamKind.QUANTITY -> quantity(descriptor)
             }

@@ -77,6 +77,8 @@ internal enum class CoreMessage(
     PARAM_INTEGER("PARAM_TYPE", "integer", "Parameter '{parameter}' must be an integer"),
     PARAM_NUMBER("PARAM_TYPE", "number", "Parameter '{parameter}' must be a number"),
     PARAM_CHOICE("PARAM_TYPE", "choice", "Parameter '{parameter}' must be one of {options}"),
+    PARAM_CHOICES("PARAM_TYPE", "choices", "Parameter '{parameter}' must be a non-empty array of {options}"),
+    CIRCUIT_WINDOW("CIRCUIT_WINDOW", null, "minimumCalls must not exceed the circuit breaker window"),
     PARAM_OBJECT("PARAM_TYPE", "object", "Parameter '{parameter}' must be an object"),
     PARAM_ARRAY("PARAM_TYPE", "array", "Parameter '{parameter}' must be a non-empty array of objects"),
     LOAD_POINT_ORDER("LOAD_POINT_ORDER", null, "Load point times must be strictly increasing"),

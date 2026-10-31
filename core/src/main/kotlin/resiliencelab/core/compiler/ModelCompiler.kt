@@ -19,9 +19,11 @@ import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.CallPool
+import resiliencelab.core.ir.CircuitBreakerConfig
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.FallbackConfig
 import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
@@ -29,6 +31,7 @@ import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.PoolerSettings
+import resiliencelab.core.ir.RetryBudgetConfig
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
@@ -1186,6 +1189,9 @@ class ModelCompiler(
             }
         val retryTarget = reader.choice("retryTarget")
         val balancing = if (reader.has("balancing")) reader.choice("balancing")?.let(::routingPolicy) else null
+        val circuitBreaker = if (reader.has("circuitBreaker")) reader.obj("circuitBreaker")?.let(::circuitBreaker) else null
+        val retryBudget = if (reader.has("retryBudget")) reader.obj("retryBudget")?.let(::retryBudget) else null
+        val fallback = if (reader.has("fallback")) reader.obj("fallback")?.let(::fallback) else null
         return if (network == null || timeout == null || attempts == null || backoff == null || retryTarget == null) {
             null
         } else {
@@ -1202,8 +1208,40 @@ class ModelCompiler(
                 if (retryTarget == "other") RetryTarget.OTHER else RetryTarget.ANY,
                 balancing,
                 pool,
+                circuitBreaker,
+                retryBudget,
+                fallback,
             )
         }
+    }
+
+    private fun circuitBreaker(reader: ParamReader): CircuitBreakerConfig? {
+        val failureRate = reader.quantity("failureRate")
+        val minimumCalls = reader.int("minimumCalls")
+        val window = reader.int("window")
+        val openDuration = reader.quantity("openDuration")
+        val halfOpenCalls = reader.int("halfOpenCalls")
+        if (minimumCalls != null && window != null && minimumCalls > window) {
+            return reader.fail(CoreMessage.CIRCUIT_WINDOW, "minimumCalls", "minimumCalls must not exceed window", dependsOn = "window")
+        }
+        return if (failureRate == null || minimumCalls == null || window == null || openDuration == null || halfOpenCalls == null) {
+            null
+        } else {
+            CircuitBreakerConfig(failureRate, minimumCalls, window, openDuration, halfOpenCalls)
+        }
+    }
+
+    private fun retryBudget(reader: ParamReader): RetryBudgetConfig? {
+        val ratio = reader.quantity("ratio")
+        val minimum = reader.quantity("minPerSecond")
+        val window = reader.quantity("window")
+        return if (ratio == null || minimum == null || window == null) null else RetryBudgetConfig(ratio, minimum, window)
+    }
+
+    private fun fallback(reader: ParamReader): FallbackConfig? {
+        val on = reader.choices("on")
+        val processing = reader.quantity("processing")
+        return if (on == null || processing == null) null else FallbackConfig(on, processing)
     }
 
     private fun readRouter(

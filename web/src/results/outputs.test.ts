@@ -17,16 +17,17 @@ describe("catalog output contract", () => {
     expect(choices.filter(choice => choice.id === "utilization").map(choice => [choice.key, choice.types]))
       .toEqual([["utilization", ["service", "database"]]]);
   });
-  it("preserves existing Timeline groups and adds pool outputs with their units", () => {
+  it("preserves existing Timeline groups and adds pool and policy outputs with their units", () => {
     expect(timelineGroups(catalog).map(group => [group.title, group.unit, group.scale, group.metrics.map(metric => metric.label)])).toEqual([
-      ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries"]],
+      ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries", "Successful requests with fallback", "Fallbacks"]],
       ["Latency", "ms", 1, ["Mean latency", "p50 latency", "p95 latency", "p99 latency"]],
-      ["Errors and rejections", "RPS", 1, ["Failures", "Timeouts", "Orphaned attempts", "Queue rejections"]],
+      ["Errors and rejections", "RPS", 1, ["Failures", "Timeouts", "Orphaned attempts", "Queue rejections", "Circuit rejections", "Retries denied by budget"]],
       ["Utilization", "%", 100, ["Handler utilization"]],
       ["Call state", "requests", 1, ["Mean in-flight", "Mean orphaned work", "Mean backoff"]],
       ["Queue", "requests", 1, ["Mean queue"]],
       ["Pool utilization", "%", 100, ["Connection pool utilization"]],
       ["Connection pool", "requests", 1, ["Mean connection wait queue", "Connection acquisition timeouts"]],
+      ["Circuit breaker", "%", 100, ["Circuit open share"]],
     ]);
   });
 

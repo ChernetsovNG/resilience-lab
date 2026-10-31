@@ -14,6 +14,7 @@ import { parameterLabel } from "../presentation/labels";
 import { parseParam } from "../workspace/paramParsing";
 import { parameterApplies } from "../workspace/parameterApplicability";
 import { canonicalOf, equivalentQuantities } from "../workspace/quantities";
+import { readOnlyCallPolicies } from "../workspace/policyParameters";
 
 type GridAxis = NonNullable<ExperimentFile["grid"]>[number];
 
@@ -113,6 +114,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const id = useId();
   const grid = experiment.grid ?? [];
   const parameters = parametersOf(model, catalog);
+  const writableParameters = parameters.filter(parameter => !readOnlyCallPolicies.has(parameter.path.split(".")[1]));
   const labels = new Map(grid.map(axis => {
     const parameter = parameters.find(candidate => candidate.path === axis.path);
     return [axis.path, parameter?.heading ?? parameterLabel(axis.path, catalog, model)];
@@ -127,7 +129,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     sizes: grid.map(axis => formatNumber(axis.values.length)).join(` ${t("editor.symbols.multiplier")} `),
   }), points: count("points", points), variants: count("variants", experiment.variants.length),
     replications: count("replications", experiment.execution.replications), runs: count("runs", points * experiment.variants.length * experiment.execution.replications) });
-  const next = parameters.find((parameter) => !grid.some((axis) => axis.path === parameter.path));
+  const next = writableParameters.find((parameter) => !grid.some((axis) => axis.path === parameter.path));
   const replace = (index: number, axis: GridAxis) => onCommand(setGridAxes(grid.map((current, position) => position === index ? axis : current)));
   return <InspectorSection name="grid" title={<h3>{t("editor.grid.title")}</h3>}>
     <section className="grid-settings" data-inspector-field="grid">
@@ -138,6 +140,8 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     {grid.length === 0 ? <p>{t("editor.grid.empty")}</p> : null}
     {grid.map((axis, index) => {
       const parameter = parameters.find((candidate) => candidate.path === axis.path);
+      const readOnly = readOnlyCallPolicies.has(axis.path.split(".")[1]);
+      const axisEditable = editable && !readOnly;
       const prefix = `grid.${index}`;
       const heading = parameter?.heading ?? parameterLabel(axis.path, catalog, model);
       const nextValue = parameter === undefined ? undefined : nextGridValue(parameter.descriptor, axis.values, parameter.value);
@@ -150,13 +154,14 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
         <legend>{heading} {parameter?.descriptor.description ? <HelpHint id={descriptionId} label={heading}>{parameter.descriptor.description}</HelpHint> : null}</legend>
         <DiagnosticMessages diagnostics={fieldMessages.get(prefix)} />
         <label className="param-field" data-inspector-field={`${prefix}.path`}>{t("editor.grid.axisParameter", { number: formatNumber(index + 1) })}
-          <select value={axis.path} disabled={!editable || invalid}
+          <select value={axis.path} disabled={!axisEditable || invalid}
             onChange={(event) => {
               const selected = parameters.find((candidate) => candidate.path === event.target.value)!;
               replace(index, { path: selected.path, values: [selected.value] });
             }}>
             {parameter === undefined ? <option value={axis.path} title={axis.path}>{t("editor.grid.unavailableParameter", { path: heading })}</option> : null}
-            {parameters.map((candidate) => <option key={candidate.path} value={candidate.path} title={candidate.path}>
+            {parameter !== undefined && readOnly ? <option value={axis.path} title={axis.path}>{heading}</option> : null}
+            {writableParameters.map((candidate) => <option key={candidate.path} value={candidate.path} title={candidate.path}>
               {candidate.heading}
             </option>)}
           </select>
@@ -167,18 +172,18 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
         {parameter === undefined ? <p>{t("editor.grid.chooseParameter")}</p> : <>
           {axis.values.map((value, position) => <div className="grid-value" key={position}>
             <ParamField descriptor={{ ...parameter.descriptor, required: true, description: "", title: t("editor.grid.axisValue", { axis: formatNumber(index + 1), value: formatNumber(position + 1) }) }}
-              path={`${prefix}.values.${position}`} value={value} editable={editable} isOverridden={() => false}
+              path={`${prefix}.values.${position}`} value={value} editable={axisEditable} isOverridden={() => false}
               onValidity={onValidity} fieldDiagnostics={errors}
               onCommit={(updated) => replace(index, { ...axis, values: axis.values.map((current, at) => at === position ? updated as typeof current : current) })} />
-            <button type="button" aria-label={t("editor.grid.removeValueLabel", { axis: formatNumber(index + 1), value: formatNumber(position + 1) })} disabled={!editable || invalid}
+            <button type="button" aria-label={t("editor.grid.removeValueLabel", { axis: formatNumber(index + 1), value: formatNumber(position + 1) })} disabled={!axisEditable || invalid}
               onClick={() => replace(index, { ...axis, values: axis.values.filter((_, at) => at !== position) })}>{t("editor.grid.removeValueSymbol")}</button>
           </div>)}
-          <button type="button" aria-label={t("editor.grid.addValueLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid || nextValue === undefined}
+          <button type="button" aria-label={t("editor.grid.addValueLabel", { axis: formatNumber(index + 1) })} disabled={!axisEditable || invalid || nextValue === undefined}
             onClick={() => { if (nextValue !== undefined) replace(index, { ...axis, values: [...axis.values, nextValue] }); }}>{t("editor.grid.addValue")}</button>
         </>}
         </div>
         <DiagnosticMessages id={warningsId} diagnostics={warnings} />
-        <button type="button" aria-label={t("editor.grid.removeAxisLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid}
+        <button type="button" aria-label={t("editor.grid.removeAxisLabel", { axis: formatNumber(index + 1) })} disabled={!axisEditable || invalid}
           onClick={() => onCommand(setGridAxes(grid.filter((_, at) => at !== index)))}>{t("editor.grid.removeAxis")}</button>
       </fieldset>;
     })}

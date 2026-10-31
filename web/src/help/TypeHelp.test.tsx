@@ -31,7 +31,7 @@ function inspect(typeId: string, locale: Language = "en") {
 }
 
 it.each(["en", "ru"] as const)("builds help for every catalog type in %s", locale => {
-  const counts: Record<string, number> = { client: 11, service: 8, request: 0, call: 16, router: 1, route: 1, database: 7, pooler: 7 };
+  const counts: Record<string, number> = { client: 11, service: 8, request: 0, call: 29, router: 1, route: 1, database: 7, pooler: 7 };
   for (const [typeId, count] of Object.entries(counts)) {
     const type = inspect(typeId, locale)!;
     const dialog = screen.getByRole("dialog");
