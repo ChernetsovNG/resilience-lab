@@ -107,7 +107,7 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
           title={descriptor.kind === "CHOICE" ? `${displayed}${t("editor.symbols.separator")}${t("editor.param.editHint")}` : t("editor.param.editHint")}
           onClick={(event) => { if (event.detail === 0) begin(); }}
         >{displayed}</button>
-      ) : displayed}
+      ) : <span className="inline-param-current">{displayed}</span>}
     </span>
   );
 }

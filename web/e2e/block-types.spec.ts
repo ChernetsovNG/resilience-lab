@@ -66,9 +66,10 @@ async function geometry(page: Page) {
   }));
 }
 
-async function save(page: Page) {
-  const button = page.getByRole("button", { name: "Сохранить", exact: true });
+async function save(page: Page, language: "en" | "ru" = "ru") {
+  const button = page.getByRole("button", { name: language === "en" ? "Save" : "Сохранить", exact: true });
   await button.click();
+  await expect(page.getByText(language === "en" ? "Unsaved changes" : "Несохранённые изменения", { exact: true })).toBeHidden();
   await expect(button).toBeDisabled();
 }
 
@@ -156,3 +157,34 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   await writeFile(measurement, JSON.stringify({ before, after, compact }, null, 2));
   await testInfo.attach("geometry.json", { path: measurement, contentType: "application/json" });
 });
+
+for (const language of ["en", "ru"] as const) {
+  test(`router variant keeps its effective policy and editor visible with Undo in ${language}`, async ({ page, graph }) => {
+    await page.evaluate(language => localStorage.setItem("resilience-lab.language", language), language);
+    await page.reload();
+    await page.getByRole("tab", { name: "Типы блоков", exact: true }).click();
+    const policy = page.getByTestId("canvas-param-router-policy");
+    await policy.dblclick();
+    await policy.locator("select").selectOption("leastInFlight");
+    await save(page, language);
+    const experiment = async () => (await (await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.experiment.json`)).json()).content.experiment;
+    expect((await experiment()).variants[0].overrides).toEqual({ "router.policy": "leastInFlight" });
+    const visibleWidth = (selector: string) => policy.locator(selector).evaluate(element => {
+      const current = element.getBoundingClientRect();
+      const parent = element.closest(".inline-param")!.getBoundingClientRect();
+      return Math.max(0, Math.min(current.right, parent.right) - Math.max(current.left, parent.left));
+    });
+    expect(await visibleWidth(".inline-param-value")).toBeGreaterThan(8);
+    expect(await visibleWidth("del")).toBeGreaterThan(4);
+    await policy.locator(".inline-param-value").dblclick();
+    expect(await visibleWidth("select")).toBeGreaterThan(8);
+    await policy.locator("select").press("Escape");
+    await page.getByRole("button", { name: language === "en" ? "Undo" : "Отменить действие", exact: true }).click();
+    await expect(policy.locator("del")).toHaveCount(0);
+    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По очереди");
+    await save(page, language);
+    expect((await experiment()).variants[0].overrides ?? {}).toEqual({});
+    const stored = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
+    expect((await stored.json()).content.model).toEqual(graph.model);
+  });
+}
