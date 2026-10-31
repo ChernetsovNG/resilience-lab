@@ -4,6 +4,20 @@ import { defineConfig } from "vitest/config";
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   optimizeDeps: { include: ["recharts"] },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Separate long-lived vendor code from application code: each chunk stays under the 500 kB warning
+        // and a release that changes only application code keeps the vendor chunks cached.
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: "diagram", test: /node_modules[\\/](@xyflow|d3-[a-z-]+|classcat|zustand)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       "/api": `http://127.0.0.1:${mode === "e2e" ? process.env.E2E_BACKEND_PORT ?? "8080" : "8080"}`,
