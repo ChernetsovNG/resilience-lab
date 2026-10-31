@@ -1,0 +1,23 @@
+{
+  "name": "block-visuals-research",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^26.0.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "bench": "node benchmark.mjs",
+    "preview": "vite preview --host 127.0.0.1 --port 15246 --strictPort"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "@xyflow/react": "12.12.0",
+    "@fortawesome/fontawesome-free": "7.3.1"
+  },
+  "devDependencies": {
+    "vite": "8.3.5",
+    "playwright": "1.64.1"
+  }
+}

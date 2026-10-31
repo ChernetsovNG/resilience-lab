@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1650" viewBox="0 0 1120 1650"><rect width="1120" height="1650" fill="#f3f7fa"/><g font-family="Arial,sans-serif" fill="#163047"><text x="40" y="44" font-size="24" font-weight="bold">Own parametric silhouettes — issue #346 research</text><text x="170" y="85" font-size="16">180 × 126 · Person 183</text><text x="460" y="85" font-size="16">300 × 180 · Person 243</text><text x="850" y="85" font-size="16">150 × 220 · Person 220</text>
+<text x="32" y="142" font-size="15" font-weight="bold">Person</text>
+<g transform="translate(170 110)" fill="#d6eaf8" stroke="#365269" stroke-width="1.7"><path d="M 55.8 36.2 a 34.2 34.2 0 1 0 68.4 0 a 34.2 34.2 0 1 0 -68.4 0"/><path d="M 47 47.6 H 133 A 45 45 0 0 1 178 92.6 V 173 A 8 8 0 0 1 170 181 H 10 A 8 8 0 0 1 2 173 V 92.6 A 45 45 0 0 1 47 47.6 Z"/></g>
+<g transform="translate(196 110)" font-size="13"><text y="114.6" font-weight="bold">Person</text><text y="136.6">capacity: 32</text><text y="158.6">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 110)" fill="#d6eaf8" stroke="#365269" stroke-width="1.7"><path d="M 93 59 a 57 57 0 1 0 114 0 a 57 57 0 1 0 -114 0"/><path d="M 77 78 H 223 A 75 75 0 0 1 298 153 V 233 A 8 8 0 0 1 290 241 H 10 A 8 8 0 0 1 2 233 V 153 A 75 75 0 0 1 77 78 Z"/></g>
+<g transform="translate(486 110)" font-size="13"><text y="175" font-weight="bold">Person</text><text y="197">capacity: 32</text><text y="219">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 110)" fill="#d6eaf8" stroke="#365269" stroke-width="1.7"><path d="M 46.5 30.5 a 28.5 28.5 0 1 0 57 0 a 28.5 28.5 0 1 0 -57 0"/><path d="M 39.5 40 H 110.5 A 37.5 37.5 0 0 1 148 77.5 V 210 A 8 8 0 0 1 140 218 H 10 A 8 8 0 0 1 2 210 V 77.5 A 37.5 37.5 0 0 1 39.5 40 Z"/></g>
+<g transform="translate(876 110)" font-size="13"><text y="99.5" font-weight="bold">Person</text><text y="121.5">capacity: 32</text><text y="143.5">p99: 48 ms · 72%</text></g>
+<text x="32" y="392" font-size="15" font-weight="bold">Service</text>
+<g transform="translate(170 360)" fill="#def1e1" stroke="#365269" stroke-width="1.7"><path d="M 12 2 H 168 Q 178 2 178 12 V 114 Q 178 124 168 124 H 12 Q 2 124 2 114 V 12 Q 2 2 12 2 Z"/></g>
+<g transform="translate(196 360)" font-size="13"><text y="49" font-weight="bold">Service</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 360)" fill="#def1e1" stroke="#365269" stroke-width="1.7"><path d="M 12 2 H 288 Q 298 2 298 12 V 168 Q 298 178 288 178 H 12 Q 2 178 2 168 V 12 Q 2 2 12 2 Z"/></g>
+<g transform="translate(486 360)" font-size="13"><text y="49" font-weight="bold">Service</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 360)" fill="#def1e1" stroke="#365269" stroke-width="1.7"><path d="M 12 2 H 138 Q 148 2 148 12 V 208 Q 148 218 138 218 H 12 Q 2 218 2 208 V 12 Q 2 2 12 2 Z"/></g>
+<g transform="translate(876 360)" font-size="13"><text y="49" font-weight="bold">Service</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<text x="32" y="642" font-size="15" font-weight="bold">Database</text>
+<g transform="translate(170 610)" fill="#ffe1c5" stroke="#365269" stroke-width="1.7"><path d="M 2 18 A 88 16 0 0 1 178 18 V 108 A 88 16 0 0 1 2 108 Z"/><path d="M 2 18 A 88 16 0 0 0 178 18"/></g>
+<g transform="translate(196 610)" font-size="13"><text y="49" font-weight="bold">Database</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 610)" fill="#ffe1c5" stroke="#365269" stroke-width="1.7"><path d="M 2 18 A 148 16 0 0 1 298 18 V 162 A 148 16 0 0 1 2 162 Z"/><path d="M 2 18 A 148 16 0 0 0 298 18"/></g>
+<g transform="translate(486 610)" font-size="13"><text y="49" font-weight="bold">Database</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 610)" fill="#ffe1c5" stroke="#365269" stroke-width="1.7"><path d="M 2 18 A 73 16 0 0 1 148 18 V 202 A 73 16 0 0 1 2 202 Z"/><path d="M 2 18 A 73 16 0 0 0 148 18"/></g>
+<g transform="translate(876 610)" font-size="13"><text y="49" font-weight="bold">Database</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<text x="32" y="892" font-size="15" font-weight="bold">Pooler</text>
+<g transform="translate(170 860)" fill="#efe0fa" stroke="#365269" stroke-width="1.7"><path d="M 2 2 H 178 V 124 H 2 Z"/><path d="M 8 8 H 172 V 118 H 8 Z"/></g>
+<g transform="translate(196 860)" font-size="13"><text y="49" font-weight="bold">Pooler</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 860)" fill="#efe0fa" stroke="#365269" stroke-width="1.7"><path d="M 2 2 H 298 V 178 H 2 Z"/><path d="M 8 8 H 292 V 172 H 8 Z"/></g>
+<g transform="translate(486 860)" font-size="13"><text y="49" font-weight="bold">Pooler</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 860)" fill="#efe0fa" stroke="#365269" stroke-width="1.7"><path d="M 2 2 H 148 V 218 H 2 Z"/><path d="M 8 8 H 142 V 212 H 8 Z"/></g>
+<g transform="translate(876 860)" font-size="13"><text y="49" font-weight="bold">Pooler</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<text x="32" y="1142" font-size="15" font-weight="bold">Router</text>
+<g transform="translate(170 1110)" fill="#ffe7a8" stroke="#365269" stroke-width="1.7"><path d="M 29 63 a 61 61 0 1 0 122 0 a 61 61 0 1 0 -122 0"/></g>
+<g transform="translate(209 1110)" font-size="11"><text y="47" font-weight="bold">Router</text><text y="69">capacity: 32</text><text y="91">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 1110)" fill="#ffe7a8" stroke="#365269" stroke-width="1.7"><path d="M 62 90 a 88 88 0 1 0 176 0 a 88 88 0 1 0 -176 0"/></g>
+<g transform="translate(559 1110)" font-size="11"><text y="74" font-weight="bold">Router</text><text y="96">capacity: 32</text><text y="118">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 1110)" fill="#ffe7a8" stroke="#365269" stroke-width="1.7"><path d="M 2 110 a 73 73 0 1 0 146 0 a 73 73 0 1 0 -146 0"/></g>
+<g transform="translate(874 1110)" font-size="11"><text y="94" font-weight="bold">Router</text><text y="116">capacity: 32</text><text y="138">p99: 48 ms · 72%</text></g>
+<text x="32" y="1392" font-size="15" font-weight="bold">Replicas</text>
+<g transform="translate(170 1360)" fill="#ffd6d6" stroke="#365269" stroke-width="1.7"><path d="M 16 2 H 178 V 110 H 16 Z"/><path d="M 9 9 H 171 V 117 H 9 Z"/><path d="M 2 16 H 164 V 124 H 2 Z"/></g>
+<g transform="translate(196 1360)" font-size="13"><text y="49" font-weight="bold">Replicas</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(460 1360)" fill="#ffd6d6" stroke="#365269" stroke-width="1.7"><path d="M 16 2 H 298 V 164 H 16 Z"/><path d="M 9 9 H 291 V 171 H 9 Z"/><path d="M 2 16 H 284 V 178 H 2 Z"/></g>
+<g transform="translate(486 1360)" font-size="13"><text y="49" font-weight="bold">Replicas</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+<g transform="translate(850 1360)" fill="#ffd6d6" stroke="#365269" stroke-width="1.7"><path d="M 16 2 H 148 V 204 H 16 Z"/><path d="M 9 9 H 141 V 211 H 9 Z"/><path d="M 2 16 H 134 V 218 H 2 Z"/></g>
+<g transform="translate(876 1360)" font-size="13"><text y="49" font-weight="bold">Replicas</text><text y="71">capacity: 32</text><text y="93">p99: 48 ms · 72%</text></g>
+</g></svg>
