@@ -16,6 +16,12 @@ afterEach(() => {
 });
 
 describe("backend messages", () => {
+  it("translates an execution cause and preserves its task context", () => {
+    expect(backendMessage({ code: "EXECUTION_REAL_TIME_LIMIT", message: "legacy", args: {
+      seconds: 1, variant: "baseline", point: "p0", replication: 2,
+    } })).toBe("Variant 'baseline', point 'p0', replication 2: Replication exceeded its real-time cap before full drain (limit: 1 s)");
+  });
+
   it("keeps the replica number when translating a parameter diagnostic", () => {
     expect(backendMessage({ code: "PARAM_RANGE", message: "legacy", args: {
       reason: "minimum", parameter: "handlers", minimum: 1, service: "worker", replica: 2,

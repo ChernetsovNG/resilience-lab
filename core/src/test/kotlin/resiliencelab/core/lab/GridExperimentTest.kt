@@ -59,8 +59,9 @@ class GridExperimentTest {
 
     private fun points(workspace: FileWorkspace) =
         Json
-            .parseToJsonElement(workspace.read(".results/e/r/summary.json").text)
-            .jsonObject
+            .parseToJsonElement(
+                workspace.read(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/summary.json").text,
+            ).jsonObject
             .getValue("variants")
             .jsonArray
             .single()
@@ -135,7 +136,11 @@ class GridExperimentTest {
 
         val expected = Json.parseToJsonElement(axes)
         listOf("manifest", "summary").forEach { name ->
-            val artifact = Json.parseToJsonElement(workspace.read(".results/e/r/$name.json").text).jsonObject
+            val artifact =
+                Json
+                    .parseToJsonElement(
+                        workspace.read(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/$name.json").text,
+                    ).jsonObject
             assertThat(artifact["grid"]).describedAs(name).isEqualTo(expected)
         }
     }
@@ -161,13 +166,25 @@ class GridExperimentTest {
             coordinates(2, "30ms"),
         )
         assertThat(progress).containsExactlyElementsOf((1..12).map { it to 12 })
-        assertThat(workspace.listFiles(".results/e/r").count { it.endsWith("/replication.json.gz") }).isEqualTo(12)
+        assertThat(
+            workspace.listFiles(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r").count {
+                it.endsWith("/replication.json.gz")
+            },
+        ).isEqualTo(12)
         for (point in 0..5) {
             for (replication in 0..1) {
-                assertThat(workspace.exists(".results/e/r/series/baseline/p$point/rep-$replication/index.json")).isTrue()
+                assertThat(
+                    workspace.exists(
+                        ".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/series/baseline/p$point/rep-$replication/index.json",
+                    ),
+                ).isTrue()
             }
         }
-        val manifest = Json.parseToJsonElement(workspace.read(".results/e/r/manifest.json").text).jsonObject
+        val manifest =
+            Json
+                .parseToJsonElement(
+                    workspace.read(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/manifest.json").text,
+                ).jsonObject
         assertThat(
             manifest
                 .getValue("series")
@@ -189,13 +206,24 @@ class GridExperimentTest {
 
         assertThat(points(original).single().getValue("coordinates").jsonObject).isEmpty()
         listOf("manifest", "summary").forEach { name ->
-            val artifact = Json.parseToJsonElement(original.read(".results/e/r/$name.json").text).jsonObject
+            val artifact =
+                Json
+                    .parseToJsonElement(
+                        original.read(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/$name.json").text,
+                    ).jsonObject
             assertThat(artifact["grid"]).isEqualTo(Json.parseToJsonElement("[]"))
         }
         assertThat(points(grid).first().getValue("aggregate")).isEqualTo(points(original).single().getValue("aggregate"))
         assertThat(points(overridden)).isEqualTo(points(grid))
-        assertThat(grid.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
-            .isEqualTo(original.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
+        assertThat(
+            grid.readBytes(
+                ".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/series/baseline/p0/rep-0/replication.json.gz",
+            ),
+        ).isEqualTo(
+            original.readBytes(
+                ".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/series/baseline/p0/rep-0/replication.json.gz",
+            ),
+        )
     }
 
     @Test
@@ -209,8 +237,15 @@ class GridExperimentTest {
         val points = points(workspace)
         assertThat(points[1].getValue("aggregate")).isEqualTo(points[0].getValue("aggregate"))
         assertThat(points[0].getValue("aggregate")).isEqualTo(points(baseline).single().getValue("aggregate"))
-        assertThat(workspace.readBytes(".results/e/r/series/baseline/p1/rep-0/replication.json.gz"))
-            .isEqualTo(workspace.readBytes(".results/e/r/series/baseline/p0/rep-0/replication.json.gz"))
+        assertThat(
+            workspace.readBytes(
+                ".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/series/baseline/p1/rep-0/replication.json.gz",
+            ),
+        ).isEqualTo(
+            workspace.readBytes(
+                ".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r/series/baseline/p0/rep-0/replication.json.gz",
+            ),
+        )
     }
 
     @Test
@@ -237,9 +272,9 @@ class GridExperimentTest {
         run(parallel, 3)
         run(reordered, 3)
 
-        val files = sequential.listFiles(".results/e/r")
-        assertThat(parallel.listFiles(".results/e/r")).isEqualTo(files)
-        assertThat(reordered.listFiles(".results/e/r")).isEqualTo(files)
+        val files = sequential.listFiles(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r")
+        assertThat(parallel.listFiles(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r")).isEqualTo(files)
+        assertThat(reordered.listFiles(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r")).isEqualTo(files)
         files.forEach { path ->
             assertThat(parallel.readBytes(path)).describedAs(path).isEqualTo(sequential.readBytes(path))
             assertThat(reordered.readBytes(path)).describedAs(path).isEqualTo(sequential.readBytes(path))

@@ -31,5 +31,9 @@ function translate({ code, message, args }: BackendMessage): string {
   const base = t(key, params);
   const translated = typeof args.replica === "number" && typeof args.service === "string"
     ? t("messages.replica", { message: base, service: args.service, replica: args.replica }) : base;
-  return typeof args?.points === "string" ? t("messages.points", { message: translated, points: args.points }) : translated;
+  const contextual = typeof args.variant === "string" && typeof args.point === "string" &&
+    typeof args.replication === "number" && Number.isFinite(args.replication)
+    ? t("messages.executionTask", { message: translated, variant: args.variant, point: args.point, replication: formatNumber(args.replication) })
+    : translated;
+  return typeof args?.points === "string" ? t("messages.points", { message: contextual, points: args.points }) : contextual;
 }

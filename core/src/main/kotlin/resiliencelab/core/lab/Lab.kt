@@ -149,9 +149,9 @@ class Lab(
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): RunOutcome {
         checkCancellation(isCancelled)
-        val runDirectory = ResultsLayout.runDirectory(experimentPath, runId)
         val loaded = load(experimentPath)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        val runDirectory = ResultsLayout.runDirectory(workspace.canonicalPath(experimentPath), runId)
         if (expectedVersions != null && expectedVersions != loaded.versions) {
             throw InvalidExperimentException(
                 listOf(
@@ -298,7 +298,12 @@ class Lab(
             throw resumeFailure(CoreMessage.RUN_VERSIONS, "Run versions changed; run again", manifestPath)
         }
         val canonical =
-            runCatching { ResultsLayout.runDirectory(manifest.experiment, runDirectory.substringAfterLast('/')) }.getOrNull()
+            runCatching {
+                ResultsLayout.runDirectory(
+                    workspace.canonicalPath(manifest.experiment),
+                    runDirectory.substringAfterLast('/'),
+                )
+            }.getOrNull()
         if (canonical != runDirectory) {
             throw resumeFailure(CoreMessage.RUN_DIRECTORY, "Run directory does not match its manifest; run again", manifestPath)
         }

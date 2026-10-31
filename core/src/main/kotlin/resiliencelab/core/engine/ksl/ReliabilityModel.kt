@@ -1,5 +1,6 @@
 package resiliencelab.core.engine.ksl
 
+import kotlinx.serialization.json.JsonPrimitive
 import ksl.modeling.entity.KSLProcess
 import ksl.modeling.entity.KSLProcessBuilder
 import ksl.modeling.entity.ProcessModel
@@ -8,6 +9,7 @@ import ksl.simulation.KSLEvent
 import ksl.simulation.Model
 import ksl.simulation.ModelElement
 import ksl.utilities.observers.ObserverIfc
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
@@ -243,10 +245,14 @@ class ReliabilityModel(
         super.afterReplication()
         if (Thread.currentThread().isInterrupted) throw CancellationException("Experiment was cancelled")
         if (executive.isExecutionTimeExceeded) {
-            throw ExperimentExecutionException("Replication exceeded its real-time cap before full drain")
+            throw ExperimentExecutionException(
+                CoreMessage.EXECUTION_REAL_TIME_LIMIT,
+                "Replication exceeded its real-time cap before full drain (limit: ${graph.run.maxRealTimeSeconds} s)",
+                mapOf("seconds" to JsonPrimitive(graph.run.maxRealTimeSeconds)),
+            )
         }
         if (workloadPrepared && !fullyDrained) {
-            throw ExperimentExecutionException("Replication ended before the workload fully drained")
+            throw ExperimentExecutionException(CoreMessage.EXECUTION_DRAIN, "Replication ended before the workload fully drained")
         }
         if (fullyDrained) metrics.verifyConnectionsDrained()
         onReplicationCompleted?.invoke(model.currentReplicationNumber, metrics.replicationResult())
@@ -273,13 +279,13 @@ class ReliabilityModel(
     ): ServiceInvocation {
         val arrivalTimeMs = time + timeUntilActivation
         if (!arrivalTimeMs.isFinite()) {
-            throw ExperimentExecutionException("Invocation arrival time must be finite")
+            throw ExperimentExecutionException(CoreMessage.EXECUTION_TIME_ARRIVAL, "Invocation arrival time must be finite")
         }
         val originalDeadlineMs =
             if (originalRequest) {
                 (arrivalTimeMs + graph.client.deadlineMs).also { deadline ->
                     if (!deadline.isFinite()) {
-                        throw ExperimentExecutionException("Original request deadline must be finite")
+                        throw ExperimentExecutionException(CoreMessage.EXECUTION_TIME_DEADLINE, "Original request deadline must be finite")
                     }
                 }
             } else {

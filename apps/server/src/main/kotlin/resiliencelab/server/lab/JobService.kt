@@ -2,6 +2,7 @@ package resiliencelab.server.lab
 
 import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.LoggerFactory
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.lab.InvalidExperimentException
 import resiliencelab.core.lab.Lab
 import resiliencelab.core.results.RunEntry
@@ -122,15 +123,7 @@ class JobService(
                 )
             }
         } catch (exception: Exception) {
-            logger.error("Resume job {} failed", id, exception)
-            finish(id) {
-                it.copy(
-                    status = JobStatus.FAILED,
-                    error = "Experiment execution failed",
-                    errorCode = ServerMessage.EXPERIMENT_EXECUTION_FAILED.code,
-                    errorArgs = ServerMessage.EXPERIMENT_EXECUTION_FAILED.args(),
-                )
-            }
+            failExecution(id, exception)
         }
     }
 
@@ -265,15 +258,35 @@ class JobService(
                 )
             }
         } catch (exception: Exception) {
-            logger.error("Job {} failed", id, exception)
+            failExecution(id, exception)
+        }
+    }
+
+    private fun failExecution(
+        id: String,
+        exception: Exception,
+    ) {
+        val diagnostic = (exception as? ExperimentExecutionException)?.diagnostic
+        if (diagnostic != null) {
             finish(id) {
                 it.copy(
                     status = JobStatus.FAILED,
-                    error = "Experiment execution failed",
-                    errorCode = ServerMessage.EXPERIMENT_EXECUTION_FAILED.code,
-                    errorArgs = ServerMessage.EXPERIMENT_EXECUTION_FAILED.args(),
+                    error = diagnostic.message,
+                    errorCode = diagnostic.code,
+                    errorArgs = diagnostic.args,
+                    diagnostics = listOf(diagnostic.copy(document = it.experiment)),
                 )
             }
+            return
+        }
+        logger.error("Job {} failed", id, exception)
+        finish(id) {
+            it.copy(
+                status = JobStatus.FAILED,
+                error = "Experiment execution failed",
+                errorCode = ServerMessage.EXPERIMENT_EXECUTION_FAILED.code,
+                errorArgs = ServerMessage.EXPERIMENT_EXECUTION_FAILED.args(),
+            )
         }
     }
 

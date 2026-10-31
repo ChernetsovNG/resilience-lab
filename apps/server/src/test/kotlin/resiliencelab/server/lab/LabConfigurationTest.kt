@@ -47,7 +47,7 @@ class LabConfigurationTest {
             val cancelled = jobs.get(job.id)!!
             assertThat(cancelled.status).isEqualTo(JobStatus.CANCELLED)
             assertThat(cancelled.cancelRequested).isTrue()
-            val directory = root.resolve(".results/retry-storm/${job.runId}")
+            val directory = root.resolve(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/${job.runId}")
             assertThat(JsonPath.read<Boolean>(Files.readString(directory.resolve("manifest.json")), "$.complete")).isFalse()
             assertThat(directory.resolve("summary.json")).doesNotExist()
         } finally {

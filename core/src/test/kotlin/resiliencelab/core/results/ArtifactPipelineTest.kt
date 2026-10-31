@@ -69,13 +69,23 @@ class ArtifactPipelineTest {
             assertThat(caller.isAlive).isFalse()
             assertThat(failure.get()).isInstanceOf(CancellationException::class.java)
             assertThat(interrupted.get()).isTrue()
-            val manifest = Json.decodeFromString(RunManifest.serializer(), backing.read(".results/retry-storm/r/manifest.json").text)
+            val manifest =
+                Json.decodeFromString(
+                    RunManifest.serializer(),
+                    backing.read(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r/manifest.json").text,
+                )
             assertThat(manifest.complete).isFalse()
             assertThat(manifest.parts).isNotEmpty()
-            assertThat(backing.exists(".results/retry-storm/r/summary.json")).isFalse()
-            assertThat(manifest.parts.keys).hasSize(backing.listFiles(".results/retry-storm/r").size - 1)
+            assertThat(backing.exists(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r/summary.json")).isFalse()
+            assertThat(manifest.parts.keys).hasSize(
+                backing.listFiles(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r").size - 1,
+            )
             manifest.parts.forEach { (path, checksum) ->
-                assertThat(DocumentVersion.of(backing.readBytes(".results/retry-storm/r/$path"))).isEqualTo(checksum)
+                assertThat(
+                    DocumentVersion.of(
+                        backing.readBytes(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r/$path"),
+                    ),
+                ).isEqualTo(checksum)
             }
         } finally {
             release.countDown()
@@ -152,7 +162,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(14)
+        assertThat(first.manifest.schemaVersion).isEqualTo(15)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")
@@ -218,11 +228,17 @@ class ArtifactPipelineTest {
         ExperimentExecutor(1).use { executor ->
             assertThatThrownBy { Lab(failing, executor = executor).run(experiment, "r") }.hasMessageContaining("disk unavailable")
         }
-        val manifest = Json.decodeFromString(RunManifest.serializer(), backing.read(".results/retry-storm/r/manifest.json").text)
+        val manifest =
+            Json.decodeFromString(
+                RunManifest.serializer(),
+                backing.read(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r/manifest.json").text,
+            )
         assertThat(manifest.complete).isFalse()
         assertThat(manifest.parts).isNotEmpty()
-        assertThat(backing.exists(".results/retry-storm/r/summary.json")).isFalse()
-        assertThat(manifest.parts.keys).hasSize(backing.listFiles(".results/retry-storm/r").size - 1)
+        assertThat(backing.exists(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r/summary.json")).isFalse()
+        assertThat(manifest.parts.keys).hasSize(
+            backing.listFiles(".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r").size - 1,
+        )
         assertThat(RunCatalog(backing).list().single().complete).isFalse()
     }
 

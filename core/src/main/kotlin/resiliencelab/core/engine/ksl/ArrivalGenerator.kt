@@ -3,6 +3,7 @@ package resiliencelab.core.engine.ksl
 import ksl.simulation.ModelElement
 import ksl.utilities.random.rng.RNStreamIfc
 import ksl.utilities.random.rvariable.KSLRandom
+import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.ir.LoadProfile
 
 /**
@@ -48,7 +49,7 @@ internal class ArrivalGenerator(
         val delayMs = KSLRandom.rExponential(meanInterArrivalMs, stream)
         val nextArrivalMs = time + delayMs
         if (!nextArrivalMs.isFinite()) {
-            throw ExperimentExecutionException("Next arrival time must be finite")
+            throw ExperimentExecutionException(CoreMessage.EXECUTION_TIME_NEXT_ARRIVAL, "Next arrival time must be finite")
         }
         if (nextArrivalMs < arrivalEndMs) {
             schedule(arrivalAction, delayMs)

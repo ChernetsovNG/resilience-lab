@@ -39,7 +39,7 @@ class ResumeApiTest {
     fun `API cancellation resumes to bytes identical to a continuous run`() {
         val path = longExperiment("resume-api")
         val runId = cancelViaApi(path)
-        val runDirectory = ".results/resume-api/$runId"
+        val runDirectory = ".results/91a0f7794b300eda183059079211587a9d4bc51da1d07a59ae0047157d1d7f67/$runId"
 
         val runs = mockMvc.perform(get("/api/v1/runs")).andReturn().response
         val entry = JsonPath.read<List<Map<String, Any>>>(runs.contentAsString, "$[?(@.id=='$runId')]").single()
@@ -84,7 +84,12 @@ class ResumeApiTest {
         val completed = awaitJob(JsonPath.read(submitted.contentAsString, "$.id"))
         assertThat(JsonPath.read<String>(completed.contentAsString, "$.status")).isEqualTo("COMPLETED")
 
-        assertArtifactsEqual(expectedRoot, ".results/resume-api/continuous", root, runDirectory)
+        assertArtifactsEqual(
+            expectedRoot,
+            ".results/91a0f7794b300eda183059079211587a9d4bc51da1d07a59ae0047157d1d7f67/continuous",
+            root,
+            runDirectory,
+        )
 
         val repeated = postJson("/api/v1/runs/$runId/resume", "")
         assertThat(repeated.status).isEqualTo(409)
