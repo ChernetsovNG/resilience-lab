@@ -62,6 +62,36 @@ class LoadProfileCompilerTest {
     }
 
     @Test
+    fun `variant profile errors retain the point index and field`() {
+        listOf(
+            Triple(
+                "client.load",
+                """{"points":[{"time":"0s","rate":"10/s"},{"time":"0s","rate":"100/s"}]}""",
+                "/points/1/time",
+            ),
+            Triple(
+                "client.load.points",
+                """[{"time":"0s","rate":"10/s"},{"time":"0s","rate":"100/s"}]""",
+                "/1/time",
+            ),
+            Triple("client.load", """{"points":[{"time":"0s","rate":"-2/s"}]}""", "/points/0/rate"),
+            Triple("client.load", """{"points":[{"time":"-1ms","rate":"2/s"}]}""", "/points/0/time"),
+        ).forEach { (path, load, suffix) ->
+            val result =
+                compile(
+                    """{"points":[{"time":"0s","rate":"10/s"}]}""",
+                    variants = """[{"id":"ramp","overrides":{"$path":$load}}]""",
+                )
+            assertThat(result.experiment).describedAs(path).isNull()
+            assertThat(result.diagnostics).describedAs(load).anySatisfy {
+                assertThat(it.document).isEqualTo("e.experiment.json")
+                assertThat(it.pointer).isEqualTo("/variants/0/overrides/$path$suffix")
+                assertThat(it.variant).isEqualTo("ramp")
+            }
+        }
+    }
+
+    @Test
     fun `load profiles cannot be swept in a grid`() {
         listOf(
             "client.load" to """{"points":[{"time":"0s","rate":"30/s"}]}""",

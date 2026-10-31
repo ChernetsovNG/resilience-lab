@@ -1,4 +1,10 @@
 {
+  "editor.load.title": "Load",
+  "editor.load.points": "Load points",
+  "editor.load.actions": "Actions",
+  "editor.load.add": "Add point",
+  "editor.load.delete": "Delete",
+  "editor.load.deletePoint": "Delete point {number}",
   "editor.scenario.title": "Scenario",
   "editor.scenario.description": "Steps run in order. By default: processing, then outgoing calls sorted by connection ID. A call may repeat. Move steps with the buttons or Alt+Up / Alt+Down. If a call fails after all retries, the remaining steps do not run.",
   "editor.scenario.customize": "Set custom scenario",

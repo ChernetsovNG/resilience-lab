@@ -58,10 +58,10 @@ it("describes service and nested overrides with catalog titles and values", asyn
   expect(within(banner).getByRole("button", { name: "gateway-to-middle · Network delay · Mean: 0.5ms → 7ms" })).toBeTruthy();
 });
 
-it("focuses the Inspector textarea when a load-profile array override is selected", async () => {
+it("focuses the first point field when a load-profile array override is selected", async () => {
   server(url => url.includes(encodeURIComponent(experimentPath)) ? { body: {
     ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [{ id: "profile", overrides: {
-      "client.load.points": [{ at: "0ms", rate: "20/s" }],
+      "client.load.points": [{ time: "0ms", rate: "20/s" }],
     } }] } },
   } } : undefined);
   await open();
@@ -69,7 +69,7 @@ it("focuses the Inspector textarea when a load-profile array override is selecte
   const banner = screen.getByTestId("variant-banner");
   fireEvent.click(banner.querySelector("summary")!);
   fireEvent.click(within(banner).getByRole("button"));
-  const field = screen.getByRole("complementary", { name: "Inspector" }).querySelector("textarea");
+  const field = screen.getByRole("complementary", { name: "Inspector" }).querySelector('[data-inspector-field="load.points.0.time"] input');
   expect(field).not.toBeNull();
   expect(document.activeElement).toBe(field);
 });

@@ -17,13 +17,24 @@ internal class OverrideOrigins(
     val pointers: Map<String, String>,
     val variant: String? = null,
 ) {
-    /** Pointer of the override that set [parameter] or an object holding it; null when the value comes from the model. */
-    fun pointerOf(parameter: String): String? =
-        pointers[parameter]
-            ?: pointers.entries
+    /**
+     * Pointer of the override that set [parameter] or an object holding it; null when the value comes from the model.
+     * Array descendants retain their indexed location within that override; grid origins stay at the grid value.
+     */
+    fun pointerOf(parameter: String): String? {
+        pointers[parameter]?.let { return it }
+        val origin =
+            pointers.entries
                 .filter { (path, _) -> parameter.startsWith("$path.") }
                 .maxByOrNull { (path, _) -> path.length }
-                ?.value
+                ?: return null
+        val suffix = parameter.removePrefix("${origin.key}.").split(".")
+        return if (origin.value.startsWith("/grid/") || suffix.none { it.toIntOrNull() != null }) {
+            origin.value
+        } else {
+            suffix.fold(origin.value) { pointer, field -> JsonPointer.child(pointer, field) }
+        }
+    }
 
     companion object {
         val NONE = OverrideOrigins("", emptyMap())
@@ -129,7 +140,7 @@ internal class ParamReader(
                 path,
                 diagnostics,
                 overrides,
-                "$prefix$name.",
+                "$prefix$name.$index.",
             )
         }
     }

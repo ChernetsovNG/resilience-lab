@@ -11,6 +11,7 @@ import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
+import { LoadProfile } from "./LoadProfile";
 import { variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
@@ -69,6 +70,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const destination = connection === undefined ? undefined : ownEntry(model.blocks, connection.to);
   const attempts = element?.params.attempts ?? type?.params.find(param => param.name === "attempts")?.default ?? 1;
   const parameters = type?.params.filter(descriptor =>
+    !(element?.type === "client" && descriptor.name === "load") &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
   const heading = showElement ? selected : resultsOnly ? null
@@ -126,6 +128,17 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             />
           ))}
           </InspectorSection>
+          {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
+            catalog={catalog} model={model} experiment={experiment} clientId={selected}
+            descriptor={type.params.find(param => param.name === "load")!}
+            editable={editable && (variantId === null || onCommand !== undefined)} invalid={invalid}
+            overridden={isOverridden(overrides, selected, "load")} onCommit={value => {
+              if (variantId === null) onParam(selected, "load", value);
+              else onCommand?.(setVariantParam(variantId, selected, "load", value, catalog));
+            }}
+            onReset={variantId === null ? undefined : () => onCommand?.(resetVariantParam(variantId, selected, "load", catalog))}
+            onValidity={onValidity} fieldDiagnostics={fieldDiagnostics}
+            variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined} onVariantDiagnostic={onVariantDiagnostic} /> : null}
           {element.type === "service" ? <ServiceScenario key={selected} catalog={catalog} model={model} serviceId={selected}
             editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
