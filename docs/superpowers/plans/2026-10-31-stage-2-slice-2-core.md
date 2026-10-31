@@ -22,7 +22,7 @@
 | T1.1 Модель v6: клиенты и классы — документ, компилятор, IR | — | — |
 | T1.2 Движок: прибытия по классам, атрибуты, пути по классам | — | T1.1 |
 | T3.1 Результаты входа по клиентам и классам, причины отказов | — | T1.2 |
-| T2.1 Circuit breaker и бюджет повторов | — | T3.1 |
+| T2.1 Circuit breaker, бюджет повторов и заглушка | — | T3.1 |
 | T2.2 Ограничение интенсивности и health-check | — | T2.1 |
 | T2.3 Outlier detection | — | T2.2 |
 
@@ -67,6 +67,7 @@
 |---|---|
 | `call.circuitBreaker` | `failureRate` (доля, `50%`), `minimumCalls` (целое, 10), `window` (целое, число попыток, 20), `openDuration` (длительность, `5s`), `halfOpenCalls` (целое, 3) |
 | `call.retryBudget` | `ratio` (доля, `20%`), `minPerSecond` (интенсивность, `10/s`), `window` (длительность, `10s`) |
+| `call.fallback` | `on` (массив кодов причин, `["circuitOpen"]`; допустимы `error`, `unavailable`, `timeout`, `queueFull`, `waitLimit`, `circuitOpen`, `rateLimited`, `noRoute`, `noReadyTarget`, но не `deadline`), `processing` (длительность, `1ms`) |
 | `call.outlierDetection`, `router.outlierDetection` | `consecutiveFailures` (целое, 5), `baseEjection` (длительность, `30s`), `maxEjected` (доля, `50%`) |
 | `service.rateLimit` | `rate` (интенсивность, `100/s`), `burst` (целое, 10) |
 | `service.healthCheck` | `interval` (длительность, `10s`), `timeout` (длительность, `1s`), `unhealthyThreshold` (целое, 3), `healthyThreshold` (целое, 1), `processing` (длительность, `1ms`) |
@@ -93,13 +94,15 @@
 
 **Причина неуспеха вызова и входа — исходная.** Вызов, исчерпавший попытки, получает причину своей последней попытки. Неуспешный шаг сценария передаёт причину вызывающему: сервис, у которого не удался вызов, завершает свою работу с причиной этого вызова, а не «ошибка вниз по цепочке». Запрос на входе неуспешен с исходной причиной из глубины пути, кроме `deadline` — она ставится на входе, когда истёк дедлайн клиента. Отклонённый бюджетом повтор — не причина: вызов завершается причиной последней выполненной попытки, а счётчик `retriesDenied` растёт.
 
+**Заглушка.** Если итоговая причина неуспешного вызова (после всех попыток) входит в `call.fallback.on`, вызов через `processing` считается успешным, его причина не передаётся вверх, а счётчик `fallbacks` связи растёт. Исходный запрос, на пути которого сработала хотя бы одна заглушка, успешен и дополнительно учитывается в `degraded`.
+
 ### Результаты, артефакт версии 16
 
 - **Итоги повторения.** Поля входа верхнего уровня `ReplicationResult` заменяются объектом `entries`:
 
   ```json
   "entries": {
-    "total":   { "originalArrivals": 7140, "successes": 7050, "failures": 90,
+    "total":   { "originalArrivals": 7140, "successes": 7050, "degraded": 120, "failures": 90,
                  "failuresByReason": { "timeout": 60, "deadline": 30 },
                  "allLatency": { … }, "successfulLatency": { … }, "failedLatency": { … } },
     "clients": { "mobile-app": { … }, "partner-api": { … } },
@@ -107,8 +110,8 @@
   }
   ```
 
-  Каждый элемент — одна структура метрик входа; `failuresByReason` содержит только ненулевые причины; сумма по причинам равна `failures`. `total` равен сумме клиентов и сумме классов.
-- **Сводка.** Поля входа верхнего уровня `AggregateMetrics` (`pooledLatency`, `successRate`, `p95LatencyMs`, `p99LatencyMs`) заменяются `entries` с той же тройкой `total` / `clients` / `classes`; в каждом элементе — прежние четыре поля и `failuresByReason`: причина → `MetricSummary` доли от исходных запросов этого элемента по повторениям.
+  Каждый элемент — одна структура метрик входа; `degraded` — успешные с заглушкой, входят в `successes`; `failuresByReason` содержит только ненулевые причины; сумма по причинам равна `failures`. `total` равен сумме клиентов и сумме классов.
+- **Сводка.** Поля входа верхнего уровня `AggregateMetrics` (`pooledLatency`, `successRate`, `p95LatencyMs`, `p99LatencyMs`) заменяются `entries` с той же тройкой `total` / `clients` / `classes`; в каждом элементе — прежние четыре поля, `degradedRate` (`MetricSummary` доли успешных с заглушкой от исходных запросов) и `failuresByReason`: причина → `MetricSummary` доли от исходных запросов этого элемента по повторениям.
 - **Попытки по причинам.** У сервиса (`ServiceTotals`) и связи — `failuresByReason`: причина → число неуспешных попыток за измерение.
 - **Знаменатель усиления** — `entries.total.originalArrivals`; путь выхода `client.originalArrivals` в описаниях каталога заменяется на `entries.total.originalArrivals` (ADR 0011).
 - **Ряды, версия 7.** Строка каждого клиента в `nodes` — по его идентификатору (а не `client`). Новый массив `classes` в части рядов: `{ id, windows }` с теми же полями окна, что у клиента. В окна клиента, класса, сервиса и связи добавляется `failuresByReason`. `clientOriginalArrivals` в строках групп — сумма исходных запросов всех клиентов за окно.
@@ -116,11 +119,12 @@
 
 | Где | Поля |
 |---|---|
-| связь `call` | `circuitOpenMs` (время в открытом состоянии, сумма по вызывающим экземплярам), `circuitRejections`, `retriesDenied` |
+| связь `call` | `circuitOpenMs` (время в открытом состоянии, сумма по вызывающим экземплярам), `circuitRejections`, `retriesDenied`, `fallbacks` |
+| вход (клиент, класс, итог) | `degraded` |
 | сервис / экземпляр | `rateLimited`, `probes`, `probeFailures`, `notReadyMs` |
 | экземпляр — цель маршрутизатора | `ejections`, `ejectedMs` (по всем маршрутизаторам, которые на него ведут) |
 
-- **Выходы каталога политик** (ADR 0011): связь — `circuitOpenShare`, `circuitRejectionsPerSecond`, `retriesDeniedPerSecond`; сервис — `rateLimitedPerSecond`, `rateLimitedRate`, `probeFailuresPerSecond`, `notReadyShare`; сервис и экземпляр группы — `ejectionsCount`, `ejectedShare`. Отдельных выходов по каждой причине отказа нет: интерфейс и CLI читают `failuresByReason` напрямую.
+- **Выходы каталога политик** (ADR 0011): связь — `circuitOpenShare`, `circuitRejectionsPerSecond`, `retriesDeniedPerSecond`, `fallbacksPerSecond`; клиент — `degradedPerSecond`; сервис — `rateLimitedPerSecond`, `rateLimitedRate`, `probeFailuresPerSecond`, `notReadyShare`; сервис и экземпляр группы — `ejectionsCount`, `ejectedShare`. Отдельных выходов по каждой причине отказа нет: интерфейс и CLI читают `failuresByReason` напрямую.
 
 ## T1.1 Модель v6: клиенты и классы — документ, компилятор, IR
 
@@ -172,18 +176,19 @@
 - Прогон прежней версии — `RUN_VERSION_UNSUPPORTED`; эталон рядов пересоздан; `WebSeriesGoldenTest` проходит.
 - Web: `npm run api:generate`, `npm test -- --run`, затронутые E2E; интерфейс показывает `entries.total` там, где показывал поля верхнего уровня (переименование источника, без новых экранов).
 
-## T2.1 Circuit breaker и бюджет повторов
+## T2.1 Circuit breaker, бюджет повторов и заглушка
 
-**Входит.** `call.circuitBreaker`, `call.retryBudget`: каталог, проверки, движок, поля в итогах и рядах, выходы каталога.
+**Входит.** `call.circuitBreaker`, `call.retryBudget`, `call.fallback`: каталог, проверки, движок, поля в итогах и рядах, выходы каталога.
 
 **Не входит.** Интерфейс правки (T4).
 
 **Контракт.**
-- Поведение — по дизайну (§3.3) и ADR 0015: breaker — окно по числу попыток, состояние у вызывающего экземпляра, отказ `circuitOpen` без пула, сети и работы у цели, такие отказы в окно не засчитываются; полуоткрытое состояние пропускает `halfOpenCalls` пробных попыток. Бюджет — повторов не больше `ratio` от первых попыток за `window` плюс `minPerSecond × window`; отклонённый повтор увеличивает `retriesDenied`.
+- Поведение — по дизайну (§3.3) и ADR 0015: breaker — окно по числу попыток, состояние у вызывающего экземпляра, отказ `circuitOpen` без пула, сети и работы у цели, такие отказы в окно не засчитываются; полуоткрытое состояние пропускает `halfOpenCalls` пробных попыток. Бюджет — повторов не больше `ratio` от первых попыток за `window` плюс `minPerSecond × window`; отклонённый повтор увеличивает `retriesDenied`. Заглушка — по разделу «Общие форматы»: применяется к итогу вызова, не к отдельной попытке.
 - Поля и выходы — по разделу «Общие форматы».
 
 **Приёмка.**
 - Unit: размыкание по порогу и минимуму, время открытого состояния, переходы полуоткрытого состояния; исчерпание и восстановление бюджета; детерминированные сценарии.
+- Заглушка: вызов с итоговой причиной из `on` успешен через `processing`, причина не уходит вверх, `fallbacks` и `degraded` растут; причина не из `on` — вызов неуспешен, как без заглушки.
 - Бюджет на `retry-storm`: вариант с бюджетом даёт усиление не выше `1 + ratio` плюс вклад минимума; выключенная политика — инвариант 7.
 
 ## T2.2 Ограничение интенсивности и health-check
