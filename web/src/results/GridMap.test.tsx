@@ -128,7 +128,7 @@ it("formats numeric grid axis values while preserving document quantities", () =
   expect(run.grid[1].values[0]).toBe(1000);
 });
 
-it("offers instances without adding group sums to the existing service selector", () => {
+it("offers group aggregates and keeps instances inside their group", () => {
   const run = gridSummary();
   for (const point of run.variants[0].points) {
     const aggregate = point.aggregate;
@@ -141,5 +141,9 @@ it("offers instances without adding group sums to the existing service selector"
   fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
   const select = screen.getAllByRole("combobox")[1];
   expect(within(select).getAllByRole("option").map(option => (option as HTMLOptionElement).value))
-    .toEqual(["gateway", "workers#1", "workers#2", "workers#3"]);
+    .toEqual(["gateway", "workers"]);
+  fireEvent.change(select, { target: { value: "workers" } });
+  const replicas = screen.getByText("Replicas · workers").closest("details")!;
+  expect(within(replicas).getAllByRole("radio").map(radio => radio.closest("label")!.textContent))
+    .toEqual(["workers", "workers#1", "workers#2", "workers#3"]);
 });

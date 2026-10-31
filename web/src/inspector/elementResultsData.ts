@@ -3,6 +3,7 @@ import type { DecodedConnection, NodeSeriesMetrics } from "../results/series/typ
 import { outputValue, outputWindow, outputsOf, type OutputValue } from "../results/outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
+import { groupInspectorOutputs, replicaMember, type ReplicaGroup } from "../results/groups";
 import { canonicalOf } from "../workspace/quantities";
 
 export interface ElementResultsContext {
@@ -33,30 +34,33 @@ export interface ElementResultsData {
 }
 
 /** Run identity follows editor lineage; removing and re-adding an ID cannot inherit its old results. */
-export function resultSelection(runModel: ModelFile, currentModel: ModelFile, selected: string | null) {
+export function resultSelection(runModel: ModelFile, currentModel: ModelFile, selected: string | null, groups: readonly ReplicaGroup[] = []) {
   if (selected === null) return null;
   const sameBlock = (id: string) => {
     const original = ownEntry(runModel.blocks, id), current = ownEntry(currentModel.blocks, id);
     return original !== undefined && current !== undefined && original.type === current.type
       && elementIdentity(original) === elementIdentity(current);
   };
-  const block = ownEntry(runModel.blocks, selected);
-  if (block !== undefined && sameBlock(selected)) return { id: selected, kind: block.type, category: "BLOCK" as const, target: null };
-  const original = runModel.connections.find(connection => connection.id === selected);
-  const current = currentModel.connections.find(connection => connection.id === selected);
+  const member = replicaMember(groups, selected);
+  const elementId = member?.group.id ?? selected;
+  const block = ownEntry(runModel.blocks, elementId);
+  if (block !== undefined && sameBlock(elementId)) return { id: selected, elementId, replica: member?.instance.replica, kind: block.type, category: "BLOCK" as const, target: null };
+  const original = runModel.connections.find(connection => connection.id === elementId);
+  const current = currentModel.connections.find(connection => connection.id === elementId);
   return original !== undefined && current?.type === original.type && original.from === current.from && original.to === current.to
     && elementIdentity(original) === elementIdentity(current) && sameBlock(original.from) && sameBlock(original.to)
-    ? { id: selected, kind: original.type, category: "CONNECTION" as const, target: original.to } : null;
+    ? { id: selected, elementId, replica: member?.instance.replica, kind: original.type, category: "CONNECTION" as const, target: original.to } : null;
 }
 
 /** Summary rates and time averages stay pooled; event counts are per replication. Only supplied replication metrics carry their unmodified Student bounds. */
 export function projectElementResults(context: ElementResultsContext): ElementResultsData | null {
   const { summary, manifest, runModel, currentModel, experiment, catalog, variantId, pointId, replication, window, selected } = context;
-  const selection = resultSelection(runModel, currentModel, selected);
   const variant = summary.variants.find(candidate => candidate.id === variantId);
   const point = variant?.points.find(candidate => candidate.id === pointId);
+  const selection = resultSelection(runModel, currentModel, selected, point?.aggregate.groups);
   if (selection === null || point === undefined || variant === undefined || replication < 0 || replication >= variant.replications) return null;
-  const outputs = outputsOf(catalog, selection.kind).filter(output => output.inspector != null);
+  const grouped = selection.replica !== undefined || point.aggregate.groups.some(group => group.kind === "NODE" && group.id === selection.id);
+  const outputs = grouped ? groupInspectorOutputs(outputsOf(catalog, selection.kind)) : outputsOf(catalog, selection.kind).filter(output => output.inspector != null);
   if (outputs.length === 0) return null;
   const block = selection.category === "BLOCK";
   const aggregate = block
@@ -66,8 +70,9 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const descriptor = catalog.types.find(type => type.id === selection.kind)!;
   const effective = applyOverrides(applyOverrides(runModel,
     experiment.variants.find(variant => variant.id === variantId)?.overrides ?? {}, catalog), point.coordinates, catalog);
-  const element = block ? ownEntry(effective.blocks, selection.id) : effective.connections.find(connection => connection.id === selection.id);
-  const params: Record<string, unknown> = { ...Object.fromEntries(descriptor.params.map(param => [param.name, param.default])), ...element?.params };
+  const element = block ? ownEntry(effective.blocks, selection.elementId) : effective.connections.find(connection => connection.id === selection.elementId);
+  const params: Record<string, unknown> = { ...Object.fromEntries(descriptor.params.map(param => [param.name, param.default])), ...element?.params,
+    ...(block && selection.replica !== undefined ? ownEntry(effective.blocks, selection.elementId)?.replicaOverrides?.[String(selection.replica)] : {}) };
   const node = context.nodes?.find(node => node.id === selection.id);
   const frames = block ? node?.windows ?? [] : context.connections?.find(connection => connection.id === selection.id)?.windows ?? [];
   const target = context.nodes?.find(node => node.id === selection.target);

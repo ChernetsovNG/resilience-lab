@@ -3,7 +3,7 @@ import { formatNumber } from "../i18n/format";
 import type { Catalog, ExperimentFile, ModelFile, OutputDescriptor, RunSummary } from "../api/apiTypes";
 import type { NodeSeriesMetrics } from "./series";
 import type { DecodedConnection } from "./series/types";
-import { outputsOf, outputValue } from "./outputs";
+import { outputsOf, outputValue, outputField } from "./outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 
@@ -16,6 +16,8 @@ interface ElementCanvasValues {
 
 export interface ServiceCanvasResults extends ElementCanvasValues {
   windowed?: boolean;
+  worst?: Record<string, { replica: number; value: number } | null>;
+  replicaParams?: Record<number, Record<string, unknown>>;
   firstSaturation: string | null;
 }
 
@@ -44,6 +46,14 @@ const valuesOf = (outputs: readonly OutputDescriptor[], context: unknown, window
 export const emptyCanvasValues = (values: Record<string, number | null>) =>
   Object.fromEntries(Object.keys(values).map(key => [key, null]));
 
+/** Recorded extrema belong to the same summary/window as the displayed group value. */
+function worstReplicas(extrema: unknown): NonNullable<ServiceCanvasResults["worst"]> {
+  return { queueRejectionRate: null, ...Object.fromEntries([["utilization", "maxUtilization"], ["meanQueue", "maxMeanQueueLength"]].map(([id, field]) => {
+    const value = outputField(extrema, field), replica = outputField(extrema, `${field}Replica`);
+    return [id, typeof value === "number" && typeof replica === "number" ? { value, replica } : null];
+  })) };
+}
+
 /** Summary metrics for the run's model; an absent variant, point or element never borrows another result. */
 export function canvasResults(
   summary: RunSummary, model: ModelFile, variantId: string, pointId: string, catalog: Catalog,
@@ -65,9 +75,20 @@ export function canvasResults(
     const outputs = outputsOf(catalog, original.type).filter(output => output.overlay != null).sort((a, b) => a.overlay!.order - b.overlay!.order);
     if (outputs.length === 0) continue;
     const params = paramsOf(original.type, effective.blocks[id]?.params ?? {});
-    services.set(id, { outputs, params,
+    const group = point.aggregate.groups.find(group => group.kind === "NODE" && group.id === id);
+    const replicaParams = group === undefined ? undefined : Object.fromEntries(group.instances.map(instance => [instance.replica,
+      { ...params, ...effective.blocks[id]?.replicaOverrides?.[String(instance.replica)] }]));
+    const worst = group === undefined ? undefined : worstReplicas(aggregate.totals.slotPools.handlers?.replicaExtrema);
+    const rejection = outputs.find(output => output.id === "queueRejectionRate");
+    if (group !== undefined && worst !== undefined && rejection !== undefined) for (const instance of group.instances) {
+      const value = outputValue(rejection, { ...ownEntry(point.aggregate.services, instance.id), params, replications: variant.replications }, false).value;
+      const previous = worst.queueRejectionRate;
+      if (value !== null && (previous == null || value > previous.value || (value === previous.value && instance.replica < previous.replica)))
+        worst.queueRejectionRate = { value, replica: instance.replica };
+    }
+    services.set(id, { outputs, params, worst, replicaParams,
       values: valuesOf(outputs, { ...aggregate, params, replications: variant.replications }),
-      firstSaturation: first?.node === id ? t("results.canvas.firstSaturation", { count: formatNumber(first.replicationCount), replications: formatNumber(variant.replications) }) : null,
+      firstSaturation: (first?.node === id || group?.instances.some(instance => instance.id === first?.node)) ? t("results.canvas.firstSaturation", { count: formatNumber(first.replicationCount), replications: formatNumber(variant.replications) }) : null,
     });
   }
   const connections = new Map<string, ConnectionCanvasResults>();
@@ -96,6 +117,7 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
     const frame = metrics.get(id);
     if (frame === undefined) return null;
     services.set(id, { ...service, windowed: true,
+      worst: service.worst === undefined ? undefined : worstReplicas(frame.slotPools.handlers?.replicaExtrema),
       values: valuesOf(service.outputs, { ...frame, params: service.params }, true) });
   }
   const connections = new Map<string, ConnectionCanvasResults>();

@@ -9,6 +9,8 @@ import { useTimelineSeries } from "../results/timeline/useTimelineSeries";
 import { projectElementResults, resultSelection, type ElementMetric } from "./elementResultsData";
 import { confidenceInterval } from "../results/confidence";
 import { useConfidenceLevel } from "../layout/confidenceLevel";
+import { ReplicaResults } from "./ReplicaResults";
+import { replicaMember } from "../results/groups";
 import { pointLabel, variantLabel } from "../presentation/labels";
 
 export interface ElementResultsProps {
@@ -25,6 +27,7 @@ export interface ElementResultsProps {
   window: number | null;
   selected: string | null;
   onShowTimeline: () => void;
+  onSelectReplica?: (id: string) => void;
 }
 
 type Format = (value: number | null | undefined) => string;
@@ -74,7 +77,11 @@ export function ElementResults(props: ElementResultsProps) {
   const level = useConfidenceLevel();
   const { runId, summary, manifest, runModel, currentModel, experiment, catalog, variantId, pointId, replication, window, selected, onShowTimeline } = props;
   const initial = projectElementResults(props);
-  const selection = resultSelection(runModel, currentModel, selected);
+  const point = summary.variants.find(variant => variant.id === variantId)?.points.find(point => point.id === pointId);
+  const selection = resultSelection(runModel, currentModel, selected, point?.aggregate.groups);
+  const memberGroup = selected === null ? undefined : replicaMember(point?.aggregate.groups ?? [], selected)?.group;
+  const group = point?.aggregate.groups.find(group => group.kind === "NODE" && group.id === selected)
+    ?? (memberGroup?.kind === "NODE" ? memberGroup : undefined);
   const metadata = manifest.series;
   const endMs = (metadata?.warmupMs ?? 0) + (metadata?.measurementMs ?? 0);
   const windowMs = metadata?.windowMs ?? 1;
@@ -106,6 +113,8 @@ export function ElementResults(props: ElementResultsProps) {
         <p className="element-results-context">{t("inspector.results.context", { variant: variantLabel(variant, experiment.variants),
           point: pointLabel(pointId, summary.grid, variant?.points.find(point => point.id === pointId)?.coordinates, catalog, runModel),
           replication: formatNumber(replication), mode: t(window === null ? "inspector.results.summaryMode" : "inspector.results.timeMode") })}</p>
+        {group === undefined || point === undefined ? null : <ReplicaResults key={group.id} group={group} aggregate={point.aggregate}
+          catalog={catalog} replications={variant?.replications ?? 0} selected={selected} onSelect={props.onSelectReplica} />}
         <table aria-label={t("inspector.results.title")}><tbody>
           {inspectorOutputs(result.outputs).map(output => {
             const key = output.id, label = output.inspector!.title;

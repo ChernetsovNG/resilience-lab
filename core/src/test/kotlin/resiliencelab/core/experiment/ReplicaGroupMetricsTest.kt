@@ -83,12 +83,20 @@ class ReplicaGroupMetricsTest {
                     originalArrivals = 1,
                     successes = 1,
                     failures = 0,
-                    services = rows,
+                    services = rows + ("ordinary" to rows.getValue("worker#2")),
                 ),
             )
         }
         val replications = listOf(result(9.0, 4.0), result(0.0, 8.0))
-        val aggregate = MetricsAggregator.aggregate(replications).services.getValue("worker")
+        val result = MetricsAggregator.aggregate(replications)
+        val instanceLatency = result.services.getValue("worker#2").pooledLatency
+        assertThat(instanceLatency).isNotNull()
+        assertThat(instanceLatency!!.statistics.count).isEqualTo(2)
+        assertThat(instanceLatency.statistics.sumMs).isEqualTo(9.0)
+        assertThat(instanceLatency.meanMs).isEqualTo(4.5)
+        assertThat(instanceLatency.p99Ms!!).isGreaterThan(8.0)
+        assertThat(result.services.getValue("ordinary").pooledLatency).isNull()
+        val aggregate = result.services.getValue("worker")
         assertThat(aggregate.totals.measurementMs).isEqualTo(20.0)
         assertThat(
             aggregate.totals.slotPools

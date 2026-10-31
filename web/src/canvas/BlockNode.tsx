@@ -37,6 +37,7 @@ export type BlockNodeType = Node<{
   resultsPending?: string;
   resultsEmpty?: boolean;
   nodeMetric?: NodeOverlayMetric;
+  selectedReplica?: number;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "block">;
@@ -60,8 +61,9 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   const wiringHint = data.needsConnection || diagnostics.some(isWiringHint);
   const choice = selectedOverlayOutput(overlayOutputs(data.catalog, "BLOCK"), data.nodeMetric);
   const output = choice?.types.includes(data.block.type) ? data.result?.outputs.find(output => output.id === choice.id) : undefined;
-  const colorValue = output === undefined ? null : data.result?.values[output.id];
-  const maximum = output?.overlay?.scaleParameter == null ? 1 : outputField(data.result?.params, output.overlay.scaleParameter);
+  const worstColor = output === undefined ? undefined : data.result?.worst?.[output.id];
+  const colorValue = output === undefined ? null : worstColor === undefined ? data.result?.values[output.id] : worstColor?.value;
+  const maximum = output?.overlay?.scaleParameter == null ? 1 : outputField(worstColor == null ? data.result?.params : data.result?.replicaParams?.[worstColor.replica] ?? data.result?.params, output.overlay.scaleParameter);
   const interval = data.result?.windowed ? t("editor.canvas.intervalWindow") : t("editor.canvas.intervalPooled");
   const tooltip = (title: string) => data.resultsPending === undefined ? title : `${title} ${t("editor.symbols.separator")} ${data.resultsPending}`;
   const editorProps = { catalog: data.catalog, elementId: data.id, elementType: data.block.type, params: data.block.params,
@@ -96,6 +98,8 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         {replicas > 1 ? <span className="block-replica-count" aria-label={t("editor.replicas.count", { count: formatNumber(replicas) })}>
           {t("editor.canvas.replicas", { count: formatNumber(replicas) })}</span> : null}
       </strong>
+      {data.selectedReplica === undefined ? null : <span className="block-selected-replica" role="status">
+        {t("results.groups.selectedReplica", { number: formatNumber(data.selectedReplica) })}</span>}
       <FaultBadge faults={data.faults} onOpen={data.onFault} disabled={data.disabled} />
       <DiagnosticBadge diagnostics={diagnostics.filter(diagnostic => !isWiringHint(diagnostic))} />
       {wiringHint ? <span className="block-wiring-hint" role="status">{t("editor.canvas.connectBlock")}</span> : null}
@@ -122,7 +126,9 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
         aria-busy={data.resultsPending === undefined ? undefined : true} aria-hidden={data.result === undefined || data.resultsEmpty || undefined}
         data-testid={data.result === undefined ? undefined : `canvas-results-${data.id}`}>
         {outputs.map(output => {
-          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result?.values[output.id]) });
+          const worst = data.result?.worst?.[output.id];
+          const text = outputText(output.overlay!.label, { value: formatOutput(output, data.result?.values[output.id]) })
+            + (worst == null ? "" : t("results.groups.worst", { number: formatNumber(worst.replica), value: formatOutput(output, worst.value) }));
           return <span key={output.id}
             title={tooltip(`${text} ${t("editor.symbols.separator")} ${outputText(output.overlay!.description, { interval })}`)}>
             {text}

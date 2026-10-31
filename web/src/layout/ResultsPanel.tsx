@@ -172,7 +172,7 @@ export function ResultsPanel({
             <p className="results-empty" role={running ? "status" : undefined}>{t(running ? "results.awaitingSummary" : "results.timeline.empty")}</p> : null}
         </> : active === "map" && summary !== null ? <>
           {staleNotice}
-          <Suspense fallback={<p role="status">{t("results.map.loading")}</p>}><GridMap summary={summary} activeVariantId={activeVariantId}
+          <Suspense fallback={<p role="status">{t("results.map.loading")}</p>}><GridMap onElement={onElement} summary={summary} activeVariantId={activeVariantId}
             pointId={selectedPointId} onPointChange={onPointChange} catalog={catalog} model={model} variants={experiment?.variants} /></Suspense>
         </> : active === "assumptions" ? <>
           {staleNotice}

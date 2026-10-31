@@ -10,8 +10,9 @@ import { InspectorSection } from "./InspectorSection";
 import { ParamField } from "./ParamField";
 
 /** Sparse structural overrides; every edit changes one document snapshot in the shared history. */
-export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid, readOnlyHint, onCommand, onValidity, fieldDiagnostics }: {
+export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid, readOnlyHint, onCommand, onValidity, fieldDiagnostics, replica: selectedReplica }: {
   catalog: Catalog; model: ModelFile; serviceId: string; editable: boolean; invalid: boolean;
+  replica?: number;
   readOnlyHint?: string; onCommand: (command: EditorCommand) => void;
   onValidity: (key: string, valid: boolean) => void;
   fieldDiagnostics?: ReadonlyMap<string, readonly Diagnostic[]>;
@@ -23,7 +24,7 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
   const parameters = catalog.types.find(type => type.id === "service")?.params.filter(param => param.name !== "replicas") ?? [];
   const selected = parameters.find(param => param.name === parameter) ?? parameters[0];
   const count = Number(service.params.replicas ?? 1);
-  const entries = Object.entries(overrides).sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b));
+  const entries = Object.entries(overrides).filter(([number]) => selectedReplica === undefined || Number(number) === selectedReplica).sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b));
   const names = new Set(entries.flatMap(([, params]) => Object.keys(params)));
   const columns = [...parameters.filter(param => names.has(param.name)).map(param => param.name),
     ...[...names].filter(name => !parameters.some(param => param.name === name))];
@@ -59,7 +60,7 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
               return <th scope="col" key={name}>{descriptor?.title ?? name}
                 {descriptor?.description ? <HelpHint label={descriptor.title}>{descriptor.description}</HelpHint> : null}</th>;
             })}
-            <th scope="col">{t("editor.replicas.actions")}</th>
+            {selectedReplica === undefined ? <th scope="col">{t("editor.replicas.actions")}</th> : null}
           </tr></thead>
           <tbody>{entries.map(([number, params]) => {
             const path = `replicaOverrides.${number}`;
@@ -81,11 +82,11 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
                     onCommit={value => change(number, name, value)}
                     onFieldCommit={(field, value) => change(number, field.slice(path.length + 1), value)}
                     onValidity={(field, valid) => onValidity(`${serviceId}.${field}`, valid)} />}
-                  <button type="button" disabled={disabled} aria-label={t("editor.replicas.reset", { parameter: descriptor?.title ?? name, number })}
-                    onClick={() => change(number, name, undefined)}>{t("editor.replicas.useGroup")}</button>
+                  {selectedReplica === undefined ? <button type="button" disabled={disabled} aria-label={t("editor.replicas.reset", { parameter: descriptor?.title ?? name, number })}
+                    onClick={() => change(number, name, undefined)}>{t("editor.replicas.useGroup")}</button> : null}
                 </>}</td>;
               })}
-              <td><select value="" disabled={disabled || parameters.every(param => Object.hasOwn(params, param.name))}
+              {selectedReplica === undefined ? <td><select value="" disabled={disabled || parameters.every(param => Object.hasOwn(params, param.name))}
                 aria-label={t("editor.replicas.addParameter", { number })} onChange={event => {
                   const descriptor = parameters.find(param => param.name === event.target.value);
                   if (!disabled && descriptor !== undefined) change(number, descriptor.name, initialParams([descriptor])[descriptor.name]);
@@ -95,12 +96,12 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
               </select>
                 <button type="button" disabled={disabled} aria-label={t("editor.replicas.remove", { number })}
                   onClick={() => write(number, () => undefined)}>{t("editor.replicas.delete")}</button>
-              </td>
+              </td> : null}
             </tr>;
           })}</tbody>
         </table>
       </div>}
-      <form className="replica-overrides-add" onSubmit={event => {
+      {selectedReplica === undefined ? <form className="replica-overrides-add" onSubmit={event => {
         event.preventDefault();
         if (!canAdd) return;
         write(replica, current => current ?? initialParams([selected]));
@@ -114,7 +115,7 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
           {parameters.map(param => <option key={param.name} value={param.name}>{param.title}</option>)}
         </select></label>
         <button type="submit" disabled={!canAdd}>{t("editor.replicas.add")}</button>
-      </form>
+      </form> : null}
     </div>
   </InspectorSection>;
 }

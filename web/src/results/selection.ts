@@ -5,6 +5,7 @@ export interface ResultsSelection {
   pointId: string;
   replication: number;
   window: number | null;
+  replicaId?: string | null;
 }
 
 const initial: ResultsSelection = { pointId: "p0", replication: 0, window: null };

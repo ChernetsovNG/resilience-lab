@@ -24,6 +24,8 @@ export interface InspectorProps {
   /** Prioritize available results; without them, parameters default to open unless a preference was saved. */
   resultsFirst?: boolean;
   resultsOnly?: boolean;
+  selectedReplica?: { id: string; replica: number } | null;
+  replicaModel?: ModelFile;
   hidden?: boolean;
   /** The model as the active variant page sees it. */
   model: ModelFile;
@@ -50,11 +52,11 @@ export interface InspectorProps {
   onVariantDiagnostic?: (variant: string, field: string) => void;
 }
 
-function AddFaultAction({ model, catalog, elementId, editable, disabled, onValidity, onAdd }: {
-  model: ModelFile; catalog: Catalog; elementId: string; editable: boolean; disabled: boolean;
+function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, editable, disabled, onValidity, onAdd }: {
+  model: ModelFile; catalog: Catalog; elementId: string; initialTarget?: string; editable: boolean; disabled: boolean;
   onValidity: (path: string, valid: boolean) => void; onAdd: (target: FaultTarget) => void;
 }) {
-  const [selected, setSelected] = useState(elementId);
+  const [selected, setSelected] = useState(initialTarget);
   const targets = faultTargets(model, catalog, [selected]).filter(target => target.elementId === elementId);
   const target = targets.find(target => target.id === selected);
   return <div className="param-field">
@@ -72,7 +74,7 @@ function AddFaultAction({ model, catalog, elementId, editable, disabled, onValid
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
-  target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false }: InspectorProps) {
+  target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
   useEffect(() => {
@@ -100,7 +102,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
     !(element?.type === "client" && descriptor.name === "load") &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
-  const heading = showElement ? selected : resultsOnly ? null
+  const heading = showElement ? selectedReplica?.id ?? selected : resultsOnly ? null
     : target === "experiment" ? t("editor.run.title") : variant === undefined ? null : variantLabel(variant, experiment.variants);
   const subtitle = showElement ? (type?.title ?? element?.type) + (variantId === null ? "" : t("editor.inspector.variantOverrides"))
     : target === "variant" ? t("editor.variant.type") : experimentPath?.split("/").at(-1)?.replace(/\.experiment\.json$/, "");
@@ -113,7 +115,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
           {showElement && element !== null ? <TypeHelp key={element.type} catalog={catalog} typeId={element.type} /> : null}</div>
         {subtitle === undefined ? null : <p className="inspector-type" title={target === "experiment" ? experimentPath : undefined}>{subtitle}</p>}
       </>}
-      <div hidden={resultsOnly}>
+      <div hidden={resultsOnly && selectedReplica == null}>
       {target === "variant" && onCommand !== undefined ? (
         <><VariantSettings variants={experiment.variants} active={variantId} disabled={!editable || invalid} editable={editable}
           onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} />
@@ -122,7 +124,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
       {target === "element" && selected !== null && element !== null ? (
         <>
           {prioritizeResults && !resultsOnly ? results : null}
-          <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
+          {selectedReplica == null ? <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} />
@@ -154,7 +156,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
               navigationDisabled={invalid}
             />
           ))}
-          </InspectorSection>
+          </InspectorSection> : null}
           {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
             catalog={catalog} model={model} experiment={experiment} clientId={selected}
             descriptor={type.params.find(param => param.name === "load")!}
@@ -166,16 +168,16 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             onReset={variantId === null ? undefined : () => onCommand?.(resetVariantParam(variantId, selected, "load", catalog))}
             onValidity={onValidity} fieldDiagnostics={fieldDiagnostics}
             variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined} onVariantDiagnostic={onVariantDiagnostic} /> : null}
-          {element.type === "service" ? <ReplicaOverrides key={`replicas-${selected}`} catalog={catalog} model={model} serviceId={selected}
+          {element.type === "service" ? <ReplicaOverrides replica={selectedReplica?.replica} key={`replicas-${selected}`} catalog={catalog} model={selectedReplica == null ? model : replicaModel ?? model} serviceId={selected}
+            editable={selectedReplica == null && editable && variantId === null && onCommand !== undefined} invalid={invalid}
+            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
+            onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
+          {element.type === "service" && selectedReplica == null ? <ServiceScenario key={selected} catalog={catalog} model={model} serviceId={selected}
             editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
             onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
-          {element.type === "service" ? <ServiceScenario key={selected} catalog={catalog} model={model} serviceId={selected}
-            editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
-            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
-            onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
-          {targets.length > 0 && onCommand !== undefined ? <AddFaultAction key={`fault-${selected}`} model={model} catalog={catalog}
-            elementId={selected} editable={editable} onValidity={onValidity}
+          {targets.length > 0 && onCommand !== undefined ? <AddFaultAction key={`fault-${selectedReplica?.id ?? selected}`} model={model} catalog={catalog}
+            elementId={selected} initialTarget={selectedReplica?.id} editable={editable} onValidity={onValidity}
             disabled={!editable || invalid || createFault(catalog, experiment, targets[0]) === null} onAdd={target => {
               const fault = createFault(catalog, experiment, target);
               if (fault === null) return;

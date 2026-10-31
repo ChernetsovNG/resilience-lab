@@ -1,4 +1,5 @@
 import { instanceServiceEntries } from "../results/instances";
+import { serviceResultRows } from "../results/groups";
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent } from "../i18n/format";
 import { useId, type ReactNode } from "react";
@@ -72,7 +73,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const selectedPointLabel = pointLabel(selectedPointId, summary.grid, activePoint?.coordinates, catalog, model);
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
     && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
-  const services = [...new Set(columns.flatMap(({ point }) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
+  const services = serviceResultRows(columns.map(({ point }) => point.aggregate));
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
   const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (
     <tr>
@@ -83,6 +84,27 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       </td>)}
     </tr>
   );
+  const serviceDetails = (service: string, instances: { id: string; replica: number }[] = [], replica = false): ReactNode => <details key={service} className="summary-services">
+      <summary onClick={event => { event.stopPropagation(); onElement?.(service); }}>{t(instances.length === 0 ? "results.answer.serviceMetrics" : "results.groups.metrics", { service, group: service })}</summary>
+      <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
+        <thead><tr>
+          <th scope="col">{t("results.answer.metric")}</th>
+          {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}</th>)}
+        </tr></thead>
+        <tbody>
+          {row(t("results.metrics.admittedAmplification"), point => point.aggregate.services[service]?.admittedAmplification, formatMultiplier)}
+          {row(t("results.metrics.pooledUtilization"), point => {
+            const totals = point.aggregate.services[service]?.totals;
+            return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? undefined : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
+          }, formatPercent, percentagePoints)}
+          {instances.length === 0 && !replica ? null : row(t("results.metrics.p99LatencyMs"), point => {
+            const value = point.aggregate.services[service]?.pooledLatency?.p99Ms;
+            return value == null ? undefined : { mean: value };
+          }, formatDuration)}
+        </tbody>
+      </table>
+      {instances.map(instance => serviceDetails(instance.id, [], true))}
+    </details>;
   return <div className="answer">
     <section className="answer-variants" aria-label={t("results.answer.variants")}>
       <h3>{t("results.answer.variants")}</h3>
@@ -108,7 +130,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       {activePoint === undefined || activeVariant === undefined ?
         <p>{t("results.answer.noPoint", { variant: activeLabel, point: selectedPointLabel })}</p> :
         <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom}
-          faults={faults} windowMs={windowMs} />}
+          faults={faults} windowMs={windowMs} onElement={onElement} />}
     </section>
     {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: variantLabel(baseline, variants), point: selectedPointLabel })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>
@@ -129,21 +151,6 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
         {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.p99LatencyMs, formatDuration)}
       </tbody>
     </table>
-    {services.map(service => <details key={service} className="summary-services">
-      <summary onClick={() => onElement?.(service)}>{t("results.answer.serviceMetrics", { service })}</summary>
-      <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
-        <thead><tr>
-          <th scope="col">{t("results.answer.metric")}</th>
-          {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}</th>)}
-        </tr></thead>
-        <tbody>
-          {row(t("results.metrics.admittedAmplification"), point => point.aggregate.services[service]?.admittedAmplification, formatMultiplier)}
-          {row(t("results.metrics.pooledUtilization"), point => {
-            const totals = point.aggregate.services[service]?.totals;
-            return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? undefined : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
-          }, formatPercent, percentagePoints)}
-        </tbody>
-      </table>
-    </details>)}
+    {services.map(service => serviceDetails(service.id, service.instances))}
   </div>;
 }
