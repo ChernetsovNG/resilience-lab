@@ -19,7 +19,7 @@ it("shows recorded pooled and worst utilization, coloring the group by its worst
   render(<Canvas catalog={catalog} model={runModel} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()}
     results={canvasResults(run, runModel, "baseline", "p0", catalog, runModel, runExperiment)} />);
   const metrics = await screen.findByTestId("canvas-results-gateway");
-  expect(metrics.textContent).toContain("Utilization 34% · worst #2: 97%");
+  expect(metrics.textContent).toContain("Util. 34% · max #2: 97%");
   expect(metrics.closest<HTMLElement>(".block-node")!.style.getPropertyValue("--node-fill")).toBe(utilizationColor(0.97));
   expect(screen.getByRole("img", { name: "First saturated node" })).toBeTruthy();
 });

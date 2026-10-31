@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { catalogOption } from "../i18n/catalog";
+import { catalogOption, catalogText } from "../i18n/catalog";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Catalog } from "../api/apiTypes";
 import type { Params } from "../workspace/params";
@@ -25,7 +25,11 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
   const id = useId();
   const { descriptor, value } = catalogParameter(catalog, elementType, params, path)!;
   const shown = value == null ? "" : String(value);
-  const displayed = value == null && !descriptor.required ? shown : formatParameterValue(value, descriptor);
+  const format = (value: unknown) => elementType === "router" && path === "policy"
+    ? catalogText(`editor.canvas.policy.${value}`, formatParameterValue(value, descriptor))
+    : formatParameterValue(value, descriptor);
+  const full = formatParameterValue(value, descriptor);
+  const displayed = value == null && !descriptor.required ? shown : format(value);
   const modelValue = modelParams === undefined ? undefined : catalogParameter(catalog, elementType, modelParams, path);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(shown);
@@ -63,10 +67,10 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
   return (
     <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`}
       data-element-id={elementId} data-param-path={path} onDoubleClick={begin}
-      title={descriptor.kind === "CHOICE" ? displayed : undefined}>
+      title={descriptor.kind === "CHOICE" ? full : undefined}>
       {overridden && modelValue !== undefined ? <del className="inline-param-model"
         title={t("editor.variant.modelValue", { value: formatParameterValue(modelValue.value, descriptor) })}>
-        {formatParameterValue(modelValue.value, descriptor)}
+        {format(modelValue.value)}
       </del> : null}
       {editing ? (
         <form className="inline-param-editor nodrag nopan" onSubmit={(event) => { event.preventDefault(); commit(); }}
@@ -102,9 +106,9 @@ export function InlineParamEditor({ catalog, elementId, elementType, params, mod
         <button
           type="button"
           className="inline-param-value nodrag nopan"
-          aria-label={t("editor.param.valueLabel", { title: descriptor.title, value: displayed })}
+          aria-label={t("editor.param.valueLabel", { title: descriptor.title, value: full })}
           aria-disabled={disabled || undefined}
-          title={descriptor.kind === "CHOICE" ? `${displayed}${t("editor.symbols.separator")}${t("editor.param.editHint")}` : t("editor.param.editHint")}
+          title={descriptor.kind === "CHOICE" ? `${full}${t("editor.symbols.separator")}${t("editor.param.editHint")}` : t("editor.param.editHint")}
           onClick={(event) => { if (event.detail === 0) begin(); }}
         >{displayed}</button>
       ) : <span className="inline-param-current">{displayed}</span>}

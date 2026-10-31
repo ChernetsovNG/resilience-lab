@@ -256,7 +256,7 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
   for (let count = 0; count < 3; count++) fireEvent.click(button("Undo"));
-  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Utilization 50%");
+  expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Util. 50%");
   for (let count = 0; count < 3; count++) fireEvent.click(button("Redo"));
   expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useLayoutEffect, useRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
@@ -137,8 +137,12 @@ it("includes the full metric label and a large queue value in its tooltip", asyn
   render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
     onCommand={vi.fn()} results={results} />);
   const metrics = await screen.findByTestId("canvas-results-gateway");
-  const queue = [...metrics.children].find(row => row.textContent?.startsWith("Mean queue"))!;
-  expect(queue.getAttribute("title")).toContain("Mean queue 9,999,999.99");
+  const hint = within(metrics).getByRole("button", { name: "More about: Mean queue" });
+  fireEvent.click(hint);
+  const tooltip = within(metrics).getByRole("tooltip");
+  expect(tooltip.textContent).toContain("Mean queue");
+  expect(tooltip.textContent).toContain("9,999,999.99");
+  expect(tooltip.textContent).toContain("Queue length integral / interval duration");
 });
 
 it("one shared utilization choice colors both services and databases", async () => {
@@ -526,11 +530,11 @@ it("keeps metric rows and edge labels while empty or stale playback values are l
   const props = { catalog, model, layout, onCommand: vi.fn(), onSelect: vi.fn(), selected: [] };
   const { rerender } = render(<Canvas {...props} results={frame} />);
   const metrics = await screen.findByTestId("canvas-results-gateway");
-  const lines = Array.from(metrics.children).map(child => child.textContent);
+  const lines = Array.from(metrics.querySelectorAll(".block-result-text")).map(child => child.textContent);
   const edge = screen.getByTestId("canvas-edge-label-client-to-gateway").querySelector(".canvas-edge-results")!;
   const label = edge.textContent;
   rerender(<Canvas {...props} results={{ ...frame, pending: "Loading playback series" }} />);
-  expect(Array.from(metrics.children).map(child => child.textContent)).toEqual(lines);
+  expect(Array.from(metrics.querySelectorAll(".block-result-text")).map(child => child.textContent)).toEqual(lines);
   expect(metrics.getAttribute("aria-busy")).toBe("true");
   expect(metrics.classList.contains("canvas-metrics--pending")).toBe(true);
   expect(metrics.firstElementChild?.getAttribute("title")).toContain("Loading playback series");

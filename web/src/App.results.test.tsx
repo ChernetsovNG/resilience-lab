@@ -22,9 +22,9 @@ describe("diagram results", () => {
     const region = screen.getByRole("region", { name: "Results context" });
     expect(region.textContent).toContain("Summary");
     const metrics = await screen.findByTestId("canvas-results-gateway");
-    expect(metrics.textContent).toContain("Utilization 50%");
-    expect(metrics.textContent).toContain("Mean queue 0.1");
-    expect(metrics.textContent).toContain("Queue rejections 7.7%");
+    expect(metrics.textContent).toContain("Util. 50%");
+    expect(metrics.textContent).toContain("Queue 0.1");
+    expect(metrics.textContent).toContain("Rejected 7.7%");
     expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per request 1.2×");
     expect(screen.queryByTestId("canvas-results-middle")).toBeNull();
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
@@ -263,7 +263,7 @@ it("compares queue fill across nodes and windows using immutable variant and gri
   await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").getAttribute("aria-busy")).toBeNull());
   expect(color("gateway")).toBe(halfFull);
   fireEvent.click(button("Next window"));
-  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Mean queue 4"));
+  await waitFor(() => expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("Queue 4"));
   expect(color("gateway")).not.toBe(halfFull);
   expect(color("gateway")).toBe(color("middle"));
   expect(legend.textContent).toBe("Queue fill: 0%–100%");

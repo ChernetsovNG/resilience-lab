@@ -132,7 +132,7 @@ internal object Stage1Outputs {
                 "Busy handler time divided by available handler time.",
                 OutputTimeline("utilization", "Utilization", 3, 0),
                 OutputInspector("Handler utilization", 0, chartOrder = 0),
-                OutputOverlay("Utilization", "Utilization {value}", "Busy handler time / handler capacity time, {interval}.", 0),
+                OutputOverlay("Utilization", "Util. {value}", "Busy handler time / handler capacity time, {interval}.", 0),
             ),
             SlotPoolOutputs.output(
                 "handlers",
@@ -144,7 +144,7 @@ internal object Stage1Outputs {
                 OutputInspector("Mean queue", 1, chartOrder = 1),
                 OutputOverlay(
                     "Mean queue",
-                    "Mean queue {value}",
+                    "Queue {value}",
                     "Queue length integral / interval duration, {interval}.",
                     1,
                     scaleParameter = "queue",
@@ -180,7 +180,7 @@ internal object Stage1Outputs {
                 overlay =
                     OutputOverlay(
                         "Queue rejections",
-                        "Queue rejections {value}",
+                        "Rejected {value}",
                         "Queue rejections / offered attempts, {interval}.",
                         2,
                     ),
@@ -244,18 +244,18 @@ internal object Stage1Outputs {
                         when (output.id) {
                             "utilization" ->
                                 overlay.copy(
-                                    label = "Connection utilization {value}",
+                                    label = "Connections {value}",
                                     description = "Busy connection time / connection capacity time, {interval}.",
                                 )
                             "meanQueue" ->
                                 overlay.copy(
-                                    label = "Mean query queue {value}",
+                                    label = "Queue {value}",
                                     description = "Waiting-query integral / interval duration, {interval}.",
                                     scaleTitle = "Query queue fill",
                                 )
                             "queueRejectionRate" ->
                                 overlay.copy(
-                                    label = "Query queue rejections {value}",
+                                    label = "Rejected {value}",
                                     description = "Rejected queries / offered queries, {interval}.",
                                 )
                             else -> overlay

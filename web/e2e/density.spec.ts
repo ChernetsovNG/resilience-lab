@@ -98,18 +98,20 @@ test("large queue values keep the node height and expose their full text", async
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
   const metrics = page.getByTestId("canvas-results-gateway");
-  await expect(metrics).toContainText("Mean queue 0");
+  await expect(metrics).toContainText("Queue 0");
   const node = page.getByTestId("rf__node-gateway").locator(".block-node");
   const height = () => node.evaluate(element => element.getBoundingClientRect().height /
     new DOMMatrixReadOnly(getComputedStyle(element.closest(".react-flow__viewport")!).transform).a);
   const zeroHeight = await height();
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
-  const queue = metrics.locator("span").filter({ hasText: "Mean queue 9,999,999.99" });
+  const queue = metrics.locator(":scope > span").filter({ has: page.locator(".block-result-text", { hasText: "Queue 9,999,999.99" }) });
   await expect(queue).toBeVisible();
-  await expect(queue).toHaveAttribute("title", /Mean queue 9,999,999\.99/);
+  await queue.getByRole("button", { name: "More about: Mean queue" }).click();
+  await expect(queue.getByRole("tooltip")).toContainText("9,999,999.99");
   expect(await height()).toBeCloseTo(zeroHeight, 1);
-  expect(await queue.evaluate(element => ({
-    ellipsis: getComputedStyle(element).textOverflow,
-    wrap: getComputedStyle(element).whiteSpace,
-  }))).toEqual({ ellipsis: "ellipsis", wrap: "nowrap" });
+  const bounds = await queue.evaluate(element => ({
+    wrap: getComputedStyle(element).whiteSpace, width: element.clientWidth, content: element.scrollWidth,
+  }));
+  expect(bounds.wrap).toBe("nowrap");
+  expect(bounds.content).toBeLessThanOrEqual(bounds.width);
 });

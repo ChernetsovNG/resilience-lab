@@ -10,6 +10,7 @@ internal object PoolerOutputs {
     private fun resource(
         id: String,
         title: String,
+        label: String,
         set: String,
         order: Int,
     ) = SlotPoolOutputs.output(
@@ -20,7 +21,7 @@ internal object PoolerOutputs {
         "Busy connection time divided by available connection time.",
         OutputTimeline("poolerResources", "Pooler connections", 3, order),
         OutputInspector(title, order, chartOrder = order),
-        OutputOverlay(title, "$title {value}", "Busy connection time / connection capacity time, {interval}.", order),
+        OutputOverlay(title, "$label {value}", "Busy connection time / connection capacity time, {interval}.", order),
     )
 
     private fun count(
@@ -42,8 +43,8 @@ internal object PoolerOutputs {
 
     val outputs =
         listOf(
-            resource("serverUtilization", "Server pool utilization", "serverConnections", 0),
-            resource("clientUtilization", "Client connection utilization", "clientConnections", 1),
+            resource("serverUtilization", "Server pool utilization", "Server pool", "serverConnections", 0),
+            resource("clientUtilization", "Client connection utilization", "Clients", "clientConnections", 1),
             SlotPoolOutputs.output(
                 "serverConnections",
                 SlotPoolOutputs.Quantity.QUEUE,
@@ -54,7 +55,7 @@ internal object PoolerOutputs {
                 OutputInspector("Waiting clients", 2, chartOrder = 2),
                 OutputOverlay(
                     "Waiting clients",
-                    "Waiting clients {value}",
+                    "Waiting {value}",
                     "Server connection queue integral / interval duration, {interval}.",
                     2,
                 ),

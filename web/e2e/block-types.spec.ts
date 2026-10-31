@@ -82,7 +82,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
     await expect(node.locator(".react-flow__handle-left")).toHaveCount(id === "client" ? 0 : 1);
   }
   await expect(page.getByTestId("canvas-param-pooler-poolSize")).toHaveText("20");
-  await expect(page.getByTestId("canvas-param-router-policy")).toHaveText("По очереди");
+  await expect(page.getByTestId("canvas-param-router-policy")).toHaveText("По кругу");
   await expect(page.getByTestId("canvas-edge-label-pooled-call")).toContainText("пул 10");
   const policy = page.getByTestId("canvas-param-router-policy");
   await policy.dblclick();
@@ -181,10 +181,72 @@ for (const language of ["en", "ru"] as const) {
     await policy.locator("select").press("Escape");
     await page.getByRole("button", { name: language === "en" ? "Undo" : "Отменить действие", exact: true }).click();
     await expect(policy.locator("del")).toHaveCount(0);
-    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По очереди");
+    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По кругу");
     await save(page, language);
     expect((await experiment()).variants[0].overrides ?? {}).toEqual({});
     const stored = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
     expect((await stored.json()).content.model).toEqual(graph.model);
+  });
+}
+
+for (const language of ["en", "ru"] as const) {
+  test(`node parameters and result labels fit their fixed footprints in ${language}`, async ({ page, graph }, testInfo) => {
+    const ru = language === "ru";
+    graph.model.blocks.service.params.replicas = 3;
+    graph.model.blocks.service.replicaOverrides = { "2": { processing: { kind: "fixed", mean: "100ms" } } };
+    await writeFile(resolve("../apps/server/build/e2e-workspace", graph.directory, "types.model.json"), JSON.stringify(graph.model));
+    await page.evaluate(language => localStorage.setItem("resilience-lab.language", language), language);
+    await page.reload();
+    await expect(page.getByTestId("rf__node-service").locator(".block-replica-count")).toHaveText("×3");
+    const overflows = () => page.getByTestId("block-node").evaluateAll(nodes => nodes.flatMap(node =>
+      [...node.querySelectorAll<HTMLElement>(".block-param, .inline-param, .inline-param-value, .inline-param-current, .inline-param-model, .block-results > span, .block-result-text")]
+        .filter(row => !row.closest(".canvas-metrics--empty") && row.scrollWidth > row.clientWidth)
+        .map(row => ({ node: node.closest<HTMLElement>(".react-flow__node")!.dataset.id,
+          text: row.textContent, width: row.clientWidth, content: row.scrollWidth }))));
+    const policy = page.getByTestId("canvas-param-router-policy");
+    const policies = ["roundRobin", "random", "leastInFlight"];
+    const full: Record<string, string> = ru
+      ? { roundRobin: "По очереди", random: "Случайная", leastInFlight: "Меньше активных запросов" }
+      : { roundRobin: "Round robin", random: "Random", leastInFlight: "Fewest active requests" };
+    const choosePolicy = async (value: string) => {
+      await policy.dblclick();
+      await policy.locator("select").selectOption(value);
+      await save(page, language);
+      expect(await overflows()).toEqual([]);
+      const row = policy.locator("..");
+      await row.locator(".help-hint-button").click();
+      await expect(row.getByRole("tooltip")).toContainText(full[value]);
+      await page.keyboard.press("Escape");
+    };
+    for (const base of ["random", "roundRobin", "leastInFlight"]) {
+      await page.getByRole("tab", { name: ru ? "Модель" : "Model", exact: true }).click();
+      await choosePolicy(base);
+      await page.getByRole("tab", { name: "Типы блоков", exact: true }).click();
+      for (const value of [...policies.filter(value => value !== base), base]) await choosePolicy(value);
+    }
+    const before = await geometry(page);
+    await page.getByRole("button", { name: ru ? "Запустить" : "Run", exact: true }).click();
+    await expect(page.getByTestId("job-status")).toHaveText(ru ? "ЗАВЕРШЕНО" : "COMPLETED");
+    await expect(page.getByTestId("canvas-results-pooler")).toBeVisible();
+    const group = page.getByTestId("canvas-results-service");
+    await expect(group.locator(".block-result-text").first()).toContainText(ru ? "макс. #2" : "max #2");
+    await expect(page.getByTestId("rf__node-entry").locator(".diagnostic-badge")).toBeVisible();
+    expect(await overflows()).toEqual([]);
+    expect((await geometry(page)).nodes).toEqual(before.nodes);
+    for (const id of ["entry", "service", "pooler", "database"]) {
+      const rows = page.getByTestId(`canvas-results-${id}`).locator(":scope > span");
+      await expect(rows).toHaveCount(3);
+      for (const row of await rows.all()) {
+        const hint = row.getByRole("button");
+        await hint.focus();
+        await hint.press("Enter");
+        await expect(row.getByRole("tooltip")).toBeVisible();
+        await expect(row.getByRole("tooltip")).toContainText(ru ? "по объединённым данным повторений" : "pooled across replications");
+        if (id === "service") await expect(row.getByRole("tooltip")).toContainText(ru ? "худшая #" : "worst #");
+        await page.keyboard.press("Escape");
+      }
+    }
+    await page.locator(".react-flow__controls-fitview").click();
+    await page.screenshot({ path: testInfo.outputPath(`node-labels-${language}.png`) });
   });
 }

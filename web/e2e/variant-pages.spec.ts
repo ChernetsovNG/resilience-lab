@@ -23,7 +23,7 @@ test("variant changes navigate to fields and structural gestures explain the Mod
   await page.screenshot({ path: testInfo.outputPath("no-retries-changes.png") });
 
   const position = await gateway.evaluate(node => getComputedStyle(node).transform);
-  const title = await gateway.locator("strong").boundingBox();
+  const title = await gateway.locator(".block-node-header").boundingBox();
   await page.mouse.move(title!.x + 10, title!.y + title!.height / 2);
   await page.mouse.down();
   await page.mouse.move(title!.x + 70, title!.y + 30, { steps: 6 });
