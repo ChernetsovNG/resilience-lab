@@ -445,3 +445,32 @@ it("does not redraw the current frame when the next chunk finishes preparing", a
   expect(result.current.loading).toBe(false);
   expect(result.current.frame?.services.get("dependency")?.values.meanQueue).toBe(32);
 });
+
+it.each(["loading", "prepared", "after the boundary"])("freezes the cursor at a chunk boundary (%s) and resumes from the paused window", async (phase) => {
+  vi.useFakeTimers();
+  let resolveNext!: () => void;
+  const loader = { load: async (request: SeriesLoadRequest) => {
+    if (phase === "loading" && request.fromWindow === 32) {
+      return new Promise<NodeSeriesMetrics[]>(resolve => { resolveNext = () => resolve(range(request)); });
+    }
+    return range(request);
+  } };
+  const { result } = setup(loader, 100);
+  await act(async () => result.current.seek(31));
+  act(() => result.current.play());
+  await act(async () => vi.advanceTimersByTime(120));
+  expect(result.current.window).toBe(32);
+  expect(result.current.loading).toBe(phase === "loading");
+  if (phase === "after the boundary") act(() => vi.advanceTimersByTime(120));
+  act(() => result.current.pause());
+  expect(result.current.playing).toBe(false);
+  if (phase === "loading") await act(async () => resolveNext());
+  const paused = phase === "after the boundary" ? 33 : 32;
+  act(() => vi.advanceTimersByTime(5000));
+  expect(result.current.window).toBe(paused);
+  expect(result.current.frame?.window).toBe(paused);
+  act(() => result.current.play());
+  act(() => vi.advanceTimersByTime(120));
+  expect(result.current.window).toBe(phase === "after the boundary" ? 34 : 33);
+  expect(result.current.playing).toBe(true);
+});

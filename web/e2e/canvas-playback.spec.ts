@@ -33,6 +33,8 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const documents = () => Promise.all(names.map(async (name) =>
       (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`playback/${name}`)}`)).json()));
     const beforeDocuments = await documents();
+    const clockStart = Date.now();
+    await page.clock.install({ time: clockStart });
     await page.goto("/");
     await selectExperiment(page, "playback/retry-storm.experiment.json");
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
@@ -94,16 +96,22 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(context).toHaveAttribute("title", new RegExp(`Window ${formatNumber(dependency.length - 1)} ·`));
     await expect(status).toContainText(`Cursor ${formatDuration(dependency.at(-1)!.startMs)}`);
 
+    // A live recording can finish while Playwright dispatches the click, turning Pause into Play.
+    await page.clock.pauseAt(clockStart + 3_600_000);
     await seek(slider, 0);
+    await expect(metrics).not.toHaveAttribute("aria-busy", "true");
     await page.getByLabel("Playback speed", { exact: true }).selectOption("4");
     await page.getByRole("button", { name: "Play run", exact: true }).click();
+    await page.clock.runFor(320);
     await expect.poll(async () => Number(await slider.inputValue())).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Pause run", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Play run", exact: true })).toBeVisible();
     const paused = await slider.inputValue();
     await expect(context).toHaveAttribute("title", new RegExp(`Window ${formatNumber(Number(paused))} ·`));
     await expect(timelineCursor).toContainText(`Window ${formatNumber(Number(paused))} ·`);
-    await page.waitForTimeout(160);
+    await page.clock.runFor(1000);
     await expect(slider).toHaveValue(paused);
+    await page.clock.resume();
     await seek(slider, during);
     await expect(metrics.locator("span")).toHaveText(frame.metrics);
     await expect(edge).toHaveText(frame.edge);
