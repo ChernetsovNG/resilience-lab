@@ -70,7 +70,8 @@ export function isOverridden(overrides: Params, id: string, path: string): boole
     .some((overridden) => overridden === path || overridden.startsWith(`${path}.`) || path.startsWith(`${overridden}.`));
 }
 
-function setField(target: Params, path: string[], value: unknown): Params {
+/** Copy with a nested parameter leaf changed; undefined removes the leaf. */
+export function setField(target: Params, path: string[], value: unknown): Params {
   const [head, ...rest] = path;
   if (rest.length > 0) return { ...target, [head]: setField(objectOr(target[head], undefined), rest, value) };
   const next = { ...target };

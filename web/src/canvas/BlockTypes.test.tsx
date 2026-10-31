@@ -11,6 +11,23 @@ import { Canvas } from "./Canvas";
 beforeAll(mockReactFlowDom);
 afterEach(() => { setLanguage("en"); localStorage.clear(); });
 
+it.each([undefined, 1, 3])("shows a service stack and count only for replicas > 1 (%s)", async replicas => {
+  const params = { ...model.blocks.middle.params, ...(replicas === undefined ? {} : { replicas }) };
+  render(<Canvas catalog={localizeCatalog(fullCatalog as Catalog)} model={{ ...model, blocks: { middle: { type: "service", params } } }}
+    layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const node = await screen.findByTestId("rf__node-middle");
+  expect(node.querySelector(".block-shape--replicas") !== null).toBe(replicas === 3);
+  expect(within(node).queryByText("×3") !== null).toBe(replicas === 3);
+});
+
+it("does not draw non-service blocks as replica groups", async () => {
+  render(<Canvas catalog={localizeCatalog(fullCatalog as Catalog)} model={{ ...model, blocks: { middle: { type: "database", params: { replicas: 3 } } } }}
+    layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const node = await screen.findByTestId("rf__node-middle");
+  expect(node.querySelector(".block-shape--replicas")).toBeNull();
+  expect(within(node).queryByText("×3")).toBeNull();
+});
+
 const blocks = [
   { type: "client", shape: "person", params: model.blocks.client.params, paths: ["load.points.0.rate", "deadline"] },
   { type: "service", shape: "card", params: model.blocks.gateway.params, paths: ["handlers", "queue", "processing.mean"] },

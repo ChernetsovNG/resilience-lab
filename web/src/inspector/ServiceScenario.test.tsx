@@ -181,7 +181,7 @@ it("shows variant structure read-only", () => {
   fireEvent.change(type, { target: { value: "call" } });
   fireEvent.keyDown(type, { key: "ArrowDown", altKey: true });
   history(0);
-  expect(screen.getByTitle("Structure is edited on the Model page")).toBeTruthy();
+  expect(within(screen.getByText("Scenario", { exact: true }).closest("details")!).getByTitle("Structure is edited on the Model page")).toBeTruthy();
 });
 
 it("keeps invalid references repairable, shows step diagnostics and focuses them from Problems", () => {

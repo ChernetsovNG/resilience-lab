@@ -1,6 +1,7 @@
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
+import { formatNumber } from "../i18n/format";
 import { formatOutput, outputField, outputText, outputsOf, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
@@ -80,8 +81,9 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
   };
   const outputs = outputsOf(data.catalog, data.block.type).filter(output => output.overlay != null)
     .sort((a, b) => a.overlay!.order - b.overlay!.order);
+  const replicas = data.block.type === "service" ? Number(data.block.params.replicas ?? 1) : 1;
   return (
-    <div className={`block-shape block-shape--${shapes.get(data.block.type) ?? "card"}`}>
+    <div className={`block-shape block-shape--${shapes.get(data.block.type) ?? "card"}${replicas > 1 ? " block-shape--replicas" : ""}`}>
     <div className={`block-node block-node--${data.block.type}${data.overridden ? " block-node--overridden" : ""}`} data-testid="block-node"
       style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
       {data.ports.map((port) => (
@@ -91,6 +93,8 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
       <strong className="block-node-header">
         <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
         <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
+        {replicas > 1 ? <span className="block-replica-count" aria-label={t("editor.replicas.count", { count: formatNumber(replicas) })}>
+          {t("editor.canvas.replicas", { count: formatNumber(replicas) })}</span> : null}
       </strong>
       <FaultBadge faults={data.faults} onOpen={data.onFault} disabled={data.disabled} />
       <DiagnosticBadge diagnostics={diagnostics.filter(diagnostic => !isWiringHint(diagnostic))} />

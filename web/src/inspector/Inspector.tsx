@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
+import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
@@ -57,7 +58,9 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
     // A malformed step can have diagnostics for controls hidden by its current type.
     const step = focusField.path.startsWith("scenario.") ? focusField.path.split(".").slice(0, 2).join(".") : null;
     const field = fields.find(element => element.dataset.inspectorField === focusField.path)
-      ?? (step === null ? undefined : fields.find(element => element.dataset.inspectorField === step));
+      ?? (step === null ? undefined : fields.find(element => element.dataset.inspectorField === step))
+      ?? fields.find(element => focusField.path.startsWith("replicaOverrides.")
+        && element.dataset.inspectorField === focusField.path.split(".").slice(0, 2).join("."));
     const section = field?.closest<HTMLDetailsElement>(".inspector-section");
     if (section !== null && section !== undefined) section.open = true;
     if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
@@ -139,6 +142,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             onReset={variantId === null ? undefined : () => onCommand?.(resetVariantParam(variantId, selected, "load", catalog))}
             onValidity={onValidity} fieldDiagnostics={fieldDiagnostics}
             variantFieldDiagnostics={variantId === null ? variantFieldDiagnostics : undefined} onVariantDiagnostic={onVariantDiagnostic} /> : null}
+          {element.type === "service" ? <ReplicaOverrides key={`replicas-${selected}`} catalog={catalog} model={model} serviceId={selected}
+            editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
+            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
+            onCommand={command => onCommand?.(command)} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics} /> : null}
           {element.type === "service" ? <ServiceScenario key={selected} catalog={catalog} model={model} serviceId={selected}
             editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
