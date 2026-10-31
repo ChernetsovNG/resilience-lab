@@ -37,7 +37,19 @@ configurations.named("ktlint") {
 
 tasks.test {
     useJUnitPlatform()
-    systemProperty("resilience-lab.workspace", rootProject.file("examples").absolutePath)
+    systemProperty("resilience-lab.workspace", "../../examples")
+    inputs
+        .dir(rootProject.file("examples"))
+        .withPropertyName("exampleWorkspace")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .files("openapi.json")
+        .withPropertyName("openApi")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .dir("src/main/kotlin")
+        .withPropertyName("contractSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
