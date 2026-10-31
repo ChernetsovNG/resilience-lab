@@ -77,6 +77,7 @@ class ReliabilityModel(
                     streams = streams,
                     scenario = graph.scenario(service),
                     onAdmitted = ::recordAdmission,
+                    onReadyChanged = { ready -> metrics.recordReadiness(service.path, ready) },
                     onSlotCapacityChanged = { set, capacity -> metrics.recordSlotCapacity(service.path, set, capacity) },
                     onQueueLengthChanged = { queueLength ->
                         metrics.recordQueueLength(service.path, this@ReliabilityModel.time, queueLength)
@@ -120,8 +121,18 @@ class ReliabilityModel(
                         )
                 }
             }.toMap()
-    private val routerRuntimes = graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams) }
+    private val routerRuntimes =
+        graph.routers.associate { it.path to RouterRuntime(it, graph.outgoingRoutes(it.path), streams, ::isTargetReady) }
     private val routeFaults = graph.routes.associate { it.path to FaultState() }
+
+    private fun isTargetReady(
+        path: String,
+        requestClass: String,
+    ): Boolean {
+        runtimes[path]?.let { return it.ready }
+        val routes = graph.outgoingRoutes(path, requestClass)
+        return routes.isEmpty() || routes.any { isTargetReady(it.to, requestClass) }
+    }
 
     var activeInvocations: Int = 0
         private set
@@ -131,6 +142,17 @@ class ReliabilityModel(
         private set
 
     init {
+        graph.topologicalServices.forEach { service ->
+            service.healthCheck?.let { config ->
+                HealthCheckProcess(
+                    this,
+                    runtimes.getValue(service.path),
+                    config,
+                    onStarted = { metrics.recordProbeStarted(service.path) },
+                    onCompleted = { succeeded -> metrics.recordProbeCompleted(service.path, succeeded) },
+                )
+            }
+        }
         model.lengthOfReplication = Double.POSITIVE_INFINITY
         model.maximumAllowedExecutionTimePerReplication = graph.run.maxRealTimeSeconds.seconds
         executive.attachObserver(
@@ -397,7 +419,7 @@ class ReliabilityModel(
     }
 
     private fun recordAdmission(entity: ProcessModel.Entity) {
-        (entity as ServiceInvocation).recordAdmission()
+        (entity as? ServiceInvocation)?.recordAdmission()
     }
 
     inner class ServiceInvocation internal constructor(
@@ -711,10 +733,12 @@ class ReliabilityModel(
                     }
                     var selectedTarget = target
                     while (selectedTarget in routerRuntimes) {
+                        val router = routerRuntimes.getValue(selectedTarget)
                         val route =
-                            routerRuntimes.getValue(selectedTarget).select(emptySet(), requestClass = request.requestClass)
+                            router.select(emptySet(), requestClass = request.requestClass)
                         if (route == null) {
-                            currentOutcome = AttemptOutcome.NO_ROUTE
+                            currentOutcome =
+                                if (router.hasRoute(request.requestClass)) AttemptOutcome.NO_READY_TARGET else AttemptOutcome.NO_ROUTE
                             return@process
                         }
                         selectedRoutes.add(route)
@@ -756,6 +780,15 @@ class ReliabilityModel(
                     }
                     val serviceArrivalMs = time
                     metrics.recordOffered(runtime.serviceId, measurementCohort)
+                    if (runtime.rateLimit?.acquire(time) == false) {
+                        currentOutcome = AttemptOutcome.RATE_LIMITED
+                        metrics.recordRateLimited(runtime.serviceId, measurementCohort)
+                        if (incomingNetwork != null || selectedRoutes.isNotEmpty()) {
+                            val networkDelayMs = nextNetworkDelayMs()
+                            if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
+                        }
+                        return@process
+                    }
                     try {
                         val acquisition = with(runtime.slots) { acquire() }
                         if (runtime.serverSlots == null) metrics.recordHandlerAcquisition(runtime.serviceId, acquisition, measurementCohort)

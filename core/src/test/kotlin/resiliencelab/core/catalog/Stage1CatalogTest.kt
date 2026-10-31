@@ -121,7 +121,7 @@ class Stage1CatalogTest {
     @Test
     fun `describes required service parameters with units and ranges`() {
         val params = catalog.type("service")!!.params.associateBy { it.name }
-        assertThat(params.keys).containsExactly("handlers", "queue", "processing", "failureRate", "replicas")
+        assertThat(params.keys).containsExactly("handlers", "queue", "processing", "failureRate", "replicas", "rateLimit", "healthCheck")
         assertThat(params.getValue("replicas").default).isEqualTo(JsonPrimitive(1))
         assertThat(params.getValue("replicas").minimum).isEqualTo(1.0)
         assertThat(params.getValue("replicas").sweepable).isTrue()

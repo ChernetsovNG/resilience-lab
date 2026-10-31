@@ -27,10 +27,12 @@ import resiliencelab.core.ir.FallbackConfig
 import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.HealthCheckConfig
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.PoolerSettings
+import resiliencelab.core.ir.RateLimitConfig
 import resiliencelab.core.ir.RetryBudgetConfig
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
@@ -1156,10 +1158,41 @@ class ModelCompiler(
         val queue = reader.int("queue")
         val processing = reader.obj("processing")?.let(::distribution)
         val failure = reader.quantity("failureRate")
+        val rateLimit = if (type == "service" && reader.has("rateLimit")) reader.obj("rateLimit")?.let(::rateLimit) else null
+        val healthCheck = if (type == "service" && reader.has("healthCheck")) reader.obj("healthCheck")?.let(::healthCheck) else null
         return if (handlers == null || queue == null || processing == null || failure == null) {
             null
         } else {
-            ServiceNode(id, handlers, queue, processing, failure, Origin(document, JsonPointer.of("blocks", id)), type = type)
+            ServiceNode(
+                id,
+                handlers,
+                queue,
+                processing,
+                failure,
+                Origin(document, JsonPointer.of("blocks", id)),
+                type = type,
+                rateLimit = rateLimit,
+                healthCheck = healthCheck,
+            )
+        }
+    }
+
+    private fun rateLimit(reader: ParamReader): RateLimitConfig? {
+        val rate = reader.quantity("rate")
+        val burst = reader.int("burst")
+        return if (rate == null || burst == null) null else RateLimitConfig(rate, burst)
+    }
+
+    private fun healthCheck(reader: ParamReader): HealthCheckConfig? {
+        val interval = reader.quantity("interval")
+        val timeout = reader.quantity("timeout")
+        val unhealthy = reader.int("unhealthyThreshold")
+        val healthy = reader.int("healthyThreshold")
+        val processing = reader.quantity("processing")
+        return if (interval == null || timeout == null || unhealthy == null || healthy == null || processing == null) {
+            null
+        } else {
+            HealthCheckConfig(interval, timeout, unhealthy, healthy, processing)
         }
     }
 

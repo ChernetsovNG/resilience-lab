@@ -27,8 +27,23 @@ describe("catalog output contract", () => {
       ["Queue", "requests", 1, ["Mean queue"]],
       ["Pool utilization", "%", 100, ["Connection pool utilization"]],
       ["Connection pool", "requests", 1, ["Mean connection wait queue", "Connection acquisition timeouts"]],
+      ["Service policies", "RPS", 1, ["Rate-limit rejections", "Failed health probes"]],
+      ["Service policies", "%", 100, ["Rate-limited share"]],
       ["Circuit breaker", "%", 100, ["Circuit open share"]],
+      ["Readiness", "%", 100, ["Not-ready share"]],
     ]);
+  });
+
+  it("computes service policy outputs from raw windows and pooled summary totals", () => {
+    const outputs = outputsOf(catalog, "service");
+    const frame = { startMs: 0, durationMs: 100, offeredAttempts: 20, rateLimited: 5, probeFailures: 2, notReadyMs: 25 };
+    const expected = { rateLimitedPerSecond: 50, rateLimitedRate: 0.25, probeFailuresPerSecond: 20, notReadyShare: 0.25 };
+    const totals = { measurementMs: 400, offeredAttempts: 80, rateLimited: 20, probeFailures: 8, notReadyMs: 100 };
+    for (const [id, value] of Object.entries(expected)) {
+      const output = outputs.find(output => output.id === id)!;
+      expect(outputWindow([output], frame)[id]).toBe(value);
+      expect(outputValue(output, { totals }, false).value).toBe(value);
+    }
   });
 
   it("preserves inspector and overlay sets, labels and units", () => {

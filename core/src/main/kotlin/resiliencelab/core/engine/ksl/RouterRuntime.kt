@@ -9,6 +9,7 @@ internal class RouterRuntime(
     node: RouterNode,
     private val outputs: List<RouteEdge>,
     streams: StreamSource,
+    private val isReady: (String, String) -> Boolean = { _, _ -> true },
 ) {
     private val defaultPolicy = node.policy
     val isReplicaGroup = node.pathSegments.last() == "#lb"
@@ -31,7 +32,7 @@ internal class RouterRuntime(
         policy: RoutingPolicy = defaultPolicy,
         requestClass: String = "default",
     ): RouteEdge? {
-        val applicable = outputs.filter { it.classes == null || requestClass in it.classes }
+        val applicable = outputs.filter { (it.classes == null || requestClass in it.classes) && isReady(it.to, requestClass) }
         if (applicable.isEmpty()) return null
         val eligible = applicable.filterNot { it.path in tried }.ifEmpty { applicable }
         val selected =
@@ -60,4 +61,6 @@ internal class RouterRuntime(
         check(remaining >= 0) { "Unbalanced route '${route.path}'" }
         inFlight[route.path] = remaining
     }
+
+    fun hasRoute(requestClass: String): Boolean = outputs.any { it.classes == null || requestClass in it.classes }
 }

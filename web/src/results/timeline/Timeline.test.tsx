@@ -161,8 +161,8 @@ it("groups only model outputs by element, without unrelated types or duplicate m
   const choices = screen.getByText("Elements and metrics").parentElement!;
   expect(within(choices).getAllByRole("group")).toHaveLength(4);
   const service = within(choices).getByRole("group", { name: "gateway · Service" });
-  expect(within(service).getAllByRole("checkbox")).toHaveLength(14);
-  expect(within(service).getAllByRole("checkbox", { checked: true })).toHaveLength(6);
+  expect(within(service).getAllByRole("checkbox")).toHaveLength(18);
+  expect(within(service).getAllByRole("checkbox", { checked: true })).toHaveLength(9);
   const names = within(service).getAllByRole("checkbox").map(input => input.parentElement!.textContent);
   expect(new Set(names).size).toBe(names.length);
   expect(within(choices).queryByText(/pooler|routing|connection pool/i)).toBeNull();

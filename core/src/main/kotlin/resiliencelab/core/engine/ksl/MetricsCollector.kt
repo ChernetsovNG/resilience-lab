@@ -118,6 +118,7 @@ class MetricsCollector(
         }
         val metrics = serviceMetrics.getValue(serviceId)
         metrics.slots.start()
+        metrics.notReadySeries.record(measurementStartMs, if (metrics.ready) 0.0 else 1.0)
         metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
         metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
     }
@@ -291,6 +292,42 @@ class MetricsCollector(
         }
     }
 
+    internal fun recordRateLimited(
+        serviceId: String,
+        measured: Boolean,
+    ) {
+        windows.attemptEvent(serviceId, currentTimeMs(), AttemptEvent.RATE_LIMITED)
+        if (measured) serviceMetrics.getValue(serviceId).rateLimited++
+    }
+
+    internal fun recordProbeStarted(serviceId: String) {
+        val timeMs = currentTimeMs()
+        windows.attemptEvent(serviceId, timeMs, AttemptEvent.PROBE)
+        if (timeMs >= measurementStartMs && timeMs < measurementEndMs) serviceMetrics.getValue(serviceId).probes++
+    }
+
+    internal fun recordProbeCompleted(
+        serviceId: String,
+        succeeded: Boolean,
+    ) {
+        if (succeeded) return
+        val timeMs = currentTimeMs()
+        windows.attemptEvent(serviceId, timeMs, AttemptEvent.PROBE_FAILURE)
+        if (timeMs >= measurementStartMs && timeMs < measurementEndMs) serviceMetrics.getValue(serviceId).probeFailures++
+    }
+
+    internal fun recordReadiness(
+        serviceId: String,
+        ready: Boolean,
+    ) {
+        val timeMs = currentTimeMs()
+        windows.readiness(serviceId, timeMs, ready)
+        serviceMetrics.getValue(serviceId).apply {
+            this.ready = ready
+            notReadySeries.record(timeMs, if (ready) 0.0 else 1.0)
+        }
+    }
+
     internal fun recordAdmitted(
         serviceId: String,
         measured: Boolean = true,
@@ -452,6 +489,11 @@ class MetricsCollector(
         var failures = 0
         val failuresByReason = sortedMapOf<String, Int>()
         var queueRejections = 0
+        var rateLimited = 0
+        var probes = 0
+        var probeFailures = 0
+        var ready = true
+        var notReadySeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
 
@@ -465,6 +507,11 @@ class MetricsCollector(
             failures = 0
             failuresByReason.clear()
             queueRejections = 0
+            rateLimited = 0
+            probes = 0
+            probeFailures = 0
+            ready = true
+            notReadySeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         }
@@ -473,6 +520,7 @@ class MetricsCollector(
             slots.finish(timeMs)
             queueLengthSeries.finish(timeMs)
             busyHandlerSeries.finish(timeMs)
+            notReadySeries.finish(timeMs)
         }
 
         fun snapshot(): ServiceMetrics =
@@ -483,6 +531,10 @@ class MetricsCollector(
                 retries = retries,
                 failures = failures,
                 failuresByReason = failuresByReason.toMap(),
+                rateLimited = rateLimited,
+                probes = probes,
+                probeFailures = probeFailures,
+                notReadyMs = notReadySeries.integral,
                 measurementMs = measurementEndMs - measurementStartMs,
                 queueDurationsMs = queueLengthSeries.durations,
                 latency = latency.snapshot(),

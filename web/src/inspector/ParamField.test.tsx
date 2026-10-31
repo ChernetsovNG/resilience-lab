@@ -5,8 +5,11 @@ import { ParamField } from "./ParamField";
 import catalog from "../test/catalog.json";
 import { initialParams } from "../workspace/initialParams";
 
-it.each(["circuitBreaker", "retryBudget", "fallback"])("keeps %s read-only until the policy editor is available", name => {
-  const descriptor = catalog.types.find(type => type.id === "call")!.params.find(param => param.name === name)! as ParamDescriptor;
+it.each([
+  ["call", "circuitBreaker"], ["call", "retryBudget"], ["call", "fallback"],
+  ["service", "rateLimit"], ["service", "healthCheck"],
+])("keeps %s %s read-only until the policy editor is available", (typeId, name) => {
+  const descriptor = catalog.types.find(type => type.id === typeId)!.params.find(param => param.name === name)! as ParamDescriptor;
   render(<ParamField descriptor={descriptor} value={initialParams(descriptor.fields)} path={name} editable
     isOverridden={() => false} onCommit={vi.fn()} onValidity={vi.fn()} />);
   for (const input of screen.getAllByRole("textbox")) expect(input).toHaveProperty("readOnly", true);

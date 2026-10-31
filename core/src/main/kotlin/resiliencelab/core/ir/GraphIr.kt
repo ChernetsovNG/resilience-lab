@@ -95,6 +95,8 @@ data class ServiceNode(
     val pooler: PoolerSettings? = null,
     /** Catalog type retained for resource names in results; runtime service semantics remain shared. */
     val type: String = "service",
+    val rateLimit: RateLimitConfig? = null,
+    val healthCheck: HealthCheckConfig? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -107,7 +109,21 @@ data class ServiceNode(
         scenario: List<ServiceStep>? = null,
         pooler: PoolerSettings? = null,
         type: String = "service",
-    ) : this(path.split('/'), handlers, queueCapacity, processing, failureProbability, origin, scenario, pooler, type)
+        rateLimit: RateLimitConfig? = null,
+        healthCheck: HealthCheckConfig? = null,
+    ) : this(
+        path.split('/'),
+        handlers,
+        queueCapacity,
+        processing,
+        failureProbability,
+        origin,
+        scenario,
+        pooler,
+        type,
+        rateLimit,
+        healthCheck,
+    )
 
     val path: String get() = displayPath(pathSegments)
 }

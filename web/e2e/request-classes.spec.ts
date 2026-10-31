@@ -12,7 +12,7 @@ async function stored(page: Page, path: string): Promise<ModelFile> {
   return (await response.json()).content.model;
 }
 
-test("preserves v6 clients, classes, filters and call policies through editing and saving", async ({ page }) => {
+test("preserves v6 clients, classes, filters and policies through editing and saving", async ({ page }) => {
   const directory = `request-classes-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const modelPath = `${directory}/retry-storm.model.json`;
@@ -39,6 +39,12 @@ test("preserves v6 clients, classes, filters and call policies through editing a
     };
     const call = source.connections.find(edge => edge.id === "gateway-to-middle")!;
     call.params = { ...call.params, ...policies };
+    const servicePolicies = {
+      rateLimit: { rate: "150/s", burst: 5 },
+      healthCheck: { interval: "10s", timeout: "1s", unhealthyThreshold: 3, healthyThreshold: 2, processing: "1ms" },
+    };
+    source.blocks.gateway.params = { ...source.blocks.gateway.params, ...servicePolicies };
+    source.blocks.middle.replicaOverrides = { "1": { healthCheck: { ...servicePolicies.healthCheck, timeout: "2s" } } };
     source.connections.find(edge => edge.id === "middle-to-dependency")!.to = "router";
     source.connections.push(
       { id: "partner-to-gateway", type: "request", from: "partner", to: "gateway", params: {} },
@@ -48,7 +54,11 @@ test("preserves v6 clients, classes, filters and call policies through editing a
     const override = [{ id: "status", load: { points: [{ time: "0s", rate: "100/s" }] } }, classes[1]];
     experiment.variants[1].overrides["client.classes"] = override;
     experiment.variants[1].overrides["gateway-to-middle.retryBudget.ratio"] = "35%";
-    experiment.grid = [{ path: "gateway-to-middle.retryBudget.ratio", values: ["10%", "20%"] }];
+    experiment.variants[1].overrides["gateway.healthCheck.timeout"] = "500ms";
+    experiment.grid = [
+      { path: "gateway-to-middle.retryBudget.ratio", values: ["10%", "20%"] },
+      { path: "gateway.rateLimit.burst", values: [5, 10] },
+    ];
     await writeFile(resolve(target, "retry-storm.model.json"), JSON.stringify(source));
     await writeFile(resolve(target, "retry-storm.experiment.json"), JSON.stringify(experiment));
     await page.goto("/");
@@ -70,6 +80,8 @@ test("preserves v6 clients, classes, filters and call policies through editing a
     expected.blocks.client.params.deadline = "3s";
 
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+    await expect(page.locator('[data-inspector-field="rateLimit.rate"] input')).not.toBeEditable();
+    await expect(page.locator('[data-inspector-field="healthCheck.timeout"] input')).not.toBeEditable();
     const scenario = page.locator(".inspector-scenario");
     if (await scenario.getAttribute("open") === null) await scenario.locator("summary").click();
     await page.getByRole("group", { name: "Step 1", exact: true }).getByRole("combobox", { name: "Step type", exact: true }).selectOption("call");
@@ -85,6 +97,7 @@ test("preserves v6 clients, classes, filters and call policies through editing a
     const savedOverrides = savedExperimentContent.variants[1].overrides;
     expect(savedOverrides["client.classes"]).toEqual(override);
     expect(savedOverrides["gateway-to-middle.retryBudget.ratio"]).toBe("35%");
+    expect(savedOverrides["gateway.healthCheck.timeout"]).toBe("500ms");
     const validation = await page.request.post("/api/v1/validate", { data: { experiment: experimentPath } });
     expect(validation.ok()).toBe(true);
     expect((await validation.json()).valid).toBe(true);
