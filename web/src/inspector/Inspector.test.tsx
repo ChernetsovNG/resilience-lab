@@ -7,6 +7,33 @@ import { applyOverrides, withParam } from "../workspace/params";
 import type { EditorDocuments } from "../workspace/editor";
 import { Inspector } from "./Inspector";
 import type { InspectorProps } from "./Inspector";
+import type { Catalog, ModelFile } from "../api/apiTypes";
+
+it.each([
+  { targetType: "database", replicas: 1, attempts: 1, balancing: false, backoff: false },
+  { targetType: "service", replicas: 1, attempts: 2, balancing: false, backoff: true },
+  { targetType: "service", replicas: 3, attempts: 2, balancing: true, backoff: true },
+])("shows applicable call settings for $targetType, $replicas replicas, $attempts attempts", state => {
+  const callModel: ModelFile = { ...model, blocks: {
+    caller: { type: "service", params: { handlers: 2 } },
+    target: { type: state.targetType, params: { handlers: 2, maxConnections: 3, replicas: state.replicas } },
+  }, connections: [{ id: "call", type: "call", from: "caller", to: "target", params: {
+    attempts: state.attempts, timeout: "1s", balancing: "random", backoff: { kind: "fixed", base: "10ms" },
+  } }] };
+  const onParam = renderInspector({ catalog: serverCatalog as Catalog, model: callModel, selected: "call" });
+  expect(screen.queryByRole("combobox", { name: "Balancing" }) !== null).toBe(state.balancing);
+  expect(screen.queryByRole("group", { name: "Backoff" }) !== null).toBe(state.backoff);
+  expect(onParam).not.toHaveBeenCalled();
+});
+
+it("names the actual default replica selection policy", () => {
+  const callModel: ModelFile = { ...model, blocks: { ...model.blocks,
+    middle: { ...model.blocks.middle, params: { ...model.blocks.middle.params, replicas: 3 } },
+  } };
+  renderInspector({ catalog: serverCatalog as Catalog, model: callModel, selected: "gateway-to-middle" });
+  const select = screen.getByRole("combobox", { name: "Balancing" });
+  expect(select.textContent).toMatch(/Default.*Round robin/);
+});
 
 function renderInspector(props: Partial<InspectorProps> = {}) {
   const onParam = vi.fn();
@@ -280,7 +307,7 @@ describe("Inspector", () => {
     expect(input("Attempts").value).toBe("1");
     expect(input("Attempts").readOnly).toBe(true);
     expect(input("Attempts").closest(".param-field")?.textContent).toContain("overridden");
-    expect((screen.getByLabelText("Kind") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole("group", { name: "Backoff" })).toBeNull();
   });
 
   it("shows run settings and faults without a selection", () => {

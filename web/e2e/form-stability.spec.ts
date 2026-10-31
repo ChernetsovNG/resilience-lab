@@ -42,7 +42,7 @@ test("keeps inspector and toolbar controls still when delayed lint warnings arri
     await page.screenshot({ path: testInfo.outputPath(value === "10ms" ? "with-warning.png" : "without-warning.png") });
     expect(await positions()).toEqual(before);
     if (value === "10ms") {
-      await timeout.locator("..").locator(".field-feedback button").focus();
+      await timeout.locator("..").locator(".field-feedback button").press("Enter");
       await expect(inspector.getByRole("tooltip")).toContainText("LINT_TIMEOUT_BUDGET");
       await page.screenshot({ path: testInfo.outputPath("warning-details.png") });
       await page.keyboard.press("Escape");

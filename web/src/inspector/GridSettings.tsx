@@ -10,6 +10,9 @@ import type { EditorCommand } from "../workspace/editor";
 import { setGridAxes } from "../workspace/experimentCommands";
 import { isObject } from "../workspace/params";
 import { ParamField } from "./ParamField";
+import { parameterLabel } from "../presentation/labels";
+import { parseParam } from "../workspace/paramParsing";
+import { canonicalOf, equivalentQuantities } from "../workspace/quantities";
 
 type GridAxis = NonNullable<ExperimentFile["grid"]>[number];
 
@@ -36,8 +39,70 @@ function parametersOf(model: ModelFile, catalog: Catalog) {
   });
   return [...Object.entries(model.blocks), ...model.connections.map((connection) => [connection.id, connection] as const)]
     .flatMap(([id, element]) => leaves(catalog.types.find((type) => type.id === element.type)?.params ?? [], id, element.params)
-      .map(parameter => ({ ...parameter, heading: t("editor.grid.axisTitle", { parameter: parameter.title,
-        element: "from" in element ? t("editor.grid.connection", { from: element.from, to: element.to }) : id }) })));
+      .map(parameter => ({ ...parameter, heading: parameterLabel(parameter.path, catalog, model) })));
+}
+
+/** Continue the written step, then look for unused values inside the descriptor's range. */
+function nextGridValue(descriptor: ParamDescriptor, values: GridAxis["values"], initial: GridAxis["values"][number]): GridAxis["values"][number] | undefined {
+  const quantity = descriptor.kind === "QUANTITY";
+  const lastWritten = values.at(-1) ?? initial;
+  const unit = quantity ? [...descriptor.units].sort((a, b) => b.symbol.length - a.symbol.length)
+    .find(candidate => String(lastWritten).endsWith(candidate.symbol)) ?? descriptor.units[0] : undefined;
+  if (quantity && unit === undefined) return undefined;
+  const scale = unit === undefined ? 1 : unit.numerator / unit.denominator;
+  const numberOf = (value: unknown) => quantity ? canonicalOf(String(value), descriptor.units)
+    : typeof value === "number" && Number.isFinite(value) ? value : null;
+  const numbers = values.map(numberOf).filter((value): value is number => value !== null);
+  const last = numbers.at(-1) ?? numberOf(initial) ?? descriptor.minimum ?? descriptor.exclusiveMinimum ?? 0;
+  const previous = numbers.slice(0, -1).reverse().find(value => value !== last);
+  const step = previous === undefined ? scale : last - previous;
+  const used = (value: GridAxis["values"][number]) => values.some(current => quantity
+    ? equivalentQuantities(String(current), String(value), descriptor.units) : current === value);
+  const encode = (canonical: number) => {
+    const written = unit === undefined ? canonical : canonical * unit.denominator / unit.numerator;
+    if (!Number.isFinite(written)) return undefined;
+    // Remove addition noise in decimal steps; retain full precision when rounding repeats an existing value.
+    for (const number of descriptor.kind === "INTEGER" ? [written] : [Number(written.toPrecision(15)), written]) {
+      const value = unit === undefined ? number : `${number}${unit.symbol}`;
+      if (parseParam({ ...descriptor, required: true }, String(value)).ok && !used(value)) return value;
+    }
+    return undefined;
+  };
+  const first = encode(values.length === 0 ? last : last + step);
+  if (first !== undefined) return first;
+  const resolution = descriptor.kind === "INTEGER" ? 1 : Math.max(Number.MIN_VALUE, Math.abs(last) * Number.EPSILON);
+  const distance = Math.max(Math.abs(step), resolution);
+  for (let index = 1; index <= values.length + 1; index++) {
+    for (const candidate of [last - Math.sign(step) * distance * index, last + Math.sign(step) * distance * index]) {
+      const value = encode(candidate);
+      if (value !== undefined) return value;
+    }
+  }
+  if (descriptor.kind === "INTEGER") {
+    for (let index = 1; index <= values.length + 1; index++) {
+      for (const candidate of [last - index, last + index]) {
+        const value = encode(candidate);
+        if (value !== undefined) return value;
+      }
+    }
+  }
+  const lower = descriptor.minimum ?? descriptor.exclusiveMinimum ?? (quantity ? 0 : undefined);
+  for (const bound of [lower, descriptor.maximum]) {
+    if (bound == null) continue;
+    for (const candidate of [bound, bound / 2 + last / 2]) {
+      const value = encode(candidate);
+      if (value !== undefined) return value;
+    }
+  }
+  if (descriptor.kind === "NUMBER" || quantity) {
+    const positions = [...new Set([...numbers, lower, descriptor.maximum]
+      .filter((value): value is number => value != null && Number.isFinite(value)))].sort((a, b) => a - b);
+    for (let index = 1; index < positions.length; index++) {
+      const value = encode(positions[index - 1] / 2 + positions[index] / 2);
+      if (value !== undefined) return value;
+    }
+  }
+  return undefined;
 }
 
 /** Shared grid axes use the same catalog fields, draft validation and history as other parameters. */
@@ -47,10 +112,9 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const parameters = parametersOf(model, catalog);
   const labels = new Map(grid.map(axis => {
     const parameter = parameters.find(candidate => candidate.path === axis.path);
-    const ambiguous = parameters.filter(candidate => grid.some(axis => axis.path === candidate.path) && candidate.title === parameter?.title).length > 1;
-    return [axis.path, (ambiguous ? parameter?.heading : parameter?.title) ?? axis.path];
+    return [axis.path, parameter?.heading ?? parameterLabel(axis.path, catalog, model)];
   }));
-  const display = (diagnostics: readonly Diagnostic[] = []) => sweepDiagnostics(diagnostics, experiment, labels);
+  const display = (diagnostics: readonly Diagnostic[] = []) => sweepDiagnostics(diagnostics, experiment, labels, catalog, model);
   const fieldMessages = new Map([...(fieldDiagnostics ?? [])].map(([path, diagnostics]) => [path, display(diagnostics)]));
   const errors = new Map([...fieldMessages].map(([path, diagnostics]) => [path, diagnostics.filter(diagnostic => diagnostic.severity === "ERROR")]));
   const plural = new Intl.PluralRules(language);
@@ -72,7 +136,8 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     {grid.map((axis, index) => {
       const parameter = parameters.find((candidate) => candidate.path === axis.path);
       const prefix = `grid.${index}`;
-      const heading = parameter?.heading ?? axis.path;
+      const heading = parameter?.heading ?? parameterLabel(axis.path, catalog, model);
+      const nextValue = parameter === undefined ? undefined : nextGridValue(parameter.descriptor, axis.values, parameter.value);
       const descriptionId = `${id}-axis-${index}-description`;
       const warningsId = `${id}-axis-${index}-warnings`;
       const warnings = display(axis.values.flatMap((_, position) => fieldDiagnostics?.get(`${prefix}.values.${position}`) ?? [])
@@ -87,7 +152,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
               const selected = parameters.find((candidate) => candidate.path === event.target.value)!;
               replace(index, { path: selected.path, values: [selected.value] });
             }}>
-            {parameter === undefined ? <option value={axis.path}>{t("editor.grid.unavailableParameter", { path: axis.path })}</option> : null}
+            {parameter === undefined ? <option value={axis.path} title={axis.path}>{t("editor.grid.unavailableParameter", { path: heading })}</option> : null}
             {parameters.map((candidate) => <option key={candidate.path} value={candidate.path} title={candidate.path}>
               {candidate.heading}
             </option>)}
@@ -105,8 +170,8 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
             <button type="button" aria-label={t("editor.grid.removeValueLabel", { axis: formatNumber(index + 1), value: formatNumber(position + 1) })} disabled={!editable || invalid}
               onClick={() => replace(index, { ...axis, values: axis.values.filter((_, at) => at !== position) })}>{t("editor.grid.removeValueSymbol")}</button>
           </div>)}
-          <button type="button" aria-label={t("editor.grid.addValueLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid}
-            onClick={() => replace(index, { ...axis, values: [...axis.values, parameter.value] })}>{t("editor.grid.addValue")}</button>
+          <button type="button" aria-label={t("editor.grid.addValueLabel", { axis: formatNumber(index + 1) })} disabled={!editable || invalid || nextValue === undefined}
+            onClick={() => { if (nextValue !== undefined) replace(index, { ...axis, values: [...axis.values, nextValue] }); }}>{t("editor.grid.addValue")}</button>
         </>}
         </div>
         <DiagnosticMessages id={warningsId} diagnostics={warnings} />

@@ -25,7 +25,7 @@ describe("diagram results", () => {
     expect(metrics.textContent).toContain("Utilization 50%");
     expect(metrics.textContent).toContain("Mean queue 0.1");
     expect(metrics.textContent).toContain("Queue rejections 7.7%");
-    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.2×");
+    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per request 1.2×");
     expect(screen.queryByTestId("canvas-results-middle")).toBeNull();
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
 
@@ -75,7 +75,7 @@ describe("diagram results", () => {
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
     expect(screen.getByRole("img", { name: "First saturated node" }).title).toBe("1 of 2 replications");
     const insight = screen.getByRole("region", { name: "Saturation insight" });
-    expect(within(insight).getByRole("heading").textContent).toContain("Baseline · gateway.handlers = 6");
+    expect(within(insight).getByRole("heading").textContent).toContain("Baseline · Handlers · gateway = 6");
     expect(insight.textContent).toContain("gateway first in 1 of 2 replications");
     fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
     expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("25%");
@@ -137,11 +137,11 @@ it("shares point, replication and time between the context row, Answer, Timeline
   const row = screen.getByRole("region", { name: "Results context" });
   fireEvent.pointerDown(row);
   const pointSelect = within(row).getByLabelText("Grid point");
-  expect(within(pointSelect).getByRole("option", { name: /p1.*gateway.handlers = 1,000/ })).toBeTruthy();
-  expect(within(pointSelect).getByRole("option", { name: /p2.*gateway.handlers = 6/ })).toBeTruthy();
+  expect(within(pointSelect).getByRole("option", { name: "Handlers · gateway = 1,000" })).toBeTruthy();
+  expect(within(pointSelect).getByRole("option", { name: "Handlers · gateway = 6" })).toBeTruthy();
   fireEvent.change(pointSelect, { target: { value: "p1" } });
   expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · gateway.handlers = 1,000");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · Handlers · gateway = 1,000");
   expect(screen.getByTestId("canvas-results-gateway").textContent).toContain("75%");
   fireEvent.click(within(row).getByRole("button", { name: "Time" }));
   expect((within(row).getByLabelText("Replication") as HTMLSelectElement).disabled).toBe(false);
@@ -182,7 +182,7 @@ it("shares point, replication and time between the context row, Answer, Timeline
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Answer" }));
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · gateway.handlers = 1,000");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Baseline · Handlers · gateway = 1,000");
   expect(button("Save").disabled).toBe(true);
   expect(button("Undo").disabled).toBe(true);
 });

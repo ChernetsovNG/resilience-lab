@@ -50,6 +50,28 @@ class DatabaseBlockTest {
         ).value
 
     @Test
+    fun `database capacity warning names connections and the database parameter`() {
+        val source = databaseParams("processing" to Json.parseToJsonElement("""{"kind":"fixed","mean":"200ms"}"""))
+        val warning = ModelLinter().lint(compile(source).experiment!!).single { it.code == "LINT_HANDLERS_LITTLE" }
+
+        assertThat(warning.path).isEqualTo("db")
+        assertThat(warning.pointer).isEqualTo("/blocks/db/params/maxConnections")
+        assertThat(warning.message).startsWith("Connections 1 are below λ·W = 2").doesNotContain("Handler", "handler")
+        assertThat(warning.args).containsEntry("elementType", JsonPrimitive("database"))
+    }
+
+    @Test
+    fun `an unreachable database is diagnosed as a database`() {
+        val result = compile(model.copy(connections = model.connections.filterNot { it.id == "query" }))
+        val diagnostic = result.diagnostics.single { it.code == "TOPOLOGY_GRAPH" && it.path == "db" }
+
+        assertThat(diagnostic.message).isEqualTo("Database 'db' is not reachable from the client")
+        assertThat(diagnostic.args)
+            .containsEntry("reason", JsonPrimitive("unreachable"))
+            .containsEntry("elementType", JsonPrimitive("database"))
+    }
+
+    @Test
     fun `database uses connection slots with FIFO queue and full queue rejection`() {
         val rig = simulate(graph(), listOf(0.0, 1.0, 2.0))
         assertThat(rig.invocations.map { it.outcome }).containsExactly(

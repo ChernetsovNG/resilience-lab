@@ -4,6 +4,8 @@ import { t } from "../i18n";
 import type { Variant } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
 import { addVariant, nextVariantId, removeVariant } from "../workspace/experimentCommands";
+import { variantLabel } from "../presentation/labels";
+import { useConfirmation } from "../components/useConfirmation";
 
 export interface VariantTabsProps {
   variants: Variant[];
@@ -21,6 +23,7 @@ export interface VariantTabsProps {
  * the model page edits the model; a variant page edits its overrides, even when there are none yet.
  */
 export function VariantTabs({ variants, active, disabled: navigationDisabled = false, onSelect, onInspect, onCommand }: VariantTabsProps) {
+  const { confirm, confirmationDialog } = useConfirmation();
   const [creating, startCreating] = useTransition();
   const disabled = navigationDisabled || creating;
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; tab: HTMLButtonElement } | null>(null);
@@ -47,7 +50,7 @@ export function VariantTabs({ variants, active, disabled: navigationDisabled = f
     const id = nextVariantId(variants);
     startCreating(() => {
       onCommand(addVariant(id, source === undefined ? t("editor.variant.newLabel", { number: id.slice(8) })
-        : t("editor.variant.copyLabel", { label: source.label ?? source.id }), source?.id));
+        : t("editor.variant.copyLabel", { label: variantLabel(source, variants) }), source?.id));
       onInspect(id);
     });
   };
@@ -68,7 +71,7 @@ export function VariantTabs({ variants, active, disabled: navigationDisabled = f
             disabled={disabled}
             aria-selected={variant.id === active}
             title={t(Object.keys(variant.overrides).length === 1 ? "editor.pages.variantHintOne" : "editor.pages.variantHint", {
-              name: variant.label ?? variant.id, count: Object.keys(variant.overrides).length,
+              name: variantLabel(variant, variants), count: Object.keys(variant.overrides).length,
             })}
             aria-haspopup="menu"
             aria-expanded={menu?.id === variant.id}
@@ -84,7 +87,7 @@ export function VariantTabs({ variants, active, disabled: navigationDisabled = f
               setMenu({ id: variant.id, x: bounds.left, y: bounds.bottom, tab: event.currentTarget });
             }}
           >
-            {variant.label ?? variant.id}
+            {variantLabel(variant, variants)}
           </button>
         ))}
         <button type="button" disabled={disabled} aria-busy={creating} aria-label={t("editor.variant.add")}
@@ -111,12 +114,14 @@ export function VariantTabs({ variants, active, disabled: navigationDisabled = f
           <button type="button" role="menuitem" onClick={() => { close(); onInspect(variant.id, true); }}>{t("editor.variant.rename")}</button>
           <button type="button" role="menuitem" disabled={variants.length <= 1}
             aria-describedby={variants.length <= 1 ? explanationId : undefined}
-            onClick={() => {
+            onClick={async () => {
               close();
-              if (window.confirm(t("editor.variant.deleteConfirm", { label: variant.label ?? variant.id }))) onCommand(removeVariant(variant.id));
+              if (await confirm({ title: t("editor.variant.deleteConfirm", { label: variantLabel(variant, variants) }),
+                confirmLabel: t("editor.variant.delete"), cancelLabel: t("file.cancel") })) onCommand(removeVariant(variant.id));
             }}>{t("editor.variant.delete")}</button>
           {variants.length <= 1 ? <p id={explanationId} className="param-description">{t("editor.variant.lastVariant")}</p> : null}
         </div>, document.body)}
+      {confirmationDialog}
     </>
   );
 }

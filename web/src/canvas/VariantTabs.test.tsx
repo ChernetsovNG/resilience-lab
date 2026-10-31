@@ -1,9 +1,24 @@
 import { Suspense, use, useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { VariantTabs } from "./VariantTabs";
 import { deferred } from "../test/app";
 import type { Variant } from "../api/apiTypes";
+import { setLanguage } from "../i18n";
+
+afterEach(() => setLanguage("en"));
+
+it.each(["en", "ru"] as const)("names unlabeled variants without exposing generated IDs in %s", locale => {
+  setLanguage(locale);
+  render(<VariantTabs variants={[
+    { id: "baseline", overrides: {} }, { id: "variant-2", label: "  ", overrides: {} },
+    { id: "custom", label: "My experiment", overrides: {} },
+  ]} active="variant-2" onSelect={vi.fn()} onInspect={vi.fn()} onCommand={vi.fn()} />);
+  expect(screen.getByRole("tab", { name: locale === "en" ? "Baseline" : "Базовый" })).toBeTruthy();
+  expect(screen.getByRole("tab", { name: locale === "en" ? "Variant 2" : "Вариант 2" }).title).not.toContain("variant-2");
+  expect(screen.getByRole("tab", { name: "My experiment" })).toBeTruthy();
+  expect(screen.getByRole("tablist").textContent).not.toContain("variant-2");
+});
 
 it("keeps Add disabled with immediate feedback until the new variant can render", async () => {
   const gate = deferred();

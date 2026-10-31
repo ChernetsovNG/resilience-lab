@@ -6,6 +6,7 @@ import { overlayOutputs, selectedOverlayOutput, type OverlayOutput } from "./out
 import { PlaybackControls } from "./playback/PlaybackControls";
 import type { usePlayback } from "./playback/usePlayback";
 import type { ResultsSelection } from "./selection";
+import { pointLabel, variantLabel } from "../presentation/labels";
 
 interface ResultsContextBarProps {
   catalog: Catalog;
@@ -32,17 +33,15 @@ interface ResultsContextBarProps {
 export function ResultsContextBar({ catalog, model, summary, variant, selection, onSelect, replications, playback,
   windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "amplification", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
-  const pointLabels = new Map(points.map(point => [point.id, Object.keys(point.coordinates).length === 0 ? point.id : t("results.gridPointCoordinates", {
-    point: point.id, coordinates: Object.entries(point.coordinates).map(([path, value]) => t("results.coordinate", {
-      path, value: typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value),
-    })).join(t("results.coordinateSeparator")),
-  })]));
+  const pointLabels = new Map(points.map(point => [point.id, pointLabel(point.id, summary.grid, point.coordinates, catalog, model)]));
+  const name = variantLabel(variant, summary.variants);
+  const selectedPoint = pointLabels.get(selection.pointId) ?? pointLabel(selection.pointId, summary.grid, undefined, catalog, model);
   const time = selection.window !== null;
   const context = time ? t("app.canvas.windowContext", {
     window: formatNumber(selection.window), start: formatDuration(selection.window! * windowMs),
     end: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)), replication: formatNumber(selection.replication),
-    variant: variant.label ?? variant.id, pointId: selection.pointId,
-  }) : t("app.canvas.summaryContext", { variant: variant.label ?? variant.id, pointId: selection.pointId });
+    variant: name, pointId: selectedPoint,
+  }) : t("app.canvas.summaryContext", { variant: name, pointId: selectedPoint });
   const nodeOutputs = overlayOutputs(catalog, "BLOCK", model), connectionOutputs = overlayOutputs(catalog, "CONNECTION", model);
   const output = selectedOverlayOutput(nodeOutputs, metric);
   const connectionOutput = selectedOverlayOutput(connectionOutputs, connectionMetric);
@@ -54,8 +53,8 @@ export function ResultsContextBar({ catalog, model, summary, variant, selection,
   const minimum = formatPercent(0);
   return <div className="results-context-bar" role="region" aria-label={t("app.canvas.results")}
     data-testid="canvas-result-context" title={context}>
-    <strong className="results-context-variant" title={variant.label ?? variant.id}>{variant.label ?? variant.id}</strong>
-    {summary.grid.length === 0 ? null : <select aria-label={t("results.gridPoint")} title={pointLabels.get(selection.pointId) ?? selection.pointId}
+    <strong className="results-context-variant" title={name}>{name}</strong>
+    {summary.grid.length === 0 ? null : <select aria-label={t("results.gridPoint")} title={selectedPoint}
       className="results-context-point" value={selection.pointId} onChange={event => onSelect({ pointId: event.target.value })}>
       {points.map(point => <option key={point.id} value={point.id}>
         {pointLabels.get(point.id)}
@@ -70,12 +69,12 @@ export function ResultsContextBar({ catalog, model, summary, variant, selection,
       <button type="button" title={t("results.context.time")} aria-pressed={time} disabled={windowCount === 0}
         onClick={() => playback.seek(selection.window ?? 0)}>{t("results.context.time")}</button>
     </div>
-    {time ? <>
-      <PlaybackControls playback={playback} window={selection.window} windowCount={windowCount} disabled={metric === "off"} />
+    <span className="results-context-playback" aria-hidden={!time} inert={!time}>
+      <PlaybackControls playback={playback} window={selection.window} windowCount={windowCount} disabled={!time || metric === "off"} />
       <span className="results-context-time" title={context}>{t("results.context.windowTime", {
         from: formatDuration(selection.window! * windowMs), to: formatDuration(Math.min(endMs, (selection.window! + 1) * windowMs)),
       })}</span>
-    </> : null}
+    </span>
     <select aria-label={t("results.context.overlay")} title={output?.overlay?.title ?? t("results.context.metric.off")}
       value={output?.key ?? metric} onChange={event => onMetricChange(event.target.value as NodeOverlayMetric | "off")}>
       {nodeOutputs.map(output => <option key={output.key} value={output.key}>{optionLabel(output, nodeOutputs)}</option>)}

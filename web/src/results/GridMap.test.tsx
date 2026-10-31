@@ -1,12 +1,25 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { summary } from "../test/fixtures";
+import { catalog, model, summary } from "../test/fixtures";
 import { GridMap } from "./GridMap";
 import { gridCells, mapMetric } from "./map";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
 import { SummaryTable } from "../layout/SummaryTable";
 
 afterEach(() => { act(() => setConfidenceLevel(95)); localStorage.clear(); });
+
+it("shows axis names and actual coordinates without raw paths or point IDs", () => {
+  const run = gridSummary();
+  run.variants[0].id = "variant-2";
+  run.variants[0].label = "variant-2";
+  render(<GridMap summary={run} catalog={catalog} model={model} activeVariantId="variant-2" pointId="p1" />);
+  const table = screen.getByRole("table", { name: "Parameter heatmap" });
+  expect(table.textContent).not.toMatch(/gateway-to-middle\.(timeout|attempts)|p\d/);
+  expect(table.textContent).toContain("Timeout · gateway → middle");
+  expect(screen.getByRole("region", { name: "Map · Variant 2" }).textContent).not.toContain("variant-2");
+  expect(within(table).getAllByRole("button")[1].getAttribute("aria-label")).toContain("Timeout · gateway → middle = 80ms, Attempts · gateway → middle = 1");
+  expect(within(table).getAllByRole("button")[1].textContent).toContain("80ms · 1");
+});
 
 it.each([false, true])("updates Map intervals and descriptions without changing the mean (two axes: %s)", twoAxes => {
   const run = gridSummary(twoAxes);
@@ -77,13 +90,13 @@ it("renders the heatmap in grid order, selects points and reads service metrics 
   const heatmap = screen.getByRole("table", { name: "Parameter heatmap" });
   expect(within(heatmap).getAllByRole("rowheader").map((node) => node.textContent)).toEqual(["80ms", "40ms", "80ms"]);
   const cells = within(heatmap).getAllByRole("button");
-  expect(cells.map((node) => node.textContent)).toEqual(["p00%", "p110%", "p220%", "p330%", "p440%", "p550%"]);
+  expect(cells.map((node) => node.textContent)).toEqual(["80ms · 30%", "80ms · 110%", "40ms · 320%", "40ms · 130%", "80ms · 340%", "80ms · 150%"]);
   fireEvent.click(cells[5]);
   expect(onPointChange).toHaveBeenCalledWith("p5");
   expect(screen.getByLabelText("Map color scale").textContent).toContain("50%");
   fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
   expect(cells[0].textContent).toContain("50%");
-  expect(screen.getByText(/pooled busy\/capacity/)).toBeTruthy();
+  expect(screen.getByText(/total busy time \/ available time/)).toBeTruthy();
 });
 
 it("shows every one-axis value with the selected confidence interval and point selection", () => {
@@ -102,7 +115,7 @@ it("requires a variant page and never substitutes the first variant", () => {
   const view = render(<GridMap summary={gridSummary()} activeVariantId={null} pointId="p0" />);
   expect(screen.getByText("Select a variant page to view Map.")).toBeTruthy();
   view.rerender(<GridMap summary={gridSummary()} activeVariantId="no-retries" pointId="p0" />);
-  expect(screen.getByRole("button", { name: /p1/ }).textContent).toContain("n/a");
+  expect(within(screen.getByRole("table", { name: "Parameter heatmap" })).getAllByRole("button")[1].textContent).toContain("n/a");
 });
 
 it("formats numeric grid axis values while preserving document quantities", () => {

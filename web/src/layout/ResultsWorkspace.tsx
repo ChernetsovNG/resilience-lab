@@ -96,8 +96,9 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   const available = Math.max(0, size.height - 8);
   const minimumCanvas = (analysis ? 288 : 220) + canvasFooterHeight + canvasChromeHeight;
   const cramped = available < 160 + minimumCanvas;
-  const minimum = cramped ? available / 2 : 160;
-  const maximum = cramped ? available / 2 : available - minimumCanvas;
+  const crampedResults = Math.max(0, Math.min(available / 2, available - canvasChromeHeight - canvasFooterHeight - 80));
+  const minimum = cramped ? crampedResults : 160;
+  const maximum = cramped ? crampedResults : available - minimumCanvas;
   const clamp = (value: number) => Math.max(minimum, Math.min(maximum, value));
   const key = (analysis ? "analysis:" : "normal:") + view;
   const fraction = analysis ? 0.62 : view === "timeline" ? 0.55 : 0.32;

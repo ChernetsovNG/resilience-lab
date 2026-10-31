@@ -9,6 +9,7 @@ import { useTimelineSeries } from "../results/timeline/useTimelineSeries";
 import { projectElementResults, resultSelection, type ElementMetric } from "./elementResultsData";
 import { confidenceInterval } from "../results/confidence";
 import { useConfidenceLevel } from "../layout/confidenceLevel";
+import { pointLabel, variantLabel } from "../presentation/labels";
 
 export interface ElementResultsProps {
   runId: string;
@@ -102,7 +103,8 @@ export function ElementResults(props: ElementResultsProps) {
     <h3>{t("inspector.results.title")}</h3>
     {selected === null ? <p>{t("inspector.results.select")}</p> : result === null || !manifest.complete
       ? <p>{t("inspector.results.unavailable")}</p> : <>
-        <p className="element-results-context">{t("inspector.results.context", { variant: variant?.label ?? variantId, point: pointId,
+        <p className="element-results-context">{t("inspector.results.context", { variant: variantLabel(variant, experiment.variants),
+          point: pointLabel(pointId, summary.grid, variant?.points.find(point => point.id === pointId)?.coordinates, catalog, runModel),
           replication: formatNumber(replication), mode: t(window === null ? "inspector.results.summaryMode" : "inspector.results.timeMode") })}</p>
         <table aria-label={t("inspector.results.title")}><tbody>
           {inspectorOutputs(result.outputs).map(output => {

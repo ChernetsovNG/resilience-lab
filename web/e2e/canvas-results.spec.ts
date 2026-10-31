@@ -36,7 +36,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
       await page.getByRole("tab", { name: variant.label, exact: true }).click();
       for (const point of variant.points) {
         await page.getByLabel("Grid point").selectOption(point.id);
-        await expect(toolbar).toHaveAttribute("title", `Summary · ${variant.label} · ${point.id} · measurement interval`);
+        await expect(toolbar).toHaveAttribute("title", `Summary · ${variant.label} · Handlers · gateway = ${formatNumber(Number(point.coordinates["gateway.handlers"]))} · measurement interval`);
         await expect(toolbar.getByLabel("Node color scale")).toContainText("Utilization: 0%–100%");
         await expect(table).toBeVisible();
         const column = summary.variants.findIndex(candidate => candidate.id === variant.id);
@@ -49,12 +49,12 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           await expect(metrics).toContainText(`Queue rejections ${formatPercent(totals.slotPools.handlers.queueFullCount / totals.offeredAttempts)}`);
           const disclosure = page.locator("details.summary-services").filter({ has: page.getByText(`${id} metrics`, { exact: true }) });
           if (await disclosure.getAttribute("open") === null) await disclosure.locator("summary").click();
-          const services = page.getByRole("table", { name: `Service metrics: ${id}`, exact: true });
-          await expect(services.getByRole("row", { name: /Handler utilization/ }).locator("td").nth(column)).toContainText(utilization);
+          const services = page.getByRole("table", { name: `Element metrics: ${id}`, exact: true });
+          await expect(services.getByRole("row", { name: /Resource utilization/ }).locator("td").nth(column)).toContainText(utilization);
           const amplification = formatMultiplier(service.admittedAmplification!.mean);
           const connection = id === "gateway" ? "client-to-gateway" : id === "middle" ? "gateway-to-middle" : "middle-to-dependency";
-          await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Amplification ${amplification}`);
-          await expect(services.getByRole("row", { name: /Admitted amplification/ }).locator("td").nth(column)).toContainText(amplification);
+          await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Attempts per request ${amplification}`);
+          await expect(services.getByRole("row", { name: /Attempts per request/ }).locator("td").nth(column)).toContainText(amplification);
           expect(await page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate((node) =>
             (node as HTMLElement).style.backgroundColor)).not.toBe("");
         }

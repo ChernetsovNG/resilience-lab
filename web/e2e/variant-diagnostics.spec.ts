@@ -17,12 +17,12 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(client.getByRole("img", { name: "1 problems: warning", exact: true })).toBeVisible();
   await model.click();
   const edge = page.getByTestId("canvas-edge-label-gateway-to-middle");
-  const clientBadge = client.getByRole("button", { name: "Warnings in variants: baseline", exact: true });
-  const edgeBadge = edge.getByRole("button", { name: "Warnings in variants: baseline", exact: true });
+  const clientBadge = client.getByRole("button", { name: "Warnings in variants: Baseline", exact: true });
+  const edgeBadge = edge.getByRole("button", { name: "Warnings in variants: Baseline", exact: true });
   for (const badge of [clientBadge, edgeBadge]) {
     await expect(badge).toBeVisible();
     await expect(badge).toHaveClass(/diagnostic-badge--variants/);
-    await expect(badge).toHaveAttribute("title", "Warnings in variants: baseline");
+    await expect(badge).toHaveAttribute("title", "Warnings in variants: Baseline");
     await expect(badge).toHaveCSS("border-top-style", "dashed");
   }
   const badgeSize = () => edgeBadge.evaluate(element => ({
@@ -48,7 +48,7 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(problems).toContainText("LINT_TIMEOUT_BUDGET");
   await expect(problems).not.toContainText("LINT_DEADLINE_BUDGET");
   const inspector = page.getByRole("complementary", { name: "Inspector" });
-  const hint = inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true });
+  const hint = inspector.getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true });
   const trigger = inspector.locator('[data-inspector-field="timeout"] .field-feedback--variants button');
   await trigger.click();
   await expect(hint).toBeVisible();
@@ -67,7 +67,7 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(inspector.locator('[data-inspector-field="timeout"] .field-feedback button')).toHaveCSS("color", "rgb(146, 64, 14)");
   await expect(edge.locator(".diagnostic-badge--variants")).toHaveCount(0);
   await expect(client.getByRole("img", { name: "1 problems: warning", exact: true })).toBeVisible();
-  await inspector.locator('[data-inspector-field="timeout"] .field-feedback button').focus();
+  await inspector.locator('[data-inspector-field="timeout"] .field-feedback button').press("Enter");
   await expect(inspector.getByRole("tooltip")).toContainText("LINT_TIMEOUT_BUDGET");
   await page.screenshot({ path: testInfo.outputPath("variant-field-warning.png") });
   await model.click();
@@ -77,9 +77,9 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await expect(client).toHaveAttribute("style", position!);
   await expect(problems.locator(".validation-problems > li")).toHaveCount(1);
   await expect(problems).toContainText("LINT_DEADLINE_BUDGET");
-  await expect(inspector.getByLabel("Deadline", { exact: true }).locator("..")).toContainText("In variants: baseline — 1 warning");
-  await inspector.locator('[data-inspector-field="deadline"] .field-feedback--variants button').focus();
-  await inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true }).scrollIntoViewIfNeeded();
+  await expect(inspector.getByLabel("Deadline", { exact: true }).locator("..")).toContainText("In variants: Baseline — 1 warning");
+  await inspector.locator('[data-inspector-field="deadline"] .field-feedback--variants button').press("Enter");
+  await inspector.getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("model-client-warning.png") });
   await problems.getByRole("button", { name: "Show all problems", exact: true }).click();
   await expect(problems.locator(".validation-problems > li")).toHaveCount(2);

@@ -2,7 +2,10 @@ package resiliencelab.core.compiler
 
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Translation contracts used by core emitters; legacy message text remains available to older clients. */
+/**
+ * Translation contracts used by core emitters; legacy message text remains available to older clients.
+ * `elementType` arguments carry catalog type IDs so clients can select localized resource and block names.
+ */
 internal enum class CoreMessage(
     val code: String,
     val reason: String?,
@@ -59,7 +62,7 @@ internal enum class CoreMessage(
     ),
     GRAPH_ENTRY("TOPOLOGY_GRAPH", "entry", "Entry service '{service}' must not receive calls"),
     GRAPH_CYCLE("TOPOLOGY_GRAPH", "cycle", "Calls form a cycle: {cycle} (connections: {connections})"),
-    GRAPH_UNREACHABLE("TOPOLOGY_GRAPH", "unreachable", "Service '{service}' is not reachable from the client"),
+    GRAPH_UNREACHABLE("TOPOLOGY_GRAPH", "unreachable", "{elementType} '{service}' is not reachable from the client"),
     PARAM_UNKNOWN("PARAM_UNKNOWN", null, "Unknown parameter '{parameter}'"),
     PARAM_INTEGER("PARAM_TYPE", "integer", "Parameter '{parameter}' must be an integer"),
     PARAM_NUMBER("PARAM_TYPE", "number", "Parameter '{parameter}' must be a number"),
@@ -109,7 +112,7 @@ internal enum class CoreMessage(
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,
-        "Handlers {handlers} are below λ·W = {demand} (λ = {ratePerSecond} requests/s, W = {holdingMs} ms; profile maximum, conservative)",
+        "{elementType} {handlers} are below λ·W = {demand} (λ = {ratePerSecond} requests/s, W = {holdingMs} ms; profile maximum, conservative)",
     ),
     LINT_DEADLINE_BUDGET("LINT_DEADLINE_BUDGET", null, "Deadline {deadlineMs} ms is below the entry call budget {requiredMs} ms"),
     LINT_FEW_REPLICATIONS(

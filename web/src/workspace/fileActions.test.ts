@@ -174,6 +174,20 @@ describe("workspace file actions", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it("waits for an asynchronous import replacement decision and preserves documents on cancel", async () => {
+    vi.spyOn(api, "documents").mockResolvedValue(Object.values(documentViews));
+    const save = vi.spyOn(api, "saveDocument").mockResolvedValue({ path: modelPath, kind: "MODEL", version: "new-version" });
+    let decide!: (accepted: boolean) => void;
+    const decision = new Promise<boolean>(resolve => { decide = resolve; });
+    const confirmed = vi.fn(() => decision);
+    const writing = writeDocuments([{ path: modelPath, content: { model } }], confirmed);
+    await vi.waitFor(() => expect(confirmed).toHaveBeenCalledWith([modelPath]));
+    expect(save).not.toHaveBeenCalled();
+    decide(false);
+    expect(await writing).toBe(false);
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("refuses to replace a copy destination and guards confirmed replacements with If-Match versions", async () => {
     vi.spyOn(api, "documents").mockResolvedValue(Object.values(documentViews));
     const save = vi.spyOn(api, "saveDocument").mockResolvedValue({ path: modelPath, kind: "MODEL", version: "new-version" });

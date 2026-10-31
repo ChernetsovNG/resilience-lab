@@ -80,7 +80,7 @@ it("moves parameter descriptions behind help while preserving field accessibilit
   const field = screen.getByRole("textbox", { name: "Handlers" });
   expect(field.closest(".param-field")!.querySelector("p.param-description")).toBeNull();
   const button = screen.getByRole("button", { name: "More about: Handlers" });
-  fireEvent.focus(button);
+  fireEvent.click(button);
   const tooltip = screen.getByRole("tooltip");
   expect(tooltip.textContent).toBe(catalog.types.find(type => type.id === "service")!.params[0].description);
   expect(field.getAttribute("aria-describedby")).toBe(tooltip.id);

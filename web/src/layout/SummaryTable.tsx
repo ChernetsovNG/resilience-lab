@@ -3,13 +3,14 @@ import { t } from "../i18n";
 import { formatDuration, formatInterval, formatMultiplier, formatNumber, formatPercent } from "../i18n/format";
 import { useId, type ReactNode } from "react";
 import { HelpHint } from "../help/HelpHint";
-import type { MetricSummary, RunSummary } from "../api/apiTypes";
+import type { Catalog, MetricSummary, ModelFile, RunSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
 import { backendMessage } from "../i18n/backendMessage";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
 import { setConfidenceLevel, useConfidenceLevel } from "./confidenceLevel";
+import { pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
 type Metric = Pick<MetricSummary, "mean" | "stdDev"> & Partial<Pick<MetricSummary, "count">>;
@@ -48,10 +49,13 @@ interface SummaryTableProps {
   onElement?: (id: string) => void;
   faults?: readonly CourseFault[];
   windowMs?: number;
+  catalog?: Catalog | null;
+  model?: ModelFile | null;
+  variants?: readonly NamedVariant[];
 }
 
 /** Answer for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
-export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement, faults = [], windowMs = 0 }: SummaryTableProps) {
+export function SummaryTable({ summary, activeVariantId = null, selectedPointId = "p0", onElement, faults = [], windowMs = 0, catalog, model, variants = summary.variants }: SummaryTableProps) {
   const level = useConfidenceLevel();
   const confidenceHelpId = useId();
   const baseline = summary.variants.find(variant => variant.id === "baseline") ?? summary.variants[0];
@@ -63,10 +67,9 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const reference = baseline?.points.find(point => point.id === selectedPointId);
   const activeVariant = activeVariantId === null ? summary.variants[0] : summary.variants.find(variant => variant.id === activeVariantId);
   const activePoint = activeVariant?.points.find(point => point.id === selectedPointId);
-  const coordinates = summary.grid.length === 0 ? "" : Object.entries(activePoint?.coordinates ?? {}).map(([path, value]) => t("results.coordinate", {
-    path, value: typeof value === "number" ? formatNumber(value) : typeof value === "string" ? value : JSON.stringify(value),
-  })).join(t("results.coordinateSeparator"));
-  const variantLabel = activeVariant?.label ?? activeVariantId ?? t("results.variant");
+  const coordinates = summary.grid.length === 0 ? "" : pointLabel(selectedPointId, summary.grid, activePoint?.coordinates, catalog, model);
+  const activeLabel = variantLabel(activeVariant, variants);
+  const selectedPointLabel = pointLabel(selectedPointId, summary.grid, activePoint?.coordinates, catalog, model);
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
     && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
   const services = [...new Set(columns.flatMap(({ point }) => instanceServiceEntries(point.aggregate).map(([id]) => id)))].sort();
@@ -85,14 +88,14 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       <h3>{t("results.answer.variants")}</h3>
       {columns.map(({ variant, point }) => <p key={variant.id}>
         {t(point.saturation.firstNodes.length === 0 ? "results.answer.variantUnsaturated" : "results.answer.variantSaturated", {
-          variant: variant.label, resources: point.saturation.firstNodes.map(first => backendMessage(first.label)).join(", "),
+          variant: variantLabel(variant, variants), resources: point.saturation.firstNodes.map(first => backendMessage(first.label)).join(", "),
           success: formatPercent(point.aggregate.successRate?.mean),
         })}
       </p>)}
     </section>
     <section className="answer-insight" aria-label={t("results.saturation.title")}>
       <header className="answer-heading">
-        <h3>{coordinates === "" ? variantLabel : t("results.answer.forVariant", { variant: variantLabel, point: coordinates })}</h3>
+        <h3>{coordinates === "" ? activeLabel : t("results.answer.forVariant", { variant: activeLabel, point: coordinates })}</h3>
         <div className="answer-controls">
           <label>{t("results.answer.intervalsLabel")} <select aria-label={t("results.answer.intervals")}
             aria-describedby={confidenceHelpId} value={level}
@@ -103,17 +106,17 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
         </div>
       </header>
       {activePoint === undefined || activeVariant === undefined ?
-        <p>{t("results.answer.noPoint", { variant: activeVariant?.label ?? activeVariantId ?? t("results.variant"), point: selectedPointId })}</p> :
+        <p>{t("results.answer.noPoint", { variant: activeLabel, point: selectedPointLabel })}</p> :
         <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom}
           faults={faults} windowMs={windowMs} />}
     </section>
-    {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: baseline.label, point: selectedPointId })}</p> : null}
+    {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: variantLabel(baseline, variants), point: selectedPointLabel })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>
-      <caption>{t("results.answer.comparison", { variant: baseline?.label ?? t("results.variant") })}</caption>
+      <caption>{t("results.answer.comparison", { variant: variantLabel(baseline, variants) })}</caption>
       <thead><tr>
         <th scope="col">{t("results.answer.metric")}</th>
         {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>
-          {variant.label}
+          {variantLabel(variant, variants)}
           <span className="summary-replications">{t("results.answer.replications", { count: formatNumber(variant.replications) })}</span>
           {[point.aggregate.successRate, point.aggregate.p95LatencyMs, point.aggregate.p99LatencyMs,
             ...instanceServiceEntries(point.aggregate).map(([, service]) => service.admittedAmplification)]
@@ -131,7 +134,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
         <thead><tr>
           <th scope="col">{t("results.answer.metric")}</th>
-          {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variant.label}</th>)}
+          {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}</th>)}
         </tr></thead>
         <tbody>
           {row(t("results.metrics.admittedAmplification"), point => point.aggregate.services[service]?.admittedAmplification, formatMultiplier)}

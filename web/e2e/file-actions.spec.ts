@@ -52,8 +52,9 @@ for (const [label, title] of [["Model", "New model"], ["Experiment", "New experi
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
     await page.getByLabel("Handlers", { exact: true }).fill("7");
     await page.getByLabel("Handlers", { exact: true }).press("Enter");
-    page.once("dialog", confirmation => confirmation.dismiss());
     await selector.selectOption({ label: `+ ${title}…` });
+    await page.getByRole("dialog", { name: "Discard unsaved edits?", exact: true })
+      .getByRole("button", { name: "Stay", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(selector).toHaveValue(previous);
     await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("7");
@@ -256,8 +257,9 @@ test("canceling replacement preserves existing files", async ({ page, directory 
   await dialog.getByLabel("Document files").setInputFiles({
     name: "retry-storm.model.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(changed)),
   });
-  page.once("dialog", confirmation => confirmation.dismiss());
   await dialog.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("dialog", { name: "Replace documents?", exact: true })
+    .getByRole("button", { name: "Keep documents", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   expect(await readFile(path, "utf8")).toBe(before);
 });
@@ -272,8 +274,9 @@ test("confirmed replacement imports a document and reloads its experiment", asyn
   await dialog.getByLabel("Document files").setInputFiles({
     name: "retry-storm.model.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(changed)),
   });
-  page.once("dialog", confirmation => confirmation.accept());
   await dialog.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("dialog", { name: "Replace documents?", exact: true })
+    .getByRole("button", { name: "Replace documents", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
   await expect(page.getByLabel("Handlers", { exact: true })).toHaveValue("7");

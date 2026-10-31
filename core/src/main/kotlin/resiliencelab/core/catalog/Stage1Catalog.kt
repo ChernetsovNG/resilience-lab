@@ -203,7 +203,9 @@ object Stage1Catalog {
                         name = "replicas",
                         kind = ParamKind.INTEGER,
                         title = "Replicas",
-                        description = "Service instances; one keeps the original service path.",
+                        description =
+                            "Number of service instances. More replicas distribute incoming requests across " +
+                                "independent handler pools.",
                         default = JsonPrimitive(1),
                         minimum = 1.0,
                         sweepable = true,
@@ -326,14 +328,16 @@ object Stage1Catalog {
                         name = "balancing",
                         kind = ParamKind.CHOICE,
                         title = "Balancing",
-                        description = "Selection policy for the target replica group; ignored for other targets.",
+                        description = "Choose how attempts are distributed across the target replicas. The default is round robin.",
                         options = listOf("roundRobin", "random", "leastInFlight"),
                     ),
                     ParamDescriptor(
                         name = "retryTarget",
                         kind = ParamKind.CHOICE,
                         title = "Retry target",
-                        description = "With other, prefer router outputs not yet tried by this invocation; reuse all after exhaustion.",
+                        description =
+                            "Another replica prefers a replica or routing target not yet tried by this request; " +
+                                "once all have been tried, any may be reused.",
                         default = JsonPrimitive("any"),
                         options = listOf("any", "other"),
                     ),
@@ -380,7 +384,9 @@ object Stage1Catalog {
                                     name = "kind",
                                     kind = ParamKind.CHOICE,
                                     title = "Kind",
-                                    description = "Backoff policy.",
+                                    description =
+                                        "Fixed uses the base delay, capped by the maximum. Exponential pauses choose a random value " +
+                                            "from zero to the current limit; the multiplier sets how that limit changes.",
                                     required = true,
                                     options = listOf("none", "fixed", "exponential-full-jitter"),
                                 ),
@@ -486,7 +492,7 @@ object Stage1Catalog {
             service.copy(
                 id = "database",
                 title = "Database",
-                description = "Database server with limited concurrent queries and a bounded FIFO query queue; no outgoing calls.",
+                description = "Database server with a connection limit and a bounded FIFO query queue; no outgoing calls.",
                 ports = listOf(PortDescriptor("in", PortDirection.IN)),
                 outputs = Stage1Outputs.database,
                 params =
@@ -497,12 +503,12 @@ object Stage1Catalog {
                                     name = "maxConnections",
                                     initial = JsonPrimitive(100),
                                     title = "Maximum connections",
-                                    description = "Maximum concurrent database queries (max_connections). Initially 100.",
+                                    description = "Maximum concurrent database connections. Initially 100.",
                                 )
                             "queue" ->
                                 param.copy(
                                     initial = JsonPrimitive(0),
-                                    title = "Query queue capacity",
+                                    title = "Queue capacity",
                                     description = "Waiting queries; zero disables queueing. Initially 0.",
                                 )
                             "processing" ->
@@ -513,7 +519,7 @@ object Stage1Catalog {
                                 )
                             "failureRate" ->
                                 param.copy(
-                                    title = "Query failure rate",
+                                    title = "Failure rate",
                                     description = "Probability that one executed query fails.",
                                 )
                             else -> param
@@ -542,7 +548,9 @@ object Stage1Catalog {
                     name = "kind",
                     kind = ParamKind.CHOICE,
                     title = "Distribution",
-                    description = "Distribution of the duration.",
+                    description =
+                        "Choose fixed for a constant duration, exponential for independent random durations, " +
+                            "or lognormal for a long tail of slow operations.",
                     required = true,
                     options = listOf("fixed", "exponential", "lognormal"),
                 ),
@@ -550,7 +558,7 @@ object Stage1Catalog {
                     name = "mean",
                     kind = ParamKind.QUANTITY,
                     title = "Mean",
-                    description = "Mean duration.",
+                    description = "Use the measured average, not p95 or p99. It sets the scale of the chosen distribution.",
                     required = true,
                     dimension = Dimension.DURATION,
                     minimum = 0.0,
@@ -560,7 +568,7 @@ object Stage1Catalog {
                     name = "stdDev",
                     kind = ParamKind.QUANTITY,
                     title = "Standard deviation",
-                    description = "Required for lognormal only.",
+                    description = "For lognormal only: use the measured standard deviation. Larger values produce more variation.",
                     dimension = Dimension.DURATION,
                     exclusiveMinimum = 0.0,
                 ),

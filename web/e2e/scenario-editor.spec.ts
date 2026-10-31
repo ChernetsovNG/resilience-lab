@@ -181,9 +181,9 @@ test("opens edits saves and runs a database without losing query parameters", as
   expect((await stored(page, files.model)).content.model).toEqual(source);
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
-  await expect(page.locator(".element-results")).toContainText("Connections busy");
+  await expect(page.locator(".element-results")).toContainText("Connection utilization");
   await expect(page.locator(".element-results")).toContainText("Mean query queue");
-  await expect(page.locator(".element-results")).toContainText("max_connections rejection share");
+  await expect(page.locator(".element-results")).toContainText("Query rejection share");
 });
 
 test("opens saves and runs replica groups without losing per-replica parameters", async ({ page, files }) => {
@@ -394,13 +394,15 @@ test("keeps a draft when external model reload is dismissed and reloads after co
   const alert = page.getByRole("alert").filter({ hasText: files.model });
   await expect(alert).toContainText("Reload will discard unsaved changes", { timeout: 5000 });
 
-  page.once("dialog", (dialog) => dialog.dismiss());
   await alert.getByRole("button", { name: "Reload", exact: true }).click();
+  await page.getByRole("dialog", { name: "Reload and discard unsaved changes to the documents?", exact: true })
+    .getByRole("button", { name: "Stay", exact: true }).click();
   await expect(handlers).toHaveValue("6");
   await expect(alert).toBeVisible();
 
-  page.once("dialog", (dialog) => dialog.accept());
   await alert.getByRole("button", { name: "Reload", exact: true }).click();
+  await page.getByRole("dialog", { name: "Reload and discard unsaved changes to the documents?", exact: true })
+    .getByRole("button", { name: "Reload and discard edits", exact: true }).click();
   await page.getByTestId("rf__node-gateway").click();
   await expect(handlers).toHaveValue("9");
 });
@@ -862,8 +864,8 @@ test("keeps the Inspector on one target and manages variant pages through their 
   await copy.focus();
   await page.keyboard.press("Shift+F10");
   await page.keyboard.press("End");
-  page.once("dialog", dialog => dialog.accept());
   await page.keyboard.press("Enter");
+  await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
   await expect(copy).toHaveCount(0);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(copy).toBeVisible();
@@ -893,6 +895,7 @@ test("inserts a database with explicit initial values and a wiring hint, then co
   await expect(database).toHaveCount(0);
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(database.locator(".block-wiring-hint")).toBeVisible();
+  await page.getByRole("button", { name: /fit view/i }).click();
   await connect(page, "dependency", "database-1");
   await expect(database.locator(".block-wiring-hint")).toHaveCount(0);
   await save(page);

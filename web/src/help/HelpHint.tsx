@@ -65,7 +65,7 @@ export function HelpHint({ label, children, id: suppliedId, symbol, interactive 
     <button ref={button} type="button" className="help-hint-button"
       aria-label={t("help.more", { field: label })} aria-describedby={interactive ? undefined : id} aria-expanded={open}
       aria-controls={interactive ? id : undefined} aria-haspopup={interactive ? "dialog" : undefined}
-      onFocus={() => setOpen(true)} onClick={() => setOpen(true)}>{symbol ?? t("help.symbol")}</button>
+      onClick={() => setOpen(true)}>{symbol ?? t("help.symbol")}</button>
     <div ref={panel} id={id} role={interactive ? "dialog" : "tooltip"} aria-label={interactive ? label : undefined}
       popover="manual" hidden={!open} className="help-hint-popover">{children}</div>
   </span>;

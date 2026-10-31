@@ -6,6 +6,7 @@ import { api } from "../api/apiClient";
 import type { DocumentEntry, RunStorageEntry } from "../api/apiTypes";
 import { copyModel, documentsToDelete, downloadDocuments, newExperiment, newModel, readImports, runsToDelete } from "../workspace/fileActions";
 import type { Workspace } from "../workspace/useWorkspace";
+import { useConfirmation } from "../components/useConfirmation";
 
 type FileAction = "new" | "newExperiment" | "saveAs" | "import" | "deleteModel" | "deleteExperiment" | "cleanupObsolete";
 
@@ -16,6 +17,7 @@ export interface FileMenuHandle {
 
 /** File commands use server workspace documents; native File/Blob transfer copies to and from the browser. */
 export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Workspace; disabled: boolean; onOpened: () => void; ref?: Ref<FileMenuHandle> }) {
+  const { confirm, confirmationDialog } = useConfirmation();
   const menu = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [action, setAction] = useState<FileAction | null>(null);
@@ -44,7 +46,9 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
     if (next === "newExperiment" && workspace.loaded === null) return;
     menu.current?.hidePopover?.();
     const deleting = next === "deleteModel" || next === "deleteExperiment";
-    if ((next === "new" || next === "newExperiment" || deleting) && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+    if ((next === "new" || next === "newExperiment" || deleting) && workspace.dirty &&
+      !await confirm({ title: t("app.confirm.discardChanges"),
+        confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
     setDirectory(""); setFiles([]); setDeletion([]); setRunDeletion([]); setAction(next);
     if (next === "cleanupObsolete" || (deleting && workspace.loaded !== null)) {
       setWorking(true);
@@ -63,7 +67,8 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
   useImperativeHandle(ref, () => ({ start }));
   const submit = async () => {
     if (action === null || working) return;
-    if (action === "import" && workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+    if (action === "import" && workspace.dirty && !await confirm({ title: t("app.confirm.discardChanges"),
+      confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
     setWorking(true);
     try {
       if (deleting) {
@@ -103,7 +108,9 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
         : action === "newExperiment" && workspace.loaded !== null ? newExperiment(workspace.loaded, directory)
         : action === "saveAs" && workspace.loaded !== null ? await copyModel(workspace.loaded, directory)
         : await readImports(files, directory);
-      const replaced = action === "import" ? (paths: string[]) => window.confirm(t("file.replaceConfirm", { paths: paths.join("\n") })) : undefined;
+      const replaced = action === "import" ? (paths: string[]) => confirm({ title: t("file.replaceTitle"),
+        message: t("file.replaceConfirm", { paths: paths.join("\n") }),
+        confirmLabel: t("file.replaceAction"), cancelLabel: t("file.keepDocumentsAction") }) : undefined;
       if (await workspace.storeDocuments(drafts, replaced, action === "import")) onOpened();
     } catch (error) { workspace.reportProblem(error); }
     finally { setWorking(false); setAction(null); }
@@ -111,7 +118,8 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
   const download = async () => {
     menu.current?.hidePopover?.();
     const needsSave = workspace.dirty || workspace.loaded?.versions.experiment === null;
-    if (needsSave && !window.confirm(t("file.saveBeforeExport"))) return;
+    if (needsSave && !await confirm({ title: t("file.saveBeforeExport"),
+      confirmLabel: t("file.saveAndExportAction"), cancelLabel: t("file.cancelExportAction") })) return;
     const documents = await workspace.exportFiles(needsSave);
     if (documents !== null) downloadDocuments(documents);
   };
@@ -157,5 +165,6 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
         </div>
       </form>}
     </dialog>
+    {confirmationDialog}
   </div>;
 }

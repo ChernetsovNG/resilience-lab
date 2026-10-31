@@ -188,3 +188,15 @@ it("reserves canvas messages and tabs in addition to the usable diagram height",
   fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });
   expect(height()).toBe(396);
 });
+
+it("keeps a readable plot when wrapped controls consume a cramped workspace", () => {
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+    return new DOMRect(0, 0, 960, this.classList.contains("canvas-messages") ? 180 : this.tagName === "NAV" ? 36 : 400);
+  });
+  render(<ResultsWorkspace view="timeline" collapsed={false} analysis={false} canvasFooterHeight={32}>
+    <main className="canvas-area"><div className="canvas-messages" /><div className="canvas" /><nav /></main>
+  </ResultsWorkspace>);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });
+  // 400px minus divider, controls, tabs, footer, and an 80px usable plotting area.
+  expect(height()).toBe(64);
+});

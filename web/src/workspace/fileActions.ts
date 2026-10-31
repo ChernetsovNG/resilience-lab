@@ -9,7 +9,7 @@ import { resolveRef } from "./paths";
 import { experimentsForModel } from "./modelSelection";
 
 export interface DownloadDocument { name: string; text: string }
-export type ConfirmReplace = (paths: string[]) => boolean;
+export type ConfirmReplace = (paths: string[]) => boolean | Promise<boolean>;
 const nameOf = (path: string) => path.split("/").at(-1)!;
 
 function destination(directory: string): string {
@@ -150,7 +150,7 @@ export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: C
   const collisions = drafts.filter(draft => versions.has(draft.path)).map(draft => draft.path);
   if (collisions.length > 0) {
     if (confirmReplace === undefined) throw new MessageError("file.destinationExists", { paths: collisions.join(", ") });
-    if (!confirmReplace(collisions)) return false;
+    if (!await confirmReplace(collisions)) return false;
   }
   for (const draft of drafts) {
     if (!validate || draft.content.experiment == null) continue;

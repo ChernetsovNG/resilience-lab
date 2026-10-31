@@ -6,10 +6,12 @@ export function EstimatePopover({ children, onClose }: { children: ReactNode; on
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     const outside = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       if (event.target instanceof Node && !panel.current?.contains(event.target)) onClose();
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       event.preventDefault();
       event.stopPropagation();
       onClose();

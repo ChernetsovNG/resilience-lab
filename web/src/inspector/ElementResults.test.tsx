@@ -74,6 +74,20 @@ const row = (name: string) => within(screen.getByRole("table", { name: "Results"
 afterEach(() => { vi.restoreAllMocks(); act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("ElementResults", () => {
+  it("names the stored variant and point coordinates in the selected-element context", () => {
+    loadSeries();
+    const options = props();
+    options.summary.variants[0].id = "variant-2";
+    options.summary.variants[0].label = "variant-2";
+    options.variantId = "variant-2";
+    options.summary.grid = [{ path: "gateway.handlers", values: [999] }];
+    options.summary.variants[0].points[0].coordinates = { "gateway.handlers": 4 };
+    const { container } = render(<ElementResults {...options} />);
+    const context = container.querySelector(".element-results-context")!;
+    expect(context.textContent).toContain("Variant 2 · Handlers · gateway = 4");
+    expect(context.textContent).not.toMatch(/variant-2|p0|gateway\.handlers/);
+  });
+
   it("recalculates the selected confidence interval for call results", async () => {
     loadSeries();
     const options = { ...props(), selected: "gateway-to-middle" };
@@ -147,8 +161,8 @@ describe("ElementResults", () => {
     const view = render(<ElementResults {...options} />);
     await waitFor(() => expect(row("Sent attempts").textContent).toContain("40 RPSWindow 1"));
     expect(row("Timeout share").textContent).toContain("50%Window 1");
-    expect(row("Admitted amplification").textContent).toContain("2.5×");
-    expect(row("Admitted amplification").textContent).toContain("Approximate");
+    expect(row("Attempts per request").textContent).toContain("2.5×");
+    expect(row("Attempts per request").textContent).toContain("Approximate");
     expect(document.querySelector(".summary-interval")).toBeNull();
     expect(document.querySelector('[data-cursor-window="1"]')).toBeTruthy();
     view.rerender(<ElementResults {...options} window={2} />);

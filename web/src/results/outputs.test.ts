@@ -7,6 +7,16 @@ import { decodeSeriesPart } from "./series/decode";
 import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
 
 describe("catalog output contract", () => {
+  it("shares a metric selector across resource-specific labels and help", () => {
+    const service = catalog.types.find(type => type.id === "service")!;
+    const utilization = service.outputs.find(output => output.id === "utilization")!;
+    const database: TypeDescriptor = { ...service, id: "database", outputs: [{ ...utilization,
+      overlay: { ...utilization.overlay!, label: "Connections busy {value}", description: "Busy connection time." },
+    }] };
+    const choices = overlayOutputs({ ...catalog, types: [service, database] }, "BLOCK");
+    expect(choices.filter(choice => choice.id === "utilization").map(choice => [choice.key, choice.types]))
+      .toEqual([["utilization", ["service", "database"]]]);
+  });
   it("preserves existing Timeline groups and adds pool outputs with their units", () => {
     expect(timelineGroups(catalog).map(group => [group.title, group.unit, group.scale, group.metrics.map(metric => metric.label)])).toEqual([
       ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries"]],
@@ -28,11 +38,11 @@ describe("catalog output contract", () => {
     expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
       ["Orphaned attempts", "REQUESTS"], ["Mean orphaned work", "REQUESTS"], ["Mean in flight", "REQUESTS"],
-      ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Admitted amplification", "MULTIPLIER"],
+      ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per request", "MULTIPLIER"],
       ["Connection pool utilization", "PERCENT"], ["Mean connection wait queue", "REQUESTS"], ["Connection acquisition timeouts", "REQUESTS"],
     ]);
     expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
-    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Amplification", "Sent attempts", "Timeout share", "Orphaned work"]);
+    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per request", "Sent attempts", "Timeout share", "Orphaned work"]);
   });
 
   it("keeps different type-local outputs with the same id as separate overlay choices", () => {

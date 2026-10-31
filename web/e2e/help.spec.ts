@@ -73,6 +73,7 @@ test("Estimate help escapes the scrolling popover and keeps Escape local", async
   await expect(estimate).toBeVisible();
   const help = estimate.getByRole("button", { name: "More about: Tasks", exact: true });
   await help.focus();
+  await help.press("Enter");
   const tooltip = page.getByRole("tooltip");
   await expect(tooltip).toContainText("variant × grid point × replication");
   await withinViewport(page, tooltip);

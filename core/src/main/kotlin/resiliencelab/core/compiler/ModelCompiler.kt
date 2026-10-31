@@ -572,7 +572,14 @@ class ModelCompiler(
             sink.error(CoreMessage.GRAPH_REQUEST, "Exactly one request connection must start at the client", document, "/connections")
         }
         val entry = requests.singleOrNull()?.value?.to
-        checkGraph(entry?.takeIf { it in services }, services.keys + routers.keys, routers.keys, calls + routes, document, sink)
+        checkGraph(
+            entry?.takeIf { it in services },
+            (services + routers).mapValues { it.value.type },
+            routers.keys,
+            calls + routes,
+            document,
+            sink,
+        )
         if (!structureOk || sink.errorCount() > before) return null
         return GraphParts(
             clientNodes.single()!!,
@@ -588,12 +595,13 @@ class ModelCompiler(
 
     private fun checkGraph(
         entry: String?,
-        services: Set<String>,
+        types: Map<String, String>,
         routers: Set<String>,
         calls: List<IndexedValue<ConnectionInstance>>,
         document: String,
         sink: Diagnostics,
     ) {
+        val services = types.keys
         val validOutgoing = calls.filter { it.value.from in services && it.value.to in services }.groupBy { it.value.from }
         routers.sorted().forEach { router ->
             if (validOutgoing[router].orEmpty().none { it.value.type == "route" }) {
@@ -677,14 +685,16 @@ class ModelCompiler(
             if (reachable.add(current)) validOutgoing[current].orEmpty().forEach { pending.addLast(it.value.to) }
         }
         (services - reachable).sorted().forEach {
+            val type = types.getValue(it)
             sink.error(
                 CoreMessage.GRAPH_UNREACHABLE,
-                "Service '$it' is not reachable from the client",
+                "${type.replaceFirstChar(Char::uppercaseChar)} '$it' is not reachable from the client",
                 document,
                 JsonPointer.of("blocks", it),
                 it,
                 args =
                     mapOf(
+                        "elementType" to JsonPrimitive(type),
                         "service" to JsonPrimitive(it),
                     ),
             )

@@ -86,8 +86,8 @@ it("opens collapsed variant parameters from a model-page diagnostic link and foc
   expect(parameters().open).toBe(false);
   fireEvent.click(screen.getByRole("tab", { name: "Model" }));
   expect(parameters().open).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "More about: Warnings in variants: baseline" }));
-  fireEvent.click(screen.getByRole("link", { name: "In variants: baseline — 1 warning" }));
+  fireEvent.click(screen.getByRole("button", { name: "More about: Warnings in variants: Baseline" }));
+  fireEvent.click(screen.getByRole("link", { name: "In variants: Baseline — 1 warning" }));
   expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
   await waitFor(() => expect(parameters().open).toBe(true));
   expect(document.activeElement).toBe(within(parameters()).getByRole("textbox", { name: "Handlers" }));
