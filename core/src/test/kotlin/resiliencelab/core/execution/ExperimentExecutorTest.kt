@@ -1,5 +1,4 @@
 package resiliencelab.core.execution
-
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.assertj.core.data.Offset.offset
@@ -9,6 +8,8 @@ import resiliencelab.core.compiler.CompiledPoint
 import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.engine.ksl.TestChains
+import resiliencelab.core.experiment.EntryMetrics
+import resiliencelab.core.experiment.ReplicationEntries
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
@@ -126,14 +127,21 @@ class ExperimentExecutorTest {
                 Thread.sleep(20)
                 active.decrementAndGet()
                 ReplicationResult(
-                    emptyList(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    0,
-                    0,
-                    0,
-                    emptyMap(),
+                    entries =
+                        ReplicationEntries(
+                            EntryMetrics(
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                0,
+                                0,
+                                0,
+                            ),
+                            emptyMap(),
+                            emptyMap(),
+                        ),
+                    arrivalTimesMs = emptyList(),
+                    services = emptyMap(),
                 )
             }
 
@@ -161,14 +169,21 @@ class ExperimentExecutorTest {
                     }
                 }
                 ReplicationResult(
-                    emptyList(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    resiliencelab.core.experiment.LatencyStatistics(),
-                    0,
-                    0,
-                    0,
-                    emptyMap(),
+                    entries =
+                        ReplicationEntries(
+                            EntryMetrics(
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                resiliencelab.core.experiment.LatencyStatistics(),
+                                0,
+                                0,
+                                0,
+                            ),
+                            emptyMap(),
+                            emptyMap(),
+                        ),
+                    arrivalTimesMs = emptyList(),
+                    services = emptyMap(),
                 )
             }
         val runner =
@@ -337,10 +352,10 @@ class ExperimentExecutorTest {
         val meanResponseMs =
             variant.points
                 .single()
-                .aggregate.pooledLatency.all!!
+                .aggregate.entries.total.pooledLatency.all!!
                 .meanMs
-        assertThat(replication.successes).isEqualTo(replication.originalArrivals)
-        assertThat(replication.failures).isZero()
+        assertThat(replication.entries.total.successes).isEqualTo(replication.entries.total.originalArrivals)
+        assertThat(replication.entries.total.failures).isZero()
         assertThat(utilization).isCloseTo(0.5, offset(0.03))
         val windowUtilization =
             windows.sumOf { it.slotPools.getValue("handlers").busyIntegralMs } /

@@ -1,12 +1,18 @@
 package resiliencelab.core.engine.ksl
 
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import ksl.modeling.entity.ProcessModel
 import ksl.simulation.Model
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
 import org.junit.jupiter.api.Test
+import resiliencelab.core.document.DocumentCodec
+import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.ClientNode
+import resiliencelab.core.ir.FaultKind
+import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
@@ -16,6 +22,7 @@ import resiliencelab.core.ir.RouterNode
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
+import resiliencelab.core.results.NodeWindow
 import kotlin.math.sqrt
 
 class RequestClassesTest {
@@ -99,10 +106,10 @@ class RequestClassesTest {
         assertThat(rig.invocations.map { it.outcome }).containsExactly(AttemptOutcome.DEADLINE_EXCEEDED, AttemptOutcome.SUCCEEDED)
         assertThat(rig.invocations.map { it.request.deadlineMs }).containsExactly(12.0, 107.0)
         val result = rig.reliability.metrics.replicationResult()
-        assertThat(result.originalArrivals).isEqualTo(2)
-        assertThat(result.successes).isEqualTo(1)
-        assertThat(result.failures).isEqualTo(1)
-        assertThat(result.allLatency.sumMs).isEqualTo(25.0)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(2)
+        assertThat(result.entries.total.successes).isEqualTo(1)
+        assertThat(result.entries.total.failures).isEqualTo(1)
+        assertThat(result.entries.total.allLatency.sumMs).isEqualTo(25.0)
         assertDrained(rig.reliability)
     }
 
@@ -121,7 +128,7 @@ class RequestClassesTest {
                     .replicationResult()
                     .connections
 
-            assertThat(rig.invocations.single().outcome).describedAs("%s", policy).isEqualTo(AttemptOutcome.DOWNSTREAM_FAILURE)
+            assertThat(rig.invocations.single().outcome).describedAs("%s", policy).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
             assertThat(connections.getValue("route-a").sentAttempts).isPositive()
             assertThat(connections.getValue("route-b").sentAttempts).isPositive()
             assertThat(connections.getValue("route-a").sentAttempts + connections.getValue("route-b").sentAttempts).isEqualTo(5)
@@ -185,9 +192,10 @@ class RequestClassesTest {
                 .single()
                 .work.processCompletionTime,
         ).isEqualTo(7.0)
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.failures).isEqualTo(1)
-        assertThat(result.allLatency.sumMs).isZero()
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.failures).isEqualTo(1)
+        assertThat(result.entries.total.failuresByReason).containsExactlyEntriesOf(mapOf("noRoute" to 1))
+        assertThat(result.entries.total.allLatency.sumMs).isZero()
         assertThat(result.services.values.sumOf { it.offeredAttempts }).isZero()
         assertThat(result.connections.getValue("outer").failed).isEqualTo(1)
         assertThat(result.connections.getValue("inner").sentAttempts).isZero()
@@ -230,6 +238,180 @@ class RequestClassesTest {
                         .isCloseTo(count * 8, offset(6 * sqrt(count * 8)))
                 }
             }
+    }
+
+    @Test
+    fun `deepest failure survives two call levels and exhausted retries`() {
+        val base = graph()
+        val chain =
+            base.copy(
+                services =
+                    listOf(
+                        service("entry", listOf(ServiceStep.Call("entry-middle"))),
+                        service("middle", listOf(ServiceStep.Call("middle-leaf"))),
+                        service("leaf").copy(failureProbability = 1.0),
+                    ),
+                calls =
+                    listOf(
+                        call("entry-middle", "entry", "middle").copy(attempts = 2),
+                        call("middle-leaf", "middle", "leaf").copy(attempts = 3),
+                    ),
+                routers = emptyList(),
+                routes = emptyList(),
+            )
+        val rig = simulate(chain)
+        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
+        assertThat(
+            rig.invocations
+                .single()
+                .callAttempt!!
+                .status,
+        ).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
+        val result = rig.reliability.metrics.replicationResult()
+        assertThat(result.connections.getValue("middle-leaf").sentAttempts).isEqualTo(6)
+        assertThat(result.connections.getValue("entry-middle").sentAttempts).isEqualTo(2)
+        assertThat(result.entries.total.failuresByReason).containsExactlyEntriesOf(mapOf("error" to 1))
+        assertThat(result.connections.getValue("entry-middle").failuresByReason).containsExactlyEntriesOf(mapOf("error" to 2))
+        assertThat(result.connections.getValue("middle-leaf").failuresByReason).containsExactlyEntriesOf(mapOf("error" to 6))
+        assertThat(result.services.getValue("leaf").failuresByReason).containsExactlyEntriesOf(mapOf("error" to 6))
+        assertDrained(rig.reliability)
+    }
+
+    @Test
+    fun `entry JSON partitions the measured cohort by actual client and shared class`() {
+        val base = graph()
+        val mobile = base.clients.single()
+        val partner = mobile.copy(pathSegments = listOf("partner"), deadlineMs = 5.0)
+        val chain =
+            base.copy(
+                clients = listOf(mobile, partner),
+                services = listOf(service("entry").copy(processing = TestChains.fixed(10.0))),
+                calls = emptyList(),
+                routers = emptyList(),
+                routes = emptyList(),
+            )
+        val rig = simulate(chain, listOf(Arrival(mobile), Arrival(mobile, "checkout"), Arrival(partner)))
+        val result = rig.reliability.metrics.replicationResult()
+        val json =
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(
+                    DocumentCodec.encode(ReplicationResult.serializer(), result),
+                ).jsonObject
+        assertThat(json.keys).doesNotContain("originalArrivals", "allLatency", "successes", "failures")
+        val entries = json.getValue("entries").jsonObject
+        val total = entries.getValue("total").jsonObject
+        assertThat(total.getValue("originalArrivals").jsonPrimitive.content).isEqualTo("3")
+        assertThat(total.getValue("successes").jsonPrimitive.content).isEqualTo("2")
+        assertThat(total.getValue("degraded").jsonPrimitive.content).isEqualTo("0")
+        assertThat(total.getValue("failuresByReason").jsonObject.keys).containsExactly("deadline")
+        val clients = entries.getValue("clients").jsonObject
+        assertThat(clients.keys).containsExactlyInAnyOrder("mobile", "partner")
+        assertThat(
+            clients
+                .getValue("mobile")
+                .jsonObject
+                .getValue("originalArrivals")
+                .jsonPrimitive.content,
+        ).isEqualTo("2")
+        val classes = entries.getValue("classes").jsonObject
+        assertThat(classes.keys).containsExactlyInAnyOrder("status", "checkout")
+        assertThat(
+            classes
+                .getValue("status")
+                .jsonObject
+                .getValue("originalArrivals")
+                .jsonPrimitive.content,
+        ).isEqualTo("2")
+        assertThat(
+            classes
+                .getValue("status")
+                .jsonObject
+                .getValue("failuresByReason")
+                .jsonObject.keys,
+        ).containsExactly("deadline")
+        val metrics = result.entries
+        assertThat(metrics.clients.values.sumOf { it.originalArrivals }).isEqualTo(metrics.total.originalArrivals)
+        assertThat(metrics.classes.values.sumOf { it.originalArrivals }).isEqualTo(metrics.total.originalArrivals)
+        assertThat(metrics.clients.values.sumOf { it.successes }).isEqualTo(metrics.total.successes)
+        assertThat(metrics.classes.values.sumOf { it.failures }).isEqualTo(metrics.total.failures)
+        assertThat(
+            metrics.total.failuresByReason.values
+                .sum(),
+        ).isEqualTo(metrics.total.failures)
+        assertThat(
+            rig.windows
+                .filterNot { it.isClass }
+                .map { it.id }
+                .distinct(),
+        ).containsExactlyInAnyOrder("mobile", "partner", "entry")
+        assertThat(
+            rig.windows
+                .filter { it.isClass }
+                .map { it.id }
+                .distinct(),
+        ).containsExactlyInAnyOrder("status", "checkout")
+        assertThat(rig.windows.filter { it.isClass && it.id == "status" }.sumOf { it.metrics.originalArrivals }).isEqualTo(2)
+        assertThat(
+            rig.windows.filter { it.isClass && it.id == "status" }.sumOf { it.metrics.failuresByReason["deadline"] ?: 0 },
+        ).isEqualTo(1)
+    }
+
+    @Test
+    fun `exhausted call propagates the last attempt cause instead of an earlier failure`() {
+        val base = graph()
+        val chain =
+            base.copy(
+                services =
+                    listOf(
+                        service("entry", listOf(ServiceStep.Call("entry-middle"))),
+                        service("middle", listOf(ServiceStep.Call("middle-leaf"))),
+                        service("broken").copy(failureProbability = 1.0),
+                        service("leaf"),
+                    ),
+                calls = listOf(call("entry-middle", "entry", "middle"), call("middle-leaf", "middle", "leaf").copy(attempts = 2)),
+                routers = emptyList(),
+                routes = emptyList(),
+                faults = listOf(FaultSpan("leaf", 0.0, 100.0, FaultKind.UNAVAILABLE)),
+            )
+        val rig = simulate(chain, selectTarget = { edge, attempt -> if (edge.path == "middle-leaf" && attempt == 1) "broken" else edge.to })
+        val result = rig.reliability.metrics.replicationResult()
+        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.UNAVAILABLE)
+        assertThat(result.entries.total.failuresByReason).containsExactlyEntriesOf(mapOf("unavailable" to 1))
+        assertThat(result.connections.getValue("entry-middle").failuresByReason).containsExactlyEntriesOf(mapOf("unavailable" to 1))
+        assertThat(result.connections.getValue("middle-leaf").failuresByReason).containsExactlyEntriesOf(
+            mapOf(
+                "error" to 1,
+                "unavailable" to 1,
+            ),
+        )
+        assertThat(result.services.getValue("leaf").failuresByReason).containsExactlyEntriesOf(mapOf("unavailable" to 1))
+        assertDrained(rig.reliability)
+    }
+
+    @Test
+    fun `service failure reason shares its completion window before response network and runout`() {
+        val base = graph()
+        val chain =
+            base.copy(
+                services =
+                    listOf(
+                        service("entry", listOf(ServiceStep.Call("entry-leaf"))),
+                        service("leaf").copy(failureProbability = 1.0),
+                    ),
+                calls = listOf(call("entry-leaf", "entry", "leaf").copy(network = TestChains.fixed(10.0))),
+                routers = emptyList(),
+                routes = emptyList(),
+                run = base.run.copy(measurementMs = 20.0, windowMs = 10.0),
+            )
+        val rig = simulate(chain)
+        val leaf = rig.windows.single { !it.isClass && it.id == "leaf" && it.metrics.startMs == 10.0 }.metrics
+        assertThat(leaf.failures).isEqualTo(1)
+        assertThat(leaf.failuresByReason).containsExactlyEntriesOf(mapOf("error" to 1))
+        assertThat(
+            rig.invocations
+                .single()
+                .work.processCompletionTime,
+        ).isEqualTo(27.0)
     }
 
     private fun graph(policy: RoutingPolicy = RoutingPolicy.ROUND_ROBIN): GraphIr {
@@ -287,7 +469,8 @@ class RequestClassesTest {
     ): Rig {
         val model = Model("RequestClasses", autoCSVReports = false)
         val streams = PathStreamSource(StreamPlan(PathStreams.keys(graph, 0)), graph.run.seed, 0)
-        val reliability = ReliabilityModel(model, graph, streams, selectTarget = selectTarget)
+        val closed = mutableListOf<NodeWindow>()
+        val reliability = ReliabilityModel(model, graph, streams, selectTarget = selectTarget, onWindow = { _, rows, _ -> closed += rows })
         val invocations = mutableListOf<ReliabilityModel.ServiceInvocation>()
         object : ProcessModel(model, name = "classes-driver") {
             override fun initialize() {
@@ -306,7 +489,7 @@ class RequestClassesTest {
         model.numberOfReplications = 1
         model.lengthOfReplication = 1_000.0
         model.simulate()
-        return Rig(reliability, invocations)
+        return Rig(reliability, invocations, closed)
     }
 
     private fun assertDrained(reliability: ReliabilityModel) {
@@ -325,5 +508,6 @@ class RequestClassesTest {
     private data class Rig(
         val reliability: ReliabilityModel,
         val invocations: List<ReliabilityModel.ServiceInvocation>,
+        val windows: List<NodeWindow>,
     )
 }

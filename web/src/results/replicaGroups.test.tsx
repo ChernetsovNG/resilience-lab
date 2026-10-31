@@ -105,7 +105,8 @@ it("shows a copied connection's own results without a service-replica table", ()
   aggregate.groups.push({ id: "gateway-to-middle", kind: "CONNECTION", instances: [{ id: "gateway-to-middle#2", replica: 2 }] });
   aggregate.connections["gateway-to-middle#2"] = {
     slotPoolSummaries: {},
-    totals: { sentAttempts: 10, retries: 0, succeeded: 9, failed: 1, timeouts: 1, orphaned: 0,
+    totals: {
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, sentAttempts: 10, retries: 0, succeeded: 9, failed: 1, timeouts: 1, orphaned: 0,
       inFlightIntegralMs: 100, orphanedIntegralMs: 0, backoffIntegralMs: 0, measurementMs: 2000, slotPools: {} },
     timeoutRate: { mean: 0.1, count: 2, min: 0.1, max: 0.1 },
   };

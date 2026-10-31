@@ -113,7 +113,7 @@ test("worker errors follow the explicit UI language instead of the Russian brows
     const { WorkerSeriesDecoder } = await import(path);
     const decoder = new WorkerSeriesDecoder();
     try {
-      await decoder.decode([JSON.stringify({ schemaVersion: 6, kind: "INSTANCE", profile: "unsupported-test-profile", fromWindow: 0, untilWindow: 1,
+      await decoder.decode([JSON.stringify({ schemaVersion: 7, kind: "INSTANCE", profile: "unsupported-test-profile", classes: [], fromWindow: 0, untilWindow: 1,
         connections: [], nodes: [{ id: "gateway", windows: [{ startMs: 0, durationMs: 10,
           originalArrivals: 0, offeredAttempts: 0, admittedAttempts: 0, successes: 0, failures: 0, timeouts: 0, retries: 0,
           slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: 10,

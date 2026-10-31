@@ -64,7 +64,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const heatmap = page.getByRole("table", { name: "Parameter heatmap" });
     await expect(heatmap.getByRole("button")).toHaveCount(4);
     const point = result.summary.variants.find((variant) => variant.id === "baseline")!.points.find((point) => point.id === "p3")!;
-    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(point.aggregate.successRate!.mean));
+    await expect(heatmap.getByRole("button").nth(3)).toContainText(formatPercent(point.aggregate.entries.total.successRate!.mean));
     const series = page.waitForResponse((response) => response.url().includes(`/series/baseline/p3/0`));
     await heatmap.getByRole("button").nth(3).click();
     await expect(heatmap.getByRole("button").nth(3)).toHaveAttribute("aria-pressed", "true");
@@ -88,7 +88,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p3");
     await expect(page.getByLabel("Grid point", { exact: true }).locator("option:checked")).toContainText("Timeout · gateway → middle = 80ms");
     await expect(insight).toContainText("How saturation is detected");
-    await expect(page.getByRole("table", { name: "Findings", exact: true }).getByRole("row", { name: /Success rate/ }).locator("td").first()).toContainText(formatPercent(point.aggregate.successRate!.mean));
+    await expect(page.getByRole("table", { name: "Findings", exact: true }).getByRole("row", { name: /Success rate/ }).locator("td").first()).toContainText(formatPercent(point.aggregate.entries.total.successRate!.mean));
     await page.getByRole("button", { name: /fit view/i }).click();
     await page.getByTestId("rf__node-dependency").locator(".block-node > strong").click();
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();

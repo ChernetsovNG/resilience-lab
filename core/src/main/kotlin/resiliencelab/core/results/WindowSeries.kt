@@ -41,12 +41,21 @@ data class WindowMetrics(
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
     /** Shared client original-request denominator for independently loaded group rows; never a summed group counter. */
     val clientOriginalArrivals: Int? = null,
+    @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
+    @EncodeDefault val degraded: Int = 0,
+    @EncodeDefault val rateLimited: Int = 0,
+    @EncodeDefault val probes: Int = 0,
+    @EncodeDefault val probeFailures: Int = 0,
+    @EncodeDefault val notReadyMs: Double = 0.0,
+    @EncodeDefault val ejections: Int = 0,
+    @EncodeDefault val ejectedMs: Double = 0.0,
 )
 
 /** One node in a closed window, passed directly to the artifact writer. */
 data class NodeWindow(
     val id: String,
     val metrics: WindowMetrics,
+    val isClass: Boolean = false,
 )
 
 /** Windows of a node within the containing part's half-open index range. */
@@ -78,6 +87,11 @@ data class ConnectionWindowMetrics(
     val backoffIntegralMs: Double = 0.0,
     val latency: LatencyStatistics = LatencyStatistics(),
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
+    @EncodeDefault val circuitOpenMs: Double = 0.0,
+    @EncodeDefault val circuitRejections: Int = 0,
+    @EncodeDefault val retriesDenied: Int = 0,
+    @EncodeDefault val fallbacks: Int = 0,
 )
 
 /** One connection in a closed window, passed directly to the artifact writer. */
@@ -108,6 +122,7 @@ data class SeriesPart(
     val untilWindow: Int,
     val nodes: List<NodeSeries>,
     val connections: List<ConnectionSeries> = emptyList(),
+    @EncodeDefault val classes: List<NodeSeries> = emptyList(),
 )
 
 /** SHA-256 covers the stored gzip bytes; [uncompressedBytes] is the actual UTF-8 JSON size before compression. */
@@ -122,6 +137,7 @@ data class SeriesPartReference(
     val sha256: String,
     val connections: List<String> = emptyList(),
     @EncodeDefault val kind: SeriesPartKind = SeriesPartKind.INSTANCE,
+    @EncodeDefault val classes: List<String> = emptyList(),
 )
 
 /** Complete node and connection × window coverage of one variant × p0 × replication task. */
@@ -160,6 +176,7 @@ class SeriesWriter(
     private var nextWindow = 0
     private var nodeIds: List<String>? = null
     private var connectionIds: List<String>? = null
+    private var classIds: List<String>? = null
     private val pending = mutableMapOf<SeriesPartKind, BufferedPart>()
     private val groupNodeIds = groups.filter { it.kind == ReplicaGroupKind.NODE }.map { it.id }.toSet()
     private val groupCallIds = groups.filter { it.kind == ReplicaGroupKind.CONNECTION }.map { it.id }.toSet()
@@ -182,15 +199,22 @@ class SeriesWriter(
         connections: List<ConnectionWindow>,
     ) {
         require(index == nextWindow) { "Expected window $nextWindow, received $index" }
-        val sorted = rows.sortedBy { it.id }
+        val sorted = rows.filterNot { it.isClass }.sortedBy { it.id }
+        val sortedClasses = rows.filter { it.isClass }.sortedBy { it.id }
+        val idsOfClasses = sortedClasses.map { it.id }
         val ids = sorted.map { it.id }
         val sortedConnections = connections.sortedBy { it.id }
         val callIds = sortedConnections.map { it.id }
-        require(ids.isNotEmpty() || callIds.isNotEmpty()) { "Window nodes and connections must not both be empty" }
+        require(
+            ids.isNotEmpty() || callIds.isNotEmpty() || idsOfClasses.isNotEmpty(),
+        ) { "Window nodes and connections must not both be empty" }
         require(ids.distinct().size == ids.size) { "Window nodes must be distinct" }
         require(callIds.distinct().size == callIds.size) { "Window connections must be distinct" }
         require(nodeIds == null || nodeIds == ids) { "Every window must cover the same nodes" }
         require(connectionIds == null || connectionIds == callIds) { "Every window must cover the same connections" }
+        require(idsOfClasses.distinct().size == idsOfClasses.size) { "Window classes must be distinct" }
+        require(classIds == null || classIds == idsOfClasses) { "Every window must cover the same classes" }
+        classIds = idsOfClasses
         nodeIds = ids
         connectionIds = callIds
         writeKindWindow(
@@ -200,6 +224,7 @@ class SeriesWriter(
             },
             sortedConnections.filter { it.id !in groupCallIds },
             SeriesPartKind.INSTANCE,
+            sortedClasses,
         )
         if (groups.isNotEmpty()) {
             writeKindWindow(
@@ -217,6 +242,7 @@ class SeriesWriter(
         sorted: List<NodeWindow>,
         sortedConnections: List<ConnectionWindow>,
         kind: SeriesPartKind,
+        sortedClasses: List<NodeWindow> = emptyList(),
     ) {
         val baseBytes = prefix(index, index + 1, kind).size + PART_SUFFIX_BYTES
         var window = BufferedPart(index, index + 1, kind)
@@ -224,18 +250,18 @@ class SeriesWriter(
 
         fun add(
             row: BufferedSeries,
-            connection: Boolean,
+            population: Int,
         ) {
             if (baseBytes + row.singleWindowBytes > maxPartBytes) {
                 flushPending(kind)
-                val kind = if (connection) "connection" else "node"
+                val kind = listOf("node", "connection", "class")[population]
                 throw ExperimentExecutionException(
                     CoreMessage.SERIES_PART_LIMIT,
                     "$kind=${row.id} window=$index: part size limit $maxPartBytes bytes",
                     mapOf("id" to JsonPrimitive(row.id), "window" to JsonPrimitive(index), "maximum" to JsonPrimitive(maxPartBytes)),
                 )
             }
-            val group = if (connection) window.connections else window.nodes
+            val group = window.population(population)
             val separator = if (group.isEmpty()) 0 else 1
             if (baseBytes + window.bodyBytes + separator + row.singleWindowBytes > maxPartBytes) {
                 flushPending(kind)
@@ -243,24 +269,31 @@ class SeriesWriter(
                 window = BufferedPart(index, index + 1, kind)
                 splitRows = true
             }
-            window.add(row, connection)
+            window.add(row, population)
         }
         sorted.forEach { row ->
-            add(bufferedSeries(row.id, json.encodeToString(WindowMetrics.serializer(), row.metrics)), connection = false)
+            add(bufferedSeries(row.id, json.encodeToString(WindowMetrics.serializer(), row.metrics)), population = 0)
         }
         sortedConnections.forEach { row ->
-            add(bufferedSeries(row.id, json.encodeToString(ConnectionWindowMetrics.serializer(), row.metrics)), connection = true)
+            add(bufferedSeries(row.id, json.encodeToString(ConnectionWindowMetrics.serializer(), row.metrics)), population = 1)
+        }
+        sortedClasses.forEach { row ->
+            add(bufferedSeries(row.id, json.encodeToString(WindowMetrics.serializer(), row.metrics)), population = 2)
         }
         if (splitRows) {
             persist(window)
         } else {
             val current = pending[kind]
-            val added = window.nodes.sumOf { it.windows.single().size + 1 } + window.connections.sumOf { it.windows.single().size + 1 }
+            val added =
+                listOf(window.nodes, window.connections, window.classes).sumOf { rows ->
+                    rows.sumOf { it.windows.single().size + 1 }
+                }
             if (current != null &&
                 prefix(current.fromWindow, index + 1, kind).size + current.bodyBytes + added + PART_SUFFIX_BYTES <= maxPartBytes
             ) {
                 window.nodes.forEachIndexed { node, value -> current.nodes[node].windows += value.windows.single() }
                 window.connections.forEachIndexed { connection, value -> current.connections[connection].windows += value.windows.single() }
+                window.classes.forEachIndexed { row, value -> current.classes[row].windows += value.windows.single() }
                 current.bodyBytes += added
                 current.untilWindow = index + 1
             } else {
@@ -313,6 +346,8 @@ class SeriesWriter(
         writeRows(part.nodes)
         output.write(CONNECTIONS_PREFIX)
         writeRows(part.connections)
+        output.write(CLASSES_PREFIX)
+        writeRows(part.classes)
         output.write(SUFFIX)
         val bytes = output.toByteArray()
         check(bytes.size == header.size + part.bodyBytes + PART_SUFFIX_BYTES && bytes.size <= maxPartBytes) {
@@ -331,6 +366,7 @@ class SeriesWriter(
                 checksum,
                 part.connections.map { it.id },
                 part.kind,
+                part.classes.map { it.id },
             )
     }
 
@@ -349,13 +385,22 @@ class SeriesWriter(
     ) {
         val nodes = mutableListOf<BufferedSeries>()
         val connections = mutableListOf<BufferedSeries>()
+        val classes = mutableListOf<BufferedSeries>()
+
+        fun population(index: Int): MutableList<BufferedSeries> =
+            when (index) {
+                0 -> nodes
+                1 -> connections
+                else -> classes
+            }
+
         var bodyBytes = 0
 
         fun add(
             row: BufferedSeries,
-            connection: Boolean,
+            population: Int,
         ) {
-            val group = if (connection) connections else nodes
+            val group = population(population)
             bodyBytes += row.singleWindowBytes + if (group.isEmpty()) 0 else 1
             group += row
         }
@@ -382,6 +427,7 @@ class SeriesWriter(
         const val MAX_PART_BYTES = 4 * 1024 * 1024
         private val SUFFIX = "]}".toByteArray(Charsets.UTF_8)
         private val CONNECTIONS_PREFIX = "],\"connections\":[".toByteArray(Charsets.UTF_8)
-        private val PART_SUFFIX_BYTES = CONNECTIONS_PREFIX.size + SUFFIX.size
+        private val CLASSES_PREFIX = "],\"classes\":[".toByteArray(Charsets.UTF_8)
+        private val PART_SUFFIX_BYTES = CONNECTIONS_PREFIX.size + CLASSES_PREFIX.size + SUFFIX.size
     }
 }

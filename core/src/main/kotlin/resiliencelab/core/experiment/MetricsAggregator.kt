@@ -9,24 +9,6 @@ import ksl.utilities.statistic.Statistic
  */
 object MetricsAggregator {
     fun aggregate(replications: List<ReplicationResult>): AggregateMetrics {
-        val pooledLatency =
-            LatencySummary(
-                all = latencyDistribution(replications.map { it.allLatency }),
-                successful = latencyDistribution(replications.map { it.successfulLatency }),
-                failed = latencyDistribution(replications.map { it.failedLatency }),
-            )
-        val successRate =
-            metricSummary(
-                replications.mapNotNull { ratio(it.successes, it.originalArrivals) },
-            )
-        val p95LatencyMs =
-            metricSummary(
-                replications.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.95) },
-            )
-        val p99LatencyMs =
-            metricSummary(
-                replications.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.99) },
-            )
         val groupedServiceIds =
             replications
                 .flatMap { it.groups }
@@ -41,7 +23,7 @@ object MetricsAggregator {
                         metricSummary(
                             replications.mapNotNull { replication ->
                                 replication.services[serviceId]?.let { service ->
-                                    ratio(service.admittedAttempts, replication.originalArrivals)
+                                    ratio(service.admittedAttempts, replication.entries.total.originalArrivals)
                                 }
                             },
                         ),
@@ -83,23 +65,64 @@ object MetricsAggregator {
                         metricSummary(
                             replications.mapNotNull { replication ->
                                 replication.services[serviceId]?.let { service ->
-                                    ratio(service.offeredAttempts, replication.originalArrivals)
+                                    ratio(service.offeredAttempts, replication.entries.total.originalArrivals)
                                 }
                             },
                         ),
                 )
             }
         return AggregateMetrics(
-            pooledLatency = pooledLatency,
-            successRate = successRate,
-            p95LatencyMs = p95LatencyMs,
-            p99LatencyMs = p99LatencyMs,
+            entries =
+                AggregateEntries(
+                    total = entryMetrics(replications.map { it.entries.total }),
+                    clients = aggregateEntries(replications.map { it.entries.clients }),
+                    classes = aggregateEntries(replications.map { it.entries.classes }),
+                ),
             services = services,
             connections = connectionMetrics(replications),
             poolers = poolerMetrics(replications),
             groups = replications.flatMap { it.groups }.distinct(),
         )
     }
+
+    private fun aggregateEntries(rows: List<Map<String, EntryMetrics>>): Map<String, AggregateEntryMetrics> =
+        rows
+            .flatMap { it.keys }
+            .distinct()
+            .sorted()
+            .associateWith { id -> entryMetrics(rows.mapNotNull { it[id] }) }
+
+    private fun entryMetrics(rows: List<EntryMetrics>): AggregateEntryMetrics =
+        AggregateEntryMetrics(
+            pooledLatency =
+                LatencySummary(
+                    all = latencyDistribution(rows.map { it.allLatency }),
+                    successful = latencyDistribution(rows.map { it.successfulLatency }),
+                    failed = latencyDistribution(rows.map { it.failedLatency }),
+                ),
+            successRate = metricSummary(rows.mapNotNull { ratio(it.successes, it.originalArrivals) }),
+            p95LatencyMs = metricSummary(rows.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.95) }),
+            p99LatencyMs = metricSummary(rows.mapNotNull { LatencySketch.fromBins(it.allLatency.sketch).percentile(0.99) }),
+            degradedRate = metricSummary(rows.mapNotNull { ratio(it.degraded, it.originalArrivals) }),
+            failuresByReason =
+                rows.flatMap { it.failuresByReason.keys }.distinct().sorted().associateWith { reason ->
+                    requireNotNull(metricSummary(rows.mapNotNull { ratio(it.failuresByReason[reason] ?: 0, it.originalArrivals) }))
+                },
+        )
+
+    internal fun sumReasons(rows: List<Map<String, Int>>): Map<String, Int> =
+        rows
+            .flatMap { it.keys }
+            .distinct()
+            .sorted()
+            .associateWith { reason -> rows.sumOf { it[reason] ?: 0 } }
+            .filterValues { it != 0 }
+
+    private fun pooledReasons(rows: List<Map<String, Int>>): Map<String, Long> =
+        rows.flatMap { it.keys }.distinct().sorted().associateWith { reason -> rows.sumOf { (it[reason] ?: 0).toLong() } }.filterValues {
+            it !=
+                0L
+        }
 
     private fun connectionMetrics(replications: List<ReplicationResult>): Map<String, AggregateConnectionMetrics> =
         replications.flatMap { it.connections.keys }.distinct().sorted().associateWith { id ->
@@ -135,6 +158,11 @@ object MetricsAggregator {
                         retries = values.sumOf { it.retries.toLong() },
                         succeeded = values.sumOf { it.succeeded.toLong() },
                         failed = values.sumOf { it.failed.toLong() },
+                        failuresByReason = pooledReasons(values.map { it.failuresByReason }),
+                        circuitOpenMs = values.sumOf { it.circuitOpenMs },
+                        circuitRejections = values.sumOf { it.circuitRejections.toLong() },
+                        retriesDenied = values.sumOf { it.retriesDenied.toLong() },
+                        fallbacks = values.sumOf { it.fallbacks.toLong() },
                         timeouts = values.sumOf { it.timeouts.toLong() },
                         orphaned = values.sumOf { it.orphaned.toLong() },
                         inFlightIntegralMs = values.sumOf { it.inFlightIntegralMs },
@@ -183,12 +211,23 @@ object MetricsAggregator {
     ): ServiceTotals {
         val services = replications.mapNotNull { it.services[serviceId] }
         return ServiceTotals(
-            originalArrivals = replications.filter { serviceId in it.services }.sumOf { it.originalArrivals.toLong() },
+            originalArrivals =
+                replications.filter { serviceId in it.services }.sumOf {
+                    it.entries.total.originalArrivals
+                        .toLong()
+                },
             offeredAttempts = services.sumOf { it.offeredAttempts.toLong() },
             admittedAttempts = services.sumOf { it.admittedAttempts.toLong() },
             timeouts = services.sumOf { it.timeouts.toLong() },
             retries = services.sumOf { it.retries.toLong() },
             failures = services.sumOf { it.failures.toLong() },
+            failuresByReason = pooledReasons(services.map { it.failuresByReason }),
+            rateLimited = services.sumOf { it.rateLimited.toLong() },
+            probes = services.sumOf { it.probes.toLong() },
+            probeFailures = services.sumOf { it.probeFailures.toLong() },
+            notReadyMs = services.sumOf { it.notReadyMs },
+            ejections = services.sumOf { it.ejections.toLong() },
+            ejectedMs = services.sumOf { it.ejectedMs },
             measurementMs = services.sumOf { it.measurementMs },
             slotPools = groupSlots(replications, serviceId, ReplicaGroupKind.NODE) ?: sumSlotPools(services.map { it.slotPools }),
         )

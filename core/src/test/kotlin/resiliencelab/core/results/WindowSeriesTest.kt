@@ -73,7 +73,7 @@ class WindowSeriesTest {
     }
 
     @Test
-    fun `packed series use schema six with slot maps and connection coverage`(
+    fun `packed series use schema seven with slot maps and connection coverage`(
         @TempDir root: Path,
     ) {
         val workspace = FileWorkspace(root)
@@ -87,9 +87,9 @@ class WindowSeriesTest {
         val index = writer.finish()
         val bytes = GZIPInputStream(workspace.readBytes("$directory/${index.parts.single().file}").inputStream()).use { it.readAllBytes() }
         assertThat(bytes.toString(Charsets.UTF_8)).doesNotContain("\"pooler\"")
-        assertThat(index.schemaVersion).isEqualTo(6)
+        assertThat(index.schemaVersion).isEqualTo(7)
         val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-        assertThat(part.schemaVersion).isEqualTo(6)
+        assertThat(part.schemaVersion).isEqualTo(7)
         assertThat(part.connections.map { it.id }).containsExactly("call")
         val persistedIndex = Json.decodeFromString(SeriesIndex.serializer(), workspace.read("$directory/index.json").text)
         assertThat(persistedIndex.parts.single().connections).containsExactly("call")
@@ -501,6 +501,38 @@ class WindowSeriesTest {
             .hasMessageContaining("service")
             .hasMessageContaining("window=0")
             .hasMessageContaining("100")
+    }
+
+    @Test
+    fun `classes retain a separate namespace in byte limited parts`(
+        @TempDir root: Path,
+    ) {
+        val workspace = FileWorkspace(root)
+        val directory = ".results/e/classes/series/v/p0/rep-0"
+        val metrics = WindowMetrics(0.0, 1.0, originalArrivals = 3, failuresByReason = mapOf("deadline" to 1))
+        val expected = SeriesPart(fromWindow = 0, untilWindow = 1, nodes = listOf(NodeSeries("shared", listOf(metrics))))
+        val budget = partBytes(expected).size
+        val writer = SeriesWriter(workspace, directory, 1.0, 1.0, maxPartBytes = budget)
+        writer.writeWindow(0, listOf(NodeWindow("shared", metrics), NodeWindow("shared", metrics, isClass = true)))
+        val index = writer.finish()
+        assertThat(index.schemaVersion).isEqualTo(7)
+        assertThat(index.parts).hasSize(2)
+        assertThat(index.parts.flatMap { it.nodes }).containsExactly("shared")
+        assertThat(index.parts.flatMap { it.classes }).containsExactly("shared")
+        val parts =
+            index.parts.map { reference ->
+                val bytes = GZIPInputStream(workspace.readBytes("$directory/${reference.file}").inputStream()).use { it.readAllBytes() }
+                assertThat(bytes.size).isEqualTo(reference.uncompressedBytes).isLessThanOrEqualTo(budget)
+                Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
+            }
+        assertThat(
+            parts
+                .flatMap { it.classes }
+                .single()
+                .windows
+                .single()
+                .failuresByReason,
+        ).containsExactlyEntriesOf(mapOf("deadline" to 1))
     }
 
     private fun partBytes(part: SeriesPart) = partJson.encodeToString(SeriesPart.serializer(), part).toByteArray(Charsets.UTF_8)

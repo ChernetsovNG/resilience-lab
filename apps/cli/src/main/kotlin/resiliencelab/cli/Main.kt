@@ -7,6 +7,7 @@ import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.document.DocumentSchemas
 import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.execution.ExperimentExecutor
+import resiliencelab.core.experiment.AggregateEntryMetrics
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.AggregateServiceMetrics
 import resiliencelab.core.experiment.MetricSummary
@@ -289,10 +290,7 @@ private fun printSummary(
             val aggregate = point.aggregate
             val coordinates = point.coordinates.entries.joinToString(", ") { (path, value) -> "$path=$value" }
             val suffix = if (coordinates.isEmpty()) "" else " [$coordinates]"
-            stdout.append(
-                "${variant.id}/${point.id}$suffix: success ${percent(aggregate.successRate)}, " +
-                    "p95 ${millis(aggregate.p95LatencyMs)}, p99 ${millis(aggregate.p99LatencyMs)}; ",
-            )
+            stdout.append("${variant.id}/${point.id}$suffix: entry total: ${entryMetrics(aggregate.entries.total)}; ")
             val saturation = point.saturation
             saturation.firstNodes.forEach { first ->
                 stdout.append(
@@ -315,9 +313,27 @@ private fun printSummary(
                 )
             }
             stdout.appendLine()
+            listOf("client" to aggregate.entries.clients, "class" to aggregate.entries.classes).forEach { (kind, entries) ->
+                if (entries.size > 1) {
+                    entries.toSortedMap().forEach { (id, metrics) ->
+                        stdout.appendLine("  entry $kind $id: ${entryMetrics(metrics)}")
+                    }
+                }
+            }
             printGroups(aggregate, stdout, replicas)
         }
     }
+}
+
+private fun entryMetrics(metrics: AggregateEntryMetrics): String {
+    val failures =
+        metrics.failuresByReason.entries
+            .sortedWith(compareByDescending<Map.Entry<String, MetricSummary>> { it.value.mean }.thenBy { it.key })
+            .take(3)
+            .joinToString(", ") { (reason, rate) -> "$reason ${percent(rate)}" }
+    val values =
+        "success ${percent(metrics.successRate)}, p95 ${millis(metrics.p95LatencyMs)}, p99 ${millis(metrics.p99LatencyMs)}"
+    return if (failures.isEmpty()) values else "$values; failure reasons $failures"
 }
 
 private fun printGroups(

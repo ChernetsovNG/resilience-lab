@@ -213,6 +213,11 @@ class PoolerModelTest {
     fun `client limit rejects immediately while server wait timeout releases the admitted client`() {
         val rig = simulate(graph(), listOf(0.0, 1.0, 2.0))
         val metrics = pooler(rig)
+        assertThat(
+            rig.reliability.metrics
+                .replicationResult()
+                .entries.total.failuresByReason,
+        ).containsExactlyEntriesOf(mapOf("queueFull" to 1, "waitLimit" to 1))
         assertFields(
             metrics,
             "offeredAttempts" to 3.0,

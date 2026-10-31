@@ -1,14 +1,17 @@
 package resiliencelab.core.results
-
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.io.TempDir
+import resiliencelab.core.experiment.AggregateEntries
+import resiliencelab.core.experiment.AggregateEntryMetrics
 import resiliencelab.core.experiment.ConnectionMetrics
+import resiliencelab.core.experiment.EntryMetrics
 import resiliencelab.core.experiment.LatencyStatistics
 import resiliencelab.core.experiment.PoolerMetrics
+import resiliencelab.core.experiment.ReplicationEntries
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.experiment.ServiceMetrics
 import resiliencelab.core.experiment.SlotPoolMetrics
@@ -38,15 +41,18 @@ class CapacityHeadroomTest {
         )
         val aggregate =
             resiliencelab.core.experiment.AggregateMetrics(
-                resiliencelab.core.experiment.LatencySummary(null, null, null),
-                null,
-                null,
-                null,
-                linkedMapOf(
-                    "workers#2" to service(90.0, 60.0),
-                    "workers" to service(180.0, 120.0),
-                    "workers#1" to service(90.0, 60.0),
-                ),
+                entries =
+                    AggregateEntries(
+                        AggregateEntryMetrics(resiliencelab.core.experiment.LatencySummary(null, null, null), null, null, null),
+                        emptyMap(),
+                        emptyMap(),
+                    ),
+                services =
+                    linkedMapOf(
+                        "workers#2" to service(90.0, 60.0),
+                        "workers" to service(180.0, 120.0),
+                        "workers#1" to service(90.0, 60.0),
+                    ),
                 groups =
                     listOf(
                         resiliencelab.core.experiment.ReplicaGroup(
@@ -85,11 +91,16 @@ class CapacityHeadroomTest {
             )
         val aggregate =
             resiliencelab.core.experiment.AggregateMetrics(
-                resiliencelab.core.experiment.LatencySummary(null, null, null),
-                null,
-                null,
-                null,
-                mapOf("service" to service),
+                entries =
+                    AggregateEntries(
+                        AggregateEntryMetrics(resiliencelab.core.experiment.LatencySummary(null, null, null), null, null, null),
+                        emptyMap(),
+                        emptyMap(),
+                    ),
+                services =
+                    mapOf(
+                        "service" to service,
+                    ),
             )
         assertThat(CapacityHeadroomAnalyzer.analyze(aggregate)).isEqualTo(CapacityHeadroom())
     }
@@ -104,12 +115,19 @@ class CapacityHeadroomTest {
         writer.writeReplication(
             "$directory/series/v/p0/rep-0",
             ReplicationResult(
-                allLatency = LatencyStatistics(),
-                successfulLatency = LatencyStatistics(),
-                failedLatency = LatencyStatistics(),
-                originalArrivals = 0,
-                successes = 0,
-                failures = 0,
+                entries =
+                    ReplicationEntries(
+                        EntryMetrics(
+                            allLatency = LatencyStatistics(),
+                            successfulLatency = LatencyStatistics(),
+                            failedLatency = LatencyStatistics(),
+                            originalArrivals = 0,
+                            successes = 0,
+                            failures = 0,
+                        ),
+                        emptyMap(),
+                        emptyMap(),
+                    ),
                 services =
                     mapOf(
                         "gateway" to

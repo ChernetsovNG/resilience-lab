@@ -33,7 +33,7 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
-        val successRate = aggregate.successRate
+        val successRate = aggregate.entries.total.successRate
         assertThat(successRate).isNotNull()
         assertSummary(successRate!!, mean = 0.625, stdDev = sqrt(0.03125), min = 0.5, max = 0.75)
         val expectedSuccessInterval = Statistic(doubleArrayOf(0.75, 0.5)).confidenceInterval(0.95)
@@ -42,20 +42,20 @@ class MetricsAggregatorTest {
         assertThat(successRate.ci95High).isNotNull()
         assertThat(successRate.ci95High!!).isCloseTo(expectedSuccessInterval.upperLimit, offset(1e-12))
 
-        val pooledAll = aggregate.pooledLatency.all
+        val pooledAll = aggregate.entries.total.pooledLatency.all
         assertThat(pooledAll).isNotNull()
         assertLatency(pooledAll!!, meanMs = 35.0, p95Ms = 60.0, p99Ms = 60.0)
-        val pooledSuccessful = aggregate.pooledLatency.successful
+        val pooledSuccessful = aggregate.entries.total.pooledLatency.successful
         assertThat(pooledSuccessful).isNotNull()
         assertLatency(pooledSuccessful!!, meanMs = 27.5, p95Ms = 50.0, p99Ms = 50.0)
-        val pooledFailed = aggregate.pooledLatency.failed
+        val pooledFailed = aggregate.entries.total.pooledLatency.failed
         assertThat(pooledFailed).isNotNull()
         assertLatency(pooledFailed!!, meanMs = 50.0, p95Ms = 60.0, p99Ms = 60.0)
 
-        assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertQuantileSummary(aggregate.p95LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.95)
-        assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertQuantileSummary(aggregate.p99LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.99)
+        assertThat(aggregate.entries.total.p95LatencyMs).isNotNull()
+        assertQuantileSummary(aggregate.entries.total.p95LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.95)
+        assertThat(aggregate.entries.total.p99LatencyMs).isNotNull()
+        assertQuantileSummary(aggregate.entries.total.p99LatencyMs!!, listOf(listOf(10.0, 20.0, 30.0, 40.0), listOf(50.0, 60.0)), 0.99)
 
         val service = aggregate.services["entry"]
         assertThat(service).isNotNull()
@@ -94,13 +94,13 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(first, second))
 
-        val pooled = aggregate.pooledLatency.all
+        val pooled = aggregate.entries.total.pooledLatency.all
         assertThat(pooled).isNotNull()
         assertLatency(pooled!!, meanMs = 100.5, p95Ms = 190.95, p99Ms = 198.99)
-        assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertQuantileSummary(aggregate.p95LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.95)
-        assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertQuantileSummary(aggregate.p99LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.99)
+        assertThat(aggregate.entries.total.p95LatencyMs).isNotNull()
+        assertQuantileSummary(aggregate.entries.total.p95LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.95)
+        assertThat(aggregate.entries.total.p99LatencyMs).isNotNull()
+        assertQuantileSummary(aggregate.entries.total.p99LatencyMs!!, listOf(firstLatencies, secondLatencies), 0.99)
     }
 
     @Test
@@ -118,13 +118,13 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
-        assertThat(aggregate.successRate).isNotNull()
-        assertSingleValue(aggregate.successRate!!, 1.0)
-        assertThat(aggregate.p95LatencyMs).isNotNull()
-        assertSingleValue(aggregate.p95LatencyMs!!, sketchPercentile(listOf(10.0), 0.95))
-        assertThat(aggregate.p99LatencyMs).isNotNull()
-        assertSingleValue(aggregate.p99LatencyMs!!, sketchPercentile(listOf(10.0), 0.99))
-        assertThat(aggregate.pooledLatency.failed).isNull()
+        assertThat(aggregate.entries.total.successRate).isNotNull()
+        assertSingleValue(aggregate.entries.total.successRate!!, 1.0)
+        assertThat(aggregate.entries.total.p95LatencyMs).isNotNull()
+        assertSingleValue(aggregate.entries.total.p95LatencyMs!!, sketchPercentile(listOf(10.0), 0.95))
+        assertThat(aggregate.entries.total.p99LatencyMs).isNotNull()
+        assertSingleValue(aggregate.entries.total.p99LatencyMs!!, sketchPercentile(listOf(10.0), 0.99))
+        assertThat(aggregate.entries.total.pooledLatency.failed).isNull()
         val service = aggregate.services["entry"]
         assertThat(service).isNotNull()
         assertThat(service!!.admittedAmplification).isNotNull()
@@ -148,12 +148,12 @@ class MetricsAggregatorTest {
 
         val aggregate = MetricsAggregator.aggregate(listOf(result))
 
-        assertThat(aggregate.successRate).isNull()
-        assertThat(aggregate.p95LatencyMs).isNull()
-        assertThat(aggregate.p99LatencyMs).isNull()
-        assertThat(aggregate.pooledLatency.all).isNull()
-        assertThat(aggregate.pooledLatency.successful).isNull()
-        assertThat(aggregate.pooledLatency.failed).isNull()
+        assertThat(aggregate.entries.total.successRate).isNull()
+        assertThat(aggregate.entries.total.p95LatencyMs).isNull()
+        assertThat(aggregate.entries.total.p99LatencyMs).isNull()
+        assertThat(aggregate.entries.total.pooledLatency.all).isNull()
+        assertThat(aggregate.entries.total.pooledLatency.successful).isNull()
+        assertThat(aggregate.entries.total.pooledLatency.failed).isNull()
         val service = aggregate.services["entry"]
         assertThat(service).isNotNull()
         assertThat(service!!.admittedAmplification).isNull()
@@ -228,13 +228,23 @@ class MetricsAggregatorTest {
         services: Map<String, ServiceMetrics>,
     ): ReplicationResult =
         ReplicationResult(
-            arrivalTimesMs = List(originalArrivals) { it.toDouble() },
-            allLatency = latencyStatistics(allLatencies),
-            successfulLatency = latencyStatistics(successfulLatencies),
-            failedLatency = latencyStatistics(failedLatencies),
-            originalArrivals = originalArrivals,
-            successes = successes,
-            failures = failures,
+            entries =
+                ReplicationEntries(
+                    EntryMetrics(
+                        allLatency = latencyStatistics(allLatencies),
+                        successfulLatency = latencyStatistics(successfulLatencies),
+                        failedLatency = latencyStatistics(failedLatencies),
+                        originalArrivals = originalArrivals,
+                        successes = successes,
+                        failures = failures,
+                    ),
+                    emptyMap(),
+                    emptyMap(),
+                ),
+            arrivalTimesMs =
+                List(originalArrivals) {
+                    it.toDouble()
+                },
             services = services,
         )
 

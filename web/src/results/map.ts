@@ -22,7 +22,7 @@ export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, serv
     const totals = aggregate.services[service]?.totals;
     return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? null : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
   }
-  return aggregate[metric] ?? null;
+  return aggregate.entries.total[metric] ?? null;
 }
 
 export function formatMapValue(value: number, metric: MapMetric): string {

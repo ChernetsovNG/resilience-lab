@@ -89,7 +89,12 @@ class PathStreamsTest {
         assertThat(keys.filter { it.path == listOf("backend") })
             .containsExactlyElementsOf(PathStreams.keys(original, 0).filter { it.path == listOf("backend") })
         val model = ksl.simulation.Model("SegmentedPathTest", autoCSVReports = false)
-        assertThat(TestChains.reliabilityModel(model, graph).runReplication().originalArrivals).isPositive()
+        assertThat(
+            TestChains
+                .reliabilityModel(model, graph)
+                .runReplication()
+                .entries.total.originalArrivals,
+        ).isPositive()
     }
 
     @Test

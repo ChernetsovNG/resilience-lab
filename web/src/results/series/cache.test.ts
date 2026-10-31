@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SeriesPartCache, type SeriesPartKey } from "./cache";
 import type { DecodedSeriesPart } from "./types";
 
-const part: DecodedSeriesPart = { fromWindow: 0, untilWindow: 1, nodes: [], connections: [] };
+const part: DecodedSeriesPart = { fromWindow: 0, untilWindow: 1, nodes: [], classes: [], connections: [] };
 
 function key(partNumber: number, runId = "run"): SeriesPartKey {
   return { runId, variant: "baseline", cell: "p0", replication: 0, part: partNumber };

@@ -113,7 +113,7 @@ describe("catalog output contract", () => {
     for (const connection of decoded.connections) for (const [index, frame] of connection.windows.entries()) {
       const raw = golden.part.connections.find(candidate => candidate.id === connection.id)!.windows[index];
       const target = decoded.nodes.find(node => node.id === (connection.id === "gateway-to-middle" ? "middle" : "dependency"))!.windows[index].metrics;
-      const values = outputWindow(outputsOf(catalog, "call"), { ...frame, target, client: target.client });
+      const values = outputWindow(outputsOf(catalog, "call"), { ...frame, target, entries: target.entries });
       expect(values.sentAttemptsPerSecond).toBe(raw.sentAttempts * 1000 / raw.durationMs);
       expect(values.retriesPerSecond).toBe(raw.retries * 1000 / raw.durationMs);
       expect(values.successesPerSecond).toBe(raw.succeeded * 1000 / raw.durationMs);
@@ -127,7 +127,7 @@ describe("catalog output contract", () => {
       expect(values.timeoutRate).toBe(raw.sentAttempts === 0 ? null : raw.timeouts / raw.sentAttempts);
       expect(values.meanLatencyMs).toBe(raw.latency.count === 0 ? null : raw.latency.sumMs / raw.latency.count);
       expect([values.p50LatencyMs, values.p95LatencyMs, values.p99LatencyMs]).toEqual([frame.latency.p50Ms, frame.latency.p95Ms, frame.latency.p99Ms]);
-      expect(values.amplification).toBe(target.client!.originalArrivals === 0 ? null : target.admittedAttempts / target.client!.originalArrivals);
+      expect(values.amplification).toBe(target.entries.total.originalArrivals === 0 ? null : target.admittedAttempts / target.entries.total.originalArrivals);
     }
   });
 

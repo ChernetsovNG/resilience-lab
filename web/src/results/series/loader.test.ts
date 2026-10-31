@@ -18,6 +18,8 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
       admittedAttempts: 0,
       successes: 0,
       failures: 0,
+      failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0,
+      probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0,
       timeouts: 0,
       retries: 0,
       latency: { count: 0, sumMs: 0, sketch: [0] },
@@ -25,7 +27,7 @@ function window(values: Partial<WindowMetrics> = {}): WindowMetrics {
 }
 
 function part(nodes: SeriesPart["nodes"], fromWindow = 0, untilWindow = fromWindow + 2): SeriesPart {
-  return { schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, connections: [] };
+  return { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow, untilWindow, nodes, classes: [], connections: [] };
 }
 
 function fixture() {
@@ -42,12 +44,12 @@ function fixture() {
   ] }]);
   const texts = [JSON.stringify(client), JSON.stringify(service)];
   const index: SeriesIndex = { groups: [],
-    schemaVersion: 6,
+    schemaVersion: 7,
     endMs: 20,
     windowMs: 10,
     parts: [
-      { kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client"], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
-      { kind: "INSTANCE", file: "part-1.json.gz", nodes: ["service"], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
+      { kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client"], classes: [], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
+      { kind: "INSTANCE", file: "part-1.json.gz", nodes: ["service"], classes: [], connections: [], fromWindow: 0, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
     ],
   };
   return { index, texts };
@@ -76,7 +78,8 @@ function request(nodes: string[], signal?: AbortSignal) {
 
 describe("series loader", () => {
   it("returns each connection's own windows from connection-only and mixed parts", async () => {
-    const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({ startMs,
+    const callWindow = (startMs: number, sentAttempts: number): ConnectionWindowMetrics => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: startMs === 20 ? 5 : 10,
       sentAttempts,
       retries: 1,
@@ -99,7 +102,8 @@ describe("series loader", () => {
     unrelated.connections = [{ id: "unselected-call", windows: [callWindow(0, 31), callWindow(10, 32)] }];
     const parts = [mixed, connectionOnly, last, unrelated];
     const texts = parts.map((value) => JSON.stringify(value));
-    const index: SeriesIndex = { groups: [], schemaVersion: 6, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
+    const index: SeriesIndex = { groups: [], schemaVersion: 7, endMs: 25, windowMs: 10, parts: parts.map((value, index) => ({
+      classes: [],
       kind: "INSTANCE", file: `part-${index}.json.gz`, nodes: value.nodes.map((node) => node.id),
       connections: value.connections.map((connection) => connection.id), fromWindow: value.fromWindow,
       untilWindow: value.untilWindow, uncompressedBytes: texts[index].length, sha256: String(index).repeat(64),
@@ -129,7 +133,8 @@ describe("series loader", () => {
   it("reuses a mixed decoded part between node and connection selections", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -157,7 +162,8 @@ describe("series loader", () => {
   it("shares a concurrent mixed-part download while allowing either consumer to abort", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -198,7 +204,8 @@ describe("series loader", () => {
   it("reuses a completed download while another view is still decoding that part", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 7 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+    mixed.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 3,
       retries: 1,
@@ -245,8 +252,8 @@ describe("series loader", () => {
       ] },
     ], 0, 3);
     const text = JSON.stringify(measured);
-    const index: SeriesIndex = { groups: [], schemaVersion: 6, endMs: 25, windowMs: 10, parts: [{
-      kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 3,
+    const index: SeriesIndex = { groups: [], schemaVersion: 7, endMs: 25, windowMs: 10, parts: [{
+      kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client", "service"], classes: [], connections: [], fromWindow: 0, untilWindow: 3,
       uncompressedBytes: text.length, sha256: CLIENT_SHA,
     }] };
     const loader = new SeriesLoader({ api: apiFor(index, [text]), decoderFactory: decoderFactory() });
@@ -257,7 +264,7 @@ describe("series loader", () => {
     expect(result[0].windows.map((value) => [value.startMs, value.durationMs])).toEqual([[10, 10], [20, 5]]);
   });
 
-  it.each([1, 2, 3, 4, 5, 7])("rejects unsupported index schema version %s", async (schemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 8])("rejects unsupported index schema version %s", async (schemaVersion) => {
     const { index, texts } = fixture();
     const api = apiFor({ ...index, schemaVersion }, texts);
     const loader = new SeriesLoader({ api, decoderFactory: decoderFactory() });
@@ -268,7 +275,8 @@ describe("series loader", () => {
   it("accounts for expanded connection rows before retaining a decoded part", async () => {
     const { index } = fixture();
     const mixed = part([{ id: "client", windows: [window({ originalArrivals: 1 }), window({ startMs: 10 })] }]);
-    mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({ startMs,
+    mixed.connections = [{ id: "call".repeat(30), windows: [0, 10].map((startMs) => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 1,
       retries: 0,
@@ -294,7 +302,8 @@ describe("series loader", () => {
   it("passes connection-only split parts while finding the client denominator", async () => {
     const { index, texts } = fixture();
     const connection = part([]);
-    connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({ startMs,
+    connection.connections = [{ id: "call", windows: [0, 10].map((startMs) => ({
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs,
       durationMs: 10,
       sentAttempts: 1,
       retries: 0,
@@ -311,9 +320,9 @@ describe("series loader", () => {
     const expandedIndex: SeriesIndex = {
       ...index,
       parts: [
-        { ...index.parts[0], nodes: [], connections: ["call"], uncompressedBytes: allTexts[0].length },
+        { ...index.parts[0], nodes: [], classes: [], connections: ["call"], uncompressedBytes: allTexts[0].length },
         index.parts[1],
-        { ...index.parts[0], kind: "INSTANCE", file: "part-2.json.gz", connections: [], uncompressedBytes: allTexts[2].length },
+        { ...index.parts[0], kind: "INSTANCE", file: "part-2.json.gz", classes: [], connections: [], uncompressedBytes: allTexts[2].length },
       ],
     };
     const cache = new SeriesPartCache();
@@ -322,7 +331,7 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, client: value.client }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(cache.get({ runId: "run", variant: "baseline", cell: "p0", replication: 0, part: 0 })?.connections[0].id).toBe("call");
   });
 
@@ -343,7 +352,7 @@ describe("series loader", () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
-  it("loads only the client and reuses one decoder during fallback", async () => {
+  it("loads all overlapping instance parts and reuses one decoder during fallback", async () => {
     const { index, texts } = fixture();
     const unrelated = part([{ id: "unrelated", windows: [window({ slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } }), window({ startMs: 10,
       slotPools: { handlers: { busyIntegralMs: 0, queueIntegralMs: 0, capacityIntegralMs: (1) * (10), waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0 } } })] }]);
@@ -353,7 +362,7 @@ describe("series loader", () => {
       parts: [...index.parts, {
         kind: "INSTANCE", file: "part-2.json.gz",
         nodes: ["unrelated"],
-        connections: [],
+        classes: [], connections: [],
         fromWindow: 0,
         untilWindow: 2,
         uncompressedBytes: allTexts[2].length,
@@ -370,10 +379,10 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, client: value.client }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(factory).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
-    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1, 0]);
+    expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1, 0, 2]);
   });
 
   it("finds a missing client window after a full window and a split window", async () => {
@@ -390,13 +399,13 @@ describe("series loader", () => {
     ];
     const texts = parts.map((value) => JSON.stringify(value));
     const index: SeriesIndex = { groups: [],
-      schemaVersion: 6,
+      schemaVersion: 7,
       endMs: 20,
       windowMs: 10,
       parts: [
-        { kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client", "service"], connections: [], fromWindow: 0, untilWindow: 1, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
-        { kind: "INSTANCE", file: "part-1.json.gz", nodes: ["service"], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
-        { kind: "INSTANCE", file: "part-2.json.gz", nodes: ["client"], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[2].length, sha256: "c".repeat(64) },
+        { kind: "INSTANCE", file: "part-0.json.gz", nodes: ["client", "service"], classes: [], connections: [], fromWindow: 0, untilWindow: 1, uncompressedBytes: texts[0].length, sha256: CLIENT_SHA },
+        { kind: "INSTANCE", file: "part-1.json.gz", nodes: ["service"], classes: [], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[1].length, sha256: SERVICE_SHA },
+        { kind: "INSTANCE", file: "part-2.json.gz", nodes: ["client"], classes: [], connections: [], fromWindow: 1, untilWindow: 2, uncompressedBytes: texts[2].length, sha256: "c".repeat(64) },
       ],
     };
     const api = apiFor(index, texts);
@@ -404,7 +413,7 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, client: value.client }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1, 2]);
   });
 

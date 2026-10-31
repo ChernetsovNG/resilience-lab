@@ -134,7 +134,7 @@ class ArtifactPipelineTest {
             assertThat(index.parts).hasSize(1)
             assertThat(index.parts.single().fromWindow).isZero()
             assertThat(index.parts.single().untilWindow).isEqualTo(100)
-            assertThat(index.schemaVersion).isEqualTo(6)
+            assertThat(index.schemaVersion).isEqualTo(7)
             assertThat(index.parts.single().connections).containsExactly("gateway-to-middle", "middle-to-dependency")
         }
         for (path in files) {
@@ -162,7 +162,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(15)
+        assertThat(first.manifest.schemaVersion).isEqualTo(16)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")
@@ -206,7 +206,10 @@ class ArtifactPipelineTest {
                 workspace.readBytes("${first.runDirectory}/series/baseline/p0/rep-0/replication.json.gz").inputStream(),
             ).bufferedReader(Charsets.UTF_8).use { it.readText() }
         val replication = Json.decodeFromString(ReplicationArtifact.serializer(), replicationText)
-        assertThat(replication.result.allLatency.count).isEqualTo(replication.result.originalArrivals.toLong())
+        assertThat(replication.result.entries.total.allLatency.count).isEqualTo(
+            replication.result.entries.total.originalArrivals
+                .toLong(),
+        )
         assertThat(replicationText)
             .doesNotContain("arrivalTimesMs", "allLatenciesMs")
     }

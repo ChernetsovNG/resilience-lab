@@ -111,7 +111,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       {columns.map(({ variant, point }) => <p key={variant.id}>
         {t(point.saturation.firstNodes.length === 0 ? "results.answer.variantUnsaturated" : "results.answer.variantSaturated", {
           variant: variantLabel(variant, variants), resources: point.saturation.firstNodes.map(first => backendMessage(first.label)).join(", "),
-          success: formatPercent(point.aggregate.successRate?.mean),
+          success: formatPercent(point.aggregate.entries.total.successRate?.mean),
         })}
       </p>)}
     </section>
@@ -140,15 +140,15 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
         {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>
           {variantLabel(variant, variants)}
           <span className="summary-replications">{t("results.answer.replications", { count: formatNumber(variant.replications) })}</span>
-          {[point.aggregate.successRate, point.aggregate.p95LatencyMs, point.aggregate.p99LatencyMs,
+          {[point.aggregate.entries.total.successRate, point.aggregate.entries.total.p95LatencyMs, point.aggregate.entries.total.p99LatencyMs,
             ...instanceServiceEntries(point.aggregate).map(([, service]) => service.admittedAmplification)]
             .some(value => value != null && value.count < MIN_RELIABLE_REPLICATIONS) ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
         </th>)}
       </tr></thead>
       <tbody>
-        {row(t("results.metrics.successRate"), point => point.aggregate.successRate, formatPercent, percentagePoints)}
-        {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.p95LatencyMs, formatDuration)}
-        {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.p99LatencyMs, formatDuration)}
+        {row(t("results.metrics.successRate"), point => point.aggregate.entries.total.successRate, formatPercent, percentagePoints)}
+        {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.entries.total.p95LatencyMs, formatDuration)}
+        {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.entries.total.p99LatencyMs, formatDuration)}
       </tbody>
     </table>
     {services.map(service => serviceDetails(service.id, service.instances))}

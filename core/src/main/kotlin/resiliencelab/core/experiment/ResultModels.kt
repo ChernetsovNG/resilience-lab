@@ -12,16 +12,33 @@ import kotlinx.serialization.Transient
 @Serializable
 data class ReplicationResult(
     @Transient val arrivalTimesMs: List<Double> = emptyList(),
-    val allLatency: LatencyStatistics,
-    val successfulLatency: LatencyStatistics,
-    val failedLatency: LatencyStatistics,
-    val originalArrivals: Int,
-    val successes: Int,
-    val failures: Int,
+    val entries: ReplicationEntries,
     val services: Map<String, ServiceMetrics>,
     val connections: Map<String, ConnectionMetrics> = emptyMap(),
     val poolers: Map<String, PoolerMetrics> = emptyMap(),
     val groups: List<ReplicaGroup> = emptyList(),
+)
+
+/** Cohort latency and final outcomes of one total, client or request-class population. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class EntryMetrics(
+    @EncodeDefault val allLatency: LatencyStatistics = LatencyStatistics(),
+    @EncodeDefault val successfulLatency: LatencyStatistics = LatencyStatistics(),
+    @EncodeDefault val failedLatency: LatencyStatistics = LatencyStatistics(),
+    @EncodeDefault val originalArrivals: Int = 0,
+    @EncodeDefault val successes: Int = 0,
+    @EncodeDefault val failures: Int = 0,
+    @EncodeDefault val degraded: Int = 0,
+    @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
+)
+
+/** Every measured request contributes once to total, its client, and its shared request class. */
+@Serializable
+data class ReplicationEntries(
+    val total: EntryMetrics,
+    val clients: Map<String, EntryMetrics>,
+    val classes: Map<String, EntryMetrics>,
 )
 
 /**
@@ -29,6 +46,8 @@ data class ReplicationResult(
  * Offered attempts include queue rejections; admitted attempts were queued or immediately allocated.
  * Queue and handler observations include all work present, including warm-up work, but exclude run-out.
  * Residence latency covers admitted attempts of the measured arrival cohort, including run-out completions.
+ * [failures] retains local processing failures; [failuresByReason] counts every unsuccessful terminal invocation,
+ * including queue rejection and failures propagated from a call.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -42,6 +61,13 @@ data class ServiceMetrics(
     val queueDurationsMs: Map<Double, Double>,
     val latency: LatencyStatistics = LatencyStatistics(),
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
+    @EncodeDefault val rateLimited: Int = 0,
+    @EncodeDefault val probes: Int = 0,
+    @EncodeDefault val probeFailures: Int = 0,
+    @EncodeDefault val notReadyMs: Double = 0.0,
+    @EncodeDefault val ejections: Int = 0,
+    @EncodeDefault val ejectedMs: Double = 0.0,
 ) {
     val handlerUtilization: Double get() = slotPools.getValue("handlers").let { it.busyIntegralMs / it.capacityIntegralMs }
     val meanQueueLength: Double get() = slotPools.getValue("handlers").queueIntegralMs / measurementMs
@@ -60,14 +86,31 @@ data class ServiceMetrics(
 /** Aggregates pooled latency with replication-level success, percentile, and service amplification summaries. */
 @Serializable
 data class AggregateMetrics(
-    val pooledLatency: LatencySummary,
-    val successRate: MetricSummary?,
-    val p95LatencyMs: MetricSummary?,
-    val p99LatencyMs: MetricSummary?,
+    val entries: AggregateEntries,
     val services: Map<String, AggregateServiceMetrics>,
     val connections: Map<String, AggregateConnectionMetrics> = emptyMap(),
     val poolers: Map<String, AggregatePoolerMetrics> = emptyMap(),
     val groups: List<ReplicaGroup> = emptyList(),
+)
+
+/** Independent-replication ratios and percentiles, plus latency pooled within one entry population. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class AggregateEntryMetrics(
+    val pooledLatency: LatencySummary,
+    val successRate: MetricSummary?,
+    val p95LatencyMs: MetricSummary?,
+    val p99LatencyMs: MetricSummary?,
+    @EncodeDefault val degradedRate: MetricSummary? = null,
+    @EncodeDefault val failuresByReason: Map<String, MetricSummary> = emptyMap(),
+)
+
+/** Total, client and shared-class summaries use each population's own original-arrival denominator. */
+@Serializable
+data class AggregateEntries(
+    val total: AggregateEntryMetrics,
+    val clients: Map<String, AggregateEntryMetrics>,
+    val classes: Map<String, AggregateEntryMetrics>,
 )
 
 /** Pooled client-latency distributions partitioned by final client outcome. */
@@ -127,6 +170,13 @@ data class ServiceTotals(
     val failures: Long,
     val measurementMs: Double,
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    @EncodeDefault val failuresByReason: Map<String, Long> = emptyMap(),
+    @EncodeDefault val rateLimited: Long = 0L,
+    @EncodeDefault val probes: Long = 0L,
+    @EncodeDefault val probeFailures: Long = 0L,
+    @EncodeDefault val notReadyMs: Double = 0.0,
+    @EncodeDefault val ejections: Long = 0L,
+    @EncodeDefault val ejectedMs: Double = 0.0,
 )
 
 /**
@@ -135,7 +185,8 @@ data class ServiceTotals(
  * Timeout durations never enter [latency]; orphaned work lasts through the child's response network delay.
  * Pool integrals cover the same fixed interval; wait counts/durations belong to completed waits of the measured
  * cohort, including run-out. Pool acquisition expiry excludes deadline expiry and does not count as a sent attempt.
- * An absent pool is omitted from [slotPools].
+ * An absent pool is omitted from [slotPools]. [failuresByReason] also includes timed-out attempts and
+ * acquisition refusals before sending, whereas [failed] counts received unsuccessful responses.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -152,6 +203,11 @@ data class ConnectionMetrics(
     val measurementMs: Double,
     val latency: LatencyStatistics,
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    @EncodeDefault val failuresByReason: Map<String, Int> = emptyMap(),
+    @EncodeDefault val circuitOpenMs: Double = 0.0,
+    @EncodeDefault val circuitRejections: Int = 0,
+    @EncodeDefault val retriesDenied: Int = 0,
+    @EncodeDefault val fallbacks: Int = 0,
 )
 
 /** Replication-level timeout fraction and mean in-flight occupancy, plus pooled response latency and totals. */
@@ -180,6 +236,11 @@ data class ConnectionTotals(
     val backoffIntegralMs: Double,
     val measurementMs: Double,
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
+    @EncodeDefault val failuresByReason: Map<String, Long> = emptyMap(),
+    @EncodeDefault val circuitOpenMs: Double = 0.0,
+    @EncodeDefault val circuitRejections: Long = 0L,
+    @EncodeDefault val retriesDenied: Long = 0L,
+    @EncodeDefault val fallbacks: Long = 0L,
 )
 
 /**

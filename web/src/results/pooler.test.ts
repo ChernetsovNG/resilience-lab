@@ -60,8 +60,9 @@ describe("transaction pooler integration", () => {
   });
 
   it("decodes pooler resource fields from the current series format", () => {
-    const part = { schemaVersion: 6, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1, connections: [],
-      nodes: [{ id: "pooler", windows: [{ startMs: 0,
+    const part = { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1, classes: [], connections: [],
+      nodes: [{ id: "pooler", windows: [{
+        failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs: 0,
       durationMs: 10,
       originalArrivals: 0,
       offeredAttempts: 3,

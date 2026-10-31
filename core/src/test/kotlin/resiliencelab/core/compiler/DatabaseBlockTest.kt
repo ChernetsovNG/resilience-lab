@@ -77,7 +77,7 @@ class DatabaseBlockTest {
         assertThat(rig.invocations.map { it.outcome }).containsExactly(
             AttemptOutcome.SUCCEEDED,
             AttemptOutcome.SUCCEEDED,
-            AttemptOutcome.DOWNSTREAM_FAILURE,
+            AttemptOutcome.QUEUE_REJECTED,
         )
         assertThat(rig.invocations.map { it.work.processCompletionTime }).containsExactly(10.0, 20.0, 2.0)
         val totals =
@@ -186,7 +186,7 @@ class DatabaseBlockTest {
                     },
             )
         val rig = simulate(graph(withRetry), listOf(0.0))
-        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.DOWNSTREAM_FAILURE)
+        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
         assertThat(
             rig.invocations
                 .single()

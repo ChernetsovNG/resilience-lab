@@ -21,13 +21,14 @@ function setup(connection = false) {
   }
   const extrema = { minUtilization: 0.02, maxUtilization: 0.97, maxUtilizationReplica: 2,
     minMeanQueueLength: 0.1, maxMeanQueueLength: 0.4, maxMeanQueueLengthReplica: 2 };
-  const window = (replica: boolean) => recordedWindow({ durationMs: 100, client: { originalArrivals: 10 },
+  const window = (replica: boolean) => recordedWindow({ durationMs: 100, entries: { total: { originalArrivals: 10 } },
     slotPools: { [connection ? "pool" : "handlers"]: { busyIntegralMs: replica ? 97 : 102,
       capacityIntegralMs: replica ? 100 : 300, queueIntegralMs: replica ? 40 : 60,
       waitCount: 0, totalWaitMs: 0, queueFullCount: 0, waitLimitCount: 0,
       ...(replica ? {} : { replicaExtrema: extrema }) } } });
   const nodes = [id, `${id}#2`].map((id, index) => ({ id, windows: [window(index > 0)] }));
   const connections = nodes.map(node => ({ id: node.id, windows: node.windows.map(window => ({
+    failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
     startMs: window.startMs, durationMs: window.durationMs, sentAttempts: 10, succeeded: 10, failed: 0,
     retries: 0, timeouts: 0, orphaned: 0, inFlightIntegralMs: 20, orphanedIntegralMs: 0,
     backoffIntegralMs: 0, latency: window.latency, slotPools: window.slotPools,
@@ -116,7 +117,8 @@ it.each([false, true])("shows a compared group's range when the primary has one 
   props.model.blocks.gateway.params.replicas = 1;
   props.summary.variants[0].points[0].aggregate.groups = [];
   if (connection) {
-    loadConnections.mockImplementation(async request => [{ id, windows: [{ startMs: 0, durationMs: 100,
+    loadConnections.mockImplementation(async request => [{ id, windows: [{
+      failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 100,
       sentAttempts: 10, succeeded: 10, failed: 0, retries: 0, timeouts: 0, orphaned: 0,
       inFlightIntegralMs: 20, orphanedIntegralMs: 0, backoffIntegralMs: 0, latency: nodes[0].windows[0].latency,
       slotPools: { pool: { ...nodes[0].windows[0].slotPools.pool,

@@ -118,7 +118,7 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
-    if (index.schemaVersion !== 6) {
+    if (index.schemaVersion !== 7) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const connectionRequest = "connections" in request;
@@ -135,21 +135,15 @@ export class SeriesLoader {
     request: SeriesLoadRequest,
     getDecoder: () => SeriesDecoder,
   ): Promise<void> {
-    let missing = missingClientWindows(parts, request);
-    while (missing.size > 0) {
-      const clientIds = clientIdsOf(parts);
-      const clientParts = index.parts.filter((reference) =>
-        !parts.has(reference.file) && reference.nodes.some((id) => clientIds.has(id)) && overlapsAny(reference, missing),
-      );
-      const candidate = clientParts[0] ?? index.parts.find((reference) =>
-        !parts.has(reference.file) && overlapsAny(reference, missing),
-      );
-      if (candidate === undefined) {
-        throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.missingClients"));
-      }
-      const extra = await this.loadReferences(request, [candidate], getDecoder);
-      for (const [file, part] of extra) parts.set(file, part);
-      missing = missingClientWindows(parts, request);
+    const missing = missingClientWindows(parts, request, false);
+    if (missing.size === 0) return;
+    // Without an embedded total, every overlapping instance part can contain another client.
+    const references = index.parts.filter(reference => reference.kind === "INSTANCE"
+      && !parts.has(reference.file) && overlapsAny(reference, missing));
+    const extra = await this.loadReferences(request, references, getDecoder);
+    for (const [file, part] of extra) parts.set(file, part);
+    if (missingClientWindows(parts, request, true).size > 0) {
+      throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.missingClients"));
     }
   }
 
@@ -243,24 +237,14 @@ function partNumberOf(reference: SeriesPartReference): number {
 }
 
 function estimatedBytes(reference: SeriesPartReference, part: DecodedSeriesPart): number {
-  const decodedEstimate = [...part.nodes, ...part.connections].reduce(
+  const decodedEstimate = [...part.nodes, ...part.classes, ...part.connections].reduce(
     (total, node) => total + 64 + node.id.length * 2 + node.windows.length * 512,
     64,
   );
   return Math.max(reference.uncompressedBytes, decodedEstimate);
 }
 
-function clientIdsOf(parts: ReadonlyMap<string, DecodedSeriesPart>): ReadonlySet<string> {
-  const result = new Set<string>();
-  for (const part of parts.values()) {
-    for (const node of part.nodes) {
-      if (node.windows.every((window) => !window.hasSlots)) result.add(node.id);
-    }
-  }
-  return result;
-}
-
-function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): Set<number> {
+function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest, includeClientRows: boolean): Set<number> {
   const requested = new Set(request.nodes);
   const covered = new Set<number>();
   const services = new Set<number>();
@@ -270,7 +254,7 @@ function missingClientWindows(parts: ReadonlyMap<string, DecodedSeriesPart>, req
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        if (client || window.metrics.clientOriginalArrivals != null) covered.add(index);
+        if ((includeClientRows && client) || window.metrics.clientOriginalArrivals != null) covered.add(index);
         else if (requested.has(node.id) && window.hasSlots) services.add(index);
       }
     }
@@ -286,7 +270,8 @@ function overlapsAny(reference: SeriesPartReference, windows: ReadonlySet<number
 }
 
 function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): NodeSeriesMetrics[] {
-  const arrivals = new Map<number, number>();
+  const arrivals = new Map<number, Map<string, number>>();
+  const embeddedArrivals = new Map<number, number>();
   const selected = new Map<string, Map<number, DecodedWindow>>();
   const requested = new Set(request.nodes);
   for (const part of parts.values()) {
@@ -294,8 +279,13 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;
-        const clientArrivals = window.metrics.clientOriginalArrivals ?? (!window.hasSlots ? window.originalArrivals : undefined);
-        if (clientArrivals !== undefined) arrivals.set(index, clientArrivals);
+        let clientRows = arrivals.get(index);
+        if (clientRows === undefined) {
+          clientRows = new Map();
+          arrivals.set(index, clientRows);
+        }
+        clientRows.set(node.id, window.originalArrivals);
+        if (window.metrics.clientOriginalArrivals != null) embeddedArrivals.set(index, window.metrics.clientOriginalArrivals);
         if (!requested.has(node.id)) continue;
         let windows = selected.get(node.id);
         if (windows === undefined) {
@@ -312,10 +302,9 @@ function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: Series
     const ordered = [...selectedWindows.entries()].sort(([a], [b]) => a - b);
     const windows = ordered.map(([index, window]) => {
       const metrics = { ...window.metrics };
-      if (window.hasSlots) {
-        const denominator = window.metrics.clientOriginalArrivals ?? arrivals.get(index) ?? 0;
-        metrics.client = { originalArrivals: denominator };
-      }
+      const denominator = window.metrics.clientOriginalArrivals ?? embeddedArrivals.get(index)
+        ?? [...(arrivals.get(index)?.values() ?? [])].reduce((sum, value) => sum + value, 0);
+      metrics.entries = { total: { originalArrivals: denominator } };
       return metrics;
     });
     return [{ id, windows, latency: ordered.map(([, window]) => window.latency) }];

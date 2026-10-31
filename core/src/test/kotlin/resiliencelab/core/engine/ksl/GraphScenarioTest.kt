@@ -59,7 +59,7 @@ class GraphScenarioTest {
         val base =
             graph(listOf(ServiceStep.Process(), ServiceStep.Call("a"), ServiceStep.Call("b"), ServiceStep.Process(), ServiceStep.Call("a")))
         val rig = simulate(base.copy(services = base.services.map { if (it.path == "right") it.copy(failureProbability = 1.0) else it }))
-        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.DOWNSTREAM_FAILURE)
+        assertThat(rig.invocations.single().outcome).isEqualTo(AttemptOutcome.LOCAL_FAILURE)
         assertThat(
             rig.invocations
                 .single()

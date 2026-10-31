@@ -77,13 +77,21 @@ class ReplicaGroupMetricsTest {
             return ReplicaGroups.replication(
                 listOf(members),
                 ReplicationResult(
-                    allLatency = LatencyStatistics(),
-                    successfulLatency = LatencyStatistics(),
-                    failedLatency = LatencyStatistics(),
-                    originalArrivals = 1,
-                    successes = 1,
-                    failures = 0,
-                    services = rows + ("ordinary" to rows.getValue("worker#2")),
+                    entries =
+                        ReplicationEntries(
+                            EntryMetrics(
+                                allLatency = LatencyStatistics(),
+                                successfulLatency = LatencyStatistics(),
+                                failedLatency = LatencyStatistics(),
+                                originalArrivals = 1,
+                                successes = 1,
+                                failures = 0,
+                            ),
+                            emptyMap(),
+                            emptyMap(),
+                        ),
+                    services =
+                        rows + ("ordinary" to rows.getValue("worker#2")),
                 ),
             )
         }

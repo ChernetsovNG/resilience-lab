@@ -44,7 +44,12 @@ class TimeoutRaceTest {
                 .getValue("entry")
                 .timeouts,
         ).isZero()
-        assertLatencies(rig.result().successfulLatency, 50.0)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.successfulLatency,
+            50.0,
+        )
         assertThat(rig.handlerBusy("entry")).isZero()
         assertThat(rig.handlerBusy("backend")).isZero()
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
@@ -82,12 +87,12 @@ class TimeoutRaceTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0)
-        assertLatencies(result.allLatency, 50.0)
-        assertThat(result.successfulLatency.count).isZero()
-        assertLatencies(result.failedLatency, 50.0)
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.successes).isZero()
-        assertThat(result.failures).isEqualTo(1)
+        assertLatencies(result.entries.total.allLatency, 50.0)
+        assertThat(result.entries.total.successfulLatency.count).isZero()
+        assertLatencies(result.entries.total.failedLatency, 50.0)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.successes).isZero()
+        assertThat(result.entries.total.failures).isEqualTo(1)
         assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(1)
         assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(1)
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
@@ -136,7 +141,12 @@ class TimeoutRaceTest {
         assertThat(child.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(caller.outcome).isEqualTo(AttemptOutcome.SUCCEEDED)
         assertThat(attempt.status).isEqualTo(AttemptOutcome.SUCCEEDED)
-        assertLatencies(rig.result().allLatency, expectedCompletionMs)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.allLatency,
+            expectedCompletionMs,
+        )
         assertThat(
             rig
                 .result()
@@ -191,11 +201,11 @@ class TimeoutRaceTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0)
-        assertLatencies(result.allLatency, 160.0)
-        assertLatencies(result.successfulLatency, 160.0)
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.successes).isEqualTo(1)
-        assertThat(result.failures).isZero()
+        assertLatencies(result.entries.total.allLatency, 160.0)
+        assertLatencies(result.entries.total.successfulLatency, 160.0)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.successes).isEqualTo(1)
+        assertThat(result.entries.total.failures).isZero()
         assertThat(result.services.getValue("entry").timeouts).isZero()
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.reliabilityModel.activeOriginalRequests).isZero()
@@ -231,7 +241,12 @@ class TimeoutRaceTest {
                 .getValue("entry")
                 .timeouts,
         ).isZero()
-        assertLatencies(rig.result().successfulLatency, 30.0)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.successfulLatency,
+            30.0,
+        )
         assertThat(rig.reliabilityModel.activeInvocations).isZero()
         assertThat(rig.handlerBusy("entry")).isZero()
         assertThat(rig.handlerBusy("backend")).isZero()
@@ -270,7 +285,12 @@ class TimeoutRaceTest {
             Snapshot(18.5, 1, 0, 0, 0, 1, 1, 1),
             Snapshot(20.5, 0, 0, 0, 0, 1, 1, 1),
         )
-        assertLatencies(rig.result().failedLatency, 18.0)
+        assertLatencies(
+            rig
+                .result()
+                .entries.total.failedLatency,
+            18.0,
+        )
         assertThat(
             rig
                 .result()
@@ -315,7 +335,7 @@ class TimeoutRaceTest {
         )
 
         val result = rig.result()
-        assertLatencies(result.failedLatency, 10.0)
+        assertLatencies(result.entries.total.failedLatency, 10.0)
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(1)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
@@ -365,7 +385,7 @@ class TimeoutRaceTest {
         )
 
         val result = rig.result()
-        assertLatencies(result.failedLatency, 10.0)
+        assertLatencies(result.entries.total.failedLatency, 10.0)
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)
         assertThat(result.services.getValue("backend").offeredAttempts).isEqualTo(2)
         assertThat(result.services.getValue("backend").admittedAttempts).isEqualTo(1)
@@ -414,12 +434,12 @@ class TimeoutRaceTest {
 
         val result = rig.result()
         assertThat(result.arrivalTimesMs).containsExactly(0.0)
-        assertLatencies(result.allLatency, 10.0)
-        assertThat(result.successfulLatency.count).isZero()
-        assertLatencies(result.failedLatency, 10.0)
-        assertThat(result.originalArrivals).isEqualTo(1)
-        assertThat(result.successes).isZero()
-        assertThat(result.failures).isEqualTo(1)
+        assertLatencies(result.entries.total.allLatency, 10.0)
+        assertThat(result.entries.total.successfulLatency.count).isZero()
+        assertLatencies(result.entries.total.failedLatency, 10.0)
+        assertThat(result.entries.total.originalArrivals).isEqualTo(1)
+        assertThat(result.entries.total.successes).isZero()
+        assertThat(result.entries.total.failures).isEqualTo(1)
         assertThat(result.services.getValue("entry").offeredAttempts).isEqualTo(1)
         assertThat(result.services.getValue("entry").admittedAttempts).isEqualTo(1)
         assertThat(result.services.getValue("entry").timeouts).isEqualTo(1)

@@ -59,6 +59,8 @@ class ReliabilityModel(
             measurementEndMs = measurementEndMs,
             currentTimeMs = { time },
             clientId = graph.clients.minBy { it.path }.path,
+            clientIds = graph.clients.map { it.path },
+            classIds = graph.clients.flatMap { it.classes.keys }.distinct(),
             windowMs = graph.run.windowMs,
             connectionIds = graph.topologicalCalls.map { it.path } + graph.routes.map { it.path },
             connectionPoolSizes = graph.topologicalCalls.mapNotNull { call -> call.pool?.let { call.path to it.size } }.toMap(),
@@ -362,12 +364,14 @@ class ReliabilityModel(
                 caller = caller,
                 recordTimeout = { orphaned ->
                     metrics.recordTimeout(callingServiceId, caller.measurementCohort)
+                    observed.forEach { metrics.recordConnectionFailure(it, AttemptOutcome.TIMED_OUT, caller.measurementCohort) }
                     record(ConnectionEvent.TIMEOUT)
                     if (orphaned) record(ConnectionEvent.ORPHANED)
                 },
-                recordResponse = { succeeded ->
+                recordResponse = { outcome ->
+                    observed.forEach { metrics.recordConnectionFailure(it, outcome, caller.measurementCohort) }
                     record(
-                        if (succeeded) ConnectionEvent.SUCCEEDED else ConnectionEvent.FAILED,
+                        if (outcome == AttemptOutcome.SUCCEEDED) ConnectionEvent.SUCCEEDED else ConnectionEvent.FAILED,
                         time - sentMs,
                     )
                 },
@@ -400,6 +404,7 @@ class ReliabilityModel(
         private var originalClientActive = false
         private var admitted = false
         private var routingCompleted = false
+        private var serviceOutcomeRecorded = false
         internal var incomingAttempt: CallAttempt? = null
         internal var noResponse: Boolean = false
             private set
@@ -433,6 +438,12 @@ class ReliabilityModel(
             if (routingCompleted) return
             routingCompleted = true
             selectedRoutes.forEach { routerRuntimes.getValue(it.from).complete(it) }
+        }
+
+        private fun recordServiceOutcome() {
+            if (serviceOutcomeRecorded || !::runtime.isInitialized) return
+            serviceOutcomeRecorded = true
+            metrics.recordServiceFailure(runtime.serviceId, currentOutcome, measurementCohort)
         }
 
         private fun onOriginalDeadline() {
@@ -472,6 +483,9 @@ class ReliabilityModel(
                 completionTimeMs = time,
                 succeeded = succeeded,
                 measured = measurementCohort,
+                clientId = request.clientId,
+                requestClass = request.requestClass,
+                failureReason = completedOutcome.failureReason,
             )
             if (measurementCohort) onOriginalCompletion?.invoke(time - arrivalTimeMs, succeeded)
         }
@@ -543,6 +557,9 @@ class ReliabilityModel(
                             acquisition?.allocation?.let { release(it) }
                         }
                     }
+                if (pool != null && acquisition?.allocation == null) {
+                    metrics.recordConnectionFailure(call.path, outcome, measurementCohort)
+                }
                 if (outcome == AttemptOutcome.SUCCEEDED) return outcome
                 if (time >= originalDeadlineMs) return AttemptOutcome.DEADLINE_EXCEEDED
                 if (attemptNumber == call.attempts) return outcome
@@ -634,7 +651,7 @@ class ReliabilityModel(
                     if (originalRequest) {
                         originalClientActive = true
                         activeOriginalRequests++
-                        metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort)
+                        metrics.recordOriginalArrival(arrivalTimeMs, measurementCohort, request.clientId, request.requestClass)
                     }
                     var selectedTarget = target
                     while (selectedTarget in routerRuntimes) {
@@ -655,7 +672,7 @@ class ReliabilityModel(
                         return@process
                     }
                     if (transmissionStates.any { it.unavailable }) {
-                        currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
+                        currentOutcome = AttemptOutcome.UNAVAILABLE
                         return@process
                     }
                     if (incomingNetwork != null || selectedRoutes.isNotEmpty()) {
@@ -669,7 +686,7 @@ class ReliabilityModel(
                         val networkDelayMs = nextNetworkDelayMs()
                         if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
                         if (transmissionFailed) {
-                            currentOutcome = AttemptOutcome.DOWNSTREAM_FAILURE
+                            currentOutcome = AttemptOutcome.LOCAL_FAILURE
                             return@process
                         }
                     }
@@ -678,7 +695,7 @@ class ReliabilityModel(
                         return@process
                     }
                     if (runtime.faults.unavailable) {
-                        currentOutcome = AttemptOutcome.LOCAL_FAILURE
+                        currentOutcome = AttemptOutcome.UNAVAILABLE
                         return@process
                     }
                     val serviceArrivalMs = time
@@ -696,7 +713,14 @@ class ReliabilityModel(
                                 metrics.recordPoolerWait(runtime.serviceId, acquired, measurementCohort)
                                 val serverAllocation = acquired.allocation
                                 if (serverAllocation == null) {
-                                    currentOutcome = AttemptOutcome.QUEUE_REJECTED
+                                    currentOutcome =
+                                        if (acquired.outcome ==
+                                            SlotAcquisitionOutcome.WAIT_LIMIT
+                                        ) {
+                                            AttemptOutcome.ACQUIRE_TIMED_OUT
+                                        } else {
+                                            AttemptOutcome.QUEUE_REJECTED
+                                        }
                                 } else {
                                     try {
                                         currentOutcome = executeScenario()
@@ -712,6 +736,7 @@ class ReliabilityModel(
                         } finally {
                             release(allocation)
                             if (currentOutcome != AttemptOutcome.PENDING) {
+                                recordServiceOutcome()
                                 metrics.recordAttemptCompletion(
                                     runtime.serviceId,
                                     time - serviceArrivalMs,
@@ -723,6 +748,7 @@ class ReliabilityModel(
                     } catch (exception: QueueFullException) {
                         currentOutcome = AttemptOutcome.QUEUE_REJECTED
                         metrics.recordQueueRejection(runtime.serviceId, measurementCohort)
+                        recordServiceOutcome()
                         if (runtime.serverSlots != null && (incomingNetwork != null || selectedRoutes.isNotEmpty())) {
                             val networkDelayMs = nextNetworkDelayMs()
                             if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
@@ -733,8 +759,10 @@ class ReliabilityModel(
                         if (incomingNetwork != null || networkDelayMs > 0.0) delay(networkDelayMs)
                     }
                 } finally {
+                    recordServiceOutcome()
                     if (originalRequest) {
                         selectedRoutes.forEach { route ->
+                            metrics.recordConnectionFailure(route.path, originalOutcome ?: currentOutcome, measurementCohort)
                             metrics.recordConnection(
                                 route.path,
                                 if ((originalOutcome ?: currentOutcome) ==

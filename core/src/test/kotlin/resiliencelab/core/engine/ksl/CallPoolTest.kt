@@ -47,6 +47,12 @@ class CallPoolTest {
         assertThat(
             rig.result.connections
                 .getValue(CALL)
+                .failuresByReason,
+        ).containsExactlyEntriesOf(mapOf("waitLimit" to 1))
+        assertThat(rig.result.entries.total.failuresByReason).isEmpty()
+        assertThat(
+            rig.result.connections
+                .getValue(CALL)
                 .sentAttempts,
         ).isEqualTo(2)
         assertThat(
@@ -66,6 +72,8 @@ class CallPoolTest {
         val rig = simulate(graph(processing = 50.0, timeout = 10.0), listOf(0.0, 1.0))
         assertThat(rig.completionTimes).containsExactly(10.0, 20.0)
         val call = rig.result.connections.getValue(CALL)
+        assertThat(call.failuresByReason).containsExactlyEntriesOf(mapOf("timeout" to 2))
+        assertThat(rig.result.entries.total.failuresByReason).containsExactlyEntriesOf(mapOf("timeout" to 2))
         assertThat(call.timeouts).isEqualTo(2)
         assertThat(call.orphaned).isEqualTo(2)
         assertThat(call.orphanedIntegralMs).isEqualTo(80.0)
@@ -109,7 +117,13 @@ class CallPoolTest {
                 .getValue(CALL)
                 .sentAttempts,
         ).isEqualTo(1)
-        assertThat(rig.result.successes).isEqualTo(1)
+        assertThat(rig.result.entries.total.successes).isEqualTo(1)
+        assertThat(rig.result.entries.total.failuresByReason).containsExactlyEntriesOf(mapOf("waitLimit" to 1))
+        assertThat(
+            rig.result.connections
+                .getValue(CALL)
+                .failuresByReason,
+        ).containsExactlyEntriesOf(mapOf("waitLimit" to 1))
     }
 
     @Test

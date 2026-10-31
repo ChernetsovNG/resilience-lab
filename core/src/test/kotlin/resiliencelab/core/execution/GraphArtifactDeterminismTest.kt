@@ -161,7 +161,7 @@ class GraphArtifactDeterminismTest {
                 .points
                 .single()
                 .replications
-                .sumOf { it.originalArrivals },
+                .sumOf { it.entries.total.originalArrivals },
         ).isPositive()
         assertThat(
             expected.result.variants.first().points.single().replications.sumOf {

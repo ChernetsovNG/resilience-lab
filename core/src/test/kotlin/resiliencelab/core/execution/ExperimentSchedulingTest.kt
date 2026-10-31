@@ -1,5 +1,4 @@
 package resiliencelab.core.execution
-
 import ksl.simulation.Executive
 import ksl.simulation.KSLEvent
 import ksl.simulation.Model
@@ -12,7 +11,9 @@ import resiliencelab.core.compiler.CompiledVariant
 import resiliencelab.core.engine.ksl.PathStreamSource
 import resiliencelab.core.engine.ksl.ReliabilityModel
 import resiliencelab.core.engine.ksl.TestChains
+import resiliencelab.core.experiment.EntryMetrics
 import resiliencelab.core.experiment.LatencyStatistics
+import resiliencelab.core.experiment.ReplicationEntries
 import resiliencelab.core.experiment.ReplicationResult
 import resiliencelab.core.ir.GraphIr
 import java.util.Collections
@@ -248,7 +249,16 @@ class ExperimentSchedulingTest {
     }
 
     private fun emptyResult() =
-        ReplicationResult(emptyList(), LatencyStatistics(), LatencyStatistics(), LatencyStatistics(), 0, 0, 0, emptyMap())
+        ReplicationResult(
+            entries =
+                ReplicationEntries(
+                    EntryMetrics(LatencyStatistics(), LatencyStatistics(), LatencyStatistics(), 0, 0, 0),
+                    emptyMap(),
+                    emptyMap(),
+                ),
+            arrivalTimesMs = emptyList(),
+            services = emptyMap(),
+        )
 
     private fun awaitWaiting(runner: Thread) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)

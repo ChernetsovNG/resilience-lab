@@ -131,7 +131,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       const connection = effective.connections.find(connection => connection.id === (originals.get(id) ?? id));
       const target = source.find(node => node.id === connection?.to)?.windows[index];
       return outputWindow(outputsOf(catalog, connectionType(id)), {
-        ...window, params: paramsOf(connectionType(id), connection?.params), target, client: target?.client,
+        ...window, params: paramsOf(connectionType(id), connection?.params), target, entries: target?.entries,
       });
     };
     const connectionSeries = primaryConnections.connections.map((connection) => ({

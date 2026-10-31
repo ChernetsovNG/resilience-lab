@@ -17,7 +17,7 @@ test("confidence updates retry-storm success intervals without another run and s
   const response = await summaryResponse;
   const summary = await response.json() as RunSummary;
   const baseline = summary.variants.find(variant => variant.id === "baseline")!;
-  const metric = baseline.points[0].aggregate.successRate!;
+  const metric = baseline.points[0].aggregate.entries.total.successRate!;
   expect(baseline.replications).toBe(10);
   expect(metric.count).toBe(10);
   const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });

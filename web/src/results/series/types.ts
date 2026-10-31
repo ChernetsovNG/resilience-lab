@@ -3,7 +3,7 @@ import type { ConnectionWindowMetrics, WindowMetrics } from "../../api/apiTypes"
 export type WindowMetricValues = Omit<WindowMetrics, "latency"> & {
   latency: DecodedConnectionLatency;
   /** Window approximation: admitted attempts may belong to client requests that arrived in earlier windows. */
-  client?: { originalArrivals: number };
+  entries: { total: { originalArrivals: number } };
 };
 
 export interface DecodedWindow {
@@ -42,6 +42,7 @@ export interface DecodedSeriesPart {
   fromWindow: number;
   untilWindow: number;
   nodes: DecodedNode[];
+  classes: DecodedNode[];
   connections: DecodedConnection[];
 }
 

@@ -94,7 +94,7 @@ class RouterCompilerTest {
         // 4 local + (2 failed + 3 successful) + 1 inherited + (2 + 3) + 3 local + 5 direct = 23 ms.
         assertThat(invocation.work.processCompletionTime).isEqualTo(23.0)
         val result = reliability.metrics.replicationResult()
-        assertThat(result.successes).isEqualTo(1)
+        assertThat(result.entries.total.successes).isEqualTo(1)
         assertThat(result.connections.getValue("call").sentAttempts).isEqualTo(4)
         assertThat(result.connections.getValue("call").retries).isEqualTo(2)
         assertThat(result.connections.getValue("to-left").sentAttempts).isEqualTo(2)
