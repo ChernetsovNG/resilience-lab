@@ -89,7 +89,7 @@ select {
 .top-bar {
   grid-area: top;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   min-width: 0;
   gap: clamp(0.25rem, 0.7vw, 0.75rem);
@@ -99,14 +99,8 @@ select {
   white-space: nowrap;
 }
 
-@media (max-width: 1279px) {
-  .top-bar { flex-wrap: wrap; }
-}
-
 .top-bar h1 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
   margin: 0 0.5rem 0 0;
   font-size: var(--font-section);
 }
@@ -121,7 +115,7 @@ select {
   flex: 1 1 12rem;
   width: 0;
   max-width: 32rem;
-  min-width: 0;
+  min-width: 14rem;
   padding: 0.3rem 0.5rem;
   border: 1px solid #9aa5b1;
   border-radius: 0.35rem;
@@ -221,9 +215,7 @@ select {
 .file-dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 
 .dirty-mark {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
   color: #b45309;
   font-size: var(--font-secondary);
 }
@@ -1164,6 +1156,9 @@ select {
   font-size: var(--font-secondary);
 }
 
+.diagnostic-code { display: block; color: #62727e; font-size: var(--font-secondary); }
+.confirmation-message { white-space: pre-line; }
+
 .validation-problems {
   margin: 0;
   padding: 0;
@@ -1304,6 +1299,7 @@ select {
 
 .results-context-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
   min-width: 0;
@@ -1329,10 +1325,12 @@ select {
 .results-context-bar > label { flex: 0 1 auto; min-width: 2.3rem; }
 .results-context-bar > label span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .results-context-bar button { cursor: pointer; padding: 0.15rem 0.3rem; }
-.results-context-mode { display: inline-flex; flex: 0 1 auto; min-width: 3rem; }
-.results-context-mode button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results-context-mode { display: inline-flex; flex: 0 0 auto; min-width: max-content; }
+.results-context-mode button { flex: 0 0 auto; white-space: nowrap; }
 .results-context-mode button[aria-pressed="true"] { background: #dbeafe; border-color: #2563eb; }
-.results-context-point { width: 3.5rem; }
+.results-context-playback { display: contents; }
+.results-context-playback[aria-hidden="true"] { visibility: hidden; }
+.results-context-bar > .results-context-point { flex: 0 1 14rem; width: auto; min-width: 9rem; max-width: 18rem; }
 .results-context-variant { flex: 0 3 6rem; min-width: 1rem; max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
 .results-context-time { flex: 0 5 5.5rem; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .results-context-actions { margin-inline-start: auto; flex: 0 1 4rem; min-width: 2rem; }

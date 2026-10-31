@@ -201,7 +201,7 @@ internal object Stage1Outputs {
             ),
         ) + latencies(service = true)
 
-    /** Database rows reuse service statistics, with query terminology in Timeline and the inspector. */
+    /** Database rows reuse service statistics, with connection and query terminology in every view. */
     val database: List<OutputDescriptor> =
         service.filterNot { it.id in setOf("retriesPerSecond", "timeoutsPerSecond") }.map { output ->
             val (title, description) =
@@ -213,14 +213,14 @@ internal object Stage1Outputs {
                     "successesPerSecond" -> "Successful queries" to "Successfully completed queries per second."
                     "failuresPerSecond" -> "Failed queries" to "Executed queries that failed per second; excludes queue rejections."
                     "queueRejectionsPerSecond" ->
-                        "max_connections rejections" to
+                        "Query queue rejections" to
                             "Queries rejected per second when connections and the query queue are full."
-                    "utilization" -> "Connections busy" to "Busy connection time divided by available connection time."
+                    "utilization" -> "Connection utilization" to "Busy connection time divided by available connection time."
                     "meanQueue" -> "Mean query queue" to "Waiting-query integral divided by interval duration."
                     "queueFill" ->
                         "Query queue fill" to
                             "Mean waiting queries divided by query queue capacity; no value when queueing is disabled."
-                    "queueRejectionRate" -> "max_connections rejection share" to "Rejected queries divided by offered queries."
+                    "queueRejectionRate" -> "Query rejection share" to "Rejected queries divided by offered queries."
                     "meanWaitMs" -> "Mean connection wait" to "Completed database connection waits, including expiry."
                     "waitLimitCount" -> "Connection wait limits" to "Database connection wait-limit rejections per replication."
                     else ->
@@ -231,6 +231,36 @@ internal object Stage1Outputs {
                 title = title,
                 description = description,
                 inspector = output.inspector?.copy(title = title),
+                timeline =
+                    output.timeline?.let { timeline ->
+                        when (output.id) {
+                            "utilization" -> timeline.copy(groupTitle = "Connection utilization")
+                            "meanQueue" -> timeline.copy(groupTitle = "Query queue")
+                            else -> timeline
+                        }
+                    },
+                overlay =
+                    output.overlay?.let { overlay ->
+                        when (output.id) {
+                            "utilization" ->
+                                overlay.copy(
+                                    label = "Connection utilization {value}",
+                                    description = "Busy connection time / connection capacity time, {interval}.",
+                                )
+                            "meanQueue" ->
+                                overlay.copy(
+                                    label = "Mean query queue {value}",
+                                    description = "Waiting-query integral / interval duration, {interval}.",
+                                    scaleTitle = "Query queue fill",
+                                )
+                            "queueRejectionRate" ->
+                                overlay.copy(
+                                    label = "Query queue rejections {value}",
+                                    description = "Rejected queries / offered queries, {interval}.",
+                                )
+                            else -> overlay
+                        }
+                    },
             )
         }
 
@@ -256,8 +286,8 @@ internal object Stage1Outputs {
     private val amplification =
         OutputDescriptor(
             "amplification",
-            "Admitted amplification",
-            "Called-service admitted attempts per original client request.",
+            "Attempts per request",
+            "Attempts admitted by the destination per original client request; values below 1 mean that not every request reached it.",
             OutputUnit.MULTIPLIER,
             OutputKind.RATIO,
             ratio("target.admittedAttempts", "client.originalArrivals"),
@@ -267,9 +297,9 @@ internal object Stage1Outputs {
             ),
             overlay =
                 OutputOverlay(
-                    "Amplification",
-                    "Amplification {value}",
-                    "Called service admitted amplification: mean across replications, as in Summary.",
+                    "Attempts per request",
+                    "Attempts per request {value}",
+                    "Attempts admitted by the destination per original request, averaged across replications.",
                     0,
                     windowDescription =
                         "Window approximation: admitted attempts / original client arrivals; " +
@@ -347,7 +377,7 @@ internal object Stage1Outputs {
                 OutputTimeline("pool", "Connection pool", 7, 1),
                 OutputInspector("Connection acquisition timeouts", 11),
             ),
-            amplification.copy(inspector = OutputInspector("Admitted amplification", 8)),
+            amplification.copy(inspector = OutputInspector("Attempts per request", 8)),
             SlotPoolOutputs.output(
                 "pool",
                 SlotPoolOutputs.Quantity.WAIT,

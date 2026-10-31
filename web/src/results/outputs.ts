@@ -93,7 +93,7 @@ export function inspectorOutputs(outputs: readonly OutputDescriptor[], charts = 
 
 export type OverlayOutput = OutputDescriptor & { key: string; types: string[] };
 
-/** Share a selector only when the type-local definitions agree; IDs alone are not globally unique. */
+/** Share a selector for equivalent calculations and scales, keeping resource-specific prose at the renderer. */
 export function overlayOutputs(catalog: Catalog, category: TypeDescriptor["category"], model?: ModelFile): OverlayOutput[] {
   const present = model === undefined ? null : new Set([
     ...Object.values(model.blocks).map(block => block.type), ...model.connections.map(connection => connection.type),
@@ -102,7 +102,7 @@ export function overlayOutputs(catalog: Catalog, category: TypeDescriptor["categ
   for (const type of catalog.types.filter(type => type.category === category)) for (const output of type.outputs ?? []) {
     if (output.overlay == null) continue;
     const signature = JSON.stringify([output.id, output.unit, output.kind, output.calculation,
-      output.summary ?? null, output.overlay, output.approximateWindow]);
+      output.summary ?? null, output.overlay.order, output.overlay.scaleParameter ?? null, output.approximateWindow]);
     const shared = choices.find(choice => choice.signature === signature);
     if (shared) shared.types.push(type.id);
     else choices.push({ output, signature, types: [type.id] });

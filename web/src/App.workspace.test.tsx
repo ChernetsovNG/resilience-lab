@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { documentViews, experiment, experimentPath, model, modelPath } from "./test/fixtures";
+import type { DocumentView } from "./api/apiTypes";
 import { setupAppTests, otherPath, completed, deferred, server, open, selectGateway, editHandlers, button, experimentSelect } from "./test/app";
 
 setupAppTests();
@@ -63,20 +64,60 @@ describe("App stage 1 integration", () => {
 
   it("requires confirmation to discard edits and clears Inspector selection after a document switch", async () => {
     const fetchMock = server();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const nativeConfirm = vi.spyOn(window, "confirm");
     await open(); await selectGateway(); editHandlers("5");
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
-    expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the documents?");
+    const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
     expect(experimentSelect().value).toBe(experimentPath);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherPath)))).toBe(false);
-    confirm.mockReturnValue(true);
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits" }));
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
     expect(experimentSelect().value).toBe(otherPath);
     expect(screen.queryByLabelText("Handlers")).toBeNull();
     await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("4");
+    expect(nativeConfirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps model edits when staying and switches models only after discarding edits", async () => {
+    const otherModel = "second/second.model.json";
+    const otherExperiment = "second/second.experiment.json";
+    const extra: Record<string, DocumentView> = {
+      [otherModel]: { ...documentViews[modelPath], path: otherModel },
+      [otherExperiment]: { ...documentViews[experimentPath], path: otherExperiment,
+        content: { experiment: { ...experiment, modelRef: "second.model.json", layoutRef: null } } },
+    };
+    const fetchMock = server(url => {
+      if (url === "/api/v1/workspace/documents") return { body: [...Object.values(documentViews), ...Object.values(extra)]
+        .map(view => ({ ...view, modelRef: view.content.experiment?.modelRef ?? null })) };
+      if (url.startsWith("/api/v1/workspace/document?")) {
+        const path = new URL(url, "http://test").searchParams.get("path")!;
+        if (extra[path] !== undefined) return { body: extra[path] };
+      }
+    });
+    const nativeConfirm = vi.spyOn(window, "confirm");
+    await open(); await selectGateway(); editHandlers("5");
+    const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Model" });
+    select.focus();
+    fireEvent.change(select, { target: { value: otherModel } });
+    const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
+    const stay = within(dialog).getByRole("button", { name: "Stay" });
+    expect(document.activeElement).toBe(stay);
+    fireEvent.click(stay);
+    expect(select.value).toBe(modelPath);
+    expect(document.activeElement).toBe(select);
+    expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "5");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherModel)))).toBe(false);
+
+    fireEvent.change(select, { target: { value: otherModel } });
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits" }));
+    await waitFor(() => expect(select.value).toBe(otherModel));
+    await selectGateway();
+    expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "4");
+    expect(nativeConfirm).not.toHaveBeenCalled();
   });
 
   it("locks document switching during save, sends If-Match and preserves a newer draft after PUT", async () => {
@@ -136,21 +177,23 @@ describe("App stage 1 integration", () => {
     await screen.findByText(/The document changed on disk/, undefined, { timeout: 3000 });
     expect(screen.getByText(modelPath)).toBeTruthy();
     expect(screen.getByText(/Reload will discard unsaved changes/)).toBeTruthy();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const nativeConfirm = vi.spyOn(window, "confirm");
     const reads = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length;
 
     fireEvent.click(button("Reload"));
-    expect(confirm).toHaveBeenCalledWith("Reload and discard unsaved changes to the documents?");
+    const dialog = await screen.findByRole("dialog", { name: "Reload and discard unsaved changes to the documents?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length).toBe(reads);
 
-    confirm.mockReturnValue(true);
     fireEvent.click(button("Reload"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Reload and discard edits" }));
     await screen.findByRole("heading", { name: "Run settings" });
     await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Undo").disabled).toBe(true);
     expect(button("Redo").disabled).toBe(true);
+    expect(nativeConfirm).not.toHaveBeenCalled();
   });
 
   it("shows an external deletion without a Reload button and keeps the editor draft", async () => {

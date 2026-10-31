@@ -153,14 +153,22 @@ class Stage1CatalogTest {
     }
 
     @Test
-    fun `database shares service overlays while retaining query terminology in other views`() {
+    fun `database retains calculations and names connections and query queues in every view`() {
         val service = catalog.type("service")!!.outputs.associateBy { it.id }
-        val database = catalog.type("database")!!.outputs
+        val databaseType = catalog.type("database")!!
+        val database = databaseType.outputs
         database.filter { it.overlay != null }.forEach { output ->
-            assertThat(output.overlay).describedAs(output.id).isEqualTo(service.getValue(output.id).overlay)
+            assertThat(output.calculation).describedAs(output.id).isEqualTo(service.getValue(output.id).calculation)
+            assertThat(output.overlay!!.title).describedAs(output.id).isEqualTo(service.getValue(output.id).overlay!!.title)
+            assertThat(output.overlay.description).doesNotContain("handler", "Handler")
         }
         val utilization = database.first { it.id == "utilization" }
-        assertThat(utilization.title).isEqualTo("Connections busy")
-        assertThat(utilization.inspector!!.title).isEqualTo("Connections busy")
+        assertThat(utilization.title).isEqualTo("Connection utilization")
+        assertThat(utilization.inspector!!.title).isEqualTo("Connection utilization")
+        assertThat(utilization.overlay!!.label).isEqualTo("Connection utilization {value}")
+        val queue = database.first { it.id == "meanQueue" }
+        assertThat(queue.timeline!!.groupTitle).isEqualTo("Query queue")
+        assertThat(queue.overlay!!.label).isEqualTo("Mean query queue {value}")
+        assertThat(databaseType.params.first { it.name == "maxConnections" }.title).isEqualTo("Maximum connections")
     }
 }

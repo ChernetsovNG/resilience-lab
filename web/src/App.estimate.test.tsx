@@ -35,12 +35,14 @@ describe("cost estimate and resume", () => {
 
   it.each([false, true])("requires an explicit budget decision before Run: accepted=%s", async (accepted) => {
     const warning = { code: "ESTIMATE_UI_CACHE", message: "Estimated uncompressed task data exceed the 64 MiB UI cache budget; load selected nodes only" };
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(accepted);
+    const nativeConfirm = vi.spyOn(window, "confirm");
     const fetchMock = server((url) => url === "/api/v1/estimate" ? { body: { ...costEstimate, warnings: [warning] } } : undefined);
     await open();
     fireEvent.click(button("Run"));
-    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
-    expect(confirm.mock.calls[0][0]).toContain(warning.message);
+    const dialog = await screen.findByRole("dialog", { name: "Start run?" });
+    expect(dialog.textContent).toContain(warning.message);
+    fireEvent.click(within(dialog).getByRole("button", { name: accepted ? "Start run" : "Review estimate" }));
+    expect(nativeConfirm).not.toHaveBeenCalled();
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
     if (accepted) {
@@ -66,15 +68,16 @@ describe("cost estimate and resume", () => {
   });
 
   it.each([false, true])("requires confirmation to run without an estimate: accepted=%s", async (accepted) => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(accepted);
+    const nativeConfirm = vi.spyOn(window, "confirm");
     const fetchMock = server((url) => url === "/api/v1/estimate" ? {
       status: 503, body: { code: "ESTIMATE_UNAVAILABLE", message: "Estimation unavailable", diagnostics: [] },
     } : undefined);
     await open(); fireEvent.click(button("Run"));
-    if (!accepted) await screen.findByText("Estimation unavailable");
-    await waitFor(() => expect(confirm).toHaveBeenCalledOnce());
-    expect(confirm.mock.calls[0][0]).toContain("Estimation unavailable");
-    expect(confirm.mock.calls[0][0]).toContain("without an estimate");
+    const dialog = await screen.findByRole("dialog", { name: "Start run?" });
+    expect(dialog.textContent).toContain("Estimation unavailable");
+    expect(dialog.textContent).toContain("without an estimate");
+    fireEvent.click(within(dialog).getByRole("button", { name: accepted ? "Start run" : "Review estimate" }));
+    expect(nativeConfirm).not.toHaveBeenCalled();
     await waitFor(() => expect(button("Run").disabled).toBe(false));
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(accepted ? 1 : 0);
     if (accepted) {

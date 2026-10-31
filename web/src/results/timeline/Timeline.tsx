@@ -11,6 +11,7 @@ import { useTimelineSeries } from "./useTimelineSeries";
 import { useConnectionSeries } from "./useConnectionSeries";
 import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
+import { variantLabel } from "../../presentation/labels";
 
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 const metricChoiceKey = (element: string, metric: string) => JSON.stringify([element, metric]);
@@ -132,7 +133,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
             lines.push({
-              id: `${source.variant.id}:${node.id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: node.id, metric: metric.label, variant: source.variant.label ?? source.variant.id, id: source.variant.id }),
+              id: `${source.variant.id}:${node.id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: node.id, metric: metric.label, variant: variantLabel(source.variant, experiment.variants), id: source.variant.id }),
               metric: metric.id, scale: group.scale, color: lineColor(nodeIndex, group.metrics.indexOf(metric), source.comparison),
               comparison: source.comparison, windows: source.data.windows,
             });
@@ -145,7 +146,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
             const label = t("results.timeline.lineLabel", { node: connection.id, metric: metric.label,
-              variant: source.variant.label ?? source.variant.id });
+              variant: variantLabel(source.variant, experiment.variants) });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
               metric: metric.id, scale: group.scale, color: lineColor(primaryNodes.length + connectionIndex, group.metrics.indexOf(metric), source.comparison),
               comparison: source.comparison,
@@ -169,7 +170,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       const timeout = connection.params.timeout ?? descriptor?.default;
       const value = typeof timeout === "string" ? canonicalOf(timeout, descriptor?.units ?? []) : null;
       return value === null ? [] : [{ id: `${source.id}:${connection.id}:timeout`, value, comparison: index === 1,
-        label: t("results.timeline.timeout", { connection: connection.id, variant: source.label ?? source.id, id: source.id }) }];
+        label: t("results.timeline.timeout", { connection: connection.id, variant: variantLabel(source, experiment.variants), id: source.id }) }];
     });
   });
   if (!enabled) return null;
@@ -179,12 +180,12 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const onCursor = (window: number | null) => { setHover(null); onCursorChange?.(window); };
   return <div className="timeline">
     <div className="timeline-toolbar">
-      <strong>{t("results.timeline.variantLabel", { variant: variant.label ?? variant.id, id: variant.id })}</strong>
+      <strong>{t("results.timeline.variantLabel", { variant: variantLabel(variant, experiment.variants), id: variant.id })}</strong>
       <label>{t("results.timeline.compare")} <select aria-label={t("results.timeline.compare")} value={compared?.id ?? ""}
         onChange={(event) => setComparison(event.target.value)}>
         <option value="">{t("results.timeline.noComparison")}</option>
         {summary.variants.filter((candidate) => candidate.id !== variant.id).map((candidate) =>
-          <option key={candidate.id} value={candidate.id}>{t("results.timeline.variantLabel", { variant: candidate.label ?? candidate.id, id: candidate.id })}</option>)}
+          <option key={candidate.id} value={candidate.id}>{t("results.timeline.variantLabel", { variant: variantLabel(candidate, experiment.variants), id: candidate.id })}</option>)}
       </select></label>
     </div>
     <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
@@ -202,8 +203,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}>
         {t("results.timeline.region", { label: region.label, from: formatDuration(region.fromMs), to: formatDuration(region.toMs) })}
       </span>)}
-      <span>{t("results.timeline.solid", { variant: variant.label ?? variant.id,
-        comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: compared.label ?? compared.id }) })}</span>
+      <span>{t("results.timeline.solid", { variant: variantLabel(variant, experiment.variants),
+        comparison: compared === undefined ? "" : t("results.timeline.dashed", { variant: variantLabel(compared, experiment.variants) }) })}</span>
     </div>
     <p className="timeline-cursor" role="status" data-testid="timeline-cursor">
       {activeWindow === null ? t("results.timeline.inspect")

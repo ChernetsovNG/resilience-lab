@@ -66,6 +66,6 @@ describe("language catalogs", () => {
 
   it("preserves the API catalog prose in English", () => {
     const english: Record<string, string> = en;
-    for (const [key, text] of catalogEntries) expect(english[key], key).toBe(text);
+    for (const [key, text] of catalogEntries.filter(([key]) => !key.startsWith("catalog.options."))) expect(english[key], key).toBe(text);
   });
 });

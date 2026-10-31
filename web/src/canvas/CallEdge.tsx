@@ -89,8 +89,8 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />
             <span>{t("editor.symbols.separator")}</span>
-            <InlineParamEditor {...editorProps} path="attempts" overridden={isOverridden(data?.overrides ?? {}, connection.id, "attempts")} onCommit={(value) => onParam(connection.id, "attempts", value)} />
             <span>{t("editor.symbols.multiplier")}</span>
+            <InlineParamEditor {...editorProps} path="attempts" overridden={isOverridden(data?.overrides ?? {}, connection.id, "attempts")} onCommit={(value) => onParam(connection.id, "attempts", value)} />
             {overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}
           </div> : overridden ? <div className="canvas-edge-parameters">
             {catalog.types.find(type => type.id === connection.type)?.params

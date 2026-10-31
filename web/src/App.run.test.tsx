@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { costEstimate } from "./test/fixtures";
 import { setupAppTests, otherPath, completed, deferred, server, open, button, experimentSelect } from "./test/app";
@@ -44,7 +44,7 @@ it("keeps ordinary Run estimates hidden during estimation and after completion",
 it.each(["ESTIMATE_UI_CACHE", "ESTIMATE_EXTRAPOLATION"])("shows %s only until the submitted job starts", async code => {
   const gate = deferred();
   let submitted = false;
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const nativeConfirm = vi.spyOn(window, "confirm");
   server(async url => {
     if (url === "/api/v1/estimate") return { body: { ...costEstimate, warnings: [{ code, message: "Run cost warning" }] } };
     if (url === "/api/v1/jobs") { submitted = true; await gate.promise; return { status: 202, body: completed }; }
@@ -52,11 +52,17 @@ it.each(["ESTIMATE_UI_CACHE", "ESTIMATE_EXTRAPOLATION"])("shows %s only until th
   });
   await open();
   fireEvent.click(button("Run"));
+  if (code === "ESTIMATE_UI_CACHE") {
+    const dialog = await screen.findByRole("dialog", { name: "Start run?" });
+    expect(submitted).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Start run" }));
+  }
   await waitFor(() => expect(submitted).toBe(true));
   expect(screen.getByRole("region", { name: "Cost estimate" }).textContent).toContain("Run cost warning");
   await act(async () => gate.release());
   await screen.findByRole("table", { name: "Answer" });
   expect(screen.queryByRole("region", { name: "Estimate" })).toBeNull();
+  expect(nativeConfirm).not.toHaveBeenCalled();
 });
 
 it("keeps an automatically closed estimate hidden while another experiment opens", async () => {
@@ -100,20 +106,26 @@ it.each(["Timeline", "Problems"])("preserves a tab selected during Run estimatio
 });
 
 it.each(["Estimate", "Run"])("reveals the prior tab when %s never submits a new job", async action => {
-  const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(true).mockReturnValue(false);
+  const nativeConfirm = vi.spyOn(window, "confirm");
   const fetchMock = server(url => url === "/api/v1/estimate" ? { body: { ...costEstimate,
     warnings: [{ code: "ESTIMATE_UI_CACHE", message: "Cache budget exceeded" }],
   } } : undefined);
   await open();
   fireEvent.click(button("Run"));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Start run?" })).getByRole("button", { name: "Start run" }));
   await screen.findByRole("table", { name: "Answer" });
   await waitFor(() => expect(button("Run").disabled).toBe(false));
   fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   fireEvent.click(button("Collapse results"));
   fireEvent.click(button(action));
   await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/estimate")).toHaveLength(2));
+  if (action === "Run") {
+    const dialog = await screen.findByRole("dialog", { name: "Start run?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review estimate" }));
+  }
   await waitFor(() => expect(button("Run").disabled).toBe(false));
-  expect(confirm).toHaveBeenCalledTimes(action === "Run" ? 2 : 1);
+  expect(nativeConfirm).not.toHaveBeenCalled();
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/jobs")).toHaveLength(1);
   expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
   expect(document.querySelector(".app")!.className).toContain("app--results-normal");

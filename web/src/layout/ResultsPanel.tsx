@@ -1,6 +1,5 @@
 import { courseData, runConditions } from "../experiment/course";
 import { applyOverrides } from "../workspace/params";
-import { backendMessage } from "../i18n/backendMessage";
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
@@ -10,6 +9,8 @@ import type { LoadedExperiment } from "../workspace/editor";
 import { Assumptions } from "./Assumptions";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
+import { parameterLabel, variantLabel } from "../presentation/labels";
+import { sweepDiagnostics } from "../inspector/sweepDiagnostics";
 
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
 const GridMap = lazy(() => import("../results/GridMap").then((module) => ({ default: module.GridMap })));
@@ -87,6 +88,14 @@ export function ResultsPanel({
   const id = useId();
   const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
     (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
+  const diagnosticExperiment = diagnosticDocuments?.experiment ?? experiment;
+  const diagnosticModel = diagnosticDocuments?.model ?? model;
+  const diagnosticGrid = diagnosticExperiment?.grid ?? summary?.grid ?? [];
+  const diagnosticVariants = diagnosticExperiment?.variants ?? summary?.variants ?? [];
+  const diagnosticLabels = new Map(diagnosticGrid.map(axis => [axis.path, parameterLabel(axis.path, catalog, diagnosticModel)]));
+  const diagnosticContext = { catalog, model: diagnosticModel, grid: diagnosticGrid, variants: diagnosticVariants };
+  const runDiagnosticContext = { catalog, model, grid: experiment?.grid ?? summary?.grid ?? [],
+    variants: experiment?.variants ?? summary?.variants ?? [] };
   const staleNotice = running && summary !== null ? <p className="banner" role="status">{t("results.staleRunning")}</p>
     : stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   const conditionVariant = activeVariantId ?? summary?.variants[0]?.id;
@@ -124,10 +133,10 @@ export function ResultsPanel({
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}
         hidden={size === "collapsed"}>
-        {problem === null ? null : <ProblemList problem={{ ...problem, diagnostics: [] }} />}
+        {problem === null ? null : <ProblemList problem={{ ...problem, diagnostics: [] }} context={runDiagnosticContext} />}
         {active === "problems" ? <>
           {validationPending ? <p role="status">{t("results.problems.validating")}</p> : null}
-          {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} />}
+          {validationProblem === null ? null : <ProblemList problem={{ ...validationProblem, diagnostics: [] }} context={diagnosticContext} />}
           {problemsElement === null ? null : <p className="problems-filter">
             {t("results.problems.elementFilter", { element: problemsElement })}
             <button type="button" onClick={onClearProblemsElement}>{t("results.problems.showAll")}</button>
@@ -140,10 +149,13 @@ export function ResultsPanel({
                   <button type="button" title={locationOf(diagnostic)} onClick={() => onDiagnostic?.(diagnostic)}>
                     <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}>{t(`results.problems.icon.${diagnostic.severity}`)}</span>
                     <span>
-                      <span className="diagnostic-message">{backendMessage(diagnostic)}</span>
+                      <span className="diagnostic-message">{sweepDiagnostics([{ ...diagnostic, variant: undefined }],
+                        { grid: diagnosticGrid, variants: diagnosticVariants }, diagnosticLabels, catalog, diagnosticModel)[0].message}</span>
                       <span className="diagnostic-context">{t("results.problems.context", {
                         element: target.element ?? t("common.experiment"),
-                        variant: target.variant == null ? "" : t("results.problems.variant", { variant: target.variant }),
+                        variant: target.variant == null ? "" : t("results.problems.variant", {
+                          variant: variantLabel(diagnosticVariants.find(variant => variant.id === target.variant) ?? { id: target.variant }, diagnosticVariants),
+                        }),
                       })}</span>
                       <span className="diagnostic-details">{t("results.problems.details", {
                         code: diagnostic.code, document: diagnostic.document ?? t("common.experiment"),
@@ -161,7 +173,7 @@ export function ResultsPanel({
         </> : active === "map" && summary !== null ? <>
           {staleNotice}
           <Suspense fallback={<p role="status">{t("results.map.loading")}</p>}><GridMap summary={summary} activeVariantId={activeVariantId}
-            pointId={selectedPointId} onPointChange={onPointChange} /></Suspense>
+            pointId={selectedPointId} onPointChange={onPointChange} catalog={catalog} model={model} variants={experiment?.variants} /></Suspense>
         </> : active === "assumptions" ? <>
           {staleNotice}
           {catalog === null || model === null ? <p className="results-empty">{t("results.assumptions.empty")}</p> :
@@ -172,7 +184,7 @@ export function ResultsPanel({
             <>
               {conditions === null ? null : <p className="run-conditions" data-testid="run-conditions" title={conditions}>{conditions}</p>}
               <SummaryTable summary={summary} activeVariantId={activeVariantId} selectedPointId={selectedPointId} onElement={onElement}
-                faults={faults} windowMs={manifest?.series?.windowMs} />
+                faults={faults} windowMs={manifest?.series?.windowMs} catalog={catalog} model={model} variants={experiment?.variants} />
             </>
           ) : problem !== null ? null : job?.status === "CANCELLED" ? (
             <p className="results-empty">{t("results.cancelled")}</p>

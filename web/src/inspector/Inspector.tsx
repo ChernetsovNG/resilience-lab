@@ -4,12 +4,13 @@ import { TypeHelp } from "../help/TypeHelp";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
 import type { EditorCommand } from "../workspace/editor";
 import { resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
-import { elementOf, isOverridden } from "../workspace/params";
+import { elementOf, isOverridden, ownEntry } from "../workspace/params";
 import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
 import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
+import { variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
   catalog: Catalog;
@@ -60,8 +61,14 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
   const showElement = (resultsOnly || target === "element") && element !== null;
   const variant = target === "variant" ? experiment.variants.find(candidate => candidate.id === variantId) : undefined;
+  const connection = model.connections.find(candidate => candidate.id === selected);
+  const destination = connection === undefined ? undefined : ownEntry(model.blocks, connection.to);
+  const attempts = element?.params.attempts ?? type?.params.find(param => param.name === "attempts")?.default ?? 1;
+  const parameters = type?.params.filter(descriptor =>
+    (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
+    (descriptor.name !== "backoff" || Number(attempts) > 1));
   const heading = showElement ? selected : resultsOnly ? null
-    : target === "experiment" ? t("editor.run.title") : variant?.label || variant?.id || null;
+    : target === "experiment" ? t("editor.run.title") : variant === undefined ? null : variantLabel(variant, experiment.variants);
   const subtitle = showElement ? (type?.title ?? element?.type) + (variantId === null ? "" : t("editor.inspector.variantOverrides"))
     : target === "variant" ? t("editor.variant.type") : experimentPath?.split("/").at(-1)?.replace(/\.experiment\.json$/, "");
 
@@ -89,10 +96,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
           )}
           {type === undefined ? <p>{t("help.type.unknown", { type: element.type })}</p> : null}
           {type?.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : null}
-          {type?.params.map((descriptor) => (
+          {parameters?.map((descriptor) => (
             <ParamField
               key={`${selected}.${descriptor.name}`}
-              descriptor={descriptor}
+              descriptor={descriptor.name === "balancing" ? { ...descriptor, default: descriptor.default ?? "roundRobin" } : descriptor}
               value={element.params[descriptor.name]}
               path={descriptor.name}
               editable={editable}

@@ -25,11 +25,11 @@ for (const language of ["en", "ru"] as const) {
       : "3 × 3 = 9 points × 2 variants × 10 replications = 180 runs");
     const axis = inspector.getByRole("group", { name: `${russian ? "Таймаут" : "Timeout"} · order-service → payment-service`, exact: true });
     const warning = axis.locator(".field-diagnostics > li").filter({ hasText: "LINT_TIMEOUT_BUDGET" })
-      .filter({ hasText: russian ? "при Таймаут = 1s" : "at Timeout = 1s" });
+      .filter({ hasText: russian ? /Таймаут.*= 1s/ : /Timeout.*= 1s/ });
     await expect(warning).toHaveCount(1);
     await expect(warning).toContainText("Baseline, hello");
     await expect(warning).not.toContainText(/p[0-9]/);
-    await axis.locator(":scope > .field-feedback").last().getByRole("button").focus();
+    await axis.locator(":scope > .field-feedback").last().getByRole("button").press("Enter");
     await expect(warning).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`parameter-sweep-${language}.png`) });
 

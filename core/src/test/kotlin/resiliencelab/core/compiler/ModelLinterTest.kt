@@ -258,6 +258,7 @@ class ModelLinterTest {
         assertThat(warning.path).isEqualTo("a")
         assertThat(warning.pointer).isEqualTo("/blocks/a/params/handlers")
         assertThat(warning.message).isEqualTo("Handlers 1 are below λ·W = 2 (λ = 125 requests/s, W = 16 ms; profile maximum, conservative)")
+        assertThat(warning.args).containsEntry("elementType", JsonPrimitive("service"))
         assertThat(
             warnings(
                 changed.copy(

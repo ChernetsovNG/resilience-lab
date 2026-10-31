@@ -47,7 +47,7 @@ test("Russian browser gets translated controls, catalog and results; language pr
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   await chooseLanguage(page, "ru", "en");
   await page.getByTestId("block-node").filter({ hasText: "gateway" }).click();
-  await expect(inspector.getByRole("option", { name: "Фиксированное значение", exact: true })).toHaveJSProperty("selected", true);
+  await expect(inspector.getByRole("option", { name: "Фиксированное", exact: true })).toHaveJSProperty("selected", true);
   await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
   await page.screenshot({ path: testInfo.outputPath("russian-before-run.png") });
 

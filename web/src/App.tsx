@@ -17,6 +17,8 @@ import { Canvas, type CanvasHandle } from "./canvas/Canvas";
 import { VariantTabs } from "./canvas/VariantTabs";
 import { VariantChanges } from "./canvas/VariantChanges";
 import { useHealth } from "./components/useHealth";
+import { useConfirmation } from "./components/useConfirmation";
+import { DiagnosticLabelContext } from "./presentation/diagnosticContext";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
 import { projectElementResults } from "./inspector/elementResultsData";
 import { Inspector } from "./inspector/Inspector";
@@ -44,6 +46,7 @@ import { useWorkspace } from "./workspace/useWorkspace";
 export function App() {
   const health = useHealth();
   const workspace = useWorkspace(health.reportFailure, health.reportSuccess);
+  const { confirm, confirmationDialog } = useConfirmation();
   const canvas = useRef<CanvasHandle>(null);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
@@ -348,10 +351,14 @@ export function App() {
         setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
       }
       if (cost.problem !== null) {
-        if (!window.confirm(t("app.confirm.estimateFailed", { message: backendMessage(cost.problem) }))) return;
+        if (!await confirm({ title: t("app.confirm.runTitle"),
+          message: t("app.confirm.estimateFailed", { message: backendMessage(cost.problem) }),
+          confirmLabel: t("app.confirm.runAction"), cancelLabel: t("app.confirm.reviewEstimateAction") })) return;
       } else {
         const budgets = cost.value.warnings.filter(warning => warning.code === "ESTIMATE_UI_CACHE");
-        if (budgets.length > 0 && !window.confirm(t("app.confirm.startRun", { warnings: budgets.map(warning => backendMessage(warning)).join("\n") }))) return;
+        if (budgets.length > 0 && !await confirm({ title: t("app.confirm.runTitle"),
+          message: t("app.confirm.startRun", { warnings: budgets.map(warning => backendMessage(warning)).join("\n") }),
+          confirmLabel: t("app.confirm.runAction"), cancelLabel: t("app.confirm.reviewEstimateAction") })) return;
       }
       const documents = { model: loaded.model, experiment: loaded.experiment };
       if ((workspace.dirty || loaded.versions.experiment === null) && !await workspace.save()) return;
@@ -361,7 +368,7 @@ export function App() {
       runInFlight.current = false;
       setRunPending(false);
     }
-  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize]);
+  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize, confirm]);
 
   useEffect(() => {
     if (command === null) return;
@@ -376,23 +383,26 @@ export function App() {
   }, [command, validation.pending, invalid, loading, startRun, workspace, health.error]);
 
   return (
+    <DiagnosticLabelContext value={{ variants: loaded?.experiment.variants ?? [], grid: loaded?.experiment.grid ?? [], catalog, model }}>
     <div className={`app app--results-${resultsSize}`}>
       <TopBar
         models={workspace.models}
         model={workspace.selectedModel}
         onNewModel={() => { void fileMenu.current?.start("new"); }}
         onNewExperiment={() => { void fileMenu.current?.start("newExperiment"); }}
-        onModel={path => {
+        onModel={async path => {
           if (invalid || loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+          if (workspace.dirty && !await confirm({ title: t("app.confirm.discardChanges"),
+            confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
           resetExperimentView();
           void workspace.openModel(path, true);
         }}
         experiments={workspace.experiments}
         experiment={loaded?.experimentPath ?? null}
-        onExperiment={(path) => {
+        onExperiment={async (path) => {
           if (invalid || workspace.loading || workspace.saving || run.running || startingRun || estimate.pending) return;
-          if (workspace.dirty && !window.confirm(t("app.confirm.discardChanges"))) return;
+          if (workspace.dirty && !await confirm({ title: t("app.confirm.discardChanges"),
+            confirmLabel: t("app.confirm.discardAction"), cancelLabel: t("app.confirm.stayAction") })) return;
           resetExperimentView();
           void workspace.open(path, true);
         }}
@@ -512,9 +522,10 @@ export function App() {
                   {workspace.externalChange !== null && workspace.dirty ? t("app.documents.discardWarning") : null}
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (workspace.externalChange !== null && workspace.dirty &&
-                        !window.confirm(t("app.confirm.reloadChanges"))) return;
+                        !await confirm({ title: t("app.confirm.reloadChanges"),
+                          confirmLabel: t("app.confirm.reloadAction"), cancelLabel: t("app.confirm.stayAction") })) return;
                       setSelection([]);
                       setInspectorTarget("experiment");
                       setFieldFocus(null);
@@ -662,6 +673,7 @@ export function App() {
         }}
       />
       </ResultsWorkspace>
+      {confirmationDialog}
       <StatusBar job={ownRun ? run.job : null} health={health.health} healthError={health.error}
         diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
         cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}
@@ -671,5 +683,6 @@ export function App() {
           if (resultsSize === "collapsed") setResultsSize("normal");
         }} />
     </div>
+    </DiagnosticLabelContext>
   );
 }

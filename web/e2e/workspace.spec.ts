@@ -69,9 +69,9 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
-  await expect(callLabel.getByRole("button", { name: "Warnings in variants: baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
+  await expect(callLabel.getByRole("button", { name: "Warnings in variants: Baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
   await timeout.locator("..").locator(".field-feedback--variants button").click();
-  await expect(timeout.locator("..").getByRole("link", { name: "In variants: baseline — 1 warning", exact: true })).toBeVisible();
+  await expect(timeout.locator("..").getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await expect(timeout).toHaveValue("80ms");
@@ -90,7 +90,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
   const warning = problems.getByRole("button", { name: /LINT_TIMEOUT_BUDGET/ });
-  await expect(warning).toContainText("baseline");
+  await expect(warning).toContainText("Baseline");
   await expect(problems.getByRole("button", { name: /LINT_DEADLINE_BUDGET/ })).toHaveCount(0);
   await warning.click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
@@ -113,13 +113,13 @@ test("summarizes a warning from the only variant override on Model and opens its
     await expect(handlers).toHaveValue("4");
     await expect(fieldMessages).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
-    await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: solo", exact: true })).toBeVisible();
+    await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: Solo", exact: true })).toBeVisible();
     await handlers.locator("..").locator(".field-feedback--variants button").click();
-    await expect(handlers.locator("..").getByRole("link", { name: "In variants: solo — 1 warning", exact: true })).toBeVisible();
+    await expect(handlers.locator("..").getByRole("link", { name: "In variants: Solo — 1 warning", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
     const warning = page.getByRole("tabpanel").getByRole("button", { name: /LINT_HANDLERS_LITTLE/ });
-    await expect(warning).toContainText("solo");
+    await expect(warning).toContainText("Solo");
     await warning.click();
     await expect(page.getByRole("tab", { name: "Solo", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(handlers).toHaveValue("1");
@@ -211,6 +211,10 @@ test("saves variant field overrides without changing the model and restores mode
     const timeout = page.getByLabel("Timeout", { exact: true });
     await timeout.fill("90ms");
     await timeout.press("Enter");
+    await expect(page.getByLabel("Base delay", { exact: true })).toHaveCount(0);
+    const attempts = page.getByLabel("Attempts", { exact: true });
+    await attempts.fill("2");
+    await attempts.press("Enter");
     const base = page.getByLabel("Base delay", { exact: true });
     await base.fill("4ms");
     await base.press("Enter");
@@ -238,7 +242,7 @@ test("saves variant field overrides without changing the model and restores mode
     const restored = (await document(path)).content.experiment;
     expect(restored.variants[1].overrides).not.toHaveProperty("gateway-to-middle.timeout");
     expect(restored.variants[1].overrides).not.toHaveProperty("gateway-to-middle.backoff.base");
-    expect(restored.variants[1].overrides["gateway-to-middle.attempts"]).toBe(1);
+    expect(restored.variants[1].overrides["gateway-to-middle.attempts"]).toBe(2);
     expect((await document(modelPath)).content.model).toEqual(originalModel);
     await expectNoPageScroll(page);
   });
@@ -389,13 +393,13 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const points = page.getByLabel("Grid point", { exact: true });
     await expect(points.getByRole("option")).toHaveCount(6);
-    await expect(points.locator('option[value="p0"]')).toContainText("gateway-to-middle.timeout = 40ms");
-    await expect(points.locator('option[value="p5"]')).toContainText("gateway-to-middle.attempts = 3");
+    await expect(points.locator('option[value="p0"]')).toContainText("Timeout · gateway → middle = 40ms");
+    await expect(points.locator('option[value="p5"]')).toContainText("Attempts · gateway → middle = 3");
     for (let point = 0; point < 6; point += 1) {
       await points.selectOption(`p${point}`);
       const heading = page.getByRole("region", { name: "Saturation insight" }).getByRole("heading");
-      await expect(heading).toContainText(`gateway-to-middle.timeout = ${grid[0].values[Math.floor(point / 3)]}`);
-      await expect(heading).toContainText(`gateway-to-middle.attempts = ${grid[1].values[point % 3]}`);
+      await expect(heading).toContainText(`Timeout · gateway → middle = ${grid[0].values[Math.floor(point / 3)]}`);
+      await expect(heading).toContainText(`Attempts · gateway → middle = ${grid[1].values[point % 3]}`);
       await expect(heading).not.toContainText(`p${point}`);
       const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
       await expect(values).toHaveCount(2);
@@ -610,7 +614,7 @@ test("keeps toolbar actions and health visible for a long experiment path in cle
     const selector = page.getByLabel("Experiment", { exact: true });
     await selectExperiment(page, path);
     await expect(selector).toHaveValue(path);
-    await expect(selector.locator("option:checked")).toHaveText(path);
+    await expect(selector.locator("option:checked")).toHaveText(path.replace(/\.experiment\.json$/, ""));
     await expect(page.getByTestId("block-node")).toHaveCount(4);
     async function expectToolbarContained() {
       for (const control of [page.getByRole("button", { name: "Save", exact: true }),

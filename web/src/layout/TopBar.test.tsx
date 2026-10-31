@@ -12,6 +12,12 @@ function props(overrides: Partial<TopBarProps> = {}): TopBarProps {
 const button = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
 
 describe("TopBar", () => {
+  it("shows document names while preserving file paths as selection values", () => {
+    render(<TopBar {...props()} />);
+    const experiment = screen.getByRole<HTMLSelectElement>("combobox", { name: "Experiment" });
+    expect(experiment.selectedOptions[0].textContent).toBe("first");
+    expect(experiment.value).toBe("first.experiment.json");
+  });
   it("blocks running with a validation explanation", () => {
     const state = props({ runBlockedReason: "Fix validation errors before running" });
     render(<TopBar {...state} />);

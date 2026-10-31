@@ -69,12 +69,14 @@ it.each([
   ["Model", "+ New model…"], ["Experiment", "+ New experiment…"],
 ])("preserves unsaved changes when creation from %s is declined", async (label, option) => {
   storage(); render(<App />); await selectGateway(); editHandlers("7");
-  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const nativeConfirm = vi.spyOn(window, "confirm");
   const select = screen.getByRole<HTMLSelectElement>("combobox", { name: label });
   const previous = select.value;
   const create = within(select).getByRole<HTMLOptionElement>("option", { name: option });
   fireEvent.change(select, { target: { value: create.value } });
-  expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the documents?");
+  const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
+  expect(nativeConfirm).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(select.value).toBe(previous);
   expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
@@ -155,12 +157,42 @@ it("asks to discard unsaved changes before preparing deletion and preserves them
   render(<App />);
   await selectGateway();
   editHandlers("7");
-  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const nativeConfirm = vi.spyOn(window, "confirm");
   await choose("Delete model…");
-  expect(confirm).toHaveBeenCalledWith("Discard unsaved changes to the documents?");
+  const dialog = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
+  expect(nativeConfirm).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(Object.keys(views)).toHaveLength(3);
   expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
+});
+
+it("keeps the import form and editor drafts when its discard confirmation is escaped", async () => {
+  const views = storage();
+  render(<App />); await selectGateway(); editHandlers("7");
+  await choose("Import");
+  const importing = await screen.findByRole("dialog", { name: "Import" });
+  fireEvent.change(within(importing).getByLabelText("Destination directory"), { target: { value: "imported" } });
+  fireEvent.submit(importing.querySelector("form")!);
+  const confirmation = await screen.findByRole("dialog", { name: "Discard unsaved edits?" });
+  fireEvent(confirmation, new Event("cancel", { cancelable: true }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discard unsaved edits?" })).toBeNull());
+  expect(within(importing).getByLabelText("Destination directory")).toHaveProperty("value", "imported");
+  expect(importing).toHaveProperty("open", true);
+  expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
+  expect(Object.keys(views)).toHaveLength(3);
+});
+
+it("keeps editor drafts when saving before export is declined", async () => {
+  const views = storage();
+  render(<App />); await selectGateway(); editHandlers("7");
+  await choose("Export");
+  const confirmation = await screen.findByRole("dialog", { name: "Save unsaved changes before exporting?" });
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel export" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByLabelText("Handlers")).toHaveProperty("value", "7");
+  expect(views[modelPath].content.model!.blocks.gateway.params.handlers).toBe(4);
+  expect(button("Save").disabled).toBe(false);
 });
 
 it("disables experiment deletion for a default that has never been saved", async () => {

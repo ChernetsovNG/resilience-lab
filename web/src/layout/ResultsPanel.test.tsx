@@ -1,8 +1,45 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
-import { summary } from "../test/fixtures";
+import { catalog, experiment, model, summary } from "../test/fixtures";
 import { ResultsPanel, type ResultsPanelSize } from "./ResultsPanel";
+import { DiagnosticLabelContext } from "../presentation/diagnosticContext";
+
+it("formats run errors with their saved grid and variants rather than the current editor context", () => {
+  render(<DiagnosticLabelContext value={{ catalog, model, variants: [{ id: "variant-2", label: "Current label" }],
+    grid: [{ path: "gateway.processing.mean", values: ["99ms", "100ms"] }] }}>
+    <ResultsPanel job={null} summary={null} model={model} catalog={catalog}
+      experiment={{ ...experiment, variants: [{ id: "variant-2", label: "Recorded label", overrides: {} }],
+        grid: [{ path: "gateway.processing.mean", values: ["3ms", "4ms"] }] }}
+      problem={{ code: "EXECUTION_DRAIN", message: "Incomplete workload", args: { variant: "variant-2", point: "p1", replication: 3 }, diagnostics: [] }} />
+  </DiagnosticLabelContext>);
+  const error = screen.getByRole("alert");
+  expect(error.textContent).toContain("Variant 'Recorded label', point 'Processing time · Mean · gateway = 4ms'");
+  expect(error.textContent).not.toMatch(/Current label|100ms|p1|variant-2/);
+});
+
+it("preserves a deliberately entered variant label even when it resembles a generated ID", () => {
+  const run = structuredClone(summary);
+  run.variants = [{ ...run.variants[0], id: "variant-2", label: "variant-2" }];
+  render(<ResultsPanel job={null} summary={run} problem={null} activeVariantId="variant-2"
+    experiment={{ ...experiment, variants: [{ id: "variant-2", label: "variant-2", overrides: {} }] }} />);
+  expect(within(screen.getByRole("table", { name: "Answer" })).getAllByRole("columnheader")[1].textContent).toContain("variant-2");
+});
+
+it("uses variant labels and catalog coordinates in Problems, keeping the code secondary", () => {
+  const finding = { code: "CUSTOM_GRID_WARNING", severity: "WARNING" as const,
+    message: "Capacity at gateway.handlers needs attention (points: p1)", args: { points: "p1" },
+    document: "test.experiment.json", path: "gateway", variant: "variant-2" };
+  render(<ResultsPanel job={null} summary={null} problem={null} catalog={catalog} model={model}
+    experiment={{ ...experiment, variants: [{ id: "variant-2", overrides: {} }], grid: [{ path: "gateway.handlers", values: [4, 6] }] }}
+    diagnostics={[finding]} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  const row = screen.getByRole("button", { name: /Capacity/ });
+  expect(row.querySelector(".diagnostic-message")!.textContent).toContain("Handlers · gateway = 6");
+  expect(row.querySelector(".diagnostic-context")!.textContent).toContain("Variant 2");
+  expect(row.textContent).not.toMatch(/p1|variant-2|gateway\.handlers/);
+  expect(row.querySelector(".diagnostic-details")!.textContent).toContain("CUSTOM_GRID_WARNING");
+});
 
 it("offers Timeline and explains that it needs a run", () => {
   render(<ResultsPanel job={null} summary={null} problem={null} />);
@@ -44,7 +81,7 @@ it("lists all diagnostics in Problems and navigates from a finding", () => {
   expect(row.textContent).toContain("chain.model.json");
   expect(row.textContent).toContain("gateway");
   expect(within(panel).getByText(/No element location/)).toBeTruthy();
-  expect(within(panel).getByRole("button", { name: /At least one handler/ }).textContent).toContain("baseline");
+  expect(within(panel).getByRole("button", { name: /At least one handler/ }).textContent).toContain("Baseline");
   fireEvent.click(within(panel).getByRole("button", { name: /At least one handler/ }));
   expect(onDiagnostic).toHaveBeenCalledWith(finding);
 });
@@ -61,7 +98,7 @@ it("uses the shared point without offering another context selector in Answer or
   const view = render(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p0" onPointChange={onPointChange} />);
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   view.rerender(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p1" onPointChange={onPointChange} />);
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("gateway-to-middle.timeout = 80ms");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Timeout · gateway-to-middle = 80ms");
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   expect(screen.queryByRole("combobox", { name: "Replication" })).toBeNull();

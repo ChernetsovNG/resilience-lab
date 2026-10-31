@@ -18,6 +18,19 @@ import { applyOverrides } from "../workspace/params";
 
 beforeAll(mockReactFlowDom);
 
+it("shows database connections on its node without an internal type name", async () => {
+  const snapshot = structuredClone(model);
+  snapshot.blocks.middle = { type: "database", params: { maxConnections: 3, queue: 4, processing: { kind: "fixed", mean: "5ms" } } };
+  render(<Canvas catalog={localizeCatalog(fullCatalog as Catalog)} model={snapshot} layout={layout} selected={[]}
+    onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const node = await screen.findByTestId("rf__node-middle");
+  expect(node.textContent).toContain("connections:");
+  expect(node.textContent).toContain("Database");
+  expect(screen.getByTestId("canvas-param-middle-maxConnections").textContent).toBe("3");
+  expect(node.textContent).not.toContain("handlers");
+  expect(node.textContent).not.toContain("database");
+});
+
 it("retains an insertion activated before the viewport has its initial dimensions", async () => {
   const onCommand = vi.fn();
   function EarlyActivation() {
@@ -403,10 +416,10 @@ describe("VariantTabs", () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it("marks the controlled active variant and falls back to its id without a label", () => {
+  it("marks the controlled active variant and names an unlabeled page", () => {
     render(<VariantTabs variants={[{ id: "plain", overrides: {} }]} active="plain" onSelect={vi.fn()} onInspect={vi.fn()} onCommand={vi.fn()} />);
     expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("false");
-    expect(screen.getByRole("tab", { name: "plain" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Variant 1" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("keeps page navigation disabled while an editable draft is invalid", () => {
@@ -435,7 +448,7 @@ it("does not give old results to new nodes, new edges or retargeted edges", asyn
   expect(screen.queryByTestId("canvas-results-added")).toBeNull();
   expect(screen.getByTestId("canvas-edge-label-new-call").textContent).not.toContain("Amplification");
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").textContent).not.toContain("Amplification");
-  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Amplification 1.2×");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per request 1.2×");
 });
 
 
@@ -477,7 +490,7 @@ it("does not move selected nodes when arrow keys are used on a variant diagnosti
   const warning = { code: "LINT", severity: "WARNING" as const, message: "Budget", variant: "baseline" };
   render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()}
     editable onCommand={onCommand} variantElementDiagnostics={new Map([["gateway", [warning]]])} />);
-  const badge = await screen.findByRole("button", { name: "Warnings in variants: baseline" });
+  const badge = await screen.findByRole("button", { name: "Warnings in variants: Baseline" });
   badge.focus();
   fireEvent.keyDown(badge, { key: "ArrowRight" });
   expect(onCommand).not.toHaveBeenCalled();

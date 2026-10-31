@@ -40,6 +40,22 @@ function stubSeries() {
 
 const shortManifest = { ...manifest, series: { ...manifest.series!, warmupMs: 10, measurementMs: 15 } };
 
+it("names unlabeled stored variants in comparison choices, legends and chart labels", async () => {
+  stubSeries();
+  const run = structuredClone(summary);
+  run.variants[0].label = "baseline";
+  run.variants[1].id = "variant-2";
+  run.variants[1].label = "variant-2";
+  render(<Timeline runId="names" summary={run} manifest={shortManifest} model={model} experiment={experiment}
+    catalog={catalog} activeVariantId="baseline" pointId="p0" replication={0} cursorWindow={null} selectedNodes={["gateway"]} />);
+  const compare = screen.getByRole("combobox", { name: "Compare variant" });
+  expect(within(compare).getByRole("option", { name: "Variant 2" })).toBeTruthy();
+  fireEvent.change(compare, { target: { value: "variant-2" } });
+  expect(await screen.findByRole("region", { name: "Utilization" })).toBeTruthy();
+  expect(screen.getByText("Solid: Baseline · dashed: Variant 2")).toBeTruthy();
+  expect(screen.getByRole("region", { name: "Utilization" }).textContent).not.toMatch(/variant-2|\(baseline\)/);
+});
+
 it("keeps selected metrics and their charts when catalog labels change language", async () => {
   stubSeries();
   const props = { runId: "language", summary, manifest: shortManifest, model, experiment,
@@ -152,7 +168,7 @@ it("groups only model outputs by element, without unrelated types or duplicate m
   expect((within(choices).getByRole("checkbox", { name: "database" }) as HTMLInputElement).checked).toBe(false);
   fireEvent.click(within(choices).getByRole("checkbox", { name: "database" }));
   const database = within(choices).getByRole("group", { name: "database · Database" });
-  expect(within(database).getByRole("checkbox", { name: "Connections busy" })).toBeTruthy();
+  expect(within(database).getByRole("checkbox", { name: "Connection utilization" })).toBeTruthy();
   expect(within(database).queryByRole("checkbox", { name: "Handler utilization" })).toBeNull();
 });
 

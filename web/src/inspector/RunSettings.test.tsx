@@ -76,13 +76,13 @@ it("disables random seed when run settings are read-only", () => {
 
 it.each([
   { language: "en", prefix: "More about: ", fields: [
-    ["Replications", "independent runs"], ["Warm-up", "excluded from results"],
-    ["Measurement", "start of warm-up"], ["Series window", "measurement / 100"],
+    ["Replications", "Start with 10"], ["Warm-up", "excluded from results"],
+    ["Measurement", "Start with 60s"], ["Series window", "measurement / 100"],
     ["Seed", "same result"], ["Real-time limit", "real time"],
   ] },
   { language: "ru", prefix: "Подробнее: ", fields: [
-    ["Повторения", "независимых прогонов"], ["Разогрев", "не входит в результаты"],
-    ["Измерение", "от начала разогрева"], ["Окно временных рядов", "измерение / 100"],
+    ["Повторения", "Начните с 10"], ["Разогрев", "не входит в результаты"],
+    ["Измерение", "Начните с 60s"], ["Окно временных рядов", "измерение / 100"],
     ["Начальное значение генератора", "тот же результат"], ["Ограничение реального времени", "реального времени"],
   ] },
 ] as const)("explains all six run fields with associated help in $language", ({ language, prefix, fields }) => {
@@ -92,7 +92,7 @@ it.each([
     ? ["Прогон", "Отказы", "Перебор параметров"] : ["Run", "Faults", "Parameter sweep"]);
   for (const [label, description] of fields) {
     const input = screen.getByRole("textbox", { name: label });
-    fireEvent.focus(screen.getByRole("button", { name: prefix + label }));
+    fireEvent.click(screen.getByRole("button", { name: prefix + label }));
     const tooltip = screen.getByRole("tooltip");
     expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(tooltip.id);
     expect(tooltip.textContent).toContain(description);

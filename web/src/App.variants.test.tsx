@@ -65,7 +65,7 @@ it("focuses the Inspector textarea when a load-profile array override is selecte
     } }] } },
   } } : undefined);
   await open();
-  fireEvent.click(screen.getByRole("tab", { name: "profile" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Variant 1" }));
   const banner = screen.getByTestId("variant-banner");
   fireEvent.click(banner.querySelector("summary")!);
   fireEvent.click(within(banner).getByRole("button"));
@@ -105,6 +105,7 @@ it("saves precise variant overrides only to the experiment and resets fields and
   await open();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   fireEvent.click(await screen.findByTestId("rf__edge-gateway-to-middle"));
+  editField("Attempts", "2");
   editField("Timeout", "90ms");
   editField("Base delay", "4ms");
   expect((await screen.findByTestId("canvas-edge-label-gateway-to-middle")).textContent).toContain("◆");
@@ -115,7 +116,7 @@ it("saves precise variant overrides only to the experiment and resets fields and
   expect(String(puts[0][0])).toContain(encodeURIComponent(experimentPath));
   expect(puts[0][1]?.headers).toMatchObject({ "If-Match": '"v-experiment"' });
   expect(JSON.parse(String(puts[0][1]?.body)).experiment.variants[1].overrides).toEqual({
-    "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "gateway-to-middle.attempts": 2, "middle-to-dependency.attempts": 1,
     "gateway-to-middle.timeout": "90ms", "gateway-to-middle.backoff.base": "4ms",
   });
   fireEvent.click(button("Reset Timeout"));
@@ -158,7 +159,7 @@ it("edits canvas timeout with undo and saves variant edits only as overrides", a
 
 it("adds, copies, renames and confirms deletion of a variant while keeping its page active", async () => {
   server();
-  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const nativeConfirm = vi.spyOn(window, "confirm");
   await open();
   fireEvent.click(button("Add variant"));
   expect(screen.getByRole("tab", { name: "Variant 1" }).getAttribute("aria-selected")).toBe("true");
@@ -180,12 +181,14 @@ it("adds, copies, renames and confirms deletion of a variant while keeping its p
   expect(screen.getByRole("tab", { name: "My variant copy" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-  expect(confirm).toHaveBeenCalled();
+  const dialog = await screen.findByRole("dialog", { name: /My variant copy/ });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
-  confirm.mockReturnValue(true);
   fireEvent.contextMenu(screen.getByRole("tab", { name: "My variant copy" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-  expect(screen.queryByRole("tab", { name: "My variant copy" })).toBeNull();
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.queryByRole("tab", { name: "My variant copy" })).toBeNull());
+  expect(nativeConfirm).not.toHaveBeenCalled();
   expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("tab", { name: "My variant copy" })).toBeTruthy();
@@ -334,11 +337,12 @@ it("keeps variant identity when undo restores a different deleted variant before
   const fetchMock = server((url) => url.includes(encodeURIComponent(experimentPath)) ? {
     body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, variants: [...experiment.variants, third] } } },
   } : undefined);
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   await open();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   fireEvent.contextMenu(screen.getByRole("tab", { name: "No retries" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.queryByRole("tab", { name: "No retries" })).toBeNull());
   fireEvent.click(screen.getByRole("tab", { name: "Third" }));
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("tab", { name: "Third" }).getAttribute("aria-selected")).toBe("true");

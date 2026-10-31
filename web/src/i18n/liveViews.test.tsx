@@ -26,7 +26,7 @@ it("translates catalog choice labels while committing the original option value"
   const onCommit = vi.fn();
   render(<ParamField descriptor={descriptor} value="fixed" path="processing.kind" editable
     isOverridden={() => false} onCommit={onCommit} onValidity={vi.fn()} />);
-  expect((screen.getByRole("option", { name: "Фиксированное значение" }) as HTMLOptionElement).selected).toBe(true);
+  expect((screen.getByRole("option", { name: "Фиксированное" }) as HTMLOptionElement).selected).toBe(true);
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "exponential" } });
   expect(onCommit).toHaveBeenCalledWith("exponential");
 });

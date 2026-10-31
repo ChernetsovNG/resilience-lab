@@ -221,17 +221,20 @@ class ModelLinter(
                 holdingMs += service.processing.meanMs + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
                 val demand = maximumRate * holdingMs
                 if (service.pooler == null && service.handlers < demand) {
+                    val database = service.type == "database"
+                    val resource = if (database) "Connections" else "Handlers"
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
-                            "Handlers ${service.handlers} are below λ·W = ${number(demand)} " +
+                            "$resource ${service.handlers} are below λ·W = ${number(demand)} " +
                                 "(λ = ${number(
                                     maximumRate * 1_000.0,
                                 )} requests/s, W = ${number(holdingMs)} ms; profile maximum, conservative)",
                             service.origin,
                             service.path,
-                            "/params/handlers",
+                            if (database) "/params/maxConnections" else "/params/handlers",
                             mapOf(
+                                "elementType" to JsonPrimitive(service.type),
                                 "handlers" to JsonPrimitive(service.handlers),
                                 "demand" to messageNumber(demand),
                                 "ratePerSecond" to messageNumber(maximumRate * 1_000.0),

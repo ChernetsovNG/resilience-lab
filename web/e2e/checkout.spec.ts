@@ -12,7 +12,7 @@ for (const experiment of experiments) {
     await page.goto("/");
     await page.getByLabel("Model", { exact: true }).selectOption("checkout/checkout.model.json");
     const selector = page.getByLabel("Experiment", { exact: true });
-    await expect(selector.locator("option", { hasText: experiment })).toHaveCount(1);
+    await expect(selector.locator(`option[value="${experiment}"]`)).toHaveText(experiment.replace(/\.experiment\.json$/, ""));
     await selector.selectOption(experiment);
     await expect(page.getByTestId("block-node")).toHaveCount(5);
     for (const node of ["mobile-app", "api-gateway", "order-service", "payment-service", "psp"]) {

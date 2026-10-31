@@ -36,7 +36,7 @@ it("resolves defaults within absent objects and formats whole objects with catal
     "gateway-to-middle.backoff.base": "3ms", "gateway.processing": { kind: "fixed", mean: "5ms" },
   }} />);
   expect(screen.getByRole("button", { name: "gateway-to-middle · Backoff · Base delay: 0ms → 3ms" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "gateway · Processing time: Distribution: fixed · Mean: 1ms → Distribution: fixed · Mean: 5ms" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "gateway · Processing time: Distribution: Fixed · Mean: 1ms → Distribution: Fixed · Mean: 5ms" })).toBeTruthy();
 });
 
 it("uses the current language for parameter labels, numbers and empty variants", () => {

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { slotPoolResource, noSaturation, summary } from "../test/fixtures";
+import { catalog, model, slotPoolResource, noSaturation, summary } from "../test/fixtures";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 import { setLanguage } from "../i18n";
@@ -11,6 +11,19 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Answer", locale => {
+    setLanguage(locale);
+    const run = structuredClone(summary);
+    run.variants[1].id = "variant-2";
+    run.variants[1].label = "variant-2";
+    run.grid = [{ path: "gateway.handlers", values: [4] }];
+    run.variants[1].points[0].coordinates = { "gateway.handlers": 4 };
+    render(<SummaryTable summary={run} catalog={catalog} model={model} activeVariantId="variant-2" />);
+    const heading = within(screen.getByRole("region", { name: locale === "en" ? "Saturation insight" : "Вывод о насыщении" })).getByRole("heading");
+    expect(heading.textContent).toBe(locale === "en" ? "Variant 2 · Handlers · gateway = 4" : "Вариант 2 · Обработчики · gateway = 4");
+    expect(screen.getByRole("table", { name: locale === "en" ? "Answer" : "Ответ" }).textContent).not.toMatch(/variant-2|p0|gateway\.handlers/);
+  });
+
   it("summarizes both variants without switching the active page", () => {
     const run = structuredClone(summary);
     run.variants[1].points[0].aggregate.successRate = { count: 2, mean: 0.5, min: 0.5, max: 0.5 };
@@ -170,11 +183,11 @@ describe("SummaryTable", () => {
     run.variants[1].points[0].aggregate.services.gateway = alternative;
     render(<SummaryTable summary={run} />);
     fireEvent.click(screen.getByText("gateway metrics"));
-    const table = screen.getByRole("table", { name: "Service metrics: gateway" });
-    expect(cells("Admitted amplification", table)[0].textContent).toContain("95% CI 1.02×–1.38×");
-    expect(cells("Admitted amplification", table)[1].textContent).toContain("+0.5×");
-    expect(cells("Admitted amplification", table)[1].textContent).toContain("Intervals do not overlap");
-    const utilization = cells("Handler utilization", table);
+    const table = screen.getByRole("table", { name: "Element metrics: gateway" });
+    expect(cells("Attempts per request", table)[0].textContent).toContain("95% CI 1.02×–1.38×");
+    expect(cells("Attempts per request", table)[1].textContent).toContain("+0.5×");
+    expect(cells("Attempts per request", table)[1].textContent).toContain("Intervals do not overlap");
+    const utilization = cells("Resource utilization", table);
     expect(utilization[0].textContent).toBe("50%");
     expect(utilization[1].textContent).toContain("75%");
     expect(utilization[1].textContent).toContain("+25 pp");
@@ -188,8 +201,8 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={run} />);
     expect(cells("Success rate")[1].textContent).toBe("n/a");
     fireEvent.click(screen.getByText("gateway metrics"));
-    const table = screen.getByRole("table", { name: "Service metrics: gateway" });
-    expect(cells("Handler utilization", table).map(cell => cell.textContent)).toEqual(["n/a", "n/a"]);
+    const table = screen.getByRole("table", { name: "Element metrics: gateway" });
+    expect(cells("Resource utilization", table).map(cell => cell.textContent)).toEqual(["n/a", "n/a"]);
   });
 
   it("leads with all saturation details for the active variant and selected point", () => {
@@ -222,7 +235,7 @@ describe("SummaryTable", () => {
       coordinates: { "gateway.handlers": 6, "dependency.processing.mean": "12ms" } });
     render(<SummaryTable summary={run} activeVariantId="baseline" selectedPointId="p3" />);
     expect(within(screen.getByRole("region", { name: "Saturation insight" })).getByRole("heading").textContent)
-      .toBe("Baseline · gateway.handlers = 6, dependency.processing.mean = 12ms");
+      .toBe("Baseline · Handlers · gateway = 6, Processing time · Mean · dependency = 12ms");
   });
 
   it("shows recorded capacity headroom and pooled entry p99", () => {
@@ -280,8 +293,8 @@ describe("SummaryTable", () => {
     point.aggregate.successRate!.mean = 0.5;
     run.variants[1].points.push(point);
     render(<SummaryTable summary={run} activeVariantId="baseline" selectedPointId="p1" />);
-    expect(screen.getByText("No results for Baseline at p1.")).toBeTruthy();
-    expect(screen.getByText("Baseline has no results at p1; differences are unavailable.")).toBeTruthy();
+    expect(screen.getByText("No results for Baseline at Handlers · gateway = 6.")).toBeTruthy();
+    expect(screen.getByText("Baseline has no results at Handlers · gateway = 6; differences are unavailable.")).toBeTruthy();
     expect(within(comparison()).getAllByRole("columnheader")).toHaveLength(2);
     expect(cells("Success rate")[0].textContent).toContain("50%");
     expect(comparison().querySelector(".summary-difference")).toBeNull();
@@ -290,22 +303,31 @@ describe("SummaryTable", () => {
 });
 
 describe("ProblemList", () => {
+  it("leads with the explanation and keeps its code and location on a secondary line", () => {
+    render(<ProblemList problem={{ code: "INVALID", message: "Invalid experiment", diagnostics: [
+      { code: "CAPACITY", severity: "ERROR", message: "Increase the connection limit", document: "model.json", pointer: "/blocks/db/params/handlers" },
+    ] }} />);
+    const row = screen.getByRole("listitem");
+    expect(row.firstElementChild?.textContent).toBe("Increase the connection limit");
+    expect(row.querySelector(".diagnostic-details")?.textContent).toContain("CAPACITY");
+  });
   it("lists diagnostics with their location", () => {
     render(<ProblemList problem={{
       code: "EXPERIMENT_INVALID", message: "Experiment has errors",
       diagnostics: [{ code: "PARAM_MISSING", severity: "ERROR", message: "Required parameter 'handlers' is missing",
         document: "m.model.json", pointer: "/blocks/gateway/params/handlers" }],
     }} />);
-    expect(screen.getByRole("alert").textContent).toContain(
-      "PARAM_MISSING m.model.json#/blocks/gateway/params/handlers: Required parameter 'handlers' is missing",
-    );
+    expect(screen.getByRole("listitem").querySelector(".diagnostic-message")?.textContent).toBe("Required parameter 'handlers' is missing");
+    expect(screen.getByRole("listitem").querySelector(".diagnostic-details")?.textContent)
+      .toBe("PARAM_MISSING · m.model.json#/blocks/gateway/params/handlers");
   });
 
   it("uses experiment for diagnostics without a document or pointer", () => {
     render(<ProblemList problem={{ code: "INVALID", message: "Invalid experiment",
       diagnostics: [{ code: "EMPTY", severity: "ERROR", message: "No variants" }],
     }} />);
-    expect(screen.getByRole("alert").textContent).toContain("EMPTY experiment: No variants");
+    expect(screen.getByRole("alert").textContent).toContain("No variants");
+    expect(screen.getByRole("listitem").querySelector(".diagnostic-details")?.textContent).toBe("EMPTY · experiment");
   });
 });
 

@@ -68,7 +68,7 @@ test("a model-page variant diagnostic link reveals collapsed Parameters and focu
   await page.getByRole("tab", { name: "Model", exact: true }).click();
   await expect(parameters).toHaveAttribute("open");
   await inspector.locator('[data-inspector-field="timeout"] .field-feedback--variants button').click();
-  await inspector.getByRole("link", { name: "In variants: baseline — 1 warning", exact: true }).click();
+  await inspector.getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(parameters).toHaveAttribute("open");
   await expect(inspector.getByLabel("Timeout", { exact: true })).toBeFocused();

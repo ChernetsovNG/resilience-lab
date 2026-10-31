@@ -80,7 +80,7 @@ export function TopBar(props: TopBarProps) {
         {experiment === null ? <option value="">{t("app.topBar.noExperiment")}</option> : null}
         {experiments.map((path) => (
           <option key={path} value={path}>
-            {path}
+            {path.replace(/\.experiment\.json$/, "")}
           </option>
         ))}
         <option value="__create__" disabled={experiment === null}>{t("app.topBar.newExperiment")}</option>

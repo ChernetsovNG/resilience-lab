@@ -29,8 +29,8 @@ for (const locale of locales) {
       await handlers.press("Enter");
       const validation = handlers.locator("..").locator(".field-diagnostics");
       await expect(validation).toContainText("PARAM_RANGE");
-      await expect(validation).toContainText(locale.startsWith("ru") ? /[Пп]араметра? [«']handlers/ : "Parameter 'handlers'");
-      await handlers.locator("..").locator(".field-feedback:not(.field-feedback--variants) button").focus();
+      await expect(validation).toContainText(locale.startsWith("ru") ? /[Пп]араметра? [«']Обработчики/ : "Parameter 'Handlers · gateway'");
+      await handlers.locator("..").locator(".field-feedback:not(.field-feedback--variants) button").press("Enter");
       await expect(validation).toBeVisible();
       if (locale.startsWith("ru")) await page.screenshot({ path: testInfo.outputPath("russian-backend-validation.png") });
       await handlers.fill(original);

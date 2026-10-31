@@ -5,17 +5,27 @@ import { CostEstimate } from "../run/CostEstimate";
 import { EstimatePopover } from "../run/EstimatePopover";
 import { HelpHint } from "./HelpHint";
 
-it.each(["hover", "focus", "click"])("opens field help by %s with an accessible name", action => {
+it.each(["hover", "click"])("opens field help by %s with an accessible name", action => {
   render(<CostEstimate estimate={costEstimate} />);
   const button = screen.getByRole("button", { name: "More about: Tasks" });
   expect(screen.queryByRole("tooltip")).toBeNull();
   if (action === "hover") fireEvent.mouseEnter(button);
-  if (action === "focus") fireEvent.focus(button);
   if (action === "click") fireEvent.click(button);
   const tooltip = screen.getByRole("tooltip");
   expect(tooltip.textContent).toContain("variant × grid point × replication");
   expect(button.getAttribute("aria-describedby")).toBe(tooltip.id);
   expect(screen.getByLabelText("Tasks").getAttribute("aria-describedby")).toBe(tooltip.id);
+});
+
+it("keeps help closed on keyboard focus and closes it when focus leaves", () => {
+  render(<><HelpHint label="Duration">Choose a measured duration.</HelpHint><input aria-label="Next field" /></>);
+  const button = screen.getByRole("button", { name: "More about: Duration" });
+  act(() => button.focus());
+  expect(screen.queryByRole("tooltip")).toBeNull();
+  fireEvent.click(button);
+  expect(screen.getByRole("tooltip").textContent).toContain("Choose a measured duration.");
+  act(() => screen.getByRole("textbox", { name: "Next field" }).focus());
+  expect(screen.queryByRole("tooltip")).toBeNull();
 });
 
 it("closes help with Escape without closing the enclosing Estimate", () => {
@@ -39,6 +49,7 @@ it("returns focus to the diagnostic button when Escape closes interactive detail
   render(<HelpHint label="Variant warnings" interactive symbol="⚠"><a href="#variant-baseline">Baseline</a></HelpHint>);
   const trigger = screen.getByRole("button", { name: "More about: Variant warnings" });
   act(() => trigger.focus());
+  fireEvent.click(trigger);
   const dialog = screen.getByRole("dialog", { name: "Variant warnings" });
   const link = screen.getByRole("link", { name: "Baseline" });
   act(() => link.focus());

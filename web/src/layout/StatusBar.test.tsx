@@ -59,7 +59,7 @@ it("keeps backend checking and failure visible", () => {
 
 it.each([4, 0])("explains the task counter when the total is %s", totalTasks => {
   render(<StatusBar {...props} job={{ ...job, totalTasks }} />);
-  fireEvent.focus(screen.getByRole("button", { name: "More about: Tasks" }));
+  fireEvent.click(screen.getByRole("button", { name: "More about: Tasks" }));
   const tooltip = screen.getByRole("tooltip");
   expect(tooltip.textContent).toContain("variant × grid point × replication");
   expect(tooltip.textContent).toContain(totalTasks === 0 ? "unknown until the first task finishes" : "3 of 4 tasks");

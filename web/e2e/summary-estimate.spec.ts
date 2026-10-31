@@ -44,13 +44,13 @@ test("Answer and all service metrics fit at 1440 px without editing documents", 
   await page.getByRole("button", { name: "Analysis", exact: true }).click();
   for (const disclosure of await page.locator(".summary-services > summary").all()) await disclosure.click();
   for (const service of ["dependency", "gateway", "middle"]) {
-    const metrics = page.getByRole("table", { name: `Service metrics: ${service}`, exact: true });
+    const metrics = page.getByRole("table", { name: `Element metrics: ${service}`, exact: true });
     await expect(metrics).toBeVisible();
-    for (const cell of await metrics.getByRole("row", { name: /Admitted amplification/ }).locator("td").all()) {
+    for (const cell of await metrics.getByRole("row", { name: /Attempts per request/ }).locator("td").all()) {
       await expect(cell).toContainText("×");
       await expect(cell).toContainText("95% CI");
     }
-    for (const cell of await metrics.getByRole("row", { name: /Handler utilization/ }).locator("td").all()) await expect(cell).toContainText("%");
+    for (const cell of await metrics.getByRole("row", { name: /Resource utilization/ }).locator("td").all()) await expect(cell).toContainText("%");
   }
   await page.locator(".results-body").evaluate(el => { el.scrollTop = 0; });
   await noOverflow(page);
@@ -97,24 +97,23 @@ test("estimate popover preserves diagram height and closes by button, outside cl
 
 test("failed estimation starts a real run only after explicit confirmation", async ({ page }, testInfo) => {
   let jobs = 0;
-  const messages: string[] = [];
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
   // Simulate an unavailable estimate endpoint; validation and execution use the real backend.
   await page.route("**/api/v1/estimate", route => route.abort("connectionfailed"));
   const run = page.getByRole("button", { name: "Run", exact: true });
-  page.once("dialog", async dialog => { messages.push(dialog.message()); await dialog.dismiss(); });
   await run.click();
+  const confirmation = page.getByRole("dialog", { name: "Start run?", exact: true });
+  await expect(confirmation).toContainText("without an estimate");
+  await confirmation.getByRole("button", { name: "Review estimate", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(run).toBeEnabled();
-  expect(messages).toHaveLength(1);
-  expect(messages[0]).toContain("without an estimate");
   expect(jobs).toBe(0);
   await expect(page.getByRole("table", { name: "Answer", exact: true })).toHaveCount(0);
-  page.once("dialog", async dialog => { messages.push(dialog.message()); await dialog.accept(); });
   await run.click();
+  await expect(confirmation).toContainText("without an estimate");
+  await confirmation.getByRole("button", { name: "Start run", exact: true }).click();
   await expect(page.getByRole("table", { name: "Answer", exact: true })).toBeVisible();
   await expect(page.getByTestId("job-status")).toContainText("COMPLETED");
-  expect(messages).toHaveLength(2);
   expect(jobs).toBe(1);
   await expect(page.getByRole("region", { name: "Estimate", exact: true })).toHaveCount(0);
   await noOverflow(page);
