@@ -56,7 +56,7 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Attempts per request ${amplification}`);
           await expect(services.getByRole("row", { name: /Attempts per request/ }).locator("td").nth(column)).toContainText(amplification);
           expect(await page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate((node) =>
-            (node as HTMLElement).style.backgroundColor)).not.toBe("");
+            (node as HTMLElement).style.getPropertyValue("--node-fill"))).not.toBe("");
         }
         const first = point.saturation.firstNodes[0];
         const badge = page.getByRole("img", { name: "First saturated node", exact: true });

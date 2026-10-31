@@ -3,7 +3,6 @@ import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { formatOutput, outputField, outputText, outputsOf, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
-import { Handle, Position } from "@xyflow/react";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
 import { utilizationColor, type NodeOverlayMetric, type ServiceCanvasResults } from "../results/canvasResults";
@@ -13,6 +12,7 @@ import { isObject, isOverridden, type Params } from "../workspace/params";
 import { catalogParameter } from "../workspace/parameterValues";
 import { HelpHint } from "../help/HelpHint";
 import { BlockIcon } from "../layout/BlockIcon";
+import { BlockShape } from "./BlockShape";
 
 export type BlockNodeType = Node<{
   id: string;
@@ -48,10 +48,9 @@ const keyParameters = new Map<string, readonly [string, string][]>([
   ["pooler", [["maxClientConnections", "editor.canvas.clientConnections"], ["poolSize", "editor.canvas.serverPool"], ["waitTimeout", "editor.canvas.waitTimeout"]]],
   ["router", [["policy", "editor.canvas.routingPolicy"]]],
 ]);
-const shapes = new Map([["client", "person"], ["database", "cylinder"], ["pooler", "double"], ["router", "circle"]]);
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
-export function BlockNode({ data }: NodeProps<BlockNodeType>) {
+export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
   const isWiringHint = (diagnostic: Diagnostic) =>
     (diagnostic.code === "TOPOLOGY_GRAPH" && (diagnostic.args?.reason === "unreachable"
       || (diagnostic.args?.reason === "request" && data.outgoingConnections === 0)))
@@ -85,13 +84,9 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
     .sort((a, b) => a.overlay!.order - b.overlay!.order);
   const replicas = data.block.type === "service" ? Number(data.block.params.replicas ?? 1) : 1;
   return (
-    <div className={`block-shape block-shape--${shapes.get(data.block.type) ?? "card"}${replicas > 1 ? " block-shape--replicas" : ""}`}>
-    <div className={`block-node block-node--${data.block.type}${data.overridden ? " block-node--overridden" : ""}`} data-testid="block-node"
-      style={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : { backgroundColor: utilizationColor(colorValue / maximum) }}>
-      {data.ports.map((port) => (
-        <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
-          position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={data.editable} />
-      ))}
+    <BlockShape id={data.id} type={data.block.type} replicas={replicas} overridden={data.overridden}
+      ports={data.ports} editable={data.editable} width={width} height={height}
+      fill={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : utilizationColor(colorValue / maximum)}>
       <strong className="block-node-header">
         <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
         <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
@@ -135,7 +130,6 @@ export function BlockNode({ data }: NodeProps<BlockNodeType>) {
           </span>;
         })}
       </div>}
-    </div>
-    </div>
+    </BlockShape>
   );
 }

@@ -2,9 +2,9 @@ import { Icon } from "../layout/Icon";
 import { t } from "../i18n";
 import { observeResize } from "../layout/observeResize";
 import { formatNumber } from "../i18n/format";
-import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
-import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
-import type { AriaLabelConfig, Edge, NodeChange } from "@xyflow/react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
+import { Background, ControlButton, Controls, getViewportForBounds, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
+import type { AriaLabelConfig, Edge, NodeChange, Rect } from "@xyflow/react";
 import type { Catalog, Diagnostic, LayoutFile, ModelFile, Variant } from "../api/apiTypes";
 import type { CanvasResults, ConnectionOverlayMetric, NodeOverlayMetric } from "../results/canvasResults";
 import { summarizeDiagnostics } from "../validation/diagnostics";
@@ -108,9 +108,11 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     top: `${Math.max(shortCanvas ? 16 : 64, variantVisible ? bannerHeight + (shortCanvas ? 16 : 48) : 0)}px` as `${number}px`,
   } }), [bottomInset, bannerHeight, variantVisible, shortCanvas]);
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
-  const { screenToFlowPosition, fitView, getViewport, getNodes, setViewport } = useReactFlow();
+  const { screenToFlowPosition, getViewport, getNodes, setViewport } = useReactFlow();
   const manualViewport = useRef(false);
   const width = useStore((state) => state.width);
+  const minZoom = useStore(state => state.minZoom);
+  const maxZoom = useStore(state => state.maxZoom);
   const zoom = useStore((state) => state.transform[2]);
   const initialized = useNodesInitialized();
   const hasNodes = Object.keys(model.blocks).length > 0;
@@ -148,9 +150,17 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     if (initialized || !hasNodes) onZoomChange?.(zoom);
   }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
+  const [bounds, setBounds] = useState<Rect | null>(null);
+  const onBounds = useCallback((next: Rect | null) => setBounds(current =>
+    current?.x === next?.x && current?.y === next?.y && current?.width === next?.width && current?.height === next?.height ? current : next), []);
+  const fitDiagram = useCallback(() => {
+    if (bounds !== null && width > 0 && height > 0) {
+      void setViewport(getViewportForBounds(bounds, width, height, minZoom, maxZoom, fitViewOptions.padding));
+    }
+  }, [bounds, width, height, minZoom, maxZoom, fitViewOptions, setViewport]);
   useEffect(() => {
-    if (!manualViewport.current && insertions.length === 0 && initialized && width > 0 && height > 0) void fitView(fitViewOptions);
-  }, [fitView, fitViewOptions, initialized, width, height, sizes, insertions.length]);
+    if (!manualViewport.current && insertions.length === 0 && initialized) fitDiagram();
+  }, [fitDiagram, initialized, insertions.length]);
   useEffect(() => {
     if (pending === undefined || pending.center === null || measurement?.request !== pending) return;
     // Commit outside ResizeObserver delivery and cancel if the canvas or active document changes first.
@@ -305,6 +315,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     const positions = changes.flatMap((change) => change.type === "position" && change.position !== undefined
       ? [{ id: change.id, position: change.position, dragging: change.dragging }] : []);
     if (positions.length === 0) return;
+    manualViewport.current = true;
     setMoving((current) => {
       const next = { ...current };
       for (const change of positions) {
@@ -345,7 +356,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       </summary>
       <VariantChanges model={baseModel ?? model} catalog={catalog} overrides={overrides} disabled={disabled} onSelect={onSelectChange} />
     </details>}
-    <EdgeLayoutProvider nodes={nodeBounds} connections={model.connections}>
+    <EdgeLayoutProvider nodes={nodeBounds} connections={model.connections} onBounds={onBounds}>
     <ReactFlow
       aria-label={t("editor.canvas.label")}
       ariaLabelConfig={ariaLabelConfig()}
@@ -408,9 +419,13 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     <Panel position="bottom-right" className="canvas-navigation" role="group" aria-label={t("editor.canvas.navigation")}
       onWheelCapture={() => { manualViewport.current = true; }}
       onPointerDownCapture={() => { manualViewport.current = true; }}>
-      <Controls showInteractive={false} orientation="horizontal" fitViewOptions={fitViewOptions}
-        onZoomIn={() => { manualViewport.current = true; }} onZoomOut={() => { manualViewport.current = true; }}
-        onFitView={() => { manualViewport.current = true; }} />
+      <Controls showInteractive={false} showFitView={false} orientation="horizontal"
+        onZoomIn={() => { manualViewport.current = true; }} onZoomOut={() => { manualViewport.current = true; }}>
+        <ControlButton className="react-flow__controls-fitview" title={t("editor.canvas.fitView")} aria-label={t("editor.canvas.fitView")}
+          onClick={() => { manualViewport.current = true; fitDiagram(); }}>
+          <Icon name="fit-view" size={12} />
+        </ControlButton>
+      </Controls>
       <MiniMap pannable zoomable style={{ width: 120, height: 48 }} />
     </Panel>
     </ReactFlow>

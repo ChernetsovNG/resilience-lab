@@ -17,6 +17,7 @@ it.each([undefined, 1, 3])("shows a service stack and count only for replicas > 
     layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
   const node = await screen.findByTestId("rf__node-middle");
   expect(node.querySelector(".block-shape--replicas") !== null).toBe(replicas === 3);
+  expect(node.querySelectorAll(".block-shape-back path")).toHaveLength(replicas === 3 ? 2 : 0);
   expect(within(node).queryByText("×3") !== null).toBe(replicas === 3);
 });
 
@@ -42,6 +43,9 @@ it.each(blocks)("shows $type parameters and its type icon inside the $shape silh
     onSelect={vi.fn()} onCommand={vi.fn()} parametersEditable />);
   const node = await screen.findByTestId("rf__node-middle");
   expect(node.querySelector(`.block-shape--${shape}`)).not.toBeNull();
+  const silhouette = node.querySelector(".block-shape-svg");
+  expect(silhouette?.getAttribute("aria-hidden")).toBe("true");
+  expect(silhouette?.querySelectorAll(".block-shape-outline path")).toHaveLength(type === "client" ? 2 : 1);
   const icon = node.querySelector(".block-type-icon");
   expect(icon?.getAttribute("title")).toBe(fullCatalog.types.find(item => item.id === type)!.title);
   expect(icon?.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");

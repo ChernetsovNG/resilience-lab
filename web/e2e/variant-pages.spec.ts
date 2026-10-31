@@ -48,7 +48,7 @@ test("variant marks coexist with calculated metric colors", async ({ page }, tes
   await expect(page.getByText(/COMPLETED/, { exact: false }).first()).toBeVisible();
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await expect(page.getByTestId("canvas-results-gateway")).toBeVisible();
-  const background = await page.getByTestId("rf__node-gateway").getByTestId("block-node").evaluate(node => node.style.backgroundColor);
+  const background = await page.getByTestId("rf__node-gateway").getByTestId("block-node").evaluate(node => node.style.getPropertyValue("--node-fill"));
   expect(background).not.toBe("");
   await expect(page.getByTestId("canvas-edge-label-gateway-to-middle")).toHaveClass(/canvas-edge-label--overridden/);
   await expect(page.getByTestId("canvas-param-gateway-to-middle-attempts").locator("del")).toHaveText("3");

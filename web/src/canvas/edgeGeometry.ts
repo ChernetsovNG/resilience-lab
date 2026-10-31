@@ -19,6 +19,17 @@ export interface EdgeGeometry {
   path: string;
   points: XYPosition[];
   label: XYPosition;
+  bounds: Rect;
+}
+
+/** Full model-space extent of measured nodes, routed lines and connection labels. */
+export function diagramBounds(rectangles: Iterable<Rect>): Rect | null {
+  const entries = [...rectangles];
+  if (entries.length === 0) return null;
+  const x = Math.min(...entries.map(rect => rect.x));
+  const y = Math.min(...entries.map(rect => rect.y));
+  return { x, y, width: Math.max(...entries.map(rect => rect.x + rect.width)) - x,
+    height: Math.max(...entries.map(rect => rect.y + rect.height)) - y };
 }
 
 const gap = 12;
@@ -221,6 +232,7 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
     }
     points = simplify(points);
     geometries.set(edge.id, { points, label: label ?? source,
+      bounds: diagramBounds([...points.map(point => ({ ...point, width: 0, height: 0 })), labelRect(label ?? source, edge)])!,
       path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ") });
     if (edge.width > 0 && edge.height > 0) labels.push(labelRect(label!, edge));
     previousPaths.push(...pathBounds(points));
