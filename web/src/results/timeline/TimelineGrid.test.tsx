@@ -2,9 +2,10 @@ import { act, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TimelineGrid } from "./TimelineGrid";
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it("uses one to three columns from its own width, independently of the window", () => {
+  vi.useFakeTimers();
   let resize: (width: number) => void = () => {};
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: ResizeObserverCallback) {
@@ -18,7 +19,7 @@ it("uses one to three columns from its own width, independently of the window", 
   const view = render(<TimelineGrid><article /><article /><article /><article /></TimelineGrid>);
   const grid = view.container.firstElementChild as HTMLElement;
   for (const [width, columns] of [[700, 1], [1000, 2], [1600, 3], [3840, 3], [700, 1]]) {
-    act(() => resize(width));
+    act(() => { resize(width); vi.advanceTimersToNextFrame(); });
     expect(grid.style.gridTemplateColumns).toBe(`repeat(${columns}, minmax(0, 1fr))`);
   }
 });

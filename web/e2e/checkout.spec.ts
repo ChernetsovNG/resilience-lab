@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import type { RunSummary } from "../src/api/apiTypes";
 

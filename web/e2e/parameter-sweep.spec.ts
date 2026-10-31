@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
 
 for (const language of ["en", "ru"] as const) {

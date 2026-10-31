@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1280, height: 800 }, actionTimeout: 15_000 });

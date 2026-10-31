@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
 import { t } from "../i18n";
+import { observeResize } from "../layout/observeResize";
 import { formatDuration, formatNumber, formatRate } from "../i18n/format";
 import { PanelSeparator } from "../layout/PanelSeparator";
 import { windowAt } from "../results/timeline/data";
@@ -44,9 +45,7 @@ export function ExperimentCourse({ model, experiment, catalog, onFault, disabled
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(parent);
-    return () => observer.disconnect();
+    return observeResize([parent], measure);
   }, []);
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch { /* Session controls remain usable. */ }

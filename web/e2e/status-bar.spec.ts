@@ -1,7 +1,8 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
-test("detects a server outage and recovers without reloading or losing edits", async ({ page }) => {
+test("detects a server outage and recovers without reloading or losing edits", async ({ page, expectedPageErrors }) => {
+  expectedPageErrors.push(/^console\.error: Failed to load resource: net::ERR_CONNECTION_REFUSED \(http:\/\/127\.0\.0\.1:\d+\/api\/v1\//);
   await page.goto("/");
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
   const status = page.getByRole("region", { name: "Status bar" });

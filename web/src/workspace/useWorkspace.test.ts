@@ -67,7 +67,7 @@ describe("useWorkspace", () => {
     const { result } = await loaded();
     act(() => result.current.setParam("gateway", "handlers", 6));
     const edited = result.current.loaded;
-    act(() => setLanguage("ru"));
+    await act(() => setLanguage("ru"));
     expect(result.current.catalog?.types[1].title).toBe("Сервис");
     expect(result.current.catalog?.types[1].params[0].title).toBe("Обработчики");
     expect(result.current.loaded).toBe(edited);
@@ -76,7 +76,7 @@ describe("useWorkspace", () => {
     expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(4);
     act(() => result.current.redo());
     expect(result.current.loaded?.model.blocks.gateway.params.handlers).toBe(6);
-    act(() => setLanguage("en"));
+    await act(() => setLanguage("en"));
     expect(result.current.catalog?.types[1].title).toBe("Service");
     expect(catalog.types[1].title).toBe("Service");
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/v1/catalog")).toHaveLength(1);

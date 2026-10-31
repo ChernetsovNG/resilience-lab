@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("gives the empty panel's space to the canvas and shows call results without scrolling", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });

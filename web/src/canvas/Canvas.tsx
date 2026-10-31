@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { observeResize } from "../layout/observeResize";
 import { formatNumber } from "../i18n/format";
 import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MouseEvent, type Ref, type SetStateAction } from "react";
 import { Background, Controls, MiniMap, Panel, ReactFlow, ReactFlowProvider, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
@@ -94,9 +95,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
     if (element === null) return;
     const measure = () => setBannerHeight(element.getBoundingClientRect().height);
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    return observeResize([element], measure);
   }, [variant?.id]);
   const height = useStore((state) => state.height);
   const shortCanvas = height > 0 && height < 240;

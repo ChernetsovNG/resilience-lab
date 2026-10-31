@@ -1,6 +1,6 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
+import type { Page } from "./fixtures";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ExperimentEstimate, ExperimentFile, JobView, ModelFile } from "../src/api/apiTypes";
@@ -701,7 +701,8 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   });
 });
 
-test("refuses resume after the model changes and suggests a new run", async ({ page, request }) => {
+test("refuses resume after the model changes and suggests a new run", async ({ page, request, expectedPageErrors }) => {
+  expectedPageErrors.push(/^console\.error: Failed to load resource: the server responded with a status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/api\/v1\/runs\/[^/]+\/resume\)$/);
   const path = "resume-changed/changed.experiment.json";
   await withExperimentFixture(path, (document) => {
     document.execution.replications = 50;

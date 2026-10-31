@@ -1,8 +1,37 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import catalogSnapshot from "../src/test/catalog.json" with { type: "json" };
 
 test.use({ locale: "ru-RU", viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
+
+test("waits for the initial catalog and loads another language only on demand", async ({ page }) => {
+  let releaseRussian!: () => void, releaseEnglish!: () => void;
+  const russian = new Promise<void>(resolve => { releaseRussian = resolve; });
+  const english = new Promise<void>(resolve => { releaseEnglish = resolve; });
+  let russianRequests = 0, englishRequests = 0;
+  await page.route("**/src/i18n/ru.json*", async route => { russianRequests++; await russian; await route.continue(); });
+  await page.route("**/src/i18n/en.json*", async route => { englishRequests++; await english; await route.continue(); });
+  const navigation = page.goto("/");
+  try {
+    await expect.poll(() => russianRequests).toBe(1);
+    await expect(page.locator("#root")).toBeEmpty();
+    expect(englishRequests).toBe(0);
+    releaseRussian();
+    await navigation;
+    await page.getByRole("button", { name: "Вид", exact: true }).click();
+    await page.getByLabel("Язык", { exact: true }).selectOption("en");
+    await expect.poll(() => englishRequests).toBe(1);
+    await expect(page.locator("html")).toHaveAttribute("lang", "ru");
+    await expect(page.getByRole("button", { name: "Сохранить", exact: true })).toBeVisible();
+    releaseEnglish();
+    await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
+    await page.getByLabel("Language", { exact: true }).selectOption("ru");
+    await page.getByLabel("Язык", { exact: true }).selectOption("en");
+    await expect(page.getByLabel("Language", { exact: true })).toHaveValue("en");
+    expect(russianRequests).toBe(1);
+    expect(englishRequests).toBe(1);
+  } finally { releaseRussian(); releaseEnglish(); await navigation; }
+});
 
 async function chooseLanguage(page: Page, language: "en" | "ru", current: "en" | "ru") {
   await page.getByRole("button", { name: current === "ru" ? "Вид" : "View", exact: true }).click();

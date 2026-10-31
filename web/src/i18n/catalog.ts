@@ -3,7 +3,7 @@ import { catalogs, language, t, type Language } from "./index";
 
 /** API prose remains the fallback until a language catalog supplies a matching stable identifier. */
 export function catalogText(key: string, fallback: string, locale: Language = language): string {
-  return Object.hasOwn(catalogs[locale], key) ? t(key, {}, locale) : fallback;
+  return catalogs[locale]?.[key] === undefined ? fallback : t(key, {}, locale);
 }
 
 /** Only the label is translated; choice values remain the API/document tokens. */
@@ -16,7 +16,7 @@ export function localizeCatalog(catalog: Catalog, locale: Language = language): 
   const output = (type: string, descriptor: OutputDescriptor): OutputDescriptor => {
     const key = `catalog.types.${type}.outputs.${descriptor.id}`;
     // Preserve placeholders until the surface supplies its value and interval.
-    const text = (path: string, fallback: string) => catalogs[locale][`${key}.${path}`] ?? fallback;
+    const text = (path: string, fallback: string) => catalogs[locale]?.[`${key}.${path}`] ?? fallback;
     return { ...descriptor,
       title: text("title", descriptor.title), description: text("description", descriptor.description),
       timeline: descriptor.timeline == null ? descriptor.timeline : { ...descriptor.timeline,
