@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
 
 test("variant changes navigate to fields and structural gestures explain the Model page", async ({ page }, testInfo) => {

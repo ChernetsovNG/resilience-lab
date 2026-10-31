@@ -1,6 +1,7 @@
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
+import { observeResize } from "../layout/observeResize";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 import type { Edge, EdgeProps, Rect } from "@xyflow/react";
@@ -57,9 +58,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
     const measure = () => setLabelSize(current => current.width === element.offsetWidth && current.height === element.offsetHeight
       ? current : { width: element.offsetWidth, height: element.offsetHeight });
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
+    return observeResize([element], measure);
   }, [labelled]);
   const raised = data?.labelNodes?.some(node => labelX - labelSize.width / 2 < node.x + node.width &&
     labelX + labelSize.width / 2 > node.x && labelY - labelSize.height / 2 < node.y + node.height &&

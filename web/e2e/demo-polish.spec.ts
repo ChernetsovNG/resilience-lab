@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import type { components } from "../src/api/schema";
 
 type Window = components["schemas"]["WindowMetrics"];

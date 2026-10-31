@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { createHash } from "node:crypto";
 import { get, type IncomingHttpHeaders } from "node:http";
 import { gunzipSync } from "node:zlib";

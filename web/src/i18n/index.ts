@@ -1,10 +1,19 @@
-import en from "./en.json" with { type: "json" };
-import ru from "./ru.json" with { type: "json" };
-
 export type Language = "en" | "ru";
-export const catalogs: Readonly<Record<Language, Readonly<Record<string, string>>>> = { en, ru };
+type Messages = Readonly<Record<string, string>>;
+export const catalogs: Partial<Record<Language, Messages>> = {};
+const loading: Partial<Record<Language, Promise<Messages>>> = {};
 const preferenceKey = "resilience-lab.language";
 const listeners = new Set<() => void>();
+
+function loadCatalog(locale: Language): Promise<Messages> {
+  // Native Node needs JSON attributes; Vite serves these imports as JavaScript modules.
+  const options = typeof window === "undefined" ? { with: { type: "json" } } : undefined;
+  return loading[locale] ??= (locale === "en"
+    ? import("./en.json", options)
+    : import("./ru.json", options))
+    .then(module => catalogs[locale] = module.default)
+    .catch(error => { delete loading[locale]; throw error; });
+}
 
 /** An explicit supported preference wins; otherwise use the first supported browser language. */
 export function chooseLanguage(languages: readonly string[], saved: string | null): Language {
@@ -22,7 +31,8 @@ function savedLanguage(): string | null {
 
 /** Web language only; it is never stored in workspace documents or result artifacts. */
 export let language: Language = chooseLanguage(typeof navigator === "undefined" ? [] : navigator.languages, savedLanguage());
-export let messages: Readonly<Record<string, string>> = catalogs[language];
+export let messages: Messages = {};
+let requestedLanguage = language;
 
 /** Subscribe without remounting the editor, so drafts, selection and undo history survive switching. */
 export function subscribeLanguage(listener: () => void): () => void {
@@ -39,10 +49,21 @@ function updateDocumentLanguage(): void {
   document.querySelector('meta[name="description"]')?.setAttribute("content", t("app.description"));
 }
 
-/** Preference persistence is best effort; switching still works with browser storage disabled. */
-export function setLanguage(next: Language): void {
+/** Load the chosen startup catalog before rendering, without saving an implicit browser preference. */
+export async function initializeLanguage(): Promise<void> {
+  messages = await loadCatalog(language);
+  updateDocumentLanguage();
+}
+
+/** Switches retain the current messages until loading succeeds.
+ * Preference persistence is best effort; switching still works with browser storage disabled.
+ */
+export async function setLanguage(next: Language): Promise<void> {
+  requestedLanguage = next;
+  const nextMessages = catalogs[next] ?? await loadCatalog(next);
+  if (requestedLanguage !== next || (language === next && messages === nextMessages)) return;
   language = next;
-  messages = catalogs[next];
+  messages = nextMessages;
   try { localStorage.setItem(preferenceKey, next); } catch { /* This session still uses the selected language. */ }
   updateDocumentLanguage();
   for (const listener of listeners) listener();
@@ -50,7 +71,7 @@ export function setLanguage(next: Language): void {
 
 /** Resolve one catalog message and substitute named parameters; missing text is a programming error in dev/tests, with safe production fallbacks. */
 export function t(key: string, params: Record<string, string | number> = {}, locale: Language = language): string {
-  const template = catalogs[locale][key];
+  const template = catalogs[locale]?.[key];
   const strict = import.meta.env?.DEV !== false || import.meta.env?.MODE === "test";
   if (typeof template !== "string") {
     if (strict) throw new Error(`Unknown message key: ${key}`);
@@ -63,5 +84,3 @@ export function t(key: string, params: Record<string, string | number> = {}, loc
   }
   return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name]));
 }
-
-updateDocumentLanguage();

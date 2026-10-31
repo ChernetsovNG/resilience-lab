@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

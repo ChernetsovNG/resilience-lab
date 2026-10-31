@@ -57,10 +57,12 @@ describe("language preference", () => {
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["ru-RU"]);
     vi.resetModules();
     const fresh = await import("./index");
+    await fresh.initializeLanguage();
     expect(fresh.language).toBe("en");
     localStorage.clear();
     vi.resetModules();
     const russian = await import("./index");
+    await russian.initializeLanguage();
     expect(russian.language).toBe("ru");
     expect(document.documentElement.lang).toBe("ru");
   });
@@ -70,6 +72,7 @@ describe("language preference", () => {
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["ru-RU"]);
     vi.resetModules();
     const fresh = await import("./index");
+    await fresh.initializeLanguage();
     expect(fresh.language).toBe("ru");
   });
 });

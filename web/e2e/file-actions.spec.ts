@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

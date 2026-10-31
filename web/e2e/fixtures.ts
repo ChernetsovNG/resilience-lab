@@ -2,6 +2,31 @@ import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 import type { Page } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
+import { initializeLanguage } from "../src/i18n";
+
+export { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+
+/** Every scenario fails on unexpected browser errors, including ResizeObserver delivery loops. */
+export const test = base.extend<{ expectedPageErrors: RegExp[]; pageErrors: void }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright discovers fixture dependencies through destructuring.
+  expectedPageErrors: async ({}, provide) => { await provide([]); },
+  pageErrors: [async ({ page, expectedPageErrors }, use) => {
+    await initializeLanguage();
+    const errors: string[] = [];
+    const pageError = (error: Error) => errors.push(`pageerror: ${error.message}`);
+    const consoleError = (message: import("@playwright/test").ConsoleMessage) => {
+      if (message.type() === "error") errors.push(`console.error: ${message.text()} (${message.location().url})`);
+    };
+    page.on("pageerror", pageError);
+    page.on("console", consoleError);
+    await use();
+    page.off("pageerror", pageError);
+    page.off("console", consoleError);
+    expect(errors.filter(error => error.includes("ResizeObserver loop") ||
+      !expectedPageErrors.some(expected => expected.test(error))), "Unexpected browser errors").toEqual([]);
+  }, { auto: true }],
+});
 
 /** Opens a question through its owning model, independent of the remembered model and interface language. */
 export async function selectExperiment(page: Page, path: string): Promise<void> {

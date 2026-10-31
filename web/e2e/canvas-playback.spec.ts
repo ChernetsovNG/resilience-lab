@@ -1,5 +1,5 @@
 import { selectExperiment, copySmallExperiment } from "./fixtures";
-import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator } from "./fixtures";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatDuration, formatMultiplier, formatNumber } from "../src/i18n/format";

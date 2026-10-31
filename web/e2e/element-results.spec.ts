@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { RunSummary } from "../src/api/apiTypes";
 import { formatNumber, formatPercent, formatRate } from "../src/i18n/format";
 

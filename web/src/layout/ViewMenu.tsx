@@ -55,7 +55,9 @@ export function ViewMenu() {
         onChange={event => setViewSettings({ textScale: Number(event.target.value) as ViewSettings["textScale"] })}>
         {TEXT_SCALES.map(scale => <option key={scale} value={scale}>{formatPercent(scale / 100)}</option>)}
       </select></label>
-      <label>{t("app.view.language")} <select aria-label={t("app.view.language")} value={language} onChange={event => setLanguage(event.target.value as Language)}>
+      <label>{t("app.view.language")} <select aria-label={t("app.view.language")} value={language} onChange={event => {
+        void setLanguage(event.target.value as Language).catch(() => { /* Keep the current language if its replacement cannot load. */ });
+      }}>
         <option value="en">{t("app.view.english")}</option>
         <option value="ru">{t("app.view.russian")}</option>
       </select></label>

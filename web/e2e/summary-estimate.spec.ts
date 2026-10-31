@@ -1,6 +1,6 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
+import type { Page } from "./fixtures";
 
 const experiment = "retry-storm/retry-storm.experiment.json";
 
@@ -95,7 +95,8 @@ test("estimate popover preserves diagram height and closes by button, outside cl
   expect(jobs).toBe(0);
 });
 
-test("failed estimation starts a real run only after explicit confirmation", async ({ page }, testInfo) => {
+test("failed estimation starts a real run only after explicit confirmation", async ({ page, expectedPageErrors }, testInfo) => {
+  expectedPageErrors.push(/^console\.error: Failed to load resource: net::ERR_CONNECTION_FAILED \(http:\/\/127\.0\.0\.1:\d+\/api\/v1\/estimate\)$/);
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
   // Simulate an unavailable estimate endpoint; validation and execution use the real backend.

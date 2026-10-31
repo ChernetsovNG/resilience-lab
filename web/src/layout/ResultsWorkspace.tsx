@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { t } from "../i18n";
+import { observeResize } from "./observeResize";
 import type { ResultsPanelView } from "./ResultsPanel";
 import { PanelSeparator } from "./PanelSeparator";
 
@@ -62,11 +63,14 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
   }
   useLayoutEffect(() => {
     const element = workspace.current!;
-    const measure = ({ width, height }: DOMRectReadOnly) => setSize({ width, height });
+    let previous = { width: 0, height: 0 };
+    const measure = ({ width, height }: DOMRectReadOnly) => {
+      if (previous.width === width && previous.height === height) return;
+      previous = { width, height };
+      setSize(previous);
+    };
     measure(element.getBoundingClientRect());
-    const observer = new ResizeObserver(([entry]) => measure(entry.contentRect));
-    observer.observe(element);
-    return () => observer.disconnect();
+    return observeResize([element], ([entry]) => measure(entry.contentRect));
   }, []);
   useLayoutEffect(() => {
     const canvas = workspace.current!.querySelector(".canvas-area");
@@ -74,10 +78,7 @@ export function ResultsWorkspace({ children, view, collapsed, analysis, inspecto
     const chrome = [...canvas.children].filter(child => !child.classList.contains("canvas"));
     const measure = () => setCanvasChromeHeight(chrome.reduce((height, child) => height + child.getBoundingClientRect().height, 0));
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(canvas);
-    chrome.forEach(child => observer.observe(child));
-    return () => observer.disconnect();
+    return observeResize([canvas, ...chrome], measure);
   }, [canvasFooterHeight]);
   useEffect(() => {
     try {

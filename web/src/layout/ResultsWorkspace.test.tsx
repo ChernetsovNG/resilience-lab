@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ResultsWorkspace } from "./ResultsWorkspace";
 
@@ -6,6 +7,7 @@ let resizeWindow: (height: number) => void;
 let resizeWorkspace: (width: number, height: number) => void;
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1440, 800));
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: ResizeObserverCallback) {
@@ -17,7 +19,7 @@ beforeEach(() => {
     disconnect() {}
   });
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
 
 const workspace = (analysis = false) => <ResultsWorkspace view="answer" collapsed={false} analysis={analysis}><section /></ResultsWorkspace>;
 const height = () => Number(screen.getByRole("separator").getAttribute("aria-valuenow"));
@@ -36,11 +38,11 @@ it.each([[408, 160, 180], [308, 150, 150]])("bounds both areas at workspace heig
   render(workspace());
   fireEvent.keyDown(screen.getByRole("separator"), { key: "End" });
   expect(height()).toBe(572);
-  act(() => resizeWindow(size));
+  act(() => { resizeWindow(size); vi.advanceTimersToNextFrame(); });
   expect(Number(screen.getByRole("separator").getAttribute("aria-valuemin"))).toBe(min);
   expect(Number(screen.getByRole("separator").getAttribute("aria-valuemax"))).toBe(max);
   expect(height()).toBe(max);
-  act(() => resizeWindow(800));
+  act(() => { resizeWindow(800); vi.advanceTimersToNextFrame(); });
   expect(height()).toBe(572);
 });
 
@@ -82,6 +84,25 @@ const withInspector = (selected: string | null = null) => <ResultsWorkspace view
 const inspectorDivider = () => screen.getByRole("separator", { name: "Resize inspector" });
 const inspectorWidth = () => Number(inspectorDivider().getAttribute("aria-valuenow"));
 
+it("defers an observed workspace resize until the next frame", () => {
+  let frame: FrameRequestCallback | undefined;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frame = callback; return 1; });
+  render(withInspector());
+  act(() => resizeWorkspace(900, 800));
+  expect(inspectorWidth()).toBe(317);
+  act(() => frame!(0));
+  expect(inspectorWidth()).toBe(280);
+});
+
+it("does not commit another render for unchanged workspace dimensions", () => {
+  vi.useFakeTimers();
+  const committed = vi.fn();
+  render(<Profiler id="workspace" onRender={committed}>{withInspector()}</Profiler>);
+  committed.mockClear();
+  act(() => { resizeWorkspace(1440, 800); vi.advanceTimersToNextFrame(); });
+  expect(committed).not.toHaveBeenCalled();
+});
+
 it("resizes the inspector with arrows, clamps its bounds and resets on double-click", () => {
   render(withInspector());
   expect(inspectorWidth()).toBe(317);
@@ -95,7 +116,7 @@ it("resizes the inspector with arrows, clamps its bounds and resets on double-cl
   expect(inspectorWidth()).toBe(480);
   fireEvent.doubleClick(inspectorDivider());
   expect(inspectorWidth()).toBe(317);
-  act(() => resizeWorkspace(1920, 800));
+  act(() => { resizeWorkspace(1920, 800); vi.advanceTimersToNextFrame(); });
   expect(inspectorWidth()).toBe(422);
 });
 
@@ -135,9 +156,9 @@ it("constrains a saved inspector width in a smaller window and restores it on gr
   view.unmount();
   render(withInspector());
   expect(inspectorWidth()).toBe(480);
-  act(() => resizeWorkspace(900, 800));
+  act(() => { resizeWorkspace(900, 800); vi.advanceTimersToNextFrame(); });
   expect(inspectorWidth()).toBe(364);
-  act(() => resizeWorkspace(1440, 800));
+  act(() => { resizeWorkspace(1440, 800); vi.advanceTimersToNextFrame(); });
   expect(inspectorWidth()).toBe(480);
 });
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import type { RunSummary } from "../src/api/apiTypes";
 
 test.use({ viewport: { width: 1280, height: 720 } });

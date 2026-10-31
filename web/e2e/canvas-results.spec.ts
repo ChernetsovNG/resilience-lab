@@ -1,5 +1,5 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatMultiplier, formatNumber, formatPercent } from "../src/i18n/format";

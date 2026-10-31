@@ -1,6 +1,6 @@
 import { selectExperiment } from "./fixtures";
-import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
+import type { Page } from "./fixtures";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ExperimentEstimate, ExperimentFile, JobView, ModelFile } from "../src/api/apiTypes";
