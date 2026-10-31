@@ -77,7 +77,7 @@ function ObjectField({ descriptor, value, path, editable, isOverridden, isSwept,
           onClick={() => { setResetCount((count) => count + 1); onReset(path); }}>{t("editor.param.useModelValue")}</button>
       ) : null}
       {unset
-        ? <><p className="param-description">{t("editor.param.notSet")}</p>
+        ? <><span>{t("editor.param.notSet")}</span>
           {hiddenSweep ? <span id={`${id}-sweep`} className="param-sweep">{t("editor.param.swept")}</span> : null}
           {editable ? <button type="button" onClick={() => {
             const initial = initialParams(descriptor.fields);

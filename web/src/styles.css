@@ -1178,6 +1178,13 @@ select {
   cursor: text;
 }
 
+/* Read-only values reserve the same height as editable buttons and inputs. */
+.inline-param-current {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 24px;
+}
+
 .inline-param-editor input {
   width: 80px;
   min-height: 24px;

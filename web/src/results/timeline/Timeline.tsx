@@ -12,6 +12,7 @@ import { useConnectionSeries } from "./useConnectionSeries";
 import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
 import { variantLabel } from "../../presentation/labels";
+import { policyOutputAvailable } from "../../workspace/policyParameters";
 
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 const metricChoiceKey = (element: string, metric: string) => JSON.stringify([element, metric]);
@@ -56,14 +57,20 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const replicaGroups = useMemo(() => variant?.points.find(point => point.id === pointId)?.aggregate.groups ?? [], [variant, pointId]);
   const originals = useMemo(() => new Map(replicaGroups.flatMap(group => group.instances.map(instance => [instance.id, group.id]))), [replicaGroups]);
   const groups = useMemo(() => timelineGroups(catalog), [catalog]);
+  const policyModels = useMemo(() => experiment.variants.flatMap(variant => {
+    const effective = applyOverrides(model, variant.overrides, catalog);
+    const points = summary.variants.find(source => source.id === variant.id)?.points ?? [];
+    return points.length === 0 ? [effective] : points.map(point => applyOverrides(effective, point.coordinates, catalog));
+  }), [model, experiment.variants, summary.variants, catalog]);
   const elements = useMemo(() => [
     ...Object.entries(model.blocks).map(([id, block]) => ({ id, type: block.type })),
     ...model.connections.map(({ id, type }) => ({ id, type })),
   ].map(element => ({ ...element, replicas: replicaGroups.find(group => group.id === element.id)?.instances ?? [],
     title: catalog.types.find(type => type.id === element.type)?.title ?? element.type,
-    groups: groups.map(group => ({ ...group, metrics: group.metrics.filter(metric => metric.types.includes(element.type)) }))
+    groups: groups.map(group => ({ ...group, metrics: group.metrics.filter(metric => metric.types.includes(element.type)
+      && policyOutputAvailable(metric.id, element.id, policyModels)) }))
       .filter(group => group.metrics.length > 0),
-  })).filter(element => element.groups.length > 0), [model, catalog, groups, replicaGroups]);
+  })).filter(element => element.groups.length > 0), [model, catalog, groups, replicaGroups, policyModels]);
   const canvasKey = JSON.stringify(selectedNodes);
   const availableNodes = elements.flatMap(element => [element.id, ...element.replicas.map(instance => instance.id)]);
   const availableConnections = model.connections.filter(connection => availableNodes.includes(connection.id)).map(connection => connection.id);
