@@ -616,3 +616,42 @@ it("preserves the viewport when a keyboard node move expands diagram bounds", as
   expect(node.style.transform).toContain("1200px");
   expect(viewport.style.transform).toBe(before);
 });
+
+it("preserves the viewport after a palette drag and cancellation while keeping explicit fitting available", async () => {
+  const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get");
+  try {
+    const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+    const { container, rerender } = render(<Canvas {...props} key="first-experiment" />);
+    const viewport = () => container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform;
+    const resize = async (value: number) => {
+      await act(async () => {
+        height.mockReturnValue(value);
+        fireEvent(window, new Event("resize"));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      });
+    };
+    await waitFor(() => { expect(viewport()).not.toContain("scale(1)"); });
+    const initial = viewport();
+    await resize(160);
+    expect(viewport()).not.toBe(initial);
+    const beforeDrag = viewport();
+    const flow = container.querySelector(".react-flow")!;
+    fireEvent.dragOver(flow, { dataTransfer: { types: ["application/resilience-lab-block"] } });
+    await resize(320);
+    expect(viewport()).toBe(beforeDrag);
+    fireEvent.dragLeave(flow);
+    await resize(480);
+    expect(viewport()).toBe(beforeDrag);
+    expect(props.onCommand).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Fit View" }));
+    await waitFor(() => { expect(viewport()).not.toBe(beforeDrag); });
+    const fitted = viewport();
+    await resize(640);
+    expect(viewport()).toBe(fitted);
+    rerender(<Canvas {...props} key="other-experiment" />);
+    await waitFor(() => { expect(viewport()).not.toBe(fitted); });
+    const reopened = viewport();
+    await resize(800);
+    expect(viewport()).not.toBe(reopened);
+  } finally { height.mockRestore(); }
+});

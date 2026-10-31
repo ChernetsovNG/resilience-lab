@@ -381,6 +381,7 @@ function ModelCanvas({ ref, model, baseModel, variant, onSelectChange, onModelPa
       onPaneClick={() => { if (!disabled) onSelect([]); }}
       onDragOver={(event) => {
         if ((!editable && variant === undefined) || disabled) return;
+        manualViewport.current = true;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
       }}
