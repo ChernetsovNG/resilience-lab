@@ -167,6 +167,16 @@ it("includes the full metric label and a large queue value in its tooltip", asyn
   expect(tooltip.textContent).toContain("Queue length integral / interval duration");
 });
 
+it("explains attempts below one beside the connection value", async () => {
+  const run = structuredClone(summary);
+  run.variants[0].points[0].aggregate.services.gateway.admittedAmplification!.mean = 0.8;
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
+    onCommand={vi.fn()} results={canvasResults(run, model, "baseline", "p0", catalog)} />);
+  const badge = await screen.findByTestId("canvas-edge-label-client-to-gateway");
+  expect(badge.textContent).toContain("0.8×");
+  expect(badge.textContent).toContain("Not every request reached it");
+});
+
 it("one shared utilization choice colors both services and databases", async () => {
   const extended = fullCatalog as Catalog;
   const snapshot = { ...model, blocks: { ...model.blocks, middle: { ...model.blocks.middle, type: "database",

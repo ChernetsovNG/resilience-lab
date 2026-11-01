@@ -15,6 +15,7 @@ import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
 import { setConfidenceLevel, useConfidenceLevel } from "./confidenceLevel";
 import { pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
+import { outputNote } from "../results/outputs";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
 type Metric = Pick<MetricSummary, "mean" | "stdDev"> & Partial<Pick<MetricSummary, "count">>;
@@ -92,9 +93,12 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       <th scope="row">{label}</th>
       {columns.map(({ variant, point, limits }) => {
         const limit = quantile === undefined ? null : latencyLimitMatch(point.aggregate.entries.total[quantile], limits);
+        const current = value(point);
+        const note = format === formatMultiplier ? outputNote({ id: "amplification" }, current?.mean, current === null ? "noArrivals" : "missingData") : null;
         return <td key={variant.id} className={columnClass(variant.id)}>
-          {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
+          {metric(current, variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
             level, format, difference)}
+          {note === null ? null : <small className="output-note">{note}</small>}
           {limit === null ? null : <span className="summary-limit" title={t("results.answer.ceilingHelp")}>{limit}</span>}
         </td>;
       })}

@@ -55,6 +55,18 @@ function gridSummary(twoAxes = true) {
   return result;
 }
 
+it.each([true, false])("explains subunit amplification in map cells and point readouts (two axes: %s)", twoAxes => {
+  const run = gridSummary(twoAxes);
+  run.variants[0].points[0].aggregate.services.gateway.admittedAmplification!.mean = 0.8;
+  render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
+  fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "admittedAmplification" } });
+  const points = screen.getByRole(twoAxes ? "table" : "list", { name: twoAxes ? "Parameter heatmap" : "Map points" });
+  const first = within(points).getAllByRole("button")[0];
+  expect(first.textContent).toContain("0.8×");
+  expect(first.textContent).toContain("Not every request reached it");
+  expect(first.getAttribute("aria-label")).toContain("Not every request reached it");
+});
+
 describe("Map summary data", () => {
   it("places the first axis on rows, preserving unsorted values and duplicates by point ID", () => {
     const grid = gridSummary();

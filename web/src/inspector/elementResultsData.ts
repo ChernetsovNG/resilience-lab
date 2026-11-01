@@ -1,6 +1,6 @@
 import type { Catalog, ExperimentFile, ModelFile, OutputDescriptor, RunManifest, RunSummary } from "../api/apiTypes";
 import type { DecodedConnection, NodeSeriesMetrics } from "../results/series/types";
-import { outputValue, outputWindow, outputsOf, type OutputValue } from "../results/outputs";
+import { outputValue, outputWindow, outputsOf, type AmplificationUnavailableReason, type OutputValue } from "../results/outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 import { groupInspectorOutputs, replicaMember, type ReplicaGroup } from "../results/groups";
@@ -33,6 +33,7 @@ export interface ElementResultsData {
   windows: ReturnType<typeof outputWindow>[];
   values: Record<string, ElementMetric>;
   latencyCoverage?: { fromMs: number; toMs: number };
+  amplificationUnavailableReason: AmplificationUnavailableReason;
 }
 
 /** Run identity follows editor lineage; removing and re-adding an ID cannot inherit its old results. */
@@ -106,8 +107,9 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
       }
     });
   }
-  const summaryContext = { ...aggregate, params, replications: variant.replications,
-    target: selection.target === null ? undefined : ownEntry(point.aggregate.services, selection.target),
+  const targetSummary = selection.target === null ? undefined
+    : ownEntry(point.aggregate.services, selection.target) ?? ownEntry(point.aggregate.poolers, selection.target);
+  const summaryContext = { ...aggregate, params, replications: variant.replications, target: targetSummary,
     measurementLatency: { count, sumMs } };
   const valueContext = window === null ? summaryContext : Number.isInteger(window) && window >= 0 ? frameContext(window) : undefined;
   const threshold = outputs.find(output => output.inspector?.thresholdParameter != null)?.inspector?.thresholdParameter;
@@ -115,7 +117,10 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const timeoutUnits = descriptor.params.find(param => param.name === threshold)?.units ?? [];
   const coverage = outputs.some(output => output.summary?.source === "REPLICATION") && metadata != null && metadata.warmupMs % metadata.windowMs !== 0
     ? { fromMs: Math.min(endMs, Math.ceil(metadata.warmupMs / metadata.windowMs) * metadata.windowMs), toMs: endMs } : undefined;
-  return { kind: selection.kind, id: selection.id, outputs, latencyCoverage: coverage,
+  const amplificationUnavailableReason = targetSummary === undefined ? "unsupportedTarget" : window === null
+    ? targetSummary.admittedAmplification === null ? "noArrivals" : "missingData"
+    : valueContext !== undefined && target?.windows[window]?.entries.total.originalArrivals === 0 ? "noArrivals" : "missingData";
+  return { kind: selection.kind, id: selection.id, outputs, latencyCoverage: coverage, amplificationUnavailableReason,
     timeoutMs: typeof timeout === "string" ? canonicalOf(timeout, timeoutUnits) : null,
     windows: frames.map((_, index) => outputWindow(outputs, frameContext(index)!)),
     values: Object.fromEntries(outputs.filter(output => output.inspector?.showValue)

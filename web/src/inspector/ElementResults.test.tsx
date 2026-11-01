@@ -80,6 +80,24 @@ const row = (name: string) => within(screen.getByRole("table", { name: "Results"
 afterEach(() => { vi.restoreAllMocks(); act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("ElementResults", () => {
+  it("does not claim zero arrivals when Time series fail to load", async () => {
+    loadSeries();
+    vi.mocked(seriesLoader.load).mockRejectedValue(new Error("Recorded series unavailable"));
+    render(<ElementResults {...props()} selected="gateway-to-middle" window={1} />);
+    await screen.findByText("Recorded series unavailable");
+    expect(row("Attempts per request").textContent).not.toContain("no original requests");
+    expect(row("Attempts per request").textContent).toContain("no recorded data in the selected context");
+  });
+
+  it("explains attempts below one beside the call metric", () => {
+    loadSeries();
+    const options = { ...props(), selected: "gateway-to-middle" };
+    options.summary.variants[0].points[0].aggregate.services.middle.admittedAmplification!.mean = 0.8;
+    render(<ElementResults {...options} />);
+    expect(row("Attempts per request").textContent).toContain("0.8×");
+    expect(row("Attempts per request").textContent).toContain("Not every request reached it");
+  });
+
   it("names the stored variant and point coordinates in the selected-element context", () => {
     loadSeries();
     const options = props();

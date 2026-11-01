@@ -1506,6 +1506,9 @@ select {
   color: #334e68;
 }
 
+.output-note { display: block; max-width: 18rem; white-space: normal; font-size: var(--font-secondary); }
+.canvas-edge-results .output-note { min-height: 1lh; }
+
 .playback-controls {
   display: flex;
   align-items: center;
@@ -1608,6 +1611,7 @@ select {
 .replica-results-scroll { overflow-x: auto; }
 .element-results .replica-results { font-size: var(--font-secondary); table-layout: fixed; }
 .element-results .replica-results th { width: auto; }
+.replica-results caption small { display: block; }
 .element-results .replica-results--policies { min-width: 42rem; table-layout: auto; }
 .replica-results--policies th:first-child { position: sticky; left: 0; z-index: 1; background: #fff; }
 .replica-results--policies tr[aria-selected="true"] th:first-child { background: #e0efff; }

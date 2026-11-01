@@ -371,6 +371,7 @@ export interface components {
             };
         };
         AggregatePoolerMetrics: {
+            admittedAmplification?: components["schemas"]["MetricSummary"] | null;
             pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
             totals: components["schemas"]["PoolerTotals"];
         };

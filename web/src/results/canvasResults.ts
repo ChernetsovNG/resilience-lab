@@ -3,7 +3,7 @@ import { formatNumber } from "../i18n/format";
 import type { Catalog, ExperimentFile, ModelFile, OutputDescriptor, RunSummary } from "../api/apiTypes";
 import type { NodeSeriesMetrics } from "./series";
 import type { DecodedConnection } from "./series/types";
-import { outputsOf, outputValue, outputField } from "./outputs";
+import { outputsOf, outputValue, outputField, type AmplificationUnavailableReason } from "./outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 import { policyOutputAvailable } from "../workspace/policyParameters";
@@ -34,6 +34,7 @@ export interface ConnectionCanvasResults extends ElementCanvasValues {
   to: string;
   type: string;
   hasOwnSeries: boolean;
+  amplificationUnavailableReason?: AmplificationUnavailableReason;
   copies?: number;
 }
 
@@ -107,10 +108,12 @@ export function canvasResults(
     const outputs = outputsOf(catalog, connection.type).filter(output => output.overlay != null).sort((a, b) => a.overlay!.order - b.overlay!.order);
     if (outputs.length === 0) continue;
     const params = paramsOf(connection.type, effective.connections.find(candidate => candidate.id === connection.id)?.params ?? {});
+    const target = ownEntry(point.aggregate.services, connection.to) ?? ownEntry(point.aggregate.poolers, connection.to);
     connections.set(connection.id, { from: connection.from, to: connection.to, type: connection.type,
       outputs, params, hasOwnSeries: own !== undefined,
+      amplificationUnavailableReason: target === undefined ? "unsupportedTarget" : target.admittedAmplification === null ? "noArrivals" : "missingData",
       copies: Number(effective.blocks[connection.from]?.params.replicas ?? 1),
-      values: valuesOf(outputs, { ...own, params, replications: variant.replications, target: ownEntry(point.aggregate.services, connection.to) }),
+      values: valuesOf(outputs, { ...own, params, replications: variant.replications, target }),
     });
   }
   return { services, connections };
@@ -137,6 +140,8 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
     if (connection.hasOwnSeries && frame === undefined) return null;
     const target = metrics.get(connection.to);
     connections.set(id, { ...connection,
+      amplificationUnavailableReason: connection.amplificationUnavailableReason === "unsupportedTarget" ? "unsupportedTarget"
+        : target?.entries.total.originalArrivals === 0 ? "noArrivals" : "missingData",
       policyState: frame === undefined ? undefined : policyWindowState(frame, connection.copies ?? 1),
       values: valuesOf(connection.outputs, { ...frame, params: connection.params, target, entries: target?.entries }, true) });
   }

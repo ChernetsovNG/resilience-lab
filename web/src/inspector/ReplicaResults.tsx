@@ -6,11 +6,13 @@ import { formatNumber } from "../i18n/format";
 import { formatOutput, outputValue, outputsOf } from "../results/outputs";
 import type { ReplicaGroup, ResultAggregate } from "../results/groups";
 import { policyOutputAvailable } from "../workspace/policyParameters";
+import type { WindowMetricValues } from "../results/series/types";
 
-/** A measured-interval view of the saved instance rows; sorting never alters documents. */
-export function ReplicaResults({ group, aggregate, catalog, replications, models = [], selected, onSelect }: {
+/** A summary or selected-window view of the saved instance rows; sorting never alters documents. */
+export function ReplicaResults({ group, aggregate, catalog, replications, models = [], window = null, frames, selected, onSelect }: {
   group: ReplicaGroup; aggregate: ResultAggregate; catalog: Catalog; replications: number;
   models?: readonly ModelFile[];
+  window?: number | null; frames?: ReadonlyMap<string, WindowMetricValues>;
   selected: string | null; onSelect?: (id: string) => void;
 }) {
   const [sort, setSort] = useState({ column: "replica", descending: false });
@@ -28,8 +30,8 @@ export function ReplicaResults({ group, aggregate, catalog, replications, models
   const sortColumn = sort.column === "replica" || columns.some(column => column.id === sort.column) ? sort.column : "replica";
   const rows = group.instances.map(instance => ({ ...instance, values: Object.fromEntries(columns.map(column => {
     const output = outputs.find(output => output.id === column.id);
-    const value = aggregate.services[instance.id];
-    return [column.id, { output, value: output === undefined || value === undefined ? null : outputValue(output, { ...value, replications }, false).value }];
+    const value = window === null ? { ...aggregate.services[instance.id], replications } : frames?.get(instance.id);
+    return [column.id, { output, value: output === undefined ? null : outputValue(output, value, window !== null).value }];
   })) }));
   rows.sort((a, b) => {
     const av = sortColumn === "replica" ? a.replica : a.values[sortColumn].value;
@@ -44,7 +46,9 @@ export function ReplicaResults({ group, aggregate, catalog, replications, models
   </th>;
   return <div className="replica-results-scroll"><table className={`replica-results${policyColumns.length > 0 ? " replica-results--policies" : ""}`} aria-label={t("results.groups.replicas", { group: group.id })}>
     <caption>{t("results.groups.replicas", { group: group.id })} <HelpHint label={t("results.groups.replicas", { group: group.id })}>
-      {t("results.groups.summaryHelp")}</HelpHint></caption>
+      {t(window === null ? "results.groups.summaryHelp" : "results.groups.windowHelp")}</HelpHint>
+      <small>{window === null ? t("results.groups.summarySource") : t("inspector.results.window", { window: formatNumber(window) })}</small>
+    </caption>
     <thead><tr>{header("replica", t("editor.replicas.number"))}{columns.map(column => header(column.id, column.title))}</tr></thead>
     <tbody>{rows.map(row => <tr key={row.id} aria-selected={selected === row.id} onClick={() => onSelect?.(row.id)}>
       <th scope="row"><button type="button" aria-label={row.id} onClick={event => { event.stopPropagation(); onSelect?.(row.id); }}>

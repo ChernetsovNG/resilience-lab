@@ -59,6 +59,23 @@ function fixture(): ElementResultsContext {
       latency: { count: 2, sumMs: 24, meanMs: 12, p50Ms: 12, p95Ms: 12, p99Ms: 12 },
       slotPools: {  } })) }] };
 }
+
+it("uses the destination pooler's replication ratios for a call in Summary", () => {
+  const context = fixture();
+  context.selected = "gateway-to-middle";
+  context.runModel = structuredClone(context.runModel);
+  context.runModel.blocks.middle.type = "pooler";
+  context.currentModel = context.runModel;
+  const aggregate = context.summary.variants[0].points[0].aggregate;
+  delete aggregate.services.middle;
+  aggregate.poolers.middle = {
+    pooledLatency: null,
+    admittedAmplification: { mean: 0.75, count: 2, min: 0.25, max: 1.25, stdDev: 0.5 },
+    totals: { offeredAttempts: 10, admittedAttempts: 8, successes: 8, failures: 0, measurementMs: 2000, slotPools: {} },
+  };
+  expect(projectElementResults(context)?.values.amplification).toMatchObject({ value: 0.75, source: "replications", count: 2 });
+  expect(projectElementResults({ ...context, window: 0 })?.values.amplification.value).toBe(2.25);
+});
 const values = (context: ElementResultsContext) => projectElementResults(context)!.values;
 
 describe("element results sources", () => {
