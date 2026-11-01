@@ -126,6 +126,12 @@ export function ElementResults(props: ElementResultsProps) {
         <p className="element-results-context">{t("results.entries.context", { variant: variantLabel(variant, experiment.variants), point: pointLabel(pointId, summary.grid, point.coordinates, catalog, runModel) })}</p>
         <p className="element-results-note">{t("results.entries.summaryNote")}</p>
         <EntryResults entry={entry} name={t("inspector.results.title")} showFailures={showFailures} showDegraded={showDegraded} />
+        {window === null || result === null ? null : <table aria-label={t("inspector.results.window", { window: formatNumber(window) })}><tbody>
+          {inspectorOutputs(result.outputs).map(output => <tr key={output.id}>
+            <th scope="row">{output.inspector!.title}</th>
+            <td>{formatOutput(output, result.values[output.id]?.value)}<small>{t("inspector.results.window", { window: formatNumber(window) })}</small></td>
+          </tr>)}
+        </tbody></table>}
         {types.length === 0 ? null : <section aria-label={t("results.entries.byRequestTypes")}>
           <h4>{t("results.entries.byRequestTypes")}</h4>
           {types.some(id => Object.values(effective.blocks).filter(block => block.type === "client" && requestTypes(block.params).includes(id)).length > 1)
@@ -145,7 +151,8 @@ export function ElementResults(props: ElementResultsProps) {
           point: pointLabel(pointId, summary.grid, variant?.points.find(point => point.id === pointId)?.coordinates, catalog, runModel),
           replication: formatNumber(replication), mode: t(window === null ? "inspector.results.summaryMode" : "inspector.results.timeMode") })}</p>
         {group === undefined || point === undefined ? null : <ReplicaResults key={group.id} group={group} aggregate={point.aggregate}
-          catalog={catalog} replications={variant?.replications ?? 0} selected={selected} onSelect={props.onSelectReplica} />}
+          catalog={catalog} replications={variant?.replications ?? 0} models={entryModels(summary, runModel, catalog, experiment.variants)}
+          selected={selected} onSelect={props.onSelectReplica} />}
         <table aria-label={t("inspector.results.title")}><tbody>
           {inspectorOutputs(result.outputs).map(output => {
             const key = output.id, label = output.inspector!.title;

@@ -32,6 +32,35 @@ const part = {
 };
 
 describe("entry series", () => {
+  it("loads request types independently of identically named nodes, reusing mixed-part cache", async () => {
+    const data = [
+      { ...part, nodes: [{ id: "status", windows: [entryWindow(9)] }], classes: part.classes, connections: [] },
+      { ...part, nodes: [], classes: [{ id: "status", windows: [{ ...entryWindow(2), startMs: 10, durationMs: 5 }] }], connections: [], fromWindow: 1, untilWindow: 2 },
+    ];
+    const texts = data.map(value => JSON.stringify(value));
+    const index = { schemaVersion: 7, endMs: 15, windowMs: 10, groups: [], parts: data.map((value, number) => ({
+      file: `part-${number}.json.gz`, kind: "INSTANCE", nodes: value.nodes.map(node => node.id),
+      classes: value.classes.map(row => row.id), connections: [], fromWindow: value.fromWindow, untilWindow: value.untilWindow,
+      uncompressedBytes: texts[number].length, sha256: String(number).repeat(64),
+    })) } as SeriesIndex;
+    const downloaded: number[] = [];
+    const loader = new SeriesLoader({ api: { seriesIndex: async () => index,
+      seriesPart: async (_run, _variant, _cell, _replication, number) => {
+        downloaded.push(number);
+        return { text: texts[number], etag: `"${index.parts[number].sha256}"` };
+      },
+    }, decoderFactory: () => ({ decode: async values => values.map(decodeSeriesPart), close: () => undefined }) });
+    const request = { runId: "run", variant: "baseline", cell: "p0", replication: 0, fromWindow: 0, untilWindow: 2 };
+    const [node] = await loader.load({ ...request, nodes: ["status"], untilWindow: 1 });
+    expect(node.windows[0].originalArrivals).toBe(9);
+    const [requestType] = await loader.loadClasses({ ...request, classes: ["status"] });
+    expect(requestType.windows.map(window => [window.startMs, window.durationMs, window.originalArrivals])).toEqual([[0, 10, 4], [10, 5, 2]]);
+    expect(downloaded).toEqual([0, 1]);
+    expect((await loader.loadClasses({ ...request, classes: ["status"], fromWindow: 1 }))[0].windows[0].originalArrivals).toBe(2);
+    expect(await loader.loadClasses({ ...request, classes: ["missing"] })).toEqual([]);
+    expect(downloaded).toEqual([0, 1]);
+  });
+
   it("keeps actual client IDs, class windows, failure reasons and zero policy fields", () => {
     const decoded = decodeSeriesPart(JSON.stringify(part));
     expect(decoded.nodes.map(node => node.id)).toEqual(["mobile-app", "partner-api", "checkout"]);

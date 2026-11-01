@@ -17,6 +17,30 @@ class Stage1CatalogTest {
     private val json = Json { encodeDefaults = true }
 
     @Test
+    fun `policy outputs are available to the element inspector`() {
+        val expected =
+            mapOf(
+                "call" to listOf("circuitOpenShare", "circuitRejectionsPerSecond", "retriesDeniedPerSecond", "fallbacksPerSecond"),
+                "service" to
+                    listOf(
+                        "rateLimitedPerSecond",
+                        "rateLimitedRate",
+                        "probeFailuresPerSecond",
+                        "notReadyShare",
+                        "ejectionsCount",
+                        "ejectedShare",
+                    ),
+                "client" to listOf("degradedPerSecond"),
+            )
+        expected.forEach { (type, ids) ->
+            ids.forEach { id ->
+                val output = catalog.type(type)!!.outputs.first { it.id == id }
+                assertThat(output.inspector?.showValue).describedAs("%s.%s", type, id).isTrue()
+            }
+        }
+    }
+
+    @Test
     fun `every type declares its outputs in the serialized catalog`() {
         val types =
             json

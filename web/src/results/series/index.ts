@@ -4,6 +4,7 @@ export { SeriesLoadError, SeriesLoader } from "./loader";
 /** Timeline and playback share one decoded-part cache within the 64 MiB budget. */
 export const seriesLoader = new SeriesLoader();
 export type {
+  ClassSeriesLoadRequest,
   ConnectionSeriesLoadRequest,
   SeriesApi,
   SeriesDecoder,

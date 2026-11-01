@@ -40,7 +40,8 @@ export interface SeriesLoadRequest {
 }
 
 export type ConnectionSeriesLoadRequest = Omit<SeriesLoadRequest, "nodes"> & { connections: readonly string[] };
-type SeriesSelectionRequest = SeriesLoadRequest | ConnectionSeriesLoadRequest;
+export type ClassSeriesLoadRequest = Omit<SeriesLoadRequest, "nodes"> & { classes: readonly string[] };
+type SeriesSelectionRequest = SeriesLoadRequest | ConnectionSeriesLoadRequest | ClassSeriesLoadRequest;
 interface PartDownload {
   controller: AbortController;
   consumers: Set<symbol>;
@@ -85,6 +86,10 @@ export class SeriesLoader {
     return assembleConnections(await this.loadRequest(request), request);
   }
 
+  async loadClasses(request: ClassSeriesLoadRequest): Promise<NodeSeriesMetrics[]> {
+    return assemble(await this.loadRequest(request), { ...request, nodes: request.classes }, "classes");
+  }
+
   private async loadRequest(request: SeriesSelectionRequest): Promise<Map<string, DecodedSeriesPart>> {
     throwIfAborted(request.signal);
     let decoder: SeriesDecoder | undefined;
@@ -121,9 +126,9 @@ export class SeriesLoader {
     if (index.schemaVersion !== 7) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
-    const connectionRequest = "connections" in request;
-    const selected = selectSeriesParts(index, connectionRequest ? [] : request.nodes,
-      request.fromWindow, request.untilWindow, connectionRequest ? request.connections : []);
+    const selected = selectSeriesParts(index, "nodes" in request ? request.nodes : [],
+      request.fromWindow, request.untilWindow, "connections" in request ? request.connections : [],
+      "classes" in request ? request.classes : []);
     return this.loadReferences(request, selected, getDecoder);
   }
 
@@ -224,11 +229,11 @@ function estimatedBytes(reference: SeriesPartReference, part: DecodedSeriesPart)
   return Math.max(reference.uncompressedBytes, decodedEstimate);
 }
 
-function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest): NodeSeriesMetrics[] {
+function assemble(parts: ReadonlyMap<string, DecodedSeriesPart>, request: SeriesLoadRequest, population: "nodes" | "classes" = "nodes"): NodeSeriesMetrics[] {
   const selected = new Map<string, Map<number, DecodedWindow>>();
   const requested = new Set(request.nodes);
   for (const part of parts.values()) {
-    for (const node of part.nodes) {
+    for (const node of part[population]) {
       for (const [offset, window] of node.windows.entries()) {
         const index = part.fromWindow + offset;
         if (index < request.fromWindow || index >= request.untilWindow) continue;

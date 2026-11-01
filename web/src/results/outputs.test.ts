@@ -48,16 +48,19 @@ describe("catalog output contract", () => {
     }
   });
 
-  it("preserves inspector and overlay sets, labels and units", () => {
+  it("preserves inspector and overlay outputs while adding the policy inspector bindings", () => {
     expect(inspectorOutputs(outputsOf(catalog, "service")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Handler utilization", "PERCENT"], ["Mean queue", "REQUESTS"], ["Queue fill", "PERCENT"],
       ["Queue rejection share", "PERCENT"], ["Admitted attempts", "PER_SECOND"], ["Mean latency", "MILLISECONDS"],
+      ["Rate-limit rejections", "PER_SECOND"], ["Rate-limited share", "PERCENT"], ["Failed health probes", "PER_SECOND"],
+      ["Not-ready share", "PERCENT"], ["Ejections", "REQUESTS"], ["Ejected share", "PERCENT"],
     ]);
     expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
       ["Orphaned attempts", "REQUESTS"], ["Mean orphaned work", "REQUESTS"], ["Mean in flight", "REQUESTS"],
       ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per request", "MULTIPLIER"],
       ["Connection pool utilization", "PERCENT"], ["Mean connection wait queue", "REQUESTS"], ["Connection acquisition timeouts", "REQUESTS"],
+      ["Circuit open share", "PERCENT"], ["Circuit rejections", "PER_SECOND"], ["Retries denied by budget", "PER_SECOND"], ["Fallbacks", "PER_SECOND"],
     ]);
     expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
     expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per request", "Sent attempts", "Timeout share", "Orphaned work"]);
