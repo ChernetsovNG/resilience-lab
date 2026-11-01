@@ -1,8 +1,16 @@
 package resiliencelab.core.lab
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.io.TempDir
+import resiliencelab.core.catalog.Dimension
+import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.execution.ExperimentExecutor
@@ -83,12 +91,12 @@ class CheckoutPoliciesTest {
             (1..3).associateWith { replica ->
                 windows.getValue("order-service#$replica").filter { it.notReadyMs > 0.0 }.minOf { it.startMs }
             }
-        assertThat(firstNotReady.getValue(2)).isBetween(20_000.0, 40_000.0)
+        assertThat(firstNotReady.getValue(2)).isBetween(2_000.0, 4_000.0)
         for (replica in listOf(1, 3)) {
-            assertThat(firstNotReady.getValue(replica)).isGreaterThan(firstNotReady.getValue(2)).isLessThan(40_000.0)
+            assertThat(firstNotReady.getValue(replica)).isGreaterThan(firstNotReady.getValue(2)).isLessThan(4_000.0)
         }
         assertThat(windows.getValue("mobile-app")).anyMatch {
-            it.startMs >= 25_000.0 && it.startMs < 40_000.0 && it.failuresByReason.getOrDefault("noReadyTarget", 0) > 0
+            it.startMs >= 2_500.0 && it.startMs < 4_000.0 && it.failuresByReason.getOrDefault("noReadyTarget", 0) > 0
         }
     }
 
@@ -228,7 +236,7 @@ class CheckoutPoliciesTest {
             )
         for ((example, experiment) in examples) {
             fun hashes(workers: Int): Map<String, String> {
-                run(example, experiment, workers)
+                run(example, experiment, workers, determinism = true)
                 val results = root.resolve("$example-$experiment-$workers-false/.results")
                 return Files.walk(results).use { files ->
                     files.filter(Files::isRegularFile).toList().associate { file ->
@@ -256,33 +264,81 @@ class CheckoutPoliciesTest {
         experiment: String,
         workers: Int = 4,
         control: Boolean = false,
+        determinism: Boolean = false,
     ): RunSummary {
         val directory = Files.createDirectories(root.resolve("$example-$experiment-$workers-$control"))
         val source = Path.of("../examples", example)
         for (file in listOf("$example.model.json", "$example.layout.json", "$experiment.experiment.json")) {
             Files.copy(source.resolve(file), directory.resolve(file))
         }
-        if (control) {
-            val path = directory.resolve("$experiment.experiment.json")
-            val document = (DocumentCodec.decodeExperiment(Files.readString(path), path.toString()) as DecodeResult.Ok).value
+        val path = directory.resolve("$experiment.experiment.json")
+        var document = (DocumentCodec.decodeExperiment(Files.readString(path), path.toString()) as DecodeResult.Ok).value
+        if (example == "checkout-policies") {
+            val factor = if (determinism) 0.05 else 0.1
+            val modelPath = directory.resolve("$example.model.json")
+            val model = (DocumentCodec.decodeModel(Files.readString(modelPath), modelPath.toString()) as DecodeResult.Ok).value
+            // Compress load/fault coordinates only; latency, deadlines and policy durations stay unchanged.
             Files.writeString(
-                path,
-                DocumentCodec.encodeExperiment(
-                    document.copy(
-                        faults = emptyList(),
-                        variants =
-                            document.variants.filter {
-                                it.id in
-                                    setOf("least-in-flight", "outlier-detection")
+                modelPath,
+                DocumentCodec.encodeModel(
+                    model.copy(
+                        blocks =
+                            model.blocks.mapValues { (_, block) ->
+                                block.copy(params = compactTimes(block.params, factor).jsonObject)
                             },
                     ),
                 ),
             )
+            document =
+                document.copy(
+                    execution = document.execution.copy(replications = 4, warmup = "1s", measurement = "6s"),
+                    faults = document.faults.map { it.copy(from = compactTime(it.from, factor), to = compactTime(it.to, factor)) },
+                    variants =
+                        document.variants.map { variant ->
+                            variant.copy(overrides = variant.overrides.mapValues { (_, value) -> compactTimes(value, factor) })
+                        },
+                )
         }
+        if (determinism) {
+            document =
+                document.copy(execution = document.execution.copy(replications = 2, warmup = "0s", measurement = "3s", window = "100ms"))
+        }
+        if (control) {
+            document =
+                document.copy(
+                    faults = emptyList(),
+                    variants =
+                        document.variants.filter {
+                            it.id in
+                                setOf("least-in-flight", "outlier-detection")
+                        },
+                )
+        }
+        Files.writeString(path, DocumentCodec.encodeExperiment(document))
         return ExperimentExecutor(workers).use { executor ->
             Lab(FileWorkspace(directory), executor = executor).use { it.run("$experiment.experiment.json", "run").summary }
         }
     }
+
+    private fun compactTimes(
+        value: JsonElement,
+        factor: Double,
+    ): JsonElement =
+        when (value) {
+            is JsonObject ->
+                JsonObject(
+                    value.mapValues { (key, child) ->
+                        if (key == "time") JsonPrimitive(compactTime(child.jsonPrimitive.content, factor)) else compactTimes(child, factor)
+                    },
+                )
+            is JsonArray -> JsonArray(value.map { compactTimes(it, factor) })
+            else -> value
+        }
+
+    private fun compactTime(
+        value: String,
+        factor: Double,
+    ): String = Quantities.format(requireNotNull(Quantities.parse(value, Dimension.DURATION)) * factor, Dimension.DURATION)
 
     private fun RunSummary.metrics(id: String): AggregateMetrics =
         variants
