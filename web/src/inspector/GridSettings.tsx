@@ -160,7 +160,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
       const descriptionId = `${id}-axis-${index}-description`;
       const warningsId = `${id}-axis-${index}-warnings`;
       const warnings = display(axis.values.flatMap((_, position) => fieldDiagnostics?.get(`${prefix}.values.${position}`) ?? [])
-        .filter(diagnostic => diagnostic.severity === "WARNING"));
+        .filter(diagnostic => diagnostic.severity !== "ERROR"));
       return <fieldset className="param-group" key={index} data-inspector-field={prefix} aria-label={heading}
         aria-describedby={[parameter?.descriptor.description ? descriptionId : null, warnings.length > 0 ? warningsId : null].filter(Boolean).join(" ") || undefined}>
         <legend>{heading} {parameter?.descriptor.description ? <HelpHint id={descriptionId} label={heading}>{parameter.descriptor.description}</HelpHint> : null}</legend>

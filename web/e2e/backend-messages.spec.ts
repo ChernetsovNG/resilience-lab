@@ -163,6 +163,7 @@ for (const locale of locales) {
       await page.goto("/");
       await selectExperiment(page, "checkout-replicas/checkout-replicas.experiment.json");
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      await page.locator(".advice-group > summary").click();
       const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_RETRY_SAME_TARGET"]') });
       const warning = row.locator('button[data-diagnostic-code="LINT_RETRY_SAME_TARGET"]');
       const args: Record<string, string> = { connection: "api-gateway-to-order-service", attempts: "3", targets: "3", requestType: "default", threshold: "2" };
@@ -172,7 +173,7 @@ for (const locale of locales) {
       await expect(warning).toContainText(args.connection);
       await expect(warning).toContainText(translated);
       await expect(warning).toContainText(baselineLabel);
-      await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+      await row.getByRole("button", { name: new RegExp(label("results.problems.adviceExplanation")) }).click();
       await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_RETRY_SAME_TARGET_DETAILS"));
       await page.keyboard.press("Escape");
       await warning.click();
@@ -193,7 +194,7 @@ for (const locale of locales) {
       expect(report.valid).toBe(true);
       const finding = report.diagnostics.find(diagnostic => diagnostic.code === "LINT_RETRY_UNGUARDED"
         && diagnostic.path === "gateway-to-middle")!;
-      expect(finding.severity).toBe("WARNING");
+      expect(finding.severity).toBe("ADVICE");
       expect(finding.args).toMatchObject({ attempts: 3, amplification: 3 });
       const translated = label("messages.LINT_RETRY_UNGUARDED").split("{connection}")[1]
         .replace(/\{(\w+)\}/g, (_, name: string) => String(finding.args?.[name]));
@@ -201,12 +202,13 @@ for (const locale of locales) {
       await page.goto("/");
       await selectExperiment(page, experiment);
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      await page.locator(".advice-group > summary").click();
       const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_RETRY_UNGUARDED"]') })
         .filter({ hasText: "gateway-to-middle" });
       const warning = row.locator('button[data-diagnostic-code="LINT_RETRY_UNGUARDED"]');
       await expect(warning).toContainText("gateway-to-middle");
       await expect(warning).toContainText(translated);
-      await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+      await row.getByRole("button", { name: new RegExp(label("results.problems.adviceExplanation")) }).click();
       await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_RETRY_UNGUARDED_DETAILS"));
       await page.keyboard.press("Escape");
       await warning.click();
@@ -223,6 +225,7 @@ for (const locale of locales) {
       await page.goto("/");
       await selectExperiment(page, "checkout/checkout.experiment.json");
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      await page.locator(".advice-group > summary").click();
       const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_RETRY_NO_JITTER"]');
 
       await expect(warning).toBeVisible();

@@ -530,7 +530,7 @@ export interface components {
             path?: string | null;
             pointer?: string | null;
             /** @enum {string} */
-            severity: "ERROR" | "WARNING";
+            severity: "ERROR" | "WARNING" | "ADVICE";
             variant?: string | null;
         };
         DocumentContent: {

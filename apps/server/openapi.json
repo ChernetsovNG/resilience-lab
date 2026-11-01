@@ -2344,7 +2344,7 @@
           },
           "severity" : {
             "type" : "string",
-            "enum" : [ "ERROR", "WARNING" ]
+            "enum" : [ "ERROR", "WARNING", "ADVICE" ]
           },
           "variant" : {
             "type" : [ "string", "null" ]

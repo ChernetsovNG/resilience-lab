@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 enum class Severity {
     ERROR,
     WARNING,
+    ADVICE,
 }
 
 /**

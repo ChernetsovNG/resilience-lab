@@ -103,3 +103,13 @@ describe("diagnostic locations", () => {
     expect(summarizeDiagnostics([{ ...error, severity: "WARNING" }, error])).toEqual({ count: 2, severity: "ERROR" });
   });
 });
+
+it("groups advice across replicas and keeps risks above advice", () => {
+  const advice: Diagnostic = { code: "LINT_RETRY_UNGUARDED", severity: "ADVICE", message: "Use a retry budget",
+    path: "call#1", variant: "baseline", args: { connection: "call#1", replica: 1, attempts: 3 } };
+  const other: Diagnostic = { ...advice, path: "call#2", variant: "pool", args: { connection: "call#2", replica: 2, attempts: 3 } };
+  expect(groupDiagnostics([advice, other])).toHaveLength(1);
+  expect(groupDiagnostics([advice, other])[0].members).toEqual([advice, other]);
+  expect(summarizeDiagnostics([advice, other])).toEqual({ count: 1, severity: "ADVICE" });
+  expect(summarizeDiagnostics([advice, { ...advice, severity: "WARNING" }])).toEqual({ count: 2, severity: "WARNING" });
+});

@@ -5,7 +5,7 @@ import { formatNumber } from "../i18n/format";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 import type { ApiProblem, Catalog, Diagnostic, ExperimentFile, JobView, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { diagnosticTarget, groupDiagnostics, locationOf } from "../validation/diagnostics";
-import { LintDetails } from "../validation/DiagnosticDisplay";
+import { DiagnosticSymbol, LintDetails } from "../validation/DiagnosticDisplay";
 import { HelpHint } from "../help/HelpHint";
 import type { LoadedExperiment } from "../workspace/editor";
 import { Assumptions } from "./Assumptions";
@@ -86,10 +86,14 @@ export function ResultsPanel({
     });
     if (size === "collapsed") onSizeChange?.("normal");
   };
+  const [adviceOpen, setAdviceOpen] = useState(() => {
+    try { return localStorage.getItem("resilience-lab.advice-expanded") === "true"; } catch { return false; }
+  });
   const [timelineOpened, setTimelineOpened] = useState(false);
   const id = useId();
   const visibleDiagnostics = problemsElement === null ? diagnostics : diagnostics.filter(diagnostic =>
     (diagnosticDocuments === null ? diagnostic.path : diagnosticTarget(diagnostic, diagnosticDocuments).element) === problemsElement);
+  const advice = visibleDiagnostics.filter(diagnostic => diagnostic.severity === "ADVICE");
   const diagnosticExperiment = diagnosticDocuments?.experiment ?? experiment;
   const diagnosticModel = diagnosticDocuments?.model ?? model;
   const diagnosticGrid = diagnosticExperiment?.grid ?? summary?.grid ?? [];
@@ -98,6 +102,39 @@ export function ResultsPanel({
   const diagnosticContext = { catalog, model: diagnosticModel, grid: diagnosticGrid, variants: diagnosticVariants };
   const runDiagnosticContext = { catalog, model, grid: experiment?.grid ?? summary?.grid ?? [],
     variants: experiment?.variants ?? summary?.variants ?? [] };
+  const renderDiagnostics = (findings: readonly Diagnostic[]) => (
+          <ul className="validation-problems">
+            {groupDiagnostics(findings).sort((left, right) => Number(right.diagnostic.severity === "ERROR") - Number(left.diagnostic.severity === "ERROR"))
+              .map((group, index) => {
+                const { diagnostic, members } = group;
+                const lint = diagnostic.code.startsWith("LINT_");
+                const original = members[0];
+                const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(original, diagnosticDocuments);
+                return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
+                  <button type="button" data-diagnostic-code={diagnostic.code} title={locationOf(original)} onClick={() => onDiagnostic?.(original)}>
+                    <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}><DiagnosticSymbol severity={diagnostic.severity} /></span>
+                    <span>
+                      <span className="diagnostic-message">{sweepDiagnostics([{ ...diagnostic, variant: undefined }],
+                        { grid: diagnosticGrid, variants: diagnosticVariants }, diagnosticLabels, catalog, diagnosticModel)[0].message}</span>
+                      <span className="diagnostic-context">{lint ? [elementLabel(diagnostic.path ?? target.element ?? t("common.experiment"), diagnosticModel),
+                        diagnosticGroupContext(group, diagnosticVariants)].filter(Boolean).join("; ") : t("results.problems.context", {
+                        element: elementLabel(target.element ?? t("common.experiment"), diagnosticModel),
+                        variant: target.variant == null ? "" : t("results.problems.variant", {
+                          variant: variantLabel(diagnosticVariants.find(variant => variant.id === target.variant) ?? { id: target.variant }, diagnosticVariants),
+                        }),
+                      })}</span>
+                      {lint ? null : <span className="diagnostic-details">{t("results.problems.details", {
+                        code: diagnostic.code, document: diagnostic.document ?? t("common.experiment"),
+                      })}</span>}
+                    </span>
+                  </button>
+                  {lint ? <HelpHint label={t(diagnostic.severity === "ADVICE" ? "results.problems.adviceExplanation" : "results.problems.explanation")}><LintDetails diagnostic={diagnostic} />
+                    {[...new Set(members.map(locationOf))].map(location => <p key={location} className="diagnostic-details">{location}</p>)}
+                  </HelpHint> : null}
+                </li>;
+              })}
+          </ul>
+  );
   const staleNotice = running && summary !== null ? <p className="banner" role="status">{t("results.staleRunning")}</p>
     : stale ? <p className="banner" role="status">{t("results.stale")}</p> : null;
   const conditionVariant = activeVariantId ?? summary?.variants[0]?.id;
@@ -143,37 +180,15 @@ export function ResultsPanel({
             {t("results.problems.elementFilter", { element: elementLabel(problemsElement, diagnosticModel) })}
             <button type="button" onClick={onClearProblemsElement}>{t("results.problems.showAll")}</button>
           </p>}
-          <ul className="validation-problems">
-            {groupDiagnostics(visibleDiagnostics).sort((left, right) => Number(right.diagnostic.severity === "ERROR") - Number(left.diagnostic.severity === "ERROR"))
-              .map((group, index) => {
-                const { diagnostic, members } = group;
-                const lint = diagnostic.code.startsWith("LINT_");
-                const original = members[0];
-                const target = diagnosticDocuments === null ? { element: diagnostic.path, variant: diagnostic.variant } : diagnosticTarget(original, diagnosticDocuments);
-                return <li key={index} className={`diagnostic--${diagnostic.severity.toLowerCase()}`}>
-                  <button type="button" data-diagnostic-code={diagnostic.code} title={locationOf(original)} onClick={() => onDiagnostic?.(original)}>
-                    <span role="img" aria-label={t(`results.problems.severity.${diagnostic.severity}`)}>{t(`results.problems.icon.${diagnostic.severity}`)}</span>
-                    <span>
-                      <span className="diagnostic-message">{sweepDiagnostics([{ ...diagnostic, variant: undefined }],
-                        { grid: diagnosticGrid, variants: diagnosticVariants }, diagnosticLabels, catalog, diagnosticModel)[0].message}</span>
-                      <span className="diagnostic-context">{lint ? [elementLabel(diagnostic.path ?? target.element ?? t("common.experiment"), diagnosticModel),
-                        diagnosticGroupContext(group, diagnosticVariants)].filter(Boolean).join("; ") : t("results.problems.context", {
-                        element: elementLabel(target.element ?? t("common.experiment"), diagnosticModel),
-                        variant: target.variant == null ? "" : t("results.problems.variant", {
-                          variant: variantLabel(diagnosticVariants.find(variant => variant.id === target.variant) ?? { id: target.variant }, diagnosticVariants),
-                        }),
-                      })}</span>
-                      {lint ? null : <span className="diagnostic-details">{t("results.problems.details", {
-                        code: diagnostic.code, document: diagnostic.document ?? t("common.experiment"),
-                      })}</span>}
-                    </span>
-                  </button>
-                  {lint ? <HelpHint label={t("results.problems.explanation")}><LintDetails diagnostic={diagnostic} />
-                    {[...new Set(members.map(locationOf))].map(location => <p key={location} className="diagnostic-details">{location}</p>)}
-                  </HelpHint> : null}
-                </li>;
-              })}
-          </ul>
+          {renderDiagnostics(visibleDiagnostics.filter(diagnostic => diagnostic.severity !== "ADVICE"))}
+          {advice.length === 0 ? null : <details className="advice-group" open={adviceOpen} onToggle={event => {
+            const open = event.currentTarget.open;
+            setAdviceOpen(open);
+            try { localStorage.setItem("resilience-lab.advice-expanded", String(open)); } catch { /* Expansion remains usable for this session. */ }
+          }}>
+            <summary><DiagnosticSymbol severity="ADVICE" /> {t("results.problems.advice", { count: formatNumber(groupDiagnostics(advice).length) })}</summary>
+            {renderDiagnostics(advice)}
+          </details>}
           {!validationPending && validationProblem === null && visibleDiagnostics.length === 0 ? <p>{t("results.problems.none")}</p> : null}
         </> : active === "timeline" ? <>
           {staleNotice}

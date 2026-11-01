@@ -18,11 +18,11 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await model.click();
   const edge = page.getByTestId("canvas-edge-label-gateway-to-middle");
   const clientBadge = client.getByRole("button", { name: "Warnings in variants: Baseline", exact: true });
-  const edgeBadge = edge.getByRole("button", { name: "Warnings in variants: Baseline", exact: true });
+  const edgeBadge = edge.getByRole("button", { name: /^Warnings in variants: Baseline; Advice in variants: Baseline$/ });
   for (const badge of [clientBadge, edgeBadge]) {
     await expect(badge).toBeVisible();
     await expect(badge).toHaveClass(/diagnostic-badge--variants/);
-    await expect(badge).toHaveAttribute("title", "Warnings in variants: Baseline");
+    await expect(badge).toHaveAttribute("title", /^Warnings in variants: Baseline/);
     await expect(badge).toHaveCSS("border-top-style", "dashed");
   }
   const badgeSize = () => edgeBadge.evaluate(element => ({

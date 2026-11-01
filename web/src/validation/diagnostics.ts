@@ -24,7 +24,7 @@ export interface DiagnosticGroup {
 export function groupDiagnostics(diagnostics: readonly Diagnostic[]): DiagnosticGroup[] {
   const groups = new Map<string, DiagnosticGroup>();
   return diagnostics.flatMap((original, index) => {
-    const lint = original.severity === "WARNING" && original.code.startsWith("LINT_") && original.args != null;
+    const lint = original.severity !== "ERROR" && original.code.startsWith("LINT_") && original.args != null;
     const args = { ...original.args };
     const replica = typeof args.replica === "number" ? args.replica : null;
     const base = (path: string) => replica === null ? path : path.replace(/#\d+$/, "");
@@ -99,6 +99,7 @@ export function diagnosticTarget(
 export function summarizeDiagnostics(diagnostics: readonly Diagnostic[]) {
   return diagnostics.length === 0 ? null : {
     count: groupDiagnostics(diagnostics).length,
-    severity: diagnostics.some((diagnostic) => diagnostic.severity === "ERROR") ? "ERROR" as const : "WARNING" as const,
+    severity: diagnostics.some((diagnostic) => diagnostic.severity === "ERROR") ? "ERROR" as const
+      : diagnostics.some((diagnostic) => diagnostic.severity === "WARNING") ? "WARNING" as const : "ADVICE" as const,
   };
 }

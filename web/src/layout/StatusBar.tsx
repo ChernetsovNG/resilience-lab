@@ -33,12 +33,13 @@ export function StatusBar({ job, health, healthError, diagnostics, stale, cursor
   const groups = groupDiagnostics(diagnostics);
   const errors = groups.filter(({ diagnostic }) => diagnostic.severity === "ERROR").length;
   const warnings = groups.filter(({ diagnostic }) => diagnostic.severity === "WARNING").length;
+  const advice = groups.filter(({ diagnostic }) => diagnostic.severity === "ADVICE").length;
   const status = job === null ? t("status.ready") : t(`app.job.status.${job.status}`);
   const progress = active && job !== null ? t("status.progress", {
     status, completed: formatNumber(job.completedTasks), total: job.totalTasks === 0 ? t("results.unknownTotal") : formatNumber(job.totalTasks),
     cancelling: job.cancelRequested ? t("results.cancellationRequested") : "",
   }) : status;
-  const problems = t("status.problems", { errors: formatNumber(errors), warnings: formatNumber(warnings) });
+  const problems = t("status.problems", { errors: formatNumber(errors), warnings: formatNumber(warnings), advice: formatNumber(advice) });
   const cursor = cursorMs === null ? null : t("status.cursor", { time: formatDuration(cursorMs) });
   const scale = zoom === null ? null : t("status.zoom", { zoom: formatPercent(zoom) });
   return (

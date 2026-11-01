@@ -157,7 +157,9 @@ private fun validate(
 ): Int {
     val report = lab.validate(experiment)
     if (!report.valid) return validationError(stderr, report.diagnostics)
-    report.diagnostics.forEach { stderr.appendLine("- ${location(it)}: ${it.severity}: ${it.code}: ${it.message}") }
+    report.diagnostics.sortedBy { it.severity.ordinal }.forEach {
+        stderr.appendLine("- ${location(it)}: ${it.severity}: ${it.code}: ${it.message}")
+    }
     stderr.appendLine("Valid experiment: $experiment")
     return 0
 }

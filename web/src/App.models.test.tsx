@@ -36,7 +36,7 @@ it("keeps parameter errors visible while a client-less model receives the struct
     ] } };
   });
   render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" }));
   await screen.findByRole("button", { name: /At least one handler/ });
   expect(screen.queryByText("No client")).toBeNull();
   expect(button("Run").title).toBe("Add a client from the palette");

@@ -38,7 +38,7 @@ it("shows diagnostic counts, stale results, cursor time, backend version and can
   const warning = { code: "LINT", severity: "WARNING" as const, message: "Budget", document: null, pointer: null, path: null };
   const view = render(<StatusBar {...props} diagnostics={[warning, { ...warning, code: "RANGE", severity: "ERROR" }, warning]}
     stale cursorMs={1200} zoom={0.657} onProblems={onProblems} />);
-  fireEvent.click(screen.getByRole("button", { name: "Errors: 1 · Warnings: 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Errors: 1 · Warnings: 2 · Advice: 0" }));
   expect(onProblems).toHaveBeenCalledOnce();
   expect(screen.getByText("Results outdated")).toBeTruthy();
   expect(screen.getByText("Cursor 1.2 s")).toBeTruthy();
@@ -64,4 +64,11 @@ it.each([4, 0])("explains the task counter when the total is %s", totalTasks => 
   expect(tooltip.textContent).toContain("variant × grid point × replication");
   expect(tooltip.textContent).toContain(totalTasks === 0 ? "unknown until the first task finishes" : "3 of 4 tasks");
   expect(screen.getByTestId("job-status").getAttribute("aria-describedby")).toBe(tooltip.id);
+});
+
+it("counts advice separately without warning styling", () => {
+  const advice = { code: "LINT_RETRY_UNGUARDED", severity: "ADVICE" as const, message: "Use a retry budget" };
+  render(<StatusBar {...props} diagnostics={[advice]} />);
+  const button = screen.getByRole("button", { name: "Errors: 0 · Warnings: 0 · Advice: 1" });
+  expect(button.classList.contains("diagnostic--warning")).toBe(false);
 });

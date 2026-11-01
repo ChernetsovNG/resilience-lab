@@ -301,7 +301,7 @@ class ModelLinter(
                     call.balancing != null &&
                         graph.routers.none { it.path == call.to && it.pathSegments.last() == "#lb" }
                 }.map { call ->
-                    warning(
+                    finding(
                         CoreMessage.LINT_BALANCING_IGNORED,
                         "Balancing on connection '${call.path}' has no effect because its target is not a replica group. " +
                             "Remove the setting or create target replicas; an explicit router uses its own policy.",
@@ -319,7 +319,7 @@ class ModelLinter(
                         .map { it.edge }
                         .toSet()
                 graph.outgoingCalls(service.path).filter { it.path !in used }.map { call ->
-                    warning(
+                    finding(
                         CoreMessage.LINT_SCENARIO_UNUSED,
                         "Connection '${call.path}' is absent from service '${service.path}'s scenario, so no requests use it. " +
                             "Add a call step or remove the connection.",
@@ -507,7 +507,7 @@ class ModelLinter(
                 "holdingMs" to JsonPrimitive(holdingText),
                 "threshold" to JsonPrimitive(number(poolDemandThreshold)),
             )
-        return warning(
+        return finding(
             if (limitsHandlers) CoreMessage.LINT_POOL_DEMAND_LIMITS_HANDLERS else CoreMessage.LINT_POOL_DEMAND,
             "Pool of '$path': estimated simultaneous demand $demandText for $size connections at $rateText requests/s " +
                 "(threshold ${number(poolDemandThreshold)} × size). " +
@@ -581,7 +581,7 @@ class ModelLinter(
                             .joinToString(", ")
                     val thresholdText = number(healthCheckCascadeThreshold)
                     checked.map { service ->
-                        warning(
+                        finding(
                             CoreMessage.LINT_HEALTHCHECK_CASCADE,
                             "Health-check of '${service.path}': ${members.size} instances in '$group', " +
                                 "request types $requestTypes, utilization $utilization with all instances, " +
@@ -640,7 +640,7 @@ class ModelLinter(
         val thresholdPercent = number(rejectionRiskThreshold * 100.0)
         val rateText = Quantities.plain((load.rate * Fraction.of(BigDecimal(1_000))).decimal())
         val holdingText = Quantities.plain(load.holdingMs.decimal())
-        return warning(
+        return finding(
             CoreMessage.LINT_REJECTION_RISK,
             "'${service.path}' has no queue: estimated rejections $percent% at threshold $thresholdPercent% " +
                 "($rateText requests/s, $holdingText ms mean holding, ${service.handlers} slots). " +
@@ -681,7 +681,7 @@ class ModelLinter(
                 "handlers" to JsonPrimitive(service.handlers),
                 "threshold" to JsonPrimitive(number(lowHeadroomThreshold)),
             )
-        return warning(
+        return finding(
             if (limitText == null) CoreMessage.LINT_LOW_HEADROOM else CoreMessage.LINT_LOW_HEADROOM_RATE_LIMIT,
             "Low headroom of '${service.path}': nominal utilization $utilizationText at threshold ${number(lowHeadroomThreshold)} " +
                 "($rateText requests/s accepted, $holdingText ms mean holding, ${service.handlers} slots). " +
@@ -733,7 +733,7 @@ class ModelLinter(
                 "attemptChain" to JsonPrimitive(chains),
             )
         return paths.mapNotNull { it.lastOrNull { call -> call.attempts > 1 } }.distinctBy { it.path }.map { call ->
-            warning(
+            finding(
                 if (budgetLimited.isEmpty()) CoreMessage.LINT_RETRY_OVERLOAD else CoreMessage.LINT_RETRY_OVERLOAD_BUDGET,
                 "Worst retry load of '${service.path}': $rateText requests/s accepted, utilization $utilizationText " +
                     "at threshold ${number(retryOverloadThreshold)}; attempts: $chains. " +
@@ -774,7 +774,7 @@ class ModelLinter(
             } else {
                 val requestTypes = classes.sorted().joinToString(", ")
                 val estimateText = responseNumber(response.ms, call.timeoutMs)
-                warning(
+                finding(
                     CoreMessage.LINT_TIMEOUT_BELOW_LATENCY,
                     "Timeout ${number(call.timeoutMs)} ms on connection '${call.path}' is below the normal " +
                         "p${number(timeoutLatencyQuantile * 100.0)} response $estimateText ms of '${response.target}' " +
@@ -841,7 +841,7 @@ class ModelLinter(
         val required =
             2.0 * call.network.meanMs + processingMs + (next?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (call.timeoutMs * (1.0 + timeoutBudgetTolerance) < required) {
-            warning(
+            finding(
                 CoreMessage.LINT_TIMEOUT_BUDGET,
                 "Timeout ${number(call.timeoutMs)} ms is shorter than the estimated ${number(required)} ms " +
                     "for downstream processing and calls. " +
@@ -867,7 +867,7 @@ class ModelLinter(
         val affected = clients.filter { call.timeoutMs >= it.deadlineMs * timeoutUnreachableThreshold }
         if (affected.isEmpty()) return null
         val deadlines = affected.joinToString(", ") { "'${it.path}': ${number(it.deadlineMs)}" }
-        return warning(
+        return finding(
             CoreMessage.LINT_TIMEOUT_UNREACHABLE,
             "Timeout ${number(call.timeoutMs)} ms on connection '${call.path}' is at least " +
                 "${number(timeoutUnreachableThreshold)} × deadline for these clients (deadlines in ms): $deadlines. " +
@@ -895,7 +895,7 @@ class ModelLinter(
         if (call.attempts < retrySameTargetThreshold || call.retryTarget != RetryTarget.ANY) return null
         val targets = graph.entryServices(client.copy(entry = call.to), requestClass).size
         if (targets < 2) return null
-        return warning(
+        return finding(
             CoreMessage.LINT_RETRY_SAME_TARGET,
             "Connection '${call.path}' allows ${number(call.attempts.toDouble())} attempts among ${number(targets.toDouble())} targets " +
                 "for request type '$requestClass' (threshold ${number(retrySameTargetThreshold.toDouble())}). " +
@@ -918,7 +918,7 @@ class ModelLinter(
     private fun retryUnguarded(call: CallEdge): Diagnostic? {
         if (call.attempts < retryUnguardedThreshold || call.circuitBreaker != null || call.retryBudget != null) return null
         val attempts = number(call.attempts.toDouble())
-        return warning(
+        return finding(
             CoreMessage.LINT_RETRY_UNGUARDED,
             "Connection '${call.path}' allows $attempts attempts without retryBudget or circuitBreaker. " +
                 "Target load may grow by up to $attempts times on failure; " +
@@ -941,10 +941,10 @@ class ModelLinter(
         val backoff =
             call.backoff.kind.name
                 .lowercase()
-        return warning(
+        return finding(
             CoreMessage.LINT_RETRY_NO_JITTER,
             "Connection '${call.path}' allows ${number(call.attempts.toDouble())} attempts with backoff '$backoff', " +
-                "above the warning threshold of ${number(retryNoJitterThreshold.toDouble())}. " +
+                "above the advice threshold of ${number(retryNoJitterThreshold.toDouble())}. " +
                 "Retries may synchronize and overload dependencies; use exponential-full-jitter.",
             call.origin,
             call.path,
@@ -969,7 +969,7 @@ class ModelLinter(
         val product = calls.fold(BigInteger.ONE) { total, call -> total * BigInteger.valueOf(call.attempts.toLong()) }
         return if (product > BigInteger.valueOf(retryAmplificationThreshold.toLong()) && firstCall != null) {
             val amplification = if (product.bitLength() <= 53) JsonPrimitive(product) else JsonPrimitive(product.toString())
-            warning(
+            finding(
                 CoreMessage.LINT_RETRY_AMPLIFICATION,
                 "Nested retries allow up to $product attempts per request, above the warning threshold of $retryAmplificationThreshold. " +
                     "Failures may overload dependencies; reduce attempts at one or more layers.",
@@ -1007,7 +1007,7 @@ class ModelLinter(
                     val database = service.type == "database"
                     val resource = if (database) "Connections" else "Handlers"
                     add(
-                        warning(
+                        finding(
                             CoreMessage.LINT_HANDLERS_LITTLE,
                             "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand.decimal().toDouble())} at " +
                                 "${number((maximumRate * Fraction.of(BigDecimal(1_000))).decimal().toDouble())} requests/s. " +
@@ -1055,7 +1055,7 @@ class ModelLinter(
         // Existing routing shares are Double; do not emit a warning that reports equality after conversion.
         if (waitMs.isFinite() && BigDecimal.valueOf(waitMs) <= scaledLimit) return null
         val limit = if (patience.entry) "deadline of client '${patience.source}'" else "timeout on connection '${patience.source}'"
-        return warning(
+        return finding(
             if (patience.entry) CoreMessage.LINT_QUEUE_WAIT_DEADLINE else CoreMessage.LINT_QUEUE_WAIT_TIMEOUT,
             "Full queue of '${service.path}' has estimated wait ${number(waitMs)} ms " +
                 "(${service.queueCapacity} queued / ${service.handlers} slots × ${number(holdingMs)} ms holding), " +
@@ -1089,7 +1089,7 @@ class ModelLinter(
     ): Diagnostic? {
         val required = processingMs + (call?.let { it.attempts * it.timeoutMs + maxBackoffSum(it) } ?: 0.0)
         return if (client.deadlineMs < required) {
-            warning(
+            finding(
                 CoreMessage.LINT_DEADLINE_BUDGET,
                 "Deadline ${number(client.deadlineMs)} ms is shorter than the entry service's estimated ${number(required)} ms. " +
                     "The client may stop waiting before completion; increase its deadline or reduce the entry call's timeout and retries.",
@@ -1166,7 +1166,7 @@ class ModelLinter(
 
     private fun number(value: Double): String = if (value.isFinite()) Quantities.plain(value) else value.toString()
 
-    private fun warning(
+    private fun finding(
         code: CoreMessage,
         message: String,
         origin: Origin,
@@ -1186,7 +1186,10 @@ class ModelLinter(
             }
         return Diagnostic(
             code,
-            Severity.WARNING,
+            when (code) {
+                CoreMessage.LINT_RETRY_NO_JITTER, CoreMessage.LINT_RETRY_SAME_TARGET, CoreMessage.LINT_RETRY_UNGUARDED -> Severity.ADVICE
+                else -> Severity.WARNING
+            },
             if (replica == null) message else "Replica '$replicaPath': $message",
             origin.document,
             origin.pointer + suffix,

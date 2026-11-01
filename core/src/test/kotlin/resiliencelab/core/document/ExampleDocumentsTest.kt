@@ -11,7 +11,7 @@ import kotlin.test.Test
 
 class ExampleDocumentsTest {
     @Test
-    fun `example lint warnings match the documented variants`() {
+    fun `example lint warnings and advice match the documented variants`() {
         val expected =
             mapOf(
                 "retry-storm" to
@@ -72,7 +72,16 @@ class ExampleDocumentsTest {
                         "LINT_RETRY_UNGUARDED/retries" to 3,
                     ),
             )
-        (expected + policies).forEach { (example, warnings) ->
+        val counts =
+            mapOf(
+                "retry-storm" to (2 to 2),
+                "checkout" to (5 to 7),
+                "checkout-replicas" to (6 to 10),
+                "checkout-policies/slow-replica" to (3 to 0),
+                "checkout-policies/partner-burst" to (9 to 0),
+                "checkout-policies/psp-outage" to (5 to 9),
+            )
+        (expected + policies).forEach { (example, findings) ->
             val directory = Path.of("../examples", example.substringBefore('/'))
             val modelName = example.substringBefore('/')
             val experimentName = example.substringAfter('/')
@@ -85,10 +94,12 @@ class ExampleDocumentsTest {
             assertThat(compiled.diagnostics).describedAs(example).isEmpty()
             val diagnostics = ModelLinter().lint(requireNotNull(compiled.experiment))
 
-            assertThat(diagnostics).allSatisfy { assertThat(it.severity).isEqualTo(Severity.WARNING) }
+            val (warnings, advice) = counts.getValue(example)
+            assertThat(diagnostics.count { it.severity == Severity.WARNING }).describedAs("$example warnings").isEqualTo(warnings)
+            assertThat(diagnostics.count { it.severity == Severity.ADVICE }).describedAs("$example advice").isEqualTo(advice)
             assertThat(diagnostics.groupingBy { "${it.code}/${it.variant ?: "all"}" }.eachCount())
                 .describedAs(example)
-                .isEqualTo(warnings)
+                .isEqualTo(findings)
 
             val target =
                 when (modelName) {
