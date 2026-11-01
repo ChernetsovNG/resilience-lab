@@ -13,6 +13,8 @@ for (const language of ["en", "ru"] as const) {
     const directory = `request-type-filters-${randomUUID()}`;
     const root = resolve("../apps/server/build/e2e-workspace", directory);
     await mkdir(root);
+    let jobs = 0;
+    page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
     try {
       const experiment = await copySmallExperiment(root);
       experiment.execution = { ...experiment.execution, warmup: "0s", measurement: "1s", window: "100ms" };
@@ -67,11 +69,15 @@ for (const language of ["en", "ru"] as const) {
       await expect(route.getByText("status", { exact: true })).toBeVisible();
       const router = page.getByTestId("rf__node-order-router");
       const missingRoute = router.locator('.diagnostic-badge[title*="checkout"]');
+      const missingRouteMessage = ru ? "У маршрутизатора «order-router» нет маршрута для вида запроса «checkout»"
+        : "Router 'order-router' has no route for request type 'checkout'";
       await expect(missingRoute).toBeVisible();
-      await expect(missingRoute).toHaveAttribute("title", ru ? "У маршрутизатора «order-router» нет маршрута для вида запроса «checkout»"
-        : "Router 'order-router' has no route for request type 'checkout'");
+      await expect(missingRoute).toHaveAttribute("title", missingRouteMessage);
       const run = page.getByRole("button", { name: ru ? "Запустить" : "Run", exact: true });
-      await expect(run).toBeDisabled();
+      await run.click();
+      const problems = page.getByRole("tabpanel", { name: ru ? "Проблемы" : "Problems", exact: true });
+      await expect(problems).toContainText(missingRouteMessage);
+      expect(jobs).toBe(0);
       if (ru) {
         await page.mouse.move(700, 100);
         await page.screenshot({ path: testInfo.outputPath("request-type-no-route-ru.png") });
@@ -99,6 +105,7 @@ for (const language of ["en", "ru"] as const) {
       await run.click();
       const summary: RunSummary = await (await response).json();
       await expect(page.getByTestId("job-status")).toHaveText(ru ? "ЗАВЕРШЕНО" : "COMPLETED");
+      expect(jobs).toBe(1);
       const aggregate = summary.variants[0].points[0].aggregate;
       expect(Object.keys(aggregate.entries.classes).sort()).toEqual(["checkout", "status"]);
       expect(aggregate.connections["order-route-v2"].totals.sentAttempts).toBeGreaterThan(0);

@@ -57,7 +57,7 @@ it("preserves the chosen tab when a repeated launch reveals the panel and return
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
-it("expires launch findings after document edits and reveals the same error in a new validation response", async () => {
+it("expires launch findings after edits and counts new validation errors without reopening Problems", async () => {
   const finding = { code: "PARAM_RANGE", severity: "ERROR" as const, message: "Handler error", document: modelPath,
     pointer: "/blocks/gateway/params/handlers", path: "gateway" };
   let findings: typeof finding[] = [];
@@ -81,8 +81,11 @@ it("expires launch findings after document edits and reveals the same error in a
   fireEvent.click(button("Collapse results"));
   findings = [finding];
   editHandlers("6");
-  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
-  expect(screen.getByRole("tabpanel")).toBeTruthy();
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(button("Errors: 1 · Warnings: 0"));
+  expect(screen.getByRole("tabpanel").textContent).toContain("Handler error");
 });
 
 it("reveals a resume refusal against the edited documents while the original run remains stale", async () => {
@@ -186,7 +189,7 @@ it("keeps model diagnostics ordinary beside muted variant errors and counts seve
   fireEvent.click(handlers.getByRole("button", { name: "More about: Errors in variants: Baseline, No retries" }));
   expect(handlers.getByRole("link", { name: "In variants: Baseline — 1 error, 1 warning" })).toBeTruthy();
   expect(handlers.getByRole("link", { name: "In variants: No retries — 1 error" })).toBeTruthy();
-  expect(button("Run").disabled).toBe(true);
+  expect(button("Run").title).toContain("validation errors");
 });
 
 it("does not navigate away from an invalid draft through variant diagnostic links or badges", async () => {
@@ -205,7 +208,7 @@ it("does not navigate away from an invalid draft through variant diagnostic link
   await waitFor(() => expect((within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Warnings in variants: Baseline" }) as HTMLButtonElement).disabled).toBe(true));
 });
 
-it("reveals a new error outside the element filter opened by a variant badge", async () => {
+it("preserves the element filter on new errors until the status counter opens all problems", async () => {
   const warning = { code: "LINT", severity: "WARNING", message: "Gateway budget", document: modelPath,
     pointer: "/blocks/gateway/params/handlers", path: "gateway", variant: "baseline" };
   let findings = [warning];
@@ -217,6 +220,10 @@ it("reveals a new error outside the element filter opened by a variant badge", a
   findings = [warning, { ...warning, code: "PARAM_RANGE", severity: "ERROR", message: "Dependency handler error",
     pointer: "/blocks/dependency/params/handlers", path: "dependency", variant: "baseline" }];
   editHandlers("5");
-  await waitFor(() => expect(within(screen.getByRole("tabpanel")).getByText("Dependency handler error")).toBeTruthy());
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 1" });
+  expect(within(screen.getByRole("tabpanel")).getByText("Problems for gateway")).toBeTruthy();
+  expect(within(screen.getByRole("tabpanel")).queryByText("Dependency handler error")).toBeNull();
+  fireEvent.click(button("Errors: 1 · Warnings: 1"));
+  expect(within(screen.getByRole("tabpanel")).getByText("Dependency handler error")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).getAllByRole("listitem")).toHaveLength(2);
 });

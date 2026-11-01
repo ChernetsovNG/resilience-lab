@@ -51,7 +51,7 @@ for (const language of ["en", "ru"] as const) {
       await rows.nth(1).getByRole("textbox", { name: time, exact: true }).fill("30s");
       await rows.nth(1).getByRole("textbox", { name: time, exact: true }).press("Enter");
       await expect(page.getByRole("button", { name: ru ? "Запустить" : "Run", exact: true })).toBeEnabled();
-      await page.getByRole("button", { name: ru ? "Свернуть результаты" : "Collapse results", exact: true }).click();
+      await expect(page.getByRole("tabpanel")).toBeHidden();
       const save = page.getByRole("button", { name: ru ? "Сохранить" : "Save", exact: true });
       await save.click();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();

@@ -42,7 +42,7 @@ test("validates zero handlers without saving and clears diagnostics after correc
   await expect(problems.getByRole("button", { name: /PARAM_RANGE/ }).first()).toBeVisible();
   await expect(problems.getByRole("button", { name: /PARAM_RANGE/ }).first()).toHaveAttribute("title", /\/blocks\/gateway\/params\/handlers/);
   await expect(problems).not.toContainText("/blocks/gateway/params/handlers");
-  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toHaveAttribute("title", "Fix validation errors before running");
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await problems.getByRole("button", { name: /PARAM_RANGE/ }).first().click();
@@ -172,7 +172,7 @@ test("validates variant drafts on their own page and blocks Run until errors are
       await page.getByRole("tab", { name, exact: true }).click();
       await expect(handlers).toHaveValue("4");
       await expect(fieldMessages).toBeHidden();
-      await expect(run).toBeDisabled();
+      await expect(run).toBeEnabled();
       await expect(run).toHaveAttribute("title", "Fix validation errors before running");
     }
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
@@ -184,7 +184,7 @@ test("validates variant drafts on their own page and blocks Run until errors are
     await expect(fieldMessages).toContainText("PARAM_RANGE");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toBeHidden();
-    await expect(run).toBeDisabled();
+    await expect(run).toBeEnabled();
     await expect(run).toHaveAttribute("title", "Fix validation errors before running");
     await page.getByRole("button", { name: "Reset Handlers", exact: true }).click();
     await expect(handlers).toHaveValue("4");
@@ -697,7 +697,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
     await display(result);
     expect(await (await request.get(modelUrl)).json()).toEqual(original);
     expect(jobs).toBe(0);
-    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await expectNoPageScroll(page);
     await page.screenshot({ path: testInfo.outputPath("cost-estimate-drafts.png") });
   });

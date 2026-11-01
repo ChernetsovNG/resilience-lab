@@ -41,6 +41,8 @@ export interface TopBarProps {
   onCancel: () => void;
   /** Validation errors, an unfinished check or an unavailable validator prevent running. */
   runBlockedReason?: string;
+  /** Opens validation findings on a blocked Run attempt or an explicit click on its explanation. */
+  onValidationProblems?: () => void;
   /** A failed save is explained beside Run; another attempt may retry it. */
   runProblem?: string;
   job: JobView | null;
@@ -114,13 +116,16 @@ export function TopBar(props: TopBarProps) {
         className="primary"
         onMouseDown={event => event.preventDefault()}
         onClick={onRun}
-        disabled={experiment === null || loading || saving || conflict || invalid || running || props.estimating || props.runBlockedReason !== undefined || props.backendError !== undefined}
+        disabled={experiment === null || loading || saving || conflict || invalid || running || props.estimating || (props.runBlockedReason !== undefined && props.onValidationProblems === undefined) || props.backendError !== undefined}
         title={reason ?? t("app.topBar.runTitle")}
         aria-describedby={reason === undefined ? undefined : reasonId}
       >
         {t("app.topBar.run")}
       </button>
-      {reason === undefined ? null : <span id={reasonId} className="run-blocked-reason" role="status">{reason}</span>}
+      {reason === undefined ? null : props.onValidationProblems !== undefined && reason === props.runBlockedReason ? (
+        <button type="button" id={reasonId} className="run-blocked-reason"
+          onMouseDown={event => event.preventDefault()} onClick={props.onValidationProblems}>{reason}</button>
+      ) : <span id={reasonId} className="run-blocked-reason" role="status">{reason}</span>}
       {props.canResume ? <button type="button" onClick={props.onResume}
         disabled={loading || saving || dirty || invalid || running || props.estimating}
         title={dirty ? t("app.topBar.saveBeforeResume") : undefined}>{t("app.topBar.resume")}</button> : null}

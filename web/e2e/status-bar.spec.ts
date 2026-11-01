@@ -38,7 +38,7 @@ test("detects a server outage and recovers without reloading or losing edits", a
   await expect(run).toBeEnabled();
 });
 
-test("keeps status in one place and reveals warnings and new errors without page scrolling", async ({ page }, testInfo) => {
+test("keeps status in one place and opens draft errors on Run without page scrolling", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
@@ -67,6 +67,10 @@ test("keeps status in one place and reveals warnings and new errors without page
   const handlers = page.getByLabel("Handlers", { exact: true });
   await handlers.fill("0");
   await handlers.press("Enter");
+  await expect(status.getByRole("button", { name: /^Errors: [1-9]/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Findings", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel")).toBeHidden();
+  await run.click();
   await expect(page.getByRole("tab", { name: "Problems", exact: true })).toHaveAttribute("aria-selected", "true");
   const finding = page.getByRole("tabpanel").getByRole("button", { name: /PARAM_RANGE/ }).first();
   await expect(finding).toBeVisible();
@@ -92,4 +96,45 @@ test("keeps status in one place and reveals warnings and new errors without page
     x: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     y: document.documentElement.scrollHeight > document.documentElement.clientHeight,
   }))).toEqual({ x: false, y: false });
+});
+
+test.describe("draft errors in Russian", () => {
+  test.use({ locale: "ru-RU" });
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+    test(`keeps an invalid added block collapsed at ${viewport.width}×${viewport.height}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+      const run = page.getByRole("button", { name: "Запустить", exact: true });
+      await expect(run).toBeEnabled();
+      const counter = page.getByRole("region", { name: "Строка состояния" }).getByRole("button", { name: /^Ошибок: / });
+      await expect(counter).toContainText("Ошибок: 0");
+      await page.getByRole("tab", { name: "Выводы", exact: true }).click();
+      await page.getByRole("button", { name: "Свернуть результаты", exact: true }).click();
+      await page.getByRole("button", { name: "Сервис", exact: true }).dblclick();
+      await expect(page.getByTestId("rf__node-service-1")).toBeVisible();
+      await expect(counter).not.toContainText("Ошибок: 0");
+      await expect(page.getByRole("tab", { name: "Выводы", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("tabpanel")).toBeHidden();
+      await page.screenshot({ path: testInfo.outputPath(`draft-errors-collapsed-${viewport.width}.png`) });
+
+      await run.click();
+      await expect(page.getByRole("tab", { name: "Проблемы", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("tabpanel")).toContainText("service-1");
+      await page.screenshot({ path: testInfo.outputPath(`draft-errors-run-${viewport.width}.png`) });
+      for (const name of ["Оценка", "Исправьте ошибки проверки перед запуском"]) {
+        await page.getByRole("button", { name: "Свернуть результаты", exact: true }).click();
+        await page.getByRole("button", { name, exact: true }).click();
+        await expect(page.getByRole("tab", { name: "Проблемы", exact: true })).toHaveAttribute("aria-selected", "true");
+        await expect(page.getByRole("tabpanel")).toContainText("service-1");
+      }
+      await page.getByRole("button", { name: "Свернуть результаты", exact: true }).click();
+      const handlers = page.getByLabel("Обработчики", { exact: true });
+      await handlers.fill("-1");
+      await page.getByRole("button", { name: "Исправьте ошибки проверки перед запуском", exact: true }).click();
+      await expect(page.getByRole("tabpanel")).toBeVisible();
+      await expect(handlers).toHaveValue("-1");
+    });
+  }
 });

@@ -155,6 +155,7 @@ it("opens and focuses the variant field named by a Problem", async () => {
       pointer: "/variants/1/id", path: null },
   ] } } : undefined);
   render(<App />); await screen.findByRole("heading", { name: "Run settings" }); await selectGateway();
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
   fireEvent.click(await screen.findByRole("button", { name: /Invalid variant identifier/ }));
   expect(document.activeElement).toBe(screen.getByLabelText("Variant ID"));
   expect((screen.getByLabelText("Variant ID") as HTMLInputElement).value).toBe("no-retries");
