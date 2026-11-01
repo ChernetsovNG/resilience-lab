@@ -77,6 +77,10 @@ function InlineValue({ catalog, elementId, elementType, modelParams, overridden 
     <span className="inline-param nodrag nopan" data-testid={`canvas-param-${elementId}-${path}`}
       data-element-id={elementId} data-param-path={path} onDoubleClick={begin}
       title={descriptor.kind === "CHOICE" ? full : undefined}>
+      {elementType === "router" && path === "policy" && descriptor.kind === "CHOICE" ?
+        <span className="inline-param-sizing" aria-hidden="true">
+          {descriptor.options.map(option => <span key={option} data-value={format(option)} />)}
+        </span> : null}
       {overridden && modelValue !== undefined ? <del className="inline-param-model"
         title={t("editor.variant.modelValue", { value: formatParameterValue(modelValue.value, descriptor) })}>
         {format(modelValue.value)}

@@ -12,6 +12,7 @@ export interface BlockGeometry {
 }
 
 const horizontalPadding = 13.8;
+const routerHorizontalPadding = 8;
 const verticalPadding = 10.6;
 const stackOffset = (type: string, replicas: number) => type === "service" && replicas > 1 ? 8 : 0;
 const personContentTop = (width: number) => 2 + 2 * 0.38 * width / 3 + 0.25 * width + 8;
@@ -24,6 +25,11 @@ export function minimumBlockHeight(type: string, width: number, contentHeight: n
   return Math.ceil(contentHeight + (type === "database" ? 22 + verticalPadding : 2 * verticalPadding) + offset);
 }
 
+/** Fits the measured content rectangle inside the router's circular contour. */
+export function minimumRouterDiameter(contentWidth: number, contentHeight: number): number {
+  return Math.max(144, Math.ceil(contentWidth + 2 * routerHorizontalPadding), Math.ceil(Math.hypot(contentWidth, contentHeight) + 6));
+}
+
 function roundedCard(x: number, y: number, width: number, height: number): string {
   return `M ${x + 9} ${y + 1} H ${x + width - 9} A 8 8 0 0 1 ${x + width - 1} ${y + 9} V ${y + height - 9} A 8 8 0 0 1 ${x + width - 9} ${y + height - 1} H ${x + 9} A 8 8 0 0 1 ${x + 1} ${y + height - 9} V ${y + 9} A 8 8 0 0 1 ${x + 9} ${y + 1} Z`;
 }
@@ -33,7 +39,7 @@ function circlePath(cx: number, cy: number, radius: number): string {
 }
 
 /** Silhouette, content rectangle and visible-contour ports for an actual outer node size. */
-export function blockGeometry(type: string, width: number, height: number, replicas = 1): BlockGeometry {
+export function blockGeometry(type: string, width: number, height: number, replicas = 1, routerContent?: { width: number; height: number }): BlockGeometry {
   const offset = stackOffset(type, replicas);
   const w = width - offset;
   const h = height - offset;
@@ -82,6 +88,13 @@ export function blockGeometry(type: string, width: number, height: number, repli
       geometry.paths = [circlePath(w / 2, h / 2, radius)];
       geometry.content = { x: w / 2 - 0.85 * radius, y: h / 2 - 0.45 * radius,
         width: 1.7 * radius, height: 0.9 * radius };
+      if (routerContent !== undefined && routerContent.width > 0 && routerContent.height > 0) {
+        const scale = Math.max(0, Math.min(2 * (radius - 2) / Math.hypot(routerContent.width, routerContent.height),
+          (w - 2 * routerHorizontalPadding) / routerContent.width));
+        const contentWidth = routerContent.width * scale;
+        const contentHeight = routerContent.height * scale;
+        geometry.content = { x: (w - contentWidth) / 2, y: (h - contentHeight) / 2, width: contentWidth, height: contentHeight };
+      }
       geometry.ports = { IN: { x: w / 2 - radius, y: h / 2 }, OUT: { x: w / 2 + radius, y: h / 2 } };
       break;
     }
