@@ -5,6 +5,61 @@ import { setupAppTests, deferred, server, open, selectGateway, editHandlers, but
 
 setupAppTests();
 
+it("waits for current validation before estimating a corrected draft with warnings", async () => {
+  const gate = deferred();
+  let checkingCorrection = false;
+  const fetchMock = server(async (url, init) => {
+    if (url !== "/api/v1/validate") return undefined;
+    const draft = JSON.parse(String(init?.body)).drafts.find((item: { path: string }) => item.path === modelPath);
+    const handlers = draft?.content.model.blocks.gateway.params.handlers ?? 4;
+    if (handlers === 5) { checkingCorrection = true; await gate.promise; }
+    return { body: { experiment: experimentPath, valid: handlers !== 0, diagnostics: handlers === 4 ? [] : [{
+      code: "PARAM_RANGE", severity: handlers === 0 ? "ERROR" : "WARNING", message: handlers === 0 ? "Handler error" : "Handler warning",
+      document: modelPath, pointer: "/blocks/gateway/params/handlers", path: "gateway",
+    }] } };
+  });
+  await open(); await selectGateway(); editHandlers("0");
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
+  fireEvent.click(button("Collapse results"));
+  editHandlers("5");
+  fireEvent.click(button("Estimate"));
+  await waitFor(() => expect(checkingCorrection).toBe(true));
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/estimate")).toBe(false);
+  await act(async () => gate.release());
+  await screen.findByRole("region", { name: "Cost estimate" });
+  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+  const estimate = fetchMock.mock.calls.find(([url]) => url === "/api/v1/estimate")!;
+  expect(JSON.parse(String(estimate[1]?.body)).drafts.find((draft: { path: string }) => draft.path === modelPath)
+    .content.model.blocks.gateway.params.handlers).toBe(5);
+  expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
+});
+
+it("waits for current validation before opening Problems for a newly invalid draft", async () => {
+  const gate = deferred();
+  let checkingInvalid = false;
+  const fetchMock = server(async (url, init) => {
+    if (url !== "/api/v1/validate") return undefined;
+    const draft = JSON.parse(String(init?.body)).drafts.find((item: { path: string }) => item.path === modelPath);
+    const invalid = draft?.content.model.blocks.gateway.params.handlers === 0;
+    if (invalid) { checkingInvalid = true; await gate.promise; }
+    return { body: { experiment: experimentPath, valid: !invalid, diagnostics: invalid ? [{
+      code: "PARAM_RANGE", severity: "ERROR", message: "Current handler error", document: modelPath,
+      pointer: "/blocks/gateway/params/handlers", path: "gateway",
+    }] : [] } };
+  });
+  await open(); await selectGateway(); editHandlers("0");
+  fireEvent.click(button("Estimate"));
+  await waitFor(() => expect(checkingInvalid).toBe(true));
+  expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/estimate")).toBe(false);
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  await act(async () => gate.release());
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
+  expect(screen.getByRole("tabpanel").textContent).toContain("Current handler error");
+  expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/estimate" || url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
+});
+
 describe("cost estimate and resume", () => {
 
   it("estimates unsaved model and experiment drafts without saving or starting a job", async () => {

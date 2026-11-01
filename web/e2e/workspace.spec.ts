@@ -697,7 +697,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
     await display(result);
     expect(await (await request.get(modelUrl)).json()).toEqual(original);
     expect(jobs).toBe(0);
-    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await expectNoPageScroll(page);
     await page.screenshot({ path: testInfo.outputPath("cost-estimate-drafts.png") });
   });

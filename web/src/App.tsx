@@ -56,7 +56,7 @@ export function App() {
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
   const runInFlight = useRef(false);
-  const [command, setCommand] = useState<"save" | "run" | null>(null);
+  const [command, setCommand] = useState<"save" | "run" | "estimate" | null>(null);
   const startingRun = runPending || command === "run";
   const summary = run.result?.summary ?? null;
   const resultDocuments = run.result?.documents ?? run.documents;
@@ -276,7 +276,7 @@ export function App() {
     : validation.pending ? t("app.validation.pending")
     : validation.problem !== null ? t("app.validation.failed")
       : validation.report?.valid === false ? t("app.validation.invalid") : undefined;
-  const validationFailed = validation.problem !== null || validation.report?.valid === false;
+  const validationFailed = !validation.pending && (validation.problem !== null || validation.report?.valid === false);
   const openProblems = useCallback(() => {
     setProblemsElement(null);
     setProblemsRequest(current => current + 1);
@@ -374,13 +374,13 @@ export function App() {
   const courseFaults = loaded === null || courseModel === null || catalog === null ? [] : courseData(courseModel, loaded.experiment, catalog).faults;
   const courseTime = ownRun && !staleResults && variant !== undefined && seriesMetadata != null;
 
-  const requestEstimate = async () => {
+  const requestEstimate = useCallback(async () => {
     if (validationFailed) { openProblems(); return; }
     if (resultsSize === "collapsed") setResultsSize("normal");
     setEstimatePanel({ source: "manual" });
     const cost = await estimate.request();
     if (cost?.problem?.diagnostics.some(finding => finding.severity === "ERROR")) setEstimatePanel(null);
-  };
+  }, [validationFailed, openProblems, resultsSize, estimate]);
 
   const resetExperimentView = () => {
     setCommand(null);
@@ -437,15 +437,17 @@ export function App() {
 
   useEffect(() => {
     if (command === null) return;
-    // A field commits on blur/Enter; its new snapshot must pass validation before keyboard Run.
-    if (command === "run" && validation.pending && !invalid && !loading && !runInFlight.current) return;
+    // A field commits on blur/Enter; its new snapshot must pass validation before Estimate or Run, including keyboard Run.
+    if ((command === "run" || command === "estimate") && validation.pending && !invalid && !loading && !runInFlight.current) return;
     const timer = window.setTimeout(() => {
       setCommand(null);
       if (command === "run") void startRun();
-      else if (!invalid && !loading && !workspace.saving && !workspace.conflict && health.error === null) void workspace.save();
+      else if (command === "estimate") {
+        if (!invalid && !loading) void requestEstimate();
+      } else if (!invalid && !loading && !workspace.saving && !workspace.conflict && health.error === null) void workspace.save();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [command, validation.pending, invalid, loading, startRun, workspace, health.error]);
+  }, [command, validation.pending, invalid, loading, startRun, requestEstimate, workspace, health.error]);
 
   return (
     <DiagnosticLabelContext value={{ variants: loaded?.experiment.variants ?? [], grid: loaded?.experiment.grid ?? [], catalog, model }}>
@@ -496,8 +498,11 @@ export function App() {
         runBlockedReason={runBlockedReason}
         onValidationProblems={hasClient && validationFailed ? openProblems : undefined}
         runProblem={workspace.problem === null ? undefined : backendMessage(workspace.problem)}
-        estimating={estimate.pending}
-        onEstimate={() => void requestEstimate()}
+        estimating={estimate.pending || command === "estimate"}
+        onEstimate={() => {
+          if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur();
+          setCommand("estimate");
+        }}
         canResume={ownRun && run.canResume}
         onResume={() => {
           if (loaded === null) return;
