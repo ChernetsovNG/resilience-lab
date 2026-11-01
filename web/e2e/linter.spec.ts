@@ -113,3 +113,52 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
     });
   });
 }
+
+for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
+  test.describe(`nominal headroom in ${language}`, () => {
+    test.use({ locale });
+    test("translates rate-limited headroom and opens handlers for grouped replicas and variants", async ({ page }) => {
+      const directory = `low-headroom-${randomUUID()}`;
+      const root = resolve("../apps/server/build/e2e-workspace", directory);
+      const labels = JSON.parse(await readFile(resolve(`src/i18n/${language}.json`), "utf8")) as Record<string, string>;
+      const model: ModelFile = { schemaVersion: 6, blocks: {
+        client: { type: "client", params: { load: { points: [{ time: "0s", rate: "1800/s" }] }, deadline: "1s" } },
+        catalog: { type: "service", params: { handlers: 16, replicas: 3, processing: { kind: "fixed", mean: "35ms" },
+          rateLimit: { rate: "400/s", burst: 1 } } },
+      }, connections: [{ id: "request", type: "request", from: "client", to: "catalog" }] };
+      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+        execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 },
+        variants: ["Base", "Equivalent"].map((label, index) => ({ id: `v${index}`, label, overrides: { "catalog.handlers": 16 } })) };
+      await mkdir(root, { recursive: true });
+      try {
+        await writeFile(resolve(root, "model.model.json"), JSON.stringify(model));
+        await writeFile(resolve(root, "experiment.experiment.json"), JSON.stringify(experiment));
+        const response = await page.request.post("/api/v1/validate", { data: { experiment: `${directory}/experiment.experiment.json` } });
+        expect(response.ok()).toBe(true);
+        const report: ValidationReport = await response.json();
+        expect(report.valid).toBe(true);
+        const findings = report.diagnostics.filter(diagnostic => diagnostic.code === "LINT_LOW_HEADROOM");
+        expect(findings).toHaveLength(6);
+        expect(findings.every(diagnostic => diagnostic.severity === "WARNING" && diagnostic.args?.utilization === "0.875")).toBe(true);
+
+        await page.goto("/");
+        await selectExperiment(page, `${directory}/experiment.experiment.json`);
+        await page.getByRole("tab", { name: labels["results.problems.title"], exact: true }).click();
+        const rows = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_LOW_HEADROOM"]') });
+        const warning = rows.locator('button[data-diagnostic-code="LINT_LOW_HEADROOM"]');
+        await expect(warning).toHaveCount(1);
+        await expect(warning).toContainText(language === "ru" ? "Малый запас ёмкости" : "Little spare capacity");
+        await expect(warning).toContainText(language === "ru" ? "ограничение интенсивности 400" : "rate limit: 400");
+        await expect(warning).toContainText("#1–#3");
+        await expect(warning).toContainText("Base, Equivalent");
+        await rows.getByRole("button", { name: new RegExp(labels["results.problems.explanation"]) }).click();
+        await expect(rows.getByRole("tooltip")).toContainText("ρ = λ × W / handlers");
+        await expect(rows.getByRole("tooltip")).toContainText("LINT_LOW_HEADROOM");
+        await page.keyboard.press("Escape");
+        await warning.click();
+        await expect(page.getByRole("tab", { name: "Base", exact: true })).toHaveAttribute("aria-selected", "true");
+        await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.handlers.title"], { exact: true })).toBeFocused();
+      } finally { await rm(root, { recursive: true, force: true }); }
+    });
+  });
+}

@@ -148,6 +148,16 @@ internal enum class CoreMessage(
         "retryBudget",
         "Worst retry load of '{target}': {ratePerSecond} requests/s, utilization {utilization} at threshold {threshold}; attempts: {attemptChain}. Retry budgets limit connections: {budgetLimited}",
     ),
+    LINT_LOW_HEADROOM(
+        "LINT_LOW_HEADROOM",
+        null,
+        "Low headroom of '{target}': nominal utilization {utilization} at threshold {threshold} ({ratePerSecond} requests/s, {holdingMs} ms mean holding, {handlers} slots)",
+    ),
+    LINT_LOW_HEADROOM_RATE_LIMIT(
+        "LINT_LOW_HEADROOM",
+        "rateLimit",
+        "Low headroom of '{target}': nominal utilization {utilization} at threshold {threshold} ({ratePerSecond} requests/s, {holdingMs} ms mean holding, {handlers} slots). Configured rate limit: {rateLimitPerSecond} requests/s",
+    ),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,

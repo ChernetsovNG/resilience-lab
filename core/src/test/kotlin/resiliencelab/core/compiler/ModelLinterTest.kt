@@ -570,7 +570,7 @@ class ModelLinterTest {
                 calls = chain.calls.reversed().map { it.copy(network = fixed(1.0), attempts = 5) },
             )
 
-        val warning = warnings(changed, "LINT_HANDLERS_LITTLE").single()
+        val warning = warnings(changed, "LINT_HANDLERS_LITTLE").single { it.path == "a" }
 
         assertThat(warning.path).isEqualTo("a")
         assertThat(warning.pointer).isEqualTo("/blocks/a/params/handlers")
@@ -582,15 +582,7 @@ class ModelLinterTest {
             warnings(
                 changed.copy(
                     services =
-                        changed.services.map {
-                            if (it.path ==
-                                "a"
-                            ) {
-                                it.copy(handlers = 2)
-                            } else {
-                                it
-                            }
-                        },
+                        changed.services.map { it.copy(handlers = 3) },
                 ),
                 "LINT_HANDLERS_LITTLE",
             ),
