@@ -61,6 +61,11 @@ for (const language of ["en", "ru"] as const) {
       await table.getByRole("button", { name: "gateway#2", exact: true }).click();
       await expect(inspector.getByRole("heading", { name: "gateway#2", exact: true })).toBeVisible();
       await expect(inspector.getByRole("combobox", { name: ru ? "Цель отказа" : "Fault target", exact: true })).toHaveValue("gateway#2");
+      if (ru) {
+        await inspector.getByRole("combobox", { name: "Цель отказа", exact: true }).scrollIntoViewIfNeeded();
+        await page.mouse.move(500, 80);
+        await page.screenshot({ path: testInfo.outputPath("fault-target-ru.png") });
+      }
       await expect(node.locator(".block-selected-replica")).toContainText("#2");
       const differences = inspector.locator(".inspector-replicaOverrides");
       if (!await differences.evaluate(element => (element as HTMLDetailsElement).open))

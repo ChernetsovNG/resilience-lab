@@ -23,6 +23,19 @@ export function elementLabel(id: string, model?: Pick<ModelFile, "connections"> 
   return connection === undefined ? id : `${t("editor.grid.connection", { from: connection.from + (replica?.[2] ?? ""), to: connection.to })} (${id})`;
 }
 
+/** Fault addresses remain document values; readers see the element and a separate replica number. */
+export function faultTargetLabel(id: string, model: ModelFile): string {
+  const exact = Object.hasOwn(model.blocks, id) || model.connections.some(connection => connection.id === id);
+  const replica = exact ? null : /^(.*)#([1-9][0-9]*)$/.exec(id);
+  const base = replica?.[1] ?? id;
+  const connection = model.connections.find(connection => connection.id === base);
+  const block = Object.hasOwn(model.blocks, base) ? model.blocks[base] : undefined;
+  const target = connection !== undefined ? t("editor.fault.target.connection", { from: connection.from, to: connection.to, id: base })
+    : block !== undefined ? t("editor.fault.target.block", { type: t(`catalog.types.${block.type}.title`), id: base }) : base;
+  return replica === null ? target : t(`editor.fault.target.${connection === undefined ? "replica" : "connectionReplica"}`,
+    { target, number: formatNumber(Number(replica[2])) });
+}
+
 /** Meaningful summary labels win; source documents distinguish explicit labels from generated fallbacks. */
 export function variantLabel(variant: NamedVariant | undefined, variants: readonly NamedVariant[] = []): string {
   if (variant === undefined) return t("results.variant");

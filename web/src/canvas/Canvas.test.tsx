@@ -754,12 +754,12 @@ it("marks only fault targets including replica groups and connection copies", as
   render(<Canvas catalog={catalog} model={grouped} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()}
     faults={courseData(grouped, run, catalog).faults} onFault={onFault} />);
   const gateway = await screen.findByTestId("rf__node-gateway");
-  expect(gateway.querySelector(".fault-badge")?.getAttribute("title")).toContain("gateway#2");
+  expect(gateway.querySelector(".fault-badge")?.getAttribute("title")).toContain("Service gateway, replica 2");
   expect(screen.getByTestId("rf__node-middle").querySelector(".fault-badge")).toBeNull();
   expect(screen.getByTestId("rf__node-dependency").querySelector(".fault-badge")).toBeNull();
   const edge = screen.getByTestId("canvas-edge-label-gateway-to-middle");
   const badge = edge.querySelector<HTMLButtonElement>(".fault-badge")!;
-  expect(badge.title).toBe("gateway#2 → middle · Slowdown 2× · 200–700 ms");
+  expect(badge.title).toBe("Connection gateway → middle (gateway-to-middle), from replica 2 · Slowdown 2× · 200–700 ms");
   fireEvent.click(badge);
   expect(onFault).toHaveBeenCalledWith(1);
 });

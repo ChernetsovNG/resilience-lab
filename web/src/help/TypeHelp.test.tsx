@@ -122,7 +122,7 @@ it.each(["en", "ru"] as const)("uses localized fallback reasons in help choices,
   const row = within(screen.getByRole("dialog")).getByRole("row", { name: new RegExp("^" + label + " ") });
   expect(row.textContent).not.toMatch(/circuitOpen|noReadyTarget/);
   const cells = within(row).getAllByRole("cell");
-  const reason = locale === "en" ? "Circuit breaker open" : "Предохранитель вызовов разомкнут";
+  const reason = locale === "en" ? "Circuit breaker open" : "Circuit breaker открыт";
   expect(cells[2].textContent).toContain(reason);
   expect(cells[3].textContent).toContain(reason);
 });

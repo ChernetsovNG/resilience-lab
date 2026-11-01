@@ -1,3 +1,4 @@
+import ru from "../src/i18n/ru.json" with { type: "json" };
 import { cleanupWorkspace, selectExperiment } from "./fixtures";
 import { expect, test } from "./fixtures";
 import { readFile, writeFile } from "node:fs/promises";
@@ -80,14 +81,15 @@ test.describe("readable checkout answer", () => {
     await expect(page.getByText("По клиентам", { exact: true })).toHaveCount(0);
     await expect(page.getByText("По видам запросов", { exact: true })).toHaveCount(0);
     await expect(table.getByRole("rowheader", { name: "Причины отказа", exact: true })).toHaveCount(0);
-    await expect(table.getByRole("rowheader", { name: "Успешные с заглушкой", exact: true })).toHaveCount(0);
+    await expect(table.getByRole("rowheader", { name: "Успешные с fallback", exact: true })).toHaveCount(0);
     for (const variant of summary.variants) await expect(table.getByRole("columnheader", { name: new RegExp(variant.label) })).toBeVisible();
     await expect(table.getByRole("row", { name: /p99/ }).getByRole("cell").first()).toContainText("совпадает с таймаутом 5 с");
     const first = summary.variants[0].points[0].saturation.firstNodes[0];
     expect(first.medianStartMs).toBeGreaterThanOrEqual(20000);
     expect(first.medianStartMs).toBeLessThan(40000);
     const insight = page.getByRole("region", { name: "Вывод о насыщении" });
-    await expect(insight).toContainText("во время отказа psp");
+    const faultTarget = ru["editor.fault.target.block"].replace("{type}", ru["catalog.types.service.title"]).replace("{id}", "psp");
+    await expect(insight).toContainText(ru["results.saturation.duringFault"].split("{fault}")[0] + faultTarget);
     await expect(insight).toContainText("20–40 с");
     expect(((await page.getByRole("tabpanel").innerText()).match(/по объединённым данным/g) ?? []).length).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath("checkout-answer.png") });

@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -45,5 +46,12 @@ for (const language of ["en", "ru"] as const) {
     expect(random!.x).toBeGreaterThan(seed!.x);
     expect(random!.x + random!.width).toBeLessThanOrEqual(seed!.x + seed!.width);
     await page.screenshot({ path: testInfo.outputPath(`run-settings-${language}.png`) });
+    if (russian) {
+      const fault = inspector.locator('[data-inspector-field="faults.0"]');
+      await fault.getByRole("combobox", { name: ru["editor.fault.kind"], exact: true }).selectOption("blackhole");
+      await expect(page.getByRole("button", { name: ru["app.topBar.run"], exact: true })).toBeEnabled();
+      await fault.getByRole("button", { name: ru["help.more"].replace("{field}", ru["editor.fault.kind"]), exact: true }).click();
+      await page.screenshot({ path: testInfo.outputPath("fault-blackhole-help-ru.png") });
+    }
   });
 }

@@ -9,7 +9,7 @@ internal object OutlierDetectionParameters {
             "outlierDetection",
             ParamKind.OBJECT,
             "Outlier detection",
-            "Temporarily excludes failing targets. State is shared by all callers of the router or replica group.",
+            "Directs new attempts away from failing instances toward the remaining targets. The router temporarily excludes targets after consecutive failures; state is shared by all callers.",
             fields =
                 listOf(
                     ParamDescriptor(

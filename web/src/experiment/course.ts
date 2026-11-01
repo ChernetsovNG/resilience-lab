@@ -1,3 +1,4 @@
+import { faultTargetLabel } from "../presentation/labels";
 import type { Catalog, ExperimentFile, ModelFile, ParamDescriptor } from "../api/apiTypes";
 import { messages, t } from "../i18n";
 import { formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
@@ -35,8 +36,8 @@ function targetOf(target: string, model: ModelFile): { elementId: string | null;
   const count = block?.params.replicas ?? 1;
   const replicaExists = suffix === "" || (typeof count === "number" && Number.isInteger(count) && count > 1 && Number(suffix.slice(1)) <= count);
   if (connection !== undefined) return { elementId: replicaExists && ["call", "route"].includes(connection.type) ? id : null,
-    label: t("course.connection", { from: connection.from + suffix, to: connection.to }) };
-  return { elementId: replicaExists && block !== undefined && !["client", "router"].includes(block.type) ? id : null, label: target };
+    label: faultTargetLabel(target, model) };
+  return { elementId: replicaExists && block !== undefined && !["client", "router"].includes(block.type) ? id : null, label: faultTargetLabel(target, model) };
 }
 
 /** One description for every view; fault kind names stay in the shared faults.kinds catalog. */

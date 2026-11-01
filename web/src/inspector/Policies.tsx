@@ -42,7 +42,8 @@ export function Policies({ catalog, model, baseModel = model, experiment, select
   return <div className="policy-editor" onKeyDown={event => {
     if (event.key === "Escape") { setMenuOpen(false); event.stopPropagation(); }
   }}>
-    {element.type === "call" && enabled.length > 0 ? <HelpHint label={t("editor.policies.order")}>{t("editor.policies.callOrder")}</HelpHint> : null}
+    {element.type === "call" && enabled.length > 0 ? <div className="param-field-label">{t("editor.policies.order")}
+      <HelpHint label={t("editor.policies.order")}>{t("editor.policies.callOrder")}</HelpHint></div> : null}
     {enabled.map(descriptor => {
       const removed = element.params[descriptor.name] == null;
       const overridden = isOverridden(overrides, selected, descriptor.name);
@@ -80,12 +81,16 @@ export function Policies({ catalog, model, baseModel = model, experiment, select
     {menuOpen ? <div id={menuId} role="menu" aria-label={t("editor.policies.menu")} className="policy-menu">
       {descriptors.map(descriptor => {
         const unavailable = reason(descriptor);
-        return <button type="button" role="menuitem" key={descriptor.name} disabled={disabled || unavailable !== null}
+        const descriptionId = `${menuId}-${descriptor.name}-description`;
+        const reasonId = `${menuId}-${descriptor.name}-reason`;
+        return <button type="button" role="menuitem" key={descriptor.name} aria-label={descriptor.title}
+          aria-describedby={unavailable === null ? descriptionId : `${descriptionId} ${reasonId}`} disabled={disabled || unavailable !== null}
           onClick={() => {
             if (disabled || unavailable !== null) return;
             commit(descriptor.name, descriptor.initial ?? descriptor.default ?? initialParams(descriptor.fields));
             setMenuOpen(false);
-          }}>{descriptor.title}{unavailable === null ? null : <span>{unavailable}</span>}</button>;
+          }}>{descriptor.title}<span id={descriptionId}>{descriptor.description}</span>
+          {unavailable === null ? null : <span id={reasonId}>{unavailable}</span>}</button>;
       })}
     </div> : null}
   </div>;

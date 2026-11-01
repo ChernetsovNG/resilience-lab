@@ -102,7 +102,7 @@ for (const language of ["en", "ru"] as const) {
         await choices.getByRole("checkbox", { name: ru ? "Ошибки" : "Failures", exact: true }).check();
       }
       await page.getByText(ru ? "Элементы и показатели" : "Elements and metrics", { exact: true }).click();
-      const breaker = page.getByRole("slider", { name: new RegExp(`${ru ? "Предохранитель вызовов разомкнут" : "Circuit breaker open"}.*order-service-to-payment-service\\)`) });
+      const breaker = page.getByRole("slider", { name: new RegExp(`${ru ? "Circuit breaker открыт" : "Circuit breaker open"}.*order-service-to-payment-service\\)`) });
       await expect(breaker).toBeVisible();
       await expect.poll(async () => breaker.locator("rect[data-share]").evaluateAll(rects => rects.some(rect => Number(rect.getAttribute("data-share")) > 0))).toBe(true);
       const shares = await breaker.locator("rect[data-share]").evaluateAll(rects => rects.map(rect => Number(rect.getAttribute("data-share"))));

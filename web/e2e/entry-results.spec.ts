@@ -70,7 +70,7 @@ test("compares clients, request types and refusal reasons, then selects checkout
     await expect(status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell").first()).toContainText("нет отказов");
     await expect(status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell").nth(1)).toContainText("ошибка обработки");
     const checkout = page.getByRole("table", { name: "Вид запроса · checkout", exact: true });
-    await expect(checkout.getByRole("row", { name: /Успешные с заглушкой/ }).getByRole("cell").nth(1))
+    await expect(checkout.getByRole("row", { name: /Успешные с fallback/ }).getByRole("cell").nth(1))
       .toContainText(formatPercent(fallback.points[0].aggregate.entries.classes.checkout.degradedRate!.mean));
     const statusReasons = status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell");
     await statusReasons.first().locator("summary").click();

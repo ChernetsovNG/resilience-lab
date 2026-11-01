@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { dirtyDocuments, editorReducer, initialEditorState } from "../workspace/editor";
 import { RunSettings } from "./RunSettings";
-import { setLanguage } from "../i18n";
+import { setLanguage, t } from "../i18n";
 import serverCatalog from "../test/catalog.json";
 import type { Catalog, ModelFile } from "../api/apiTypes";
 
@@ -94,8 +94,8 @@ it("lists replica and outgoing-call copy targets while excluding client, router 
   expect(values).not.toEqual(expect.arrayContaining(["client"]));
   expect(values).not.toContain("router");
   expect(values).not.toContain("client-to-gateway");
-  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "gateway#2 → middle (gateway-to-middle#2)" }).value).toBe("gateway-to-middle#2");
-  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "router → gateway (route)" }).value).toBe("route");
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "Connection gateway → middle (gateway-to-middle), from replica 2" }).value).toBe("gateway-to-middle#2");
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "Connection router → gateway (route)" }).value).toBe("route");
 });
 
 it.each([
@@ -113,7 +113,7 @@ it("prevents moving capacity loss to a target without slots and bounds it by rep
     { target: "gateway#2", kind: "capacityLoss", from: "20s", to: "30s", capacity: 1 },
   ] }} />);
   const target = screen.getByRole("combobox", { name: "Fault target" });
-  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "router → gateway (route)" }).disabled).toBe(true);
+  expect(within(target).getByRole<HTMLOptionElement>("option", { name: "Connection router → gateway (route)" }).disabled).toBe(true);
   const capacity = screen.getByRole("textbox", { name: "Available handlers" });
   fireEvent.change(capacity, { target: { value: "2" } });
   expect(capacity.getAttribute("aria-invalid")).toBe("true");
@@ -228,6 +228,36 @@ it.each([
     const tooltip = screen.getByRole("tooltip");
     expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(tooltip.id);
     expect(tooltip.textContent).toContain(description);
+    fireEvent.keyDown(window, { key: "Escape" });
+  }
+});
+
+it.each([
+  ["en", "Service gateway, replica 2", "Connection gateway → middle (gateway-to-middle), from replica 2"],
+  ["ru", "Сервис gateway, реплика 2", "Связь gateway → middle (gateway-to-middle), от реплики 2"],
+] as const)("names fault targets in %s while retaining their document addresses", async (locale, serviceLabel, callLabel) => {
+  await setLanguage(locale);
+  render(<Settings sourceModel={replicaModel} source={{ ...experiment, faults: [
+    { target: "gateway#2", kind: "blackhole", from: "20s", to: "30s" },
+  ] }} />);
+  const targets = screen.getByRole("combobox", { name: t("editor.fault.target") });
+  expect(within(targets).getByRole<HTMLOptionElement>("option", { name: serviceLabel }).value).toBe("gateway#2");
+  expect(within(targets).getByRole<HTMLOptionElement>("option", { name: callLabel }).value).toBe("gateway-to-middle#2");
+  expect(within(targets).getAllByRole("option").every(option => !option.textContent?.includes("#"))).toBe(true);
+  fireEvent.change(targets, { target: { value: "gateway-to-middle#2" } });
+  expect(JSON.parse(screen.getByTestId("fault-document").textContent!)[0].target).toBe("gateway-to-middle#2");
+});
+
+it.each(["en", "ru"] as const)("explains the selected fault kind in %s", async locale => {
+  await setLanguage(locale);
+  render(<Settings />);
+  const kind = screen.getByRole("combobox", { name: t("editor.fault.kind") });
+  for (const value of ["slowdown", "errors", "unavailable", "blackhole", "capacityLoss"]) {
+    fireEvent.change(kind, { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: t("help.more", { field: t("editor.fault.kind") }) }));
+    expect(screen.getByRole("tooltip").textContent).toBe(t(`editor.fault.kind.${value}.description`));
+    if (value === "errors") expect(screen.getByRole("tooltip").textContent).toContain(locale === "en"
+      ? "transmission fails without work at the destination" : "передача завершается ошибкой без работы у цели");
     fireEvent.keyDown(window, { key: "Escape" });
   }
 });

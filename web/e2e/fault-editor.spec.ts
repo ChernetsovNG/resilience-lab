@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile } from "../src/api/apiTypes";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
@@ -43,7 +44,9 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
       await fault.getByRole("textbox", { name: label, exact: true }).press("Enter");
     }
     const course = page.getByRole("region", { name: "Ход эксперимента", exact: true });
-    await expect(course).toContainText("gateway#2");
+    const targetLabel = ru["editor.fault.target.block"].replace("{type}", ru["catalog.types.service.title"]).replace("{id}", "gateway");
+    const replicaLabel = ru["editor.fault.target.replica"].replace("{target}", targetLabel).replace("{number}", "2");
+    await expect(course).toContainText(replicaLabel);
     await expect(course).toContainText("Чёрная дыра");
     await fault.getByRole("combobox", { name: "Вид отказа", exact: true }).selectOption("slowdown");
     const multiplier = fault.getByRole("textbox", { name: "Множитель времени обработки", exact: true });
@@ -62,7 +65,7 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     await expect(fault.getByRole("combobox", { name: "Цель отказа", exact: true })).toHaveValue("gateway#2");
     await expect(multiplier).toHaveValue("4");
     await course.getByRole("button", { name: "Ход эксперимента", exact: true }).click();
-    await expect(course).toContainText("gateway#2");
+    await expect(course).toContainText(replicaLabel);
     const collapse = page.getByRole("button", { name: "Свернуть результаты", exact: true });
     if (await collapse.isVisible()) await collapse.click();
     const after = await canvas.boundingBox();
@@ -75,7 +78,7 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     await page.getByRole("button", { name: "Запустить", exact: true }).click();
     expect((await response).ok()).toBe(true);
     await expect(page.getByTestId("job-status")).toHaveText("ЗАВЕРШЕНО");
-    await expect(course).toContainText("gateway#2");
+    await expect(course).toContainText(replicaLabel);
     await expect(course).toContainText("4×");
     await page.mouse.move(700, 100);
     await page.screenshot({ path: testInfo.outputPath("fault-editor-results-ru.png") });

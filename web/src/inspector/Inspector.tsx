@@ -21,7 +21,7 @@ import { RequestTypeFilter } from "./RequestTypeFilter";
 import { Policies } from "./Policies";
 import { policyNames } from "../workspace/policyParameters";
 import { ReplicaTargetField } from "./ReplicaTargetField";
-import { elementLabel, variantLabel } from "../presentation/labels";
+import { elementLabel, faultTargetLabel, variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
   renameReferences?: readonly string[];
@@ -72,9 +72,9 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
   const target = targets.find(target => target.id === selected);
   return <div className="param-field">
     {targets.length > 1 ? <label>{t("editor.fault.creationTarget")}
-      <select aria-label={t("editor.fault.creationTarget")} value={selected} title={elementLabel(selected, model)} disabled={disabled} onChange={event => setSelected(event.target.value)}>
-        {target === undefined ? <option value={selected} disabled>{elementLabel(selected, model)}</option> : null}
-        {targets.map(target => <option key={target.id} value={target.id}>{elementLabel(target.id, model)}</option>)}
+      <select aria-label={t("editor.fault.creationTarget")} value={selected} title={faultTargetLabel(selected, model)} disabled={disabled} onChange={event => setSelected(event.target.value)}>
+        {target === undefined ? <option value={selected} disabled>{faultTargetLabel(selected, model)}</option> : null}
+        {targets.map(target => <option key={target.id} value={target.id}>{faultTargetLabel(target.id, model)}</option>)}
       </select>
     </label> : null}
     <ReplicaTargetField target={targets[0]} value={selected} path="new-fault.replica" editable={editable} onTarget={setSelected} onValidity={onValidity} />

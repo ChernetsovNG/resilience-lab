@@ -11,7 +11,7 @@ internal object CallPolicyParameters {
                 "circuitBreaker",
                 ParamKind.OBJECT,
                 "Circuit breaker",
-                "An open circuit breaker rejects attempts locally. Each calling instance keeps its own window of completed attempts.",
+                "Stops sending attempts to a failing dependency so it has time to recover. When open, it rejects attempts at the caller; each calling instance tracks its own completed attempts.",
                 fields =
                     listOf(
                         ParamDescriptor(
@@ -38,8 +38,7 @@ internal object CallPolicyParameters {
                             "window",
                             ParamKind.INTEGER,
                             "Window size",
-                            "Number of most recent completed attempts in the closed circuit breaker's window. " +
-                                "Circuit breaker rejections are excluded.",
+                            "Number of recent completed dependency-call attempts used by the closed circuit breaker to calculate the failure share. Attempts rejected by this circuit breaker are not included.",
                             default = JsonPrimitive(20),
                             minimum = 1.0,
                             sweepable = true,
@@ -48,7 +47,7 @@ internal object CallPolicyParameters {
                             "openDuration",
                             ParamKind.QUANTITY,
                             "Open duration",
-                            "Time before allowing half-open probes; rejected attempts use no pool, network or target work.",
+                            "Time the circuit breaker stays open before allowing probe attempts to the dependency. Attempts rejected by the circuit breaker use no connection pool, network or target work.",
                             default = JsonPrimitive("5s"),
                             dimension = Dimension.DURATION,
                             exclusiveMinimum = 0.0,
@@ -69,7 +68,7 @@ internal object CallPolicyParameters {
                 "retryBudget",
                 ParamKind.OBJECT,
                 "Retry budget",
-                "Bound retries by a share of first attempts plus a minimum allowance over a rolling time window.",
+                "Limits the extra load that retries send to a failing dependency. Retries are bounded by a share of first attempts plus a minimum allowance over a rolling time window.",
                 fields =
                     listOf(
                         ParamDescriptor(
@@ -109,7 +108,7 @@ internal object CallPolicyParameters {
                 "fallback",
                 ParamKind.OBJECT,
                 "Fallback",
-                "Replace a matching final call failure after all attempts. Successful originals with a fallback count as degraded.",
+                "Lets the scenario continue when a dependency call ultimately fails. Replaces selected final failure reasons after all attempts; successful originals with a fallback count as degraded.",
                 fields =
                     listOf(
                         ParamDescriptor(

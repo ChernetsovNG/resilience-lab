@@ -50,7 +50,7 @@ describe("catalog output contract", () => {
       ["Queue", "requests", 1, ["Mean queue"]],
       ["Pool utilization", "%", 100, ["Connection pool utilization"]],
       ["Connection pool", "requests", 1, ["Mean connection wait queue", "Connection acquisition timeouts"]],
-      ["Service policies", "RPS", 1, ["Rate-limit rejections", "Failed readiness checks"]],
+      ["Service policies", "RPS", 1, ["Rate-limit rejections", "Failed health-check probes"]],
       ["Service policies", "%", 100, ["Rate-limited share"]],
       ["Circuit breaker", "%", 100, ["Circuit breaker open share"]],
       ["Readiness", "%", 100, ["Not-ready share"]],
@@ -75,7 +75,7 @@ describe("catalog output contract", () => {
     expect(inspectorOutputs(outputsOf(catalog, "service")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Handler utilization", "PERCENT"], ["Mean queue", "REQUESTS"], ["Queue fill", "PERCENT"],
       ["Queue rejection share", "PERCENT"], ["Admitted attempts", "PER_SECOND"], ["Mean latency", "MILLISECONDS"],
-      ["Rate-limit rejections", "PER_SECOND"], ["Rate-limited share", "PERCENT"], ["Failed readiness checks", "PER_SECOND"],
+      ["Rate-limit rejections", "PER_SECOND"], ["Rate-limited share", "PERCENT"], ["Failed health-check probes", "PER_SECOND"],
       ["Not-ready share", "PERCENT"], ["Ejections", "REQUESTS"], ["Ejected share", "PERCENT"],
     ]);
     expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([

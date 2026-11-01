@@ -199,7 +199,9 @@ object Stage1Catalog {
             version = 3,
             category = TypeCategory.BLOCK,
             title = "Service",
-            description = "A replica holds a handler while processing a request, waiting for downstream calls and pausing before retries.",
+            description =
+                "A service processes requests and makes downstream calls. " +
+                    "Each replica holds a handler while processing, waiting for downstream calls and pausing before retries.",
             ports = listOf(PortDescriptor("in", PortDirection.IN), PortDescriptor("out", PortDirection.OUT)),
             params =
                 listOf(

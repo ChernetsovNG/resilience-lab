@@ -30,7 +30,7 @@ test("published checkout-policies compares PSP outcomes and replays the breaker"
   const status = page.getByRole("table", { name: "Вид запроса · status", exact: true });
   const checkout = page.getByRole("table", { name: "Вид запроса · checkout", exact: true });
   await expect(status.getByRole("row", { name: /Доля успешных/ })).toBeVisible();
-  await expect(checkout.getByRole("row", { name: /Успешные с заглушкой/ })).toBeVisible();
+  await expect(checkout.getByRole("row", { name: /Успешные с fallback/ })).toBeVisible();
   await checkout.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("checkout-policies-results-ru.png") });
   await status.scrollIntoViewIfNeeded();
@@ -52,7 +52,7 @@ test("published checkout-policies compares PSP outcomes and replays the breaker"
   const closed = windows.findIndex(window => window.startMs >= 50_000 && window.circuitOpenMs === 0);
   expect(open).toBeGreaterThanOrEqual(0);
   expect(closed).toBeGreaterThan(open);
-  const badge = page.getByTestId(`canvas-policies-${payment}`).getByRole("button", { name: "Предохранитель вызовов", exact: true });
+  const badge = page.getByTestId(`canvas-policies-${payment}`).getByRole("button", { name: "Circuit breaker", exact: true });
   await expect(badge).toBeVisible();
   await badge.click();
   await expect(page.locator('[data-policy="circuitBreaker"]')).toHaveAttribute("open");
@@ -100,7 +100,7 @@ test("builds a new model with two clients, request types and a policy using the 
     const parameters = inspector.locator(".inspector-parameters");
     if (await parameters.getAttribute("open") === null) await parameters.locator(":scope > summary").click();
     await inspector.getByRole("button", { name: "+ Добавить политику", exact: true }).click();
-    await inspector.getByRole("menuitem", { name: "Ограничение интенсивности", exact: true }).click();
+    await inspector.getByRole("menuitem", { name: "Rate limit", exact: true }).click();
     await expect(inspector.locator('[data-policy="rateLimit"]')).toHaveAttribute("open");
     await expect(page.getByTestId("canvas-policies-service-1")).toBeVisible();
     await page.getByRole("button", { name: "Настройки прогона", exact: true }).click();
