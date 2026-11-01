@@ -38,7 +38,7 @@ async function inspect(page: Page, slider: Locator, window: Window, endMs: numbe
 }
 
 async function value(chart: Locator, metric: string, variant = "baseline") {
-  const row = chart.locator(".timeline-readout > div").filter({ has: chart.page().getByText(`dependency · ${metric} ·`, { exact: false }) })
+  const row = chart.locator(".chart-readout > div").filter({ has: chart.page().getByText(`dependency · ${metric} ·`, { exact: false }) })
     .filter({ hasText: variant === "baseline" ? " · Baseline" : " · No retries" });
   return Number((await row.locator("dd").innerText()).replace(/,/g, "").split(" ")[0]);
 }
@@ -79,7 +79,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   expect(await value(errors, "Queue rejections")).toBeCloseTo(errorPeak.slotPools.handlers.queueFullCount * 1000 / errorPeak.durationMs, 2);
 
   await page.getByLabel("Compare variant").selectOption("no-retries");
-  await expect(queue.locator('path.recharts-line-curve[stroke-dasharray="6 4"]')).toBeVisible();
+  await expect(queue.locator('path.chart-line[stroke-dasharray="6 4"]')).toBeVisible();
   await inspect(page, queueSlider, queuePeak, endMs, true);
   const pinned = baseline.indexOf(queuePeak);
   await expect(page.getByTestId("timeline-cursor")).toContainText(`Window ${pinned} ·`);

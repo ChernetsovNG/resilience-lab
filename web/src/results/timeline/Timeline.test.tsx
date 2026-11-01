@@ -329,18 +329,35 @@ it("uses distinct variant colors and readable variant names for node and connect
   fireEvent.change(screen.getByRole("combobox", { name: "Compare variant" }), { target: { value: "no-retries" } });
   const queue = screen.getByRole("region", { name: "Queue" });
   await waitFor(() => expect(within(queue).getAllByRole("term")).toHaveLength(2));
-  const keys = queue.querySelectorAll<HTMLElement>(".timeline-line-key");
+  const keys = queue.querySelectorAll<HTMLElement>(".chart-line-key");
   expect(keys[0].style.borderColor).not.toBe(keys[1].style.borderColor);
-  expect(keys[1].classList.contains("timeline-line-key--comparison")).toBe(true);
+  expect(keys[1].classList.contains("chart-line-key--dashed")).toBe(true);
   expect(within(queue).getByText("gateway · Mean queue · Baseline")).toBeTruthy();
   expect(within(queue).getByText("gateway · Mean queue · No retries")).toBeTruthy();
   const rates = screen.getByRole("region", { name: "Rates" });
   expect(within(rates).getByText("gateway → middle (gateway-to-middle) · Sent attempts · Baseline")).toBeTruthy();
   expect(await within(rates).findByText("gateway → middle (gateway-to-middle) · Sent attempts · No retries")).toBeTruthy();
-  const primaryColors = [...rates.querySelectorAll<HTMLElement>(".timeline-line-key:not(.timeline-line-key--comparison)")].map(key => key.style.borderColor);
-  const comparisonColors = [...rates.querySelectorAll<HTMLElement>(".timeline-line-key--comparison")].map(key => key.style.borderColor);
+  const primaryColors = [...rates.querySelectorAll<HTMLElement>(".chart-line-key:not(.chart-line-key--dashed)")].map(key => key.style.borderColor);
+  const comparisonColors = [...rates.querySelectorAll<HTMLElement>(".chart-line-key--dashed")].map(key => key.style.borderColor);
   expect(new Set(primaryColors).size).toBe(2);
   expect(new Set(comparisonColors).size).toBe(2);
   expect(primaryColors.some(color => comparisonColors.includes(color))).toBe(false);
   expect(queue.textContent).not.toContain("no-retries");
+});
+
+it("keeps an element's color when another selected element precedes it", async () => {
+  stubSeries();
+  vi.mocked(seriesLoader.load).mockImplementation(async request => request.nodes.map(id => ({
+    id, windows: [recordedWindow({ startMs: 0, durationMs: 25 })],
+  })));
+  const props = { runId: "stable-colors", summary, manifest: shortManifest, model, experiment, catalog,
+    activeVariantId: "baseline", pointId: "p0", replication: 0, cursorWindow: 0 };
+  const view = render(<Timeline {...props} selectedNodes={["gateway"]} />);
+  const queue = await screen.findByRole("region", { name: "Queue" });
+  const color = within(queue).getByText("gateway · Mean queue · Baseline").querySelector<HTMLElement>(".chart-line-key")?.style.borderColor;
+  expect(color).toBeTruthy();
+  view.rerender(<Timeline {...props} selectedNodes={["middle", "gateway"]} />);
+  await waitFor(() => expect(within(screen.getByRole("region", { name: "Queue" })).getAllByRole("term")).toHaveLength(2));
+  expect(within(screen.getByRole("region", { name: "Queue" })).getByText("gateway · Mean queue · Baseline")
+    .querySelector<HTMLElement>(".chart-line-key")?.style.borderColor).toBe(color);
 });
