@@ -80,8 +80,8 @@ test("latency markers show recorded windows and leave empty-window readouts unav
   }
   await page.getByText("Elements and metrics", { exact: true }).click();
   const latency = page.getByRole("region", { name: "Latency", exact: true });
-  await expect(latency.locator(".recharts-line-dots").first()).toBeVisible();
-  const dots = latency.locator(".recharts-line-dots").first().locator("circle");
+  await expect(latency.locator(".chart-markers").first()).toBeVisible();
+  const dots = latency.locator(".chart-markers").first().locator("circle");
   await expect(dots).toHaveCount(windows.filter((window) => window.latency.count > 0).length);
   await expect(latency).toContainText("Empty windows have no latency value");
   const cursor = latency.getByRole("slider");

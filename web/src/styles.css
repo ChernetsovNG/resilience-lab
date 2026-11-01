@@ -929,34 +929,29 @@ select {
 .timeline-choices legend { font-weight: 600; }
 .timeline-choices label { display: inline-flex; align-items: center; gap: 0.3rem; }
 .timeline-regions span { padding: 0.2rem 0.4rem; border-radius: 0.2rem; }
-.timeline-region--warmup { background: #e2e8f0; }
-.timeline-region--fault { background: #fef3c7; }
 .timeline-cursor { margin: 0.5rem 0; font-size: var(--font-secondary); min-height: 1.2rem; }
 .timeline-charts { display: grid; gap: 0.75rem; }
-.timeline-chart { min-width: 0; padding: 0.5rem; border: 1px solid #d5dbe3; border-radius: 0.35rem; }
-.timeline-chart h3 { margin: 0 0 0.25rem; font-size: var(--font-ui); }
-.timeline-chart h3 span { color: #52606d; font-weight: normal; }
-.timeline-plot { position: relative; }
-.timeline-plot .recharts-text { font-size: var(--font-secondary); }
-.timeline-interaction { position: absolute; inset: 0.75rem 0.75rem 2rem 3.5rem; cursor: crosshair; touch-action: none; }
-.timeline-interaction:focus-visible { outline: 2px solid #2563eb; }
-.timeline-policy-states { margin-top: 0.25rem; font-size: var(--font-secondary); }
-.timeline-policy-state { margin-bottom: 0.35rem; overflow-wrap: anywhere; }
-.timeline-state-band { margin: 0.2rem 0.75rem 0.2rem 3.5rem; height: 0.9rem; background: #f1f5f9; cursor: crosshair; touch-action: none; }
-.timeline-state-band svg { display: block; width: 100%; height: 100%; }
-.timeline-state-band:focus-visible { outline: 2px solid #2563eb; }
-.timeline-axis { margin: 0 0.75rem 0.25rem 3.5rem; text-align: center; color: #52606d; font-size: var(--font-secondary); }
-.timeline-latency-note { margin: 0.25rem 0; color: #52606d; font-size: var(--font-secondary); }
-.timeline-readout { margin: 0.25rem 0 0; font-size: var(--font-secondary); }
-.timeline-readout > div { display: flex; justify-content: space-between; gap: 0.5rem; }
-.timeline-readout dt { min-width: 0; overflow-wrap: anywhere; }
-.timeline-readout dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.timeline-replica-range { display: block; color: #52616b; }
-.timeline-line-key { display: inline-block; width: 1.25rem; margin-right: 0.35rem; border-top: 2px solid; vertical-align: middle; }
-.timeline-line-key--comparison { border-top-style: dashed; }
-.timeline-line-key--latency { position: relative; }
-.timeline-line-key--latency::after { content: ""; position: absolute; left: 0.45rem; top: -0.25rem; width: 0.3rem; height: 0.3rem; border: 1px solid; border-color: inherit; border-radius: 50%; background: #fff; }
-.timeline-line-key--latency.timeline-line-key--comparison::after { border-radius: 0; }
+.chart { min-width: 0; padding: 0.5rem; border: 1px solid #d5dbe3; border-radius: 0.35rem; }
+.chart h3 { margin: 0 0 0.25rem; font-size: var(--font-ui); }
+.chart h3 span { color: #52606d; font-weight: normal; }
+.chart-plot svg { display: block; overflow: visible; }
+.chart-plot text { fill: #666; font-size: var(--font-secondary); }
+.chart-interaction { cursor: crosshair; touch-action: none; }
+.chart-interaction:focus-visible { outline: 2px solid #2563eb; }
+.chart-policy-states { margin-top: 0.25rem; font-size: var(--font-secondary); }
+.chart-policy-state { margin-bottom: 0.35rem; overflow-wrap: anywhere; }
+.chart-state-band { display: block; margin: 0.2rem 0; height: 0.9rem; }
+.chart-axis { margin: 0 0 0.25rem; text-align: center; color: #52606d; font-size: var(--font-secondary); }
+.timeline-latency-note, .chart-note { margin: 0.25rem 0; color: #52606d; font-size: var(--font-secondary); }
+.chart-readout { margin: 0.25rem 0 0; font-size: var(--font-secondary); }
+.chart-readout > div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.chart-readout dt { min-width: 0; overflow-wrap: anywhere; }
+.chart-readout dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chart-range-readout { display: block; color: #52616b; }
+.chart-line-key { display: inline-block; width: 1.25rem; margin-right: 0.35rem; border-top: 2px solid; vertical-align: middle; }
+.chart-line-key--circle, .chart-line-key--square { position: relative; }
+.chart-line-key--circle::after, .chart-line-key--square::after { content: ""; position: absolute; left: 0.45rem; top: -0.25rem; width: 0.3rem; height: 0.3rem; border: 1px solid; border-color: inherit; border-radius: 50%; background: #fff; }
+.chart-line-key--square::after { border-radius: 0; }
 
 .grid-explanation, .param-sweep { color: #52606d; font-size: var(--font-secondary); }
 .grid-explanation { margin: 0.375rem 0; }

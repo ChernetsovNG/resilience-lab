@@ -41,7 +41,7 @@
 | `inspector` | Формы и результаты выбранного элемента; загрузка рядов находится в `results/series`. |
 | `layout` | Панели, меню, палитра, Summary/Answer/Problems; подготовка данных находится в `results`. |
 | `presentation` | Подписи и контекст диагностик; словари находятся в `i18n`. |
-| `results` | Проекции итогов, выбор, Map; `series`, `timeline`, `playback` — загрузка, графики и курсор. Заданиями управляет `run`. |
+| `results` | Проекции итогов, выбор, Map; `series`, `timeline`, `playback` — загрузка, графики и курсор; `chart` — общий SVG-компонент, шкалы и палитра. Заданиями управляет `run`. |
 | `run` | Запуск, опрос, отмена, восстановление, досчёт и оценка; документы редактирует `workspace`. |
 | `test` | Общие фикстуры и настройка Vitest; E2E с сервером находятся в `web/e2e`. |
 | `validation` | Проверка черновиков через API и адресация диагностик; правила модели исполняет ядро. |
@@ -71,7 +71,7 @@
 ### Результаты в web
 
 1. `useRun` загружает манифест и сводку. В `App` вариант задаёт `variantPage`; [`useResultsSelection`][selection] хранит точку, повторение, окно и реплику. [`canvasResults`][canvas-results] проецирует выбранный итог и снимок параметров прогона на схему; [`ElementResults`][element-results] показывает выбранный элемент.
-2. [`RunTimeline`][timeline] и [`usePlayback`][playback] используют [`SeriesLoader`][loader]: индекс, выбор частей диапазона, общий кэш, [`series.worker.ts`][worker] и [`decode.ts`][decode]. [`outputs.ts`][outputs] вычисляет метрики каталога для графиков и инспектора.
+2. [`RunTimeline`][timeline] и [`usePlayback`][playback] используют [`SeriesLoader`][loader]: индекс, выбор частей диапазона, общий кэш, [`series.worker.ts`][worker] и [`decode.ts`][decode]. [`outputs.ts`][outputs] вычисляет метрики каталога для графиков и инспектора. `TimelineChart` переводит их в описание [`Chart`][chart]; `ChartCursorProvider` передаёт общее наведение и закреплённое окно графикам с одной осью X. Геометрия и палитра находятся в `results/chart`.
 3. Закреплённый курсор Timeline через `App` вызывает `usePlayback.seek`; `windowCanvasResults` превращает окно в слой схемы. Воспроизведение подгружает текущий и следующий диапазоны; наведение на график имеет отдельный временный курсор. Популяции клиентов и классов, включая причины отказов, показывает [`EntryResults`][entry-results].
 4. Ряды видов запросов загружает `SeriesLoader.loadClasses` из `classes` через тот же кэш частей, отдельно от одноимённых узлов. Общая проекция [`policyWindowState`](../../web/src/results/policyState.ts) переводит интегралы состояния в доли окон для полос Timeline и потребителей воспроизведения; число копий связи берётся из групп выбранного варианта и точки.
 
@@ -153,6 +153,7 @@ apps/cli/build/install/cli/bin/cli catalog > web/src/test/catalog.json
 [canvas-results]: ../../web/src/results/canvasResults.ts
 [element-results]: ../../web/src/inspector/ElementResults.tsx
 [timeline]: ../../web/src/results/timeline/Timeline.tsx
+[chart]: ../../web/src/results/chart/Chart.tsx
 [playback]: ../../web/src/results/playback/usePlayback.ts
 [loader]: ../../web/src/results/series/loader.ts
 [worker]: ../../web/src/results/series/series.worker.ts

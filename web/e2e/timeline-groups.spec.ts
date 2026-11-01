@@ -39,8 +39,8 @@ for (const language of ["en", "ru"] as const) {
       });
       await page.getByRole("tab", { name: ru ? "Таймлайн" : "Timeline", exact: true }).click();
       const utilization = page.getByRole("region", { name: ru ? "Загрузка" : "Utilization", exact: true });
-      await expect(utilization.locator(".recharts-area-area")).toHaveCount(1);
-      await expect(utilization.locator(".recharts-area-area")).toBeVisible();
+      await expect(utilization.locator(".chart-range")).toHaveCount(1);
+      await expect(utilization.locator(".chart-range")).toBeVisible();
       await expect(page.getByText(ru ? "Загрузка рядов…" : "Loading series…", { exact: true })).toBeHidden();
       expect(parts.length).toBeGreaterThan(0);
       const reference = (number: number) => index.parts.find(part => part.file === `part-${number}.json.gz`)!;
@@ -52,8 +52,8 @@ for (const language of ["en", "ru"] as const) {
         await choices.getByRole("checkbox", { name, exact: true }).uncheck();
       }
       await page.getByRole("checkbox", { name: ru ? "Добавить реплику #2 на график" : "Add replica #2 to chart", exact: true }).check();
-      await expect(utilization.locator(".timeline-readout")).toContainText("gateway#2");
-      await expect(utilization.locator(".recharts-line-curve")).toHaveCount(2);
+      await expect(utilization.locator(".chart-readout")).toContainText("gateway#2");
+      await expect(utilization.locator(".chart-line")).toHaveCount(2);
       const added = parts.filter(number => !before.has(number));
       expect(added.length).toBeGreaterThan(0);
       expect(added.every(number => reference(number).kind === "INSTANCE" && reference(number).nodes.includes("gateway#2"))).toBe(true);
@@ -63,7 +63,7 @@ for (const language of ["en", "ru"] as const) {
       const last = Math.ceil(index.endMs / index.windowMs) - 1;
       const playback = page.getByRole("slider", { name: ru ? "Окно воспроизведения" : "Playback window", exact: true });
       await expect(playback).toHaveValue(String(last));
-      await expect(utilization.locator(".timeline-replica-range")).toContainText(/\d/);
+      await expect(utilization.locator(".chart-range-readout")).toContainText(/\d/);
       await expect(page.getByTestId("canvas-results-gateway")).not.toHaveAttribute("aria-busy", "true");
       if (ru) {
         await page.getByRole("button", { name: "Анализ", exact: true }).click();

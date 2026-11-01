@@ -95,7 +95,7 @@ test.describe("readable checkout answer", () => {
     await table.screenshot({ path: testInfo.outputPath("checkout-quantiles-ru.png") });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole("tab", { name: "Таймлайн", exact: true }).click();
-    await expect(page.locator(".timeline-axis").first()).toHaveText("Время симуляции (с)");
+    await expect(page.locator(".chart-axis").first()).toHaveText("Время симуляции (с)");
     await expect(page.locator(".timeline-chart").first().getByText("70", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("checkout-timeline.png") });
   });

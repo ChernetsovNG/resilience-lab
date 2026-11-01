@@ -73,7 +73,7 @@ for (const language of ["en", "ru"] as const) {
       const utilization = page.getByRole("region", { name: ru ? "Загрузка" : "Utilization", exact: true });
       await expect(utilization).toContainText(`order-service#2 · ${ru ? "Загрузка обработчиков" : "Handler utilization"}`);
       await expect(utilization).toContainText(`order-service · ${ru ? "Загрузка обработчиков" : "Handler utilization"}`);
-      await expect(utilization.locator(".timeline-readout dt")).toHaveCount(2);
+      await expect(utilization.locator(".chart-readout dt")).toHaveCount(2);
       const ejected = page.getByRole("slider", { name: new RegExp(`${ru ? "выведен" : "Ejected"}.*order-service#2`) });
       await expect(ejected).toBeVisible();
       await expect.poll(async () => ejected.locator("rect[data-share]").evaluateAll(rects => rects.some(rect => Number(rect.getAttribute("data-share")) > 0))).toBe(true);

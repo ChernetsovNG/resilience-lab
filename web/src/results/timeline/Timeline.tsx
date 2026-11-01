@@ -16,8 +16,9 @@ import { policyOutputAvailable, poolOutputAvailable } from "../../workspace/poli
 import { requestTypes } from "../entries";
 import { replicaMember } from "../groups";
 import { policyWindowState, type PolicyState } from "../policyState";
+import { ChartCursorProvider } from "../chart/ChartCursor";
+import { chartColors, timelineColor } from "../chart/palette";
 
-const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 const metricChoiceKey = (element: string, metric: string) => JSON.stringify([element, metric]);
 const requestTypeKey = (id: string) => JSON.stringify(["classes", id]);
 const classSeriesLoader = { load: ({ nodes, ...request }: SeriesLoadRequest) => seriesLoader.loadClasses({ ...request, classes: nodes }) };
@@ -109,6 +110,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const [metricKeys, setMetricKeys] = useState(() => elements.flatMap(element =>
     element.groups.map(group => metricChoiceKey(element.id, group.metrics[0].key))));
   const context = JSON.stringify([variant?.id, pointId, replication, cursorWindow]);
+  const axisId = JSON.stringify([runId, pointId, replication]);
   const [inspection, setInspection] = useState({ context, window: null as number | null });
   const hover = inspection.context === context ? inspection.window : null;
   if (inspection.context !== context) setInspection({ context, window: null });
@@ -140,12 +142,6 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const regions = useMemo(() => timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog, model),
     [metadata, experiment, catalog, model]);
   const charts = useMemo(() => {
-    const lineColor = (element: number, metric: number, comparison: boolean) => {
-      // Disjoint palettes distinguish variants while keeping separate element/metric colors.
-      const index = compared === undefined ? element * 3 + metric
-        : ((element + metric) % (colors.length / 2)) * 2 + Number(comparison);
-      return colors[index % colors.length];
-    };
     const paramsOf = (type: string, params: Record<string, unknown> = {}) => ({
       ...Object.fromEntries((catalog.types.find(candidate => candidate.id === type)?.params ?? []).map(param => [param.name, param.default])), ...params,
     });
@@ -203,7 +199,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       const lines: TimelineLine[] = [];
       for (const metric of group.metrics) {
         const nodeIds = [...new Set([...primaryNodes, ...overlayNodes].map(node => node.id))];
-        for (const [nodeIndex, id] of nodeIds.entries()) {
+        for (const id of nodeIds) {
           if (!metric.types.includes(nodeType(id)) || !metricKeys.includes(metricChoiceKey(originals.get(id) ?? id, metric.key))) continue;
           for (const source of [{ variant, data: primaryNodes.find(candidate => candidate.id === id), comparison: false }, {
             variant: compared, data: overlayNodes.find((candidate) => candidate.id === id), comparison: true,
@@ -211,14 +207,15 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
             if (source.variant === undefined || source.data === undefined) continue;
             lines.push({
               id: `${source.variant.id}:${id}:${metric.key}`, label: t("results.timeline.lineLabel", { node: nodeName(id), metric: metric.label, variant: variantLabel(source.variant, experiment.variants), id: source.variant.id }),
-              metric: metric.id, scale: group.scale, color: lineColor(nodeIndex, group.metrics.indexOf(metric), source.comparison),
+              elementId: id, variantId: source.variant.id, replication,
+              metric: metric.id, scale: group.scale, color: timelineColor(id, metric.id, source.comparison),
               comparison: source.comparison, windows: source.data.windows,
               range: source.variant.points.find(point => point.id === pointId)?.aggregate.groups.some(group => group.id === id)
                 ? replicaRange(outputsOf(catalog, nodeType(id)), metric.id) : undefined,
             });
           }
         }
-        for (const [connectionIndex, connection] of connectionSeries.entries()) {
+        for (const connection of connectionSeries) {
           if (!metric.types.includes(connectionType(connection.id)) || !metricKeys.includes(metricChoiceKey(originals.get(connection.id) ?? connection.id, metric.key))) continue;
           for (const source of [{ variant, data: connection, comparison: false, model: primaryModel }, {
             variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true, model: comparedModel,
@@ -228,7 +225,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
             const label = t("results.timeline.lineLabel", { node: elementLabel(connection.id, model), metric: metric.label,
               variant: variantLabel(source.variant, experiment.variants) });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
-              metric: metric.id, scale: group.scale, color: lineColor(primaryNodes.length + connectionIndex, group.metrics.indexOf(metric), source.comparison),
+              elementId: connection.id, variantId: source.variant.id, replication,
+              metric: metric.id, scale: group.scale, color: timelineColor(connection.id, metric.id, source.comparison),
               comparison: source.comparison,
               range: source.variant.points.find(point => point.id === pointId)?.aggregate.groups.some(group => group.id === connection.id)
                 ? replicaRange(outputsOf(catalog, connectionType(connection.id)), metric.id) : undefined,
@@ -239,7 +237,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       return { ...group, lines, bands: group.metrics.some(metric => metric.id === "sentAttemptsPerSecond") ? bands : [] };
     }).filter((group) => group.lines.length > 0 || group.bands.length > 0);
   }, [primary.nodes, overlay.nodes, primaryConnections.connections,
-    overlayConnections.connections, primaryClasses.nodes, overlayClasses.nodes, elements, model, metricKeys, variant, compared, groups, catalog, experiment, pointId, primaryTargets.nodes, overlayTargets.nodes, originals, displayedModels]);
+    overlayConnections.connections, primaryClasses.nodes, overlayClasses.nodes, elements, model, metricKeys, variant, compared, groups, catalog, experiment, pointId, primaryTargets.nodes, overlayTargets.nodes, originals, displayedModels, replication]);
   const thresholds: TimelineThreshold[] = [variant, compared].flatMap((source, index) => {
     if (source === undefined) return [];
     const point = source.points.find((candidate) => candidate.id === pointId);
@@ -287,7 +285,8 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       </fieldset>)}
     </details>
     <div className="timeline-regions" aria-label={t("results.timeline.regions")}>
-      {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}>
+      {regions.map((region, index) => <span key={index} className={`timeline-region--${region.kind}`}
+        style={{ backgroundColor: `color-mix(in srgb, ${chartColors[region.kind]} 20%, white)` }}>
         {t("results.timeline.region", { label: region.label, from: formatDuration(region.fromMs), to: formatDuration(region.toMs) })}
       </span>)}
       <span>{t("results.timeline.solid", { variant: variantLabel(variant, experiment.variants),
@@ -313,8 +312,9 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     {connectionIds.length > 0 ? <p className="timeline-latency-note">{t("results.timeline.connectionLegend")}</p> : null}
     {nodes.length === 0 ? <p>{t("results.timeline.selectNodes")}</p> : null}
     {!primary.loading && !primaryConnections.loading && primary.problem === null && primaryConnections.problem === null && nodes.length > 0 && charts.length === 0 ? <p>{t("results.timeline.selectMetrics")}</p> : null}
-    <TimelineGrid>{charts.map((group) => <TimelineChart key={group.id} title={group.title} unit={group.unit}
-      lines={group.lines} bands={group.bands} regions={regions} thresholds={group.unit === "ms" ? thresholds : undefined} endMs={endMs} windowMs={windowMs} hoverWindow={hover} cursorWindow={cursorWindow}
-      onHover={setHover} onCursor={onCursor} />)}</TimelineGrid>
+    <ChartCursorProvider axisId={axisId} hoverWindow={hover} cursorWindow={cursorWindow} onHover={setHover} onCursor={onCursor}>
+      <TimelineGrid>{charts.map((group) => <TimelineChart key={group.id} title={group.title} unit={group.unit}
+        lines={group.lines} bands={group.bands} regions={regions} thresholds={group.unit === "ms" ? thresholds : undefined} endMs={endMs} windowMs={windowMs} axisId={axisId} />)}</TimelineGrid>
+    </ChartCursorProvider>
   </div>;
 }
