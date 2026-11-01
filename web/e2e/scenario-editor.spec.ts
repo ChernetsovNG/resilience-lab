@@ -474,12 +474,12 @@ test("ignores a delayed loaded version after reload and save but reports a new e
     const alert = page.getByRole("alert").filter({ hasText: files.model });
     await expect(alert).toHaveCount(0);
     expect((await stored(page, files.model)).content.model.blocks.gateway.params.handlers).toBe(7);
-    await page.unroute(changes);
+    await page.unrouteAll({ behavior: "wait" });
     await writeHandlers(files, 11);
     await expect(alert).toContainText("The document changed on disk", { timeout: 5000 });
   } finally {
     release();
-    await page.unroute(changes);
+    await page.unrouteAll({ behavior: "wait" });
   }
 });
 
