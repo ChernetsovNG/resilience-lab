@@ -2040,6 +2040,9 @@
               "$ref" : "#/components/schemas/ScenarioStep"
             }
           },
+          "title" : {
+            "type" : [ "string", "null" ]
+          },
           "type" : {
             "type" : "string"
           }
@@ -2580,6 +2583,9 @@
       "Fault" : {
         "type" : "object",
         "properties" : {
+          "at" : {
+            "type" : [ "string", "null" ]
+          },
           "capacity" : {
             "type" : [ "integer", "null" ],
             "format" : "int32"
@@ -2591,7 +2597,7 @@
             "type" : [ "string", "null" ]
           },
           "from" : {
-            "type" : "string"
+            "type" : [ "string", "null" ]
           },
           "kind" : {
             "type" : "string"
@@ -2604,10 +2610,10 @@
             "type" : "string"
           },
           "to" : {
-            "type" : "string"
+            "type" : [ "string", "null" ]
           }
         },
-        "required" : [ "from", "kind", "target", "to" ]
+        "required" : [ "kind", "target" ]
       },
       "FirstNodeSaturation" : {
         "type" : "object",
@@ -3552,6 +3558,15 @@
       "ScenarioStep" : {
         "type" : "object",
         "properties" : {
+          "branches" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ScenarioStep"
+              }
+            }
+          },
           "classes" : {
             "type" : [ "array", "null" ],
             "items" : {
@@ -3564,9 +3579,34 @@
           "failureRate" : {
             "type" : [ "string", "null" ]
           },
+          "id" : {
+            "type" : [ "string", "null" ]
+          },
+          "keySpace" : {
+            "type" : [ "string", "null" ]
+          },
+          "onCacheError" : {
+            "type" : [ "string", "null" ]
+          },
+          "onMiss" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/ScenarioStep"
+            }
+          },
           "processing" : {
             "type" : [ "object", "null" ],
             "additionalProperties" : true
+          },
+          "repeat" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/StepRepeat"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "singleFlight" : {
+            "type" : [ "boolean", "null" ]
           },
           "type" : {
             "type" : "string"
@@ -3894,6 +3934,19 @@
           }
         },
         "required" : [ "label", "node", "slotPool", "value" ]
+      },
+      "StepRepeat" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mode" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "count", "mode" ]
       },
       "TypeDescriptor" : {
         "type" : "object",

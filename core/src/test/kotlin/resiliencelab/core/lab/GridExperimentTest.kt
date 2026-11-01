@@ -21,7 +21,7 @@ class GridExperimentTest {
 
     private val model =
         """
-        {"schemaVersion":6,"blocks":{
+        {"schemaVersion":7,"blocks":{
           "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "100/s"}]},"deadline":"10ms"}},
           "entry":{"type":"service","params":{"handlers":1,"queue":4,"processing":{"kind":"exponential","mean":"3ms"}}}
         },"connections":[{"id":"request","type":"request","from":"client","to":"entry"}]}
@@ -40,7 +40,7 @@ class GridExperimentTest {
         Files.writeString(
             root.resolve("e.experiment.json"),
             """
-            {"schemaVersion":3,"modelRef":"m.model.json",
+            {"schemaVersion":4,"modelRef":"m.model.json",
              "execution":{"replications":2,"warmup":"0ms","measurement":"120ms","window":"20ms","seed":42},
              "variants":[{"id":"baseline","overrides":$overrides}]
              ${axes?.let { ",\"grid\":$it" }.orEmpty()}}

@@ -25,7 +25,7 @@ class ClientClassesCompilerTest {
         extra: String = "",
     ): CompileResult {
         val model = """{"schemaVersion":${DocumentCodec.MODEL_SCHEMA_VERSION},"blocks":{$blocks},"connections":[$connections]}"""
-        val experiment = """{"schemaVersion":3,"modelRef":"m.model.json",
+        val experiment = """{"schemaVersion":4,"modelRef":"m.model.json",
             "execution":{"replications":5,"warmup":"0s","measurement":"1s","seed":42},
             "variants":$variants $extra}"""
         return ModelCompiler().compile(
@@ -339,6 +339,6 @@ class ClientClassesCompilerTest {
     fun `model five is rejected with an explicit schema diagnostic`() {
         val result = DocumentCodec.decodeModel("""{"schemaVersion":5,"blocks":{}}""", "old.model.json") as DecodeResult.Failed
         assertThat(result.diagnostics.single().code).isEqualTo("SCHEMA_VERSION")
-        assertThat(result.diagnostics.single().message).contains("5", "6")
+        assertThat(result.diagnostics.single().message).contains("5", "7")
     }
 }

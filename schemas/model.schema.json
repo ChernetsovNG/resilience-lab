@@ -4,6 +4,369 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "External keyed cache with TTL, LRU eviction and a bounded operation queue.",
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "additionalProperties": false,
+              "properties": {
+                "capacity": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 10000,
+                  "description": "Maximum stored entries across all key spaces; least recently used entries are evicted.",
+                  "title": "Entry capacity"
+                },
+                "handlers": {
+                  "anyOf": [
+                    {
+                      "minimum": 1.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 1,
+                  "description": "Maximum concurrent GET and SET operations. Initially 1.",
+                  "title": "Handlers"
+                },
+                "keySpaces": {
+                  "description": "Independent key identities and Zipf popularity; replace the entire list in a variant.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "description": "Unique identifier within this cache.",
+                        "title": "Identifier",
+                        "type": "string"
+                      },
+                      "keys": {
+                        "description": "Number of distinct keys.",
+                        "minimum": 1.0,
+                        "title": "Keys",
+                        "type": "integer"
+                      },
+                      "ttl": {
+                        "anyOf": [
+                          {
+                            "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                            "type": "string",
+                            "x-quantity": {
+                              "dimension": "DURATION",
+                              "exclusiveMinimum": 0.0,
+                              "units": [
+                                {
+                                  "denominator": 1.0,
+                                  "numerator": 1.0,
+                                  "symbol": "ms"
+                                },
+                                {
+                                  "denominator": 1.0,
+                                  "numerator": 1000.0,
+                                  "symbol": "s"
+                                },
+                                {
+                                  "denominator": 1.0,
+                                  "numerator": 60000.0,
+                                  "symbol": "min"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Optional lifetime for this space, overriding the cache TTL. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                        "title": "Time to live"
+                      },
+                      "zipf": {
+                        "description": "Zipf exponent; zero gives uniform popularity.",
+                        "minimum": 0.0,
+                        "title": "Popularity skew",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "keys",
+                      "zipf"
+                    ],
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "title": "Key spaces",
+                  "type": "array"
+                },
+                "prefill": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "keys": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Hottest keys of each space; their total must fit in capacity.",
+                          "title": "Keys per space"
+                        },
+                        "kind": {
+                          "description": "Start empty or with the hottest keys.",
+                          "enum": [
+                            "none",
+                            "hot"
+                          ],
+                          "title": "Initial population",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": {
+                    "kind": "none"
+                  },
+                  "description": "Empty, or the N hottest keys of every key space at time zero.",
+                  "title": "Initial entries"
+                },
+                "processing": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "description": "Choose fixed for a constant duration, exponential for independent random durations, or lognormal for a long tail of slow operations.",
+                          "enum": [
+                            "fixed",
+                            "exponential",
+                            "lognormal"
+                          ],
+                          "title": "Distribution",
+                          "type": "string"
+                        },
+                        "mean": {
+                          "description": "Use the measured average, not p95 or p99. It sets the scale of the chosen distribution. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                          "title": "Mean",
+                          "type": "string",
+                          "x-quantity": {
+                            "dimension": "DURATION",
+                            "minimum": 0.0,
+                            "units": [
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1.0,
+                                "symbol": "ms"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 1000.0,
+                                "symbol": "s"
+                              },
+                              {
+                                "denominator": 1.0,
+                                "numerator": 60000.0,
+                                "symbol": "min"
+                              }
+                            ]
+                          }
+                        },
+                        "stdDev": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "For lognormal only: use the measured standard deviation. Larger values produce more variation. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Standard deviation"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mean"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": {
+                    "kind": "fixed",
+                    "mean": "0.2ms"
+                  },
+                  "description": "Processing time of one GET or SET operation.",
+                  "title": "Processing time"
+                },
+                "queue": {
+                  "anyOf": [
+                    {
+                      "minimum": 0.0,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": 0,
+                  "description": "Waiting places in the FIFO queue. 0 means no queue: when all handlers are busy, an attempt is rejected immediately. Initially 100.",
+                  "title": "Queue capacity"
+                },
+                "ttl": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                      "type": "string",
+                      "x-quantity": {
+                        "dimension": "DURATION",
+                        "exclusiveMinimum": 0.0,
+                        "units": [
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1.0,
+                            "symbol": "ms"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 1000.0,
+                            "symbol": "s"
+                          },
+                          {
+                            "denominator": 1.0,
+                            "numerator": 60000.0,
+                            "symbol": "min"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": "60s",
+                  "description": "Entry lifetime unless its key space supplies another TTL. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "title": "Time to live"
+                },
+                "ttlJitter": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                      "type": "string",
+                      "x-quantity": {
+                        "dimension": "PROBABILITY",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "units": [
+                          {
+                            "denominator": 100.0,
+                            "numerator": 1.0,
+                            "symbol": "%"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": "0%",
+                  "description": "Uniform relative variation on either side of the TTL. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                  "title": "TTL jitter"
+                }
+              },
+              "required": [
+                "keySpaces"
+              ],
+              "type": "object"
+            },
+            "replicaOverrides": {
+              "maxProperties": 0,
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "scenario": {
+              "type": "null"
+            },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "cache"
+            }
+          },
+          "required": [
+            "type",
+            "params"
+          ],
+          "title": "Cache",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Generates requests at random times at the configured average rate. Each request has an overall deadline.",
           "properties": {
             "description": {
@@ -293,6 +656,15 @@
             "scenario": {
               "type": "null"
             },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "type": {
               "const": "client"
             }
@@ -468,6 +840,15 @@
             },
             "scenario": {
               "type": "null"
+            },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "const": "database"
@@ -650,6 +1031,15 @@
             "scenario": {
               "type": "null"
             },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "type": {
               "const": "pooler"
             }
@@ -802,6 +1192,15 @@
             },
             "scenario": {
               "type": "null"
+            },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "type": {
               "const": "router"
@@ -1587,6 +1986,15 @@
               "minItems": 1,
               "type": [
                 "array",
+                "null"
+              ]
+            },
+            "title": {
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": [
+                "string",
                 "null"
               ]
             },
@@ -2527,6 +2935,9 @@
         {
           "additionalProperties": false,
           "properties": {
+            "branches": {
+              "type": "null"
+            },
             "classes": {
               "items": {
                 "type": "string"
@@ -2566,6 +2977,22 @@
               "default": "0%",
               "description": "Probability that one local attempt fails. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
               "title": "Failure rate"
+            },
+            "id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "keySpace": {
+              "type": "null"
+            },
+            "onCacheError": {
+              "type": "null"
+            },
+            "onMiss": {
+              "type": "null"
             },
             "processing": {
               "anyOf": [
@@ -2657,6 +3084,19 @@
               "description": "Local processing time of one attempt. Initially exponential with a mean of 10ms.",
               "title": "Processing time"
             },
+            "repeat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/resiliencelab.core.document.StepRepeat"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "singleFlight": {
+              "type": "null"
+            },
             "type": {
               "const": "process"
             }
@@ -2669,6 +3109,9 @@
         {
           "additionalProperties": false,
           "properties": {
+            "branches": {
+              "type": "null"
+            },
             "classes": {
               "items": {
                 "type": "string"
@@ -2681,13 +3124,42 @@
               "uniqueItems": true
             },
             "connection": {
-              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
               "type": "string"
             },
             "failureRate": {
               "type": "null"
             },
+            "id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "keySpace": {
+              "type": "null"
+            },
+            "onCacheError": {
+              "type": "null"
+            },
+            "onMiss": {
+              "type": "null"
+            },
             "processing": {
+              "type": "null"
+            },
+            "repeat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/resiliencelab.core.document.StepRepeat"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "singleFlight": {
               "type": "null"
             },
             "type": {
@@ -2699,8 +3171,188 @@
             "connection"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "branches": {
+              "type": "null"
+            },
+            "classes": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ],
+              "uniqueItems": true
+            },
+            "connection": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            "failureRate": {
+              "type": "null"
+            },
+            "id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            "keySpace": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": "string"
+            },
+            "onCacheError": {
+              "enum": [
+                "source",
+                "fail",
+                null
+              ]
+            },
+            "onMiss": {
+              "items": {
+                "$ref": "#/$defs/resiliencelab.core.document.ScenarioStep"
+              },
+              "minItems": 0,
+              "type": "array"
+            },
+            "processing": {
+              "type": "null"
+            },
+            "repeat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/resiliencelab.core.document.StepRepeat"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "singleFlight": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "cacheRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "connection",
+            "keySpace",
+            "onMiss"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "branches": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/resiliencelab.core.document.ScenarioStep"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "classes": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": [
+                "array",
+                "null"
+              ],
+              "uniqueItems": true
+            },
+            "connection": {
+              "type": "null"
+            },
+            "failureRate": {
+              "type": "null"
+            },
+            "id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "keySpace": {
+              "type": "null"
+            },
+            "onCacheError": {
+              "type": "null"
+            },
+            "onMiss": {
+              "type": "null"
+            },
+            "processing": {
+              "type": "null"
+            },
+            "repeat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/resiliencelab.core.document.StepRepeat"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "singleFlight": {
+              "type": "null"
+            },
+            "type": {
+              "const": "parallel"
+            }
+          },
+          "required": [
+            "type",
+            "branches"
+          ],
+          "type": "object"
         }
       ]
+    },
+    "resiliencelab.core.document.StepRepeat": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "mode": {
+          "enum": [
+            "sequential",
+            "parallel"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "count",
+        "mode"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/model.schema.json",
@@ -2734,7 +3386,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 6,
+          "const": 7,
           "type": "integer"
         },
         {

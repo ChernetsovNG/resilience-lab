@@ -76,7 +76,7 @@ class DocumentCodecTest {
     @Test
     fun `experiment three preserves optional variant descriptions verbatim`() {
         val description = "  Другая реплика\nИсточник: https://example.org/  "
-        val source = """{"schemaVersion":3,"modelRef":"m.model.json",
+        val source = """{"schemaVersion":4,"modelRef":"m.model.json",
             "execution":{"replications":2,"warmup":"0ms","measurement":"1s","seed":7},
             "variants":[{"id":"baseline","description":${Json.encodeToString(description)}}]}"""
 
@@ -93,19 +93,19 @@ class DocumentCodecTest {
 
     @Test
     fun `old experiments report their version before obsolete shape`() {
-        for (version in listOf(1, 2)) {
+        for (version in listOf(1, 2, 3)) {
             val decoded = DocumentCodec.decodeExperiment("""{"schemaVersion":$version,"oldShape":true}""", "old.experiment.json")
             val diagnostic = (decoded as DecodeResult.Failed).diagnostics.single()
             assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
-            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 3")
-            assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(3))
+            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 4")
+            assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(4))
         }
     }
 
     @Test
     fun `reads experiment faults and keeps layout at version two`() {
         val text =
-            """{"schemaVersion":3,"modelRef":"m.model.json",
+            """{"schemaVersion":4,"modelRef":"m.model.json",
               "execution":{"replications":1,"warmup":"0ms","measurement":"1s","seed":1},
               "faults":[
                 {"target":"service","from":"0ms","to":"1s","kind":"slowdown","multiplier":2,"delay":"20ms"},
@@ -127,7 +127,7 @@ class DocumentCodecTest {
         val old = DocumentCodec.decodeExperiment("""{"schemaVersion":1,"oldShape":true}""", "old.experiment.json")
         val diagnostic = (old as DecodeResult.Failed).diagnostics.single()
         assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
-        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(3))
+        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(4))
     }
 
     @Test
@@ -165,22 +165,22 @@ class DocumentCodecTest {
 
     @Test
     fun `decodes a model and reports shape and version problems`() {
-        val text = """{"schemaVersion": 6, "blocks": {"c": {"type": "client"}}, "connections": []}"""
+        val text = """{"schemaVersion": 7, "blocks": {"c": {"type": "client"}}, "connections": []}"""
         val decoded = DocumentCodec.decodeModel(text, "m.model.json")
         assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
         assertThat((decoded as DecodeResult.Ok).value.blocks.keys).containsExactly("c")
 
-        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 6, "blocks": {}, "extra": 1}""", "m.model.json")
+        val unknownField = DocumentCodec.decodeModel("""{"schemaVersion": 7, "blocks": {}, "extra": 1}""", "m.model.json")
         assertThat((unknownField as DecodeResult.Failed).diagnostics.single().code).isEqualTo("DOCUMENT_SHAPE")
 
-        for (version in listOf(1, 4, 5)) {
+        for (version in listOf(1, 4, 5, 6)) {
             val wrongVersion = DocumentCodec.decodeModel("""{"schemaVersion":$version,"oldShape":{}}""", "m.model.json")
             val diagnostic = (wrongVersion as DecodeResult.Failed).diagnostics.single()
             assertThat(diagnostic.code).isEqualTo("SCHEMA_VERSION")
             assertThat(diagnostic.pointer).isEqualTo("/schemaVersion")
-            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 6")
+            assertThat(diagnostic.message).isEqualTo("Unsupported schemaVersion $version; expected 7")
             assertThat(Json.encodeToJsonElement(diagnostic).jsonObject["args"])
-                .isEqualTo(Json.parseToJsonElement("""{"actual":$version,"expected":6}"""))
+                .isEqualTo(Json.parseToJsonElement("""{"actual":$version,"expected":7}"""))
         }
     }
 
@@ -188,7 +188,7 @@ class DocumentCodecTest {
     fun `writes canonical text with sorted keys, two-space indent and a final newline`() {
         val model =
             ModelFile(
-                schemaVersion = 6,
+                schemaVersion = 7,
                 blocks =
                     linkedMapOf(
                         "b" to
@@ -221,7 +221,7 @@ class DocumentCodecTest {
                   "type": "service"
                 }
               },
-              "schemaVersion": 6
+              "schemaVersion": 7
             }
 
             """.trimIndent(),
@@ -233,7 +233,7 @@ class DocumentCodecTest {
     fun `round-trips experiment and layout documents`() {
         val experiment =
             ExperimentFile(
-                schemaVersion = 3,
+                schemaVersion = 4,
                 modelRef = "m.model.json",
                 execution = ExecutionSettings(replications = 2, warmup = "0ms", measurement = "1s", seed = 7),
                 variants = listOf(Variant(id = "baseline")),
@@ -251,7 +251,7 @@ class DocumentCodecTest {
     fun `keeps descriptions and notes of documents, blocks and connections`() {
         val model =
             ModelFile(
-                schemaVersion = 6,
+                schemaVersion = 7,
                 description = "Chain",
                 notes = "Calibrated on staging",
                 blocks = mapOf("a" to BlockInstance(type = "client", description = "Load", notes = "Peak hour")),

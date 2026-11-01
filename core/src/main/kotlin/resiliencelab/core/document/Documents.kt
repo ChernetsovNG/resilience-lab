@@ -24,9 +24,11 @@ data class BlockInstance(
     val scenario: List<ScenarioStep>? = null,
     /** Partial service parameters keyed by the canonical one-based replica number. */
     val replicaOverrides: Map<String, JsonObject>? = null,
+    /** Display name only; identifiers still address blocks in paths and diagnostics. */
+    val title: String? = null,
 )
 
-/** One service step: `process` inherits omitted values; `call` names an outgoing [connection]. */
+/** One scenario-tree step; process inherits omitted values, cacheRead and parallel contain nested steps. */
 @Serializable
 data class ScenarioStep(
     val type: String,
@@ -35,6 +37,20 @@ data class ScenarioStep(
     val connection: String? = null,
     /** Classes that execute this step; null applies to every class. */
     val classes: List<String>? = null,
+    val id: String? = null,
+    val repeat: StepRepeat? = null,
+    val keySpace: String? = null,
+    val onMiss: List<ScenarioStep>? = null,
+    val branches: List<List<ScenarioStep>>? = null,
+    val singleFlight: Boolean? = null,
+    val onCacheError: String? = null,
+)
+
+/** Repetition keeps the step structure fixed while its count can vary by experiment. */
+@Serializable
+data class StepRepeat(
+    val count: Int,
+    val mode: String,
 )
 
 /** One connection from a source block to a target block. */
@@ -123,17 +139,19 @@ data class ExecutionSettings(
     val window: String? = null,
 )
 
-/** A kind-specific degradation of a block, replica or connection during [from, to). */
+/** Interval degradation during [from, to), or an instantaneous cache flush at [at]. */
 @Serializable
 data class Fault(
     val target: String,
-    val from: String,
-    val to: String,
+    val from: String? = null,
+    val to: String? = null,
     val kind: String,
     val multiplier: Double? = null,
     val delay: String? = null,
     val failureRate: String? = null,
     val capacity: Int? = null,
+    /** Instant of a cache flush; interval faults use from and to instead. */
+    val at: String? = null,
 )
 
 /** A variant: parameter overrides keyed by `blockOrConnectionId.param[.field]`. */

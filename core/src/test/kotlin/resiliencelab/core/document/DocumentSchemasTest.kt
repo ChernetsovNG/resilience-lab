@@ -53,7 +53,7 @@ class DocumentSchemasTest {
         val source =
             experiment().replace("\"id\":\"baseline\"", "\"id\":\"baseline\",\"description\":\"Другая реплика\"")
         assertThat(validate("experiment", source)).isEmpty()
-        assertThat(validate("experiment", source.replace("\"schemaVersion\":3", "\"schemaVersion\":2"))).isNotEmpty()
+        assertThat(validate("experiment", source.replace("\"schemaVersion\":4", "\"schemaVersion\":2"))).isNotEmpty()
         assertThat(validate("experiment", source.replace("\"description\":\"Другая реплика\"", "\"description\":42"))).isNotEmpty()
     }
 
@@ -61,7 +61,7 @@ class DocumentSchemasTest {
     fun `client class profiles and structural filters follow the model six schema`() {
         val load = """{"points":[{"time":"0s","rate":"10/s"}]}"""
         val classes = """[{"id":"read","load":$load}]"""
-        val source = """{"schemaVersion":6,"blocks":{
+        val source = """{"schemaVersion":7,"blocks":{
             "client":{"type":"client","params":{"deadline":"1s","classes":$classes}},
             "service":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"1ms"}},
                 "scenario":[{"type":"process","classes":["read"]}]},
@@ -75,7 +75,7 @@ class DocumentSchemasTest {
             source.replace("\"classes\":[\"read\"]", "\"classes\":[]"),
             source.replace("\"classes\":[\"read\"]", "\"classes\":[\"read\",\"read\"]"),
             source.replace("\"type\":\"route\"", "\"type\":\"request\""),
-            source.replace("\"schemaVersion\":6", "\"schemaVersion\":5"),
+            source.replace("\"schemaVersion\":7", "\"schemaVersion\":5"),
         ).forEach { invalid ->
             assertThat(validate("model", invalid)).describedAs(invalid).isNotEmpty()
         }
@@ -221,8 +221,8 @@ class DocumentSchemasTest {
                 model.replace("\"handlers\":2", "\"handlers\":2,\"extra\":1"),
                 model.replace("\"mean\":\"0ms\"", "\"mean\":\"0ms\",\"extra\":1"),
                 model.replace("\"type\":\"service\"", "\"type\":\"service\",\"extra\":1"),
-                model.replace("\"schemaVersion\":6", "\"schemaVersion\":6,\"extra\":1"),
-                model.replace("\"schemaVersion\":6", "\"schemaVersion\":1"),
+                model.replace("\"schemaVersion\":7", "\"schemaVersion\":7,\"extra\":1"),
+                model.replace("\"schemaVersion\":7", "\"schemaVersion\":1"),
             )
         invalid.forEach { text ->
             assertThat(validate("model", text)).describedAs(text).isNotEmpty()
@@ -399,14 +399,34 @@ class DocumentSchemasTest {
 
     private fun JsonObject.properties(): JsonObject = getValue("properties").jsonObject
 
+    @Test
+    fun nestedCacheScenariosAndFlushHaveStrictSchemas() {
+        val nested = """[{"type":"parallel","branches":[[{"type":"cacheRead","id":"read","connection":"cache",
+            "keySpace":"product","repeat":{"count":2,"mode":"parallel"},"onMiss":[]}]]}]"""
+        val source = model.replace("\"type\":\"service\"", "\"type\":\"service\",\"title\":\"Products\",\"scenario\":$nested")
+        assertThat(validate("model", source)).isEmpty()
+        for (invalid in listOf(
+            source.replace("\"id\":\"read\",", ""),
+            source.replace("\"count\":2", "\"count\":0"),
+            source.replace("\"mode\":\"parallel\"", "\"mode\":\"other\""),
+            source.replace("\"onMiss\":[]", "\"onMiss\":[] ,\"processing\":{}"),
+            source.replace("\"title\":\"Products\"", "\"title\":\"\""),
+        )) {
+            assertThat(validate("model", invalid)).describedAs(invalid).isNotEmpty()
+        }
+        val flush = experiment().dropLast(1) + ""","faults":[{"target":"redis","kind":"flush","at":"0s"}]}"""
+        assertThat(validate("experiment", flush)).isEmpty()
+        assertThat(validate("experiment", flush.replace("\"at\":\"0s\"", "\"from\":\"0s\",\"to\":\"1s\""))).isNotEmpty()
+    }
+
     private fun validate(
         kind: String,
         text: String,
     ) = factory.getSchema(generated.getValue("$kind.schema.json"), InputFormat.JSON).validate(text, InputFormat.JSON)
 
     private fun experiment(overrides: String = "{}") =
-        """{"schemaVersion":3,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
+        """{"schemaVersion":4,"modelRef":"missing.model.json","execution":{"replications":1,"seed":0,"warmup":"0ms","measurement":"1s"},"variants":[{"id":"baseline","overrides":$overrides}]}"""
 
     private val model =
-        """{"schemaVersion":6,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
+        """{"schemaVersion":7,"blocks":{"c":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "120/s"}]},"deadline":"1s"}},"s":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"0ms"}}}},"connections":[]}"""
 }

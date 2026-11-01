@@ -32,7 +32,7 @@ test("opens saves and runs a transaction pooler and displays both resource limit
   const source = (await stored(page, files.model)).content.model as ModelFile;
   source.blocks.pooler = { type: "pooler", params: {
     maxClientConnections: 4, poolSize: 2, waitTimeout: "20ms", processing: { kind: "fixed", mean: "0.25ms" },
-  }, description: null, notes: null, scenario: null, replicaOverrides: null };
+  }, description: null, notes: null, scenario: null, replicaOverrides: null, title: null };
   source.connections.find(edge => edge.id === "middle-to-dependency")!.to = "pooler";
   source.connections.push({ id: "pooler-to-dependency", type: "call", from: "pooler", to: "dependency",
     params: { timeout: "60ms" }, description: null, notes: null, classes: null });
@@ -234,7 +234,7 @@ test("opens saves and runs a call pool without losing its configuration", async 
 
 test("opens saves and runs a router with three weighted outputs without losing routing parameters", async ({ page, files }) => {
   const routed = (await stored(page, files.model)).content.model as ModelFile;
-  expect(routed.schemaVersion).toBe(6);
+  expect(routed.schemaVersion).toBe(7);
   routed.blocks.router = { type: "router", params: { policy: "random" }, description: null, notes: null, scenario: null, replicaOverrides: null };
   routed.blocks.gateway.scenario = [
     { type: "process", processing: { kind: "fixed", mean: "2ms" }, failureRate: "0%", connection: null, classes: null },
@@ -252,6 +252,7 @@ test("opens saves and runs a router with three weighted outputs without losing r
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify(routed));
   await page.reload();
   await expect(page.getByTestId("block-node")).toHaveCount(6);
+  const expected = (await stored(page, files.model)).content.model as ModelFile;
   await expect(page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Router", exact: true })).toBeVisible();
   await page.getByTestId("rf__node-router").locator(".block-node > strong").click();
   await page.getByLabel("Policy", { exact: true }).selectOption("leastInFlight");
@@ -259,7 +260,6 @@ test("opens saves and runs a router with three weighted outputs without losing r
   await page.getByLabel("Handlers", { exact: true }).fill("5");
   await page.getByLabel("Handlers", { exact: true }).press("Enter");
   await save(page);
-  const expected = structuredClone(routed);
   expected.blocks.router.params.policy = "leastInFlight";
   expected.blocks.gateway.params.handlers = 5;
   expect((await stored(page, files.model)).content.model).toEqual(expected);

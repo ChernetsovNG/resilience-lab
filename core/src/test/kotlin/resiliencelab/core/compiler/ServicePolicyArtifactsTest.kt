@@ -20,7 +20,7 @@ class ServicePolicyArtifactsTest {
         val model =
             (
                 DocumentCodec.decodeModel(
-                    """{"schemaVersion":6,"blocks":{
+                    """{"schemaVersion":7,"blocks":{
                       "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"1000/s"}]},"deadline":"100ms"}},
                       "entry":{"type":"service","params":{"handlers":1,"queue":10,"replicas":2,
                         "processing":{"kind":"fixed","mean":"10ms"},
@@ -31,7 +31,7 @@ class ServicePolicyArtifactsTest {
                 ) as DecodeResult.Ok
             ).value
         val experiment =
-            """{"schemaVersion":3,"modelRef":"m.model.json",
+            """{"schemaVersion":4,"modelRef":"m.model.json",
               "execution":{"replications":8,"warmup":"20ms","measurement":"200ms","window":"10ms","seed":42},
               "variants":[{"id":"baseline"}]}"""
 

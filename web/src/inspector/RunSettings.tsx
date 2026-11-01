@@ -101,6 +101,12 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
       <DiagnosticMessages diagnostics={fieldDiagnostics?.get("faults")} />
       {experiment.faults.length === 0 ? <p>{t("editor.fault.none")}</p> : null}
       {experiment.faults.map((fault, index) => {
+        if (fault.kind === "flush") return <fieldset className="param-group" key={index} data-inspector-field={"faults." + index}>
+          <legend>{t("editor.fault.number", { number: formatNumber(index + 1) })}</legend>
+          <p>{t("editor.scenario.newFieldsReadOnly")}</p>
+          <pre aria-label={t("editor.fault.readOnly")} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+            {JSON.stringify(fault, null, 2)}</pre>
+        </fieldset>;
         const target = targets.find(target => target.id === fault.target);
         const kindKnown = faultKinds.some(kind => kind === fault.kind);
         const targetId = `${id}-${index}-target`;

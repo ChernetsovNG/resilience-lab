@@ -9,6 +9,19 @@ import { editorReducer, initialEditorState } from "../workspace/editor";
 import { RunSettings } from "./RunSettings";
 
 const gridCatalog = structuredClone(catalog);
+it("displays imported repeat axes and values read only", () => {
+  const source = structuredClone(model);
+  source.blocks.gateway.scenario = [{ type: "process", id: "loop", repeat: { count: 20, mode: "parallel" } }];
+  render(<Settings initialModel={source} initialExperiment={{ ...experiment, grid: [
+    { path: "gateway.steps.loop.repeat.count", values: [2, 4] },
+  ] }} />);
+  expect(screen.getByLabelText("Repeat grid values (read only)").textContent).toBe("[2,4]");
+  expect(screen.queryByRole("combobox", { name: "Axis 1 parameter" })).toBeNull();
+  expect(JSON.parse(screen.getByTestId("grid-document").textContent!)).toEqual([
+    { path: "gateway.steps.loop.repeat.count", values: [2, 4] },
+  ]);
+});
+
 for (const param of gridCatalog.types.find((type) => type.id === "call")!.params) {
   if (param.name === "timeout" || param.name === "attempts") param.sweepable = true;
 }

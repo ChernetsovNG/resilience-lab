@@ -154,11 +154,11 @@ class Stage1CatalogTest {
     fun `contains the stage 1 block and connection types`() {
         assertThat(
             catalog.types.map { it.id },
-        ).containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler")
+        ).containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler", "cache")
         assertThat(catalog.type("client")!!.category).isEqualTo(TypeCategory.BLOCK)
         assertThat(
             catalog.type("call")!!.connects,
-        ).isEqualTo(ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler")))
+        ).isEqualTo(ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler", "cache")))
         assertThat(catalog.type("request")!!.connects).isEqualTo(ConnectionRule(listOf("client"), listOf("service")))
         assertThat(catalog.type("unknown")).isNull()
     }

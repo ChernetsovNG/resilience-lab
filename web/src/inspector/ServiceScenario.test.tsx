@@ -49,6 +49,23 @@ const click = (name: string, root?: HTMLElement) => fireEvent.click((root ? with
 const history = (size: number) => expect(screen.getByTestId("history").textContent).toBe(String(size));
 afterEach(() => localStorage.clear());
 
+it("keeps nested steps and their metadata read only while editing annotations", () => {
+  const initial = { ...explicit, blocks: { ...explicit.blocks, gateway: { ...explicit.blocks.gateway,
+    title: "Товары", scenario: [{ type: "parallel", id: "fanout", branches: [[{
+      type: "cacheRead", id: "read", connection: "a-call", keySpace: "product", singleFlight: true,
+      repeat: { count: 20, mode: "parallel" }, onMiss: [{ type: "call", connection: "gateway-to-middle" }],
+    }]] }],
+  } } };
+  render(<Editor initial={initial} />);
+  expect(screen.getByLabelText("Scenario (read only)").textContent).toContain('"keySpace": "product"');
+  expect(screen.queryByRole("combobox", { name: "Step type" })).toBeNull();
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Display name" }).readOnly).toBe(true);
+  const description = screen.getByRole("textbox", { name: "Description" });
+  fireEvent.change(description, { target: { value: "Documented" } });
+  fireEvent.blur(description);
+  expect(stored().model.blocks.gateway).toEqual({ ...initial.blocks.gateway, description: "Documented" });
+});
+
 it("shows endpoints and distinct ids when selecting parallel or manually named calls", () => {
   render(<Editor initial={explicit} />);
   const choices = within(step(2)).getByRole("combobox", { name: "Connection" });

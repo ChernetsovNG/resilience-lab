@@ -52,6 +52,7 @@
 ### Документы и расчёт
 
 1. [`Lab.loadDocuments`][lab] читает эксперимент и его ссылки через [`Workspace`][workspace]. [`DocumentCodec`][codec] проверяет JSON и версии. [`ModelCompiler.compile`][compiler] применяет варианты и сетку, проверяет модель и разворачивает реплики в [`GraphIr`][ir]; `Lab.validate` добавляет [`ModelLinter`][linter].
+   Сценарий в IR — дерево `ServiceStep`: `onMiss` у `CacheRead` и ветки `Parallel`. [Обход дерева][scenario-tree] сохраняет фильтры видов запросов и ссылки на связи при разворачивании реплик; `repeat.count` адресуется через идентификатор шага. Параметры хранилища кэша находятся в `CacheSettings` узла `ServiceNode`. До реализации движка `Lab` и адаптер KSL отвергают новые конструкции кодом `EXECUTION_UNSUPPORTED_SCENARIO`.
 2. [`Lab.run`][lab] вызывает [`ExperimentExecutor.run`][executor]. Каждое повторение получает свежую модель KSL; [`ReliabilityModel.runReplication`][engine] возвращает итоги [`MetricsCollector`][metrics], а [`WindowCollector`][windows] передаёт закрытые окна через callback.
 3. [`SeriesWriter`][series] пишет части и индекс; его детектор потоково считает путь деградации. [`ArtifactWriter`][artifact] сохраняет путь вместе с итогами повторения. Его `summarize` параллельно читает итоги повторений и собирает сводку через [`MetricsAggregator`][aggregator] и анализаторы выводов в общем пуле исполнителя; затем публикуются сводка и манифест. Итоги когорты и временные окна собираются отдельно.
 
@@ -129,6 +130,7 @@ apps/cli/build/install/cli/bin/cli catalog > web/src/test/catalog.json
 [codec]: ../../core/src/main/kotlin/resiliencelab/core/document/DocumentCodec.kt
 [compiler]: ../../core/src/main/kotlin/resiliencelab/core/compiler/ModelCompiler.kt
 [ir]: ../../core/src/main/kotlin/resiliencelab/core/ir/GraphIr.kt
+[scenario-tree]: ../../core/src/main/kotlin/resiliencelab/core/ir/ScenarioTree.kt
 [linter]: ../../core/src/main/kotlin/resiliencelab/core/compiler/ModelLinter.kt
 [executor]: ../../core/src/main/kotlin/resiliencelab/core/execution/ExperimentExecutor.kt
 [engine]: ../../core/src/main/kotlin/resiliencelab/core/engine/ksl/ReliabilityModel.kt

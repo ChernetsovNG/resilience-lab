@@ -15,7 +15,7 @@ test("compares clients, request types and refusal reasons, then selects checkout
     { id: "status", load: { points: [{ time: "0s", rate: "80/s" }] } },
     { id: "checkout", load: { points: [{ time: "0s", rate: "40/s" }] } },
   ];
-  const model: ModelFile = { schemaVersion: 6, blocks: {
+  const model: ModelFile = { schemaVersion: 7, blocks: {
     "mobile-app": { type: "client", params: { deadline: "1s", classes } },
     "partner-api": { type: "client", params: { deadline: "1s", classes: [classes[0]] } },
     "api-gateway": { type: "service", params: { handlers: 40, queue: 100, processing: { kind: "fixed", mean: "1ms" } },
@@ -28,7 +28,7 @@ test("compares clients, request types and refusal reasons, then selects checkout
       timeout: "10ms", attempts: 1, circuitBreaker: { failureRate: "50%", minimumCalls: 5, window: 10, openDuration: "100ms", halfOpenCalls: 1 },
     } },
   ] };
-  const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "checkout-policies.model.json", layoutRef: "checkout-policies.layout.json",
+  const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "checkout-policies.model.json", layoutRef: "checkout-policies.layout.json",
     execution: { replications: 5, warmup: "100ms", measurement: "1s", window: "50ms", seed: 426, maxRealTime: "30s" }, faults: [],
     variants: [{ id: "baseline", label: "Baseline", overrides: {} }, { id: "fallback", label: "Fallback", overrides: {
       "gateway-to-orders.fallback": { on: ["timeout", "circuitOpen"], processing: "1ms" }, "api-gateway.failureRate": "5%",

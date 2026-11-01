@@ -12,7 +12,7 @@ async function stored(page: Page, path: string): Promise<ModelFile> {
   return (await response.json()).content.model;
 }
 
-test("preserves v6 clients, classes, filters and policies through editing and saving", async ({ page }) => {
+test("preserves v7 clients, classes, filters and policies through editing and saving", async ({ page }) => {
   const directory = `request-classes-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const modelPath = `${directory}/retry-storm.model.json`;
@@ -20,7 +20,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
   await copyRetryStorm(target);
   try {
     const source: ModelFile = JSON.parse(await readFile(resolve(target, "retry-storm.model.json"), "utf8"));
-    source.schemaVersion = 6;
+    source.schemaVersion = 7;
     const classes = [
       { id: "status", load: { points: [{ time: "0s", rate: "80/s" }] } },
       { id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }, { time: "1s", rate: "60/s" }] } },
@@ -91,6 +91,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     if (await scenario.getAttribute("open") === null) await scenario.locator("summary").click();
     await page.getByRole("group", { name: "Step 1", exact: true }).getByRole("combobox", { name: "Step type", exact: true }).selectOption("call");
     expected.blocks.gateway.scenario![0] = {
+      ...expected.blocks.gateway.scenario![0],
       type: "call", connection: "gateway-to-middle", classes: ["checkout"], processing: null, failureRate: null,
     };
     await page.getByRole("button", { name: "Save", exact: true }).click();

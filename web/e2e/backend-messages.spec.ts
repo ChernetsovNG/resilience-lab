@@ -46,7 +46,7 @@ for (const locale of locales) {
         const root = resolve("../apps/server/build/e2e-workspace", directory);
         const target = kind === "call" ? "caller-db" : "proxy";
         const parameter = kind === "call" ? "caller-db.pool.size" : "proxy.poolSize";
-        const model: ModelFile = { schemaVersion: 6, blocks: {
+        const model: ModelFile = { schemaVersion: 7, blocks: {
           client: { type: "client", params: { load: { points: [{ time: "0s", rate: "100/s" }] }, deadline: "10s" } },
           caller: { type: "service", params: { handlers: 8, queue: 16, processing: { kind: "fixed", mean: "0ms" } } },
           db: { type: "database", params: { maxConnections: 100, processing: { kind: "fixed", mean: "40ms" } } },
@@ -60,7 +60,7 @@ for (const locale of locales) {
             timeout: "1s", network: { kind: "fixed", mean: "0ms" },
           } }] : []),
         ] };
-        const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+        const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "model.model.json",
           execution: { replications: 5, warmup: "0ms", measurement: "1s", seed: 42 },
           variants: [{ id: "roomy", overrides: { [parameter]: 8 } }, { id: "tight", overrides: { [parameter]: 4 } }] };
         await mkdir(root, { recursive: true });
@@ -106,7 +106,7 @@ for (const locale of locales) {
       const directory = `healthcheck-cascade-${randomUUID()}`;
       const root = resolve("../apps/server/build/e2e-workspace", directory);
       const parameter = "worker.healthCheck.unhealthyThreshold";
-      const model: ModelFile = { schemaVersion: 6, blocks: {
+      const model: ModelFile = { schemaVersion: 7, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0s", rate: "200/s" }] }, deadline: "10s" } },
         gateway: { type: "service", params: { handlers: 100, processing: { kind: "fixed", mean: "0ms" } } },
         worker: { type: "service", params: { replicas: 3, handlers: 2, queue: 100,
@@ -115,7 +115,7 @@ for (const locale of locales) {
         { id: "request", type: "request", from: "client", to: "gateway" },
         { id: "gateway-worker", type: "call", from: "gateway", to: "worker", params: { timeout: "1s" } },
       ] };
-      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+      const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "model.model.json",
         execution: { replications: 5, warmup: "0ms", measurement: "1s", seed: 42 },
         variants: [{ id: "roomy", overrides: { "worker.handlers": 4 } }, { id: "tight", overrides: { [parameter]: 2 } }] };
       await mkdir(root, { recursive: true });

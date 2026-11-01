@@ -183,6 +183,9 @@
             }
           ],
           "properties": {
+            "at": {
+              "type": "null"
+            },
             "capacity": {
               "type": "null"
             },
@@ -301,15 +304,18 @@
           },
           "required": [
             "target",
+            "kind",
             "from",
-            "to",
-            "kind"
+            "to"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
+            "at": {
+              "type": "null"
+            },
             "capacity": {
               "type": "null"
             },
@@ -400,9 +406,9 @@
           },
           "required": [
             "target",
+            "kind",
             "from",
             "to",
-            "kind",
             "failureRate"
           ],
           "type": "object"
@@ -410,6 +416,9 @@
         {
           "additionalProperties": false,
           "properties": {
+            "at": {
+              "type": "null"
+            },
             "capacity": {
               "type": "null"
             },
@@ -485,15 +494,18 @@
           },
           "required": [
             "target",
+            "kind",
             "from",
-            "to",
-            "kind"
+            "to"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
+            "at": {
+              "type": "null"
+            },
             "capacity": {
               "type": "null"
             },
@@ -569,15 +581,18 @@
           },
           "required": [
             "target",
+            "kind",
             "from",
-            "to",
-            "kind"
+            "to"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
+            "at": {
+              "type": "null"
+            },
             "capacity": {
               "anyOf": [
                 {
@@ -662,10 +677,72 @@
           },
           "required": [
             "target",
+            "kind",
             "from",
             "to",
-            "kind",
             "capacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "description": "Simulation duration. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+              "title": "at",
+              "type": "string",
+              "x-quantity": {
+                "dimension": "DURATION",
+                "minimum": 0.0,
+                "units": [
+                  {
+                    "denominator": 1.0,
+                    "numerator": 1.0,
+                    "symbol": "ms"
+                  },
+                  {
+                    "denominator": 1.0,
+                    "numerator": 1000.0,
+                    "symbol": "s"
+                  },
+                  {
+                    "denominator": 1.0,
+                    "numerator": 60000.0,
+                    "symbol": "min"
+                  }
+                ]
+              }
+            },
+            "capacity": {
+              "type": "null"
+            },
+            "delay": {
+              "type": "null"
+            },
+            "failureRate": {
+              "type": "null"
+            },
+            "from": {
+              "type": "null"
+            },
+            "kind": {
+              "const": "flush"
+            },
+            "multiplier": {
+              "type": "null"
+            },
+            "target": {
+              "type": "string"
+            },
+            "to": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "target",
+            "kind",
+            "at"
           ],
           "type": "object"
         }
@@ -760,7 +837,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 3,
+          "const": 4,
           "type": "integer"
         },
         {

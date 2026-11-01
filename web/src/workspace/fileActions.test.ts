@@ -98,7 +98,7 @@ describe("workspace file actions", () => {
   it("creates a baseline question referring to the current model and layout", () => {
     const before = structuredClone(loaded);
     expect(newExperiment(loaded, "capacity")).toEqual([{ path: "retry-storm/capacity.experiment.json", content: { experiment: {
-      schemaVersion: 3, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json",
+      schemaVersion: 4, modelRef: "retry-storm.model.json", layoutRef: "retry-storm.layout.json",
       execution: { replications: 10, seed: 1, warmup: "10s", measurement: "60s", maxRealTime: "30s" },
       faults: [], grid: [], variants: [{ id: "baseline", label: "Baseline", overrides: {} }],
     } } }]);
@@ -155,7 +155,7 @@ describe("workspace file actions", () => {
       "my-lab/my-lab.model.json", "my-lab/my-lab.layout.json", "my-lab/my-lab.experiment.json",
     ]);
     expect(drafts[0].content.model?.blocks).toEqual({});
-    expect(drafts[0].content.model?.schemaVersion).toBe(6);
+    expect(drafts[0].content.model?.schemaVersion).toBe(7);
     expect(drafts[0].content.model?.connections).toEqual([]);
     expect(drafts[2].content.experiment).toMatchObject({
       modelRef: "my-lab.model.json", layoutRef: "my-lab.layout.json", execution: { replications: 10, warmup: "10s", measurement: "60s" },
@@ -187,7 +187,7 @@ describe("workspace file actions", () => {
   });
 
   it("preserves large integer text until ordinary server validation", async () => {
-    const source = '{"schemaVersion":3,"modelRef":"model.model.json","execution":{"seed":9007199254740993}}';
+    const source = '{"schemaVersion":4,"modelRef":"model.model.json","execution":{"seed":9007199254740993}}';
     const drafts = await readImports([new File([source], "source.experiment.json")], "imported");
     expect(JSON.stringify(drafts[0].content)).toContain('"seed":9007199254740993');
   });
@@ -272,7 +272,7 @@ describe("workspace file actions", () => {
   });
 
   it("exports the server canonical text verbatim instead of serializing the loaded objects", async () => {
-    const canonical = '{\n  "schemaVersion": 6\n}\n';
+    const canonical = '{\n  "schemaVersion": 7\n}\n';
     vi.spyOn(api, "documentText").mockResolvedValue({ text: canonical, etag: "version" });
     const files = await exportDocuments(loaded);
     expect(files.map(file => file.name)).toEqual(["retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json"]);

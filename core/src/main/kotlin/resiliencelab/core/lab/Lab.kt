@@ -14,7 +14,9 @@ import resiliencelab.core.document.DecodeResult
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.ExperimentFile
 import resiliencelab.core.document.ModelFile
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
 import resiliencelab.core.engine.ksl.PathStreams
+import resiliencelab.core.engine.ksl.requireSupportedExecution
 import resiliencelab.core.execution.CostEstimator
 import resiliencelab.core.execution.ExperimentEstimate
 import resiliencelab.core.execution.ExperimentExecutor
@@ -80,6 +82,20 @@ class Lab(
     private val ownsExecutor = executor == null
     private val executor = executor ?: ExperimentExecutor()
 
+    private fun requireExecutable(experiment: CompiledExperiment) {
+        experiment.variants.forEach { variant ->
+            variant.points.forEach { point ->
+                try {
+                    point.graph.requireSupportedExecution()
+                } catch (failure: ExperimentExecutionException) {
+                    throw InvalidExperimentException(
+                        listOf(requireNotNull(failure.diagnostic).copy(document = experiment.origin.document, variant = variant.id)),
+                    )
+                }
+            }
+        }
+    }
+
     /** Workspace-relative identity shared by path aliases; paths outside the workspace are rejected. */
     fun canonicalPath(path: String): String = workspace.canonicalPath(path)
 
@@ -117,6 +133,7 @@ class Lab(
         checkDraftPaths(drafts)
         val loaded = load(experimentPath, drafts)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        requireExecutable(compiled)
         return CostEstimator.estimate(compiled, workers)
     }
 
@@ -159,6 +176,7 @@ class Lab(
         checkCancellation(isCancelled)
         val loaded = load(experimentPath)
         val compiled = loaded.experiment ?: throw InvalidExperimentException(loaded.diagnostics)
+        requireExecutable(compiled)
         val runDirectory = ResultsLayout.runDirectory(workspace.canonicalPath(experimentPath), runId)
         if (expectedVersions != null && expectedVersions != loaded.versions) {
             throw InvalidExperimentException(

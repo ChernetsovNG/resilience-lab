@@ -3,6 +3,7 @@ import type { BlockInstance, Catalog, ExperimentFile, LayoutFile, ModelFile } fr
 import type { EditorCommand, EditorDocuments } from "./editor";
 import { elementOf, ownEntry } from "./params";
 import { initialParams } from "./initialParams";
+import { mapScenario, walkScenario } from "./scenarioTree";
 
 type Position = LayoutFile["positions"][string];
 
@@ -167,10 +168,14 @@ export function experimentReferences(experiment: ExperimentFile, mapId: (id: str
 
 function scenarioReferences(block: BlockInstance, mapId: (id: string) => string | null): BlockInstance {
   if (block.scenario == null) return block;
-  const scenario = block.scenario.flatMap((step) => {
-    if (step.type !== "call" || step.connection == null) return [step];
+  const scenario = mapScenario(block.scenario, (step, original) => {
+    if (step.type === "parallel" && step.branches != null) {
+      const branches = step.branches.filter((branch, index) => branch.length > 0 || original.branches![index].length === 0);
+      return branches.length === 0 && original.branches!.length > 0 ? null : { ...step, branches };
+    }
+    if ((step.type !== "call" && step.type !== "cacheRead") || step.connection == null) return step;
     const connection = mapId(step.connection);
-    return connection === null ? [] : [{ ...step, connection }];
+    return connection === null ? null : { ...step, connection };
   });
   const next: BlockInstance = { ...block, scenario };
   if (scenario.length === 0) delete next.scenario;
@@ -186,11 +191,18 @@ export function deleteElements(selection: string[]): EditorCommand {
       if (selected.has(edge.id) || removed.has(edge.from) || removed.has(edge.to)) removed.add(edge.id);
     }
     const mapId = (id: string) => removed.has(id) ? null : id;
+    const blocks = Object.fromEntries(Object.entries(documents.model.blocks).filter(([id]) => !removed.has(id))
+      .map(([id, block]) => [id, scenarioReferences(block, mapId)]));
+    const removedRepeats = new Set(Object.entries(blocks).flatMap(([id, block]) => {
+      const retained = new Set([...walkScenario(block.scenario ?? [])].map(step => step.id));
+      return [...walkScenario(documents.model.blocks[id].scenario ?? [])].flatMap(step =>
+        step.id != null && step.repeat != null && !retained.has(step.id) ? [id + ".steps." + step.id + ".repeat.count"] : []);
+    }));
+    const experiment = experimentReferences(documents.experiment, mapId);
     return {
       ...documents,
       model: { ...documents.model,
-        blocks: Object.fromEntries(Object.entries(documents.model.blocks).filter(([id]) => !removed.has(id))
-          .map(([id, block]) => [id, scenarioReferences(block, mapId)])),
+        blocks,
         connections: documents.model.connections.filter((edge) => !removed.has(edge.id)),
       },
       layout: { ...documents.layout,
@@ -198,7 +210,12 @@ export function deleteElements(selection: string[]): EditorCommand {
         sizes: Object.fromEntries(Object.entries(documents.layout.sizes).filter(([id]) => !removed.has(id))),
         edges: Object.fromEntries(Object.entries(documents.layout.edges).filter(([id]) => !removed.has(id))),
       },
-      experiment: experimentReferences(documents.experiment, mapId),
+      experiment: { ...experiment,
+        variants: experiment.variants.map(variant => variant.overrides == null ? variant : { ...variant,
+          overrides: Object.fromEntries(Object.entries(variant.overrides).filter(([path]) => !removedRepeats.has(path))),
+        }),
+        ...(experiment.grid == null ? {} : { grid: experiment.grid.filter(axis => !removedRepeats.has(axis.path)) }),
+      },
     };
   };
 }

@@ -55,7 +55,7 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     const url = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`;
     const faults = (await readWorkspaceDocument(page.request, url)).content.experiment.faults;
     expect(faults).toEqual([
-      { target: "gateway#2", from: "20s", to: "30s", kind: "slowdown", multiplier: 4, delay: null, failureRate: null, capacity: null },
+      { target: "gateway#2", from: "20s", to: "30s", kind: "slowdown", multiplier: 4, delay: null, failureRate: null, capacity: null, at: null },
     ]);
     await page.reload();
     await page.getByRole("button", { name: "Настройки прогона", exact: true }).click();

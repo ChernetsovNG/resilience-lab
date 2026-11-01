@@ -4,6 +4,7 @@ import { Icon, type IconName } from "./Icon";
 
 const blockIcons = new Map<string, IconName>([
   ["client", "client"], ["service", "service"], ["router", "router"], ["database", "database"], ["pooler", "pooler"],
+  ["cache", "database"],
 ]);
 
 /** The same catalog type icon in the palette and on a canvas node. */

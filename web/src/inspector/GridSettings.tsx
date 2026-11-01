@@ -145,6 +145,13 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     <DiagnosticMessages diagnostics={fieldMessages.get("grid")} />
     {grid.length === 0 ? <p>{t("editor.grid.empty")}</p> : null}
     {grid.map((axis, index) => {
+      if (/^[^.]+\.steps\.[^.]+\.repeat\.count$/.test(axis.path)) return <fieldset className="param-group" key={index}
+        data-inspector-field={"grid." + index}>
+        <legend>{axis.path}</legend>
+        <p>{t("editor.scenario.newFieldsReadOnly")}</p>
+        <pre aria-label={t("editor.grid.repeatReadOnly")}>{JSON.stringify(axis.values)}</pre>
+        <DiagnosticMessages diagnostics={fieldMessages.get("grid." + index)} />
+      </fieldset>;
       const parameter = parameters.find((candidate) => candidate.path === axis.path);
       const axisEditable = editable;
       const prefix = `grid.${index}`;

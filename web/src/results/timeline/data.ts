@@ -64,6 +64,7 @@ export function timelineRegions(warmupMs: number, measurementMs: number, faults:
   const units = catalog.types.flatMap((type) => type.params).find((param) => param.dimension === "DURATION")?.units ?? [];
   const regions: TimelineRegion[] = warmupMs > 0 ? [{ fromMs: 0, toMs: warmupMs, label: t("results.assumptions.warmup"), kind: "warmup" }] : [];
   for (const fault of faults) {
+    if (fault.from == null || fault.to == null) continue;
     const from = canonicalOf(fault.from, units), to = canonicalOf(fault.to, units);
     if (from === null || to === null || from >= end || to <= 0) continue;
     regions.push({ fromMs: Math.max(0, from), toMs: Math.min(end, to), label: t("results.timeline.fault", { target: elementLabel(fault.target, model) }), kind: "fault" });

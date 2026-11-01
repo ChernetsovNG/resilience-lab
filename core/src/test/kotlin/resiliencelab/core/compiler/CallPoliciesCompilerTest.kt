@@ -114,7 +114,7 @@ class CallPoliciesCompilerTest {
         val model =
             (
                 DocumentCodec.decodeModel(
-                    """{"schemaVersion":6,"blocks":{
+                    """{"schemaVersion":7,"blocks":{
                   "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"1/s"}]},"deadline":"1s"}},
                   "entry":{"type":"service","params":{"handlers":4,"replicas":$replicas,"processing":{"kind":"fixed","mean":"0ms"}}},
                   "backend":{"type":"service","params":{"handlers":4,"processing":{"kind":"fixed","mean":"5ms"}}}
@@ -128,7 +128,7 @@ class CallPoliciesCompilerTest {
         val experiment =
             (
                 DocumentCodec.decodeExperiment(
-                    """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":1,"warmup":"0ms","measurement":"100ms","seed":1},"variants":[{"id":"baseline"}],"grid":$grid}""",
+                    """{"schemaVersion":4,"modelRef":"m.model.json","execution":{"replications":1,"warmup":"0ms","measurement":"100ms","seed":1},"variants":[{"id":"baseline"}],"grid":$grid}""",
                     "e.experiment.json",
                 ) as DecodeResult.Ok
             ).value

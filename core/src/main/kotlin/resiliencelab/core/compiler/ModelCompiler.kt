@@ -1,8 +1,10 @@
 package resiliencelab.core.compiler
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import resiliencelab.core.catalog.Catalog
 import resiliencelab.core.catalog.Dimension
 import resiliencelab.core.catalog.ParamDescriptor
@@ -17,6 +19,9 @@ import resiliencelab.core.document.ModelFile
 import resiliencelab.core.document.ScenarioStep
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
+import resiliencelab.core.ir.CacheErrorPolicy
+import resiliencelab.core.ir.CacheKeySpace
+import resiliencelab.core.ir.CacheSettings
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.CallPool
 import resiliencelab.core.ir.CircuitBreakerConfig
@@ -34,6 +39,8 @@ import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.OutlierDetectionConfig
 import resiliencelab.core.ir.PoolerSettings
 import resiliencelab.core.ir.RateLimitConfig
+import resiliencelab.core.ir.RepeatConfig
+import resiliencelab.core.ir.RepeatMode
 import resiliencelab.core.ir.RetryBudgetConfig
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
@@ -44,6 +51,7 @@ import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.ir.WindowCountException
 import resiliencelab.core.ir.WindowGridFailure
+import resiliencelab.core.ir.connectionPaths
 import resiliencelab.core.ir.windowCount
 import kotlin.math.ceil
 
@@ -260,6 +268,12 @@ class ModelCompiler(
                 )
             }
             val type = catalog.type(block.type)
+            if (block.title != null && (block.title.isBlank() || block.title.codePointCount(0, block.title.length) > 80)) {
+                sink.error(CoreMessage.BLOCK_TITLE, CoreMessage.BLOCK_TITLE.template, document, "$pointer/title", id)
+            }
+            if (block.type == "cache" && ("replicas" in block.params || block.replicaOverrides != null)) {
+                sink.error(CoreMessage.CACHE_REPLICAS, CoreMessage.CACHE_REPLICAS.template, document, pointer, id)
+            }
             if (block.scenario != null && block.type != "service") {
                 sink.error(CoreMessage.SCENARIO_BLOCK, "Only service blocks may define a scenario", document, "$pointer/scenario", id)
             }
@@ -411,6 +425,80 @@ class ModelCompiler(
             val connectionIndex = connections.indexOfFirst { it.id == target }
             val typeId = block?.type ?: connections.getOrNull(connectionIndex)?.type
             val descriptors = typeId?.let { catalog.type(it)?.params }
+            if (paramPath.firstOrNull() == "steps") {
+                val stepId = paramPath.getOrNull(1)
+
+                fun update(steps: List<ScenarioStep>): List<ScenarioStep> =
+                    steps.map { step ->
+                        step.copy(
+                            repeat =
+                                if (step.id ==
+                                    stepId
+                                ) {
+                                    step.repeat?.copy(count = (value as? JsonPrimitive)?.intOrNull ?: 0)
+                                } else {
+                                    step.repeat
+                                },
+                            onMiss = step.onMiss?.let(::update),
+                            branches = step.branches?.map(::update),
+                        )
+                    }
+
+                fun find(steps: List<ScenarioStep>): ScenarioStep? {
+                    for (step in steps) {
+                        if (step.id == stepId) return step
+                        find(step.onMiss.orEmpty())?.let { return it }
+                        step.branches.orEmpty().forEach { branch -> find(branch)?.let { return it } }
+                    }
+                    return null
+                }
+                val exists =
+                    block?.type == "service" &&
+                        paramPath.size == 4 &&
+                        paramPath.drop(2) == listOf("repeat", "count") &&
+                        find(block.scenario.orEmpty())?.repeat != null
+                val count = (value as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
+                if (!exists || count == null || count < 1) {
+                    sink.error(
+                        if (!exists) CoreMessage.SCENARIO_REPEAT_PATH else CoreMessage.SCENARIO_REPEAT,
+                        if (!exists) {
+                            CoreMessage.SCENARIO_REPEAT_PATH.template.replace(
+                                "{path}",
+                                path,
+                            )
+                        } else {
+                            CoreMessage.SCENARIO_REPEAT.template
+                        },
+                        document,
+                        if (!exists) patch.pathPointer else patch.pointer,
+                        target,
+                        variantId,
+                        args =
+                            mapOf(
+                                "path" to JsonPrimitive(path),
+                            ),
+                    )
+                } else {
+                    blocks = blocks + (target to requireNotNull(block).copy(scenario = update(block.scenario.orEmpty())))
+                    pointers.getOrPut(target) { mutableMapOf() }[paramPath.joinToString(".")] = patch.pointer
+                }
+                return@forEach
+            }
+            if (typeId == "cache" &&
+                paramPath.firstOrNull() in setOf("keySpaces", "prefill") &&
+                (paramPath.size != 1 || patch.pathPointer.startsWith("/grid/"))
+            ) {
+                sink.error(
+                    CoreMessage.CACHE_STRUCTURE_PATH,
+                    CoreMessage.CACHE_STRUCTURE_PATH.template.replace("{path}", path),
+                    document,
+                    patch.pathPointer,
+                    target,
+                    variantId,
+                    args = mapOf("path" to JsonPrimitive(path)),
+                )
+                return@forEach
+            }
             if (descriptors == null || paramPath.isEmpty() || !resolves(descriptors, paramPath)) {
                 sink.error(
                     if (patch.pathPointer.startsWith("/grid/")) CoreMessage.GRID_PATH_PARAMETER else CoreMessage.OVERRIDE_PATH,
@@ -483,14 +571,16 @@ class ModelCompiler(
     ): GraphParts? {
         val before = sink.errorCount()
         val clients = model.blocks.filterValues { it.type == "client" }.toSortedMap()
-        val services = model.blocks.filterValues { it.type in setOf("service", "database", "pooler") }.toSortedMap()
+        val services = model.blocks.filterValues { it.type in setOf("service", "database", "pooler", "cache") }.toSortedMap()
         val routers = model.blocks.filterValues { it.type == "router" }.toSortedMap()
         val clientNodes = clients.map { (id, block) -> readClient(id, block.params, document, origins[id], sink, run) }
         val classIds = clientNodes.filterNotNull().flatMap { it.classes.keys }.toSet()
         val outgoing = model.connections.filter { it.type == "call" }.groupBy { it.from }
         val serviceNodes =
             services.map { (id, block) ->
-                if (block.type == "pooler") {
+                if (block.type == "cache") {
+                    readCache(id, block.params, document, origins[id], sink)
+                } else if (block.type == "pooler") {
                     val outputs = outgoing[id].orEmpty()
                     if (outputs.size != 1) {
                         sink.error(
@@ -510,6 +600,16 @@ class ModelCompiler(
                             JsonPointer.of("connections", model.connections.indexOf(output), "to"),
                             id,
                             args = mapOf("pooler" to JsonPrimitive(id)),
+                        )
+                    }
+                    outputs.filter { model.blocks[it.to]?.type == "cache" }.forEach { output ->
+                        sink.error(
+                            CoreMessage.CACHE_CALL,
+                            CoreMessage.CACHE_CALL.template.replace("{connection}", output.id),
+                            document,
+                            JsonPointer.of("connections", model.connections.indexOf(output), "to"),
+                            output.id,
+                            args = mapOf("connection" to JsonPrimitive(output.id)),
                         )
                     }
                     outputs.filter { "pool" in it.params }.forEach { output ->
@@ -544,7 +644,7 @@ class ModelCompiler(
                         if (block.type ==
                             "service"
                         ) {
-                            readScenario(id, block.scenario, outgoing[id].orEmpty().map { it.id }.toSet(), classIds, document, sink)
+                            readScenario(id, block.scenario, outgoing[id].orEmpty(), model, classIds, document, sink)
                         } else {
                             null
                         }
@@ -744,12 +844,14 @@ class ModelCompiler(
     private fun readScenario(
         id: String,
         steps: List<ScenarioStep>?,
-        outgoing: Set<String>,
+        outgoing: List<ConnectionInstance>,
+        model: ModelFile,
         classIds: Set<String>,
         document: String,
         sink: Diagnostics,
     ): List<ServiceStep>? {
         val pointer = JsonPointer.of("blocks", id)
+        val connections = outgoing.associateBy { it.id }
         if (steps == null) {
             if (outgoing.size > 1) {
                 sink.error(
@@ -761,88 +863,155 @@ class ModelCompiler(
                     args = mapOf("service" to JsonPrimitive(id)),
                 )
             }
+            outgoing.filter { model.blocks[it.to]?.type == "cache" }.forEach {
+                sink.error(
+                    CoreMessage.CACHE_CALL,
+                    "A cache requires a cacheRead step",
+                    document,
+                    "$pointer/scenario",
+                    id,
+                    args = mapOf("connection" to JsonPrimitive(it.id)),
+                )
+            }
             return null
         }
         if (steps.isEmpty()) {
-            sink.error(
-                CoreMessage.SCENARIO_EMPTY,
-                "A service scenario must not be empty",
-                document,
-                "$pointer/scenario",
-                id,
-            )
+            sink.error(CoreMessage.SCENARIO_EMPTY, "A service scenario must not be empty", document, "$pointer/scenario", id)
         }
-        return steps.mapIndexedNotNull { index, step ->
-            val location = "$pointer/scenario/$index"
-            val classes = checkClassFilter(step.classes, classIds, document, "$location/classes", id, sink)
-            val invalidFields =
-                when (step.type) {
-                    "process" -> listOfNotNull(step.connection?.let { "connection" })
-                    "call" -> listOfNotNull(step.processing?.let { "processing" }, step.failureRate?.let { "failureRate" })
-                    else -> emptyList()
+        val seen = mutableSetOf<String>()
+
+        fun readSteps(
+            values: List<ScenarioStep>,
+            base: String,
+        ): List<ServiceStep> =
+            values.mapIndexedNotNull { index, step ->
+                val location = "$base/$index"
+
+                fun error(
+                    code: CoreMessage,
+                    field: String,
+                    args: Map<String, JsonPrimitive> = emptyMap(),
+                ) {
+                    val message = args.entries.fold(code.template) { message, (key, value) -> message.replace("{$key}", value.content) }
+                    sink.error(code, message, document, "$location/$field", id, args = args)
                 }
-            invalidFields.forEach { field ->
-                sink.error(
-                    CoreMessage.SCENARIO_FIELD,
-                    "Field '$field' does not apply to scenario step '${step.type}'",
-                    document,
-                    "$location/$field",
-                    id,
-                    args = mapOf("field" to JsonPrimitive(field), "type" to JsonPrimitive(step.type)),
-                )
-            }
-            when (step.type) {
-                "process" -> {
-                    val params =
-                        JsonObject(
-                            buildMap {
-                                step.processing?.let { put("processing", it) }
-                                step.failureRate?.let { put("failureRate", JsonPrimitive(it)) }
-                            },
-                        )
-                    val descriptors =
-                        catalog
-                            .type("service")
-                            ?.params
-                            .orEmpty()
-                            .filter { it.name in setOf("processing", "failureRate") }
-                    if (descriptors.isEmpty()) return@mapIndexedNotNull null
-                    val reader = ParamReader(params, descriptors, document, location, id, sink.items)
-                    ServiceStep.Process(
-                        step.processing?.let { reader.obj("processing")?.let(::distribution) },
-                        step.failureRate?.let { reader.quantity("failureRate") },
-                        classes,
+                step.id?.let { stepId ->
+                    if (!ID.matches(stepId)) {
+                        error(CoreMessage.SCENARIO_ID, "id", mapOf("id" to JsonPrimitive(stepId), "pattern" to JsonPrimitive(ID.pattern)))
+                    }
+                    if (!seen.add(stepId)) error(CoreMessage.SCENARIO_ID_DUPLICATE, "id", mapOf("id" to JsonPrimitive(stepId)))
+                }
+                val repeat =
+                    step.repeat?.let {
+                        if (it.count < 1) error(CoreMessage.SCENARIO_REPEAT, "repeat/count")
+                        if (it.mode !in setOf("sequential", "parallel")) error(CoreMessage.SCENARIO_REPEAT, "repeat/mode")
+                        RepeatConfig(it.count, if (it.mode == "parallel") RepeatMode.PARALLEL else RepeatMode.SEQUENTIAL)
+                    }
+                val classes = checkClassFilter(step.classes, classIds, document, "$location/classes", id, sink)
+                val fields =
+                    listOfNotNull(
+                        step.processing?.let { "processing" },
+                        step.failureRate?.let { "failureRate" },
+                        step.connection?.let { "connection" },
+                        step.keySpace?.let { "keySpace" },
+                        step.onMiss?.let { "onMiss" },
+                        step.branches?.let { "branches" },
+                        step.singleFlight?.let { "singleFlight" },
+                        step.onCacheError?.let { "onCacheError" },
                     )
+                val allowed =
+                    when (step.type) {
+                        "process" -> setOf("processing", "failureRate")
+                        "call" -> setOf("connection")
+                        "cacheRead" -> setOf("connection", "keySpace", "onMiss", "singleFlight", "onCacheError")
+                        "parallel" -> setOf("branches")
+                        else -> fields.toSet()
+                    }
+                (fields - allowed).forEach {
+                    error(CoreMessage.SCENARIO_FIELD, it, mapOf("field" to JsonPrimitive(it), "type" to JsonPrimitive(step.type)))
                 }
-                "call" -> {
-                    val connection = step.connection
-                    if (connection !in outgoing) {
-                        sink.error(
-                            CoreMessage.SCENARIO_CONNECTION,
-                            "Scenario of service '$id' must call an outgoing connection; found '${connection.orEmpty()}'",
-                            document,
-                            "$location/connection",
-                            id,
-                            args = mapOf("service" to JsonPrimitive(id), "connection" to JsonPrimitive(connection.orEmpty())),
+                when (step.type) {
+                    "process" -> {
+                        val params =
+                            JsonObject(
+                                buildMap {
+                                    step.processing?.let { put("processing", it) }
+                                    step.failureRate?.let { put("failureRate", JsonPrimitive(it)) }
+                                },
+                            )
+                        val descriptors =
+                            catalog.type("service")?.params.orEmpty().filter {
+                                it.name in setOf("processing", "failureRate")
+                            }
+                        if (descriptors.isEmpty()) return@mapIndexedNotNull null
+                        val reader = ParamReader(params, descriptors, document, location, id, sink.items)
+                        ServiceStep.Process(
+                            step.processing?.let { reader.obj("processing")?.let(::distribution) },
+                            step.failureRate?.let { reader.quantity("failureRate") },
+                            classes,
+                            step.id,
+                            repeat,
                         )
+                    }
+                    "call" -> {
+                        val connection = connections[step.connection]
+                        if (connection == null) {
+                            error(
+                                CoreMessage.SCENARIO_CONNECTION,
+                                "connection",
+                                mapOf("service" to JsonPrimitive(id), "connection" to JsonPrimitive(step.connection.orEmpty())),
+                            )
+                            null
+                        } else {
+                            if (model.blocks[connection.to]?.type == "cache") {
+                                error(CoreMessage.CACHE_CALL, "connection", mapOf("connection" to JsonPrimitive(connection.id)))
+                            }
+                            ServiceStep.Call(connection.id, classes, step.id, repeat)
+                        }
+                    }
+                    "cacheRead" -> {
+                        if (step.id == null) error(CoreMessage.SCENARIO_ID_REQUIRED, "id")
+                        val connection = connections[step.connection]
+                        val cache = connection?.let { model.blocks[it.to] }
+                        if (cache?.type != "cache") error(CoreMessage.CACHE_CONNECTION, "connection")
+                        val spaces =
+                            (cache?.params?.get("keySpaces") as? JsonArray).orEmpty().mapNotNull {
+                                ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content
+                            }
+                        if (step.keySpace !in spaces) {
+                            error(CoreMessage.CACHE_KEY_SPACE, "keySpace", mapOf("id" to JsonPrimitive(step.keySpace.orEmpty())))
+                        }
+                        if (step.onMiss == null) error(CoreMessage.CACHE_MISS_STEPS, "onMiss")
+                        if (step.onCacheError != null && step.onCacheError !in setOf("source", "fail")) {
+                            error(CoreMessage.CACHE_ERROR_POLICY, "onCacheError")
+                        }
+                        ServiceStep.CacheRead(
+                            step.connection.orEmpty(),
+                            step.keySpace.orEmpty(),
+                            readSteps(step.onMiss.orEmpty(), "$location/onMiss"),
+                            step.singleFlight ?: false,
+                            if (step.onCacheError == "fail") CacheErrorPolicy.FAIL else CacheErrorPolicy.SOURCE,
+                            classes,
+                            step.id,
+                            repeat,
+                        )
+                    }
+                    "parallel" -> {
+                        if (step.branches.isNullOrEmpty()) error(CoreMessage.SCENARIO_BRANCHES, "branches")
+                        val branches =
+                            step.branches.orEmpty().mapIndexed { branch, children ->
+                                if (children.isEmpty()) error(CoreMessage.SCENARIO_BRANCHES, "branches/$branch")
+                                readSteps(children, "$location/branches/$branch")
+                            }
+                        ServiceStep.Parallel(branches, classes, step.id, repeat)
+                    }
+                    else -> {
+                        error(CoreMessage.SCENARIO_STEP_TYPE, "type", mapOf("type" to JsonPrimitive(step.type)))
                         null
-                    } else {
-                        ServiceStep.Call(requireNotNull(connection), classes)
                     }
                 }
-                else -> {
-                    sink.error(
-                        CoreMessage.SCENARIO_STEP_TYPE,
-                        "Unknown scenario step type '${step.type}'; expected process or call",
-                        document,
-                        "$location/type",
-                        id,
-                        args = mapOf("type" to JsonPrimitive(step.type)),
-                    )
-                    null
-                }
             }
-        }
+        return readSteps(steps, "$pointer/scenario")
     }
 
     private fun readClient(
@@ -1004,8 +1173,8 @@ class ModelCompiler(
             val service = servicesByPath[path]
             if (service != null) {
                 val steps = service.scenario ?: outgoingCalls[path].orEmpty().map { ServiceStep.Call(it.path) }
-                steps.filterIsInstance<ServiceStep.Call>().filter { it.classes == null || requestClass in it.classes }.forEach { step ->
-                    pending.addLast(callsByPath.getValue(step.edge).to to requestClass)
+                steps.connectionPaths(requestClass).forEach { edge ->
+                    pending.addLast(callsByPath.getValue(edge).to to requestClass)
                 }
             } else {
                 val available = outputs[path].orEmpty().filter { it.classes == null || requestClass in it.classes }
@@ -1184,6 +1353,86 @@ class ModelCompiler(
             0.0,
             Origin(document, JsonPointer.of("blocks", id)),
             pooler = PoolerSettings(size, wait),
+        )
+    }
+
+    private fun readCache(
+        id: String,
+        params: JsonObject,
+        document: String,
+        overrides: OverrideOrigins?,
+        sink: Diagnostics,
+    ): ServiceNode? {
+        val fields =
+            reader("cache", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
+                ?: return null
+        val handlers = fields.int("handlers")
+        val queue = fields.int("queue")
+        val processing = fields.obj("processing")?.let(::distribution)
+        val capacity = fields.int("capacity")
+        val ttl = fields.quantity("ttl")
+        val jitter = fields.quantity("ttlJitter")
+        val seen = mutableSetOf<String>()
+        val spaces =
+            fields.objects("keySpaces")?.mapNotNull { space ->
+                val name = space.string("id")
+                val keys = space.int("keys")
+                val zipf = space.number("zipf")
+                val lifetime = if (space.has("ttl")) space.quantity("ttl") else ttl
+                if (name != null && (!ID.matches(name) || !seen.add(name))) {
+                    space.fail<Unit>(
+                        CoreMessage.CACHE_KEY_SPACE_ID,
+                        "id",
+                        CoreMessage.CACHE_KEY_SPACE_ID.template.replace("{pattern}", ID.pattern),
+                        args = mapOf("pattern" to JsonPrimitive(ID.pattern)),
+                    )
+                }
+                if (name == null || keys == null || zipf == null || lifetime == null) {
+                    null
+                } else {
+                    CacheKeySpace(name, keys, zipf, lifetime)
+                }
+            }
+        val prefill = fields.obj("prefill")
+        val kind = prefill?.choice("kind")
+        val prefillKeys = if (kind == "hot") prefill.int("keys") else 0
+        if ((kind == "hot" && prefillKeys == null) ||
+            (kind == "none" && prefill.has("keys")) ||
+            (
+                prefillKeys != null &&
+                    spaces != null &&
+                    capacity != null &&
+                    (spaces.any { prefillKeys > it.keys } || prefillKeys.toLong() * spaces.size > capacity)
+            )
+        ) {
+            fields.fail<Unit>(
+                CoreMessage.CACHE_PREFILL,
+                "prefill",
+                CoreMessage.CACHE_PREFILL.template,
+                dependsOn = if (overrides?.pointerOf("keySpaces") != null) "keySpaces" else "capacity",
+            )
+        }
+        if (handlers == null ||
+            queue == null ||
+            processing == null ||
+            capacity == null ||
+            ttl == null ||
+            jitter == null ||
+            spaces == null ||
+            prefillKeys == null ||
+            kind == null
+        ) {
+            return null
+        }
+        return ServiceNode(
+            id,
+            handlers,
+            queue,
+            processing,
+            0.0,
+            Origin(document, JsonPointer.of("blocks", id)),
+            type = "cache",
+            cache = CacheSettings(capacity, ttl, jitter, spaces, prefillKeys),
         )
     }
 
@@ -1528,7 +1777,37 @@ class ModelCompiler(
             val pointer = JsonPointer.of("faults", index)
             val before = sink.errorCount()
             val base = fault.target.substringBefore('#')
-            if (model.blocks[base]?.type !in setOf("service", "database", "pooler") &&
+            if (fault.kind == "flush") {
+                val at = fault.at?.let { duration(it, "$pointer/at", document, sink, allowZero = true) }
+                if (model.blocks[fault.target]?.type != "cache" ||
+                    at == null ||
+                    (run != null && at > run.warmupMs + run.measurementMs) ||
+                    fault.from != null ||
+                    fault.to != null ||
+                    fault.multiplier != null ||
+                    fault.delay != null ||
+                    fault.failureRate != null ||
+                    fault.capacity != null
+                ) {
+                    sink.error(CoreMessage.FAULT_FLUSH, CoreMessage.FAULT_FLUSH.template, document, pointer, fault.target)
+                }
+                return@mapIndexedNotNull if (sink.errorCount() > before) {
+                    null
+                } else {
+                    FaultSpan(fault.target, requireNotNull(at), at, FaultKind.FLUSH, origin = Origin(document, pointer))
+                }
+            }
+            if (fault.at != null) {
+                sink.error(
+                    CoreMessage.FAULT_FIELD,
+                    "Only flush uses at",
+                    document,
+                    "$pointer/at",
+                    fault.target,
+                    args = mapOf("field" to JsonPrimitive("at"), "kind" to JsonPrimitive(fault.kind)),
+                )
+            }
+            if (model.blocks[base]?.type !in setOf("service", "database", "pooler", "cache") &&
                 model.connections.none { it.id == base && it.type in setOf("call", "route") }
             ) {
                 sink.error(
@@ -1559,8 +1838,18 @@ class ModelCompiler(
                         null
                     }
                 }
-            val from = duration(fault.from, "$pointer/from", document, sink, allowZero = true)
-            val to = duration(fault.to, "$pointer/to", document, sink, allowZero = true)
+            listOf("from" to fault.from, "to" to fault.to).filter { it.second == null }.forEach { (field, _) ->
+                sink.error(
+                    CoreMessage.PARAM_MISSING,
+                    "Interval fault requires $field",
+                    document,
+                    "$pointer/$field",
+                    fault.target,
+                    args = mapOf("parameter" to JsonPrimitive(field)),
+                )
+            }
+            val from = fault.from?.let { duration(it, "$pointer/from", document, sink, allowZero = true) }
+            val to = fault.to?.let { duration(it, "$pointer/to", document, sink, allowZero = true) }
             if (from != null && to != null) {
                 if (to <= from) {
                     sink.error(CoreMessage.FAULT_INTERVAL, "Fault must end after it starts", document, "$pointer/to", fault.target)

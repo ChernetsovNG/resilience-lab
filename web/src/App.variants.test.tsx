@@ -272,7 +272,7 @@ it("shows every fault kind and saves its untouched parameters after an execution
     { target: "gateway", from: "500ms", to: "900ms", kind: "capacityLoss", capacity: 0, multiplier: null, delay: null, failureRate: null },
   ];
   const fetchMock = server(url => url.includes(encodeURIComponent(experimentPath)) ? {
-    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, schemaVersion: 3, faults } } },
+    body: { ...documentViews[experimentPath], content: { experiment: { ...experiment, schemaVersion: 4, faults } } },
   } : undefined);
   await open();
   expect(screen.getAllByLabelText("Fault kind").map(field => (field as HTMLSelectElement).selectedOptions[0].textContent))
@@ -286,7 +286,7 @@ it("shows every fault kind and saves its untouched parameters after an execution
   await waitFor(() => expect(button("Save").disabled).toBe(true));
   const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")!;
   const saved = JSON.parse(String(put[1]?.body)).experiment;
-  expect(saved.schemaVersion).toBe(3);
+  expect(saved.schemaVersion).toBe(4);
   expect(saved.faults).toEqual(faults);
 });
 

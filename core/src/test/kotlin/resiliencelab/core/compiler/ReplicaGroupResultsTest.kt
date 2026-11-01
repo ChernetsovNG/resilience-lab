@@ -46,7 +46,7 @@ class ReplicaGroupResultsTest {
         val source =
             (
                 DocumentCodec.decodeModel(
-                    """{"schemaVersion":6,"blocks":{
+                    """{"schemaVersion":7,"blocks":{
                     "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"300/s"}]},"deadline":"5s"}},
                     "worker":{"type":"service","params":{"replicas":3,"handlers":10,"queue":1000,
                         "processing":{"kind":"fixed","mean":"2ms"}},"replicaOverrides":{"2":{"handlers":1}}}

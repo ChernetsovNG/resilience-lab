@@ -324,7 +324,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     expect(saved.content.experiment.execution).toMatchObject({ seed: 42, replications: 2, maxRealTime: "10s" });
     expect(saved.content.experiment.faults[0]).toEqual({
       target: "middle", from: "100ms", to: "500ms", kind: "slowdown", multiplier: 2,
-      delay: null, failureRate: null, capacity: null,
+      delay: null, failureRate: null, capacity: null, at: null,
     });
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED", { timeout: 60_000 });

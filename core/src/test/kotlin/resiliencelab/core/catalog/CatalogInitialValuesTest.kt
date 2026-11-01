@@ -81,7 +81,7 @@ class CatalogInitialValuesTest {
     fun `all block and connection initial values compile without parameter errors`() {
         val model =
             ModelFile(
-                schemaVersion = 6,
+                schemaVersion = 7,
                 blocks = listOf("client", "service", "router", "pooler", "database").associateWith { BlockInstance(it, params(it)) },
                 connections =
                     listOf(

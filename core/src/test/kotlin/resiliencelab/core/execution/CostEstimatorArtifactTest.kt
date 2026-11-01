@@ -110,7 +110,7 @@ class CostEstimatorArtifactTest {
 
     companion object {
         internal fun model(replicas: Int): String =
-            """{"schemaVersion":6,"blocks":{
+            """{"schemaVersion":7,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0ms","rate":"100/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":20,"processing":{"kind":"fixed","mean":"1ms"}}},
               "router":{"type":"router","params":{"policy":"roundRobin"}},
@@ -126,6 +126,6 @@ class CostEstimatorArtifactTest {
             ]}"""
 
         internal val experiment =
-            """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":2,"warmup":"200ms","measurement":"1s","window":"100ms","seed":42},"variants":[{"id":"baseline"}]}"""
+            """{"schemaVersion":4,"modelRef":"m.model.json","execution":{"replications":2,"warmup":"200ms","measurement":"1s","window":"100ms","seed":42},"variants":[{"id":"baseline"}]}"""
     }
 }

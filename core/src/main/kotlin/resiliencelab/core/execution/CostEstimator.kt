@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CompiledExperiment
 import resiliencelab.core.compiler.CoreMessage
+import resiliencelab.core.engine.ksl.ExperimentExecutionException
+import resiliencelab.core.engine.ksl.requireSupportedExecution
 import resiliencelab.core.experiment.ReplicaGroupKind
 import resiliencelab.core.experiment.ReplicaGroups
 import resiliencelab.core.ir.GraphIr
@@ -183,6 +185,7 @@ internal object CostEstimator {
 
     /** Configured attempts give a conservative event estimate; stochastic queue wakeups are not predicted exactly. */
     private fun expectedEvents(graph: GraphIr): Double {
+        graph.requireSupportedExecution()
         val duration = graph.run.warmupMs + graph.run.measurementMs
         val events =
             graph.clients.sumOf { client ->
@@ -232,6 +235,11 @@ internal object CostEstimator {
                         if (call.pool != null) perOriginalRequest += 3.0 * attempts
                         visits[call.to] = (visits[call.to] ?: 0.0) + attempts
                     }
+                    is ServiceStep.CacheRead, is ServiceStep.Parallel ->
+                        throw ExperimentExecutionException(
+                            CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO,
+                            CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO.template,
+                        )
                 }
             }
         }

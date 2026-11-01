@@ -10,11 +10,11 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
   const directory = `linter-${randomUUID()}`;
   const root = resolve("../apps/server/build/e2e-workspace", directory);
   const labels = JSON.parse(await readFile(resolve("src/i18n/ru.json"), "utf8")) as Record<string, string>;
-  const model: ModelFile = { schemaVersion: 6, blocks: {
+  const model: ModelFile = { schemaVersion: 7, blocks: {
     client: { type: "client", params: { load: { points: [{ time: "0s", rate: "900/s" }] }, deadline: "1s" } },
     catalog: { type: "service", params: { handlers: 16, replicas: 3, queue: 1, processing: { kind: "fixed", mean: "35ms" } } },
   }, connections: [{ id: "request", type: "request", from: "client", to: "catalog" }] };
-  const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+  const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "model.model.json",
     execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 },
     variants: [{ id: "baseline", label: "Базовый", overrides: {} }, { id: "pool", label: "Пул 16", overrides: {} }] };
   const save = async () => {
@@ -79,7 +79,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
       const directory = `retry-overload-${randomUUID()}`;
       const root = resolve("../apps/server/build/e2e-workspace", directory);
       const labels = JSON.parse(await readFile(resolve(`src/i18n/${language}.json`), "utf8")) as Record<string, string>;
-      const model: ModelFile = { schemaVersion: 6, blocks: {
+      const model: ModelFile = { schemaVersion: 7, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0s", rate: "900/s" }] }, deadline: "10s" } },
         gateway: { type: "service", params: { handlers: 100, processing: { kind: "fixed", mean: "1ms" } } },
         catalog: { type: "service", params: { handlers: 16, replicas: 3, processing: { kind: "fixed", mean: "35ms" } } },
@@ -90,7 +90,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
           retryBudget: { ratio: "50%", minPerSecond: "150/s", window: "1s" },
         } },
       ] };
-      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+      const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "model.model.json",
         execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 }, variants: [{ id: "baseline" }] };
       await mkdir(root, { recursive: true });
       try {
@@ -123,12 +123,12 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
       const directory = `low-headroom-${randomUUID()}`;
       const root = resolve("../apps/server/build/e2e-workspace", directory);
       const labels = JSON.parse(await readFile(resolve(`src/i18n/${language}.json`), "utf8")) as Record<string, string>;
-      const model: ModelFile = { schemaVersion: 6, blocks: {
+      const model: ModelFile = { schemaVersion: 7, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0s", rate: "1800/s" }] }, deadline: "1s" } },
         catalog: { type: "service", params: { handlers: 16, replicas: 3, processing: { kind: "fixed", mean: "35ms" },
           rateLimit: { rate: "400/s", burst: 1 } } },
       }, connections: [{ id: "request", type: "request", from: "client", to: "catalog" }] };
-      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+      const experiment: ExperimentFile = { schemaVersion: 4, modelRef: "model.model.json",
         execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 },
         variants: ["Base", "Equivalent"].map((label, index) => ({ id: `v${index}`, label, overrides: { "catalog.handlers": 16, "catalog.queue": 0 } })) };
       await mkdir(root, { recursive: true });

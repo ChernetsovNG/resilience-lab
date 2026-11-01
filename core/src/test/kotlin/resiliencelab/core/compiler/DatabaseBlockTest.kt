@@ -30,7 +30,7 @@ class DatabaseBlockTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":6,"blocks":{
+                """{"schemaVersion":7,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "db":{"type":"database","params":{"maxConnections":1,"queue":1,"processing":{"kind":"fixed","mean":"10ms"}}}
@@ -44,7 +44,7 @@ class DatabaseBlockTest {
     private val experiment =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","seed":42},"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":4,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","seed":42},"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

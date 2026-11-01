@@ -5,6 +5,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -126,49 +127,32 @@ class DocumentSchemas(
                 ?.params
                 .orEmpty()
                 .filter { it.name in setOf("processing", "failureRate") }
-        definitions[scenarioStep] =
+        definitions[scenarioStep] = scenarioStep(processDescriptors)
+        definitions["resiliencelab.core.document.StepRepeat"] =
             buildJsonObject {
+                put("type", "object")
+                put("additionalProperties", false)
+                put("required", JsonArray(listOf("count", "mode").map(::JsonPrimitive)))
                 put(
-                    "oneOf",
-                    JsonArray(
-                        listOf(
+                    "properties",
+                    buildJsonObject {
+                        put(
+                            "count",
+                            numericStrings(
+                                buildJsonObject {
+                                    put("type", "integer")
+                                    put("minimum", 1)
+                                },
+                            ),
+                        )
+                        put(
+                            "mode",
                             buildJsonObject {
-                                put("type", "object")
-                                put("additionalProperties", false)
-                                put("required", JsonArray(listOf(JsonPrimitive("type"))))
-                                put(
-                                    "properties",
-                                    buildJsonObject {
-                                        put("type", buildJsonObject { put("const", "process") })
-                                        put("classes", classFilter())
-                                        put("connection", buildJsonObject { put("type", "null") })
-                                        processDescriptors.forEach { put(it.name, parameter(it.copy(required = false))) }
-                                    },
-                                )
+                                put("type", "string")
+                                put("enum", JsonArray(listOf("sequential", "parallel").map(::JsonPrimitive)))
                             },
-                            buildJsonObject {
-                                put("type", "object")
-                                put("additionalProperties", false)
-                                put("required", JsonArray(listOf(JsonPrimitive("type"), JsonPrimitive("connection"))))
-                                put(
-                                    "properties",
-                                    buildJsonObject {
-                                        put("type", buildJsonObject { put("const", "call") })
-                                        put("classes", classFilter())
-                                        put("processing", buildJsonObject { put("type", "null") })
-                                        put("failureRate", buildJsonObject { put("type", "null") })
-                                        put(
-                                            "connection",
-                                            buildJsonObject {
-                                                put("type", "string")
-                                                put("minLength", 1)
-                                            },
-                                        )
-                                    },
-                                )
-                            },
-                        ),
-                    ),
+                        )
+                    },
                 )
             }
         listOf("BlockInstance" to TypeCategory.BLOCK, "ConnectionInstance" to TypeCategory.CONNECTION).forEach { (name, category) ->
@@ -184,6 +168,13 @@ class DocumentSchemas(
                     val withScenario =
                         if (category == TypeCategory.BLOCK) {
                             specialized.properties(
+                                "title" to
+                                    buildJsonObject {
+                                        put("type", JsonArray(listOf("string", "null").map(::JsonPrimitive)))
+                                        put("minLength", 1)
+                                        put("maxLength", 80)
+                                        put("pattern", "\\S")
+                                    },
                                 "replicaOverrides" to
                                     buildJsonObject {
                                         put("type", JsonArray(listOf(JsonPrimitive("object"), JsonPrimitive("null"))))
@@ -241,6 +232,96 @@ class DocumentSchemas(
             put("uniqueItems", true)
             put("items", buildJsonObject { put("type", "string") })
         }
+
+    private fun scenarioStep(processDescriptors: List<ParamDescriptor>): JsonObject {
+        val nullShape = buildJsonObject { put("type", "null") }
+
+        fun identifier(nullable: Boolean = false) =
+            buildJsonObject {
+                put("type", if (nullable) JsonArray(listOf("string", "null").map(::JsonPrimitive)) else JsonPrimitive("string"))
+                put("pattern", ModelCompiler.ID.pattern)
+            }
+
+        fun steps(minimum: Int) =
+            buildJsonObject {
+                put("type", "array")
+                put("minItems", minimum)
+                put("items", buildJsonObject { put("\$ref", "#/\$defs/resiliencelab.core.document.ScenarioStep") })
+            }
+        val fields = listOf("processing", "failureRate", "connection", "keySpace", "onMiss", "branches", "singleFlight", "onCacheError")
+        return buildJsonObject {
+            put(
+                "oneOf",
+                JsonArray(
+                    listOf("process", "call", "cacheRead", "parallel").map { type ->
+                        buildJsonObject {
+                            put("type", "object")
+                            put("additionalProperties", false)
+                            val required =
+                                when (type) {
+                                    "call" -> listOf("connection")
+                                    "cacheRead" -> listOf("id", "connection", "keySpace", "onMiss")
+                                    "parallel" -> listOf("branches")
+                                    else -> emptyList()
+                                }
+                            put("required", JsonArray((listOf("type") + required).map(::JsonPrimitive)))
+                            put(
+                                "properties",
+                                buildJsonObject {
+                                    fields.forEach { put(it, nullShape) }
+                                    put("type", buildJsonObject { put("const", type) })
+                                    put("classes", classFilter())
+                                    put("id", identifier(type != "cacheRead"))
+                                    put(
+                                        "repeat",
+                                        buildJsonObject {
+                                            put(
+                                                "anyOf",
+                                                JsonArray(
+                                                    listOf(
+                                                        buildJsonObject { put("\$ref", "#/\$defs/resiliencelab.core.document.StepRepeat") },
+                                                        nullShape,
+                                                    ),
+                                                ),
+                                            )
+                                        },
+                                    )
+                                    when (type) {
+                                        "process" -> processDescriptors.forEach { put(it.name, parameter(it.copy(required = false))) }
+                                        "call" -> put("connection", identifier())
+                                        "cacheRead" -> {
+                                            put("connection", identifier())
+                                            put("keySpace", identifier())
+                                            put("onMiss", steps(0))
+                                            put(
+                                                "singleFlight",
+                                                buildJsonObject { put("type", JsonArray(listOf("boolean", "null").map(::JsonPrimitive))) },
+                                            )
+                                            put(
+                                                "onCacheError",
+                                                buildJsonObject {
+                                                    put("enum", JsonArray(listOf(JsonPrimitive("source"), JsonPrimitive("fail"), JsonNull)))
+                                                },
+                                            )
+                                        }
+                                        "parallel" ->
+                                            put(
+                                                "branches",
+                                                buildJsonObject {
+                                                    put("type", "array")
+                                                    put("minItems", 1)
+                                                    put("items", steps(1))
+                                                },
+                                            )
+                                    }
+                                },
+                            )
+                        }
+                    },
+                ),
+            )
+        }
+    }
 
     private fun clientParameters(descriptors: List<ParamDescriptor>): JsonObject =
         JsonObject(
@@ -434,6 +515,7 @@ class DocumentSchemas(
                 "unavailable" to emptySet(),
                 "blackhole" to emptySet(),
                 "capacityLoss" to setOf("capacity"),
+                "flush" to emptySet(),
             )
         return buildJsonObject {
             put(
@@ -443,8 +525,10 @@ class DocumentSchemas(
                         val specialized =
                             shape.properties(
                                 "kind" to buildJsonObject { put("const", kind) },
-                                "from" to duration("from", allowZero = true),
-                                "to" to duration("to", allowZero = true),
+                                "from" to
+                                    if (kind == "flush") buildJsonObject { put("type", "null") } else duration("from", allowZero = true),
+                                "to" to if (kind == "flush") buildJsonObject { put("type", "null") } else duration("to", allowZero = true),
+                                "at" to if (kind == "flush") duration("at", allowZero = true) else buildJsonObject { put("type", "null") },
                                 *parameters
                                     .map { (name, value) ->
                                         name to if (name in allowed) value else buildJsonObject { put("type", "null") }
@@ -452,6 +536,10 @@ class DocumentSchemas(
                             )
                         buildJsonObject {
                             specialized.forEach { (key, value) -> put(key, value) }
+                            val required =
+                                shape.getValue("required").jsonArray +
+                                    (if (kind == "flush") listOf("at") else listOf("from", "to")).map(::JsonPrimitive)
+                            put("required", JsonArray(required))
                             if (kind == "slowdown") {
                                 put(
                                     "anyOf",
@@ -470,7 +558,7 @@ class DocumentSchemas(
                                     ),
                                 )
                             } else {
-                                put("required", JsonArray(shape.getValue("required").jsonArray + allowed.map(::JsonPrimitive)))
+                                put("required", JsonArray(required + allowed.map(::JsonPrimitive)))
                             }
                         }
                     },

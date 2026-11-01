@@ -97,6 +97,7 @@ data class ServiceNode(
     val type: String = "service",
     val rateLimit: RateLimitConfig? = null,
     val healthCheck: HealthCheckConfig? = null,
+    val cache: CacheSettings? = null,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -111,6 +112,7 @@ data class ServiceNode(
         type: String = "service",
         rateLimit: RateLimitConfig? = null,
         healthCheck: HealthCheckConfig? = null,
+        cache: CacheSettings? = null,
     ) : this(
         path.split('/'),
         handlers,
@@ -123,27 +125,54 @@ data class ServiceNode(
         type,
         rateLimit,
         healthCheck,
+        cache,
     )
 
     val path: String get() = displayPath(pathSegments)
 }
 
-/** Ordered local processing and synchronous calls of one service invocation. */
+/** Tree of local processing, synchronous calls, cache reads and parallel branches of one service invocation. */
 sealed interface ServiceStep {
     /** Null applies to every request class. */
     val classes: Set<String>?
+    val id: String?
+    val repeat: RepeatConfig?
 
     /** Omitted processing and failure probability use the effective service parameters. */
     data class Process(
         val processing: Distribution? = null,
         val failureProbability: Double? = null,
         override val classes: Set<String>? = null,
+        override val id: String? = null,
+        override val repeat: RepeatConfig? = null,
     ) : ServiceStep
 
     /** Invoke the outgoing edge identified by [edge]. */
     data class Call(
         val edge: String,
         override val classes: Set<String>? = null,
+        override val id: String? = null,
+        override val repeat: RepeatConfig? = null,
+    ) : ServiceStep
+
+    /** A keyed GET with a nested source scenario on a miss. */
+    data class CacheRead(
+        val edge: String,
+        val keySpace: String,
+        val onMiss: List<ServiceStep>,
+        val singleFlight: Boolean = false,
+        val onCacheError: CacheErrorPolicy = CacheErrorPolicy.SOURCE,
+        override val classes: Set<String>? = null,
+        override val id: String? = null,
+        override val repeat: RepeatConfig? = null,
+    ) : ServiceStep
+
+    /** Concurrent branches joined before the enclosing step completes. */
+    data class Parallel(
+        val branches: List<List<ServiceStep>>,
+        override val classes: Set<String>? = null,
+        override val id: String? = null,
+        override val repeat: RepeatConfig? = null,
     ) : ServiceStep
 }
 
@@ -259,12 +288,13 @@ data class RouteEdge(
 }
 
 /** Effects available on executable blocks and connections; capacity loss requires a slot pool. */
-enum class FaultKind { SLOWDOWN, ERRORS, UNAVAILABLE, BLACKHOLE, CAPACITY_LOSS }
+enum class FaultKind { SLOWDOWN, ERRORS, UNAVAILABLE, BLACKHOLE, CAPACITY_LOSS, FLUSH }
 
 /**
  * A degradation active during [fromMs, toMs). Overlaps multiply slowdown factors, add delays,
  * combine error probabilities as independent events and choose the minimum capacity.
  * Active error faults replace the target's normal failure probability.
+ * FLUSH is instantaneous: fromMs and toMs both hold its at instant.
  */
 data class FaultSpan(
     val targetSegments: List<String>,
@@ -474,21 +504,23 @@ data class GraphIr(
                 val path = mutableListOf<CallEdge>()
 
                 fun callsFrom(node: String): List<CallEdge> =
-                    scenario(servicesByPath.getValue(node), requestClass).filterIsInstance<ServiceStep.Call>().flatMap { step ->
-                        val edge = call(step.edge)
-                        val targets = ArrayDeque<String>()
-                        targets.add(edge.to)
-                        buildList {
-                            while (targets.isNotEmpty()) {
-                                val target = targets.removeFirst()
-                                if (target in servicesByPath) {
-                                    add(if (target == edge.to) edge else edge.copy(to = target))
-                                } else {
-                                    outgoingRoutes(target, requestClass).forEach { targets.addLast(it.to) }
+                    scenario(servicesByPath.getValue(node), requestClass)
+                        .connectionPaths(requestClass)
+                        .flatMap { path ->
+                            val edge = call(path)
+                            val targets = ArrayDeque<String>()
+                            targets.add(edge.to)
+                            buildList {
+                                while (targets.isNotEmpty()) {
+                                    val target = targets.removeFirst()
+                                    if (target in servicesByPath) {
+                                        add(if (target == edge.to) edge else edge.copy(to = target))
+                                    } else {
+                                        outgoingRoutes(target, requestClass).forEach { targets.addLast(it.to) }
+                                    }
                                 }
                             }
-                        }
-                    }
+                        }.toList()
                 pending.addLast(callsFrom(root.path).iterator())
                 if (!pending.last().hasNext()) yield(emptyList())
                 while (pending.isNotEmpty()) {

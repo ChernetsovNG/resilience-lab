@@ -125,7 +125,7 @@ class ServicePoliciesCompilerTest {
         val model =
             (
                 DocumentCodec.decodeModel(
-                    """{"schemaVersion":6,"blocks":{
+                    """{"schemaVersion":7,"blocks":{
                       "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"1/s"}]},"deadline":"1s"}},
                       "backend":{"type":"$type","params":{"${if (type == "database") "maxConnections" else "handlers"}":4,
                         ${if (type == "database") "" else "\"replicas\":$replicas,"}
@@ -137,7 +137,7 @@ class ServicePoliciesCompilerTest {
         val experiment =
             (
                 DocumentCodec.decodeExperiment(
-                    """{"schemaVersion":3,"modelRef":"m.model.json",
+                    """{"schemaVersion":4,"modelRef":"m.model.json",
                       "execution":{"replications":1,"warmup":"0ms","measurement":"100ms","seed":1},
                       "variants":[{"id":"baseline"}],"grid":$grid}""",
                     "e.experiment.json",
