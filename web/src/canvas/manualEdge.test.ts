@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editEdgePoints } from "./manualEdge";
+import { edgeBends, editEdgePoints } from "./manualEdge";
 import { manualEdgePoints } from "./edgeGeometry";
 
 const path = [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 90 }, { x: 160, y: 90 }];
@@ -139,4 +139,41 @@ describe("authored anchor limits", () => {
     expect(editEdgePoints(rendered, authored, { kind: "bend", index: 1 }, { x: 15, y: -5 }))
       .toEqual([{ x: 15, y: -5 }, ...authored]);
   });
+});
+
+
+it.each([
+  [1, { x: 10, y: 5 }], [1, { x: 5, y: 0 }],
+  [1, { x: 10, y: -5 }], [1, { x: 15, y: 0 }],
+  [3, { x: 10, y: 15 }], [3, { x: 15, y: 20 }],
+  [3, { x: 10, y: 25 }], [3, { x: 5, y: 20 }],
+] as const)("moves generated bend %s visibly to %j with a one-axis drag", (index, moved) => {
+  const source = { x: 0, y: 0 };
+  const target = { x: 20, y: 20 };
+  const anchors = [{ x: 10, y: 10 }];
+  const path = manualEdgePoints(source, target, anchors);
+  const edited = editEdgePoints(path, anchors, { kind: "bend", index }, moved)!;
+  expect(edited).toContainEqual(anchors[0]);
+  expect(edited).toContainEqual(moved);
+  const routed = manualEdgePoints(source, target, edited);
+  expect(edgeBends(routed).map(bend => bend.point)).toContainEqual(moved);
+  const movedPorts = manualEdgePoints({ x: -5, y: -5 }, { x: 25, y: 25 }, edited);
+  expect(movedPorts).toContainEqual(moved);
+  expect(routed[0]).toEqual(source);
+  expect(routed.at(-1)).toEqual(target);
+  expect(routed.slice(1).every((end, i) => end.x === routed[i].x || end.y === routed[i].y)).toBe(true);
+});
+
+it("moves an authored bend visibly when its new position is on the former outgoing segment", () => {
+  const source = { x: 0, y: 0 };
+  const target = { x: 40, y: 40 };
+  const anchors = [{ x: 20, y: 0 }, { x: 20, y: 20 }];
+  const path = manualEdgePoints(source, target, anchors);
+  const moved = { x: 20, y: 5 };
+  const edited = editEdgePoints(path, anchors, { kind: "bend", index: 1 }, moved)!;
+  expect(edited).toContainEqual(anchors[1]);
+  const routed = manualEdgePoints(source, target, edited);
+  expect(edgeBends(routed).map(bend => bend.point)).toContainEqual(moved);
+  expect(routed[0]).toEqual(source);
+  expect(routed.at(-1)).toEqual(target);
 });
