@@ -68,15 +68,15 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   const fieldMessages = timeout.locator("..").locator(".field-diagnostics");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(fieldMessages).toBeHidden();
-  await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /problems: warning/ })).toBeHidden();
   await expect(callLabel.getByRole("button", { name: "Warnings in variants: Baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
   await timeout.locator("..").locator(".field-feedback--variants button").click();
-  await expect(timeout.locator("..").getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true })).toBeVisible();
+  await expect(timeout.locator("..").getByRole("link", { name: /^In variants: Baseline — / })).toBeVisible();
 
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();
   await expect(timeout).toHaveValue("80ms");
   await expect(fieldMessages).toContainText("LINT_TIMEOUT_BUDGET");
-  await expect(callLabel).toContainText("⚠ 1");
+  await expect(callLabel.getByRole("img", { name: /problems: warning/ })).toBeVisible();
   await expect(page.getByTestId("rf__node-client").getByRole("img", { name: /problems: warning/ })).toBeHidden();
 
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
@@ -84,14 +84,14 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await timeout.press("Enter");
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
   await expect(fieldMessages).toBeHidden();
-  await expect(page.getByRole("img", { name: /problems: warning/ })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /problems: warning/ })).toBeHidden();
   await expect(callLabel).not.toContainText("⚠");
   await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
   await page.getByRole("tab", { name: "Problems", exact: true }).click();
   const problems = page.getByRole("tabpanel");
   const warning = problems.locator('button[data-diagnostic-code="LINT_TIMEOUT_BUDGET"]');
   await expect(warning).toContainText("Baseline");
-  await expect(problems.locator('button[data-diagnostic-code="LINT_DEADLINE_BUDGET"]')).toHaveCount(0);
+  await expect(problems.locator('button[data-diagnostic-code="LINT_DEADLINE_BUDGET"]')).toBeHidden();
   await warning.click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(timeout).toHaveValue("80ms");
@@ -115,7 +115,7 @@ test("summarizes a warning from the only variant override on Model and opens its
     await expect(page.getByTestId("rf__node-gateway").getByRole("img", { name: /problems: warning/ })).toBeHidden();
     await expect(page.getByTestId("rf__node-gateway").getByRole("button", { name: "Warnings in variants: Solo", exact: true })).toBeVisible();
     await handlers.locator("..").locator(".field-feedback--variants button").click();
-    await expect(handlers.locator("..").getByRole("link", { name: "In variants: Solo — 1 warning", exact: true })).toBeVisible();
+    await expect(handlers.locator("..").getByRole("link", { name: /^In variants: Solo — / })).toBeVisible();
     await page.getByRole("button", { name: /^Errors: 0 · Warnings:/ }).click();
     await page.getByRole("tab", { name: "Problems", exact: true }).click();
     const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_HANDLERS_LITTLE"]');

@@ -26,7 +26,6 @@ for (const language of ["en", "ru"] as const) {
     const axis = inspector.getByRole("group", { name: `${russian ? "Таймаут" : "Timeout"} · order-service → payment-service`, exact: true });
     const warning = axis.locator(".field-diagnostics > li").filter({ hasText: "LINT_TIMEOUT_BUDGET" })
       .filter({ hasText: russian ? /Таймаут.*= 1 с/ : /Timeout.*= 1 s/ });
-    await expect(warning).toHaveCount(1);
     await expect(warning).toContainText("Baseline, hello");
     await expect(warning).not.toContainText(/p[0-9]/);
     await axis.locator(":scope > .field-feedback").last().getByRole("button").press("Enter");

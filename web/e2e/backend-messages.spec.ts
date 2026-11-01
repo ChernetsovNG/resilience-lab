@@ -26,7 +26,7 @@ for (const locale of locales) {
         await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
         const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_QUEUE_WAIT"]');
 
-        await expect(warning).toHaveCount(1);
+        await expect(warning).toBeVisible();
         await expect(warning).toContainText(locale.startsWith("ru") ? `ожидание ${waitMs} мс` : `wait ${waitMs} ms`);
         await expect(warning).toContainText(`${limitMs} ${locale.startsWith("ru") ? "мс" : "ms"}`);
         await expect(warning).toContainText(source);
@@ -43,7 +43,7 @@ for (const locale of locales) {
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
       const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_RETRY_NO_JITTER"]');
 
-      await expect(warning).toHaveCount(1);
+      await expect(warning).toBeVisible();
       await expect(warning).toContainText("order-service-to-payment-service");
       await expect(warning).toContainText(locale.startsWith("ru") ? "3 попыток" : "3 attempts");
       await expect(warning).toContainText(label("catalog.options.exponential-full-jitter"));
@@ -66,7 +66,7 @@ for (const locale of locales) {
         await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
         const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_BELOW_LATENCY"]');
 
-        await expect(warning).toHaveCount(1);
+        await expect(warning).toBeVisible();
         await expect(warning).toContainText(locale.startsWith("ru") ? `Таймаут ${timeoutMs} мс` : `Timeout ${timeoutMs} ms`);
         await expect(warning).toContainText(locale.startsWith("ru") ? `: ${estimatedMs} мс` : `response ${estimatedMs} ms`);
         await expect(warning).toContainText("psp");
@@ -93,7 +93,7 @@ for (const locale of locales) {
       await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
       const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_UNREACHABLE"]');
 
-      await expect(warning).toHaveCount(1);
+      await expect(warning).toBeVisible();
       await expect(warning).toContainText(locale.startsWith("ru") ? "Таймаут 100.124 мс" : "Timeout 100.124 ms");
       await expect(warning).toContainText("'client': 100.124");
       await warning.click();

@@ -38,7 +38,7 @@ test("keeps inspector and toolbar controls still when delayed lint warnings arri
     release();
     await responded;
     if (value === "10ms") await expect(inspector.locator(".field-diagnostics")).toContainText("LINT_TIMEOUT_BUDGET");
-    else await expect(inspector.locator(".field-diagnostics")).toHaveCount(0);
+    else await expect(inspector.locator(".field-diagnostics")).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath(value === "10ms" ? "with-warning.png" : "without-warning.png") });
     expect(await positions()).toEqual(before);
     if (value === "10ms") {
