@@ -1793,7 +1793,7 @@
   "catalog.types.cache.params.capacity.title": "Ёмкость кэша",
   "messages.SCENARIO_ID": "Идентификатор шага '{id}' должен соответствовать {pattern}",
   "catalog.types.cache.params.processing.stdDev.title": "Стандартное отклонение",
-  "messages.EXECUTION_UNSUPPORTED_SCENARIO": "Модели с кэшем, repeat и parallel можно проверить и сохранить; их запуск пока недоступен",
+  "messages.EXECUTION_UNSUPPORTED_SCENARIO": "В сценарии есть шаги, которые эта операция пока не поддерживает",
   "catalog.types.cache.description": "Внешний кэш с ключами, TTL, вытеснением LRU и ограниченной очередью операций.",
   "catalog.types.cache.params.prefill.kind.description": "Начать с пустого кэша или с самых популярных ключей.",
   "editor.grid.repeatReadOnly": "Значения перебора кратности (только чтение)",

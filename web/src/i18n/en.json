@@ -1793,7 +1793,7 @@
   "catalog.types.cache.params.capacity.title": "Entry capacity",
   "messages.SCENARIO_ID": "Step id '{id}' must match {pattern}",
   "catalog.types.cache.params.processing.stdDev.title": "Standard deviation",
-  "messages.EXECUTION_UNSUPPORTED_SCENARIO": "Cache, repeat and parallel scenarios can be validated and saved; execution is not available yet",
+  "messages.EXECUTION_UNSUPPORTED_SCENARIO": "The scenario contains steps that this operation does not support yet",
   "catalog.types.cache.description": "External keyed cache with TTL, LRU eviction and a bounded operation queue.",
   "catalog.types.cache.params.prefill.kind.description": "Start empty or with the hottest keys.",
   "editor.grid.repeatReadOnly": "Repeat grid values (read only)",

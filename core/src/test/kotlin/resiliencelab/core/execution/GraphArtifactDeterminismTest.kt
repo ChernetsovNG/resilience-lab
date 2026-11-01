@@ -13,6 +13,8 @@ import resiliencelab.core.ir.CallPool
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
+import resiliencelab.core.ir.RepeatConfig
+import resiliencelab.core.ir.RepeatMode
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
@@ -31,6 +33,63 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.test.Test
 
 class GraphArtifactDeterminismTest {
+    @Test
+    fun `nested parallel and repeated steps preserve every artifact byte across workers and task order`(
+        @TempDir root: Path,
+    ) {
+        val base = graph()
+        val parallel =
+            base.copy(
+                services =
+                    base.services.map { node ->
+                        if (node.path == "entry") {
+                            node.copy(
+                                scenario =
+                                    listOf(
+                                        ServiceStep.Parallel(
+                                            listOf(
+                                                listOf(
+                                                    ServiceStep.Process(
+                                                        TestChains.exponential(1.0),
+                                                        repeat = RepeatConfig(2, RepeatMode.SEQUENTIAL),
+                                                    ),
+                                                    ServiceStep.Call("entry-left", repeat = RepeatConfig(3, RepeatMode.PARALLEL)),
+                                                ),
+                                                listOf(
+                                                    ServiceStep.Parallel(
+                                                        listOf(listOf(ServiceStep.Call("entry-right")), listOf(ServiceStep.Process())),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                            )
+                        } else {
+                            node
+                        }
+                    },
+                calls = base.calls.map { it.copy(pool = CallPool(2, 5.0)) },
+            )
+        assertThat(PathStreams.keys(parallel, 0)).isEqualTo(PathStreams.keys(base, 0))
+        val expected = run(root.resolve("reference"), parallel, 1, false)
+        assertThat(
+            expected.result.variants
+                .first()
+                .points
+                .single()
+                .replications
+                .sumOf { it.connections.getValue("entry-left").sentAttempts },
+        ).isPositive()
+        for (workers in listOf(1, 2, 4, 8)) {
+            val actual = run(root.resolve("parallel-$workers"), parallel, workers, true)
+            assertThat(actual.result).isEqualTo(expected.result)
+            assertThat(actual.files.keys).containsExactlyInAnyOrderElementsOf(expected.files.keys)
+            expected.files.forEach { (path, bytes) ->
+                assertThat(actual.files.getValue(path)).describedAs("$workers/$path").isEqualTo(bytes)
+            }
+        }
+    }
+
     @Test
     fun `multiple clients and class paths preserve every artifact byte across workers and document order`(
         @TempDir root: Path,

@@ -64,7 +64,7 @@ internal enum class CoreMessage(
     EXECUTION_UNSUPPORTED_SCENARIO(
         "EXECUTION_UNSUPPORTED_SCENARIO",
         null,
-        "Cache, repeat and parallel scenarios can be validated and saved; execution is not available yet",
+        "The scenario contains steps that this operation does not support yet",
     ),
     SCENARIO_BLOCK("SCENARIO_BLOCK", null, "Only service blocks may define a scenario"),
     SCENARIO_FIELD("SCENARIO_FIELD", null, "Field '{field}' does not apply to scenario step '{type}'"),

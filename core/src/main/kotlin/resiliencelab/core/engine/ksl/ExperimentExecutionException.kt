@@ -9,12 +9,12 @@ import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.ServiceStep
 import resiliencelab.core.ir.walk
 
-/** T1 accepts the new documents while T2 implements their execution; reject before allocating run artifacts. */
+/** Cache execution awaits T2.2; reject before allocating run artifacts. */
 internal fun GraphIr.requireSupportedExecution() {
     if (services.any { node ->
             node.type == "cache" ||
                 scenario(node).walk().any {
-                    it.repeat != null || it is ServiceStep.CacheRead || it is ServiceStep.Parallel
+                    it is ServiceStep.CacheRead
                 }
         } ||
         faults.any { it.kind == FaultKind.FLUSH }

@@ -17,6 +17,7 @@ import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.RepeatMode
 import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.ServiceStep
@@ -388,6 +389,7 @@ class ReliabilityModel(
 
     private fun createCallAttempt(
         caller: ServiceInvocation,
+        waitingCaller: Entity,
         child: ServiceInvocation,
         callingServiceId: String,
         connectionId: String,
@@ -417,7 +419,7 @@ class ReliabilityModel(
             CallAttempt(
                 child = child,
                 timeoutEvent = timeoutEvent,
-                caller = caller,
+                caller = waitingCaller,
                 recordTimeout = { orphaned ->
                     metrics.recordTimeout(callingServiceId, caller.measurementCohort)
                     observed.forEach { metrics.recordConnectionFailure(it, AttemptOutcome.TIMED_OUT, caller.measurementCohort) }
@@ -560,32 +562,62 @@ class ReliabilityModel(
         }
 
         /** Runs ordered steps in this process while the caller keeps its handler allocation. */
-        private suspend fun KSLProcessBuilder.executeScenario(): AttemptOutcome {
-            for (step in runtime.scenario) {
+        private suspend fun KSLProcessBuilder.executeScenario(steps: List<ServiceStep> = runtime.scenario): AttemptOutcome {
+            for (step in steps) {
                 if (step.classes != null && request.requestClass !in step.classes!!) continue
-                val outcome =
-                    when (step) {
-                        is ServiceStep.Process -> {
-                            val durationMs = runtime.nextDurationMs(step)
-                            val localFailure = runtime.nextLocalFailure(step)
-                            delay(durationMs)
-                            if (localFailure) {
-                                metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
-                                AttemptOutcome.LOCAL_FAILURE
-                            } else {
-                                AttemptOutcome.SUCCEEDED
-                            }
-                        }
-                        is ServiceStep.Call -> executeCall(callRuntimes.getValue(step.edge))
-                        is ServiceStep.CacheRead, is ServiceStep.Parallel ->
-                            throw ExperimentExecutionException(
-                                CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO,
-                                CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO.template,
-                            )
-                    }
+                val outcome = executeStep(step)
                 if (outcome != AttemptOutcome.SUCCEEDED) return outcome
             }
             return AttemptOutcome.SUCCEEDED
+        }
+
+        private suspend fun KSLProcessBuilder.executeStep(step: ServiceStep): AttemptOutcome {
+            val repetition = step.repeat ?: return executeOnce(step)
+            if (repetition.mode == RepeatMode.PARALLEL) {
+                return executeParallel(List(repetition.count) { ScenarioBranch { executeOnce(step) } })
+            }
+            repeat(repetition.count) {
+                val outcome = executeOnce(step)
+                if (outcome != AttemptOutcome.SUCCEEDED) return outcome
+            }
+            return AttemptOutcome.SUCCEEDED
+        }
+
+        private suspend fun KSLProcessBuilder.executeOnce(step: ServiceStep): AttemptOutcome =
+            when (step) {
+                is ServiceStep.Process -> {
+                    val durationMs = runtime.nextDurationMs(step)
+                    val localFailure = runtime.nextLocalFailure(step)
+                    delay(durationMs)
+                    if (localFailure) {
+                        metrics.recordLocalFailure(runtime.serviceId, measurementCohort)
+                        AttemptOutcome.LOCAL_FAILURE
+                    } else {
+                        AttemptOutcome.SUCCEEDED
+                    }
+                }
+                is ServiceStep.Call -> executeCall(callRuntimes.getValue(step.edge))
+                is ServiceStep.Parallel -> executeParallel(step.branches.map { branch -> ScenarioBranch { executeScenario(branch) } })
+                is ServiceStep.CacheRead ->
+                    throw ExperimentExecutionException(
+                        CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO,
+                        CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO.template,
+                    )
+            }
+
+        private suspend fun KSLProcessBuilder.executeParallel(branches: List<ScenarioBranch>): AttemptOutcome {
+            branches.forEach { activate(it.work) }
+            blockUntilAllCompleted(branches.map { it.work }.toSet())
+            return branches.firstOrNull { it.outcome != AttemptOutcome.SUCCEEDED }?.outcome ?: AttemptOutcome.SUCCEEDED
+        }
+
+        /** Branches share this invocation's request, cohort, runtime and degraded flag. */
+        private inner class ScenarioBranch(
+            action: suspend KSLProcessBuilder.() -> AttemptOutcome,
+        ) : Entity() {
+            var outcome: AttemptOutcome = AttemptOutcome.PENDING
+                private set
+            val work: KSLProcess = process("scenario-branch") { outcome = action() }
         }
 
         private suspend fun KSLProcessBuilder.executeCall(callRuntime: CallRuntime): AttemptOutcome {
@@ -713,7 +745,7 @@ class ReliabilityModel(
         }
 
         /** Starts one attempt against the selected service; routing is resolved anew before each retry. */
-        private fun startAttempt(
+        private fun KSLProcessBuilder.startAttempt(
             callRuntime: CallRuntime,
             target: String,
             attemptNumber: Int,
@@ -750,7 +782,8 @@ class ReliabilityModel(
                     selectedRoutes = routes,
                 )
             return createCallAttempt(
-                caller = this,
+                caller = this@ServiceInvocation,
+                waitingCaller = entity,
                 child = child,
                 callingServiceId = runtime.serviceId,
                 connectionId = call.path,
