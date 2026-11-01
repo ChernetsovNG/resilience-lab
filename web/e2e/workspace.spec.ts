@@ -513,6 +513,7 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
     const submitted = page.waitForResponse((response) => response.url().endsWith("/api/v1/jobs") && response.request().method() === "POST");
     await run.click();
     const job: JobView = await (await submitted).json();
+    expect(job.totalTasks).toBe(100);
     await expect.poll(async () => (await (await request.get(`/api/v1/jobs/${job.id}`)).json()).completedTasks).toBeGreaterThan(0);
     const cancel = page.getByRole("button", { name: "Cancel", exact: true });
     await expect(cancel).toBeVisible();
@@ -525,12 +526,18 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
     await expect(cancel).toHaveCount(0);
     const resume = page.getByRole("button", { name: "Resume", exact: true });
     await expect(resume).toBeEnabled();
+    const resuming = page.waitForResponse(response => /\/runs\/[^/]+\/resume$/.test(response.url()) && response.request().method() === "POST");
     await resume.click();
+    const resumed: JobView = await (await resuming).json();
+    expect(resumed.totalTasks).toBe(100);
     await expect(page.getByRole("table", { name: "Findings" })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     await expect(resume).toHaveCount(0);
     const result = await (await request.get(`/api/v1/runs/${job.runId}/manifest`)).json();
     expect(result.complete).toBe(true);
+    const completed: JobView = await (await request.get(`/api/v1/jobs/${resumed.id}`)).json();
+    expect(completed.completedTasks).toBe(100);
+    expect(completed.totalTasks).toBe(100);
     await expectNoPageScroll(page);
   });
 });
@@ -642,7 +649,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   const display = async (estimate: ExperimentEstimate) => {
     const panel = page.getByRole("region", { name: "Cost estimate" });
     await expect(panel).toBeVisible();
-    const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 3 });
+    const number = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
     const size = (bytes: number) => bytes < 1048576 ? `${number(bytes / 1024)} KiB` : `${number(bytes / 1048576)} MiB`;
     for (const [label, expected] of [
       ["Tasks", number(estimate.tasks)], ["Workers", number(estimate.workers)],

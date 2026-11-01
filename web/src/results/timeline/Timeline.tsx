@@ -12,7 +12,7 @@ import { useConnectionSeries } from "./useConnectionSeries";
 import { applyOverrides } from "../../workspace/params";
 import { canonicalOf } from "../../workspace/quantities";
 import { elementLabel, variantLabel } from "../../presentation/labels";
-import { policyOutputAvailable } from "../../workspace/policyParameters";
+import { policyOutputAvailable, poolOutputAvailable } from "../../workspace/policyParameters";
 
 const colors = ["#2563eb", "#b45309", "#047857", "#9333ea", "#be123c", "#0e7490"];
 const metricChoiceKey = (element: string, metric: string) => JSON.stringify([element, metric]);
@@ -57,6 +57,12 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   const replicaGroups = useMemo(() => variant?.points.find(point => point.id === pointId)?.aggregate.groups ?? [], [variant, pointId]);
   const originals = useMemo(() => new Map(replicaGroups.flatMap(group => group.instances.map(instance => [instance.id, group.id]))), [replicaGroups]);
   const groups = useMemo(() => timelineGroups(catalog), [catalog]);
+  const [comparison, setComparison] = useState("");
+  const compared = summary.variants.find((candidate) => candidate.id === comparison && candidate.id !== variant?.id);
+  const displayedModels = useMemo(() => [variant, compared].flatMap(source => source === undefined ? [] : [
+    applyOverrides(applyOverrides(model, experiment.variants.find(variant => variant.id === source.id)?.overrides ?? {}, catalog),
+      source.points.find(point => point.id === pointId)?.coordinates ?? {}, catalog),
+  ]), [variant, compared, model, experiment.variants, catalog, pointId]);
   const policyModels = useMemo(() => experiment.variants.flatMap(variant => {
     const effective = applyOverrides(model, variant.overrides, catalog);
     const points = summary.variants.find(source => source.id === variant.id)?.points ?? [];
@@ -68,9 +74,10 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   ].map(element => ({ ...element, replicas: replicaGroups.find(group => group.id === element.id)?.instances ?? [],
     title: catalog.types.find(type => type.id === element.type)?.title ?? element.type,
     groups: groups.map(group => ({ ...group, metrics: group.metrics.filter(metric => metric.types.includes(element.type)
-      && policyOutputAvailable(metric.id, element.id, policyModels)) }))
+      && policyOutputAvailable(metric.id, element.id, policyModels)
+      && poolOutputAvailable(metric.id, element.id, displayedModels)) }))
       .filter(group => group.metrics.length > 0),
-  })).filter(element => element.groups.length > 0), [model, catalog, groups, replicaGroups, policyModels]);
+  })).filter(element => element.groups.length > 0), [model, catalog, groups, replicaGroups, policyModels, displayedModels]);
   const canvasKey = JSON.stringify(selectedNodes);
   const availableNodes = elements.flatMap(element => [element.id, ...element.replicas.map(instance => instance.id)]);
   const availableConnections = model.connections.filter(connection => availableNodes.includes(connection.id)).map(connection => connection.id);
@@ -84,13 +91,11 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
   if (nodeChoice.canvasKey !== canvasKey) setNodeChoice({ canvasKey, ids: nodes });
   const [metricKeys, setMetricKeys] = useState(() => elements.flatMap(element =>
     element.groups.map(group => metricChoiceKey(element.id, group.metrics[0].key))));
-  const [comparison, setComparison] = useState("");
   const context = JSON.stringify([variant?.id, pointId, replication, cursorWindow]);
   const [inspection, setInspection] = useState({ context, window: null as number | null });
   const hover = inspection.context === context ? inspection.window : null;
   if (inspection.context !== context) setInspection({ context, window: null });
   const setHover = (window: number | null) => setInspection({ context, window });
-  const compared = summary.variants.find((candidate) => candidate.id === comparison && candidate.id !== variant?.id);
   const metadata = manifest.series;
   const endMs = (metadata?.warmupMs ?? 0) + (metadata?.measurementMs ?? 0);
   const windowMs = metadata?.windowMs ?? 1;
@@ -119,13 +124,10 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
         : ((element + metric) % (colors.length / 2)) * 2 + Number(comparison);
       return colors[index % colors.length];
     };
-    const effectiveModel = (source: RunSummary["variants"][number] | undefined) => applyOverrides(applyOverrides(model,
-      experiment.variants.find(variant => variant.id === source?.id)?.overrides ?? {}, catalog),
-      source?.points.find(point => point.id === pointId)?.coordinates ?? {}, catalog);
     const paramsOf = (type: string, params: Record<string, unknown> = {}) => ({
       ...Object.fromEntries((catalog.types.find(candidate => candidate.id === type)?.params ?? []).map(param => [param.name, param.default])), ...params,
     });
-    const primaryModel = effectiveModel(variant), comparedModel = effectiveModel(compared);
+    const [primaryModel = model, comparedModel = model] = displayedModels;
     const nodeType = (id: string) => model.blocks[originals.get(id) ?? id]?.type;
     const nodeSeries = (series: readonly NodeSeriesMetrics[], effective: ModelFile) => series.map(node => ({ ...node,
       windows: node.windows.map(window => outputWindow(outputsOf(catalog, nodeType(node.id)), {
@@ -167,10 +169,11 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
         }
         for (const [connectionIndex, connection] of connectionSeries.entries()) {
           if (!metric.types.includes(connectionType(connection.id)) || !metricKeys.includes(metricChoiceKey(originals.get(connection.id) ?? connection.id, metric.key))) continue;
-          for (const source of [{ variant, data: connection, comparison: false }, {
-            variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true,
+          for (const source of [{ variant, data: connection, comparison: false, model: primaryModel }, {
+            variant: compared, data: comparedConnectionSeries.find((candidate) => candidate.id === connection.id), comparison: true, model: comparedModel,
           }]) {
             if (source.variant === undefined || source.data === undefined) continue;
+            if (!poolOutputAvailable(metric.id, originals.get(connection.id) ?? connection.id, [source.model])) continue;
             const label = t("results.timeline.lineLabel", { node: elementLabel(connection.id, model), metric: metric.label,
               variant: variantLabel(source.variant, experiment.variants) });
             lines.push({ id: `${source.variant.id}:${connection.id}:${metric.key}`, label,
@@ -185,7 +188,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
       return { ...group, lines };
     }).filter((group) => group.lines.length > 0);
   }, [primary.nodes, overlay.nodes, primaryConnections.connections,
-    overlayConnections.connections, model, metricKeys, variant, compared, groups, catalog, experiment, pointId, primaryTargets.nodes, overlayTargets.nodes, originals]);
+    overlayConnections.connections, model, metricKeys, variant, compared, groups, catalog, experiment, pointId, primaryTargets.nodes, overlayTargets.nodes, originals, displayedModels]);
   const thresholds: TimelineThreshold[] = [variant, compared].flatMap((source, index) => {
     if (source === undefined) return [];
     const point = source.points.find((candidate) => candidate.id === pointId);

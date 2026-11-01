@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
 import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
-import type { EditorCommand } from "../workspace/editor";
+import { elementIdentity, type EditorCommand } from "../workspace/editor";
 import { addFault, resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
 import { createFault, faultTargets, type FaultTarget } from "../workspace/faults";
 import { elementOf, isOverridden, ownEntry } from "../workspace/params";
@@ -95,6 +95,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
     if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);
+  // Renaming must keep Tab's next field mounted, while another element resets its drafts.
+  const annotationIdentity = element === null ? null : elementIdentity(element);
+  const [annotationTarget, setAnnotationTarget] = useState({ identity: annotationIdentity, key: 0 });
+  if (annotationTarget.identity !== annotationIdentity) setAnnotationTarget({ identity: annotationIdentity, key: annotationTarget.key + 1 });
   const targets = faultTargets(model, catalog).filter(target => target.elementId === selected);
   const type = element === null ? undefined : catalog.types.find((candidate) => candidate.id === element.type);
   const showElement = (resultsOnly || target === "element") && element !== null;
@@ -133,7 +137,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
-          <AnnotationFields key={`annotations-${selected}`} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
+          <AnnotationFields key={annotationTarget.key} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
             editable={editable && variantId === null && onCommand !== undefined}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}
             onCommit={(field, value) => onCommand?.(setAnnotation({ element: selected }, field, value))} />

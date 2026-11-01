@@ -16,6 +16,7 @@ import resiliencelab.core.workspace.Workspace
 import resiliencelab.core.workspace.createSymbolicLink
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
@@ -176,10 +177,11 @@ class LabTest {
             val actualRoot = exampleWorkspace()
             Lab(FileWorkspace(expectedRoot)).use { it.run(experiment, "run-1") }
             val cancelled = AtomicBoolean()
-            Lab(FileWorkspace(actualRoot)).use { lab ->
+            ExperimentExecutor(workers = 1).use { executor ->
+                val lab = Lab(FileWorkspace(actualRoot), executor = executor)
                 assertThatThrownBy {
                     lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
-                        if (done == 1) cancelled.set(true)
+                        if (done == 2) cancelled.set(true)
                     }
                 }.isInstanceOf(CancellationException::class.java)
             }
@@ -188,8 +190,14 @@ class LabTest {
             val original = Files.readAllBytes(actualRoot.resolve(corrupt))
             Files.write(actualRoot.resolve(corrupt), original.copyOf(original.size - 4))
 
-            val resumed = Lab(FileWorkspace(actualRoot)).use { it.resume(runDirectory) }
+            val progress = Collections.synchronizedList(mutableListOf<Pair<Int, Int>>())
+            val resumed =
+                Lab(FileWorkspace(actualRoot)).use { lab ->
+                    lab.resume(runDirectory) { done, total -> progress += done to total }
+                }
 
+            assertThat(progress.first()).isEqualTo(1 to 20)
+            assertThat(progress.last()).isEqualTo(20 to 20)
             assertThat(resumed.manifest.complete).isTrue()
             val expectedDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/run-1"
             val expectedFiles = FileWorkspace(expectedRoot).listFiles(expectedDirectory).map { it.removePrefix("$expectedDirectory/") }
@@ -321,9 +329,14 @@ class LabTest {
                 error("A valid task must not be recomputed")
             }
 
-        val resumed = Lab(FileWorkspace(root), executor = executor).use { it.resume(runDirectory) }
+        val progress = mutableListOf<Pair<Int, Int>>()
+        val resumed =
+            Lab(FileWorkspace(root), executor = executor).use { lab ->
+                lab.resume(runDirectory) { done, total -> progress += done to total }
+            }
         executor.close()
 
+        assertThat(progress).containsExactly(20 to 20)
         assertThat(calls.get()).isZero()
         assertThat(resumed.manifest.complete).isTrue()
         assertThat(Files.readAllBytes(root.resolve("$runDirectory/manifest.json"))).containsExactly(*originalManifest)
@@ -380,7 +393,7 @@ class LabTest {
                 runCatching {
                     Lab(workspace).use { lab ->
                         lab.resume(runDirectory) { done, _ ->
-                            if (done == 1) {
+                            if (done == 19) {
                                 firstProgress.countDown()
                                 check(release.await(timeoutSeconds, TimeUnit.SECONDS))
                             }

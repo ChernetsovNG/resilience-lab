@@ -114,7 +114,23 @@ class ExperimentExecutorTest {
 
         ExperimentExecutor(workers = 3).run(experiment) { completed, total -> progress += completed to total }
 
-        assertThat(progress).containsExactly(1 to 6, 2 to 6, 3 to 6, 4 to 6, 5 to 6, 6 to 6)
+        assertThat(progress).containsExactly(0 to 6, 1 to 6, 2 to 6, 3 to 6, 4 to 6, 5 to 6, 6 to 6)
+    }
+
+    @Test
+    fun `selected task progress includes completed tasks in the full experiment`() {
+        val progress = mutableListOf<Pair<Int, Int>>()
+
+        ExperimentExecutor(workers = 1).use { executor ->
+            executor.runSelected(experiment, listOf(ExperimentTask("baseline", "p0", 0), ExperimentTask("single", "p0", 2))) {
+                completed,
+                total,
+                ->
+                progress += completed to total
+            }
+        }
+
+        assertThat(progress).containsExactly(4 to 6, 5 to 6, 6 to 6)
     }
 
     @Test

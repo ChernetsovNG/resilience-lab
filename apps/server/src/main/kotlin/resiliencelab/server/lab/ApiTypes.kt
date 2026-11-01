@@ -116,7 +116,8 @@ enum class JobStatus {
 }
 
 /**
- * Snapshot of a job: one run of one experiment; [totalTasks] is known after the first task finishes.
+ * Snapshot of a job: one run of one experiment; [totalTasks] is known when the job is accepted.
+ * Progress covers the full experiment, including retained valid tasks during resume.
  * [cancelRequested] records a cancellation request; a running job only becomes [JobStatus.CANCELLED] after it stops.
  * [errorCode] and [errorArgs] localize a failure while [error] keeps its legacy text; successful and cancelled jobs have no error.
  */

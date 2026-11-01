@@ -14,7 +14,7 @@ describe("localized display formats", () => {
   });
   it("formats milliseconds, seconds, rates and multipliers", () => {
     expect(formatDuration(80)).toBe("80 ms");
-    expect(formatDuration(1.23456, "s")).toBe("1.235 s");
+    expect(formatDuration(1.23456, "s")).toBe("1.23 s");
     expect(formatRate(1200)).toBe("1,200 RPS");
     expect(formatMultiplier(0.9)).toBe("0.9×");
   });
@@ -26,8 +26,13 @@ describe("localized display formats", () => {
   it("formats binary sizes consistently, including the MiB boundary", () => {
     expect(formatSize(819200)).toBe("800 KiB");
     expect(formatSize(1048576)).toBe("1 MiB");
-    expect(formatSize(1023)).toBe("0.999 KiB");
+    expect(formatSize(1023)).toBe("1 KiB");
     expect(formatSize(0)).toBe("0 KiB");
+  });
+  it("uses the same readable precision for estimated and measured seconds and sizes", () => {
+    expect(formatDuration(35.982, "s")).toBe("35.98 s");
+    expect(formatDuration(35982)).toBe("35.98 s");
+    expect(formatSize(45.508 * 1024 ** 2)).toBe("45.51 MiB");
   });
   it("preserves negative confidence bounds and missing values", () => {
     expect(formatInterval(-0.1, 1.2, formatPercent)).toBe("95% CI -10%–120%");

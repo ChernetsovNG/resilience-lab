@@ -24,7 +24,7 @@ export function formatDuration(value: Value, unit: "ms" | "s" = "ms"): string {
   if (missing(value)) return t("common.na");
   const seconds = unit === "s" || Math.abs(value) >= 1000;
   return t(seconds ? "common.durationS" : "common.durationMs", {
-    value: formatNumber(unit === "ms" && seconds ? value / 1000 : value, unit === "s" ? 3 : seconds ? 2 : 1),
+    value: formatNumber(unit === "ms" && seconds ? value / 1000 : value, seconds ? 2 : 1),
   });
 }
 
@@ -40,7 +40,7 @@ export function formatSize(bytes: Value): string {
   if (missing(bytes)) return t("common.na");
   const mebibytes = Math.abs(bytes) >= 1024 ** 2;
   return t(mebibytes ? "common.sizeMiB" : "common.sizeKiB", {
-    value: formatNumber(bytes / (mebibytes ? 1024 ** 2 : 1024), 3),
+    value: formatNumber(bytes / (mebibytes ? 1024 ** 2 : 1024)),
   });
 }
 

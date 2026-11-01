@@ -138,13 +138,17 @@ it("shows variant warnings on Model, filters Problems by badge and links fields 
   expect(problems.queryByText("Client deadline budget")).toBeNull();
   const timeout = screen.getByLabelText("Timeout").closest(".param-field")!;
   const links = within(timeout as HTMLElement);
-  expect(links.queryByText("Baseline timeout budget")).toBeNull();
+  expect(links.queryByRole("dialog")).toBeNull();
   fireEvent.click(links.getByRole("button", { name: "More about: Warnings in variants: Baseline, No retries" }));
+  const explanation = within(links.getByRole("dialog"));
+  expect(explanation.getByText("Baseline timeout budget")).toBeTruthy();
+  expect(explanation.getByText("No retries timeout budget")).toBeTruthy();
   const link = links.getByRole("link", { name: "In variants: Baseline — 1 warning" });
   expect(link.getAttribute("href")).toBe("#variant-baseline");
   expect(links.getByRole("link", { name: "In variants: No retries — 1 warning" })).toBeTruthy();
   const backoff = within(screen.getByLabelText("Base delay").closest(".param-field") as HTMLElement);
   fireEvent.click(backoff.getByRole("button", { name: "More about: Warnings in variants: Baseline" }));
+  expect(within(backoff.getByRole("dialog")).getByText("Baseline backoff budget")).toBeTruthy();
   expect(backoff.getByRole("link", { name: "In variants: Baseline — 1 warning" })).toBeTruthy();
   fireEvent.click(link);
   expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");

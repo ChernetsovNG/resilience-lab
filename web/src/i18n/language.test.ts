@@ -34,7 +34,7 @@ describe("language preference", () => {
     expect(formatPercent(-0.1)).toBe("-10\u00a0%");
     expect(formatPercent(1.2)).toBe("120\u00a0%");
     expect(formatDuration(80)).toBe("80 мс");
-    expect(formatDuration(1.23456, "s")).toBe("1,235 с");
+    expect(formatDuration(1.23456, "s")).toBe("1,23 с");
     expect(formatRate(1200)).toBe("1\u00a0200 RPS");
     expect(formatSize(819200)).toBe("800 КиБ");
     expect(formatSize(1048576)).toBe("1 МиБ");

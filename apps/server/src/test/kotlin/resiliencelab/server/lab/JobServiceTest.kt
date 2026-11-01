@@ -41,6 +41,37 @@ class JobServiceTest {
     }
 
     @Test
+    fun `knows the total task count before the job starts`() {
+        val job = service(Executor { }).submit(experiment)
+
+        assertThat(job.status).isEqualTo(JobStatus.QUEUED)
+        assertThat(job.completedTasks).isZero()
+        assertThat(job.totalTasks).isEqualTo(20)
+    }
+
+    @Test
+    fun `resumed job progress includes already completed tasks`() {
+        val cancelled = AtomicBoolean()
+        assertThatThrownBy {
+            lab.run(experiment, "cancelled", isCancelled = cancelled::get) { done, _ ->
+                if (done == 1) cancelled.set(true)
+            }
+        }.isInstanceOf(CancellationException::class.java)
+        val entry = RunCatalog(FileWorkspace(root)).entry("cancelled")!!
+        val queued = mutableListOf<Runnable>()
+        val jobs = service(Executor { queued += it })
+
+        val accepted = jobs.resume(entry)
+
+        queued.single().run()
+        val completed = jobs.get(accepted.id)!!
+        assertThat(completed.status).isEqualTo(JobStatus.COMPLETED)
+        assertThat(completed.completedTasks).isEqualTo(20)
+        assertThat(completed.totalTasks).isEqualTo(20)
+        assertThat(accepted.totalTasks).isEqualTo(20)
+    }
+
+    @Test
     fun `runs an experiment whose directory and filename contain Cyrillic and spaces`() {
         val directory = root.resolve("Платёжный контур")
         Files.move(root.resolve("retry-storm"), directory)

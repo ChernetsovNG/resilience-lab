@@ -66,7 +66,8 @@ class ExperimentExecutor internal constructor(
      * Runs tasks in variant/point/replication order within this job. [isCancelled] must be fast and thread-safe;
      * it is checked before tasks start and at most every 25 ms while the caller waits. Cancellation interrupts
      * this job's active workers; KSL models stop at the next event boundary. Other jobs keep their turns.
-     * Progress callbacks run on workers and must return promptly or honor interruptions when blocking.
+     * Initial progress runs on the caller before scheduling tasks; later callbacks run on workers.
+     * Progress callbacks must return promptly or honor interruptions when blocking.
      * @throws CancellationException if cancellation is observed or the calling thread is interrupted.
      */
     fun run(
@@ -152,7 +153,7 @@ class ExperimentExecutor internal constructor(
                     variant.points.flatMap { point -> (0 until replications).flatMap { PathStreams.keys(point.graph, it) } }
                 },
             )
-        val tasks =
+        val allTasks =
             experiment
                 .variants
                 .indices
@@ -160,16 +161,18 @@ class ExperimentExecutor internal constructor(
                     experiment.variants[variant].points.indices.flatMap { point ->
                         (0 until replications).map { Triple(variant, point, it) }
                     }
-                }.filter { (variant, point, replication) ->
-                    selectedTasks == null ||
-                        ExperimentTask(
-                            experiment.variants[variant].id,
-                            experiment.variants[variant].points[point].id,
-                            replication,
-                        ) in selectedTasks
                 }
+        val tasks =
+            allTasks.filter { (variant, point, replication) ->
+                selectedTasks == null ||
+                    ExperimentTask(
+                        experiment.variants[variant].id,
+                        experiment.variants[variant].points[point].id,
+                        replication,
+                    ) in selectedTasks
+            }
         val results = experiment.variants.map { variant -> variant.points.map { arrayOfNulls<ReplicationResult>(replications) } }
-        val progress = Progress(tasks.size, onProgress)
+        val progress = Progress(allTasks.size, allTasks.size - tasks.size, onProgress)
         scheduler.run(
             tasks.map { (variant, point, replication) ->
                 {
@@ -384,9 +387,12 @@ internal fun checkCancellation(isCancelled: () -> Boolean) {
 /** Finished tasks of one run; the count and its notification change together, so reported counts only grow. */
 private class Progress(
     private val total: Int,
+    private var completed: Int,
     private val onProgress: (Int, Int) -> Unit,
 ) {
-    private var completed = 0
+    init {
+        onProgress(completed, total)
+    }
 
     @Synchronized
     fun completeOne() {

@@ -74,8 +74,9 @@ it.each(["fixed", "lognormal"])("offers only applicable sweep fields for %s", ki
 it("excludes the outgoing pooler's forbidden call pool from sweep parameters", () => {
   const initialModel: ModelFile = { ...model, blocks: { ...model.blocks,
     pooler: { type: "pooler", params: { poolSize: 3 } }, database: { type: "database", params: { maxConnections: 10 } },
-  }, connections: [...model.connections,
-    { id: "pooler-call", type: "call", from: "pooler", to: "database", params: { timeout: "1s" } },
+  }, connections: [...model.connections.map(edge => edge.id === "gateway-to-middle"
+    ? { ...edge, params: { ...edge.params, pool: { size: 10 } } } : edge),
+    { id: "pooler-call", type: "call", from: "pooler", to: "database", params: { timeout: "1s", pool: { size: 3 } } },
   ] };
   render(<Settings initialCatalog={serverCatalog as Catalog} initialModel={initialModel} />);
   fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
@@ -85,10 +86,24 @@ it("excludes the outgoing pooler's forbidden call pool from sweep parameters", (
   expect(paths.some(path => path.startsWith("pooler-call.pool."))).toBe(false);
 });
 
+it.each([undefined, null])("excludes every pool parameter when a connection has no pool (%s)", pool => {
+  const initialModel: ModelFile = { ...model, connections: model.connections.map(edge => edge.id === "middle-to-dependency"
+    ? { ...edge, params: { ...edge.params, pool: { size: 10 } } }
+    : edge.id === "gateway-to-middle" ? { ...edge, params: { ...edge.params, pool } } : edge) };
+  render(<Settings initialCatalog={serverCatalog as Catalog} initialModel={initialModel} />);
+  fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
+  const paths = [...screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).options].map(option => option.value);
+  expect(paths.some(path => path.startsWith("gateway-to-middle.pool."))).toBe(false);
+  expect(paths).toContain("middle-to-dependency.pool.size");
+  expect(paths).toContain("middle-to-dependency.pool.acquireTimeout");
+});
+
 it.each([
   { path: "gateway-to-middle.attempts", values: [3], expected: [3, 4, 5] },
   { path: "gateway-to-middle.attempts", values: [2, 4], expected: [2, 4, 6, 8] },
-  { path: "gateway-to-middle.timeout", values: ["80ms"], expected: ["80ms", "81ms", "82ms"] },
+  { path: "gateway-to-middle.timeout", values: ["80ms"], expected: ["80ms", "120ms", "160ms"] },
+  { path: "gateway-to-middle.timeout", values: ["300ms"], expected: ["300ms", "450ms", "600ms"] },
+  { path: "gateway-to-middle.timeout", values: ["0.3s"], expected: ["0.3s", "0.45s", "0.6s"] },
   { path: "gateway-to-middle.timeout", values: ["100ms", "0.2s"], expected: ["100ms", "0.2s", "0.3s", "0.4s"] },
 ])("adds distinct values using the prior step and written units: $values", ({ path, values, expected }) => {
   render(<Settings initialExperiment={{ ...experiment, grid: [{ path, values }] }} />);
@@ -179,7 +194,7 @@ it("edits catalog paths and values in shared settings with undo/redo and a two-a
   fireEvent.blur(value);
   expect(screen.getByTestId("grid-document").textContent).toBe('[{"path":"gateway-to-middle.timeout","values":["80ms","0.04s"]}]');
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-  expect((screen.getByLabelText("Axis 1 value 2") as HTMLInputElement).value).toBe("81ms");
+  expect((screen.getByLabelText("Axis 1 value 2") as HTMLInputElement).value).toBe("120ms");
   fireEvent.click(screen.getByRole("button", { name: "Redo" }));
   expect((screen.getByLabelText("Axis 1 value 2") as HTMLInputElement).value).toBe("0.04s");
   fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));

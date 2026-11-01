@@ -18,6 +18,13 @@ const outputPolicies: Record<string, string> = {
   ejectedShare: "outlierDetection",
 };
 
+const poolOutputs = new Set(["poolUtilization", "meanPoolQueue", "poolAcquireTimeouts"]);
+
+/** Connection-pool outputs require a pool in at least one displayed effective model. */
+export function poolOutputAvailable(output: string, id: string, models: readonly ModelFile[]): boolean {
+  return !poolOutputs.has(output) || models.some(model => isObject(elementOf(model, id)?.params.pool));
+}
+
 function clientHasFallback(model: ModelFile, id: string): boolean {
   const classes = ownEntry(model.blocks, id)?.params.classes;
   const requestClasses = Array.isArray(classes)

@@ -42,11 +42,12 @@ function parametersOf(model: ModelFile, catalog: Catalog) {
   });
   return [...Object.entries(model.blocks), ...model.connections.map((connection) => [connection.id, connection] as const)]
     .flatMap(([id, element]) => leaves((catalog.types.find((type) => type.id === element.type)?.params ?? []).filter(param =>
-      !(element.type === "call" && "from" in element && ownEntry(model.blocks, element.from)?.type === "pooler" && param.name === "pool")), id, element.params)
+      !(element.type === "call" && param.name === "pool" && (element.params.pool == null
+        || "from" in element && ownEntry(model.blocks, element.from)?.type === "pooler"))), id, element.params)
       .map(parameter => ({ ...parameter, heading: parameterLabel(parameter.path, catalog, model) })));
 }
 
-/** Continue the written step, then look for unused values inside the descriptor's range. */
+/** Start continuous values with a half-value step, then continue the written step within the descriptor's range. */
 function nextGridValue(descriptor: ParamDescriptor, values: GridAxis["values"], initial: GridAxis["values"][number]): GridAxis["values"][number] | undefined {
   const quantity = descriptor.kind === "QUANTITY";
   const lastWritten = values.at(-1) ?? initial;
@@ -59,7 +60,9 @@ function nextGridValue(descriptor: ParamDescriptor, values: GridAxis["values"], 
   const numbers = values.map(numberOf).filter((value): value is number => value !== null);
   const last = numbers.at(-1) ?? numberOf(initial) ?? descriptor.minimum ?? descriptor.exclusiveMinimum ?? 0;
   const previous = numbers.slice(0, -1).reverse().find(value => value !== last);
-  const step = previous === undefined ? scale : last - previous;
+  const initialStep = descriptor.kind === "INTEGER" ? scale : Math.abs(last) / 2 || scale;
+  const step = previous === undefined ? Math.min(initialStep,
+    descriptor.maximum != null && descriptor.maximum > last ? descriptor.maximum - last : initialStep) : last - previous;
   const used = (value: GridAxis["values"][number]) => values.some(current => quantity
     ? equivalentQuantities(String(current), String(value), descriptor.units) : current === value);
   const encode = (canonical: number) => {

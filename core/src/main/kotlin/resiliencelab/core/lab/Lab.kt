@@ -47,6 +47,8 @@ data class ValidationReport(
     val experimentPath: String,
     val diagnostics: List<Diagnostic>,
     val documentVersions: Map<String, String> = emptyMap(),
+    /** Full experiment task count, or zero when compilation fails. */
+    val totalTasks: Int = 0,
 ) {
     val valid: Boolean get() = diagnostics.none { it.severity == Severity.ERROR }
 }
@@ -99,7 +101,9 @@ class Lab(
         checkDraftPaths(drafts)
         val loaded = load(experimentPath, drafts)
         val warnings = loaded.experiment?.let { ModelLinter().lint(it) }.orEmpty()
-        return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions)
+        val totalTasks =
+            loaded.experiment?.let { compiled -> compiled.variants.sumOf { it.points.size } * compiled.run.replications } ?: 0
+        return ValidationReport(experimentPath, loaded.diagnostics + warnings, loaded.versions, totalTasks)
     }
 
     /** Estimates task, event, time, and storage costs from compiled IR without starting a model. */

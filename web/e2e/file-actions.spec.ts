@@ -29,7 +29,7 @@ async function createIn(page: Page, name: string, directory: string, fromList = 
     .selectOption({ label: `+ ${name}…` });
   else await action(page, name);
   const dialog = page.getByRole("dialog", { name, exact: true });
-  await dialog.getByLabel(name === "New model" ? "Model name" : name === "New experiment" ? "Experiment name" : "Destination directory").fill(directory);
+  await dialog.getByLabel(name === "New experiment" ? "Experiment name" : "Model name").fill(directory);
   await dialog.getByRole("button", { name, exact: true }).click();
 }
 async function stored(page: Page, path: string) {
@@ -137,6 +137,7 @@ test("deletes a newly created model and its files, then returns to the last mode
       const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${target}/${target}.${kind}.json`)}`);
       expect(response.status()).toBe(404);
     }
+    await expect(stat(resolve(root, target))).rejects.toMatchObject({ code: "ENOENT" });
     expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model).toBeDefined();
   } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
 });

@@ -652,7 +652,7 @@ select {
 .scenario-steps { list-style: none; margin: 0.5rem 0; padding: 0; }
 .scenario-step { min-width: 0; }
 .scenario-actions, .scenario-override { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
-.scenario-actions button { flex: 1; }
+.scenario-actions button { flex: 1 0 auto; }
 .scenario-override { margin: 0.375rem 0; }
 .scenario-override label { display: flex; align-items: center; gap: 0.25rem; }
 .replica-overrides-scroll { max-width: 100%; overflow-x: auto; }
@@ -694,7 +694,8 @@ select {
 
 .inspector-execution .param-field > :not(label, .param-field-label, input, select),
 .inspector-faults .param-field > :not(label, .param-field-label, input, select) { grid-column: 1 / -1; }
-.inspector-faults .param-field[data-inspector-field$=".target"] { grid-template-columns: 1fr; }
+.inspector-faults .param-field[data-inspector-field$=".target"],
+.inspector-faults .param-field[data-inspector-field$=".kind"] { grid-template-columns: 1fr; }
 
 .inspector-type {
   margin: 0.25rem 0 0.375rem;
@@ -920,7 +921,7 @@ select {
 .grid-values { display: flex; flex-wrap: wrap; align-items: start; gap: 0.375rem; }
 .grid-values > .field-diagnostics { flex-basis: 100%; }
 .grid-value { display: flex; align-items: start; gap: 0.125rem; padding: 0.125rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; background: #f1f4f8; min-width: 0; max-width: 100%; }
-.grid-value .param-field { position: relative; margin: 0; min-width: 0; width: 5rem; }
+.grid-value .param-field { position: relative; margin: 0; min-width: 0; width: 7rem; }
 .grid-value .param-field-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .grid-value input { width: 100%; min-width: 0; }
 .grid-value > button { border: 0; background: transparent; padding: 0.125rem 0.25rem; }
@@ -1340,7 +1341,7 @@ select {
   position: absolute;
   inset-block-start: calc(100% + 0.5rem);
   inset-inline-end: 0;
-  z-index: 20;
+  z-index: 1003;
   width: min(48rem, calc(100vw - 2rem));
   max-height: 40vh;
   overflow: auto;
@@ -1418,7 +1419,7 @@ select {
 .results-context-playback { display: contents; }
 .results-context-playback[aria-hidden="true"] { visibility: hidden; }
 .results-context-bar > .results-context-point { flex: 0 1 14rem; width: auto; min-width: 9rem; max-width: 18rem; }
-.results-context-variant { flex: 0 3 6rem; min-width: 1rem; max-width: 6rem; overflow: hidden; text-overflow: ellipsis; }
+.results-context-variant { flex: 0 1 auto; min-width: 1rem; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }
 .results-context-time { flex: 0 5 5.5rem; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .results-context-actions { margin-inline-start: auto; flex: 0 1 4rem; min-width: 2rem; }
 .results-context-actions button { width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1444,10 +1445,12 @@ select {
 
 .canvas-results-stale {
   color: #92400e;
-  max-width: 7rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
+
+.status-bar > .canvas-results-stale { flex-shrink: 0; white-space: nowrap; }
 
 .block-results {
   display: grid;

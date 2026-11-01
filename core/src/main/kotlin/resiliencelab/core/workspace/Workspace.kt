@@ -1,6 +1,7 @@
 package resiliencelab.core.workspace
 
 import java.nio.channels.FileChannel
+import java.nio.file.DirectoryNotEmptyException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -99,7 +100,10 @@ interface Workspace {
         expectedVersion: String? = null,
     ): String
 
-    /** Deletes [path] only when its current version equals [expectedVersion]. */
+    /**
+     * Deletes [path] only when its current version equals [expectedVersion], then removes its empty physical parent.
+     * The workspace root and parent paths containing symbolic links remain.
+     */
     fun delete(
         path: String,
         expectedVersion: String,
@@ -285,6 +289,14 @@ class FileWorkspace(
             val current = DocumentVersion.of(Files.readAllBytes(file))
             if (current != expectedVersion) throw VersionConflictException(path, expectedVersion, current)
             Files.delete(file)
+            val directory = file.parent
+            if (directory != root && directory.toRealPath() == directory) {
+                try {
+                    Files.delete(directory)
+                } catch (_: DirectoryNotEmptyException) {
+                    // Other documents and unrelated files keep their directory.
+                }
+            }
         }
     }
 
