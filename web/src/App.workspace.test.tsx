@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { documentViews, experiment, experimentPath, model, modelPath } from "./test/fixtures";
+import { documentViews, experiment, experimentPath, layoutPath, model, modelPath } from "./test/fixtures";
 import type { DocumentView } from "./api/apiTypes";
 import { setupAppTests, otherPath, completed, deferred, server, open, selectGateway, editHandlers, button, experimentSelect } from "./test/app";
 
@@ -156,7 +156,7 @@ describe("App stage 1 integration", () => {
     expect(button("Save").disabled).toBe(true);
     editHandlers("oops");
     fireEvent.click(button("Reload"));
-    await screen.findByRole("heading", { name: "Run settings" });
+    await waitFor(() => expect(screen.queryByText(/The document changed on disk/)).toBeNull());
     await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Save").disabled).toBe(true);
@@ -179,18 +179,24 @@ describe("App stage 1 integration", () => {
     expect(screen.getByText(modelPath)).toBeTruthy();
     expect(screen.getByText(/Reload will discard unsaved changes/)).toBeTruthy();
     const nativeConfirm = vi.spyOn(window, "confirm");
-    const reads = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length;
+    // Related experiments may be read in the background; Reload reads the three open documents.
+    const reloadReads = () => fetchMock.mock.calls.filter(([url]) => {
+      if (!String(url).startsWith("/api/v1/workspace/document?")) return false;
+      const path = new URL(String(url), "http://test").searchParams.get("path");
+      return [experimentPath, modelPath, layoutPath].some(openPath => openPath === path);
+    });
+    const reads = reloadReads();
 
     fireEvent.click(button("Reload"));
     const dialog = await screen.findByRole("dialog", { name: "Reload and discard unsaved changes to the documents?" });
     expect(within(dialog).getAllByRole("button").map(button => button.textContent)).toEqual(["Stay", "Reload and discard edits"]);
     fireEvent.click(within(dialog).getByRole("button", { name: "Stay" }));
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/workspace/document?")).length).toBe(reads);
+    expect(reloadReads()).toEqual(reads);
 
     fireEvent.click(button("Reload"));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Reload and discard edits" }));
-    await screen.findByRole("heading", { name: "Run settings" });
+    await waitFor(() => expect(screen.queryByText(/The document changed on disk/)).toBeNull());
     await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
     expect(button("Undo").disabled).toBe(true);
@@ -230,7 +236,7 @@ describe("App stage 1 integration", () => {
     await screen.findByText(/The document changed on disk/, undefined, { timeout: 3000 });
 
     fireEvent.click(button("Reload"));
-    await screen.findByRole("heading", { name: "Run settings" });
+    await waitFor(() => expect(screen.queryByText(/The document changed on disk/)).toBeNull());
     expect(confirm).not.toHaveBeenCalled();
     await selectGateway();
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("9");
