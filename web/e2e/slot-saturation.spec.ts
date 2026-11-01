@@ -11,7 +11,7 @@ for (const locale of ["en-US", "ru-RU"]) {
     for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) test(`Findings names the connection pool at ${viewport.width}px`, async ({ page, request }) => {
       await page.setViewportSize(viewport);
       const name = `slot-saturation-${locale}-${viewport.width}`;
-      const model = { schemaVersion: 6, blocks: {
+      const model = { schemaVersion: 7, blocks: {
         client: { type: "client", params: { load: { points: [{ time: "0ms", rate: "300/s" }] }, deadline: "10s" } },
         gateway: { type: "service", params: { handlers: 100, queue: 1000, processing: { kind: "fixed", mean: "0ms" } } },
         "orders-db": { type: "database", params: { maxConnections: 100, queue: 1000, processing: { kind: "fixed", mean: "200ms" } } },
@@ -21,7 +21,7 @@ for (const locale of ["en-US", "ru-RU"]) {
           timeout: "10s", attempts: 1, pool: { size: 1, acquireTimeout: "10s" },
         } },
       ] };
-      const experiment = { schemaVersion: 3, modelRef: `${name}.model.json`,
+      const experiment = { schemaVersion: 4, modelRef: `${name}.model.json`,
         execution: { replications: 2, seed: 42, warmup: "0ms", measurement: "300ms", window: "50ms" },
         variants: [{ id: "baseline", label: "Baseline" }] };
       expect((await request.put(`/api/v1/workspace/document?path=${name}.model.json`, { data: { model } })).ok()).toBe(true);

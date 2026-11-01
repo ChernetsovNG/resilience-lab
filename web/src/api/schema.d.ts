@@ -410,6 +410,7 @@ export interface components {
                 };
             } | null;
             scenario?: components["schemas"]["ScenarioStep"][] | null;
+            title?: string | null;
             type: string;
         };
         CapacityHeadroom: {
@@ -610,16 +611,17 @@ export interface components {
             experiment: string;
         };
         Fault: {
+            at?: string | null;
             /** Format: int32 */
             capacity?: number | null;
             delay?: string | null;
             failureRate?: string | null;
-            from: string;
+            from?: string | null;
             kind: string;
             /** Format: double */
             multiplier?: number | null;
             target: string;
-            to: string;
+            to?: string | null;
         };
         FirstNodeSaturation: {
             label: components["schemas"]["SlotPoolLabel"];
@@ -971,12 +973,19 @@ export interface components {
             withoutSaturation: number;
         };
         ScenarioStep: {
+            branches?: components["schemas"]["ScenarioStep"][][] | null;
             classes?: string[] | null;
             connection?: string | null;
             failureRate?: string | null;
+            id?: string | null;
+            keySpace?: string | null;
+            onCacheError?: string | null;
+            onMiss?: components["schemas"]["ScenarioStep"][] | null;
             processing?: {
                 [key: string]: unknown;
             } | null;
+            repeat?: components["schemas"]["StepRepeat"] | null;
+            singleFlight?: boolean | null;
             type: string;
         };
         SeriesIndex: {
@@ -1102,6 +1111,11 @@ export interface components {
             slotPool: string;
             /** Format: double */
             value: number;
+        };
+        StepRepeat: {
+            /** Format: int32 */
+            count: number;
+            mode: string;
         };
         TypeDescriptor: {
             assumptions: string[];

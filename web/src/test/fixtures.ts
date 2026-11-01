@@ -129,7 +129,7 @@ const service = (handlers: number, queue: number, mean: string) => ({
 });
 
 export const model: ModelFile = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   blocks: {
     client: { type: "client", params: { deadline: "250ms", load: { points: [{ time: "0s", rate: "120/s" }] } } },
     dependency: service(2, 8, "8ms"),
@@ -172,7 +172,7 @@ export const modelPath = "retry-storm/retry-storm.model.json";
 export const layoutPath = "retry-storm/retry-storm.layout.json";
 
 export const experiment: ExperimentFile = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   modelRef: "retry-storm.model.json",
   layoutRef: "retry-storm.layout.json",
   execution: { replications: 2, warmup: "0ms", measurement: "1s", seed: 20261025, maxRealTime: "30s" },

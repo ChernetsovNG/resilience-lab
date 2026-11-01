@@ -509,7 +509,7 @@ class CliTest {
         workspace.resolve("replicas.model.json").writeText(
             """
             {
-              "schemaVersion": 6,
+              "schemaVersion": 7,
               "blocks": {
                 "client": {"type":"client","params":{"deadline":"1s","load":{"points":[{"time":"0ms","rate":"$rate"}]}}},
                 "gateway": {"type":"service","params":{"handlers":100,"queue":100,"processing":{"kind":"fixed","mean":"1ms"}}},
@@ -525,7 +525,7 @@ class CliTest {
         workspace.resolve("replicas.experiment.json").writeText(
             """
             {
-              "schemaVersion": 3,
+              "schemaVersion": 4,
               "modelRef": "replicas.model.json",
               "execution": {"seed":42,"warmup":"0ms","measurement":"1s","replications":2},
               "variants": [{"id":"baseline"}],

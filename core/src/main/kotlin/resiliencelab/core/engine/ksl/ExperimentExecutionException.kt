@@ -4,6 +4,27 @@ import kotlinx.serialization.json.JsonPrimitive
 import resiliencelab.core.compiler.CoreMessage
 import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.Severity
+import resiliencelab.core.ir.FaultKind
+import resiliencelab.core.ir.GraphIr
+import resiliencelab.core.ir.ServiceStep
+import resiliencelab.core.ir.walk
+
+/** T1 accepts the new documents while T2 implements their execution; reject before allocating run artifacts. */
+internal fun GraphIr.requireSupportedExecution() {
+    if (services.any { node ->
+            node.type == "cache" ||
+                scenario(node).walk().any {
+                    it.repeat != null || it is ServiceStep.CacheRead || it is ServiceStep.Parallel
+                }
+        } ||
+        faults.any { it.kind == FaultKind.FLUSH }
+    ) {
+        throw ExperimentExecutionException(
+            CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO,
+            CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO.template,
+        )
+    }
+}
 
 /** Indicates that execution or result collection failed, so no complete experiment result can be produced. */
 class ExperimentExecutionException(

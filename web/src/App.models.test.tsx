@@ -10,7 +10,7 @@ setupAppTests();
 it("guides a model without a client instead of showing structural errors", async () => {
   const fetchMock = server(url => {
     if (url.includes(encodeURIComponent(modelPath))) return { body: {
-      ...documentViews[modelPath], content: { model: { schemaVersion: 6, blocks: {}, connections: [] } },
+      ...documentViews[modelPath], content: { model: { schemaVersion: 7, blocks: {}, connections: [] } },
     } };
     if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: false, diagnostics: [
       { code: "TOPOLOGY_CLIENT", severity: "ERROR", message: "No client", document: modelPath, pointer: null, path: null },
@@ -28,7 +28,7 @@ it("guides a model without a client instead of showing structural errors", async
 it("keeps parameter errors visible while a client-less model receives the structural hint", async () => {
   server(url => {
     if (url.includes(encodeURIComponent(modelPath))) return { body: {
-      ...documentViews[modelPath], content: { model: { schemaVersion: 6, blocks: { service: { type: "service", params: { handlers: 0 } } }, connections: [] } },
+      ...documentViews[modelPath], content: { model: { schemaVersion: 7, blocks: { service: { type: "service", params: { handlers: 0 } } }, connections: [] } },
     } };
     if (url === "/api/v1/validate") return { body: { experiment: experimentPath, valid: false, diagnostics: [
       { code: "TOPOLOGY_CLIENT", severity: "ERROR", message: "No client", document: modelPath, pointer: "/blocks", path: null },

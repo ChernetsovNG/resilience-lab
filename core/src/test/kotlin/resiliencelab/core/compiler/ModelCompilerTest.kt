@@ -24,7 +24,7 @@ class ModelCompilerTest {
 
     private val model =
         """
-        {"schemaVersion": 6, "blocks": {
+        {"schemaVersion": 7, "blocks": {
           "client": {"type": "client", "params": {"load": {"points": [{"time": "0s", "rate": "120/s"}]}, "deadline": "250ms"}},
           "gateway": {"type": "service", "params": {"handlers": 4, "queue": 16, "processing": {"kind": "fixed", "mean": "1ms"}}},
           "dependency": {"type": "service", "params": {"handlers": 2, "queue": 8, "processing": {"kind": "exponential", "mean": "8ms"}}}
@@ -37,7 +37,7 @@ class ModelCompilerTest {
 
     private val experiment =
         """
-        {"schemaVersion": 3, "modelRef": "m.model.json",
+        {"schemaVersion": 4, "modelRef": "m.model.json",
          "execution": {"replications": 2, "warmup": "0ms", "measurement": "1s", "seed": 20261025},
          "faults": [{"target": "dependency", "from": "200ms", "to": "700ms", "kind": "slowdown", "multiplier": 6.0},
                     {"target": "dependency", "from": "200ms", "to": "700ms", "kind": "errors", "failureRate": "5%"}],
@@ -381,7 +381,7 @@ class ModelCompilerTest {
     fun `document order does not change the compiled experiment`() {
         val reordered =
             """
-            {"schemaVersion": 6, "connections": [
+            {"schemaVersion": 7, "connections": [
               {"id": "gateway-to-dependency", "type": "call", "from": "gateway", "to": "dependency",
                "params": {"backoff": {"max": "20ms", "base": "2ms", "kind": "exponential-full-jitter"}, "attempts": 3, "timeout": "80ms"}},
               {"id": "client-to-gateway", "type": "request", "from": "client", "to": "gateway"}

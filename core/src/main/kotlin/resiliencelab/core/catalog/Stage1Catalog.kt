@@ -29,6 +29,11 @@ object Stage1Catalog {
                     "Each query holds one connection until completion; waiting queries use a bounded FIFO queue.",
                     "An upstream timeout does not cancel an admitted query or release its connection.",
                 ),
+            "cache" to
+                listOf(
+                    "An external cache processes keyed GET and SET operations through a bounded FIFO handler pool.",
+                    "Entries expire by TTL; accesses update LRU order. A miss loads its source in the calling service.",
+                ),
             "request" to
                 listOf("Client requests enter the first service without network delay, per-attempt timeout, or retries."),
             "call" to
@@ -50,9 +55,9 @@ object Stage1Catalog {
 
     val catalog: Catalog =
         Catalog(
-            schemaVersion = 7,
+            schemaVersion = 8,
             types =
-                listOf(client(), service(), request(), call(), router(), route(), database(), pooler()).map { type ->
+                listOf(client(), service(), request(), call(), router(), route(), database(), pooler(), cache()).map { type ->
                     type.copy(params = type.params.map(::withUnits), assumptions = typeAssumptions.getValue(type.id))
                 },
             assumptions =
@@ -335,7 +340,7 @@ object Stage1Catalog {
             category = TypeCategory.CONNECTION,
             title = "Call",
             description = "Synchronous call with a per-attempt timeout, retries and backoff on the caller side.",
-            connects = ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler")),
+            connects = ConnectionRule(listOf("service", "pooler"), listOf("service", "router", "database", "pooler", "cache")),
             params =
                 listOf(
                     distribution(
@@ -586,6 +591,136 @@ object Stage1Catalog {
                     },
             )
         }
+
+    private fun cache() =
+        TypeDescriptor(
+            id = "cache",
+            version = 1,
+            category = TypeCategory.BLOCK,
+            title = "Cache",
+            description = "External keyed cache with TTL, LRU eviction and a bounded operation queue.",
+            ports = listOf(PortDescriptor("in", PortDirection.IN)),
+            params =
+                service().params.filter { it.name in setOf("handlers", "queue", "processing") }.map {
+                    when (it.name) {
+                        "handlers" ->
+                            it.copy(
+                                required = false,
+                                default = JsonPrimitive(1),
+                                initial = JsonPrimitive(1),
+                                description = "Maximum concurrent GET and SET operations. Initially 1.",
+                            )
+                        "processing" ->
+                            it.copy(
+                                required = false,
+                                default = Json.parseToJsonElement("""{"kind":"fixed","mean":"0.2ms"}"""),
+                                initial = Json.parseToJsonElement("""{"kind":"fixed","mean":"0.2ms"}"""),
+                                description = "Processing time of one GET or SET operation.",
+                            )
+                        else -> it
+                    }
+                } +
+                    listOf(
+                        ParamDescriptor(
+                            name = "capacity",
+                            kind = ParamKind.INTEGER,
+                            title = "Entry capacity",
+                            description = "Maximum stored entries across all key spaces; least recently used entries are evicted.",
+                            default = JsonPrimitive(10000),
+                            minimum = 1.0,
+                            sweepable = true,
+                        ),
+                        ParamDescriptor(
+                            name = "ttl",
+                            kind = ParamKind.QUANTITY,
+                            title = "Time to live",
+                            description = "Entry lifetime unless its key space supplies another TTL.",
+                            default = JsonPrimitive("60s"),
+                            dimension = Dimension.DURATION,
+                            exclusiveMinimum = 0.0,
+                            sweepable = true,
+                        ),
+                        ParamDescriptor(
+                            name = "ttlJitter",
+                            kind = ParamKind.QUANTITY,
+                            title = "TTL jitter",
+                            description = "Uniform relative variation on either side of the TTL.",
+                            default = JsonPrimitive("0%"),
+                            dimension = Dimension.PROBABILITY,
+                            minimum = 0.0,
+                            maximum = 1.0,
+                            sweepable = true,
+                        ),
+                        ParamDescriptor(
+                            name = "keySpaces",
+                            kind = ParamKind.ARRAY,
+                            title = "Key spaces",
+                            description = "Independent key identities and Zipf popularity; replace the entire list in a variant.",
+                            required = true,
+                            initial = Json.parseToJsonElement("""[{"id":"keys","keys":100000,"zipf":1.0}]"""),
+                            fields =
+                                listOf(
+                                    ParamDescriptor(
+                                        name = "id",
+                                        kind = ParamKind.STRING,
+                                        title = "Identifier",
+                                        description = "Unique identifier within this cache.",
+                                        required = true,
+                                    ),
+                                    ParamDescriptor(
+                                        name = "keys",
+                                        kind = ParamKind.INTEGER,
+                                        title = "Keys",
+                                        description = "Number of distinct keys.",
+                                        required = true,
+                                        minimum = 1.0,
+                                    ),
+                                    ParamDescriptor(
+                                        name = "zipf",
+                                        kind = ParamKind.NUMBER,
+                                        title = "Popularity skew",
+                                        description = "Zipf exponent; zero gives uniform popularity.",
+                                        required = true,
+                                        minimum = 0.0,
+                                    ),
+                                    ParamDescriptor(
+                                        name = "ttl",
+                                        kind = ParamKind.QUANTITY,
+                                        title = "Time to live",
+                                        description = "Optional lifetime for this space, overriding the cache TTL.",
+                                        dimension = Dimension.DURATION,
+                                        exclusiveMinimum = 0.0,
+                                    ),
+                                ),
+                        ),
+                        ParamDescriptor(
+                            name = "prefill",
+                            kind = ParamKind.OBJECT,
+                            title = "Initial entries",
+                            description = "Empty, or the N hottest keys of every key space at time zero.",
+                            default = Json.parseToJsonElement("""{"kind":"none"}"""),
+                            fields =
+                                listOf(
+                                    ParamDescriptor(
+                                        name = "kind",
+                                        kind = ParamKind.CHOICE,
+                                        title = "Initial population",
+                                        description = "Start empty or with the hottest keys.",
+                                        required = true,
+                                        options = listOf("none", "hot"),
+                                    ),
+                                    ParamDescriptor(
+                                        name = "keys",
+                                        kind = ParamKind.INTEGER,
+                                        title = "Keys per space",
+                                        description = "Hottest keys of each space; their total must fit in capacity.",
+                                        minimum = 1.0,
+                                        appliesWhen = ParamApplicability("kind", listOf("hot")),
+                                    ),
+                                ),
+                        ),
+                    ),
+        )
 
     private fun distribution(
         name: String,

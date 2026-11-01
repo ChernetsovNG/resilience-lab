@@ -292,7 +292,10 @@ class CheckoutPoliciesTest {
             document =
                 document.copy(
                     execution = document.execution.copy(replications = 4, warmup = "1s", measurement = "6s"),
-                    faults = document.faults.map { it.copy(from = compactTime(it.from, factor), to = compactTime(it.to, factor)) },
+                    faults =
+                        document.faults.map {
+                            it.copy(from = compactTime(requireNotNull(it.from), factor), to = compactTime(requireNotNull(it.to), factor))
+                        },
                     variants =
                         document.variants.map { variant ->
                             variant.copy(overrides = variant.overrides.mapValues { (_, value) -> compactTimes(value, factor) })

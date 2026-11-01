@@ -5,6 +5,7 @@ import { rememberRequestTypeCopy, requestTypeIdentity, type EditorCommand } from
 import { resetVariantParam, setVariantParam } from "./experimentCommands";
 import { applyOverrides, isObject, withParam, type Params } from "./params";
 import { identifierError } from "./structure";
+import { mapScenario } from "./scenarioTree";
 
 /** Smallest free generated identifier within this client's request types. */
 export function nextRequestTypeId(types: unknown[]): string {
@@ -142,7 +143,8 @@ export function renameRequestType(client: string, index: number, id: string, cat
         blocks: Object.fromEntries(Object.entries(edited.model.blocks).map(([key, block]) => [key, {
           ...block,
           params: block.type === "client" && Array.isArray(block.params.classes) ? { ...block.params, classes: renameTypes(block.params.classes) } : block.params,
-          ...(block.scenario == null ? {} : { scenario: block.scenario.map(step => step.classes == null ? step : { ...step, classes: renameFilter(step.classes) }) }),
+          ...(block.scenario == null ? {} : { scenario: mapScenario(block.scenario, step =>
+            step.classes == null ? step : { ...step, classes: renameFilter(step.classes) }) }),
         }])),
         connections: edited.model.connections.map(connection => connection.classes == null ? connection : { ...connection, classes: renameFilter(connection.classes) }),
       },

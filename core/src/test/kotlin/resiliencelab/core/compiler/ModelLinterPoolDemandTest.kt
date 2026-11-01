@@ -379,7 +379,7 @@ class ModelLinterPoolDemandTest {
         val source =
             (
                 DocumentCodec.decodeModel(
-                    """{"schemaVersion":6,"blocks":{
+                    """{"schemaVersion":7,"blocks":{
                   "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"150/s"}]},"deadline":"10s"}},
                   "front":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
                   "caller":{"type":"pooler","params":{"maxClientConnections":100,"poolSize":2,"waitTimeout":"1s"}},
@@ -414,7 +414,7 @@ class ModelLinterPoolDemandTest {
         overrides: String = "",
     ) = (
         DocumentCodec.decodeModel(
-            """{"schemaVersion":6,"blocks":{
+            """{"schemaVersion":7,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"150/s"}]},"deadline":"10s"}},
               "caller":{"type":"service","params":{"replicas":$replicas,"handlers":8,"processing":{"kind":"fixed","mean":"0ms"}}$overrides},
               "db":{"type":"database","params":{"maxConnections":100,"processing":{"kind":"fixed","mean":"40ms"}}}

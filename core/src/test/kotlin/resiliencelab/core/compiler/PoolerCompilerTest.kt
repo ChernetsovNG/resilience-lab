@@ -262,7 +262,7 @@ internal object PoolerTestModel {
     val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":6,"blocks":{
+                """{"schemaVersion":7,"blocks":{
               "client":{"type":"client","params":{"load":{"points":[{"time":"0ms","rate":"100/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":100,"processing":{"kind":"fixed","mean":"0ms"}}},
               "pooler":{"type":"pooler","params":{"maxClientConnections":2,"poolSize":1,"waitTimeout":"5ms","processing":{"kind":"fixed","mean":"1ms"}}},
@@ -278,7 +278,7 @@ internal object PoolerTestModel {
     val experiment =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","window":"10ms","seed":42},"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":4,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"100ms","window":"10ms","seed":42},"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

@@ -52,7 +52,7 @@ class WorkspaceApiTest {
 
         assertThat(response.status).isEqualTo(200)
         assertThat(JsonPath.read<List<String>>(response.contentAsString, "$.types[*].id"))
-            .containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler")
+            .containsExactly("client", "service", "request", "call", "router", "route", "database", "pooler", "cache")
         assertThat(JsonPath.read<List<String>>(response.contentAsString, "$.assumptions[*]")).isNotEmpty()
         assertThat(JsonPath.read<List<List<String>>>(response.contentAsString, "$.types[*].assumptions"))
             .allSatisfy { assumptions -> assertThat(assumptions).isNotEmpty() }
@@ -239,10 +239,10 @@ class WorkspaceApiTest {
     @Test
     fun `rejects wrong kinds, invalid content, bad paths and missing documents`() {
         val modelBody =
-            apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 6, blocks = emptyMap())))
+            apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 7, blocks = emptyMap())))
         assertThat(code(putDocument("drafts/x.layout.json", modelBody, ifMatch = null))).isEqualTo("DOCUMENT_KIND")
 
-        val futureBody = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 3)))
+        val futureBody = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 4)))
         val invalid = putDocument("drafts/future.layout.json", futureBody, ifMatch = null)
         assertThat(invalid.status).isEqualTo(400)
         assertThat(code(invalid)).isEqualTo("DOCUMENT_INVALID")

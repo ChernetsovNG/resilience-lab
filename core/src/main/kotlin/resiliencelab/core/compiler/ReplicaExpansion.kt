@@ -5,7 +5,7 @@ import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
-import resiliencelab.core.ir.ServiceStep
+import resiliencelab.core.ir.mapConnections
 
 /** Expand validated service instances without introducing another execution path (ADR 0012). */
 internal fun GraphIr.expandReplicaGroups(instances: Map<String, List<ServiceNode>>): GraphIr {
@@ -22,9 +22,7 @@ internal fun GraphIr.expandReplicaGroups(instances: Map<String, List<ServiceNode
                     instance.copy(
                         pathSegments = service.pathSegments + segment,
                         scenario =
-                            instance.scenario?.map { step ->
-                                if (step is ServiceStep.Call) step.copy(edge = step.edge + segment) else step
-                            },
+                            instance.scenario?.mapConnections { it + segment },
                     )
                 }
             }

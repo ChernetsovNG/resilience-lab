@@ -22,7 +22,7 @@ export function Palette({ catalog, editable = false, onAdd, hidden = false }: {
     if (restoreFocus) details?.anchor.focus();
   }, [details]);
   if (hidden && details !== null) setDetails(null);
-  const types = catalog?.types.filter((type) => type.category === "BLOCK") ?? [];
+  const types = catalog?.types.filter((type) => type.category === "BLOCK" && type.id !== "cache") ?? [];
   const add = (type: string) => {
     if (!editable) return;
     close(true);

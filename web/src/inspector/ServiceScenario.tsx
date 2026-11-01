@@ -62,6 +62,15 @@ export function ServiceScenario({ catalog, model, serviceId, editable, invalid, 
     requestAnimationFrame(() => list.current?.children[to]?.querySelector<HTMLSelectElement>("select")?.focus());
   };
 
+  if (steps.some(step => !["process", "call"].includes(step.type) || step.id != null || step.repeat != null)) {
+    return <InspectorSection name="scenario" title={t("editor.scenario.title")}>
+      <p>{t("editor.scenario.newFieldsReadOnly")}</p>
+      <pre aria-label={t("editor.scenario.readOnly")} data-inspector-field="scenario"
+        style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(steps, null, 2)}</pre>
+      <DiagnosticMessages diagnostics={[...(fieldDiagnostics ?? [])].filter(([path]) => path.startsWith("scenario"))
+        .flatMap(([, findings]) => findings)} />
+    </InspectorSection>;
+  }
   return <InspectorSection name="scenario" title={<>{t("editor.scenario.title")} <span onClick={event => event.stopPropagation()}>
     <HelpHint label={t("editor.scenario.title")}>{t("editor.scenario.description")}</HelpHint></span></>}>
     <div title={readOnlyHint}>

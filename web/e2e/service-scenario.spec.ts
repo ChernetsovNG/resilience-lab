@@ -44,7 +44,8 @@ for (const language of ["en", "ru"] as const) {
         { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
         { type: "call", connection: "gateway-to-dependency", processing: null, failureRate: null, classes: null },
         { type: "call", connection: "gateway-to-middle", processing: null, failureRate: null, classes: null },
-      ];
+      ].map(step => ({ ...step, id: null, repeat: null, keySpace: null, onMiss: null,
+        branches: null, singleFlight: null, onCacheError: null }));
       const after = await canvas.boundingBox();
       expect({ width: after!.width, height: after!.height }).toEqual({ width: before!.width, height: before!.height });
       await testInfo.attach("canvas-size", { body: JSON.stringify({ before, after }), contentType: "application/json" });

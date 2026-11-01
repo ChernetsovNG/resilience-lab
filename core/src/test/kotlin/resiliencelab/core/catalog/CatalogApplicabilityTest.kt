@@ -23,15 +23,17 @@ class CatalogApplicabilityTest {
     private val catalog = Stage1Catalog.catalog
     private val source =
         """
-        {"schemaVersion":6,"blocks":{
+        {"schemaVersion":7,"blocks":{
           "client":{"type":"client","params":{"load":{"points":[{"time":"0s","rate":"1/s"}]},"deadline":"1s"}},
-          "service":{"type":"service","params":{"handlers":4,"processing":{"kind":"fixed","mean":"5ms"}}},
+          "service":{"type":"service","params":{"handlers":4,"processing":{"kind":"fixed","mean":"5ms"}},"scenario":[{"type":"call","connection":"rpc"},{"type":"cacheRead","id":"cached","connection":"cached","keySpace":"items","onMiss":[]}]},
           "pooler":{"type":"pooler","params":{"maxClientConnections":4,"poolSize":2,"waitTimeout":"20ms","processing":{"kind":"fixed","mean":"5ms"}}},
-          "database":{"type":"database","params":{"maxConnections":4,"processing":{"kind":"fixed","mean":"5ms"}}}
+          "database":{"type":"database","params":{"maxConnections":4,"processing":{"kind":"fixed","mean":"5ms"}}},
+          "cache":{"type":"cache","params":{"keySpaces":[{"id":"items","keys":100,"zipf":0}]}}
         },"connections":[
           {"id":"request","type":"request","from":"client","to":"service"},
           {"id":"rpc","type":"call","from":"service","to":"pooler","params":{"timeout":"100ms","attempts":3}},
-          {"id":"query","type":"call","from":"pooler","to":"database","params":{"timeout":"50ms"}}
+          {"id":"query","type":"call","from":"pooler","to":"database","params":{"timeout":"50ms"}},
+          {"id":"cached","type":"call","from":"service","to":"cache","params":{"timeout":"50ms"}}
         ]}
         """.trimIndent()
 
@@ -94,7 +96,7 @@ class CatalogApplicabilityTest {
             model,
             "m.model.json",
             ExperimentFile(
-                2,
+                4,
                 modelRef = "m.model.json",
                 execution = ExecutionSettings(2, "0s", "1s", 1),
                 variants = listOf(Variant("baseline")),
@@ -109,6 +111,8 @@ class CatalogApplicabilityTest {
             "service.processing.stdDev",
             "database.processing.stdDev",
             "pooler.processing.stdDev",
+            "cache.processing.stdDev",
+            "cache.prefill.keys",
             "call.network.stdDev",
             "call.backoff.base",
             "call.backoff.max",

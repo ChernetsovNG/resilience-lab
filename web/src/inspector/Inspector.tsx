@@ -147,6 +147,10 @@ export function Inspector({ catalog, model, layout, baseModel, experiment, exper
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
+          {ownEntry(model.blocks, selected)?.title != null ? <label className="param-field">
+            {t("editor.block.title")}
+            <input readOnly value={ownEntry(model.blocks, selected)!.title ?? ""} />
+          </label> : null}
           {variantId === null && ownEntry(model.blocks, selected) !== undefined && layout != null && Object.hasOwn(layout.sizes, selected) ?
             <button type="button" disabled={!editable || invalid || onCommand === undefined}
               onClick={() => onCommand?.(resetBlockSize(selected))}>{t("editor.canvas.resetSize")}</button> : null}
@@ -165,7 +169,7 @@ export function Inspector({ catalog, model, layout, baseModel, experiment, exper
               descriptor={descriptor}
               value={element.params[descriptor.name]}
               path={descriptor.name}
-              editable={editable}
+              editable={editable && element.type !== "cache"}
               isOverridden={(path) => isOverridden(overrides, selected, path)}
               isSwept={(path) => variantId !== null && (experiment.grid ?? []).some(axis =>
                 axis.path === `${selected}.${path}` || axis.path.startsWith(`${selected}.${path}.`))}

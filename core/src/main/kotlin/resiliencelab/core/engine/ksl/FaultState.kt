@@ -62,6 +62,7 @@ internal class FaultState {
                     FaultKind.UNAVAILABLE -> unavailable = true
                     FaultKind.BLACKHOLE -> blackhole = true
                     FaultKind.CAPACITY_LOSS -> capacity = capacity?.let { minOf(it, requireNotNull(fault.capacity)) } ?: fault.capacity
+                    FaultKind.FLUSH -> error("Flush is an instantaneous cache event, not an interval fault")
                 }
             }
     }

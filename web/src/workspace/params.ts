@@ -1,4 +1,5 @@
 import type { Catalog, ModelFile } from "../api/apiTypes";
+import { mapScenario } from "./scenarioTree";
 
 export type Params = Record<string, unknown>;
 
@@ -50,6 +51,16 @@ export function applyOverrides(model: ModelFile, overrides: Params, catalog: Cat
   for (const key of Object.keys(overrides).sort()) {
     const value = overrides[key];
     const [id, name, ...fields] = key.split(".");
+    if (name === "steps") {
+      const block = ownEntry(result.blocks, id);
+      if (block?.type === "service" && block.scenario != null && fields.length === 3 &&
+        fields[1] === "repeat" && fields[2] === "count" && typeof value === "number" && Number.isInteger(value)) {
+        const scenario = mapScenario(block.scenario, step => step.id === fields[0] && step.repeat != null
+          ? { ...step, repeat: { ...step.repeat, count: value } } : step);
+        result = { ...result, blocks: { ...result.blocks, [id]: { ...block, scenario } } };
+      }
+      continue;
+    }
     const element = elementOf(result, id);
     const descriptor = catalog.types
       .find((type) => type.id === element?.type)

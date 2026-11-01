@@ -184,7 +184,7 @@ class RouterCompilerTest {
     private val model =
         (
             DocumentCodec.decodeModel(
-                """{"schemaVersion":6,"blocks":{
+                """{"schemaVersion":7,"blocks":{
               "client":{"type":"client","params":{"load": {"points": [{"time": "0s", "rate": "10/s"}]},"deadline":"1s"}},
               "gateway":{"type":"service","params":{"handlers":2,"processing":{"kind":"fixed","mean":"1ms"}}},
               "router":{"type":"router","params":{"policy":"random"}},
@@ -202,7 +202,7 @@ class RouterCompilerTest {
     private val experiment =
         (
             DocumentCodec.decodeExperiment(
-                """{"schemaVersion":3,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"variants":[{"id":"baseline"}]}""",
+                """{"schemaVersion":4,"modelRef":"m.model.json","execution":{"replications":5,"warmup":"0ms","measurement":"1s","seed":42},"variants":[{"id":"baseline"}]}""",
                 "e.experiment.json",
             ) as DecodeResult.Ok
         ).value

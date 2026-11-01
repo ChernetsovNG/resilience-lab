@@ -49,6 +49,10 @@ class ReliabilityModel(
     private val onOriginalCompletion: ((Double, Boolean) -> Unit)? = null,
     private val selectTarget: (CallEdge, Int) -> String = { call, _ -> call.to },
 ) : ProcessModel(model) {
+    init {
+        graph.requireSupportedExecution()
+    }
+
     private val measurementStartMs = graph.run.warmupMs
     private val measurementEndMs = graph.run.warmupMs + graph.run.measurementMs
 
@@ -573,6 +577,11 @@ class ReliabilityModel(
                             }
                         }
                         is ServiceStep.Call -> executeCall(callRuntimes.getValue(step.edge))
+                        is ServiceStep.CacheRead, is ServiceStep.Parallel ->
+                            throw ExperimentExecutionException(
+                                CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO,
+                                CoreMessage.EXECUTION_UNSUPPORTED_SCENARIO.template,
+                            )
                     }
                 if (outcome != AttemptOutcome.SUCCEEDED) return outcome
             }

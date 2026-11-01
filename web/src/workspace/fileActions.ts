@@ -39,7 +39,7 @@ function parseDocument(text: string, name: string): Record<string, unknown> {
 /** Default question for a model: one baseline and ten independent replications. */
 export function defaultExperiment(modelRef: string, layoutRef: string | null): ExperimentFile {
   return {
-    schemaVersion: 3, modelRef, layoutRef,
+    schemaVersion: 4, modelRef, layoutRef,
     execution: { replications: 10, seed: 1, warmup: "10s", measurement: "60s", maxRealTime: "30s" },
     faults: [], grid: [], variants: [{ id: "baseline", label: t("file.baseline"), overrides: {} }],
   };
@@ -51,7 +51,7 @@ export function newModel(directory: string): DocumentDraft[] {
   const name = nameOf(path);
   return [
     { path: `${path}/${name}.model.json`, content: { model: {
-      schemaVersion: 6,
+      schemaVersion: 7,
       blocks: {}, connections: [],
     } } },
     { path: `${path}/${name}.layout.json`, content: { layout: {

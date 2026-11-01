@@ -43,6 +43,9 @@ function targetOf(target: string, model: ModelFile): { elementId: string | null;
 export function faultLabel(fault: Fault, model: ModelFile, catalog: Catalog): string {
   const key = `faults.kinds.${fault.kind}`;
   const kind = Object.hasOwn(messages, key) ? t(key) : fault.kind;
+  if (fault.kind === "flush") return t("course.fault", {
+    target: targetOf(fault.target, model).label, details: kind, interval: formatParameterValue(fault.at),
+  });
   const parameters = fault.kind === "slowdown" ? [
     ...(fault.multiplier == null ? [] : [formatMultiplier(fault.multiplier)]),
     ...(fault.delay == null ? [] : [t("course.delay", { delay: formatParameterValue(fault.delay) })]),
@@ -50,7 +53,7 @@ export function faultLabel(fault: Fault, model: ModelFile, catalog: Catalog): st
   const details = fault.kind === "capacityLoss" ? t("course.capacity", { kind, capacity: formatNumber(fault.capacity) })
     : parameters === "" ? kind : t("course.parameters", { kind, parameters });
   const from = formatParameterValue(fault.from), to = formatParameterValue(fault.to);
-  const sameUnit = /[a-z]+$/.exec(fault.from)?.[0] === /[a-z]+$/.exec(fault.to)?.[0];
+  const sameUnit = /[a-z]+$/.exec(fault.from ?? "")?.[0] === /[a-z]+$/.exec(fault.to ?? "")?.[0];
   const combineUnit = sameUnit && from.includes(" ") && quantity(fault.from, catalog, "DURATION") !== null && quantity(fault.to, catalog, "DURATION") !== null;
   const interval = t("course.interval", { from: combineUnit ? from.slice(0, from.lastIndexOf(" ")) : from, to });
   return t("course.fault", { target: targetOf(fault.target, model).label, details, interval });
