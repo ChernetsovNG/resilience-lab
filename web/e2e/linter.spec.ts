@@ -55,5 +55,17 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
     await warning.click();
     await expect(page.getByRole("tab", { name: "Базовый", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.handlers.title"], { exact: true })).toBeFocused();
+
+    model.blocks.catalog.params.queue = 1000;
+    await save();
+    await page.reload();
+    await selectExperiment(page, `${directory}/experiment.experiment.json`);
+    await tab.click();
+    await expect(tab).toHaveText("Проблемы (2)");
+    const queueWarning = rows.locator('button[data-diagnostic-code="LINT_QUEUE_WAIT"]');
+    await expect(queueWarning).toHaveCount(1);
+    await expect(queueWarning).toContainText("реплики #1–#3; варианты: Базовый, Пул 16");
+    await queueWarning.click();
+    await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
