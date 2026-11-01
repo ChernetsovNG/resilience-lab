@@ -37,6 +37,10 @@ class ExampleDocumentsTest {
                         "LINT_RETRY_NO_JITTER/least-in-flight" to 1,
                         "LINT_RETRY_NO_JITTER/bigger-pool" to 1,
                         "LINT_RETRY_NO_JITTER/no-backoff" to 1,
+                        "LINT_RETRY_SAME_TARGET/baseline" to 1,
+                        "LINT_RETRY_SAME_TARGET/least-in-flight" to 1,
+                        "LINT_RETRY_SAME_TARGET/bigger-pool" to 1,
+                        "LINT_RETRY_SAME_TARGET/no-backoff" to 1,
                     ),
             )
         val policies =

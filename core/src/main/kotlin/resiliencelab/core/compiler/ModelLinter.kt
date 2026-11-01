@@ -11,6 +11,7 @@ import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.RetryTarget
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
@@ -35,6 +36,7 @@ import kotlin.math.sqrt
  * [rejectionRiskThreshold] is the queue-free Erlang B probability threshold (0.01 by default), in (0, 1].
  * [retryOverloadThreshold] is the positive accepted-utilization threshold for worst-case retries (1 by default).
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
+ * [retrySameTargetThreshold] is the minimum attempt count for same-target retry warnings (2 by default), at least 2.
  * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
@@ -53,8 +55,10 @@ class ModelLinter(
     private val rejectionRiskThreshold: Double = 0.01,
     private val poolDemandThreshold: Double = 1.0,
     private val healthCheckCascadeThreshold: Double = 1.0,
+    private val retrySameTargetThreshold: Int = 2,
 ) {
     init {
+        require(retrySameTargetThreshold >= 2) { "retrySameTargetThreshold must be at least 2" }
         require(healthCheckCascadeThreshold.isFinite() && healthCheckCascadeThreshold > 0.0) {
             "healthCheckCascadeThreshold must be finite and positive"
         }
@@ -209,6 +213,7 @@ class ModelLinter(
                     }
                     calls.forEach { call ->
                         clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
+                        retrySameTarget(graph, client, requestClass, graph.call(call.path))?.let(diagnostics::add)
                         retryNoJitter(call)?.let(diagnostics::add)
                         timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
                             ?.let(diagnostics::add)
@@ -873,6 +878,35 @@ class ModelLinter(
                 "clientDeadlines" to JsonPrimitive(deadlines),
                 "threshold" to JsonPrimitive(number(timeoutUnreachableThreshold)),
             ),
+        )
+    }
+
+    /** Resolve the original target: callPaths replaces router targets with each reachable leaf service. */
+    private fun retrySameTarget(
+        graph: GraphIr,
+        client: ClientNode,
+        requestClass: String,
+        call: CallEdge,
+    ): Diagnostic? {
+        if (call.attempts < retrySameTargetThreshold || call.retryTarget != RetryTarget.ANY) return null
+        val targets = graph.entryServices(client.copy(entry = call.to), requestClass).size
+        if (targets < 2) return null
+        return warning(
+            CoreMessage.LINT_RETRY_SAME_TARGET,
+            "Connection '${call.path}' allows ${number(call.attempts.toDouble())} attempts among ${number(targets.toDouble())} targets " +
+                "for request type '$requestClass' (threshold ${number(retrySameTargetThreshold.toDouble())}). " +
+                "Retries may return to the same degraded target; use retryTarget: other.",
+            call.origin,
+            call.path,
+            if (call.retryTargetExplicit) "/params/retryTarget" else "/params/attempts",
+            mapOf(
+                "connection" to JsonPrimitive(call.path),
+                "attempts" to JsonPrimitive(call.attempts),
+                "targets" to JsonPrimitive(targets),
+                "requestType" to JsonPrimitive(requestClass),
+                "threshold" to JsonPrimitive(retrySameTargetThreshold),
+            ),
+            replicaPath = call.from,
         )
     }
 

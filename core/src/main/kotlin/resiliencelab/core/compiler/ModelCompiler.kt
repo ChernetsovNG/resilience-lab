@@ -1290,6 +1290,7 @@ class ModelCompiler(
                 retryBudget,
                 fallback,
                 outlierDetection,
+                retryTargetExplicit = reader.has("retryTarget"),
             )
         }
     }
