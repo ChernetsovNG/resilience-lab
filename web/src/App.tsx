@@ -52,7 +52,7 @@ export function App() {
   const workspace = useWorkspace(health.reportFailure, health.reportSuccess);
   const { confirm, confirmDocumentSwitch, confirmationDialog } = useConfirmation();
   const canvas = useRef<CanvasHandle>(null);
-  const focusCanvasElement = useCallback((id: string) => canvas.current?.focusElement(id), []);
+  const focusCanvasElement = useCallback((id: string, page: string | null) => canvas.current?.focusElement(id, page), []);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
@@ -205,7 +205,7 @@ export function App() {
     if (current === undefined) return;
     if (variantId === null && resultVariantId !== undefined) selectVariant(resultVariantId);
     setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null);
-    focusCanvasElement(current[0]);
+    focusCanvasElement(current[0], variantId ?? resultVariantId ?? null);
     results.select({ replicaId: replica?.instance.id ?? null });
     setInspectorRequest(current => current + 1);
   };

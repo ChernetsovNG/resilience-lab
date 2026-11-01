@@ -20,6 +20,45 @@ import * as blockGeometry from "./blockGeometry";
 
 beforeAll(mockReactFlowDom);
 
+it("keeps a result centered through late measurements and releases it on a canvas gesture", async () => {
+  const observer = globalThis.ResizeObserver;
+  const heightProperty = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;
+  const measurements: (() => void)[] = [];
+  let targetHeight = 80;
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get() {
+    return (this as HTMLElement).dataset.id === "dependency" ? targetHeight : 80;
+  } });
+  globalThis.ResizeObserver = class extends observer {
+    observe(target: Element) { measurements.push(() => super.observe(target)); super.observe(target); }
+  };
+  try {
+    const ref = createRef<CanvasHandle>();
+    const { container } = render(<Canvas ref={ref} catalog={catalog} model={model} layout={layout} selected={[]}
+      onSelect={vi.fn()} onCommand={vi.fn()} />);
+    const viewport = () => {
+      const [, x, y, zoom] = container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform
+        .match(/translate\(([-\d.]+)px,([-\d.]+)px\) scale\(([\d.]+)\)/)!;
+      return { x: Number(x), y: Number(y), zoom: Number(zoom) };
+    };
+    await waitFor(() => expect(viewport().zoom).toBeLessThan(0.7));
+    act(() => ref.current!.focusElement("dependency"));
+    await waitFor(() => expect(viewport().zoom).toBeGreaterThanOrEqual(0.7));
+    targetHeight = 160;
+    await act(async () => { measurements.forEach(measure => measure()); });
+    await waitFor(() => expect(viewport().y + (layout.positions.dependency.y + 80) * viewport().zoom).toBeCloseTo(48));
+    const zoomIn = screen.getByRole("button", { name: "Zoom In" });
+    fireEvent.mouseDown(zoomIn); fireEvent.click(zoomIn);
+    await waitFor(() => expect(viewport().zoom).toBeGreaterThan(0.7));
+    const manual = viewport();
+    targetHeight = 240;
+    await act(async () => { measurements.forEach(measure => measure()); await new Promise(requestAnimationFrame); });
+    expect(viewport()).toEqual(manual);
+  } finally {
+    globalThis.ResizeObserver = observer;
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightProperty);
+  }
+});
+
 it("centers a result node at readable zoom and preserves a larger zoom on repeated navigation", async () => {
   const ref = createRef<CanvasHandle>();
   const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn(), bottomInset: 20 };

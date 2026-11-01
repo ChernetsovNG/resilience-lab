@@ -45,8 +45,8 @@ const ariaLabelConfig = (): AriaLabelConfig => ({
 /** Palette activation uses the current viewport, waiting for its first measurement when necessary. */
 export interface CanvasHandle {
   addBlock: (type: string) => void;
-  /** Centers a result element after measurement, preserving zoom above the readable minimum of 70%. */
-  focusElement: (id: string) => void;
+  /** Follows result geometry at a minimum 70% zoom until a canvas gesture or page change. */
+  focusElement: (id: string, variantId?: string | null) => void;
 }
 
 export interface CanvasProps {
@@ -138,7 +138,8 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, getViewport, getNodes, setViewport } = useReactFlow();
   const manualViewport = useRef(false);
-  const [focusTarget, setFocusTarget] = useState<{ id: string } | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{ id: string; page: string | null } | null>(null);
+  if (focusTarget !== null && focusTarget.page !== (variant?.id ?? null)) setFocusTarget(null);
   const width = useStore((state) => state.width);
   const minZoom = useStore(state => state.minZoom);
   const maxZoom = useStore(state => state.maxZoom);
@@ -158,7 +159,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       get message() { return t("editor.variant.structureHint"); } });
   };
   useImperativeHandle(ref, () => ({
-    focusElement: id => { manualViewport.current = true; setFocusTarget({ id }); },
+    focusElement: (id, page = variant?.id ?? null) => { manualViewport.current = true; setFocusTarget({ id, page }); },
     addBlock: (type) => {
       if (!editable) { structureHint(); return; }
       if (disabled) return;
@@ -281,16 +282,11 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     const center = node === undefined ? edgeGeometries.get(focusTarget.id)?.label
       : node.width > 0 && node.height > 0 ? { x: node.x + node.width / 2, y: node.y + node.height / 2 } : undefined;
     if (center === undefined) return;
-    // Edge labels are measured in a frame after node ResizeObserver updates; changes restart this wait.
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => {
-          const zoom = Math.max(0.7, getViewport().zoom);
-          const top = variantVisible ? bannerHeight + 16 : 16;
-          void setViewport({ x: width / 2 - center.x * zoom, y: (top + height - bottomInset) / 2 - center.y * zoom, zoom });
-          setFocusTarget(null);
-        });
-      });
+    // Geometry can arrive after any number of frames; retain focus until the user takes over.
+    const frame = requestAnimationFrame(() => {
+      const zoom = Math.max(0.7, getViewport().zoom);
+      const top = variantVisible ? bannerHeight + 16 : 16;
+      void setViewport({ x: width / 2 - center.x * zoom, y: (top + height - bottomInset) / 2 - center.y * zoom, zoom });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusTarget, initialized, nodeBounds, edgeGeometries, width, height, variantVisible, bannerHeight, bottomInset, getViewport, setViewport]);
@@ -388,8 +384,10 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     count: t(count === 1 ? "editor.variant.changeCountOne" : "editor.variant.changeCount", { count: formatNumber(count) }) });
   return (
     <div className={`model-canvas${variant === undefined ? "" : " variant-canvas"}`}
+      onWheelCapture={() => setFocusTarget(null)} onKeyDownCapture={() => setFocusTarget(null)}
       onMouseDownCapture={event => {
         manualViewport.current = true;
+        setFocusTarget(null);
         if (variant === undefined || disabled || !(event.target instanceof Element)
           || event.target.closest("button, input, textarea, select, .inline-param") !== null
           || event.target.closest(".react-flow__node, .react-flow__handle") === null) return;
@@ -428,7 +426,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       nodesConnectable={editable}
       elementsSelectable={!disabled}
       deleteKeyCode={null}
-      onMoveStart={event => { if (event !== null) manualViewport.current = true; }}
+      onMoveStart={event => { if (event !== null) { manualViewport.current = true; setFocusTarget(null); } }}
       onNodesChange={onNodesChange}
       onEdgesChange={selectionChanges}
       onNodeClick={(event, node) => select(event, node.id)}
