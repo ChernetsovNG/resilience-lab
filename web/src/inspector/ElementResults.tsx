@@ -1,3 +1,6 @@
+import { EntryResults } from "../results/EntryResults";
+import { entryModels, hasEntryDetails, hasFallback, requestTypes } from "../results/entries";
+import { applyOverrides, ownEntry } from "../workspace/params";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatNumber } from "../i18n/format";
@@ -106,6 +109,34 @@ export function ElementResults(props: ElementResultsProps) {
     thresholdMs: output.inspector!.thresholdParameter == null ? null : result?.timeoutMs,
     points: (result?.windows ?? []).map((frame, index) => ({ window: index, startMs: frame.startMs, value: frame[output.id] })),
   }));
+  if (selection?.kind === "client" && point !== undefined && variant !== undefined && manifest.complete
+    && replication >= 0 && replication < variant.replications) {
+    const entry = ownEntry(point.aggregate.entries.clients, selection.id);
+    const effective = applyOverrides(applyOverrides(runModel,
+      experiment.variants.find(variant => variant.id === variantId)?.overrides ?? {}, catalog), point.coordinates, catalog);
+    const client = ownEntry(effective.blocks, selection.id);
+    const aggregates = summary.variants.flatMap(variant => variant.points.map(point => point.aggregate));
+    const models = entryModels(summary, runModel, catalog, experiment.variants);
+    const showFailures = hasEntryDetails(aggregates, models);
+    const showDegraded = hasFallback(aggregates, models);
+    const types = client !== undefined && Array.isArray(client.params.classes) ? requestTypes(client.params) : [];
+    return <section className="element-results" aria-label={t("inspector.results.title")}>
+      <h3>{t("inspector.results.title")}</h3>
+      {entry === undefined ? <p>{t("inspector.results.unavailable")}</p> : <>
+        <p className="element-results-context">{t("results.entries.context", { variant: variantLabel(variant, experiment.variants), point: pointLabel(pointId, summary.grid, point.coordinates, catalog, runModel) })}</p>
+        <p className="element-results-note">{t("results.entries.summaryNote")}</p>
+        <EntryResults entry={entry} name={t("inspector.results.title")} showFailures={showFailures} showDegraded={showDegraded} />
+        {types.length === 0 ? null : <section aria-label={t("results.entries.byRequestTypes")}>
+          <h4>{t("results.entries.byRequestTypes")}</h4>
+          {types.some(id => Object.values(effective.blocks).filter(block => block.type === "client" && requestTypes(block.params).includes(id)).length > 1)
+            ? <p className="element-results-note">{t("results.entries.sharedTypes")}</p> : null}
+          {types.map(id => <div key={id}><h4>{id}</h4><EntryResults entry={ownEntry(point.aggregate.entries.classes, id)}
+            name={t("results.entries.requestType", { id })} showFailures={showFailures} showDegraded={showDegraded} /></div>)}
+        </section>}
+        <button type="button" onClick={onShowTimeline}>{t("inspector.results.showTimeline")}</button>
+      </>}
+    </section>;
+  }
   return <section className="element-results" aria-label={t("inspector.results.title")}>
     <h3>{t("inspector.results.title")}</h3>
     {selected === null ? <p>{t("inspector.results.select")}</p> : result === null || !manifest.complete

@@ -52,6 +52,16 @@ export function resultSelection(runModel: ModelFile, currentModel: ModelFile, se
     ? { id: selected, elementId, replica: member?.instance.replica, kind: original.type, category: "CONNECTION" as const, target: original.to } : null;
 }
 
+/** Availability includes direct client aggregates as well as catalog-defined element outputs. */
+export function hasElementResults(context: ElementResultsContext): boolean {
+  const variant = context.summary.variants.find(variant => variant.id === context.variantId);
+  const point = variant?.points.find(point => point.id === context.pointId);
+  if (variant === undefined || point === undefined || context.replication < 0 || context.replication >= variant.replications) return false;
+  const selection = resultSelection(context.runModel, context.currentModel, context.selected, point.aggregate.groups);
+  return selection?.kind === "client" ? ownEntry(point.aggregate.entries.clients, selection.id) !== undefined
+    : projectElementResults(context) !== null;
+}
+
 /** Summary rates and time averages stay pooled; event counts are per replication. Only supplied replication metrics carry their unmodified Student bounds. */
 export function projectElementResults(context: ElementResultsContext): ElementResultsData | null {
   const { summary, manifest, runModel, currentModel, experiment, catalog, variantId, pointId, replication, window, selected } = context;

@@ -24,7 +24,7 @@ import { DiagnosticLabelContext } from "./presentation/diagnosticContext";
 import { parameterLabel, variantLabel } from "./presentation/labels";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
 import { replicaMember } from "./results/groups";
-import { projectElementResults, resultSelection } from "./inspector/elementResultsData";
+import { hasElementResults, resultSelection } from "./inspector/elementResultsData";
 import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
@@ -517,7 +517,7 @@ export function App() {
             variantChanges={variant === undefined ? undefined : <VariantChanges model={loaded.model} catalog={catalog}
               overrides={overrides} disabled={invalid || loading} onSelect={selectVariantChange} />}
             results={elementResults === null ? null : <ElementResults {...elementResults} />}
-            resultsFirst={launchDocuments !== null && elementResults !== null && elementResults.manifest.complete && projectElementResults(elementResults) !== null}
+            resultsFirst={launchDocuments !== null && elementResults !== null && elementResults.manifest.complete && hasElementResults(elementResults)}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
             model={model}

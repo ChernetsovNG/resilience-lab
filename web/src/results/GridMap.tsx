@@ -1,3 +1,4 @@
+import { entryModels, entryPopulations, type EntrySelection } from "./entries";
 import { serviceResultRows } from "./groups";
 import { t } from "../i18n";
 import { formatInterval, formatNumber, formatPercent } from "../i18n/format";
@@ -8,6 +9,7 @@ import { formatMapValue, gridCells, mapMetric, type MapMetric, type MapValue } f
 import { confidenceInterval } from "./confidence";
 import { useConfidenceLevel } from "../layout/confidenceLevel";
 import { parameterLabel, pointCoordinates, pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
+import type { Params } from "../workspace/params";
 import { formatParameterValue } from "../workspace/parameterValues";
 
 interface Props {
@@ -17,7 +19,7 @@ interface Props {
   onPointChange?: (id: string) => void;
   catalog?: Catalog | null;
   model?: ModelFile | null;
-  variants?: readonly NamedVariant[];
+  variants?: readonly (NamedVariant & { overrides?: Params })[];
   onElement?: (id: string) => void;
 }
 
@@ -33,6 +35,7 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
   const level = useConfidenceLevel();
   const metrics = mapMetrics();
   const [metric, setMetric] = useState<MapMetric>("successRate");
+  const [chosenEntry, setEntry] = useState<EntrySelection>("total");
   const [chosenService, setService] = useState("");
   const variant = summary.variants.find((candidate) => candidate.id === activeVariantId);
   if (variant === undefined) return <p className="results-empty">{t("results.map.selectVariant")}</p>;
@@ -44,8 +47,15 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
   const selectedService = services.find(service => service.id === chosenService || service.instances.some(instance => instance.id === chosenService)) ?? services[0];
   const service = selectedService?.instances.some(instance => instance.id === chosenService) ? chosenService : selectedService?.id ?? "";
   const serviceMetric = metric === "admittedAmplification" || metric === "handlerUtilization";
+  const populations = entryPopulations(summary.variants.flatMap(variant => variant.points.map(point => point.aggregate)), entryModels(summary, model, catalog, variants));
+  const choices = [
+    { id: "total", title: t("results.entries.total") },
+    ...(populations.clients.length > 1 ? populations.clients.map(id => ({ id: `clients:${id}`, title: t("results.entries.client", { id }) })) : []),
+    ...(populations.classes.length > 1 ? populations.classes.map(id => ({ id: `classes:${id}`, title: t("results.entries.requestType", { id }) })) : []),
+  ];
+  const entry = choices.some(choice => choice.id === chosenEntry) ? chosenEntry : "total";
   const cells = gridCells(grid, variant.points).map((cell) => {
-    const value = cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service);
+    const value = cell.point === null ? null : mapMetric(cell.point.aggregate, metric, service, entry);
     return { ...cell, value, interval: confidenceInterval(value, level) };
   });
   const values = cells.flatMap((cell) => cell.value === null ? [] : [cell.value.mean]);
@@ -73,6 +83,10 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
       <label>{t("results.map.metric")} <select value={metric} onChange={(event) => setMetric(event.target.value as MapMetric)}>
         {metrics.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
       </select></label>
+      {!serviceMetric && choices.length > 1 ? <label>{t("results.entries.entry")} <select value={entry}
+        onChange={event => setEntry(event.target.value as EntrySelection)}>
+        {choices.map(choice => <option key={choice.id} value={choice.id}>{choice.title}</option>)}
+      </select></label> : null}
       {serviceMetric ? <label>{t("results.map.service")} <select value={selectedService?.id ?? ""} disabled={services.length === 0} onChange={(event) => setService(event.target.value)}>
         {services.map(({ id }) => <option key={id} value={id}>{id}</option>)}
       </select></label> : null}

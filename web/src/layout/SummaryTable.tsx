@@ -1,3 +1,5 @@
+import { FailureReasons } from "../results/EntryResults";
+import { entryPopulations, failureMetric, hasEntryDetails, hasFallback, hasUnreliableEntryInterval, type EntryMetrics } from "../results/entries";
 import { instanceServiceEntries } from "../results/instances";
 import { serviceResultRows } from "../results/groups";
 import { t } from "../i18n";
@@ -6,7 +8,7 @@ import { useId, type ReactNode } from "react";
 import { HelpHint } from "../help/HelpHint";
 import type { Catalog, MetricSummary, ModelFile, RunSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
-import { applyOverrides, type Params } from "../workspace/params";
+import { applyOverrides, ownEntry, type Params } from "../workspace/params";
 import { comparisonConclusion, latencyLimitMatch, latencyLimits, saturationConclusions } from "../results/findings";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
@@ -67,7 +69,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     if (point === undefined) return [];
     const effective = model == null || catalog == null ? null : applyOverrides(applyOverrides(model,
       variants.find(source => source.id === variant.id)?.overrides ?? {}, catalog), point.coordinates, catalog);
-    return [{ variant, point, limits: effective === null || catalog == null ? [] : latencyLimits(effective, catalog) }];
+    return [{ variant, point, effective, limits: effective === null || catalog == null ? [] : latencyLimits(effective, catalog) }];
   });
   const reference = baseline?.points.find(point => point.id === selectedPointId);
   const activeVariant = activeVariantId === null ? summary.variants[0] : summary.variants.find(variant => variant.id === activeVariantId);
@@ -77,6 +79,11 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const selectedPointLabel = pointLabel(selectedPointId, summary.grid, (activePoint ?? columns[0]?.point)?.coordinates, catalog, model);
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
     && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
+  const aggregates = columns.map(({ point }) => point.aggregate);
+  const models = columns.map(column => column.effective ?? model);
+  const populations = entryPopulations(aggregates, models);
+  const showFailures = hasEntryDetails(aggregates, models);
+  const showDegraded = hasFallback(aggregates, models);
   const services = serviceResultRows(columns.map(({ point }) => point.aggregate));
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
   const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format,
@@ -93,6 +100,31 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       })}
     </tr>
   );
+  const failureRow = (entry: (point: Point) => EntryMetrics | undefined) => {
+    const reasons = [...new Set(columns.flatMap(({ point }) => Object.keys(entry(point)?.failuresByReason ?? {})))].sort();
+    return <tr><th scope="row">{t("results.entries.failureReasons")}</th>{columns.map(({ variant, point }) =>
+      <td key={variant.id} className={columnClass(variant.id)}><FailureReasons entry={entry(point)} reasons={reasons}
+        renderValue={(code, value) => metric(value, variant.id === baseline?.id || reference === undefined
+          ? undefined : failureMetric(entry(reference), code), level, formatPercent, percentagePoints)} /></td>)}</tr>;
+  };
+  const entryRows = (entry: (point: Point) => EntryMetrics | undefined) => <>
+    {row(t("results.metrics.successRate"), point => entry(point)?.successRate, formatPercent, percentagePoints)}
+    {row(t("results.metrics.p95LatencyMs"), point => entry(point)?.p95LatencyMs, formatDuration)}
+    {row(t("results.metrics.p99LatencyMs"), point => entry(point)?.p99LatencyMs, formatDuration)}
+    {showFailures ? failureRow(entry) : null}
+    {showDegraded ? row(t("results.entries.degraded"), point => entry(point)?.degradedRate, formatPercent, percentagePoints) : null}
+  </>;
+  const populationGroup = (kind: "clients" | "classes", ids: string[]) => ids.length < 2 ? null : <details className="summary-services">
+    <summary>{t(kind === "clients" ? "results.entries.byClients" : "results.entries.byRequestTypes")}</summary>
+    {ids.map(id => <table key={id} className="summary-table" aria-label={t(kind === "clients" ? "results.entries.client" : "results.entries.requestType", { id })}>
+      <caption>{id}</caption><thead><tr><th scope="col">{t("results.answer.metric")}</th>
+        {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}
+          {hasUnreliableEntryInterval(ownEntry(point.aggregate.entries[kind], id))
+            ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
+        </th>)}
+      </tr></thead><tbody>{entryRows(point => ownEntry(point.aggregate.entries[kind], id))}</tbody>
+    </table>)}
+  </details>;
   const serviceDetails = (service: string, instances: { id: string; replica: number }[] = [], replica = false): ReactNode => <details key={service} className="summary-services">
       <summary onClick={event => { event.stopPropagation(); onElement?.(service); }}>{t(instances.length === 0 ? "results.answer.serviceMetrics" : "results.groups.metrics", { service, group: service })}</summary>
       <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
@@ -157,8 +189,12 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
         {row(t("results.metrics.successRate"), point => point.aggregate.entries.total.successRate, formatPercent, percentagePoints)}
         {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.entries.total.p95LatencyMs, formatDuration, formatDuration, "p95LatencyMs")}
         {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.entries.total.p99LatencyMs, formatDuration, formatDuration, "p99LatencyMs")}
+        {showFailures ? failureRow(point => point.aggregate.entries.total) : null}
+        {showDegraded ? row(t("results.entries.degraded"), point => point.aggregate.entries.total.degradedRate, formatPercent, percentagePoints) : null}
       </tbody>
     </table>
+    {populationGroup("clients", populations.clients)}
+    {populationGroup("classes", populations.classes)}
     {services.map(service => serviceDetails(service.id, service.instances))}
   </div>;
 }

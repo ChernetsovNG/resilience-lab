@@ -1,3 +1,4 @@
+import { selectedEntry, type EntrySelection } from "./entries";
 import { formatDuration, formatMultiplier, formatPercent } from "../i18n/format";
 import type { MetricSummary, RunSummary } from "../api/apiTypes";
 
@@ -16,13 +17,13 @@ export function gridCells(grid: RunSummary["grid"], points: Point[]) {
 }
 
 /** Replication means and spread come from the artifact; utilization is the pooled busy/capacity ratio. */
-export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, service: string): MapValue | null {
+export function mapMetric(aggregate: Point["aggregate"], metric: MapMetric, service: string, entry: EntrySelection = "total"): MapValue | null {
   if (metric === "admittedAmplification") return aggregate.services[service]?.admittedAmplification ?? null;
   if (metric === "handlerUtilization") {
     const totals = aggregate.services[service]?.totals;
     return totals == null || totals.slotPools.handlers.capacityIntegralMs === 0 ? null : { mean: totals.slotPools.handlers.busyIntegralMs / totals.slotPools.handlers.capacityIntegralMs };
   }
-  return aggregate.entries.total[metric] ?? null;
+  return selectedEntry(aggregate.entries, entry)?.[metric] ?? null;
 }
 
 export function formatMapValue(value: number, metric: MapMetric): string {

@@ -4,6 +4,8 @@ import type { SeriesPart, TypeDescriptor } from "../api/apiTypes";
 import { seriesLoader } from "../results/series";
 import { decodeSeriesPart } from "../results/series/decode";
 import { catalog, experiment, manifest, model, summary } from "../test/fixtures";
+import outputCatalog from "../test/catalog.json";
+import { entryResults } from "../test/entryResults";
 import { ElementResults, type ElementResultsProps } from "./ElementResults";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
 import { SummaryTable } from "../layout/SummaryTable";
@@ -210,4 +212,46 @@ describe("ElementResults", () => {
     expect(await screen.findByText("Latency covers 200 ms–350 ms; samples in the window crossing warmup cannot be separated.")).toBeTruthy();
     await waitFor(() => expect(row("Mean latency").textContent).toContain("20 ms"));
   });
+});
+
+
+it("shows client-owned summary results and only its request types, labeling shared types", () => {
+  loadSeries();
+  const scenario = entryResults();
+  const options = { ...props(), summary: scenario.summary, runModel: scenario.model, currentModel: scenario.model, selected: "partner" };
+  const { rerender } = render(<ElementResults {...options} />);
+  expect(row("Success rate").textContent).toContain("100%");
+  expect(row("p95 latency").textContent).toContain("42 ms");
+  expect(row("p99 latency").textContent).toContain("85 ms");
+  expect(row("Failure reasons").textContent).toContain("timeout 4%");
+  expect(screen.getByRole("table", { name: "Request type · status" })).toBeTruthy();
+  expect(screen.queryByRole("table", { name: "Request type · checkout" })).toBeNull();
+  expect(screen.getByText("Request-type results include all clients sending this type.")).toBeTruthy();
+  rerender(<ElementResults {...options} variantId="no-retries" window={1} />);
+  expect(row("Successful with fallback").textContent).toContain("4.6%");
+  expect(screen.getByText(/Across replications/)).toBeTruthy();
+  const changedModel = { ...scenario.model, blocks: { ...scenario.model.blocks } };
+  delete changedModel.blocks.partner;
+  rerender(<ElementResults {...options} currentModel={changedModel} />);
+  expect(screen.getByText("No results for this element in the selected run context.")).toBeTruthy();
+});
+
+
+it("shows a zero fallback share when only the selected grid coordinate configures it", () => {
+  const options = { ...props(), selected: "client", catalog: outputCatalog as typeof catalog };
+  const point = options.summary.variants[0].points[0];
+  point.aggregate.entries.clients.client = point.aggregate.entries.total;
+  point.coordinates = { "gateway-to-middle.fallback.processing": "1ms" };
+  options.summary.grid = [{ path: "gateway-to-middle.fallback.processing", values: ["1ms"] }];
+  render(<ElementResults {...options} />);
+  expect(row("Successful with fallback").textContent).toContain("0%");
+});
+
+
+it("warns about a client interval based on only two observations", () => {
+  const scenario = entryResults();
+  const entry = scenario.summary.variants[0].points[0].aggregate.entries.clients.partner;
+  entry.successRate = { ...entry.successRate!, count: 2 };
+  render(<ElementResults {...props()} summary={scenario.summary} runModel={scenario.model} currentModel={scenario.model} selected="partner" />);
+  expect(screen.getByText("Unreliable interval: increase Replications.")).toBeTruthy();
 });
