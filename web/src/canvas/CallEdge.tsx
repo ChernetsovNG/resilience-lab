@@ -18,6 +18,7 @@ import { catalogOption } from "../i18n/catalog";
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Rect } from "@xyflow/react";
 import { diagramBounds, layoutEdges, type EdgeGeometry, type EdgeMeasurement } from "./edgeGeometry";
+import { PolicyBadges } from "./PolicyBadges";
 
 const EdgeLayoutContext = createContext<{ geometries: Map<string, EdgeGeometry>;
   onMeasure: (id: string, measurement: EdgeMeasurement) => void } | null>(null);
@@ -57,6 +58,7 @@ export type CallEdgeType = Edge<{
   onProblems?: () => void;
   faults?: readonly CourseFault[];
   onFault?: (index: number) => void;
+  onPolicy?: (path: string) => void;
   parametersEditable: boolean;
   disabled: boolean;
   result?: ConnectionCanvasResults;
@@ -66,6 +68,7 @@ export type CallEdgeType = Edge<{
   onSelect?: (multiple: boolean) => void;
   windowed?: boolean;
   targetGroup?: boolean;
+  policyRow?: number;
   onParam: (id: string, path: string, value: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }, "call">;
@@ -88,6 +91,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
   const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
+  const circuitOpen = isObject(connection.params.circuitBreaker) && (result?.policyState?.circuitOpenShare ?? 0) > 0;
   const labelled = routeTypes.length > 0 || Boolean(connection.description) || connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
   const label = useRef<HTMLDivElement>(null);
   const onMeasure = layout?.onMeasure;
@@ -107,7 +111,12 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={28}
-        style={selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : undefined} />
+        style={{ ...(selected ? { stroke: "#2563eb", strokeWidth: 2.5 } : {}), ...(circuitOpen ? { strokeDasharray: "6 4" } : {}) }} />
+      <EdgeLabelRenderer><PolicyBadges id={id} type={connection.type} params={connection.params} catalog={catalog}
+        targetGroup={data?.targetGroup} disabled={disabled} onOpen={path => data?.onPolicy?.(path)}
+        state={result?.policyState} copies={result?.copies}
+        owner={connectionLabel}
+        style={{ transform: `translate(12px, -100%) translate(${sourceX}px,${sourceY - 28 - (data?.policyRow ?? 0) * 26}px)` }} /></EdgeLabelRenderer>
       {labelled ? <EdgeLabelRenderer>
         <div ref={label}
           className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${overridden ? " canvas-edge-label--overridden" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}

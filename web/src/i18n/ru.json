@@ -1683,5 +1683,7 @@
   "results.timeline.policyValue.ejectedShare": "выведен",
   "results.timeline.policyValue.notReadyShare": "не готов",
   "results.timeline.policyWindow": "{state} {share} окна",
-  "results.timeline.policyCallers": ", в среднем по {copies} репликам вызывающего"
+  "results.timeline.policyCallers": ", в среднем по {copies} репликам вызывающего",
+  "editor.canvas.morePolicies": "Ещё политик: {count}",
+  "editor.canvas.policyOverflow": "+{count}"
 }

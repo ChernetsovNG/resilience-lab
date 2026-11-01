@@ -91,8 +91,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
       ?? (step === null ? undefined : fields.find(element => element.dataset.inspectorField === step))
       ?? fields.find(element => focusField.path.startsWith("replicaOverrides.")
         && element.dataset.inspectorField === focusField.path.split(".").slice(0, 2).join("."));
-    const section = field?.closest<HTMLDetailsElement>(".inspector-section");
-    if (section !== null && section !== undefined) section.open = true;
+    for (let section: HTMLElement | null = field ?? null; section !== null && section !== panel.current; section = section.parentElement) {
+      if (section instanceof HTMLDetailsElement) section.open = true;
+    }
+    field?.scrollIntoView?.({ block: "nearest" });
     if (focusField.focus !== false) (field?.querySelector<HTMLElement>("input, select, textarea") ?? field?.querySelector<HTMLElement>("button:not(:disabled):not(.help-hint-button)"))?.focus();
   }, [focusField, hidden, target, selected, variantId]);
   const element = selected === null ? null : elementOf(model, selected);

@@ -1683,5 +1683,7 @@
   "results.timeline.policyValue.ejectedShare": "ejected",
   "results.timeline.policyValue.notReadyShare": "not ready",
   "results.timeline.policyWindow": "{state} {share} of window",
-  "results.timeline.policyCallers": ", averaged over {copies} caller replicas"
+  "results.timeline.policyCallers": ", averaged over {copies} caller replicas",
+  "editor.canvas.morePolicies": "{count} more policies",
+  "editor.canvas.policyOverflow": "+{count}"
 }

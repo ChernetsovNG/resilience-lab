@@ -9,8 +9,16 @@ import router from "../assets/icons/router.svg?raw";
 import service from "../assets/icons/service.svg?raw";
 import settings from "../assets/icons/settings.svg?raw";
 import viewSettings from "../assets/icons/view-settings.svg?raw";
+import circuitBreaker from "../assets/icons/circuit-breaker.svg?raw";
+import fallback from "../assets/icons/fallback.svg?raw";
+import retryBudget from "../assets/icons/retry-budget.svg?raw";
+import outlierDetection from "../assets/icons/outlier-detection.svg?raw";
+import rateLimit from "../assets/icons/rate-limit.svg?raw";
+import healthCheck from "../assets/icons/health-check.svg?raw";
 
-const icons = { client, database, dice, "fit-view": fitView, info, lock, pooler, router, service, settings, "view-settings": viewSettings };
+const icons = { client, database, dice, "fit-view": fitView, info, lock, pooler, router, service, settings, "view-settings": viewSettings,
+  "circuit-breaker": circuitBreaker, fallback, "retry-budget": retryBudget, "outlier-detection": outlierDetection,
+  "rate-limit": rateLimit, "health-check": healthCheck };
 export type IconName = keyof typeof icons;
 
 /** Only bundled icon assets enter the markup sink; callers supply a name, never SVG or a URL. */

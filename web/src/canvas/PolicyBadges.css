@@ -1,0 +1,12 @@
+.policy-badges { position: absolute; display: flex; align-items: center; gap: 2px; z-index: 2; pointer-events: all; color: #52606d; }
+.policy-badges--node { top: -7px; right: 12px; }
+.policy-badges button, .policy-badges summary { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; box-sizing: border-box; padding: 2px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: inherit; cursor: pointer; font-size: 11px; }
+.policy-badges button:focus-visible, .policy-badges summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.policy-badges button:disabled { cursor: default; opacity: .5; }
+.policy-badges .policy-badge--active { color: #b91c1c; border-color: currentColor; background: #fef2f2; }
+.policy-replica--inactive { opacity: .4; }
+.block-shape--inactive { opacity: .45; }
+.policy-badges summary { list-style: none; }
+.policy-badges summary::-webkit-details-marker { display: none; }
+.policy-badges-more > div { position: absolute; top: 24px; right: 0; min-width: max-content; display: grid; gap: 3px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; box-shadow: 0 2px 6px #0f172a20; }
+.policy-badges-more > div > span { display: flex; align-items: center; gap: 4px; font-size: 11px; }

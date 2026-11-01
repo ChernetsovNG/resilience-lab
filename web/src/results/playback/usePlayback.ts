@@ -33,14 +33,15 @@ export function usePlayback({
   const [speed, setSpeed] = useState(1);
   if (state.key !== key) setState({ key, playing: false });
   const enabled = variant !== null && results !== null && windowCount > 0;
+  const loadedNodes = [...new Set([...nodes, ...[...(results?.services.values() ?? [])].flatMap(service => service.instances?.map(instance => instance.id) ?? [])])];
   // Keep derived metrics to a working slice: at most 32 windows, using the artifact's 512-byte row estimate.
-  const rangeSize = Math.max(1, Math.min(32, Math.floor(4 * 1024 * 1024 / (Math.max(1, nodes.length) * 512))));
+  const rangeSize = Math.max(1, Math.min(32, Math.floor(4 * 1024 * 1024 / (Math.max(1, loadedNodes.length) * 512))));
   const fromWindow = Math.floor((window ?? 0) / rangeSize) * rangeSize;
   const untilWindow = Math.min(windowCount, fromWindow + rangeSize);
   const connections = [...(results?.connections ?? [])].filter(([, connection]) => connection.hasOwnSeries).map(([id]) => id);
   const connectionLoader = loader.loadConnections === undefined ? seriesLoader : loader as Pick<SeriesLoader, "loadConnections">;
   const active = enabled && window !== null;
-  const nodesKey = JSON.stringify(nodes);
+  const nodesKey = JSON.stringify(loadedNodes);
   const connectionsKey = JSON.stringify(connections);
   const chunksKey = JSON.stringify([key, nodesKey, connectionsKey, rangeSize, windowCount]);
   const [prepared, setPrepared] = useState(() => ({
