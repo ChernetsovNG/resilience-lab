@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalog, model, slotPoolResource, noSaturation, summary } from "../test/fixtures";
 import outputCatalog from "../test/catalog.json";
 import { entryResults } from "../test/entryResults";
@@ -13,6 +13,15 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it("names result tables and saturation resources from block titles while navigating by identifier", () => {
+    const onElement = vi.fn();
+    const named = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, title: "Магазин" } } };
+    render(<SummaryTable summary={summary} catalog={catalog} model={named} onElement={onElement} />);
+    expect(screen.getByRole("table", { name: "Element metrics: Магазин" })).toBeTruthy();
+    const link = screen.getByText("Магазин metrics");
+    fireEvent.click(link);
+    expect(onElement).toHaveBeenCalledWith("gateway");
+  });
   it.each(["en", "ru"] as const)("explains routing in the %s original-request metrics", locale => {
     setLanguage(locale);
     const run = structuredClone(summary);

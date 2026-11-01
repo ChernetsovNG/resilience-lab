@@ -4,6 +4,7 @@ import { formatMultiplier, formatNumber, formatPercent, formatRate } from "../i1
 import { isObject, ownEntry } from "../workspace/params";
 import { canonicalOf } from "../workspace/quantities";
 import { formatParameterValue } from "../workspace/parameterValues";
+import { elementLabel } from "../presentation/labels";
 
 type Fault = ExperimentFile["faults"][number];
 export interface LoadPoint { timeMs: number; rate: number }
@@ -35,8 +36,8 @@ function targetOf(target: string, model: ModelFile): { elementId: string | null;
   const count = block?.params.replicas ?? 1;
   const replicaExists = suffix === "" || (typeof count === "number" && Number.isInteger(count) && count > 1 && Number(suffix.slice(1)) <= count);
   if (connection !== undefined) return { elementId: replicaExists && ["call", "route"].includes(connection.type) ? id : null,
-    label: t("course.connection", { from: connection.from + suffix, to: connection.to }) };
-  return { elementId: replicaExists && block !== undefined && !["client", "router"].includes(block.type) ? id : null, label: target };
+    label: t("course.connection", { from: elementLabel(connection.from + suffix, model), to: elementLabel(connection.to, model) }) };
+  return { elementId: replicaExists && block !== undefined && !["client", "router"].includes(block.type) ? id : null, label: elementLabel(target, model) };
 }
 
 /** One description for every view; fault kind names stay in the shared faults.kinds catalog. */
@@ -132,7 +133,7 @@ export function runConditions(model: ModelFile, experiment: ExperimentFile, cata
     const low = Math.min(...rates), high = Math.max(...rates);
     const value = rates.length === 0 ? t("common.na") : low === high ? formatRate(low)
       : t("course.loadRange", { from: formatRate(low), to: formatRate(high) });
-    return data.loads.length === 1 ? value : t("course.clientLoad", { client: load.id, value });
+    return data.loads.length === 1 ? value : t("course.clientLoad", { client: elementLabel(load.id, model), value });
   }).join(t("course.listSeparator")) || t("common.na");
   return t("course.conditions", { load: loads, faults: data.faults.map(fault => fault.label).join(t("course.listSeparator")) || t("course.noFaults") });
 }

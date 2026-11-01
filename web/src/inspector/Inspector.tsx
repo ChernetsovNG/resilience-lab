@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnnotationFields } from "./AnnotationFields";
-import { setAnnotation } from "../workspace/annotations";
+import { setAnnotation, setBlockTitle } from "../workspace/annotations";
+import { BlockTitleField } from "./BlockTitleField";
 import { t } from "../i18n";
 import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
@@ -72,9 +73,9 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
   const target = targets.find(target => target.id === selected);
   return <div className="param-field">
     {targets.length > 1 ? <label>{t("editor.fault.creationTarget")}
-      <select aria-label={t("editor.fault.creationTarget")} value={selected} title={elementLabel(selected, model)} disabled={disabled} onChange={event => setSelected(event.target.value)}>
+      <select aria-label={t("editor.fault.creationTarget")} value={selected} title={selected} disabled={disabled} onChange={event => setSelected(event.target.value)}>
         {target === undefined ? <option value={selected} disabled>{elementLabel(selected, model)}</option> : null}
-        {targets.map(target => <option key={target.id} value={target.id}>{elementLabel(target.id, model)}</option>)}
+        {targets.map(target => <option key={target.id} value={target.id} title={target.id}>{elementLabel(target.id, model)}</option>)}
       </select>
     </label> : null}
     <ReplicaTargetField target={targets[0]} value={selected} path="new-fault.replica" editable={editable} onTarget={setSelected} onValidity={onValidity} />
@@ -129,7 +130,7 @@ export function Inspector({ catalog, model, layout, baseModel, experiment, exper
     <aside ref={panel} hidden={hidden} className="inspector" aria-label={t("editor.inspector.label")}>
       {resultsOnly && selected === null ? <p>{t("results.element.select")}</p> : null}
       {heading === null ? null : <>
-        <div className="inspector-heading"><h2>{heading}</h2>
+        <div className="inspector-heading"><h2 title={showElement ? selectedReplica?.id ?? selected! : undefined}>{heading}</h2>
           {showElement && element !== null ? <TypeHelp key={element.type} catalog={catalog} typeId={element.type} /> : null}</div>
         {subtitle === undefined ? null : <p className="inspector-type" title={target === "experiment" ? experimentPath : undefined}>{subtitle}</p>}
       </>}
@@ -143,14 +144,14 @@ export function Inspector({ catalog, model, layout, baseModel, experiment, exper
         <>
           {prioritizeResults && !resultsOnly ? results : null}
           {selectedReplica == null ? <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
+          {ownEntry(model.blocks, selected) === undefined ? null : <BlockTitleField key={`title-${annotationTarget.key}`}
+            value={ownEntry(model.blocks, selected)?.title} identifier={selected}
+            editable={editable && variantId === null && onCommand !== undefined}
+            onCommit={value => onCommand?.(setBlockTitle(selected, value))} />}
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
-          {ownEntry(model.blocks, selected)?.title != null ? <label className="param-field">
-            {t("editor.block.title")}
-            <input readOnly value={ownEntry(model.blocks, selected)!.title ?? ""} />
-          </label> : null}
           {variantId === null && ownEntry(model.blocks, selected) !== undefined && layout != null && Object.hasOwn(layout.sizes, selected) ?
             <button type="button" disabled={!editable || invalid || onCommand === undefined}
               onClick={() => onCommand?.(resetBlockSize(selected))}>{t("editor.canvas.resetSize")}</button> : null}

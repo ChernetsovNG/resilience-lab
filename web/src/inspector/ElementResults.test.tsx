@@ -80,6 +80,13 @@ const row = (name: string) => within(screen.getByRole("table", { name: "Results"
 afterEach(() => { vi.restoreAllMocks(); act(() => setConfidenceLevel(95)); localStorage.clear(); });
 
 describe("ElementResults", () => {
+  it("uses the recorded block display name in chart labels without changing result selection", async () => {
+    loadSeries();
+    const options = props();
+    const named = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, title: "Магазин" } } };
+    render(<ElementResults {...options} runModel={named} currentModel={named} />);
+    expect(await screen.findByRole("img", { name: /Магазин.*Handler utilization/ })).toBeTruthy();
+  });
   it("does not claim zero arrivals when Time series fail to load", async () => {
     loadSeries();
     vi.mocked(seriesLoader.load).mockRejectedValue(new Error("Recorded series unavailable"));

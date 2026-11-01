@@ -272,7 +272,7 @@ function RunTimeline({ enabled = true, runId, summary, manifest, model, experime
     </div>
     <details className="timeline-choices"><summary>{t("results.timeline.choices")}</summary>
       {elements.map(element => <fieldset key={element.id}>
-        <legend><label><input type="checkbox" checked={nodes.includes(element.id)} onChange={event => setNodeChoice({ canvasKey,
+        <legend><label title={element.id}><input type="checkbox" checked={nodes.includes(element.id)} onChange={event => setNodeChoice({ canvasKey,
           ids: event.target.checked ? [...nodes, element.id] : nodes.filter(id => id !== element.id && !element.replicas.some(instance => instance.id === id)) })} />{elementName(element.id)}</label>{element.requestType === null ? t("results.timeline.elementType", { type: element.title }) : null}</legend>
         {nodes.includes(element.id) ? element.groups.flatMap(group => group.metrics.map(metric => {
           const key = metricChoiceKey(element.id, metric.key);

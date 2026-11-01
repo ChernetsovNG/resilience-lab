@@ -5,6 +5,7 @@ import { formatNumber } from "../i18n/format";
 import { catalogParameter, formatParameterValue } from "../workspace/parameterValues";
 import { backendMessage } from "../i18n/backendMessage";
 import type { DiagnosticGroup } from "../validation/diagnostics";
+import { ownEntry } from "../workspace/params";
 
 export interface NamedVariant { id: string; label?: string | null }
 type GridAxis = RunSummary["grid"][number];
@@ -17,10 +18,17 @@ export interface DiagnosticPresentationContext {
 type DiagnosticText = Pick<Diagnostic, "code" | "message" | "args" | "path"> & { requiresNewRun?: boolean };
 
 /** Connection endpoints identify the path; the original id distinguishes parallel connections and replica copies. */
-export function elementLabel(id: string, model?: Pick<ModelFile, "connections"> | null): string {
+export function elementLabel(id: string, model?: Pick<ModelFile, "connections"> & Partial<Pick<ModelFile, "blocks">> | null): string {
   const replica = /^(.*)(#[1-9][0-9]*)$/.exec(id);
+  const blockName = (id: string) => {
+    const member = /^(.*)(#[1-9][0-9]*)$/.exec(id);
+    const block = model?.blocks === undefined ? undefined : ownEntry(model.blocks, member?.[1] ?? id);
+    return block?.title == null ? id : block.title + (member?.[2] ?? "");
+  };
   const connection = model?.connections.find(connection => connection.id === (replica?.[1] ?? id));
-  return connection === undefined ? id : `${t("editor.grid.connection", { from: connection.from + (replica?.[2] ?? ""), to: connection.to })} (${id})`;
+  return connection === undefined ? blockName(id) : `${t("editor.grid.connection", {
+    from: blockName(connection.from + (replica?.[2] ?? "")), to: blockName(connection.to),
+  })} (${id})`;
 }
 
 /** Meaningful summary labels win; source documents distinguish explicit labels from generated fallbacks. */
@@ -69,7 +77,9 @@ export function parameterLabel(path: string, catalog?: Catalog | null, model?: M
     return element === undefined ? fallback : catalogText(`catalog.types.${element.type}${suffix}`, fallback);
   }).join(t("editor.symbols.separator"));
   return t("editor.grid.axisTitle", { parameter: title,
-    element: element !== undefined && "from" in element ? t("editor.grid.connection", { from: element.from, to: element.to }) : id });
+    element: element !== undefined && "from" in element ? t("editor.grid.connection", {
+      from: elementLabel(element.from, model), to: elementLabel(element.to, model),
+    }) : elementLabel(id, model) });
 }
 
 /** Translate parameter and task arguments at display time, retaining the original identities for navigation. */
@@ -77,7 +87,7 @@ export function diagnosticMessage(diagnostic: DiagnosticText, catalog?: Catalog 
   context?: Pick<DiagnosticPresentationContext, "variants" | "grid">): string {
   if (diagnostic.args == null) return backendMessage(diagnostic);
   const args = { ...diagnostic.args };
-  for (const key of ["connection", "target"]) {
+  for (const key of ["connection", "target", "element", "service", "client", "router", "pooler", "cache", "from", "to"]) {
     if (typeof args[key] === "string") args[key] = elementLabel(args[key], model);
   }
   const parameter = args.parameter;

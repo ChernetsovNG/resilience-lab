@@ -79,6 +79,7 @@ export function EdgeLayoutProvider({ nodes, connections, manual = emptyEdges, on
 
 export type CallEdgeType = Edge<{
   connection: ConnectionInstance;
+  connectionLabel?: string;
   modelParams?: Params;
   edgePoints?: readonly { x: number; y: number }[];
   routeEditable?: boolean;
@@ -119,7 +120,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const path = geometry?.path ?? initialPath;
   const { x: labelX, y: labelY } = geometry?.label ?? { x: initialX, y: initialY };
   const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "attemptsPerCall", onSelect } = data!;
-  const connectionLabel = elementLabel(connection.id, { connections: [connection] });
+  const connectionLabel = data?.connectionLabel ?? elementLabel(connection.id, { connections: [connection] });
   const routeTypes = connection.type === "route" ? connection.classes ?? [] : [];
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,

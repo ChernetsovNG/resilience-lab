@@ -20,6 +20,29 @@ import * as blockGeometry from "./blockGeometry";
 
 beforeAll(mockReactFlowDom);
 
+it("uses a block display name on the canvas and its policy badges, keeping its identifier in the tooltip", () => {
+  const named = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, title: "Мобильное приложение",
+    params: { ...model.blocks.gateway.params, rateLimit: { limit: "100/s", burst: 1 } },
+  } } };
+  render(<Canvas catalog={catalog} model={named} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const node = screen.getByTestId("rf__node-gateway");
+  expect(node.getAttribute("aria-label")).toBe("Мобильное приложение");
+  expect(within(node).getByText("Мобильное приложение").getAttribute("title")).toBe("gateway");
+  expect(within(screen.getByTestId("rf__node-middle")).getByText("middle")).toBeTruthy();
+  expect(screen.getByTestId("canvas-policies-gateway").getAttribute("aria-label")).toBe("Мобильное приложение");
+});
+
+it("uses block display names in connection labels and annotation help while retaining connection identities", async () => {
+  const named = { ...model, blocks: { ...model.blocks,
+    gateway: { ...model.blocks.gateway, title: "Шлюз" }, middle: { ...model.blocks.middle, title: "Магазин" },
+  }, connections: model.connections.map(connection => connection.id === "gateway-to-middle"
+    ? { ...connection, description: "Вызов магазина" } : connection) };
+  render(<Canvas catalog={catalog} model={named} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const label = await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+  expect(label.getAttribute("aria-label")).toBe("Шлюз → Магазин (gateway-to-middle)");
+  expect(within(label).getByRole("button", { name: "More about: Шлюз → Магазин (gateway-to-middle)" })).toBeTruthy();
+});
+
 it("keeps a result centered through late measurements and releases it on a canvas gesture", async () => {
   const observer = globalThis.ResizeObserver;
   const heightProperty = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")!;

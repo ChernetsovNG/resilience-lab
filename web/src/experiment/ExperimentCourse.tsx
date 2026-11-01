@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
 import { t } from "../i18n";
+import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
 import { formatDuration, formatNumber, formatRate } from "../i18n/format";
 import { PanelSeparator } from "../layout/PanelSeparator";
@@ -81,8 +82,8 @@ export function ExperimentCourse({ model, experiment, catalog, onFault, disabled
               title={t("course.phase", { phase: t("editor.run.measurement"), from: time(data.warmupMs), to: time(data.endMs) })}>{t("editor.run.measurement")}</span>
           </div>
           {data.loads.flatMap(load => [
-            ...load.types.map((type, index) => ({ ...type, key: JSON.stringify([load.id, "type", index]), compact: true, label: t("course.requestType", { client: load.id, id: type.id }) })),
-            { ...load, key: JSON.stringify([load.id, "total"]), compact: load.types.length > 0, label: load.types.length === 0 ? load.id : t("course.total", { client: load.id }) },
+            ...load.types.map((type, index) => ({ ...type, key: JSON.stringify([load.id, "type", index]), compact: true, label: t("course.requestType", { client: elementLabel(load.id, model), id: type.id }) })),
+            { ...load, key: JSON.stringify([load.id, "total"]), compact: load.types.length > 0, label: load.types.length === 0 ? elementLabel(load.id, model) : t("course.total", { client: elementLabel(load.id, model) }) },
           ]).map(load => {
             const maximumRate = Math.max(1, ...load.points.map(point => point.rate));
             const y = (rate: number) => 64 - rate / maximumRate * 40;

@@ -6,6 +6,20 @@ import { setupAppTests, server, open, selectGateway, button, editField } from ".
 
 setupAppTests();
 
+it("keeps File, Run and navigation available while a block identifier is invalid", async () => {
+  server(); await open(); await selectGateway();
+  const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Identifier" });
+  fireEvent.change(input, { target: { value: "Мобильное приложение" } });
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  expect(button("File").disabled).toBe(false);
+  expect(button("Run").disabled).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>("tab", { name: "Baseline" }).disabled).toBe(false);
+  fireEvent.blur(input);
+  expect(input.value).toBe("gateway");
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+});
+
 it("reveals run settings on every click even with the Inspector and execution section collapsed", async () => {
   localStorage.setItem("resilience-lab.inspector-execution-open", "false");
   server(); await open();

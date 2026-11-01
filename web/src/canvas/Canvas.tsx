@@ -315,7 +315,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     },
     selected: id !== pendingId && selected.includes(id),
     className: connected.has(id) ? "canvas-node--connected" : undefined,
-    ariaLabel: id,
+    ariaLabel: elementLabel(id, model),
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
   const nextBounds = new Map(nodes.filter(node => node.id !== pendingId).map(node => [node.id, { ...node.position,
@@ -350,6 +350,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       ? result : undefined;
     const diagnostics = elementDiagnostics?.get(connection.id) ?? [];
     const summary = summarizeDiagnostics(diagnostics);
+    const connectionLabel = elementLabel(connection.id, model);
     return {
       id: connection.id,
       type: "call",
@@ -358,6 +359,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
+        connectionLabel,
         edgePoints: layout === null ? undefined : ownEntry(layout.edges, connection.id)?.points,
         routeEditable: canResize, editIdentity: edgeEditIdentity,
         onEdgePoints: (points: { x: number; y: number }[]) => onCommand(setEdgePoints(connection.id, points)),
@@ -378,7 +380,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       },
       className: summary === null ? undefined : `diagnostic--${summary.severity.toLowerCase()}`,
       selected: selected.includes(connection.id),
-      ariaLabel: elementLabel(connection.id, model),
+      ariaLabel: connectionLabel,
       domAttributes: { "aria-roledescription": t("editor.canvas.edgeRole") },
     };
   });

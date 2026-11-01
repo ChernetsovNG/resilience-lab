@@ -54,6 +54,34 @@ function renderEditor(target: Target, variantPage = false) {
 const cases = (["block", "connection", "model", "experiment"] as const)
   .flatMap(target => (["description", "notes"] as const).map(field => ({ target, field })));
 
+it("edits, clears and undoes a block display name without changing any other document fields", () => {
+  const { documents, current } = renderEditor("block");
+  const input = () => screen.getByRole<HTMLInputElement>("textbox", { name: "Display name" });
+  fireEvent.change(input(), { target: { value: "Мобильное приложение" } });
+  expect(current().model).toEqual(documents.model);
+  fireEvent.blur(input());
+  const expected = structuredClone(documents);
+  expected.model.blocks.gateway.title = "Мобильное приложение";
+  expect({ model: current().model, experiment: current().experiment, layout: current().layout }).toEqual(expected);
+  expect(screen.getByRole("heading", { name: "Мобильное приложение" })).toBeTruthy();
+  expect(screen.getByTestId("history-length").textContent).toBe("1");
+  fireEvent.change(input(), { target: { value: "   " } });
+  fireEvent.blur(input());
+  expect(current().model.blocks.gateway).not.toHaveProperty("title");
+  expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(input().value).toBe("Мобильное приложение");
+});
+
+it("keeps block display names read-only on variant pages", () => {
+  const { current, documents } = renderEditor("block", true);
+  const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Display name" });
+  expect(input.readOnly).toBe(true);
+  fireEvent.change(input, { target: { value: "Мобильное приложение" } });
+  fireEvent.blur(input);
+  expect(current().model).toEqual(documents.model);
+});
+
 it.each([...cases, { target: "variant" as const, field: "description" as const }])(
   "edits, clears and undoes $target $field without changing other document fields", ({ target, field }) => {
     const { documents, current, scope } = renderEditor(target);
