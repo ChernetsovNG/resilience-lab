@@ -65,6 +65,40 @@ select {
   grid-template-areas: "canvas inspector-divider inspector" "divider divider divider" "results results results";
 }
 
+.workspace-panels--expanded {
+  grid-template-columns: minmax(0, 1fr) var(--inspector-divider-width) var(--inspector-width);
+  grid-template-rows: 32px 0.5rem minmax(0, 1fr);
+  grid-template-areas:
+    "strip inspector-divider inspector"
+    "divider inspector-divider inspector"
+    "results inspector-divider inspector";
+  overflow: hidden;
+}
+
+.workspace-panels--expanded > .canvas-area,
+.workspace-panels--expanded > .palette {
+  display: none;
+}
+
+.diagram-strip {
+  grid-area: strip;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0 0.5rem;
+  white-space: nowrap;
+  font-size: var(--font-secondary);
+}
+
+.diagram-strip-selection {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagram-strip button { flex-shrink: 0; }
+
 .workspace-panels > [hidden] {
   display: none;
 }
@@ -873,6 +907,8 @@ select {
   gap: 0.25rem;
   padding: 0.35rem 0.75rem 0;
   border-bottom: 1px solid #d5dbe3;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
 .results-panel [role="tab"] {
@@ -885,6 +921,7 @@ select {
 
 .results-size-actions {
   display: flex;
+  flex-shrink: 0;
   gap: 0.25rem;
   margin-inline-start: auto;
 }

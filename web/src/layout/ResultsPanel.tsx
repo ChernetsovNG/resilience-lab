@@ -17,7 +17,7 @@ import { sweepDiagnostics } from "../inspector/sweepDiagnostics";
 const Timeline = lazy(() => import("../results/timeline/Timeline").then((module) => ({ default: module.Timeline })));
 const GridMap = lazy(() => import("../results/GridMap").then((module) => ({ default: module.GridMap })));
 
-export type ResultsPanelSize = "collapsed" | "normal";
+export type ResultsPanelSize = "collapsed" | "normal" | "expanded";
 export type ResultsPanelView = "answer" | "timeline" | "assumptions" | "map" | "problems";
 
 export interface ResultsPanelProps {
@@ -129,8 +129,10 @@ export function ResultsPanel({
           {t("results.problems.count", { count: formatNumber(groupDiagnostics(diagnostics).length) })}
         </button>
         <span className="results-size-actions">
+          {size === "normal" ? <button type="button" onClick={() => onSizeChange?.("expanded")}>{t("results.expand")}</button> : null}
+          {size === "expanded" ? <button type="button" onClick={() => onSizeChange?.("normal")}>{t("results.unexpand")}</button> : null}
           {size === "normal" ? <button type="button" onClick={() => onSizeChange?.("collapsed")}>{t("results.collapse")}</button> : null}
-          {size !== "normal" ? <button type="button" onClick={() => onSizeChange?.("normal")}>{t("results.restore")}</button> : null}
+          {size === "collapsed" ? <button type="button" onClick={() => onSizeChange?.("normal")}>{t("results.restore")}</button> : null}
         </span>
       </div>
       <div id={`${id}-panel`} className="results-body" role="tabpanel" aria-labelledby={`${id}-${active}`} tabIndex={0}

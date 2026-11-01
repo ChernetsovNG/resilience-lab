@@ -1,13 +1,14 @@
 import { useRef } from "react";
 
 /** Accessible boundary for the panel to its right or below; values are CSS pixels. */
-export function PanelSeparator({ orientation, value, minimum, maximum, onChange, onReset, label, valueText, controls, className, hidden }: {
+export function PanelSeparator({ orientation, value, minimum, maximum, onChange, onReset, onOverflow, label, valueText, controls, className, hidden }: {
   orientation: "horizontal" | "vertical";
   value: number;
   minimum: number;
   maximum: number;
   onChange: (value: number) => void;
   onReset: () => void;
+  onOverflow?: () => void;
   label: string;
   valueText: string;
   controls: string;
@@ -16,7 +17,13 @@ export function PanelSeparator({ orientation, value, minimum, maximum, onChange,
 }) {
   const drag = useRef<{ pointer: number; coordinate: number; value: number } | null>(null);
   const horizontal = orientation === "horizontal";
-  const change = (next: number) => onChange(Math.max(minimum, Math.min(maximum, next)));
+  const change = (next: number) => {
+    if (next > maximum && onOverflow !== undefined) {
+      drag.current = null;
+      onOverflow();
+    }
+    else onChange(Math.max(minimum, Math.min(maximum, next)));
+  };
   return <div className={`panel-divider panel-divider--${orientation} ${className}`} role="separator" tabIndex={0} hidden={hidden}
     aria-label={label} aria-orientation={orientation} aria-controls={controls}
     aria-valuemin={Math.round(minimum)} aria-valuemax={Math.round(maximum)} aria-valuenow={Math.round(value)} aria-valuetext={valueText}
