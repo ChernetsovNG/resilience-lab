@@ -57,6 +57,8 @@ export interface CanvasProps {
   baseModel?: ModelFile;
   variant?: Variant;
   modelInfo?: ReactNode;
+  /** Model-page results shortcut; its measured overlay height is reserved when fitting the diagram. */
+  modelResultsHint?: ReactNode;
   onSelectChange?: (id: string, path: string) => void;
   onModelPage?: () => void;
   overrides?: Record<string, unknown>;
@@ -100,7 +102,7 @@ function CanvasViewport({ ready, onZoomChange }: { ready: boolean; onZoomChange?
   return null;
 }
 
-function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
+function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHint, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
   replicaSelection, nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
   const { gridStep, snapToGrid, showGrid } = useViewSettings();
@@ -114,14 +116,25 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     measure();
     return observeResize([element], measure);
   }, [variant?.id]);
+  const hint = useRef<HTMLDivElement>(null);
+  const hintVisible = modelResultsHint != null;
+  const [hintTopInset, setHintTopInset] = useState(0);
+  const canvasNode = useStore(state => state.domNode);
+  useLayoutEffect(() => {
+    const element = hint.current;
+    if (element === null || canvasNode === null) return;
+    const measure = () => setHintTopInset(element.getBoundingClientRect().bottom - canvasNode.getBoundingClientRect().top + 16);
+    measure();
+    return observeResize([element], measure);
+  }, [hintVisible, canvasNode]);
   const height = useStore((state) => state.height);
   const shortCanvas = height > 0 && height - bottomInset < 240;
   const fitViewOptions = useMemo(() => ({ ...baseFitViewOptions, padding: {
     ...baseFitViewOptions.padding,
     right: shortCanvas ? "252px" as const : baseFitViewOptions.padding.right,
     bottom: `${Math.max(shortCanvas ? 16 : 80, bottomInset + 16)}px` as `${number}px`,
-    top: `${Math.max(shortCanvas ? 16 : 64, variantVisible ? bannerHeight + (shortCanvas ? 16 : 48) : 0)}px` as `${number}px`,
-  } }), [bottomInset, bannerHeight, variantVisible, shortCanvas]);
+    top: `${Math.max(shortCanvas ? 16 : 64, variantVisible ? bannerHeight + (shortCanvas ? 16 : 48) : 0, hintVisible ? hintTopInset : 0)}px` as `${number}px`,
+  } }), [bottomInset, bannerHeight, variantVisible, shortCanvas, hintVisible, hintTopInset]);
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, getViewport, getNodes, setViewport } = useReactFlow();
   const manualViewport = useRef(false);
@@ -450,9 +463,12 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     >
       <CanvasViewport ready={initialized || !hasNodes} onZoomChange={onZoomChange} />
       {showGrid && <Background gap={gridStep} />}
-      {modelInfo == null ? null : <Panel position="top-left" className="model-info-position"
-        style={{ top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 48 : 40)) }}>
-        {modelInfo}
+      {modelInfo == null && !hintVisible ? null : <Panel position="top-left" className="model-info-position"
+        style={{ pointerEvents: "none", top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 48 : 40)) }}>
+        <div className="model-info-row">
+          {modelInfo}
+          {hintVisible ? <div ref={hint} className="model-results-hint nodrag nopan nowheel" role="status">{modelResultsHint}</div> : null}
+        </div>
       </Panel>}
       <Panel position="bottom-right" className="react-flow__attribution">
         <a href={`https://reactflow.dev${import.meta.env.PROD ? "?utm_source=attribution" : "/attribution"}`} target="_blank" rel="noopener noreferrer"

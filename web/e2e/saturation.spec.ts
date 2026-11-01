@@ -88,21 +88,65 @@ test.describe("readable result navigation", () => {
         await writeFile(layoutPath, JSON.stringify(layout));
         await page.goto("/");
         await selectExperiment(page, `saturation-focus-${viewport.width}/retry-storm.experiment.json`);
-        const hint = page.getByRole("button", { name: "Показать результаты: Baseline", exact: true });
+        const hint = page.getByRole("button", { name: "Показать: Baseline", exact: true });
         await expect(hint).toHaveCount(0);
+        const run = page.getByRole("button", { name: "Запустить", exact: true });
+        await expect(run).toBeEnabled();
+        const canvasChromeHeight = async () => (await page.locator(".canvas-area").boundingBox())!.height
+          - (await page.locator(".react-flow").boundingBox())!.height;
+        const fullCanvasHeight = async () => (await page.locator(".react-flow").boundingBox())!.height
+          + (await page.getByRole("region", { name: "Ход эксперимента", exact: true }).boundingBox())!.height;
+        const chromeBeforeResults = await canvasChromeHeight();
+        const heightBeforeResults = await fullCanvasHeight();
         const response = page.waitForResponse(response => /\/api\/v1\/runs\/[^/]+\/summary$/.test(new URL(response.url()).pathname));
-        await page.getByRole("button", { name: "Запустить", exact: true }).click();
+        await run.click();
         const summary: RunSummary = await (await response).json();
         await expect(page.getByTestId("job-status")).toHaveText("ЗАВЕРШЕНО");
         await expect(hint).toBeVisible();
-        await expect(page.getByText("Здесь редактируется структура. Результаты на схеме — на вкладке варианта.", { exact: true })).toBeVisible();
+        await expect.poll(canvasChromeHeight).toBeCloseTo(chromeBeforeResults, 1);
+        await expect(page.getByText("Результаты — на вкладке варианта", { exact: true })).toBeVisible();
+        const overlay = page.locator(".model-results-hint");
+        const overlappingElements = () => overlay.evaluate(element => {
+          const hint = element.getBoundingClientRect();
+          return [...document.querySelectorAll(".react-flow__node, .canvas-navigation")].filter(target => {
+            const rect = target.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 && rect.left < hint.right && rect.right > hint.left
+              && rect.top < hint.bottom && rect.bottom > hint.top;
+          }).map(target => target.getAttribute("data-id") ?? target.className);
+        });
+        await expect.poll(overlappingElements).toEqual([]);
+        const about = (await page.getByRole("button", { name: "О модели", exact: true }).boundingBox())!;
+        const hintBox = (await overlay.boundingBox())!;
+        expect(hintBox.x).toBeGreaterThan(about.x + about.width);
+        expect(hintBox.y).toBeCloseTo(about.y, 0);
         await page.screenshot({ path: testInfo.outputPath(`model-results-hint-ru-${viewport.width}.png`) });
+
+        const longLabel = `Baseline: ${"long variant name ".repeat(20).trim()}`;
+        experiment.variants[0].label = longLabel;
+        await writeFile(resolve(directory, "retry-storm.experiment.json"), JSON.stringify(experiment));
+        await page.reload();
+        await selectExperiment(page, `saturation-focus-${viewport.width}/retry-storm.experiment.json`);
+        const longHint = page.getByRole("button", { name: `Показать: ${longLabel}`, exact: true });
+        await expect(longHint).toBeVisible();
+        await expect(longHint).toHaveAttribute("title", `Показать: ${longLabel}`);
+        expect(await longHint.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+        const longBox = (await overlay.boundingBox())!;
+        expect(longBox.height).toBeCloseTo(hintBox.height, 0);
+        await expect.poll(overlappingElements).toEqual([]);
+        await expect.poll(fullCanvasHeight).toBeCloseTo(heightBeforeResults, 1);
+        await page.screenshot({ path: testInfo.outputPath(`model-results-hint-long-ru-${viewport.width}.png`) });
+        experiment.variants[0].label = "Baseline";
+        await writeFile(resolve(directory, "retry-storm.experiment.json"), JSON.stringify(experiment));
+        await page.reload();
+        await selectExperiment(page, `saturation-focus-${viewport.width}/retry-storm.experiment.json`);
+        await expect(hint).toBeVisible();
         await hint.click();
         await expect(page.locator("#variant-baseline")).toHaveAttribute("aria-selected", "true");
         await expect(page.getByRole("region", { name: "Контекст результатов", exact: true })).toBeVisible();
         await expect(hint).toHaveCount(0);
 
         await page.getByRole("tab", { name: "Модель", exact: true }).click();
+        await page.getByRole("button", { name: "Восстановить результаты", exact: true }).click();
         const first = summary.variants[0].points[0].saturation.firstNodes[0];
         expect(first).toBeDefined();
         const insight = page.getByRole("region", { name: "Вывод о насыщении", exact: true });

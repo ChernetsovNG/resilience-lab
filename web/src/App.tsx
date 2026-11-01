@@ -620,13 +620,6 @@ export function App() {
             </div>
           ) : null}
           {workspace.problem === null ? null : <ProblemList problem={workspace.problem} />}
-          {!ownRun || summary === null || variant !== undefined || diagramVariant === undefined ? null : <div className="model-results-hint" role="status">
-            <span>{t("app.canvas.modelResultsHint")}</span>
-            <button type="button" disabled={invalid || !editable} onClick={() => {
-              selectVariant(diagramVariant.id); setFieldFocus(null);
-              setNodeMetric(current => current === "off" ? "utilization" : current);
-            }}>{t("app.canvas.openVariantResults", { variant: variantLabel(diagramVariant, variants) })}</button>
-          </div>}
           {!ownRun || summary === null || variant === undefined || catalog === null || model === null ? null : <ResultsContextBar
             catalog={catalog} model={model} summary={summary} variant={variant} selection={results.selection} onSelect={results.select}
             replications={resultManifest?.replications ?? summary.variants.find(candidate => candidate.id === variant.id)?.replications ?? 0}
@@ -655,6 +648,15 @@ export function App() {
               onModelPage={() => { if (!invalid) { setAnalysis(false); selectVariant(null); setFieldFocus(null); } }}
               layout={loaded.layout}
               key={loaded.experimentPath}
+              modelResultsHint={!ownRun || summary === null || variant !== undefined || diagramVariant === undefined ? null : <>
+                <span>{t("app.canvas.modelResultsHint")}</span>
+                <button type="button" disabled={invalid || !editable}
+                  title={t("app.canvas.openVariantResults", { variant: variantLabel(diagramVariant, variants) })}
+                  onClick={() => {
+                    selectVariant(diagramVariant.id); setFieldFocus(null);
+                    setNodeMetric(current => current === "off" ? "utilization" : current);
+                  }}>{t("app.canvas.openVariantResults", { variant: variantLabel(diagramVariant, variants) })}</button>
+              </>}
               modelInfo={<ModelInfo key={loaded.modelPath} modelPath={loaded.modelPath} model={loaded.model} experiment={loaded.experiment}
                 notesDisabled={invalid || loading} onFullNotes={() => {
                   setAnalysis(false);
