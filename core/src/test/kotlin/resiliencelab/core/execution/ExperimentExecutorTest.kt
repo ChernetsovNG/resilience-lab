@@ -32,6 +32,30 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 
 class ExperimentExecutorTest {
+    @Test
+    fun `ordered parallel work reuses workers and survives a failed batch`() {
+        ExperimentExecutor(2).use { executor ->
+            val together = CountDownLatch(2)
+            val threads = Collections.synchronizedList(mutableListOf<String>())
+            val values =
+                executor.mapOrdered(listOf(2, 1)) { value ->
+                    threads += Thread.currentThread().name
+                    together.countDown()
+                    check(together.await(5, TimeUnit.SECONDS))
+                    value * 10
+                }
+            assertThat(values).containsExactly(20, 10)
+            assertThat(threads).containsOnly("experiment-task")
+            assertThatThrownBy {
+                executor.mapOrdered(listOf(1, 2)) { value ->
+                    check(value != 2) { "summary read failed" }
+                    value
+                }
+            }.hasMessageContaining("summary read failed")
+            assertThat(executor.mapOrdered(listOf(3)) { it }).containsExactly(3)
+        }
+    }
+
     private fun variant(
         id: String,
         label: String,

@@ -1443,6 +1443,7 @@
   "messages.storageSource.connections": "call connection rows",
   "messages.storageSource.routerOutputs": "router output rows",
   "messages.storageSource.groups": "replica group rows",
+  "messages.storageSource.classes": "request class rows",
   "editor.grid.axisTitle": "{parameter} · {element}",
   "editor.grid.connection": "{from} → {to}",
   "editor.grid.coordinate": "{parameter} = {value}",

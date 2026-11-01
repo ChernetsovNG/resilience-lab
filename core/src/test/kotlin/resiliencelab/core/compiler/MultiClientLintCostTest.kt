@@ -75,8 +75,8 @@ class MultiClientLintCostTest {
 
         // Per replication: status 10 × 5 events, checkout 20 × 12, 10 windows and 3 fixed events.
         assertThat(estimate.expectedEvents).isEqualTo(1_515.0)
-        // Two clients, two services and one call, over ten windows and five replications.
-        assertThat(estimate.expectedRows).isEqualTo(250)
+        // Two clients, two classes, two services and one call, over ten windows and five replications.
+        assertThat(estimate.expectedRows).isEqualTo(350)
     }
 
     @Test

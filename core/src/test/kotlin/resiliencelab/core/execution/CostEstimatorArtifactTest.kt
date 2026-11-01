@@ -60,7 +60,10 @@ class CostEstimatorArtifactTest {
                                         Files.newInputStream(indexPath.parent.resolve(reference.file)),
                                     ).use { it.readBytes() }
                                 val part = Json.decodeFromString(SeriesPart.serializer(), bytes.toString(Charsets.UTF_8))
-                                rows += part.nodes.sumOf { it.windows.size.toLong() } + part.connections.sumOf { it.windows.size.toLong() }
+                                rows +=
+                                    part.nodes.sumOf { it.windows.size.toLong() } +
+                                    part.connections.sumOf { it.windows.size.toLong() } +
+                                    part.classes.sumOf { it.windows.size.toLong() }
                                 rawBytes += bytes.size
                                 parts++
                             }

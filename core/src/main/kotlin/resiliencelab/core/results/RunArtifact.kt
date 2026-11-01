@@ -12,6 +12,7 @@ import resiliencelab.core.compiler.Diagnostic
 import resiliencelab.core.compiler.Severity
 import resiliencelab.core.document.DocumentCodec
 import resiliencelab.core.document.GridAxis
+import resiliencelab.core.execution.ExperimentExecutor
 import resiliencelab.core.experiment.AggregateMetrics
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.MetricsAggregator
@@ -22,8 +23,10 @@ import resiliencelab.core.workspace.DocumentExistsException
 import resiliencelab.core.workspace.DocumentVersion
 import resiliencelab.core.workspace.Workspace
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
+import java.util.concurrent.RejectedExecutionException
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
@@ -55,9 +58,9 @@ internal fun <T> uninterruptedArtifactWrite(action: () -> T): T {
 object Versions {
     const val APPLICATION = "0.1.0"
     const val KSL = "R1.8.1"
-    const val ARTIFACT_SCHEMA = 17
+    const val ARTIFACT_SCHEMA = 18
     const val SERIES_SCHEMA = 7
-    const val REPLICATION_SCHEMA = 6
+    const val REPLICATION_SCHEMA = 7
 }
 
 /** Stored results are versioned independently of input documents; old formats require a fresh run. */
@@ -119,6 +122,7 @@ data class ReplicationArtifact(
     val profile: String,
     val unit: String,
     val result: ReplicationResult,
+    val saturation: ReplicationSaturation,
 )
 
 /** Metrics of one variant, separated by grid point. */
@@ -189,21 +193,41 @@ object ResultsLayout {
 /** Writes the artifact; the manifest goes last so that its presence marks a finished run. */
 class ArtifactWriter(
     private val workspace: Workspace,
+    private val executor: ExperimentExecutor? = null,
 ) {
+    private val json = Json { explicitNulls = false }
+
+    private fun <T, R : Any> mapOrdered(
+        items: List<T>,
+        transform: (T) -> R,
+    ): List<R> =
+        try {
+            executor?.mapOrdered(items, transform) ?: items.map(transform)
+        } catch (failure: RejectedExecutionException) {
+            if (executor?.isClosed != true) throw failure
+            // These mappings only read stored data; publication must also work after the pool has closed.
+            items.map(transform)
+        } catch (failure: CancellationException) {
+            if (executor?.isClosed != true) throw failure
+            // A pool closed during a batch has drained its readers before this sequential retry.
+            items.map(transform)
+        }
+
     /** Publishes a task's fully drained cohort totals immediately, before reporting its completion. */
     fun writeReplication(
         taskDirectory: String,
         result: ReplicationResult,
+        saturation: ReplicationSaturation,
     ) {
         uninterruptedArtifactWrite {
-            val artifact = ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result)
+            val artifact = ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result, saturation)
             val bytes = DocumentCodec.encode(ReplicationArtifact.serializer(), artifact).toByteArray(Charsets.UTF_8)
             val compressed = ByteArrayOutputStream().also { buffer -> GZIPOutputStream(buffer).use { it.write(bytes) } }.toByteArray()
             workspace.createBytes("$taskDirectory/replication.json.gz", compressed)
         }
     }
 
-    /** Rebuilds metrics and insights from persisted totals and series in variant/point/replication order. */
+    /** Rebuilds metrics and insights from saved replication outcomes in variant/point/replication order. */
     fun summarize(
         runDirectory: String,
         experiment: String,
@@ -211,60 +235,55 @@ class ArtifactWriter(
         replications: Int,
         points: List<GridPoint>,
         grid: List<GridAxis>,
-        callChain: List<String>,
         graphs: Map<String, Map<String, GraphIr>> = emptyMap(),
     ): RunSummary {
-        val json = Json { explicitNulls = false }
-        val saturationReader = SaturationArtifactReader(workspace)
+        val pointKeys = variants.flatMap { (id, _) -> points.map { id to it } }
+        val paths =
+            pointKeys.flatMap { (id, point) ->
+                (0 until replications).map { replication -> "$runDirectory/series/$id/${point.id}/rep-$replication/replication.json.gz" }
+            }
+        val stored = mapOrdered(paths, ::readReplication)
+        val summaries =
+            mapOrdered(pointKeys.indices.toList()) { index ->
+                val (id, point) = pointKeys[index]
+                val results = stored.subList(index * replications, (index + 1) * replications)
+                val labels = graphs[id]?.get(point.id)?.let(SlotPoolLabels::from).orEmpty()
+                val aggregate = MetricsAggregator.aggregate(results.map { it.result })
+                PointSummary(
+                    point.id,
+                    point.coordinates,
+                    aggregate,
+                    SaturationAnalyzer.aggregate(results.map { it.saturation }),
+                    CapacityHeadroomAnalyzer.analyze(aggregate, labels),
+                )
+            }
         return RunSummary(
             Versions.ARTIFACT_SCHEMA,
             experiment,
-            variants.map { (id, label) ->
-                val summaries =
-                    points.map { point ->
-                        val graph = graphs[id]?.get(point.id)
-                        val labels = graph?.let(SlotPoolLabels::from).orEmpty()
-                        val positions = graph?.let(SlotPoolLabels::positions) ?: callChain.withIndex().associate { it.value to it.index }
-                        val stored =
-                            (0 until replications).map { replication ->
-                                val directory = "$runDirectory/series/$id/${point.id}/rep-$replication"
-                                val path = "$directory/replication.json.gz"
-                                val text =
-                                    GZIPInputStream(workspace.readBytes(path).inputStream())
-                                        .bufferedReader(Charsets.UTF_8)
-                                        .use { it.readText() }
-                                val version =
-                                    json
-                                        .parseToJsonElement(text)
-                                        .jsonObject["schemaVersion"]
-                                        ?.jsonPrimitive
-                                        ?.intOrNull
-                                if (version != Versions.REPLICATION_SCHEMA) {
-                                    throw UnsupportedArtifactVersionException("replication", version, Versions.REPLICATION_SCHEMA)
-                                }
-                                val artifact = json.decodeFromString(ReplicationArtifact.serializer(), text)
-                                require(
-                                    artifact.schemaVersion == Versions.REPLICATION_SCHEMA &&
-                                        artifact.profile == LatencySketch.PROFILE &&
-                                        artifact.unit == "ms",
-                                ) {
-                                    "Unsupported replication format in '$path'"
-                                }
-                                artifact.result to saturationReader.read(directory, replication, callChain, labels, positions)
-                            }
-                        val aggregate = MetricsAggregator.aggregate(stored.map { it.first })
-                        PointSummary(
-                            point.id,
-                            point.coordinates,
-                            aggregate,
-                            SaturationAnalyzer.aggregate(stored.map { it.second }),
-                            CapacityHeadroomAnalyzer.analyze(aggregate, labels),
-                        )
-                    }
-                VariantSummary(id, label, replications, summaries)
+            variants.mapIndexed { index, (id, label) ->
+                VariantSummary(id, label, replications, summaries.subList(index * points.size, (index + 1) * points.size))
             },
             grid,
         )
+    }
+
+    private fun readReplication(path: String): ReplicationArtifact {
+        val text =
+            GZIPInputStream(workspace.readBytes(path).inputStream())
+                .bufferedReader(Charsets.UTF_8)
+                .use { it.readText() }
+        val version =
+            json
+                .parseToJsonElement(text)
+                .jsonObject["schemaVersion"]
+                ?.jsonPrimitive
+                ?.intOrNull
+        if (version != Versions.REPLICATION_SCHEMA) {
+            throw UnsupportedArtifactVersionException("replication", version, Versions.REPLICATION_SCHEMA)
+        }
+        val artifact = json.decodeFromString(ReplicationArtifact.serializer(), text)
+        require(artifact.profile == LatencySketch.PROFILE && artifact.unit == "ms") { "Unsupported replication format in '$path'" }
+        return artifact
     }
 
     /** Writes [summary], then [manifest] with the checksums of the written parts, and returns that manifest. */
@@ -302,13 +321,11 @@ class ArtifactWriter(
                     workspace.create(summaryPath, encoded)
                 }
             }
+            val files = workspace.listFiles(runDirectory).filter { it != manifestPath }
             val parts =
-                workspace
-                    .listFiles(runDirectory)
-                    .filter { it != manifestPath }
-                    .associate { path ->
-                        path.removePrefix("$runDirectory/") to DocumentVersion.of(workspace.readBytes(path))
-                    }.toSortedMap()
+                mapOrdered(files) { path ->
+                    path.removePrefix("$runDirectory/") to DocumentVersion.of(workspace.readBytes(path))
+                }.toMap().toSortedMap()
             val written = manifest.copy(parts = parts, complete = summary != null && manifest.complete)
             val encoded = DocumentCodec.encode(RunManifest.serializer(), written)
             if (replaceExisting && workspace.exists(manifestPath)) {

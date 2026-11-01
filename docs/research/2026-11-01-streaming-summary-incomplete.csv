@@ -1,0 +1,4 @@
+source,version,case,workers,trial,status,reason
+exploratory-after-progress.log,after,ramp-90-10ms,1,2,failed,Replication exceeded its real-time cap before full drain (limit: 30 s)
+after-progress.log,after,ramp-90-10ms,8,,not_started,No two CPU samples at 90 percent idle within 10 minutes
+campaign/progress.log,,expanded_campaign,,,stopped,Expanded series ended after scope correction; all completed measurements retained

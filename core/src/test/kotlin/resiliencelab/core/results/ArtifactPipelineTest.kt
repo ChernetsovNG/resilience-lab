@@ -21,6 +21,7 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
 import kotlin.concurrent.thread
@@ -30,6 +31,164 @@ class ArtifactPipelineTest {
     @TempDir
     lateinit var temp: Path
     private val experiment = "retry-storm/retry-storm.experiment.json"
+
+    @Test
+    fun `run and resume summarize saved saturation without opening series parts`() {
+        val root = example("saved-saturation")
+        val backing = FileWorkspace(root)
+        val summarizing = AtomicBoolean()
+        val seriesReads = AtomicInteger()
+        val workspace =
+            object : Workspace by backing {
+                override fun readBytes(path: String): ByteArray {
+                    if (summarizing.get() && path.substringAfterLast('/').startsWith("part-")) {
+                        seriesReads.incrementAndGet()
+                        error("Summary must not read series parts")
+                    }
+                    return backing.readBytes(path)
+                }
+
+                override fun create(
+                    path: String,
+                    text: String,
+                ): String {
+                    if (path.endsWith("/summary.json")) summarizing.set(false)
+                    return backing.create(path, text)
+                }
+            }
+        ExperimentExecutor(2).use { executor ->
+            Lab(workspace, executor = executor).use { lab ->
+                val original = lab.run(experiment, "r", onProgress = { done, total -> summarizing.set(done == total) })
+                assertThat(original.manifest.schemaVersion).isEqualTo(18)
+                val task = "${original.runDirectory}/series/baseline/p0/rep-0/replication.json.gz"
+                val stored =
+                    Json
+                        .parseToJsonElement(
+                            GZIPInputStream(backing.readBytes(task).inputStream()).bufferedReader().use { it.readText() },
+                        ).jsonObject
+                assertThat(stored["schemaVersion"]?.jsonPrimitive?.content).isEqualTo("7")
+                assertThat(stored["saturation"]).isNotNull()
+                backing.delete(task)
+                backing.write(
+                    "${original.runDirectory}/manifest.json",
+                    DocumentCodec.encode(RunManifest.serializer(), original.manifest.copy(complete = false)),
+                )
+                val progress = mutableListOf<Pair<Int, Int>>()
+                val resumed =
+                    lab.resume(original.runDirectory, onProgress = { done, total ->
+                        progress += done to total
+                        summarizing.set(done == total)
+                    })
+                assertThat(progress).containsExactly(19 to 20, 20 to 20)
+                assertThat(resumed.summary).isEqualTo(original.summary)
+                assertThat(resumed.manifest).isEqualTo(original.manifest)
+                assertThat(seriesReads.get()).isZero()
+            }
+        }
+    }
+
+    @Test
+    fun `storage cancellation is not retried while the executor remains open`() {
+        for (pooled in listOf(false, true)) {
+            val backing = FileWorkspace(example("storage-cancel-$pooled"))
+            val reads = AtomicInteger()
+            val workspace =
+                object : Workspace by backing {
+                    override fun readBytes(path: String): ByteArray {
+                        if (reads.incrementAndGet() == 1) throw CancellationException("storage cancelled")
+                        return backing.readBytes(path)
+                    }
+                }
+            ExperimentExecutor(2).use { executor ->
+                assertThatThrownBy {
+                    ArtifactWriter(workspace, if (pooled) executor else null).summarize(
+                        ".results/e/r",
+                        "e",
+                        listOf("baseline" to "Baseline"),
+                        1,
+                        listOf(GridPoint("p0", emptyMap())),
+                        emptyList(),
+                    )
+                }.isInstanceOf(CancellationException::class.java)
+                assertThat(reads.get()).isEqualTo(1)
+            }
+        }
+    }
+
+    @Test
+    fun `closing the executor preserves a checksummed manifest that can be resumed`() {
+        val root = example("closed-executor")
+        val workspace = FileWorkspace(root)
+        ExperimentExecutor(1).use { executor ->
+            assertThatThrownBy {
+                Lab(workspace, executor = executor).run(experiment, "r", onProgress = { done, _ ->
+                    if (done == 1) executor.close()
+                })
+            }.isInstanceOf(CancellationException::class.java)
+        }
+        val directory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r"
+        val manifest = Json.decodeFromString(RunManifest.serializer(), workspace.read("$directory/manifest.json").text)
+        assertThat(manifest.complete).isFalse()
+        assertThat(manifest.parts).isNotEmpty()
+        manifest.parts.forEach { (path, checksum) ->
+            assertThat(DocumentVersion.of(workspace.readBytes("$directory/$path"))).isEqualTo(checksum)
+        }
+        assertThat(Lab(workspace).use { it.resume(directory) }.manifest.complete).isTrue()
+    }
+
+    @Test
+    fun `closing the pool during finalization still publishes the complete artifact`() {
+        val root = example("closed-finalization")
+        val backing = FileWorkspace(root)
+        val finalizing = AtomicBoolean()
+        val first = AtomicBoolean(true)
+        val reading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val failure = AtomicReference<Throwable?>()
+        val workspace =
+            object : Workspace by backing {
+                override fun readBytes(path: String): ByteArray {
+                    if (finalizing.get() && path.endsWith("/replication.json.gz") && first.compareAndSet(true, false)) {
+                        reading.countDown()
+                        check(release.await(30, TimeUnit.SECONDS))
+                    }
+                    return backing.readBytes(path)
+                }
+            }
+        ExperimentExecutor(2).use { executor ->
+            val caller =
+                thread(isDaemon = true) {
+                    try {
+                        Lab(workspace, executor = executor).run(experiment, "r", onProgress = {
+                            done,
+                            total,
+                            ->
+                            finalizing.set(done == total)
+                        })
+                    } catch (exception: Throwable) {
+                        failure.set(exception)
+                    }
+                }
+            try {
+                assertThat(reading.await(30, TimeUnit.SECONDS)).isTrue()
+                executor.close()
+                release.countDown()
+                caller.join(30_000)
+                assertThat(caller.isAlive).isFalse()
+                assertThat(failure.get()).isNull()
+                val directory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/r"
+                val manifest = Json.decodeFromString(RunManifest.serializer(), backing.read("$directory/manifest.json").text)
+                assertThat(manifest.complete).isTrue()
+                manifest.parts.forEach { (path, checksum) ->
+                    assertThat(DocumentVersion.of(backing.readBytes("$directory/$path"))).isEqualTo(checksum)
+                }
+            } finally {
+                release.countDown()
+                caller.interrupt()
+                caller.join(30_000)
+            }
+        }
+    }
 
     @Test
     fun `caller cancellation during a worker write waits for parts and publishes an incomplete manifest`() {
@@ -101,6 +260,8 @@ class ArtifactPipelineTest {
     fun `artifact is byte identical across workers and document order and summary rebuilds from replication files`() {
         val sequential = example("one")
         val parallel = example("eight")
+        val two = example("two")
+        val four = example("four")
         val reordered = example("reordered")
         val modelPath = reordered.resolve("retry-storm/retry-storm.model.json")
         val model = (DocumentCodec.decodeModel(Files.readString(modelPath), modelPath.toString()) as DecodeResult.Ok).value
@@ -126,6 +287,8 @@ class ArtifactPipelineTest {
         }
         val first = run(sequential, 1)
         run(parallel, 8)
+        run(two, 2)
+        run(four, 4)
         run(reordered, 8)
         val workspace = FileWorkspace(sequential)
         val storedManifest = Json.parseToJsonElement(workspace.read("${first.runDirectory}/manifest.json").text).jsonObject
@@ -159,6 +322,8 @@ class ArtifactPipelineTest {
         for (path in files) {
             val bytes = workspace.readBytes(path)
             assertThat(Files.readAllBytes(parallel.resolve(path))).describedAs(path).isEqualTo(bytes)
+            assertThat(Files.readAllBytes(two.resolve(path))).describedAs("2/$path").isEqualTo(bytes)
+            assertThat(Files.readAllBytes(four.resolve(path))).describedAs("4/$path").isEqualTo(bytes)
             assertThat(Files.readAllBytes(reordered.resolve(path))).describedAs(path).isEqualTo(bytes)
         }
         val rebuilt =
@@ -169,7 +334,6 @@ class ArtifactPipelineTest {
                 first.manifest.replications,
                 requireNotNull(first.manifest.series).points,
                 first.manifest.grid,
-                listOf("gateway", "middle", "dependency"),
             )
         assertThat(DocumentCodec.encode(RunSummary.serializer(), rebuilt))
             .isEqualTo(workspace.read("${first.runDirectory}/summary.json").text)
@@ -181,7 +345,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(17)
+        assertThat(first.manifest.schemaVersion).isEqualTo(18)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

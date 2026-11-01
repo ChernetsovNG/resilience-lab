@@ -74,26 +74,43 @@ object SaturationAnalyzer {
         labels: Map<String, Map<String, SlotPoolLabel>> = emptyMap(),
         positions: Map<String, Int> = callChain.withIndex().associate { it.value to it.index },
     ): ReplicationSaturation {
-        val states = mutableMapOf<Pair<String, String>, NodeState>()
-        windows.forEach { row ->
+        val detector = Detector(rule, labels, positions)
+        windows.forEach(detector::observe)
+        return detector.result(replication)
+    }
+
+    /** Retains two pressure intervals per instance slot set, independently of the number of observed windows. */
+    class Detector(
+        private val rule: SaturationRule = SaturationRule(),
+        private val labels: Map<String, Map<String, SlotPoolLabel>> = emptyMap(),
+        private val positions: Map<String, Int> = emptyMap(),
+    ) {
+        private val states = mutableMapOf<Pair<String, String>, NodeState>()
+
+        /** Observes one instance row; windows of each element must arrive chronologically. */
+        fun observe(row: NodeWindow) {
             row.metrics.slotPools.forEach { (slot, pool) ->
                 states
                     .getOrPut(row.id to slot) { NodeState() }
                     .observe(row.metrics, pool, slot != "clientConnections", rule)
             }
         }
-        val path =
-            states
-                .mapNotNull { (key, state) ->
-                    val (node, slot) = key
-                    state.startMs?.let { SaturatedNode(node, it, slot, labels[node]?.get(slot) ?: SlotPoolLabels.label(node, slot)) }
-                }.sortedWith(
-                    compareBy<SaturatedNode> { it.startMs }
-                        .thenByDescending { positions[it.node] ?: -1 }
-                        .thenBy { it.node }
-                        .thenBy { it.slotPool },
-                )
-        return ReplicationSaturation(replication, path)
+
+        /** Returns the current confirmed degradation path in the canonical downstream order. */
+        fun result(replication: Int): ReplicationSaturation {
+            val path =
+                states
+                    .mapNotNull { (key, state) ->
+                        val (node, slot) = key
+                        state.startMs?.let { SaturatedNode(node, it, slot, labels[node]?.get(slot) ?: SlotPoolLabels.label(node, slot)) }
+                    }.sortedWith(
+                        compareBy<SaturatedNode> { it.startMs }
+                            .thenByDescending { positions[it.node] ?: -1 }
+                            .thenBy { it.node }
+                            .thenBy { it.slotPool },
+                    )
+            return ReplicationSaturation(replication, path)
+        }
     }
 
     fun aggregate(

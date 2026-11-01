@@ -53,7 +53,7 @@
 
 1. [`Lab.loadDocuments`][lab] читает эксперимент и его ссылки через [`Workspace`][workspace]. [`DocumentCodec`][codec] проверяет JSON и версии. [`ModelCompiler.compile`][compiler] применяет варианты и сетку, проверяет модель и разворачивает реплики в [`GraphIr`][ir]; `Lab.validate` добавляет [`ModelLinter`][linter].
 2. [`Lab.run`][lab] вызывает [`ExperimentExecutor.run`][executor]. Каждое повторение получает свежую модель KSL; [`ReliabilityModel.runReplication`][engine] возвращает итоги [`MetricsCollector`][metrics], а [`WindowCollector`][windows] передаёт закрытые окна через callback.
-3. [`SeriesWriter`][series] пишет части и индекс, [`ArtifactWriter`][artifact] — итоги повторений. Его `summarize` перечитывает сохранённые данные, вызывает [`MetricsAggregator`][aggregator] и анализаторы выводов; затем публикуются сводка и манифест. Итоги когорты и временные окна собираются отдельно.
+3. [`SeriesWriter`][series] пишет части и индекс; его детектор потоково считает путь деградации. [`ArtifactWriter`][artifact] сохраняет путь вместе с итогами повторения. Его `summarize` параллельно читает итоги повторений и собирает сводку через [`MetricsAggregator`][aggregator] и анализаторы выводов в общем пуле исполнителя; затем публикуются сводка и манифест. Итоги когорты и временные окна собираются отдельно.
 
 ### Задание через API
 

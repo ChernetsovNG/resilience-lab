@@ -165,6 +165,7 @@ class SeriesWriter(
     private val windowMs: Double,
     private val maxPartBytes: Int = MAX_PART_BYTES,
     private val groups: List<ReplicaGroup> = emptyList(),
+    private val saturation: SaturationAnalyzer.Detector = SaturationAnalyzer.Detector(),
 ) {
     private val expectedWindows = windowCount(endMs, windowMs)
 
@@ -246,6 +247,14 @@ class SeriesWriter(
         kind: SeriesPartKind,
         sortedClasses: List<NodeWindow> = emptyList(),
     ) {
+        if (kind == SeriesPartKind.INSTANCE) {
+            sorted.forEach(saturation::observe)
+            sortedConnections.forEach { row ->
+                saturation.observe(
+                    NodeWindow(row.id, WindowMetrics(row.metrics.startMs, row.metrics.durationMs, slotPools = row.metrics.slotPools)),
+                )
+            }
+        }
         val baseBytes = prefix(index, index + 1, kind).size + PART_SUFFIX_BYTES
         var window = BufferedPart(index, index + 1, kind)
         var splitRows = false
@@ -407,6 +416,9 @@ class SeriesWriter(
             group += row
         }
     }
+
+    /** Degradation path accumulated from instance windows, without reading persisted parts. */
+    fun saturation(replication: Int): ReplicationSaturation = saturation.result(replication)
 
     /** Writes the index only after every window has been persisted. */
     fun finish(): SeriesIndex =
