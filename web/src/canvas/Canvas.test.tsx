@@ -19,6 +19,21 @@ import * as edgeGeometry from "./edgeGeometry";
 
 beforeAll(mockReactFlowDom);
 
+it.each([
+  { classes: ["status"], label: "status" },
+  { classes: ["status", "read"], label: "status, read" },
+  { classes: ["status", "read", "checkout", "write"], label: "status +3" },
+])("shows route request types as $label with a full tooltip", async ({ classes, label }) => {
+  const initial = structuredClone(model);
+  initial.blocks.middle = { type: "router", params: { policy: "roundRobin" } };
+  Object.assign(initial.connections.find(edge => edge.id === "middle-to-dependency")!, { type: "route", classes, params: {} });
+  render(<Canvas catalog={fullCatalog as Catalog} model={initial} layout={layout} selected={[]} onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const badge = await screen.findByTestId("canvas-edge-label-middle-to-dependency");
+  expect(within(badge).getByText(label, { exact: true })).toBeTruthy();
+  fireEvent.click(within(badge).getByRole("button", { name: "More about: Routed request types" }));
+  expect(within(badge).getByRole("tooltip").textContent).toBe(`Routed here: ${classes.join(", ")}`);
+});
+
 it("selects a connection from its endpoint label while retaining its document id", async () => {
   const onSelect = vi.fn();
   render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={onSelect} onCommand={vi.fn()} />);
