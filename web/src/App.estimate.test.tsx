@@ -19,7 +19,7 @@ it("waits for current validation before estimating a corrected draft with warnin
     }] } };
   });
   await open(); await selectGateway(); editHandlers("0");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   editHandlers("5");
@@ -29,7 +29,7 @@ it("waits for current validation before estimating a corrected draft with warnin
   expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/estimate")).toBe(false);
   await act(async () => gate.release());
   await screen.findByRole("region", { name: "Cost estimate" });
-  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+  expect(button("Errors: 0 · Warnings: 1 · Advice: 0")).toBeTruthy();
   const estimate = fetchMock.mock.calls.find(([url]) => url === "/api/v1/estimate")!;
   expect(JSON.parse(String(estimate[1]?.body)).drafts.find((draft: { path: string }) => draft.path === modelPath)
     .content.model.blocks.gateway.params.handlers).toBe(5);

@@ -85,3 +85,23 @@ it("resolves execution task variants and points in API error explanations and th
   expect(screen.getByRole("listitem").querySelector(".diagnostic-details")?.textContent).toContain("EXECUTION_DRAIN");
   expect(finding.args).toEqual({ variant: "variant-2", point: "p1", replication: 3 });
 });
+
+it("shows advice-only variants with a separate recommendation count", () => {
+  const advice = { code: "CUSTOM_ADVICE", severity: "ADVICE" as const, message: "Use a retry budget", variant: "baseline" };
+  render(<><DiagnosticBadge diagnostics={[advice]} /><DiagnosticMessages diagnostics={[advice]} />
+    <VariantDiagnosticLinks diagnostics={[advice]} /><VariantDiagnosticBadge diagnostics={[advice]} /></>);
+  expect(document.querySelector(".diagnostic--warning")).toBeNull();
+  expect(screen.getByRole("img").getAttribute("aria-label")).toContain("advice");
+  fireEvent.click(screen.getByRole("button", { name: /More about: Advice in variants/ }));
+  expect(screen.getByRole("link").textContent).toContain("1 recommendation");
+});
+
+it("keeps advice-only variants out of the warning label when severities are mixed", () => {
+  const advice = { code: "CUSTOM_ADVICE", severity: "ADVICE" as const, message: "Use a retry budget", variant: "advice-only" };
+  const warning = { ...advice, code: "CUSTOM_WARNING", severity: "WARNING" as const, variant: "risky" };
+  render(<DiagnosticLabelContext value={{ catalog, model, variants: [
+    { id: "advice-only", label: "Advice only" }, { id: "risky", label: "Risky" },
+  ] }}><VariantDiagnosticBadge diagnostics={[advice, warning]} /></DiagnosticLabelContext>);
+  const label = screen.getByRole("button").getAttribute("aria-label");
+  expect(label).toBe("Warnings in variants: Risky; Advice in variants: Advice only");
+});

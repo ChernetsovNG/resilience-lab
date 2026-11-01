@@ -64,7 +64,7 @@ it("shows available element results first and opens Parameters for Problems and 
   fireEvent.keyDown(inline, { key: "Escape" });
   fireEvent.click(within(parameters()).getByText("Parameters", { selector: "summary" }));
   await waitFor(() => expect(parameters().open).toBe(false));
-  fireEvent.click(button("Errors: 0 · Warnings: 1"));
+  fireEvent.click(button("Errors: 0 · Warnings: 1 · Advice: 0"));
   fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: /Inspect gateway handlers/ }));
   await waitFor(() => expect(parameters().open).toBe(true));
   expect(document.activeElement).toBe(within(parameters()).getByRole("textbox", { name: "Handlers" }));

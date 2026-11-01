@@ -63,7 +63,7 @@ class ModelLinterTest {
                     .describedAs("$kind, $attempts attempts")
                     .hasSize(if (attempts > 1 && kind != "exponential-full-jitter") 1 else 0)
                 findings.forEach { warning ->
-                    assertThat(warning.severity).isEqualTo(Severity.WARNING)
+                    assertThat(warning.severity.name).isEqualTo("ADVICE")
                     assertThat(warning.document).isEqualTo("m.model.json")
                     assertThat(warning.pointer).isEqualTo("/connections/1/params/backoff/kind")
                     assertThat(warning.path).isEqualTo("a-b")

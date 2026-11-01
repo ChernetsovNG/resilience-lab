@@ -56,7 +56,7 @@ class ModelLinterRetryUnguardedTest {
         assertThat(diagnostics).hasSize(1)
         val warning = diagnostics.single()
 
-        assertThat(warning.severity).isEqualTo(Severity.WARNING)
+        assertThat(warning.severity.name).isEqualTo("ADVICE")
         assertThat(warning.path).isEqualTo("call")
         assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.pointer).isEqualTo("/connections/1/params/attempts")

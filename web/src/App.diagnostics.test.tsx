@@ -19,7 +19,7 @@ it("reveals launch diagnostics and navigates to their element", async () => {
   const row = within(screen.getByRole("tabpanel")).getByRole("button", { name: /Launch handler error/ });
   fireEvent.click(row);
   expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
-  expect(button("Errors: 1 · Warnings: 0")).toBeTruthy();
+  expect(button("Errors: 1 · Warnings: 0 · Advice: 0")).toBeTruthy();
 });
 
 it("counts the same validation and job warning once", async () => {
@@ -32,7 +32,7 @@ it("counts the same validation and job warning once", async () => {
   await open();
   fireEvent.click(button("Run"));
   await screen.findByText("COMPLETED", { exact: true });
-  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+  expect(button("Errors: 0 · Warnings: 1 · Advice: 0")).toBeTruthy();
 });
 
 it("preserves the chosen tab when a repeated launch reveals the panel and returns the same error", async () => {
@@ -72,19 +72,19 @@ it("expires launch findings after edits and counts new validation errors without
   });
   await open();
   fireEvent.click(button("Run"));
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   await selectGateway(); editHandlers("5");
   await waitFor(() => expect(checks).toBe(2));
-  expect(button("Errors: 0 · Warnings: 0")).toBeTruthy();
+  expect(button("Errors: 0 · Warnings: 0 · Advice: 0")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).queryByRole("button", { name: /Handler error/ })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   findings = [finding];
   editHandlers("6");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  fireEvent.click(button("Errors: 1 · Warnings: 0"));
+  fireEvent.click(button("Errors: 1 · Warnings: 0 · Advice: 0"));
   expect(screen.getByRole("tabpanel").textContent).toContain("Handler error");
 });
 
@@ -108,7 +108,7 @@ it("reveals a resume refusal against the edited documents while the original run
   fireEvent.click(button("Resume"));
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
   expect(screen.getByRole("tabpanel").textContent).toContain("RUN_DOCUMENT_CHANGED");
-  expect(button("Errors: 1 · Warnings: 0")).toBeTruthy();
+  expect(button("Errors: 1 · Warnings: 0 · Advice: 0")).toBeTruthy();
   expect(screen.getByText("Results outdated")).toBeTruthy();
 });
 
@@ -164,7 +164,7 @@ it("shows variant warnings on Model, filters Problems by badge and links fields 
   expect(edge.queryByRole("button", { name: /in variants/ })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   expect(edge.getByRole("img", { name: "1 problems: warning" })).toBeTruthy();
-  fireEvent.click(button("Errors: 0 · Warnings: 5"));
+  fireEvent.click(button("Errors: 0 · Warnings: 5 · Advice: 0"));
   expect(screen.getByRole("tabpanel").querySelectorAll(".validation-problems > li")).toHaveLength(5);
 });
 
@@ -220,10 +220,10 @@ it("preserves the element filter on new errors until the status counter opens al
   findings = [warning, { ...warning, code: "PARAM_RANGE", severity: "ERROR", message: "Dependency handler error",
     pointer: "/blocks/dependency/params/handlers", path: "dependency", variant: "baseline" }];
   editHandlers("5");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 1" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 1 · Advice: 0" });
   expect(within(screen.getByRole("tabpanel")).getByText("Problems for gateway")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).queryByText("Dependency handler error")).toBeNull();
-  fireEvent.click(button("Errors: 1 · Warnings: 1"));
+  fireEvent.click(button("Errors: 1 · Warnings: 1 · Advice: 0"));
   expect(within(screen.getByRole("tabpanel")).getByText("Dependency handler error")).toBeTruthy();
   expect(within(screen.getByRole("tabpanel")).getAllByRole("listitem")).toHaveLength(2);
 });

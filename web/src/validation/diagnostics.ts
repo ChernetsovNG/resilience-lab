@@ -20,11 +20,13 @@ export interface DiagnosticGroup {
   members: Diagnostic[];
 }
 
-/** Collapse equivalent structured linter warnings across replicas and variants, preserving all source locations. */
+const severityOrder = { ERROR: 0, WARNING: 1, ADVICE: 2 };
+
+/** Collapse equivalent structured lint findings, preserving source locations and ordering groups by severity. */
 export function groupDiagnostics(diagnostics: readonly Diagnostic[]): DiagnosticGroup[] {
   const groups = new Map<string, DiagnosticGroup>();
   return diagnostics.flatMap((original, index) => {
-    const lint = original.severity === "WARNING" && original.code.startsWith("LINT_") && original.args != null;
+    const lint = original.severity !== "ERROR" && original.code.startsWith("LINT_") && original.args != null;
     const args = { ...original.args };
     const replica = typeof args.replica === "number" ? args.replica : null;
     const base = (path: string) => replica === null ? path : path.replace(/#\d+$/, "");
@@ -38,7 +40,7 @@ export function groupDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic
     const group = { diagnostic, members: [original] };
     groups.set(key, group);
     return [group];
-  });
+  }).sort((left, right) => severityOrder[left.diagnostic.severity] - severityOrder[right.diagnostic.severity]);
 }
 
 /** A transport or launch failure without compiler diagnostics still counts as one visible error. */
@@ -99,6 +101,7 @@ export function diagnosticTarget(
 export function summarizeDiagnostics(diagnostics: readonly Diagnostic[]) {
   return diagnostics.length === 0 ? null : {
     count: groupDiagnostics(diagnostics).length,
-    severity: diagnostics.some((diagnostic) => diagnostic.severity === "ERROR") ? "ERROR" as const : "WARNING" as const,
+    severity: diagnostics.some((diagnostic) => diagnostic.severity === "ERROR") ? "ERROR" as const
+      : diagnostics.some((diagnostic) => diagnostic.severity === "WARNING") ? "WARNING" as const : "ADVICE" as const,
   };
 }

@@ -185,3 +185,32 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
     });
   });
 }
+
+
+test("separates recommendations from risks and remembers their disclosure in Russian", async ({ page }, testInfo) => {
+  const ru = JSON.parse(await readFile(resolve("src/i18n/ru.json"), "utf8")) as Record<string, string>;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+  await expect(page.getByRole("button", { name: ru["app.topBar.run"], exact: true })).toBeEnabled();
+  const counter = ru["status.problems"].replace("{errors}", "0").replace("{warnings}", "2").replace("{advice}", "2");
+  const status = page.getByRole("region", { name: ru["status.title"] });
+  await expect(status.getByRole("button", { name: counter, exact: true })).toBeVisible();
+  await status.getByRole("button", { name: counter, exact: true }).click();
+  const group = page.locator(".advice-group");
+  await expect(group.locator("summary")).toHaveText(ru["results.problems.advice"].replace("{count}", "2"));
+  await expect(group).not.toHaveAttribute("open");
+  await expect(page.locator(".validation-problems > .diagnostic--warning")).toHaveCount(2);
+  await expect(group.locator(".diagnostic--advice")).toHaveCount(2);
+  await expect(group.locator('[data-diagnostic-code="LINT_RETRY_UNGUARDED"]').first()).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath("advice-collapsed.png") });
+  await group.locator("summary").click();
+  await expect(group).toHaveAttribute("open");
+  await page.screenshot({ path: testInfo.outputPath("advice-expanded.png") });
+  await group.locator('[data-diagnostic-code="LINT_RETRY_UNGUARDED"]').first().click();
+  await expect(page.locator(".inspector").getByLabel(ru["catalog.types.call.params.attempts.title"], { exact: true })).toBeFocused();
+  await page.reload();
+  await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+  await page.getByRole("tab", { name: ru["results.problems.title"], exact: true }).click();
+  await expect(page.locator(".advice-group")).toHaveAttribute("open");
+});

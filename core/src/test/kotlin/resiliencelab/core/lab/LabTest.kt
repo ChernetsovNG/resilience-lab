@@ -572,7 +572,7 @@ class LabTest {
     }
 
     @Test
-    fun `validates the example with advisory warnings for baseline only`() {
+    fun `validates the example with warnings and advice for baseline only`() {
         val report = Lab(FileWorkspace(exampleWorkspace())).validate(experiment)
 
         assertThat(report.diagnostics.map { it.code }).containsExactly(
@@ -581,8 +581,9 @@ class LabTest {
             "LINT_RETRY_UNGUARDED",
             "LINT_RETRY_OVERLOAD",
         )
+        assertThat(report.diagnostics.count { it.severity == resiliencelab.core.compiler.Severity.WARNING }).isEqualTo(2)
+        assertThat(report.diagnostics.count { it.severity == resiliencelab.core.compiler.Severity.ADVICE }).isEqualTo(2)
         assertThat(report.diagnostics).allSatisfy {
-            assertThat(it.severity).isEqualTo(resiliencelab.core.compiler.Severity.WARNING)
             assertThat(it.document).isEqualTo(model)
             assertThat(it.variant).isEqualTo("baseline")
             assertThat(it.message).doesNotContain("variants:")

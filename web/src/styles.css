@@ -1703,3 +1703,11 @@ select {
 .canvas-edge-handle--bend { border-radius: 2px; }
 .canvas-edge-handle:focus-visible { outline: 2px solid #0f172a; outline-offset: 2px; }
 .canvas-edge-edit-limit { position: absolute; z-index: 3; padding: 4px 8px; background: #fff; color: #b91c1c; }
+
+.diagnostic--advice,
+.diagnostic-badge.diagnostic--advice { color: #52606d; }
+.advice-group { margin-top: 0.6rem; }
+.advice-group > summary { color: #52606d; cursor: pointer; }
+.diagnostic-badge .icon,
+.help-hint-button .icon,
+.advice-group .icon { width: 1em; height: 1em; vertical-align: -0.1em; }

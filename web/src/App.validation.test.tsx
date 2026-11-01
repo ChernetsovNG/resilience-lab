@@ -15,12 +15,12 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
   await open();
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  fireEvent.click(await screen.findByRole("button", { name: "Errors: 0 · Warnings: 1" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Errors: 0 · Warnings: 1 · Advice: 0" }));
   expect(screen.getByRole("tabpanel").textContent).toContain("Budget warning 1");
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   await selectGateway(); editHandlers("5");
-  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+  expect(button("Errors: 0 · Warnings: 1 · Advice: 0")).toBeTruthy();
   expect(screen.getByRole("tab", { name: "Problems" }).textContent).toContain("1");
   await waitFor(() => expect(checks).toBe(2));
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
@@ -43,13 +43,13 @@ it("keeps new and recurring validation errors collapsed while updating counts", 
   fireEvent.click(button("Collapse results"));
   findings = [first];
   editHandlers("5");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
 
   findings = [first, { ...first, message: "Another handler error" }];
   editHandlers("6");
-  await screen.findByRole("button", { name: "Errors: 2 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 2 · Warnings: 0 · Advice: 0" });
   expect(screen.queryByRole("tabpanel")).toBeNull();
   findings = [];
   editHandlers("7");
@@ -57,7 +57,7 @@ it("keeps new and recurring validation errors collapsed while updating counts", 
   expect(screen.queryByRole("tabpanel")).toBeNull();
   findings = [first];
   editHandlers("8");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();
 });
@@ -78,7 +78,7 @@ it("keeps the panel collapsed when an added block produces a validation error", 
   fireEvent.doubleClick(button("Service"));
   const node = await screen.findByTestId("rf__node-service-1");
   await waitFor(() => expect(node.classList.contains("selected")).toBe(true));
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.queryByRole("tabpanel")).toBeNull();
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(button("Run"));
@@ -95,7 +95,7 @@ it.each(["Run", "Estimate", "Fix validation errors before running", "Ctrl+Enter"
   await open(); await selectGateway();
   invalid = true;
   editHandlers("0");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   if (action === "Ctrl+Enter") fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -115,7 +115,7 @@ it("preserves an expanded tab when validation finds a new error", async () => {
   fireEvent.click(screen.getByRole("tab", { name: "Assumptions" }));
   invalid = true;
   editHandlers("0");
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.getByRole("tab", { name: "Assumptions" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
@@ -131,7 +131,7 @@ it.each(["Run", "Estimate"])("opens Problems when %s receives validation errors 
   fireEvent.click(button(action));
   await waitFor(() => expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true"));
   expect(screen.getByRole("tabpanel").textContent).toContain("Estimate handler error");
-  expect(button("Errors: 1 · Warnings: 0")).toBeTruthy();
+  expect(button("Errors: 1 · Warnings: 0 · Advice: 0")).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(requests.mock.calls.some(([url, init]) => url === "/api/v1/jobs" || init?.method === "PUT")).toBe(false);
 });
@@ -154,7 +154,7 @@ it.each(["Run", "Estimate"])("preserves the tab chosen during %s when the estima
   await waitFor(() => expect(estimates).toBe(2));
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   await act(async () => gate.release());
-  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
+  await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0 · Advice: 0" });
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
 });
 

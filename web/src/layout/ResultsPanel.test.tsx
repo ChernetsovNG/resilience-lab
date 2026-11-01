@@ -324,3 +324,41 @@ it("shows the submitted load and faults above the Findings using variant and poi
   view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} />);
   expect(screen.getByTestId("run-conditions").textContent).toContain("Load 30 RPS");
 });
+
+it("keeps advice collapsed below risks and remembers expansion and navigation", () => {
+  localStorage.clear();
+  const advice = { code: "CUSTOM_ADVICE", severity: "ADVICE" as const, message: "Use a retry budget", path: "gateway-to-middle" };
+  const warning = { ...advice, code: "CUSTOM_WARNING", severity: "WARNING" as const, message: "Short timeout" };
+  const onDiagnostic = vi.fn();
+  const props = { job: null, summary: null, problem: null, diagnostics: [advice, warning], onDiagnostic };
+  const view = render(<ResultsPanel {...props} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  const group = screen.getByText("Advice (1)").closest("details")!;
+  expect(group.open).toBe(false);
+  expect(group.previousElementSibling?.textContent).toContain("Short timeout");
+  group.open = true;
+  fireEvent(group, new Event("toggle"));
+  fireEvent.click(screen.getByRole("button", { name: /Use a retry budget/ }));
+  expect(onDiagnostic).toHaveBeenCalledWith(advice);
+  view.unmount();
+  render(<ResultsPanel {...props} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  expect(screen.getByText("Advice (1)").closest("details")!.open).toBe(true);
+  localStorage.clear();
+});
+
+it("keeps advice usable when browser storage is unavailable", () => {
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("storage denied"); });
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage denied"); });
+  try {
+    render(<ResultsPanel job={null} summary={null} problem={null} diagnostics={[
+      { code: "CUSTOM_ADVICE", severity: "ADVICE", message: "Use a retry budget" },
+    ]} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+    const group = screen.getByText("Advice (1)").closest("details")!;
+    group.open = true;
+    fireEvent(group, new Event("toggle"));
+    expect(group.open).toBe(true);
+    expect(screen.getByRole("button", { name: /Use a retry budget/ })).toBeTruthy();
+  } finally { vi.restoreAllMocks(); }
+});
