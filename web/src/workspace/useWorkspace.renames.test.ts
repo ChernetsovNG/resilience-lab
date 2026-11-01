@@ -5,6 +5,7 @@ import { catalog, documentViews, experiment, experimentPath, layoutPath, modelPa
 import { stubFetch } from "../test/stubFetch";
 import { renameElement } from "./structure";
 import { useWorkspace } from "./useWorkspace";
+import { editRequestTypes, renameRequestType } from "./requestTypes";
 
 const sibling = "questions/grid.experiment.json";
 const unrelated = "other/grid.experiment.json";
@@ -198,4 +199,72 @@ it("preserves an external edit made to a question after a partial rename save", 
   expect(store.puts()).toHaveLength(writes);
   expect(result.current.problem?.message).toContain(sibling);
   expect(store.documents[sibling].content.experiment!.faults[0].target).toBe("gateway#2");
+});
+
+const requestTypes = [
+  { id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }] } },
+  { id: "status", load: { points: [{ time: "0s", rate: "80/s" }] } },
+];
+
+function requestTypeStorage(failModelOnce = false) {
+  const store = storage(undefined, failModelOnce);
+  const client = store.documents[modelPath].content.model!.blocks.client;
+  delete client.params.load;
+  client.params.classes = structuredClone(requestTypes);
+  store.documents[sibling].content.experiment!.variants = [{ id: "baseline", overrides: { "client.classes": structuredClone(requestTypes) } }];
+  return store;
+}
+
+it("saves request type renames in sibling experiments and follows Undo after saving", async () => {
+  const store = requestTypeStorage();
+  const other = structuredClone(store.documents[unrelated]);
+  const { result } = await opened();
+  await waitFor(() => expect(result.current.requestTypeExperimentsUsing("checkout")).toEqual(["grid"]));
+  act(() => result.current.execute(renameRequestType("client", 0, "order", catalog)));
+  await act(async () => { expect(await result.current.save()).toBe(true); });
+  const types = () => store.documents[sibling].content.experiment!.variants[0].overrides["client.classes"] as typeof requestTypes;
+  expect(types().map(type => type.id)).toEqual(["order", "status"]);
+  expect(store.documents[unrelated]).toEqual(other);
+  act(() => result.current.undo());
+  await act(async () => { expect(await result.current.save()).toBe(true); });
+  expect(types().map(type => type.id)).toEqual(["checkout", "status"]);
+});
+
+it("preflights request type collisions in other experiments before writing anything", async () => {
+  const store = requestTypeStorage();
+  store.documents[sibling].content.experiment!.variants[0].overrides["client.classes"] = [...requestTypes, { ...requestTypes[0], id: "order" }];
+  const { result } = await opened();
+  act(() => result.current.execute(renameRequestType("client", 0, "order", catalog)));
+  await act(async () => { expect(await result.current.save()).toBe(false); });
+  expect(store.puts()).toHaveLength(0);
+  expect(result.current.problem?.message).toContain(sibling);
+});
+
+it("keeps partial request type writes pending when Undo restores the saved model", async () => {
+  const store = requestTypeStorage(true);
+  const before = structuredClone(store.documents[sibling].content);
+  const { result } = await opened();
+  act(() => result.current.execute(renameRequestType("client", 0, "order", catalog)));
+  await act(async () => { expect(await result.current.save()).toBe(false); });
+  expect((store.documents[sibling].content.experiment!.variants[0].overrides["client.classes"] as typeof requestTypes)[0].id).toBe("order");
+  act(() => result.current.undo());
+  expect(result.current.dirty).toBe(true);
+  await act(async () => { expect(await result.current.save()).toBe(true); });
+  expect(store.documents[sibling].content).toEqual(before);
+});
+
+it("does not repeat swapped request type renames after a partial save and profile edit", async () => {
+  const store = requestTypeStorage(true);
+  const { result } = await opened();
+  for (const [index, id] of [[0, "temporary"], [1, "checkout"], [0, "status"]] as const) {
+    act(() => result.current.execute(renameRequestType("client", index, id, catalog)));
+  }
+  await act(async () => { expect(await result.current.save()).toBe(false); });
+  const types = () => store.documents[sibling].content.experiment!.variants[0].overrides["client.classes"] as typeof requestTypes;
+  expect(types().map(type => type.id)).toEqual(["status", "checkout"]);
+  const current = result.current.loaded!.model.blocks.client.params.classes as typeof requestTypes;
+  act(() => result.current.execute(editRequestTypes("client", current.map(type => ({ ...type, load: { points: [{ time: "0s", rate: "50/s" }] } })), catalog)));
+  await act(async () => { expect(await result.current.save()).toBe(true); });
+  expect(types().map(type => type.id)).toEqual(["status", "checkout"]);
+  expect(store.puts().filter(([url]) => String(url).includes(encodeURIComponent(sibling)))).toHaveLength(1);
 });

@@ -74,11 +74,12 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     expect(expected.connections.find(edge => edge.id === "checkout-route")!.classes).toEqual(["checkout"]);
 
     await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
-    const classField = page.locator('[data-inspector-field="classes"] textarea');
-    await expect(classField).toBeVisible();
-    await expect(classField).not.toBeEditable();
-    expect(JSON.parse(await classField.inputValue())).toEqual(classes);
-    await expect(page.getByRole("table", { name: "Load points" })).toHaveCount(0);
+    const requestTypes = page.getByRole("textbox", { name: "Request type ID", exact: true });
+    await expect(requestTypes).toHaveCount(2);
+    await expect(requestTypes.nth(0)).toHaveValue("status");
+    await expect(requestTypes.nth(1)).toHaveValue("checkout");
+    await expect(requestTypes.nth(1)).toBeEditable();
+    await expect(page.getByRole("table", { name: "Load points" })).toHaveCount(2);
     await page.getByLabel("Deadline", { exact: true }).fill("3s");
     await page.getByLabel("Deadline", { exact: true }).press("Enter");
     expected.blocks.client.params.deadline = "3s";

@@ -1,7 +1,7 @@
 import { FaultBadge } from "../experiment/FaultBadge";
-import type { CourseFault } from "../experiment/course";
+import { clientLoadCurves, type CourseFault } from "../experiment/course";
 import { t } from "../i18n";
-import { formatNumber } from "../i18n/format";
+import { formatNumber, formatRate } from "../i18n/format";
 import { formatOutput, outputField, outputText, outputsOf, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { BlockInstance, Catalog, Diagnostic, TypeDescriptor } from "../api/apiTypes";
@@ -71,7 +71,12 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
   const type = data.catalog.types.find(type => type.id === data.block.type) ?? { id: data.block.type, title: data.block.type };
   const load = isObject(data.block.params.load) ? data.block.params.load : {};
   const points = Array.isArray(load.points) ? load.points : [];
-  const singlePoint = points.length === 1 && isObject(points[0]);
+  const hasTypes = data.block.params.classes != null;
+  const singlePoint = !hasTypes && points.length === 1 && isObject(points[0]);
+  const requestTypes = hasTypes && data.block.type === "client" ? clientLoadCurves(data.block.params, 1, data.catalog) : null;
+  const requestTypeSummary = requestTypes === null ? null : t("editor.canvas.requestTypes", {
+    rate: formatRate(requestTypes.points[0]?.rate), count: formatNumber(requestTypes.types.length),
+  });
   const parameters: readonly [string, string][] = data.block.type === "client"
     ? [...(singlePoint ? [["load.points.0.rate", "editor.canvas.intensity"] as [string, string]] : []), ["deadline", "editor.canvas.deadline"]]
     : keyParameters.get(data.block.type) ?? [];
@@ -106,7 +111,8 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
         title={data.result.firstSaturation}>{t("editor.symbols.saturation")}</span>}
       {parameters.length > 0 ? (
         <span className="block-summary">
-          {data.block.type === "client" && !singlePoint ? <span className="block-param">
+          {requestTypeSummary === null ? null : <span className="block-param request-type-summary" title={requestTypeSummary}>{requestTypeSummary}</span>}
+          {data.block.type === "client" && !singlePoint && !hasTypes ? <span className="block-param">
             {t("editor.canvas.loadProfile")}
             <HelpHint label={type.title}>{catalogParameter(data.catalog, data.block.type, data.block.params, "load")?.descriptor.description}</HelpHint>
           </span> : null}

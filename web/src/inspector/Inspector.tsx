@@ -15,12 +15,13 @@ import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
-import { LoadProfile } from "./LoadProfile";
+import { RequestTypes } from "./RequestTypes";
 import { ReplicaTargetField } from "./ReplicaTargetField";
 import { elementLabel, variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
   renameReferences?: readonly string[];
+  requestTypeReferences?: (id: string) => string[];
   catalog: Catalog;
   results?: ReactNode;
   variantChanges?: ReactNode;
@@ -76,7 +77,7 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
-  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences,
+  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences, requestTypeReferences,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
@@ -102,7 +103,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const destination = connection === undefined ? undefined : ownEntry(model.blocks, connection.to);
   const attempts = element?.params.attempts ?? type?.params.find(param => param.name === "attempts")?.default ?? 1;
   const parameters = type?.params.filter(descriptor =>
-    !(element?.type === "client" && descriptor.name === "load") &&
+    !(element?.type === "client" && ["load", "classes"].includes(descriptor.name)) &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
   const heading = showElement ? elementLabel(selectedReplica?.id ?? selected!, model) : resultsOnly ? null
@@ -164,11 +165,12 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             />
           ))}
           </InspectorSection> : null}
-          {element.type === "client" && element.params.classes == null && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
+          {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <RequestTypes key={selected}
             catalog={catalog} model={model} experiment={experiment} clientId={selected}
+            onCommand={onCommand} variantId={variantId} requestTypeReferences={requestTypeReferences}
             descriptor={type.params.find(param => param.name === "load")!}
             editable={editable && (variantId === null || onCommand !== undefined)} invalid={invalid}
-            overridden={isOverridden(overrides, selected, "load")} onCommit={value => {
+            overridden={isOverridden(overrides, selected, "load") || isOverridden(overrides, selected, "classes")} onCommit={value => {
               if (variantId === null) onParam(selected, "load", value);
               else onCommand?.(setVariantParam(variantId, selected, "load", value, catalog));
             }}

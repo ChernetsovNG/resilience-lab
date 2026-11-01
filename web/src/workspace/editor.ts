@@ -27,6 +27,17 @@ export interface LoadedExperiment extends EditorDocuments {
 
 type ModelElement = ModelFile["blocks"][string] | ModelFile["connections"][number];
 const elementOrigins = new WeakMap<ModelElement["params"], object>();
+const requestTypeOrigins = new WeakMap<Params, object>();
+
+/** Session identity distinguishes a rename from removing and recreating a request type. */
+export function requestTypeIdentity(value: Params): object {
+  return requestTypeOrigins.get(value) ?? value;
+}
+
+/** Retains identity across immutable copies; no metadata enters model JSON. */
+export function rememberRequestTypeCopy(previous: Params, current: Params): void {
+  if (previous !== current && !requestTypeOrigins.has(current)) requestTypeOrigins.set(current, requestTypeIdentity(previous));
+}
 
 /** Session-only identity follows parameter records: renames retain them, edits register copies; nothing enters document JSON. */
 export function elementIdentity(element: ModelElement): object {
@@ -39,6 +50,13 @@ export function rememberElementCopies(before: ModelFile, after: ModelFile): void
   const remember = (previous: ModelElement, current: ModelElement) => {
     if (previous.params !== current.params && !elementOrigins.has(current.params)) {
       elementOrigins.set(current.params, elementIdentity(previous));
+    }
+    if (Array.isArray(previous.params.classes) && Array.isArray(current.params.classes)) {
+      const types = new Map(previous.params.classes.filter(isObject).map(value => [value.id, value]));
+      for (const value of current.params.classes.filter(isObject)) {
+        const before = types.get(value.id);
+        if (before !== undefined) rememberRequestTypeCopy(before, value);
+      }
     }
   };
   for (const [id, block] of Object.entries(after.blocks)) {

@@ -6,6 +6,16 @@ import type { Catalog } from "../api/apiTypes";
 
 const catalog = catalogSnapshot as Catalog;
 
+function englishCatalog() {
+  const expected = structuredClone(catalog);
+  const classes = expected.types.find(type => type.id === "client")!.params.find(param => param.name === "classes")!;
+  classes.title = "Request types";
+  classes.description = "Load profiles by request type; use either one profile or request types. Variants replace the entire list; grids are not supported.";
+  classes.fields.find(field => field.name === "id")!.title = "Request type ID";
+  classes.fields.find(field => field.name === "load")!.description = "Piecewise-linear intensity for this request type, including warm-up.";
+  return expected;
+}
+
 describe("messages", () => {
   afterEach(() => { vi.unstubAllEnvs(); setLanguage("en"); localStorage.clear(); });
 
@@ -55,7 +65,7 @@ describe("messages", () => {
   it("falls back to API text and preserves the original catalog", () => {
     expect(catalogText("catalog.types.future.title", "Future type")).toBe("Future type");
     const localized = localizeCatalog(catalog);
-    expect(localized).toEqual(catalog);
+    expect(localized).toEqual(englishCatalog());
     expect(localized).not.toBe(catalog);
     expect(localized.types[1].params[2].fields[1].title).toBe("Mean");
   });
@@ -69,6 +79,6 @@ describe("messages", () => {
     expect(localized.types[1].params[1].default).toBe(0);
     expect(catalog).toEqual(source);
     setLanguage("en");
-    expect(localizeCatalog(catalog)).toEqual(source);
+    expect(localizeCatalog(catalog)).toEqual(englishCatalog());
   });
 });

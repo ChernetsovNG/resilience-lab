@@ -10,3 +10,10 @@
 .load-profile-chart svg { display: block; width: 100%; overflow: visible; }
 .load-profile-chart text { fill: #52606d; font-size: 11px; }
 .load-profile-chart figcaption { display: flex; justify-content: space-between; color: #52606d; font-size: var(--font-secondary); }
+.request-load-mode { display: grid; gap: 0.35rem; margin-bottom: 0.65rem; }
+.request-load-mode label { display: flex; gap: 0.4rem; align-items: center; }
+.request-load-mode input { width: auto; margin: 0; }
+.request-type { min-width: 0; margin: 0.6rem 0; padding: 0.5rem; border: 1px solid #d5dbe3; }
+.request-type-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.4rem; }
+.request-types-invalid { max-height: 10rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.block-summary > .request-type-summary { display: block; overflow: hidden; text-overflow: ellipsis; }
