@@ -57,12 +57,29 @@ describe("draft validation", () => {
     expect(result.current.problem).toBeNull();
   });
 
-  it("discards old diagnostics immediately on edits and after opening another experiment", async () => {
+  it("keeps the last diagnostics while edits are waiting for validation", async () => {
+    let resolve!: (response: { body: ValidationView }) => void;
+    let checks = 0;
+    stubFetch(() => ++checks === 1 ? { body: invalid } : new Promise(done => { resolve = done; }));
+    const { result, rerender } = renderHook((document: LoadedExperiment) => useValidation(document), { initialProps: loaded });
+    await advance(500);
+    rerender({ ...loaded, model: withParam(model, "gateway", "handlers", 8) });
+    expect(result.current.pending).toBe(true);
+    expect(result.current.report).toEqual(invalid);
+    await advance(500);
+    expect(result.current.pending).toBe(true);
+    expect(result.current.report).toEqual(invalid);
+    await act(async () => { resolve({ body: valid }); });
+    expect(result.current.report).toEqual(valid);
+    expect(result.current.pending).toBe(false);
+  });
+
+  it("does not carry diagnostics to another experiment or model", async () => {
     stubFetch(() => ({ body: invalid }));
     const { result, rerender } = renderHook((document: LoadedExperiment | null) => useValidation(document), { initialProps: loaded as LoadedExperiment | null });
     await advance(500);
     expect(result.current.report?.valid).toBe(false);
-    rerender({ ...loaded, model: withParam(model, "gateway", "handlers", 8) });
+    rerender({ ...loaded, modelPath: "other.model.json" });
     expect(result.current.report).toBeNull();
     expect(result.current.pending).toBe(true);
     rerender({ ...loaded, experimentPath: "other.experiment.json" });

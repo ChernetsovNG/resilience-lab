@@ -37,7 +37,7 @@ class JobService(
             synchronized(lock) {
                 val report = lab.validate(experiment)
                 if (!report.valid) throw InvalidExperimentException(report.diagnostics)
-                val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, 0)
+                val job = JobView(UUID.randomUUID().toString(), experiment, newRunId(), JobStatus.QUEUED, 0, report.totalTasks)
                 jobs[job.id] = job
                 if (stopping) return cancel(job.id)!!
                 report to job
@@ -62,20 +62,22 @@ class JobService(
         val job =
             synchronized(lock) {
                 requireIdleRun(run.id)
-                try {
-                    lab.validateResume(run.directory)
-                } catch (exception: InvalidExperimentException) {
-                    if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
-                        throw Conflict(
-                            ServerMessage.RUN_COMPLETE,
-                            "Run '${run.id}' is already complete",
-                            exception.diagnostics,
-                            mapOf("id" to JsonPrimitive(run.id)),
-                        )
+                val manifest =
+                    try {
+                        lab.validateResume(run.directory)
+                    } catch (exception: InvalidExperimentException) {
+                        if (exception.diagnostics.any { it.code == "RUN_COMPLETE" }) {
+                            throw Conflict(
+                                ServerMessage.RUN_COMPLETE,
+                                "Run '${run.id}' is already complete",
+                                exception.diagnostics,
+                                mapOf("id" to JsonPrimitive(run.id)),
+                            )
+                        }
+                        throw exception
                     }
-                    throw exception
-                }
-                val job = JobView(UUID.randomUUID().toString(), experimentIdentity(run.experiment), run.id, JobStatus.QUEUED, 0, 0)
+                val totalTasks = manifest.variants.size * requireNotNull(manifest.series).points.size * manifest.replications
+                val job = JobView(UUID.randomUUID().toString(), experimentIdentity(run.experiment), run.id, JobStatus.QUEUED, 0, totalTasks)
                 jobs[job.id] = job
                 if (stopping) return cancel(job.id)!!
                 job

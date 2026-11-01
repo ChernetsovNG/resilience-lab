@@ -20,6 +20,8 @@ it("opens counted warnings on demand and leaves new warnings collapsed", async (
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   await selectGateway(); editHandlers("5");
+  expect(button("Errors: 0 · Warnings: 1")).toBeTruthy();
+  expect(screen.getByRole("tab", { name: "Problems" }).textContent).toContain("1");
   await waitFor(() => expect(checks).toBe(2));
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   expect(screen.queryByRole("tabpanel")).toBeNull();

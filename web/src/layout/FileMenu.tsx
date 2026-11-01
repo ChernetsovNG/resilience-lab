@@ -155,7 +155,7 @@ export function FileMenu({ workspace, disabled, onOpened, ref }: { workspace: Wo
           <p>{t("file.deleteRuns", { count: formatNumber(runDeletion.length), size: formatSize(runDeletion.reduce((sum, run) => sum + run.sizeBytes, 0)) })}</p>
         </> : <>
         <p>{t("file.locationHint")}</p>
-        <label>{t(action === "new" ? "file.modelName" : action === "newExperiment" ? "file.experimentName" : "file.directory")}<input autoFocus required value={directory} disabled={working}
+        <label>{t(action === "new" || action === "saveAs" ? "file.modelName" : action === "newExperiment" ? "file.experimentName" : "file.directory")}<input autoFocus required value={directory} disabled={working}
           onChange={event => setDirectory(event.target.value)} /></label>
         {action !== "import" ? null : <label>{t("file.files")}<input type="file" multiple required
           accept=".model.json,.layout.json,.experiment.json" disabled={working}

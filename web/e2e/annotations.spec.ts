@@ -41,6 +41,13 @@ test("checkout-replicas explanations survive editing, saving and reloading in Ru
     await page.locator(".react-flow__controls-fitview").click();
     await page.getByTestId("rf__node-order-service").locator(".block-node-header").click();
     await openSection(page, ".inspector-parameters");
+    const identifier = inspector.getByRole("textbox", { name: "Идентификатор", exact: true });
+    await identifier.fill("order-service-tab");
+    await identifier.press("Tab");
+    await expect(inspector.getByRole("textbox", { name: "Описание", exact: true })).toBeFocused();
+    await identifier.fill("order-service");
+    await identifier.press("Tab");
+    await expect(inspector.getByRole("textbox", { name: "Описание", exact: true })).toBeFocused();
     await expect(inspector.getByRole("textbox", { name: "Заметки", exact: true })).toHaveValue(sourceModel.blocks["order-service"].notes!);
     await inspector.getByRole("textbox", { name: "Описание", exact: true }).fill(description);
     await inspector.getByRole("textbox", { name: "Описание", exact: true }).press("Tab");

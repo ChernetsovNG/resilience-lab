@@ -107,4 +107,23 @@ class CatalogInitialValuesTest {
         assertThat(params("database")["queue"]).isEqualTo(JsonPrimitive(0))
         assertThat(params("call")).doesNotContainKey("pool")
     }
+
+    @Test
+    fun `enabling backoff starts with positive delays while omitted delays retain zero defaults`() {
+        val fields =
+            catalog
+                .type("call")!!
+                .params
+                .first { it.name == "backoff" }
+                .fields
+                .associateBy { it.name }
+        val base = fields.getValue("base")
+        val maximum = fields.getValue("max")
+        val initialBase = Quantities.parse((initial(base) as JsonPrimitive).content, Dimension.DURATION)!!
+        val initialMaximum = Quantities.parse((initial(maximum) as JsonPrimitive).content, Dimension.DURATION)!!
+        assertThat(initialBase).isPositive()
+        assertThat(initialMaximum).isGreaterThanOrEqualTo(initialBase)
+        assertThat(base.default).isEqualTo(JsonPrimitive("0ms"))
+        assertThat(maximum.default).isEqualTo(JsonPrimitive("0ms"))
+    }
 }

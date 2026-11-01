@@ -68,11 +68,12 @@ export function VariantDiagnosticBadge({ diagnostics = [], onOpen, disabled = fa
   </button>;
 }
 
-/** Short per-variant counts; full messages stay on the variant page. */
+/** Variant findings and links to their editable fields. */
 export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = false }: {
   diagnostics?: readonly Diagnostic[]; onSelect?: (variant: string) => void; disabled?: boolean;
 }) {
-  const labels = useContext(DiagnosticLabelContext).variants;
+  const context = useContext(DiagnosticLabelContext);
+  const labels = context.variants;
   const name = (id: string) => variantLabel(labels.find(variant => variant.id === id) ?? { id }, labels);
   const variants = new Map<string, Diagnostic[]>();
   for (const diagnostic of diagnostics) {
@@ -88,12 +89,17 @@ export function VariantDiagnosticLinks({ diagnostics = [], onSelect, disabled = 
       const count = groupDiagnostics(findings.filter(finding => finding.severity === severity)).length;
       return count === 0 ? [] : [t(`editor.diagnostics.variantCount.${severity}.${count === 1 ? "one" : "other"}`, { count: formatNumber(count) })];
     });
-    return <p key={variant} className="variant-diagnostic-hint">
+    return <div key={variant}><p className="variant-diagnostic-hint">
       <a href={`#variant-${encodeURIComponent(variant)}`} aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined}
         onClick={event => { event.preventDefault(); if (!disabled) onSelect?.(variant); }}>
         {t("editor.diagnostics.inVariants", { variant: name(variant), counts: counts.join(", ") })}
       </a>
-    </p>;
+    </p><ul className="field-diagnostics">
+      {groupDiagnostics(findings).map((group, index) => <li key={index} className={`diagnostic--${group.diagnostic.severity.toLowerCase()}`}>
+        {diagnosticMessage(group.diagnostic, context.catalog, context.model, context)}
+        {group.diagnostic.code.startsWith("LINT_") ? <span className="diagnostic-context">{diagnosticGroupContext(group, labels)}</span> : null}
+      </li>)}
+    </ul></div>;
     })}
     </HelpHint>}
   </span>;

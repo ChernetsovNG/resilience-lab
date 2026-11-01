@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { useReducer } from "react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { useReducer, useState } from "react";
 import { expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { editorReducer, initialEditorState, type EditorDocuments } from "../workspace/editor";
 import { Inspector } from "./Inspector";
+import { renameElement } from "../workspace/structure";
 
 const original = "  Initial explanation\nSource: https://example.org/  ";
 const edited = "  Новое пояснение\nДопущение: 120/s  ";
@@ -86,4 +87,23 @@ it.each(["block", "connection", "model"] as const)("keeps $target annotations re
   }
   expect(current().model).toEqual(documents.model);
   expect(screen.getByTestId("history-length").textContent).toBe("0");
+});
+
+it("keeps Description focused when leaving a changed Identifier", () => {
+  function Editor() {
+    const [documents, setDocuments] = useState(annotated);
+    const [selected, setSelected] = useState("gateway");
+    return <Inspector catalog={catalog} model={documents.model} experiment={documents.experiment}
+      selected={selected} editable overrides={{}} onParam={vi.fn()} onValidity={vi.fn()} onCommand={vi.fn()}
+      onRename={(id, next) => { setDocuments(renameElement(id, next)(documents)); setSelected(next); }} />;
+  }
+  render(<Editor />);
+  const identifier = screen.getByRole("textbox", { name: "Identifier" });
+  const description = screen.getByRole("textbox", { name: "Description" });
+  expect(screen.getByRole("textbox", { name: "Notes" })).toBeTruthy();
+  act(() => identifier.focus());
+  fireEvent.change(identifier, { target: { value: "entry" } });
+  act(() => description.focus());
+  expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Description" }));
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Identifier" }).value).toBe("entry");
 });

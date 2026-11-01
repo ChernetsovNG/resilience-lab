@@ -75,6 +75,20 @@ it.each([false, true])("removes inactive backoff fields in one history entry (va
   expect(params().backoff.multiplier).toBe(2);
 });
 
+it.each([false, true])("initializes an enabled exponential backoff with nonzero catalog delays (variant=%s)", variant => {
+  const initialModel = { ...model, connections: model.connections.map(edge => edge.id === "gateway-to-middle"
+    ? { ...edge, params: { ...edge.params, backoff: { kind: "none" } } } : edge) };
+  render(<Fields initialModel={initialModel} variant={variant} />);
+  const backoff = within(screen.getByRole("group", { name: "Backoff" }));
+  fireEvent.change(backoff.getByRole("combobox", { name: "Kind" }), { target: { value: "exponential-full-jitter" } });
+  expect(params().backoff).toEqual({ kind: "exponential-full-jitter", base: "10ms", max: "100ms", multiplier: 2 });
+  expect(screen.getByTestId("history").textContent).toBe("1");
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(params().backoff).toEqual({ kind: "none" });
+  fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+  expect(params().backoff).toEqual({ kind: "exponential-full-jitter", base: "10ms", max: "100ms", multiplier: 2 });
+});
+
 it.each(["lognormal", "exponential"])("initializes a zero mean before switching to %s through inline editing", kind => {
   const initialModel = { ...model, connections: model.connections.map(edge => edge.id === "gateway-to-middle"
     ? { ...edge, params: { ...edge.params, network: { kind: "fixed", mean: "0ms" } } } : edge) };

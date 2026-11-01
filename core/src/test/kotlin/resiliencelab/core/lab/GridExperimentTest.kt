@@ -165,7 +165,7 @@ class GridExperimentTest {
             coordinates(2, "20ms"),
             coordinates(2, "30ms"),
         )
-        assertThat(progress).containsExactlyElementsOf((1..12).map { it to 12 })
+        assertThat(progress).containsExactlyElementsOf((0..12).map { it to 12 })
         assertThat(
             workspace.listFiles(".results/35bb6fa423da5447e955dbd3e9428d2ddd1b8a0cb3dda99386dcc310f5980537/r").count {
                 it.endsWith("/replication.json.gz")

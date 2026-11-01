@@ -10,7 +10,7 @@ interface ValidationState {
   problem: ApiProblem | null;
 }
 
-/** Validates a document snapshot after 500 ms of inactivity; obsolete successes and failures are discarded. */
+/** Validates after 500 ms of inactivity, keeping the experiment's last report while pending; obsolete responses are discarded. */
 export function useValidation(loaded: LoadedExperiment | null, hasClient = true) {
   const [state, setState] = useState<ValidationState | null>(null);
 
@@ -27,7 +27,8 @@ export function useValidation(loaded: LoadedExperiment | null, hasClient = true)
   }, [loaded]);
 
   const current = state?.snapshot === loaded ? state : null;
-  const report = current?.report ?? null;
+  const report = loaded !== null && state?.snapshot.experimentPath === loaded.experimentPath
+    && state.snapshot.modelPath === loaded.modelPath ? state.report : null;
   return {
     report: report === null || hasClient ? report : { ...report, diagnostics: report.diagnostics.filter(diagnostic => !diagnostic.code.startsWith("TOPOLOGY_")) },
     problem: current?.problem ?? null,

@@ -27,6 +27,19 @@ it("names generated variants in badges and diagnostic navigation without changin
   expect(onSelect).toHaveBeenCalledWith("variant-2");
 });
 
+it("explains each variant warning alongside its navigation link", () => {
+  render(<VariantDiagnosticLinks diagnostics={[
+    ...findings,
+    { ...findings[0], variant: "variant-3", message: "Allow more time" },
+  ]} />);
+  fireEvent.click(screen.getByRole("button", { name: "More about: Warnings in variants: Variant 2, Variant 3" }));
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.textContent).toContain("Increase capacity");
+  expect(dialog.textContent).toContain("Allow more time");
+  expect(screen.getByRole("link", { name: "In variants: Variant 2 — 1 warning" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "In variants: Variant 3 — 1 warning" })).toBeTruthy();
+});
+
 it("uses the actual document label in diagnostic badges and links", () => {
   render(<DiagnosticLabelContext value={{ variants: [{ id: "variant-2", label: "More connections" }] }}>
     <VariantDiagnosticBadge diagnostics={findings} />

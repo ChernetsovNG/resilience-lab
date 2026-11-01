@@ -67,6 +67,53 @@ class FileWorkspaceTest {
         workspace.delete("a.model.json", expectedVersion = version)
 
         assertThat(workspace.exists("a.model.json")).isFalse()
+        assertThat(root).isDirectory()
+    }
+
+    @Test
+    fun `deletes the empty model directory after its last document`() {
+        val model = workspace.write("models/example/example.model.json", "model\n")
+        val layout = workspace.write("models/example/example.layout.json", "layout\n")
+        val experiment = workspace.write("models/example/example.experiment.json", "experiment\n")
+        val directory = root.resolve("models/example")
+
+        workspace.delete("models/example/example.experiment.json", expectedVersion = experiment)
+        workspace.delete("models/example/example.layout.json", expectedVersion = layout)
+        assertThat(directory).isDirectory()
+
+        workspace.delete("models/example/example.model.json", expectedVersion = model)
+
+        assertThat(directory).doesNotExist()
+        assertThat(root.resolve("models")).isDirectory()
+        assertThat(root).isDirectory()
+    }
+
+    @Test
+    fun `keeps a model directory containing unrelated files`() {
+        val version = workspace.write("example/example.model.json", "model\n")
+        val unrelated = root.resolve("example/.gitkeep")
+        Files.writeString(unrelated, "keep\n")
+
+        workspace.delete("example/example.model.json", expectedVersion = version)
+
+        assertThat(root.resolve("example")).isDirectory()
+        assertThat(unrelated).hasContent("keep\n")
+    }
+
+    @Test
+    fun `keeps directories reached through symbolic link aliases`() {
+        val direct = workspace.write("models/direct/example.model.json", "direct\n")
+        val nested = workspace.write("models/nested/example.model.json", "nested\n")
+        Files.createSymbolicLink(root.resolve("direct-alias"), root.resolve("models/direct"))
+        Files.createSymbolicLink(root.resolve("models-alias"), root.resolve("models"))
+
+        workspace.delete("direct-alias/example.model.json", expectedVersion = direct)
+        workspace.delete("models-alias/nested/example.model.json", expectedVersion = nested)
+
+        assertThat(root.resolve("direct-alias")).isSymbolicLink()
+        assertThat(root.resolve("models-alias")).isSymbolicLink()
+        assertThat(root.resolve("models/direct")).isEmptyDirectory()
+        assertThat(root.resolve("models/nested")).isEmptyDirectory()
     }
 
     @Test
