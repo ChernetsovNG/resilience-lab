@@ -12,7 +12,7 @@ import {
 import { resolveRef } from "./paths";
 import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, runsToDelete, storedExperiments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
 import { experimentsForModel, preferredExperiment, preferredModel, readSelection, rememberSelection } from "./modelSelection";
-import { experimentsUsing, hasPendingRelatedRenames, prepareRelatedRenames, type AppliedRename, type StoredExperiment } from "./renames";
+import { experimentsUsing, hasPendingRelatedRenames, prepareRelatedRenames, requestTypeExperimentsUsing, type AppliedRename, type StoredExperiment } from "./renames";
 
 export interface ExternalDocumentChange {
   path: string;
@@ -49,6 +49,7 @@ export interface Workspace {
   save: () => Promise<boolean>;
   /** Names of other stored questions whose references follow this element's rename. */
   experimentsUsing: (id: string) => string[];
+  requestTypeExperimentsUsing: (id: string) => string[];
   /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
   storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate?: boolean) => Promise<boolean>;
   /** Deletes a confirmed snapshot in order, stops at the first failure and reconciles the open documents. */
@@ -556,6 +557,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   }, [loaded, load, recoveryLayoutPath, externalChange, documents]);
 
   return {
+    requestTypeExperimentsUsing: id => loaded === null || relatedExperiments?.modelPath !== loaded.modelPath ? [] : requestTypeExperimentsUsing(loaded, id, relatedExperiments.questions, appliedRenames),
     experimentsUsing: id => loaded === null || relatedExperiments?.modelPath !== loaded.modelPath ? [] : experimentsUsing(loaded, id, relatedExperiments.questions, appliedRenames),
     catalog, models, selectedModel, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
     conflict: conflictPath !== null, conflictPath, externalChange, problem, open, openModel, setParam, execute,

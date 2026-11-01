@@ -281,3 +281,16 @@ it("shows malformed imported request types before explicitly replacing them with
   click("Undo");
   expect(stored().model.blocks.client.params.classes).toEqual(raw);
 });
+
+it("repairs an imported primitive request type by naming it, with one Undo", () => {
+  const initial = withParam(withParam(source, "client", "load", undefined), "client", "classes", [42]);
+  render(<Editor initial={initial} />);
+  expect(screen.getByLabelText("Invalid request types").textContent).toBe("42");
+  const id = screen.getByLabelText("Request type ID");
+  fireEvent.change(id, { target: { value: "checkout" } });
+  fireEvent.blur(id);
+  expect(stored().model.blocks.client.params.classes).toEqual([{ id: "checkout", load: { points: [{ time: "0s", rate: "10/s" }] } }]);
+  history(1);
+  click("Undo");
+  expect(stored().model).toEqual(initial);
+});

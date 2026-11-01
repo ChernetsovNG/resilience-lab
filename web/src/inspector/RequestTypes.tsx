@@ -10,12 +10,15 @@ import { editRequestTypes, nextRequestTypeId, renameRequestType, requestTypeRena
 import { InspectorSection } from "./InspectorSection";
 import { LoadProfile } from "./LoadProfile";
 
-type Props = ComponentProps<typeof LoadProfile> & { onCommand?: (command: EditorCommand) => void; variantId: string | null };
+type Props = ComponentProps<typeof LoadProfile> & {
+  onCommand?: (command: EditorCommand) => void; variantId: string | null; requestTypeReferences?: (id: string) => string[];
+};
 
-function RequestTypeIdentifier({ types, index, editable, onRename, onValidity, clientId, errorFor }: {
+function RequestTypeIdentifier({ types, index, editable, onRename, onValidity, clientId, errorFor, references }: {
   types: unknown[]; index: number; editable: boolean; clientId: string;
   onRename: (value: string) => void; onValidity: Props["onValidity"];
   errorFor: (value: string) => string | null;
+  references: readonly string[];
 }) {
   const input = useId();
   const value = isObject(types[index]) && typeof types[index].id === "string" ? types[index].id : "";
@@ -33,12 +36,14 @@ function RequestTypeIdentifier({ types, index, editable, onRename, onValidity, c
   return <div className="param-field" data-inspector-field={`classes.${index}.id`}>
     <label htmlFor={input}>{t("editor.requestTypes.id")}</label>
     <input id={input} value={draft} readOnly={!editable} aria-invalid={error !== null}
-      aria-describedby={error === null ? undefined : `${input}-error`} onChange={event => setDraft(event.target.value)} onBlur={commit}
+      aria-describedby={[...(error === null ? [] : [`${input}-error`]), ...(references.length === 0 ? [] : [`${input}-references`])].join(" ") || undefined}
+      onChange={event => setDraft(event.target.value)} onBlur={commit}
       onKeyDown={event => {
         if (event.key === "Enter") { event.preventDefault(); commit(); }
         if (event.key === "Escape") { event.preventDefault(); setDraft(value); }
       }} />
     {error === null ? null : <span id={`${input}-error`} className="param-error" role="alert">{error}</span>}
+    {references.length === 0 ? null : <p id={`${input}-references`} className="inspector-type">{t("editor.identifier.references", { experiments: references.join(", ") })}</p>}
   </div>;
 }
 
@@ -81,6 +86,7 @@ export function RequestTypes(props: Props) {
           <legend>{id}</legend>
           {isObject(raw) ? null : <pre className="request-types-invalid" aria-label={t("editor.requestTypes.invalid")}>{JSON.stringify(raw, null, 2)}</pre>}
           <RequestTypeIdentifier types={types} index={index} clientId={clientId} editable={editable && onCommand !== undefined}
+            references={variantId === null ? props.requestTypeReferences?.(id) ?? [] : []}
             errorFor={next => requestTypeRenameError(model, props.experiment, clientId, index, next, variantId)}
             onValidity={props.onValidity} onRename={next => onCommand?.(renameRequestType(clientId, index, next, catalog, variantId))} />
           <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`${path}.id`)} />

@@ -31,6 +31,9 @@ for (const language of ["en", "ru"] as const) {
       model.connections.push({ id: "checkout-route", type: "route", from: "router", to: "dependency", params: {}, classes: ["checkout"] });
       await writeFile(resolve(root, "retry-storm.model.json"), JSON.stringify(model));
       await writeFile(resolve(root, "retry-storm.experiment.json"), JSON.stringify(experiment));
+      await writeFile(resolve(root, "sibling.experiment.json"), JSON.stringify({ ...experiment, variants: [{ id: "baseline", overrides: {
+        "mobile-app.load": null, "mobile-app.classes": [{ id: "checkout", load: { points: [{ time: "0s", rate: "10/s" }] } }],
+      } }] }));
       const layoutPath = resolve(root, "retry-storm.layout.json");
       const layout = JSON.parse(await readFile(layoutPath, "utf8"));
       layout.positions["mobile-app"] = layout.positions.client;
@@ -107,7 +110,7 @@ for (const language of ["en", "ru"] as const) {
       const problems = page.getByRole("tabpanel", { name: ru ? "Проблемы" : "Problems", exact: true });
       await expect(problems.getByRole("button", { name: /CLASS_UNKNOWN/ })).toHaveCount(2);
       await expect(problems.getByRole("button", { name: /gateway CLASS_UNKNOWN/ })).toBeVisible();
-      await expect(problems.getByRole("button", { name: /checkout-route CLASS_UNKNOWN/ })).toBeVisible();
+      await expect(problems.getByRole("button", { name: /checkout-route.*CLASS_UNKNOWN/ })).toBeVisible();
       if (ru) await page.screenshot({ path: testInfo.outputPath("request-types-problems-ru.png") });
       await page.getByRole("button", { name: ru ? "Отменить действие" : "Undo", exact: true }).click();
       await expect(ids.nth(1)).toHaveValue("checkout");
@@ -115,6 +118,23 @@ for (const language of ["en", "ru"] as const) {
       await expect(save).toBeDisabled();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
+      await expect(checkout.locator(".inspector-type")).toContainText("sibling");
+      await ids.nth(1).fill("purchase");
+      await ids.nth(1).press("Enter");
+      await expect(run).toBeEnabled();
+      await save.click();
+      await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
+      const siblingPath = `${directory}/sibling.experiment.json`;
+      const siblingURL = `/api/v1/workspace/document?path=${encodeURIComponent(siblingPath)}`;
+      const sibling = (await (await page.request.get(siblingURL)).json()).content.experiment;
+      expect(sibling.variants[0].overrides["mobile-app.classes"][0].id).toBe("purchase");
+      const valid = await page.request.post("/api/v1/validate", { data: { experiment: siblingPath } });
+      expect((await valid.json()).valid).toBe(true);
+      await page.getByRole("button", { name: ru ? "Отменить действие" : "Undo", exact: true }).click();
+      await save.click();
+      await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
+      expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
+      expect((await (await page.request.get(siblingURL)).json()).content.experiment.variants[0].overrides["mobile-app.classes"][0].id).toBe("checkout");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

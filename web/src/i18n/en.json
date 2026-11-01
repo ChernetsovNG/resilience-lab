@@ -1630,5 +1630,6 @@
   "course.requestType": "{client} · {id}",
   "editor.requestTypes.renameConflict": "This rename would duplicate a request type ID in another client or variant.",
   "editor.requestTypes.invalid": "Invalid request types",
-  "editor.requestTypes.replaceInvalid": "Replace invalid request types"
+  "editor.requestTypes.replaceInvalid": "Replace invalid request types",
+  "app.workspace.requestTypeRenameConflict": "Renaming would duplicate a request type ID in experiment '{path}'. Undo the rename and correct that experiment's variant list before saving."
 }

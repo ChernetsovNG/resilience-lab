@@ -1630,5 +1630,6 @@
   "course.requestType": "{client} · {id}",
   "editor.requestTypes.renameConflict": "После переименования идентификатор вида запроса повторится у другого клиента или в варианте.",
   "editor.requestTypes.invalid": "Неверный список видов запросов",
-  "editor.requestTypes.replaceInvalid": "Заменить неверный список видов запросов"
+  "editor.requestTypes.replaceInvalid": "Заменить неверный список видов запросов",
+  "app.workspace.requestTypeRenameConflict": "После переименования идентификатор вида запроса повторится в эксперименте «{path}». Отмените переименование и исправьте список в вариантах этого эксперимента перед сохранением."
 }

@@ -1,9 +1,9 @@
 import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
 import { sumLoadProfiles } from "../experiment/course";
 import { t } from "../i18n";
-import type { EditorCommand } from "./editor";
+import { rememberRequestTypeCopy, requestTypeIdentity, type EditorCommand } from "./editor";
 import { resetVariantParam, setVariantParam } from "./experimentCommands";
-import { applyOverrides, isObject, withParam } from "./params";
+import { applyOverrides, isObject, withParam, type Params } from "./params";
 import { identifierError } from "./structure";
 
 /** Smallest free generated identifier within this client's request types. */
@@ -36,6 +36,36 @@ export function requestTypeRenameError(model: ModelFile, experiment: ExperimentF
   ];
   return lists.some(list => Array.isArray(list) && list.some(value => isObject(value) && value.id === old)
     && list.some(value => isObject(value) && value.id === id)) ? t("editor.requestTypes.renameConflict") : null;
+}
+
+function declarations(model: ModelFile): { id: string; value: Params }[] {
+  return Object.values(model.blocks).filter(block => block.type === "client").flatMap(block =>
+    Array.isArray(block.params.classes) ? block.params.classes.flatMap(value =>
+      isObject(value) && typeof value.id === "string" ? [{ id: value.id, value }] : []) : []);
+}
+
+/** Net ID changes across history and profile edits, shared with the related-experiment save mechanism. */
+export function modelRequestTypeRenames(before: ModelFile, after: ModelFile): Map<string, string> {
+  const ids = new Map(declarations(after).map(({ id, value }) => [requestTypeIdentity(value), id]));
+  return new Map(declarations(before).flatMap(({ id, value }) => {
+    const next = ids.get(requestTypeIdentity(value));
+    return next === undefined || next === id ? [] : [[id, next]];
+  }));
+}
+
+/** Rewrites whole-list overrides simultaneously; null means the rename would merge two IDs in one list. */
+export function experimentRequestTypeReferences(experiment: ExperimentFile, ids: ReadonlyMap<string, string>): ExperimentFile | null {
+  let collision = false;
+  const variants = experiment.variants.map(variant => ({ ...variant,
+    overrides: Object.fromEntries(Object.entries(variant.overrides).map(([path, value]) => {
+      if (!path.endsWith(".classes") || !Array.isArray(value)) return [path, value];
+      const before = value.flatMap(item => isObject(item) && typeof item.id === "string" ? [item.id] : []);
+      const after = before.map(id => ids.get(id) ?? id);
+      if (new Set(after).size < new Set(before).size) collision = true;
+      return [path, value.map(item => isObject(item) && typeof item.id === "string" && ids.has(item.id) ? { ...item, id: ids.get(item.id)! } : item)];
+    })),
+  }));
+  return collision ? null : { ...experiment, variants };
 }
 
 function setClientLoad(client: string, field: "load" | "classes", value: unknown, catalog: Catalog, variant: string | null): EditorCommand {
@@ -92,11 +122,19 @@ export function renameRequestType(client: string, index: number, id: string, cat
     const overrides = documents.experiment.variants.find(value => value.id === variant)?.overrides ?? {};
     const model = variant === null ? documents.model : applyOverrides(documents.model, overrides, catalog);
     const types = model.blocks[client].params.classes;
-    if (!Array.isArray(types) || !isObject(types[index]) || requestTypeRenameError(model, documents.experiment, client, index, id, variant) !== null) return documents;
-    const old = types[index].id;
+    if (!Array.isArray(types) || index < 0 || index >= types.length || requestTypeRenameError(model, documents.experiment, client, index, id, variant) !== null) return documents;
+    const original = types[index];
+    const old = isObject(original) ? original.id : undefined;
     if (id === old) return documents;
-    const renameTypes = (values: unknown[]) => values.map(value => typeof old === "string" && isObject(value) && value.id === old ? { ...value, id } : value);
-    const edited = editRequestTypes(client, types.map((value, at) => at === index ? { ...types[index] as object, id } : value), catalog, variant)(documents);
+    const renamed = (value: Params) => {
+      const next = { ...value, id };
+      rememberRequestTypeCopy(value, next);
+      return next;
+    };
+    const renameTypes = (values: unknown[]) => values.map(value => typeof old === "string" && isObject(value) && value.id === old ? renamed(value) : value);
+    const descriptor = catalog.types.find(type => type.id === "client")?.params.find(param => param.name === "load");
+    const edited = editRequestTypes(client, types.map((value, at) => at === index
+      ? isObject(original) ? renamed(original) : { id, load: descriptor?.initial } : value), catalog, variant)(documents);
     if (variant !== null) return edited;
     const renameFilter = (values: string[] | null | undefined) => values == null ? values : [...new Set(values.map(value => value === old ? id : value))];
     return { ...edited,
@@ -108,10 +146,7 @@ export function renameRequestType(client: string, index: number, id: string, cat
         }])),
         connections: edited.model.connections.map(connection => connection.classes == null ? connection : { ...connection, classes: renameFilter(connection.classes) }),
       },
-      experiment: { ...edited.experiment, variants: edited.experiment.variants.map(value => ({ ...value,
-        overrides: Object.fromEntries(Object.entries(value.overrides).map(([path, entry]) =>
-          [path, path.endsWith(".classes") && Array.isArray(entry) ? renameTypes(entry) : entry])),
-      })) },
+      experiment: typeof old === "string" ? experimentRequestTypeReferences(edited.experiment, new Map([[old, id]]))! : edited.experiment,
     };
   };
 }
