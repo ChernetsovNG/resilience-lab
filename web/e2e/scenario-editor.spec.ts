@@ -1,10 +1,12 @@
-import { cleanupWorkspace, copyRetryStorm, selectExperiment } from "./fixtures";
+import { cleanupWorkspace, copyRetryStorm, readWorkspaceDocument, selectExperiment } from "./fixtures";
 import { dragCanvas, dragConnection, dragNode, dragPaletteBlock } from "./canvasGestures";
 import { expect, test as base, type Page } from "./fixtures";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
+import en from "../src/i18n/en.json" with { type: "json" };
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 type Files = { model: string; layout: string; experiment: string };
 const test = base.extend<{ files: Files }>({
@@ -97,6 +99,8 @@ for (const operation of ["rename", "delete connection", "delete block", "copy gr
         expected.connections = expected.connections.filter(edge => edge.from !== "middle" && edge.to !== "middle");
       }
       await page.keyboard.press("Delete");
+      await page.getByRole("dialog", { name: en["app.confirm.deleteElements"], exact: true })
+        .getByRole("button", { name: en["file.delete"], exact: true }).click();
       delete expected.blocks.gateway.scenario;
     } else {
       await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
@@ -507,8 +511,8 @@ async function stored(page: Page, path: string) {
   expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
 }
-async function save(page: Page) {
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+async function save(page: Page, label = en["app.topBar.save"]) {
+  await page.getByRole("button", { name: label, exact: true }).click();
   await expect(page.locator(".dirty-mark")).toBeHidden();
 }
 async function connect(page: Page, from: string, to: string, targetPort = "in") {
@@ -912,36 +916,68 @@ test("keeps automatic connection ids and references after building, renaming, sa
   await page.screenshot({ path: testInfo.outputPath("link-rename-fault-ru.png") });
 });
 
-test("renames and deletes with experiment cascades, undo restores the complete saved documents", async ({ page, files }) => {
+test("renames and confirms experiment cascades in Russian, cancel preserves and undo restores saved documents", async ({ page, files }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const source = (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(files.experiment)}`))
+    .content.experiment as ExperimentFile;
+  source.faults = [{ target: "dependency", from: "200ms", to: "700ms", kind: "blackhole" }];
+  source.grid = [{ path: "middle-to-dependency.timeout", values: ["40ms", "80ms"] }];
+  const protectedVariant = source.variants.find(variant => variant.id === "no-retries")!;
+  protectedVariant.label = "С защитой";
+  protectedVariant.overrides = { "gateway-to-middle.attempts": 1, "middle-to-dependency.attempts": 1,
+    "middle-to-dependency.timeout": "40ms", "middle-to-dependency.backoff.base": "1ms", "dependency.handlers": 3 };
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.experiment), JSON.stringify(source));
+  await page.reload();
   await page.getByTestId("rf__node-dependency").click();
-  await page.getByLabel("Identifier", { exact: true }).fill("storage");
-  await page.getByLabel("Identifier", { exact: true }).press("Enter");
+  await page.getByLabel(en["editor.identifier"], { exact: true }).fill("storage");
+  await page.getByLabel(en["editor.identifier"], { exact: true }).press("Enter");
   await expect(page.getByTestId("rf__node-storage")).toBeVisible();
   await save(page);
-  const renamedModel = (await stored(page, files.model)).content.model as ModelFile;
-  const renamedExperiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
-  const renamedLayout = (await stored(page, files.layout)).content.layout as LayoutFile;
+  const readDocuments = async () => {
+    const [model, experiment, layout] = await Promise.all([files.model, files.experiment, files.layout]
+      .map(path => readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`)));
+    return { model: model.content.model as ModelFile, experiment: experiment.content.experiment as ExperimentFile,
+      layout: layout.content.layout as LayoutFile };
+  };
+  const renamed = await readDocuments();
+  const { model: renamedModel, experiment: renamedExperiment, layout: renamedLayout } = renamed;
   expect(renamedModel.connections.find((edge) => edge.id === "middle-to-storage")!.to).toBe("storage");
   expect(renamedExperiment.faults[0].target).toBe("storage");
   expect(renamedLayout.positions.storage).toEqual({ x: 780, y: 100 });
   expect(renamedLayout.positions.dependency).toBeUndefined();
-  await page.getByTestId("rf__node-middle").click();
+  await page.evaluate(() => localStorage.setItem("resilience-lab.language", "ru"));
+  await page.reload();
+  await page.getByTestId("rf__node-storage").click();
   await page.keyboard.press("Delete");
-  await expect(page.getByTestId("rf__node-middle")).toHaveCount(0);
-  await expect(page.getByTestId("rf__edge-gateway-to-middle")).toHaveCount(0);
+  const confirmation = page.getByRole("dialog", { name: ru["app.confirm.deleteElements"], exact: true });
+  await expect(confirmation).toContainText("middle → storage (middle-to-storage)");
+  await expect(confirmation).toContainText(ru["faults.kinds.blackhole"]);
+  await expect(confirmation).toContainText(`${ru["catalog.types.call.params.timeout.title"]} · middle → storage`);
+  await expect(confirmation).toContainText("С защитой");
+  await expect(confirmation).toContainText("(4)");
+  await expect(confirmation).toContainText("Undo");
+  await page.screenshot({ path: testInfo.outputPath("delete-cascade-confirmation-ru.png") });
+  await confirmation.getByRole("button", { name: ru["file.cancel"], exact: true }).click();
+  await expect(page.getByTestId("block-node")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: ru["app.topBar.save"], exact: true })).toBeDisabled();
+  expect(await readDocuments()).toEqual(renamed);
+  await page.keyboard.press("Delete");
+  await confirmation.getByRole("button", { name: ru["file.delete"], exact: true }).click();
+  await expect(page.getByTestId("rf__node-storage")).toHaveCount(0);
   await expect(page.getByTestId("rf__edge-middle-to-storage")).toHaveCount(0);
-  await save(page);
-  const deletedExperiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
-  expect(deletedExperiment.variants.find((variant) => variant.id === "no-retries")!.overrides).toEqual({});
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(page.getByTestId("rf__node-middle")).toBeVisible();
+  await save(page, ru["app.topBar.save"]);
+  const deleted = await readDocuments();
+  expect(deleted.experiment.faults).toEqual([]);
+  expect(deleted.experiment.grid).toEqual([]);
+  expect(deleted.experiment.variants.find((variant) => variant.id === "no-retries")!.overrides).toEqual({ "gateway-to-middle.attempts": 1 });
+  await page.getByRole("button", { name: ru["app.topBar.undo"], exact: true }).click();
+  await expect(page.getByTestId("rf__node-storage")).toBeVisible();
   await expect(page.getByTestId("rf__edge-middle-to-storage")).toBeAttached();
-  await save(page);
-  expect((await stored(page, files.model)).content.model).toEqual(renamedModel);
-  expect((await stored(page, files.experiment)).content.experiment).toEqual(renamedExperiment);
-  expect((await stored(page, files.layout)).content.layout).toEqual(renamedLayout);
+  await save(page, ru["app.topBar.save"]);
+  expect(await readDocuments()).toEqual(renamed);
   await page.reload();
   await expect(page.getByTestId("rf__node-storage")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("delete-cascade-restored-ru.png") });
 });
 
 test("moves a multi-selection once, copies its internal connection, and keeps variant structure read-only", async ({ page, files }) => {
