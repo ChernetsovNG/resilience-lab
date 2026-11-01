@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ExperimentFile, ModelFile, RunSummary } from "../src/api/apiTypes";
+import type { ExperimentFile, ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
 import { expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
 for (const language of ["en", "ru"] as const) {
-  test(`policy results: slow replica, breaker windows and request types in ${language}`, async ({ page }, testInfo) => {
+  test(`policy results: slow replica, breaker windows and request types in ${language}`, async ({ page, request }, testInfo) => {
     const ru = language === "ru";
     await page.addInitScript(language => localStorage.setItem("resilience-lab.language", language), language);
     const directory = `policy-results-${randomUUID()}`;
@@ -45,7 +45,16 @@ for (const language of ["en", "ru"] as const) {
       await selectExperiment(page, `${directory}/checkout-replicas.experiment.json`);
       const completed = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));
       await page.getByRole("button", { name: ru ? "Запустить" : "Run", exact: true }).click();
-      const summary: RunSummary = await (await completed).json();
+      const response = await completed;
+      const summary: RunSummary = await response.json();
+      const runId = /\/runs\/([^/]+)\/summary$/.exec(response.url())![1];
+      const seriesPath = `/api/v1/runs/${runId}/series/baseline/p0/0`;
+      const index: SeriesIndex = await (await request.get(seriesPath)).json();
+      const parts: number[] = [];
+      await page.route(`**${seriesPath}/*`, async intercepted => {
+        parts.push(Number(intercepted.request().url().split("/").at(-1)));
+        await intercepted.continue();
+      });
       const aggregate = summary.variants[0].points[0].aggregate;
       expect(aggregate.services["order-service#2"].totals.ejectedMs).toBeGreaterThan(0);
       expect(aggregate.connections[payment.id].totals.circuitOpenMs).toBeGreaterThan(0);
@@ -60,12 +69,20 @@ for (const language of ["en", "ru"] as const) {
       if (ru) await page.screenshot({ path: testInfo.outputPath("policy-replicas-ru.png") });
       await table.getByRole("button", { name: "order-service#2", exact: true }).click();
       await inspector.getByRole("button", { name: ru ? "Показать на таймлайне" : "Show on Timeline", exact: true }).click();
-      await page.getByText(ru ? "Элементы и показатели" : "Elements and metrics", { exact: true }).click();
-      await page.getByRole("checkbox", { name: ru ? "Добавить реплику #2 на график" : "Add replica #2 to chart", exact: true }).check();
-      await page.getByText(ru ? "Элементы и показатели" : "Elements and metrics", { exact: true }).click();
+      await expect(page.getByRole("tab", { name: ru ? "Таймлайн" : "Timeline", exact: true })).toHaveAttribute("aria-selected", "true");
+      const utilization = page.getByRole("region", { name: ru ? "Загрузка" : "Utilization", exact: true });
+      await expect(utilization).toContainText(`order-service#2 · ${ru ? "Загрузка обработчиков" : "Handler utilization"}`);
+      await expect(utilization).toContainText(`order-service · ${ru ? "Загрузка обработчиков" : "Handler utilization"}`);
+      await expect(utilization.locator(".timeline-readout dt")).toHaveCount(2);
       const ejected = page.getByRole("slider", { name: new RegExp(`${ru ? "выведен" : "Ejected"}.*order-service#2`) });
       await expect(ejected).toBeVisible();
       await expect.poll(async () => ejected.locator("rect[data-share]").evaluateAll(rects => rects.some(rect => Number(rect.getAttribute("data-share")) > 0))).toBe(true);
+      await expect(page.getByRole("slider", { name: new RegExp(`${ru ? "не готов" : "Not ready"}.*order-service#2`) })).toBeVisible();
+      const instanceParts = parts.map(number => index.parts.find(part => part.file === `part-${number}.json.gz`)!)
+        .filter(part => part.kind === "INSTANCE");
+      expect(instanceParts.length).toBeGreaterThan(0);
+      // A short run can pack several replicas together; no INSTANCE part unrelated to #2 is needed.
+      expect(instanceParts.every(part => part.nodes.includes("order-service#2"))).toBe(true);
       if (ru) {
         await page.getByRole("button", { name: "Анализ", exact: true }).click();
         await page.locator(".timeline").evaluate(element => {
