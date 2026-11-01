@@ -66,7 +66,7 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await hint.click();
   await expect(page.getByRole("tab", { name: "Baseline", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(inspector.getByLabel("Timeout", { exact: true })).toBeFocused();
-  await expect(inspector.locator(".field-diagnostics")).toContainText("LINT_TIMEOUT_BUDGET");
+  await expect(inspector.locator('[data-inspector-field="timeout"] .field-diagnostics')).toContainText("LINT_TIMEOUT_BUDGET");
   await expect(inspector.locator('[data-inspector-field="timeout"] .field-feedback button')).toHaveCSS("color", "rgb(146, 64, 14)");
   await expect(edge.locator(".diagnostic-badge--variants")).toBeHidden();
   await expect(client.getByRole("img", { name: /problems: warning/ })).toBeVisible();

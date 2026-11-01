@@ -37,6 +37,7 @@ import kotlin.math.sqrt
  * [retryOverloadThreshold] is the positive accepted-utilization threshold for worst-case retries (1 by default).
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [retrySameTargetThreshold] is the minimum attempt count for same-target retry warnings (2 by default), at least 2.
+ * [retryUnguardedThreshold] is the minimum attempt count without a retry budget or circuit breaker (2 by default), at least 2.
  * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
@@ -56,8 +57,10 @@ class ModelLinter(
     private val poolDemandThreshold: Double = 1.0,
     private val healthCheckCascadeThreshold: Double = 1.0,
     private val retrySameTargetThreshold: Int = 2,
+    private val retryUnguardedThreshold: Int = 2,
 ) {
     init {
+        require(retryUnguardedThreshold >= 2) { "retryUnguardedThreshold must be at least 2" }
         require(retrySameTargetThreshold >= 2) { "retrySameTargetThreshold must be at least 2" }
         require(healthCheckCascadeThreshold.isFinite() && healthCheckCascadeThreshold > 0.0) {
             "healthCheckCascadeThreshold must be finite and positive"
@@ -215,6 +218,7 @@ class ModelLinter(
                         clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
                         retrySameTarget(graph, client, requestClass, graph.call(call.path))?.let(diagnostics::add)
                         retryNoJitter(call)?.let(diagnostics::add)
+                        retryUnguarded(call)?.let(diagnostics::add)
                         timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
                             ?.let(diagnostics::add)
                     }
@@ -905,6 +909,27 @@ class ModelLinter(
                 "targets" to JsonPrimitive(targets),
                 "requestType" to JsonPrimitive(requestClass),
                 "threshold" to JsonPrimitive(retrySameTargetThreshold),
+            ),
+            replicaPath = call.from,
+        )
+    }
+
+    /** Structural guard check on applicable paths; policy effectiveness is not predicted. */
+    private fun retryUnguarded(call: CallEdge): Diagnostic? {
+        if (call.attempts < retryUnguardedThreshold || call.circuitBreaker != null || call.retryBudget != null) return null
+        val attempts = number(call.attempts.toDouble())
+        return warning(
+            CoreMessage.LINT_RETRY_UNGUARDED,
+            "Connection '${call.path}' allows $attempts attempts without retryBudget or circuitBreaker. " +
+                "Target load may grow by up to $attempts times on failure; " +
+                "retryBudget limits retries relative to traffic, and circuitBreaker stops calls when the target fails.",
+            call.origin,
+            call.path,
+            "/params/attempts",
+            mapOf(
+                "connection" to JsonPrimitive(call.path),
+                "attempts" to JsonPrimitive(call.attempts),
+                "amplification" to JsonPrimitive(call.attempts),
             ),
             replicaPath = call.from,
         )

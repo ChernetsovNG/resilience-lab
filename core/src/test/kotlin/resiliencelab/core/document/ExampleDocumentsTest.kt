@@ -14,7 +14,12 @@ class ExampleDocumentsTest {
     fun `example lint warnings match the documented variants`() {
         val expected =
             mapOf(
-                "retry-storm" to mapOf("LINT_TIMEOUT_BUDGET/baseline" to 1, "LINT_RETRY_OVERLOAD/baseline" to 1),
+                "retry-storm" to
+                    mapOf(
+                        "LINT_TIMEOUT_BUDGET/baseline" to 1,
+                        "LINT_RETRY_OVERLOAD/baseline" to 1,
+                        "LINT_RETRY_UNGUARDED/baseline" to 2,
+                    ),
                 "checkout" to
                     mapOf(
                         "LINT_TIMEOUT_BUDGET/baseline" to 2,
@@ -23,6 +28,10 @@ class ExampleDocumentsTest {
                         "LINT_RETRY_NO_JITTER/baseline" to 1,
                         "LINT_RETRY_NO_JITTER/aligned-timeouts" to 1,
                         "LINT_RETRY_NO_JITTER/bigger-payment-pool" to 1,
+                        "LINT_RETRY_UNGUARDED/all" to 1,
+                        "LINT_RETRY_UNGUARDED/baseline" to 1,
+                        "LINT_RETRY_UNGUARDED/aligned-timeouts" to 1,
+                        "LINT_RETRY_UNGUARDED/bigger-payment-pool" to 1,
                     ),
                 "checkout-replicas" to
                     mapOf(
@@ -41,6 +50,7 @@ class ExampleDocumentsTest {
                         "LINT_RETRY_SAME_TARGET/least-in-flight" to 1,
                         "LINT_RETRY_SAME_TARGET/bigger-pool" to 1,
                         "LINT_RETRY_SAME_TARGET/no-backoff" to 1,
+                        "LINT_RETRY_UNGUARDED/all" to 1,
                     ),
             )
         val policies =
@@ -59,6 +69,7 @@ class ExampleDocumentsTest {
                         "LINT_TIMEOUT_BUDGET/retry-budget" to 1,
                         "LINT_RETRY_NO_JITTER/retries" to 3,
                         "LINT_RETRY_NO_JITTER/retry-budget" to 3,
+                        "LINT_RETRY_UNGUARDED/retries" to 3,
                     ),
             )
         (expected + policies).forEach { (example, warnings) ->
