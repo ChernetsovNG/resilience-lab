@@ -32,7 +32,7 @@ import { ResultsWorkspace } from "./layout/ResultsWorkspace";
 import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./layout/ResultsPanel";
 import { TopBar } from "./layout/TopBar";
 import { FileMenu, type FileMenuHandle } from "./layout/FileMenu";
-import { StatusBar } from "./layout/StatusBar";
+import { ZoomStatusBar } from "./layout/StatusBar";
 import { currentViewSettings } from "./layout/viewSettings";
 import { runDocumentsEqual, useRun, type RunDocuments } from "./run/useRun";
 import { useResultsSelection } from "./results/selection";
@@ -77,7 +77,8 @@ export function App() {
   const [analysis, setAnalysis] = useState(false);
   const [problemsRequest, setProblemsRequest] = useState(0);
   const [problemsElement, setProblemsElement] = useState<string | null>(null);
-  const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
+  const canvasZoom = useRef<((zoom: number) => void) | null>(null);
+  const reportCanvasZoom = useCallback((zoom: number) => canvasZoom.current?.(zoom), []);
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
   const [observedErrors, setObservedErrors] = useState<{ path: string | null; run: string; estimate: string; workspace: string }>({ path: null, run: "[]", estimate: "[]", workspace: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
@@ -662,7 +663,7 @@ export function App() {
                 setSelection([id]); setInspectorTarget("element"); setFieldFocus(null);
                 setProblemsElement(id); setProblemsRequest(current => current + 1); setResultsSize("normal");
               }}
-              onZoomChange={setCanvasZoom}
+              onZoomChange={reportCanvasZoom}
               overrides={overrides}
               results={showDiagramResults ? diagramResults : null}
               replicaSelection={selectedReplica === null || selected === null ? null : { groupId: selected, replica: selectedReplica.replica }}
@@ -752,8 +753,8 @@ export function App() {
       />
       </ResultsWorkspace>
       {confirmationDialog}
-      <StatusBar job={ownRun ? run.job : null} health={health.health} healthError={health.error}
-        diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
+      <ZoomStatusBar ref={canvasZoom} hasModel={model !== null} job={ownRun ? run.job : null} health={health.health} healthError={health.error}
+        diagnostics={allDiagnostics} stale={staleResults}
         cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}
         onProblems={openProblems} />
     </div>

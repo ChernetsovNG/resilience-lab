@@ -1,10 +1,26 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { documentViews, model, modelPath } from "./test/fixtures";
 import { setupAppTests, otherPath, server, open, selectGateway, editHandlers, button, experimentSelect } from "./test/app";
+import * as blockGeometry from "./canvas/blockGeometry";
 
 setupAppTests();
+
+it("updates the status zoom without rendering the model nodes again", async () => {
+  const renders = vi.spyOn(blockGeometry, "blockGeometry");
+  try {
+    server();
+    await open();
+    await screen.findByText(/^Zoom /);
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    const before = renders.mock.calls.length;
+    const label = screen.getByText(/^Zoom /).textContent;
+    fireEvent.click(button("Zoom In"));
+    await waitFor(() => expect(screen.getByText(/^Zoom /).textContent).not.toBe(label));
+    expect(renders).toHaveBeenCalledTimes(before);
+  } finally { renders.mockRestore(); }
+});
 
 describe("palette insertion", () => {
 

@@ -58,7 +58,7 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
     </svg>
     {ports.map(port => {
       const point = geometry.ports[port.direction === "OUT" ? "OUT" : "IN"];
-      return <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
+      return <Handle key={port.id} id={port.id} className="block-port" type={port.direction === "OUT" ? "source" : "target"}
         position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={editable}
         style={{ left: point.x, top: point.y, right: "auto", transform: "translate(-50%, -50%)" }} />;
     })}

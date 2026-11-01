@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
 import { selectExperiment } from "./fixtures";
 import { sharedEdgeLength } from "../src/test/sharedEdgeLength";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection, waitForStablePorts } from "./connectionGestures";
 
 const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
   graph: async ({ page }, provide) => {
@@ -320,4 +320,108 @@ test("compact branch labels remain nearest their own edges", async ({ page, grap
   expect(measured.overlaps).toEqual([]);
   expect(measured.labelOverlaps).toEqual([]);
   for (const label of measured.labels) expect(label.nearest, label.id).toBe(label.id);
+});
+
+async function zoomCanvas(page: Page, zoom: number, anchor?: { x: number; y: number }): Promise<void> {
+  const scale = () => page.locator(".react-flow__viewport").evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a);
+  const initial = await scale();
+  const canvas = (await page.locator(".react-flow").boundingBox())!;
+  await page.mouse.move(anchor?.x ?? canvas.x + canvas.width / 2, anchor?.y ?? canvas.y + 32);
+  await page.mouse.wheel(0, Math.log2(initial / zoom) / 0.002);
+  await expect.poll(scale).toBeCloseTo(zoom, 4);
+}
+
+for (const activation of ["enter", "add"] as const) {
+  test(`palette ${activation} adds right of the selection without moving the viewport`, async ({ page, graph }, testInfo) => {
+    await zoomCanvas(page, 0.4);
+    const selected = page.getByTestId("rf__node-database");
+    await selected.locator(".block-node-header").click();
+    await expect(selected).toHaveClass(/selected/);
+    await waitForStablePorts(selected.locator('[data-handleid="in"]'));
+    const before = (await selected.boundingBox())!;
+    const viewport = await page.locator(".react-flow__viewport").getAttribute("style");
+    const service = page.getByRole("complementary", { name: "Палитра", exact: true })
+      .getByRole("button", { name: "Сервис", exact: true });
+    if (activation === "enter") await service.press("Enter");
+    else {
+      await service.click();
+      await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    }
+    const inserted = page.getByTestId("rf__node-service-1");
+    await waitForStablePorts(inserted.locator('[data-handleid="in"]'));
+    await expect(inserted).toBeInViewport({ ratio: 0.99 });
+    const after = (await inserted.boundingBox())!;
+    expect(after.x - before.x - before.width).toBeGreaterThanOrEqual(15);
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(8);
+    expect(await page.locator(".react-flow__viewport").getAttribute("style")).toBe(viewport);
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    const saved: LayoutFile = (await response.json()).content.layout;
+    for (const [id, position] of Object.entries(graph.layout.positions)) expect(saved.positions[id]).toEqual(position);
+    await expect(page.getByRole("button", { name: "Запустить", exact: true }))
+      .not.toHaveAttribute("title", "Дождитесь окончания проверки");
+    await page.screenshot({ path: testInfo.outputPath(`selected-insertion-${activation}.png`) });
+    await page.reload();
+    await expect(page.getByTestId("rf__node-service-1")).toBeVisible();
+  });
+}
+
+for (const zoom of [0.05, 0.4, 1]) {
+  test(`off-centre port drag at ${zoom * 100} percent creates a connection without moving nodes`, async ({ page, graph }, testInfo) => {
+    const source = page.getByTestId("rf__node-client").locator('[data-handleid="out"]');
+    const target = page.getByTestId("rf__node-gateway").locator('[data-handleid="in"]');
+    await waitForStablePorts(source, target);
+    const initialSource = (await source.boundingBox())!, initialTarget = (await target.boundingBox())!;
+    await zoomCanvas(page, zoom, {
+      x: (initialSource.x + initialSource.width / 2 + initialTarget.x + initialTarget.width / 2) / 2,
+      y: (initialSource.y + initialSource.height / 2 + initialTarget.y + initialTarget.height / 2) / 2,
+    });
+    await page.getByTestId("rf__edge-request").press("Enter");
+    await expect(page.getByTestId("rf__edge-request")).toHaveClass(/selected/);
+    await page.keyboard.press("Delete");
+    await expect(page.getByTestId("rf__edge-request")).toHaveCount(0);
+    await waitForStablePorts(source, target);
+    const from = (await source.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    for (const port of [source, target]) {
+      const hit = await port.evaluate(element => {
+        const style = getComputedStyle(element, "::before");
+        return { width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
+      });
+      expect(hit.width * zoom).toBeGreaterThanOrEqual(11.9);
+      expect(hit.height * zoom).toBeGreaterThanOrEqual(11.9);
+    }
+    // At 5%, approach the input from outside to avoid the nearby output's hit target.
+    const targetOffset = zoom === 0.05 ? -4 : 4;
+    await source.dragTo(target, {
+      sourcePosition: { x: from.width / 2 - 4, y: from.height / 2 },
+      targetPosition: { x: to.width / 2 + targetOffset, y: to.height / 2 },
+    });
+    await expect(page.locator('.react-flow__edge[data-id="client-to-gateway"]')).toBeAttached();
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    expect((await response.json()).content.layout).toEqual(graph.layout);
+    await expect(page.getByRole("button", { name: "Запустить", exact: true }))
+      .not.toHaveAttribute("title", "Дождитесь окончания проверки");
+    await page.screenshot({ path: testInfo.outputPath(`ports-${zoom * 100}-percent.png`) });
+    await page.reload();
+    await expect(page.locator('.react-flow__edge[data-id="client-to-gateway"]')).toBeAttached();
+  });
+}
+
+test("port endpoints keep their model coordinates across zoom levels", async ({ page, graph }) => {
+  void graph;
+  const source = page.getByTestId("rf__node-gateway").locator('[data-handleid="out"]');
+  const target = page.getByTestId("rf__node-router").locator('[data-handleid="in"]');
+  const endpoints = () => page.locator('.react-flow__edge[data-id="dispatch"] .react-flow__edge-path').evaluate(path => {
+    const numbers = path.getAttribute("d")!.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)!.map(Number);
+    return [...numbers.slice(0, 2), ...numbers.slice(-2)];
+  });
+  await waitForStablePorts(source, target);
+  const initial = await endpoints();
+  for (const zoom of [0.4, 0.05, 1]) {
+    await zoomCanvas(page, zoom);
+    await waitForStablePorts(source, target);
+    await expect.poll(async () => (await endpoints()).every((value, index) => Math.abs(value - initial[index]) < 0.001)).toBe(true);
+  }
 });
