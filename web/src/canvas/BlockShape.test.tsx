@@ -37,3 +37,38 @@ it("keeps the lower head arc covered by the body when the client has an override
   expect(headLayers).toHaveLength(2);
   for (const layer of headLayers) expect(paths.indexOf(layer)).toBeLessThan(paths.indexOf(body));
 });
+
+it("sizes the router from independent content dimensions, not its previous measured footprint", () => {
+  const originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+  const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  const originalScroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollWidth");
+  let contentHeight = 50;
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true,
+    get() { return this.classList.contains("block-node--router") ? 140 : 0; } });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true,
+    get() { return this.classList.contains("block-node--router") ? contentHeight : 0; } });
+  Object.defineProperty(Element.prototype, "scrollWidth", { configurable: true,
+    get() { return this.classList.contains("block-node--router") ? 140 : 0; } });
+  try {
+    const props = { id: "router", type: "router", ports: [], editable: true };
+    const { rerender } = render(<ReactFlowProvider><BlockShape {...props}>Policy and help</BlockShape></ReactFlowProvider>);
+    const shape = screen.getByTestId("block-node").parentElement!;
+    expect(shape.style.minWidth).toBe("156px");
+    expect(shape.style.minHeight).toBe("156px");
+    expect(shape.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 156 156");
+    // A late observer delivery must not feed a formerly wrapped footprint back into the minimum.
+    rerender(<ReactFlowProvider><BlockShape {...props} width={260} height={260}>Policy and help</BlockShape></ReactFlowProvider>);
+    expect(shape.style.width).toBe("156px");
+    expect(shape.style.height).toBe("156px");
+    rerender(<ReactFlowProvider><BlockShape {...props} width={156} height={156} authoredSize>Policy and help</BlockShape></ReactFlowProvider>);
+    expect(shape.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 156 156");
+    contentHeight = 100;
+    rerender(<ReactFlowProvider><BlockShape {...props} width={300} height={300} authoredSize>Translated policy and help</BlockShape></ReactFlowProvider>);
+    expect(shape.style.minHeight).toBe("179px");
+    expect(shape.style.width).toBe("300px");
+  } finally {
+    if (originalWidth) Object.defineProperty(HTMLElement.prototype, "offsetWidth", originalWidth);
+    if (originalHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", originalHeight);
+    if (originalScroll) Object.defineProperty(Element.prototype, "scrollWidth", originalScroll);
+  }
+});

@@ -156,7 +156,9 @@ export const model: ModelFile = {
 };
 
 export const layout: LayoutFile = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+  sizes: {},
+  edges: {},
   positions: {
     client: { x: 0, y: 100 },
     dependency: { x: 780, y: 100 },

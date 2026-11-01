@@ -626,3 +626,35 @@ it("shows request type profiles without offering a competing single profile", ()
   expect(screen.getByRole<HTMLInputElement>("radio", { name: "Several request types" }).checked).toBe(true);
   expect(onParam).not.toHaveBeenCalled();
 });
+
+
+it("resets authored node dimensions from the model inspector", () => {
+  const manual = { ...layout, sizes: { gateway: { width: 320, height: 300 } } };
+  const changes: EditorDocuments[] = [];
+  renderInspector({ layout: manual, onCommand: command => changes.push(command({ model, layout: manual, experiment })) });
+  fireEvent.click(screen.getByRole("button", { name: "Reset size" }));
+  expect(changes[0].layout.sizes).toEqual({});
+  expect(changes[0].layout.positions).toEqual(layout.positions);
+});
+
+it("resets a connection's manual route with one command", () => {
+  const onCommand = vi.fn();
+  const manual = { ...layout, edges: { "gateway-to-middle": { points: [{ x: 400, y: -100 }] } } };
+  renderInspector({ selected: "gateway-to-middle", layout: manual, onCommand });
+  fireEvent.click(screen.getByRole("button", { name: "Reset to automatic route" }));
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  const after = onCommand.mock.calls[0][0]({ model, layout: manual, experiment });
+  expect(after.layout.edges).toEqual({});
+  expect(after.model).toBe(model);
+});
+
+it("hides manual edge route reset on variant pages", () => {
+  renderInspector({ selected: "gateway-to-middle", layout: { ...layout, edges: { "gateway-to-middle": { points: [{ x: 4, y: 2 }] } } }, variantId: experiment.variants[0].id });
+  expect(screen.queryByRole("button", { name: "Reset to automatic route" })).toBeNull();
+});
+
+
+it("disables manual route reset while a field draft is invalid", () => {
+  renderInspector({ selected: "gateway-to-middle", layout: { ...layout, edges: { "gateway-to-middle": { points: [{ x: 4, y: 2 }] } } }, invalid: true, onCommand: vi.fn() });
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Reset to automatic route" }).disabled).toBe(true);
+});

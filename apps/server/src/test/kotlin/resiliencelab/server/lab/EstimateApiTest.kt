@@ -81,7 +81,7 @@ class EstimateApiTest {
         assertThat(JsonPath.read<String>(missing.contentAsString, "$.diagnostics[0].code")).isEqualTo("DOCUMENT_MISSING")
         openApi.assertResponse("post", "/api/v1/estimate", missing)
 
-        val layout = """{"layout":{"schemaVersion":1,"positions":{}}}"""
+        val layout = """{"layout":{"schemaVersion":2,"positions":{}}}"""
         val duplicate =
             """[{"path":"bad.layout.json","content":$layout},{"path":"bad.layout.json","content":$layout}]"""
         listOf(

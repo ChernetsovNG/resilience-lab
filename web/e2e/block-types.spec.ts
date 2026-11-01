@@ -29,7 +29,7 @@ const test = base.extend<{ graph: { directory: string; model: ModelFile } }>({
       } },
       { id: "query", from: "pooler", to: "database", type: "call", params: { timeout: "50ms", attempts: 1 } },
     ];
-    const layout: LayoutFile = { schemaVersion: 1, positions: {
+    const layout: LayoutFile = { schemaVersion: 2, sizes: {}, edges: {}, positions: {
       client: { x: 0, y: 32 }, entry: { x: 240, y: 32 }, router: { x: 480, y: 32 },
       service: { x: 680, y: 32 }, pooler: { x: 920, y: 32 }, database: { x: 1160, y: 32 },
     } };

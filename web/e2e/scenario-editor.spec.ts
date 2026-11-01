@@ -333,6 +333,18 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(timeout).toHaveText("80 ms");
 
+  const edge = page.getByTestId("rf__edge-gateway-to-middle");
+  await page.locator(".react-flow__pane").click({ position: { x: 15, y: 100 } });
+  await expect(edge).not.toHaveClass(/selected/);
+  await page.getByTestId("canvas-edge-label-gateway-to-middle").click({ position: { x: 3, y: 3 } });
+  await expect(edge).toHaveClass(/selected/);
+  await timeout.dblclick();
+  await input.fill("95ms");
+  await input.press("Enter");
+  await expect(timeout).toHaveText("95 ms");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(timeout).toHaveText("80 ms");
+
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await timeout.dblclick();
   await input.fill("100ms");
@@ -836,7 +848,7 @@ test("keeps automatic connection ids and references after building, renaming, sa
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify({
     ...source, blocks: { client: source.blocks.client }, connections: [],
   }));
-  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout), JSON.stringify({ schemaVersion: 1, positions: { client: { x: 0, y: 100 } } }));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout), JSON.stringify({ schemaVersion: 2, sizes: {}, edges: {}, positions: { client: { x: 0, y: 100 } } }));
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.experiment), JSON.stringify({
     ...execution, variants: [{ id: "baseline", label: "Baseline", overrides: {} }], faults: [], grid: [],
     execution: { ...execution.execution, replications: 2, warmup: "0ms", measurement: "300ms", window: "50ms" },

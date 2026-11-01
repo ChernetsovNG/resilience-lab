@@ -6,9 +6,9 @@ import { formatNumber } from "../i18n/format";
 import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
 import { formatOutput, outputNote, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
-import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow } from "@xyflow/react";
 import type { Edge, EdgeProps } from "@xyflow/react";
-import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
+import type { Catalog, ConnectionInstance, Diagnostic, LayoutFile } from "../api/apiTypes";
 import { summarizeDiagnostics } from "../validation/diagnostics";
 import type { ConnectionCanvasResults, ConnectionOverlayMetric } from "../results/canvasResults";
 import { InlineParamEditor } from "./InlineParamEditor";
@@ -18,16 +18,34 @@ import { catalogOption } from "../i18n/catalog";
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Rect } from "@xyflow/react";
 import { diagramBounds, layoutEdges, type EdgeGeometry, type EdgeMeasurement } from "./edgeGeometry";
+import { EdgeEditControls } from "./EdgeEditControls";
 import { PolicyBadges } from "./PolicyBadges";
 
 const EdgeLayoutContext = createContext<{ geometries: Map<string, EdgeGeometry>;
-  onMeasure: (id: string, measurement: EdgeMeasurement) => void } | null>(null);
+  onMeasure: (id: string, measurement: EdgeMeasurement) => void;
+  onPreview: (id: string, points: EdgeGeometry["points"] | null) => void } | null>(null);
+
+const emptyEdges: LayoutFile["edges"] = {};
+const emptyPreviews: Record<string, EdgeGeometry["points"]> = {};
 
 /** Edge measurements update edges without sending measured nodes through another React Flow update. */
-export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
-  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[];
+export function EdgeLayoutProvider({ nodes, connections, manual = emptyEdges, onBounds, children }: {
+  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[]; manual?: LayoutFile["edges"];
   onBounds?: (bounds: Rect | null, geometries: ReadonlyMap<string, EdgeGeometry>) => void; children: ReactNode;
 }) {
+  const [preview, setPreview] = useState({ manual, values: emptyPreviews });
+  const previews = preview.manual === manual ? preview.values : emptyPreviews;
+  const onPreview = useCallback((id: string, points: EdgeGeometry["points"] | null) => {
+    setPreview(current => {
+      if (points === null) {
+        if (!Object.hasOwn(current.values, id)) return current;
+        const values = { ...current.values };
+        delete values[id];
+        return { ...current, values };
+      }
+      return { manual, values: { ...(current.manual === manual ? current.values : emptyPreviews), [id]: points } };
+    });
+  }, [manual]);
   const [measurements, setMeasurements] = useState<Record<string, EdgeMeasurement>>({});
   const onMeasure = useCallback((id: string, measurement: EdgeMeasurement) => {
     setMeasurements(current => {
@@ -40,21 +58,33 @@ export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
   const [topology, setTopology] = useState(nextTopology);
   if (topology.length !== nextTopology.length || nextTopology.some((edge, index) =>
     edge.id !== topology[index].id || edge.from !== topology[index].from || edge.to !== topology[index].to)) setTopology(nextTopology);
+  const [manualRoutes, setManualRoutes] = useState(manual);
+  if (topology.some(({ id }) => {
+    const before = ownEntry(manualRoutes, id)?.points ?? [];
+    const after = ownEntry(manual, id)?.points ?? [];
+    return before.length !== after.length || before.some((point, index) => point.x !== after[index].x || point.y !== after[index].y);
+  })) setManualRoutes(manual);
   const geometries = useMemo(() => layoutEdges(topology.flatMap(connection => {
     const measurement = ownEntry(measurements, connection.id);
-    return measurement === undefined ? [] : [{ ...measurement, id: connection.id, from: connection.from, to: connection.to }];
-  }), nodes), [topology, measurements, nodes]);
+    return measurement === undefined ? [] : [{ ...measurement, id: connection.id, from: connection.from, to: connection.to,
+      points: ownEntry(previews, connection.id) ?? ownEntry(manualRoutes, connection.id)?.points }];
+  }), nodes), [topology, measurements, nodes, manualRoutes, previews]);
   const bounds = useMemo(() => diagramBounds([
     ...[...nodes.values()].filter(node => node.width > 0 && node.height > 0),
     ...[...geometries.values()].map(geometry => geometry.bounds),
   ]), [nodes, geometries]);
   useEffect(() => { onBounds?.(bounds, geometries); }, [onBounds, bounds, geometries]);
-  return <EdgeLayoutContext value={{ geometries, onMeasure }}>{children}</EdgeLayoutContext>;
+  return <EdgeLayoutContext value={{ geometries, onMeasure, onPreview }}>{children}</EdgeLayoutContext>;
 }
 
 export type CallEdgeType = Edge<{
   connection: ConnectionInstance;
   modelParams?: Params;
+  edgePoints?: readonly { x: number; y: number }[];
+  routeEditable?: boolean;
+  editIdentity?: object;
+  onEdgePoints?: (points: EdgeGeometry["points"]) => void;
+  onEditStart?: () => void;
   overrides?: Params;
   catalog: Catalog;
   overridden: boolean;
@@ -81,6 +111,9 @@ export type CallEdgeType = Edge<{
 /** A call edge with HTML labels because SVG text cannot contain parameter inputs. */
 export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, selected, data }: EdgeProps<CallEdgeType>) {
   const layout = useContext(EdgeLayoutContext);
+  const { screenToFlowPosition } = useReactFlow();
+  const preview = layout?.onPreview;
+  const previewPoints = useCallback((points: EdgeGeometry["points"] | null) => preview?.(id, points), [preview, id]);
   const geometry = layout?.geometries.get(id);
   const [initialPath, initialX, initialY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const path = geometry?.path ?? initialPath;
@@ -174,6 +207,11 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
             {output?.id === "amplification" ? <small className="output-note" aria-hidden={metricNote === null || undefined}>{metricNote}</small> : null}
           </span>}
         </div>
+      </EdgeLabelRenderer> : null}
+      {selected && data?.routeEditable && geometry !== undefined && data.editIdentity !== undefined && data.onEdgePoints !== undefined ? <EdgeLabelRenderer>
+        <EdgeEditControls id={connection.id} path={geometry.points}
+          anchors={data.edgePoints ?? []}
+          identity={data.editIdentity} toFlow={screenToFlowPosition} onPreview={previewPoints} onCommit={data.onEdgePoints} onStart={data.onEditStart} />
       </EdgeLabelRenderer> : null}
     </>
   );

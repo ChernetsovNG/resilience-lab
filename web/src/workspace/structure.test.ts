@@ -5,7 +5,7 @@ import type { Catalog } from "../api/apiTypes";
 import { documentDrafts, editorReducer, initialEditorState, setModelParam, type EditorCommand, type EditorDocuments } from "./editor";
 import {
   addBlock, addConnection, connectionRule, copySelection, deleteElements, identifierError,
-  insertionPosition, moveBlocks, pasteSelection, renameElement,
+  insertionPosition, moveBlocks, pasteSelection, renameElement, resizeBlock, resetBlockSize, setEdgePoints, resetEdgePoints,
 } from "./structure";
 
 const documents = (): EditorDocuments => structuredClone({ model, layout, experiment });
@@ -572,4 +572,82 @@ it("retains request classes and structural filters when renaming and copying gra
   ]);
   expect(copied.model.connections.at(-1)).toMatchObject({ id: "router-1-to-service-2", classes: ["checkout"] });
   expect(copied.model.blocks.client).toEqual(before.model.blocks.client);
+});
+
+
+describe("authored layout", () => {
+  function manual() {
+    const before = documents();
+    before.layout.sizes = { gateway: { width: 300, height: 280 }, middle: { width: 240, height: 250 } };
+    before.layout.edges = { "gateway-to-middle": { points: [{ x: 420, y: 20 }] }, "middle-to-dependency": { points: [{ x: 700, y: 20 }] } };
+    return before;
+  }
+  it("commits a left resize position and size in one Undo/Redo step, then resets to auto", () => {
+    const before = manual();
+    const after = roundTrip(before, resizeBlock("gateway", { x: -40, y: 60 }, { width: 340, height: 300 }));
+    expect(after.layout.positions.gateway).toEqual({ x: -40, y: 60 });
+    expect(after.layout.sizes.gateway).toEqual({ width: 340, height: 300 });
+    expect(after.layout.edges).toEqual(before.layout.edges);
+    const automatic = roundTrip(after, resetBlockSize("gateway"));
+    expect(automatic.layout.sizes).not.toHaveProperty("gateway");
+    expect(automatic.layout.positions).toEqual(after.layout.positions);
+  });
+  it("renames sizes and automatically renamed incident paths atomically", () => {
+    const after = roundTrip(manual(), renameElement("gateway", "entry"));
+    expect(after.layout.sizes).toEqual({ entry: { width: 300, height: 280 }, middle: { width: 240, height: 250 } });
+    expect(after.layout.edges).toEqual({ "entry-to-middle": { points: [{ x: 420, y: 20 }] }, "middle-to-dependency": { points: [{ x: 700, y: 20 }] } });
+    const renamed = roundTrip(after, renameElement("entry-to-middle", "rpc"));
+    expect(renamed.layout.edges.rpc).toEqual(after.layout.edges["entry-to-middle"]);
+    expect(renamed.layout.edges).not.toHaveProperty("entry-to-middle");
+  });
+  it("deletes sizes and incident paths while retaining unrelated layout", () => {
+    const after = roundTrip(manual(), deleteElements(["gateway"]));
+    expect(after.layout.sizes).toEqual({ middle: { width: 240, height: 250 } });
+    expect(after.layout.edges).toEqual({ "middle-to-dependency": { points: [{ x: 700, y: 20 }] } });
+    expect(roundTrip(manual(), deleteElements(["gateway-to-middle"])).layout.edges).not.toHaveProperty("gateway-to-middle");
+  });
+  it("copies authored sizes for selected blocks but leaves copied connections automatic", () => {
+    const before = manual();
+    const after = roundTrip(before, pasteSelection(copySelection(before, ["gateway", "middle"])));
+    const copied = Object.keys(after.model.blocks).filter(id => !Object.hasOwn(before.model.blocks, id));
+    expect(copied.map(id => after.layout.sizes[id])).toEqual([{ width: 300, height: 280 }, { width: 240, height: 250 }]);
+    expect(after.layout.edges).toEqual(before.layout.edges);
+  });
+});
+
+
+it("renames authored sizes and incident paths over stale destination layout ids", () => {
+  const before = documents();
+  before.layout.sizes = { gateway: { width: 320, height: 280 }, entry: { width: 1, height: 1 } };
+  before.layout.edges = { "gateway-to-middle": { points: [{ x: 400, y: 10 }] }, "entry-to-middle": { points: [{ x: 1, y: 1 }] } };
+  const renamed = roundTrip(before, renameElement("gateway", "entry"));
+  expect(renamed.layout.sizes.entry).toEqual({ width: 320, height: 280 });
+  expect(renamed.layout.edges["entry-to-middle"]).toEqual({ points: [{ x: 400, y: 10 }] });
+  renamed.layout.edges.rpc = { points: [{ x: 0, y: 0 }] };
+  expect(roundTrip(renamed, renameElement("entry-to-middle", "rpc")).layout.edges.rpc).toEqual({ points: [{ x: 400, y: 10 }] });
+});
+
+
+describe("edge layout commands", () => {
+  it("sets and resets points as single undoable operations without changing the model", () => {
+    const before = documents();
+    const points = [{ x: 400, y: -200 }, { x: 700, y: -200 }];
+    const after = roundTrip(before, setEdgePoints("gateway-to-middle", points));
+    expect(after.layout.edges["gateway-to-middle"]).toEqual({ points });
+    expect(after.model).toEqual(before.model);
+    const reset = roundTrip(after, resetEdgePoints("gateway-to-middle"));
+    expect(reset.layout.edges).not.toHaveProperty("gateway-to-middle");
+    expect(resetEdgePoints("missing")(before)).toBe(before);
+    expect(setEdgePoints("missing", points)(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", points)(after)).toBe(after);
+  });
+
+  it("accepts at most 50 finite points, rejecting the whole invalid edit", () => {
+    const before = documents();
+    const points = Array.from({ length: 50 }, (_, i) => ({ x: i, y: -i }));
+    expect(setEdgePoints("gateway-to-middle", points)(before).layout.edges["gateway-to-middle"].points).toHaveLength(50);
+    expect(setEdgePoints("gateway-to-middle", [...points, { x: 51, y: 0 }])(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", [{ x: Infinity, y: 0 }])(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", [])(before)).toBe(before);
+  });
 });

@@ -28,7 +28,7 @@ for (const language of ["en", "ru"] as const) {
       model.blocks["payment-service"].params.failureRate = "100%";
       await writeFile(resolve(root, "retry-storm.model.json"), JSON.stringify(model));
       await writeFile(resolve(root, "retry-storm.experiment.json"), JSON.stringify(experiment));
-      await writeFile(resolve(root, "retry-storm.layout.json"), JSON.stringify({ schemaVersion: 1, positions: {
+      await writeFile(resolve(root, "retry-storm.layout.json"), JSON.stringify({ schemaVersion: 2, sizes: {}, edges: {}, positions: {
         "mobile-app": { x: 0, y: 160 }, "api-gateway": { x: 260, y: 160 }, "order-service": { x: 520, y: 160 }, "payment-service": { x: 780, y: 160 },
       } }));
       const experimentPath = `${directory}/retry-storm.experiment.json`;

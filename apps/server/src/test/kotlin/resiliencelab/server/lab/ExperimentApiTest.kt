@@ -156,7 +156,7 @@ class ExperimentApiTest {
                 """{"experiment":"new/new.experiment.json","drafts":[
                 {"path":"new/new.experiment.json","content":{"experiment":$draftExperiment}},
                 {"path":"new/new.model.json","content":{"model":$model}},
-                {"path":"new/new.layout.json","content":{"layout":{"schemaVersion":1,"positions":{}}}}
+                {"path":"new/new.layout.json","content":{"layout":{"schemaVersion":2,"positions":{}}}}
             ]}""",
             )
 
@@ -168,7 +168,7 @@ class ExperimentApiTest {
 
     @Test
     fun `rejects ambiguous draft content duplicate paths and paths outside workspace`() {
-        val layout = """{"layout":{"schemaVersion":1,"positions":{}}}"""
+        val layout = """{"layout":{"schemaVersion":2,"positions":{}}}"""
         listOf(
             """[{"path":"bad.model.json","content":$layout}]""",
             """[{"path":"../bad.layout.json","content":$layout}]""",

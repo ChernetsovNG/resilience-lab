@@ -352,7 +352,7 @@ describe("Canvas", () => {
         else super.observe(target);
       }
     };
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] });
     try {
       const onZoomChange = vi.fn();
       render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
@@ -452,7 +452,7 @@ describe("Canvas", () => {
     const { rerender } = render(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={null} />);
     expect((await screen.findByTestId("rf__node-client")).style.transform).toBe("translate(0px,100px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
-    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={{ schemaVersion: 1, positions: { client: { x: 40, y: 60 } } }} />);
+    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={{ schemaVersion: 2, sizes: {}, edges: {}, positions: { client: { x: 40, y: 60 } } }} />);
     expect(screen.getByTestId("rf__node-client").style.transform).toBe("translate(40px,60px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
   });
@@ -890,4 +890,144 @@ it("shows block and every connection type description through HelpHint without e
     fireEvent.keyDown(window, { key: "Escape" });
   }
   expect(within(screen.getByTestId("rf__node-client")).queryByRole("button", { name: "More about: client" })).toBeNull();
+});
+
+
+it("renders authored dimensions, selected resize handles and resets the automatic footprint", async () => {
+  const manual = { ...layout, sizes: { gateway: { width: 320, height: 300 } } };
+  const props = { catalog, model, selected: ["gateway"], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+  const { rerender } = render(<Canvas {...props} layout={manual} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.style.width).toBe("320px");
+  expect(gateway.style.height).toBe("300px");
+  expect(gateway.querySelector(".block-shape")?.getAttribute("style")).toContain("width: 320px");
+  expect(gateway.querySelectorAll(".react-flow__resize-control.handle")).toHaveLength(4);
+  expect(screen.getByTestId("rf__node-middle").querySelector(".react-flow__resize-control")).toBeNull();
+  rerender(<Canvas {...props} layout={layout} />);
+  expect(gateway.style.width).toBe("");
+  expect(gateway.style.height).toBe("");
+  expect((gateway.querySelector(".block-shape") as HTMLElement).style.width).toBe("");
+  expect(props.onCommand).not.toHaveBeenCalled();
+});
+
+it.each([{ variant: experiment.variants[0] }, { disabled: true }, { editable: false }])("hides resize actions for read-only or disabled nodes: %s", async state => {
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={vi.fn()} editable {...state} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.querySelector(".react-flow__resize-control")).toBeNull();
+});
+
+
+function resizeMouse(type: string, target: Element | Window, x: number, y: number) {
+  const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  // Vitest's Window proxy is not accepted by jsdom's UIEvent constructor.
+  Object.defineProperty(event, "view", { value: window });
+  fireEvent(target, event);
+}
+
+it("commits a native left resize once on release and keeps position and dimensions atomic", async () => {
+  const onCommand = vi.fn();
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={onCommand} editable />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  const handle = gateway.querySelector(".react-flow__resize-control.handle.left.top")!;
+  expect(handle).not.toBeNull();
+  resizeMouse("mousedown", handle, 20, 20);
+  resizeMouse("mousemove", window, -180, -180);
+  expect(onCommand).not.toHaveBeenCalled();
+  resizeMouse("mouseup", window, -180, -180);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  const after = (onCommand.mock.calls[0][0] as EditorCommand)({ model, layout, experiment });
+  expect(after.layout.positions.gateway.x).toBeLessThan(layout.positions.gateway.x);
+  expect(after.layout.positions.gateway.y).toBeLessThan(layout.positions.gateway.y);
+  expect(after.layout.sizes.gateway.width).toBeGreaterThan(180);
+  expect(after.layout.sizes.gateway.height).toBeGreaterThan(80);
+});
+
+it.each(["Escape", "blur", "pointercancel"])("discards a native resize on %s without writing a command", async cancel => {
+  const onCommand = vi.fn();
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={onCommand} editable />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  const handle = gateway.querySelector(".react-flow__resize-control.handle.right.bottom")!;
+  resizeMouse("mousedown", handle, 20, 20);
+  resizeMouse("mousemove", window, 220, 220);
+  expect(gateway.style.width).not.toBe("");
+  if (cancel === "Escape") fireEvent.keyDown(window, { key: "Escape" });
+  else fireEvent(window, new Event(cancel));
+  expect(gateway.style.width).toBe("");
+  resizeMouse("mouseup", window, 220, 220);
+  expect(onCommand).not.toHaveBeenCalled();
+});
+
+
+it.each(["disabled", "selection", "document"])("cannot resurrect an interrupted resize after %s changes", async interruption => {
+  const props = { catalog, model, layout, selected: ["gateway"], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+  const { rerender } = render(<Canvas {...props} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  resizeMouse("mousedown", gateway.querySelector(".react-flow__resize-control.handle.right.bottom")!, 20, 20);
+  resizeMouse("mousemove", window, 220, 220);
+  expect(gateway.style.width).not.toBe("");
+  rerender(<Canvas {...props} {...(interruption === "disabled" ? { disabled: true } : interruption === "selection" ? { selected: [] } : { layout: structuredClone(layout) })} />);
+  expect(gateway.style.width).toBe("");
+  rerender(<Canvas {...props} />);
+  expect(gateway.style.width).toBe("");
+  resizeMouse("mouseup", window, 220, 220);
+  expect(props.onCommand).not.toHaveBeenCalled();
+});
+
+it("offers segment and bend controls on selected model edges and hides them on variants", async () => {
+  const onCommand = vi.fn();
+  const props = { catalog, model, layout, selected: ["gateway-to-middle"], onSelect: vi.fn(), onCommand, editable: true };
+  const { rerender } = render(<Canvas {...props} />);
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /Move segment .*gateway-to-middle/ }).length).toBeGreaterThan(0));
+  expect(screen.getAllByRole("button", { name: /Move bend .*gateway-to-middle/ }).length).toBeGreaterThan(0);
+  expect(onCommand).not.toHaveBeenCalled();
+  rerender(<Canvas {...props} variant={experiment.variants[0]} />);
+  expect(screen.queryByRole("button", { name: /Move segment/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Move bend/ })).toBeNull();
+});
+
+it("routes saved model points on readonly variants and includes them in common Fit bounds", async () => {
+  const points = [{ x: 400, y: -1800 }, { x: 2200, y: -1800 }];
+  const manual = { ...layout, edges: { "gateway-to-middle": { points } } };
+  const calculate = vi.spyOn(edgeGeometry, "layoutEdges");
+  try {
+    render(<Canvas catalog={catalog} model={model} layout={manual} selected={["gateway-to-middle"]} onSelect={vi.fn()} onCommand={vi.fn()}
+      variant={experiment.variants[0]} editable={false} />);
+    await waitFor(() => {
+      const route = calculate.mock.results.at(-1)?.value?.get("gateway-to-middle");
+      expect(route?.points).toEqual(expect.arrayContaining(points));
+      expect(route?.bounds.y).toBeLessThanOrEqual(-1800);
+      expect(route?.bounds.x + route?.bounds.width).toBeGreaterThanOrEqual(2200);
+    });
+    expect(screen.queryByRole("button", { name: /Move segment/ })).toBeNull();
+  } finally { calculate.mockRestore(); }
+});
+
+it.each(["variant", "layout"])("creates one manual route and discards previews on %s changes", async reason => {
+  const onCommand = vi.fn();
+  const props = { catalog, model, layout, selected: ["gateway-to-middle"], onSelect: vi.fn(), onCommand, editable: true };
+  const { rerender, container } = render(<Canvas {...props} />);
+  const path = () => container.querySelector<SVGPathElement>('#gateway-to-middle')!.getAttribute("d");
+  const handle = await screen.findByRole("button", { name: "Move bend 1 of gateway-to-middle" });
+  const pointer = (type: string, x: number, y: number, target: EventTarget = window) => {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: 7 });
+    act(() => { target.dispatchEvent(event); });
+  };
+  const before = path();
+  pointer("pointerdown", 100, 100, handle);
+  pointer("pointermove", 130, 140);
+  expect(path()).not.toBe(before);
+  expect(onCommand).not.toHaveBeenCalled();
+  pointer("pointerup", 130, 140);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  const after = (onCommand.mock.lastCall![0] as EditorCommand)({ model, layout, experiment });
+  expect(after.layout.edges["gateway-to-middle"].points.length).toBeGreaterThan(0);
+  expect(after.model).toBe(model);
+  pointer("pointerdown", 100, 100, screen.getByRole("button", { name: "Move bend 1 of gateway-to-middle" }));
+  pointer("pointermove", 130, 140);
+  rerender(<Canvas {...props} layout={{ ...layout, edges: {} }} variant={reason === "variant" ? experiment.variants[0] : undefined} />);
+  pointer("pointerup", 130, 140);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  rerender(<Canvas {...props} />);
+  expect(path()).toBe(before);
 });

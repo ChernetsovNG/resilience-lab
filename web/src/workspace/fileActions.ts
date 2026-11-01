@@ -55,7 +55,7 @@ export function newModel(directory: string): DocumentDraft[] {
       blocks: {}, connections: [],
     } } },
     { path: `${path}/${name}.layout.json`, content: { layout: {
-      schemaVersion: 1, positions: {},
+      schemaVersion: 2, sizes: {}, edges: {}, positions: {},
     } } },
     { path: `${path}/${name}.experiment.json`, content: { experiment: defaultExperiment(`${name}.model.json`, `${name}.layout.json`) } },
   ];

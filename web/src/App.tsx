@@ -548,6 +548,7 @@ export function App() {
             catalog={catalog}
             model={model}
             baseModel={loaded.model}
+            layout={loaded.layout}
             experiment={loaded.experiment}
             experimentPath={loaded.experimentPath}
             selected={selected}

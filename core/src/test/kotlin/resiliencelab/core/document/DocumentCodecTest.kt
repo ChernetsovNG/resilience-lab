@@ -13,6 +13,67 @@ import kotlin.test.Test
 
 class DocumentCodecTest {
     @Test
+    fun `layout two round-trips manual geometry and accepts omitted maps`() {
+        val source = """{"schemaVersion":2,"positions":{"missing":{"x":-1.5,"y":0.0}},
+            "sizes":{"missing":{"width":240.0,"height":200.0}},
+            "edges":{"missing-edge":{"points":[{"x":520.0,"y":330.0},{"x":520.0,"y":120.0}]}}}"""
+        val decoded = DocumentCodec.decodeLayout(source, "test.layout.json")
+        assertThat(decoded).isInstanceOf(DecodeResult.Ok::class.java)
+        val encoded = DocumentCodec.encodeLayout((decoded as DecodeResult.Ok).value)
+        assertThat(Json.parseToJsonElement(encoded)).isEqualTo(Json.parseToJsonElement(source))
+        assertThat(DocumentCodec.decodeLayout(encoded, "test.layout.json")).isEqualTo(decoded)
+        assertThat(DocumentCodec.decodeLayout("""{"schemaVersion":2}""", "test.layout.json"))
+            .isInstanceOf(DecodeResult.Ok::class.java)
+    }
+
+    @Test
+    fun `old layout reports version before obsolete shape`() {
+        val decoded = DocumentCodec.decodeLayout("""{"schemaVersion":1,"oldShape":true}""", "old.layout.json")
+        val diagnostic = (decoded as DecodeResult.Failed).diagnostics.single()
+        assertThat(diagnostic.code to diagnostic.pointer).isEqualTo("SCHEMA_VERSION" to "/schemaVersion")
+        assertThat(diagnostic.args).containsEntry("expected", JsonPrimitive(2))
+    }
+
+    @Test
+    fun `layout sizes must be finite and positive`() {
+        for (value in listOf("0", "-1", "1e400", "\"NaN\"", "\"Infinity\"")) {
+            for (dimensions in listOf("\"width\":$value,\"height\":1", "\"width\":1,\"height\":$value")) {
+                val decoded =
+                    DocumentCodec.decodeLayout(
+                        """{"schemaVersion":2,"sizes":{"a":{$dimensions}}}""",
+                        "test.layout.json",
+                    )
+                assertThat(decoded).describedAs(dimensions).isInstanceOf(DecodeResult.Failed::class.java)
+                assertThat((decoded as DecodeResult.Failed).diagnostics.single().code).isNotEqualTo("SCHEMA_VERSION")
+            }
+        }
+    }
+
+    @Test
+    fun `layout bends accept fifty finite points and reject fifty one`() {
+        for (count in listOf(0, 50, 51)) {
+            val points = List(count) { """{"x":-1,"y":2}""" }.joinToString(",")
+            val decoded =
+                DocumentCodec.decodeLayout(
+                    """{"schemaVersion":2,"edges":{"edge":{"points":[$points]}}}""",
+                    "test.layout.json",
+                )
+            assertThat(decoded)
+                .describedAs("$count points")
+                .isInstanceOf(if (count <= 50) DecodeResult.Ok::class.java else DecodeResult.Failed::class.java)
+        }
+        for (coordinates in listOf("\"x\":1e400,\"y\":0", "\"x\":0,\"y\":1e400", "\"x\":\"NaN\",\"y\":0")) {
+            val decoded =
+                DocumentCodec.decodeLayout(
+                    """{"schemaVersion":2,"edges":{"edge":{"points":[{$coordinates}]}}}""",
+                    "test.layout.json",
+                )
+            assertThat(decoded).describedAs(coordinates).isInstanceOf(DecodeResult.Failed::class.java)
+            assertThat((decoded as DecodeResult.Failed).diagnostics.single().code).isNotEqualTo("SCHEMA_VERSION")
+        }
+    }
+
+    @Test
     fun `experiment three preserves optional variant descriptions verbatim`() {
         val description = "  Другая реплика\nИсточник: https://example.org/  "
         val source = """{"schemaVersion":3,"modelRef":"m.model.json",
@@ -42,7 +103,7 @@ class DocumentCodecTest {
     }
 
     @Test
-    fun `reads experiment faults and keeps layout at version one`() {
+    fun `reads experiment faults and keeps layout at version two`() {
         val text =
             """{"schemaVersion":3,"modelRef":"m.model.json",
               "execution":{"replications":1,"warmup":"0ms","measurement":"1s","seed":1},
@@ -61,7 +122,7 @@ class DocumentCodecTest {
         assertThat(experiment.faults).hasSize(5)
         assertThat(DocumentCodec.decodeExperiment(DocumentCodec.encodeExperiment(experiment), "e.experiment.json"))
             .isEqualTo(decoded)
-        assertThat(DocumentCodec.decodeLayout("""{"schemaVersion":1,"positions":{}}""", "l.layout.json"))
+        assertThat(DocumentCodec.decodeLayout("""{"schemaVersion":2,"positions":{}}""", "l.layout.json"))
             .isInstanceOf(DecodeResult.Ok::class.java)
         val old = DocumentCodec.decodeExperiment("""{"schemaVersion":1,"oldShape":true}""", "old.experiment.json")
         val diagnostic = (old as DecodeResult.Failed).diagnostics.single()
@@ -177,7 +238,7 @@ class DocumentCodecTest {
                 execution = ExecutionSettings(replications = 2, warmup = "0ms", measurement = "1s", seed = 7),
                 variants = listOf(Variant(id = "baseline")),
             )
-        val layout = LayoutFile(schemaVersion = 1, positions = mapOf("a" to Position(0.0, 100.0)))
+        val layout = LayoutFile(schemaVersion = 2, positions = mapOf("a" to Position(0.0, 100.0)))
 
         val decodedExperiment = DocumentCodec.decodeExperiment(DocumentCodec.encodeExperiment(experiment), "e.experiment.json")
         val decodedLayout = DocumentCodec.decodeLayout(DocumentCodec.encodeLayout(layout), "l.layout.json")

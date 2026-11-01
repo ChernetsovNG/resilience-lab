@@ -459,6 +459,8 @@ select {
   background: #fffbeb;
 }
 
+.react-flow__node-block { min-width: min-content; min-height: min-content; }
+
 .block-node { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3.2px; min-width: 0; }
 .block-shape {
   --node-fill: #fff;
@@ -487,6 +489,18 @@ select {
 .block-node--router .inline-param-value, .block-node--router .inline-param-current { flex: none; min-width: 24px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: inherit; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .block-node--router .inline-param-editor { flex: 1; min-width: 0; }
 .block-node--router .inline-param-editor select { width: 100%; min-width: 0; }
+/* Keep the help button in its own track; reserve every localized policy value. */
+.block-node--router .block-summary > span { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.block-node--router .inline-param { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.block-node--router .inline-param > :not(.inline-param-model) { grid-area: 1 / 1; }
+.block-node--router .inline-param-model { grid-area: 2 / 1; }
+.block-node--router .inline-param-editor { contain: inline-size; }
+.block-node--router .block-node-header { contain: inline-size; }
+.inline-param-sizing { display: grid; grid-template-columns: minmax(0, 1fr); visibility: hidden; pointer-events: none; }
+.block-node--router .inline-param-sizing { font-size: inherit; }
+.inline-param-sizing > span { grid-area: 1 / 1; padding: 0 1.6px; min-height: var(--control-height); }
+.block-node--router .inline-param-sizing > span { font-size: inherit; white-space: normal; overflow-wrap: anywhere; }
+.inline-param-sizing > span::after { content: attr(data-value); }
 .block-node-header { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .block-node .block-node-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-size: inherit; }
 .block-node .block-type-icon { display: inline-flex; flex: 0 0 18px; color: inherit; }
@@ -1669,3 +1683,23 @@ select {
 .policy-menu > button > span { display: block; color: #52606d; font-size: var(--font-secondary); }
 .policy-editor .request-type-options { display: grid; grid-template-columns: minmax(0, 1fr); }
 .policy-editor .request-type-options label { min-width: 0; overflow-wrap: anywhere; }
+
+/* Edge controls sit above labels so a longest-segment midpoint remains draggable. */
+.canvas-edge-handle {
+  position: absolute;
+  z-index: 2;
+  width: var(--port-hit-size, 12px);
+  height: var(--port-hit-size, 12px);
+  min-width: 0;
+  padding: 0;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: all;
+  touch-action: none;
+}
+/* Keep the focused parameter above handles throughout its double-click/edit gesture. */
+.canvas-edge-label:has(.inline-param:focus-within) { z-index: 3; }
+.canvas-edge-handle--bend { border-radius: 2px; }
+.canvas-edge-handle:focus-visible { outline: 2px solid #0f172a; outline-offset: 2px; }
+.canvas-edge-edit-limit { position: absolute; z-index: 3; padding: 4px 8px; background: #fff; color: #b91c1c; }

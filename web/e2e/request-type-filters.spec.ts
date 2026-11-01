@@ -45,7 +45,7 @@ for (const language of ["en", "ru"] as const) {
         "mobile-app": { x: 0, y: 160 }, "api-gateway": { x: 260, y: 160 }, "order-router": { x: 540, y: 160 },
         "order-service": { x: 820, y: 0 }, "order-service-v2": { x: 820, y: 360 }, "payment-service": { x: 1120, y: 0 },
       };
-      await writeFile(resolve(root, "retry-storm.layout.json"), JSON.stringify({ schemaVersion: 1, positions }));
+      await writeFile(resolve(root, "retry-storm.layout.json"), JSON.stringify({ schemaVersion: 2, sizes: {}, edges: {}, positions }));
       await page.goto("/");
       await selectExperiment(page, `${directory}/retry-storm.experiment.json`);
       const inspector = page.getByRole("complementary", { name: ru ? "Инспектор" : "Inspector", exact: true });

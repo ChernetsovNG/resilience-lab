@@ -168,15 +168,20 @@ export async function dragConnection(source: Locator, target: Locator, options: 
   await dragCanvas(source, target, options);
 }
 
-/** Moves from the stable header center by a screen-pixel delta (or a delta derived from stable rectangles). */
-export async function dragNode(node: Locator, delta: Point | ((header: Rect, canvas: Rect) => Point)): Promise<void> {
-  await dragCanvas(node.locator(".block-node > strong"), node.page().locator(".react-flow"), {
-    targetPosition: (header, canvas) => {
-      const offset = typeof delta === "function" ? delta(header, canvas) : delta;
-      return { x: header.x + header.width / 2 + offset.x - canvas.x,
-        y: header.y + header.height / 2 + offset.y - canvas.y };
+/** Moves a canvas control from its stable center by a screen-pixel delta. */
+export async function dragByOffset(control: Locator, delta: Point | ((control: Rect, canvas: Rect) => Point)): Promise<void> {
+  await dragCanvas(control, control.page().locator(".react-flow"), {
+    targetPosition: (source, canvas) => {
+      const offset = typeof delta === "function" ? delta(source, canvas) : delta;
+      return { x: source.x + source.width / 2 + offset.x - canvas.x,
+        y: source.y + source.height / 2 + offset.y - canvas.y };
     },
   });
+}
+
+/** Moves from the stable header center by a screen-pixel delta (or a delta derived from stable rectangles). */
+export async function dragNode(node: Locator, delta: Point | ((header: Rect, canvas: Rect) => Point)): Promise<void> {
+  await dragByOffset(node.locator(".block-node > strong"), delta);
 }
 
 /** Drops a palette block at a position relative to the stable canvas; beforeDrop runs with the mouse held. */

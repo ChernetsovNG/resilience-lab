@@ -1,4 +1,9 @@
 {
+  "editor.canvas.moveSegment": "Сдвинуть отрезок {index} связи {id}",
+  "editor.canvas.moveBend": "Переместить излом {index} связи {id}",
+  "editor.canvas.resetEdge": "Восстановить автоматический путь",
+  "editor.canvas.edgePointLimit": "В пути может быть не больше 50 точек. Изменение не применено.",
+  "editor.canvas.resetSize": "Сбросить размер",
   "results.entries.context": "{variant} · {point}",
   "results.entries.byClients": "По клиентам",
   "results.entries.byRequestTypes": "По видам запросов",

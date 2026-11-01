@@ -193,7 +193,11 @@ export function deleteElements(selection: string[]): EditorCommand {
           .map(([id, block]) => [id, scenarioReferences(block, mapId)])),
         connections: documents.model.connections.filter((edge) => !removed.has(edge.id)),
       },
-      layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).filter(([id]) => !removed.has(id))) },
+      layout: { ...documents.layout,
+        positions: Object.fromEntries(Object.entries(documents.layout.positions).filter(([id]) => !removed.has(id))),
+        sizes: Object.fromEntries(Object.entries(documents.layout.sizes).filter(([id]) => !removed.has(id))),
+        edges: Object.fromEntries(Object.entries(documents.layout.edges).filter(([id]) => !removed.has(id))),
+      },
       experiment: experimentReferences(documents.experiment, mapId),
     };
   };
@@ -227,13 +231,22 @@ export function renameElement(id: string, next: string): EditorCommand {
       used.add(renamed);
       ids.set(edge.id, renamed);
     }
+    // Authored entries win over stale metadata already stored at a destination id.
+    const renameManualEntries = <T,>(entries: Record<string, T>) => Object.fromEntries([
+      ...Object.entries(entries).filter(([key]) => !ids.has(key)),
+      ...Object.entries(entries).filter(([key]) => ids.has(key)).map(([key, value]) => [mapId(key), value]),
+    ]);
     return {
       ...documents,
       model: { ...documents.model,
         blocks: Object.fromEntries(Object.entries(documents.model.blocks).map(([key, value]) => [mapId(key), scenarioReferences(value, mapId)])),
         connections: documents.model.connections.map((edge) => ({ ...edge, id: mapId(edge.id), from: mapId(edge.from), to: mapId(edge.to) })),
       },
-      layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).map(([key, value]) => [mapId(key), value])) },
+      layout: { ...documents.layout,
+        positions: Object.fromEntries(Object.entries(documents.layout.positions).map(([key, value]) => [mapId(key), value])),
+        sizes: renameManualEntries(documents.layout.sizes),
+        edges: renameManualEntries(documents.layout.edges),
+      },
       experiment: experimentReferences(documents.experiment, mapId),
     };
   };
@@ -248,10 +261,56 @@ export function moveBlocks(positions: Record<string, Position>): EditorCommand {
   } });
 }
 
+/** A resize, including a left/top origin change, is one editor operation. */
+export function resizeBlock(id: string, position: Position, size: { width: number; height: number }): EditorCommand {
+  return documents => {
+    if (!Object.hasOwn(documents.model.blocks, id) || !Number.isFinite(position.x) || !Number.isFinite(position.y)
+      || !Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width <= 0 || size.height <= 0) return documents;
+    return { ...documents, layout: { ...documents.layout,
+      positions: { ...documents.layout.positions, [id]: { ...position } },
+      sizes: { ...documents.layout.sizes, [id]: { ...size } },
+    } };
+  };
+}
+
+/** Removes only the authored size; the next render measures automatic content again. */
+export function resetBlockSize(id: string): EditorCommand {
+  return documents => {
+    if (!Object.hasOwn(documents.layout.sizes, id)) return documents;
+    const sizes = { ...documents.layout.sizes };
+    delete sizes[id];
+    return { ...documents, layout: { ...documents.layout, sizes } };
+  };
+}
+
+/** Stores finite authored anchors only; an oversized gesture is rejected as a whole. */
+export function setEdgePoints(id: string, points: readonly Position[]): EditorCommand {
+  const anchors = points.map(point => ({ ...point }));
+  return documents => {
+    if (!documents.model.connections.some(edge => edge.id === id) || anchors.length > 50
+      || anchors.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return documents;
+    if (anchors.length === 0) return resetEdgePoints(id)(documents);
+    const previous = ownEntry(documents.layout.edges, id)?.points;
+    if (previous?.length === anchors.length && previous.every((point, index) => point.x === anchors[index].x && point.y === anchors[index].y)) return documents;
+    return { ...documents, layout: { ...documents.layout, edges: { ...documents.layout.edges, [id]: { points: anchors } } } };
+  };
+}
+
+/** Restores the automatic route without changing connection parameters. */
+export function resetEdgePoints(id: string): EditorCommand {
+  return documents => {
+    if (!Object.hasOwn(documents.layout.edges, id)) return documents;
+    const edges = { ...documents.layout.edges };
+    delete edges[id];
+    return { ...documents, layout: { ...documents.layout, edges } };
+  };
+}
+
 export interface ClipboardFragment {
   blocks: ModelFile["blocks"];
   connections: ModelFile["connections"];
   positions: LayoutFile["positions"];
+  sizes: LayoutFile["sizes"];
 }
 
 /** Snapshots selected blocks and all connections internal to them, including annotations. */
@@ -260,6 +319,7 @@ export function copySelection(documents: EditorDocuments, selection: string[]): 
   const blocks = Object.fromEntries(Object.entries(documents.model.blocks).filter(([id]) => selected.has(id)));
   return structuredClone({
     blocks,
+    sizes: Object.fromEntries(Object.entries(documents.layout.sizes).filter(([id]) => selected.has(id))),
     connections: documents.model.connections.filter((edge) => Object.hasOwn(blocks, edge.from) && Object.hasOwn(blocks, edge.to)),
     positions: Object.fromEntries(Object.keys(blocks).map((id) => [id, positionOf(documents.model, documents.layout, id)])),
   });
@@ -285,7 +345,9 @@ export function pasteSelection(fragment: ClipboardFragment, offset = 40, gridSte
           .map(([id, block]) => [ids.get(id)!, scenarioReferences(structuredClone(block), (id) => connectionIds.get(id) ?? null)])) },
         connections: [...documents.model.connections, ...connections],
       },
-      layout: { ...documents.layout, positions: { ...documents.layout.positions, ...Object.fromEntries(Object.entries(fragment.positions)
+      layout: { ...documents.layout,
+        sizes: { ...documents.layout.sizes, ...Object.fromEntries(Object.entries(fragment.sizes).map(([id, size]) => [ids.get(id)!, { ...size }])) },
+        positions: { ...documents.layout.positions, ...Object.fromEntries(Object.entries(fragment.positions)
         .map(([id, point]) => [ids.get(id)!, gridPosition({ x: point.x + offset, y: point.y + offset }, gridStep, snapToGrid)])) } },
     };
   };

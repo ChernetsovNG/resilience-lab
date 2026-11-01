@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockGeometry, minimumBlockHeight } from "./blockGeometry";
+import { blockGeometry, minimumBlockHeight, minimumRouterDiameter } from "./blockGeometry";
 
 const sizes = [[150, 220], [192, 240], [300, 400], [300, 160]] as const;
 
@@ -87,4 +87,18 @@ it("draws two replica back edges and uses the front card for content and ports",
 
 it("keeps an unknown block type in the same rounded card as a service", () => {
   expect(blockGeometry("worker", 192, 160)).toEqual(blockGeometry("service", 192, 160));
+});
+
+it("fits extra metric rows inside the router content rectangle", () => {
+  const height = minimumBlockHeight("router", 144, 160);
+  expect(blockGeometry("router", height, height).content.height).toBeGreaterThanOrEqual(160);
+});
+
+it.each([[140, 50], [95, 80], [160, 60]])("fits both intrinsic router dimensions %s × %s", (width, height) => {
+  const diameter = minimumRouterDiameter(width, height);
+  const { content } = blockGeometry("router", diameter, diameter, 1, { width, height });
+  expect(content.width).toBeGreaterThanOrEqual(width);
+  expect(content.height).toBeGreaterThanOrEqual(height);
+  expect(Math.hypot(content.width, content.height)).toBeLessThan(diameter - 2);
+  expect(content.x).toBeGreaterThanOrEqual(8);
 });
