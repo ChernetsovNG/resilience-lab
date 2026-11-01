@@ -1,13 +1,20 @@
 import { expect, it } from "vitest";
 import { axisTicks, bandPath, linearScale, sampleBand, samplePoints, stepPath, yDomain } from "./data";
-import { colorForKey, seriesColor, timelineColor } from "./palette";
+import { chartSeriesColors, colorForKey, seriesColor, timelineColor, timelineSeriesColors } from "./palette";
 
-it("scales numeric domains, retains endpoints and produces readable ticks", () => {
+it("scales numeric domains and produces readable ticks", () => {
   const scale = linearScale([10, 30], [100, 300]);
   expect([scale(10), scale(20), scale(30)]).toEqual([100, 200, 300]);
-  expect(axisTicks([0, 70], 6)).toEqual([0, 20, 40, 60, 70]);
   expect(axisTicks([0, 0.3], 4)).toEqual([0, 0.1, 0.2, 0.3]);
   expect(axisTicks([4, 4], 5)).toEqual([4]);
+});
+
+it.each([
+  { domain: [0, 70] as const, count: 6, ticks: [0, 20, 40, 60] },
+  { domain: [0, 50] as const, count: 5, ticks: [0, 20, 40] },
+  { domain: [19, 70] as const, count: 6, ticks: [20, 40, 60] },
+])("omits crowded endpoint labels for $domain", ({ domain, count, ticks }) => {
+  expect(axisTicks(domain, count)).toEqual(ticks);
 });
 
 it("includes thresholds and range extrema in automatic Y scales, with finite empty and constant domains", () => {
@@ -61,8 +68,38 @@ it("assigns colors by stable identity or experiment position, independently of v
   expect(seriesColor({ ...gateway, elementId: "another" }, "variant")).toBe(seriesColor(gateway, "variant"));
   expect(seriesColor(gateway, "variant")).not.toBe(seriesColor(dependency, "variant"));
   expect(colorForKey("gateway")).toBe(colorForKey("gateway"));
-  expect(timelineColor("gateway", "offeredPerSecond", false)).not.toBe(timelineColor("gateway-to-middle", "sentAttemptsPerSecond", false));
+  const assigned = timelineSeriesColors([
+    { id: "gateway", color: timelineColor("gateway", "offeredPerSecond", false) },
+    { id: "gateway-to-middle", color: timelineColor("gateway-to-middle", "sentAttemptsPerSecond", false) },
+  ]);
+  expect(assigned.get("gateway")).not.toBe(assigned.get("gateway-to-middle"));
   const primary = ["gateway", "dependency"].map(id => timelineColor(id, "utilization", false));
   const comparison = ["gateway", "dependency"].map(id => timelineColor(id, "utilization", true));
   expect(primary.some(color => comparison.includes(color))).toBe(false);
+});
+
+it("keeps assigned colors when a new series has an unused preference, even if its ID sorts first", () => {
+  const series = [{ id: "node-2", elementId: "node-2" }, { id: "node-3", elementId: "node-3" }];
+  const before = chartSeriesColors(series, "element");
+  const after = chartSeriesColors([{ id: "before", elementId: "node-6" }, ...series], "element");
+  expect(after.get("before")).not.toBe(before.get("node-2"));
+  expect(after.get("before")).not.toBe(before.get("node-3"));
+  expect(after.get("node-2")).toBe(before.get("node-2"));
+  expect(after.get("node-3")).toBe(before.get("node-3"));
+});
+
+it("keeps variant colors tied to experiment position and honors explicit overrides", () => {
+  const series = [
+    { id: "a", variantIndex: 2 }, { id: "b", variantIndex: 2 }, { id: "c", variantIndex: 3 }, { id: "d", color: "#123456" },
+  ];
+  const assigned = chartSeriesColors(series, "variant");
+  expect(assigned.get("a")).toBe(assigned.get("b"));
+  expect(assigned.get("c")).not.toBe(assigned.get("a"));
+  expect(assigned.get("d")).toBe("#123456");
+});
+
+it.each(["#2563eb", "#2563EB", "rgb(37, 99, 235)"])("reserves an equivalent explicit CSS color %s", color => {
+  const assigned = chartSeriesColors([{ id: "explicit", color }, { id: "auto", elementId: "node-8" }], "element");
+  expect(assigned.get("explicit")).toBe(color);
+  expect(assigned.get("auto")).not.toBe("#2563eb");
 });

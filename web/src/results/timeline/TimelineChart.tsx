@@ -2,7 +2,7 @@ import { t } from "../../i18n";
 import { formatNumber, formatPercent } from "../../i18n/format";
 import { useMemo } from "react";
 import { Chart } from "../chart/Chart";
-import { chartColors } from "../chart/palette";
+import { chartColors, timelineSeriesColors } from "../chart/palette";
 import type { ChartOverlay, ChartSeries } from "../chart/types";
 import { replicaBand, type TimelineRegion, type TimelineMetricValues } from "./data";
 import type { PolicyState } from "../policyState";
@@ -15,6 +15,7 @@ export interface TimelineLine {
   replication: number;
   metric: keyof TimelineMetricValues;
   scale: number;
+  /** Preferred key color; visible series resolve collisions within this chart. */
   color: string;
   comparison: boolean;
   windows: readonly TimelineMetricValues[];
@@ -50,16 +51,19 @@ interface TimelineChartProps {
 
 /** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
 export function TimelineChart({ title, unit, lines, bands = [], regions, thresholds = [], endMs, windowMs, axisId }: TimelineChartProps) {
-  const series = useMemo((): ChartSeries[] => lines.map(line => ({
-    id: line.id, label: line.label, elementId: line.elementId, outputId: line.metric,
-    variantId: line.variantId, replication: line.replication,
-    color: line.color, dash: line.comparison ? "dashed" : "solid", marker: unit === "ms" ? line.comparison ? "square" : "circle" : undefined,
-    // Close each defined segment at the end of its last window, including isolated values before a gap.
-    points: line.windows.map((metrics, window) => ({ window, x: metrics.startMs, endX: metrics.startMs + metrics.durationMs,
-      value: metrics[line.metric] == null ? null : metrics[line.metric]! * line.scale })),
-    range: line.range === undefined ? undefined : replicaBand(line.windows, line.range, line.scale, Infinity)
-      .map(point => ({ window: point.window, x: point.startMs, range: point.range })),
-  })), [lines, unit]);
+  const series = useMemo((): ChartSeries[] => {
+    const colors = timelineSeriesColors(lines);
+    return lines.map(line => ({
+      id: line.id, label: line.label, elementId: line.elementId, outputId: line.metric,
+      variantId: line.variantId, replication: line.replication,
+      color: colors.get(line.id), dash: line.comparison ? "dashed" : "solid", marker: unit === "ms" ? line.comparison ? "square" : "circle" : undefined,
+      // Close each defined segment at the end of its last window, including isolated values before a gap.
+      points: line.windows.map((metrics, window) => ({ window, x: metrics.startMs, endX: metrics.startMs + metrics.durationMs,
+        value: metrics[line.metric] == null ? null : metrics[line.metric]! * line.scale })),
+      range: line.range === undefined ? undefined : replicaBand(line.windows, line.range, line.scale, Infinity)
+        .map(point => ({ window: point.window, x: point.startMs, range: point.range })),
+    }));
+  }, [lines, unit]);
   const overlays: ChartOverlay[] = [
     ...regions.map((region, index): ChartOverlay => ({ kind: "region", id: region.kind + ":" + index, role: region.kind,
       from: region.fromMs, to: region.toMs, label: region.label })),

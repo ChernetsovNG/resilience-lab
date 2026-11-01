@@ -3,7 +3,7 @@ import { t } from "../../i18n";
 import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../../i18n/format";
 import { observeResize } from "../../layout/observeResize";
 import { axisTicks, bandPath, linearScale, sampleBand, samplePoints, stepPath, windowAt, yDomain } from "./data";
-import { chartColors, seriesColor } from "./palette";
+import { chartColors, chartSeriesColors } from "./palette";
 import { useChartCursor } from "./useChartCursor";
 import type { ChartDash, ChartDescription, ChartOverlay } from "./types";
 
@@ -16,6 +16,7 @@ const formatValue = (value: number | null, unit: string): string => value === nu
 /** One SVG plot geometry drives axes, sampled paths and pointer coordinates in both presets. */
 export function Chart({ description, className = "" }: { description: ChartDescription; className?: string }) {
   const { title, unit, x: axis, series, overlays = [], preset = "full" } = description;
+  const colors = useMemo(() => chartSeriesColors(series, description.colorBy ?? "element"), [series, description.colorBy]);
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const clipId = useId();
@@ -109,7 +110,7 @@ export function Chart({ description, className = "" }: { description: ChartDescr
             x={x(region.from)} width={x(region.to) - x(region.from)} y={plot.top} height={plotBottom - plot.top}
             fill={chartColors[region.role]} opacity={0.14}><title>{region.label}</title></rect>)}
           {sampled.map(line => {
-            const color = line.color ?? seriesColor(line, description.colorBy ?? "element");
+            const color = colors.get(line.id)!;
             return <g key={line.id} data-series={line.id}>
               {line.range.length === 0 ? null : <path className="chart-range" d={bandPath(line.range, x, y)} fill={color} fillOpacity={0.14}
                 stroke={color} strokeOpacity={0.35} strokeDasharray={dashArray(line.dash)} />}
@@ -157,7 +158,7 @@ export function Chart({ description, className = "" }: { description: ChartDescr
         const range = line.range?.find(point => point.window === active)?.range;
         return <div key={line.id}>
           <dt><span className={`chart-line-key${line.dash === "dashed" ? " chart-line-key--dashed" : ""}${line.marker === undefined ? "" : ` chart-line-key--${line.marker}`}`}
-            style={{ borderColor: line.color ?? seriesColor(line, description.colorBy ?? "element"), borderTopStyle: line.dash === "dashed" ? "dashed" : line.dash === "dotted" ? "dotted" : "solid" }} />{line.label}</dt>
+            style={{ borderColor: colors.get(line.id), borderTopStyle: line.dash === "dashed" ? "dashed" : line.dash === "dotted" ? "dotted" : "solid" }} />{line.label}</dt>
           <dd>{formatValue(point?.value ?? null, unit)}{line.range === undefined ? null : <span className="chart-range-readout">{t("results.timeline.replicaRange", {
             min: formatValue(range?.[0] ?? null, unit), max: formatValue(range?.[1] ?? null, unit),
           })}</span>}</dd>

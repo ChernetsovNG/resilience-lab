@@ -96,7 +96,7 @@ test.describe("readable checkout answer", () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole("tab", { name: "Таймлайн", exact: true }).click();
     await expect(page.locator(".chart-axis").first()).toHaveText("Время симуляции (с)");
-    await expect(page.locator(".timeline-chart").first().getByText("70", { exact: true })).toBeVisible();
+    await expect(page.locator(".timeline-chart").first().locator(".chart-x-tick").last()).toHaveText("60");
     await page.screenshot({ path: testInfo.outputPath("checkout-timeline.png") });
   });
 

@@ -12,7 +12,7 @@ function tickStep(span: number, count: number) {
   return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude;
 }
 
-/** Numeric ticks include exact domain endpoints, including short final windows. */
+/** Numeric ticks omit a domain endpoint when its neighbor is at most half a step away. */
 export function axisTicks([min, max]: readonly [number, number], count = 6): number[] {
   if (min === max) return [min];
   const step = tickStep(max - min, count - 1);
@@ -24,7 +24,8 @@ export function axisTicks([min, max]: readonly [number, number], count = 6): num
     if (value > min + step * 1e-9) ticks.push(value);
   }
   ticks.push(max);
-  return ticks;
+  return ticks.length <= 2 ? ticks : ticks.filter((value, index) => index === 0 ? ticks[1] - value > step * (0.5 + 1e-9)
+    : index === ticks.length - 1 ? value - ticks[index - 1] > step * (0.5 + 1e-9) : true);
 }
 
 export function yDomain(values: Iterable<number | null>, scale: ChartYScale = { scale: "zero" }): [number, number] {

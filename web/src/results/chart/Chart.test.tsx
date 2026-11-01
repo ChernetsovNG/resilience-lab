@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Chart } from "./Chart";
 import { ChartCursorProvider } from "./ChartCursor";
 import type { ChartDescription } from "./types";
+import { TimelineChart } from "../timeline/TimelineChart";
+import { timelineColor } from "./palette";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -21,6 +23,28 @@ const description: ChartDescription = {
     { kind: "state", id: "breaker", label: "Breaker open", color: "#b91c1c",
       points: [{ x: 0, endX: 10, window: 0, value: 0.5, description: "Open half of window" }] }],
 };
+
+const colorIds = ["node-2", "node-68", "node-79", "node-3", "node-69", "node-78"];
+
+it.each([2, 6])("gives %i automatic chart series distinct colors in paths and legends", count => {
+  const series = colorIds.slice(0, count).map(id => ({ ...description.series[0], id, label: id, elementId: id, color: undefined }));
+  const view = render(<Chart description={{ ...description, series, overlays: [] }} />);
+  const strokes = () => [...view.container.querySelectorAll(".chart-line")].map(line => line.getAttribute("stroke"));
+  const colors = strokes();
+  expect(new Set(colors).size).toBe(count);
+  expect(new Set([...view.container.querySelectorAll<HTMLElement>(".chart-line-key")].map(key => key.style.borderColor)).size).toBe(count);
+  view.rerender(<Chart description={{ ...description, series: [...series].reverse(), overlays: [] }} />);
+  expect(strokes()).toEqual([...colors].reverse());
+});
+
+it.each([2, 6])("gives %i Timeline series distinct colors despite colliding key preferences", count => {
+  const lines = colorIds.slice(0, count).map(id => ({ id, label: id, elementId: id, variantId: "baseline", replication: 0,
+    metric: "value", scale: 1, comparison: false, color: timelineColor(id, "value", false),
+    windows: [{ startMs: 0, durationMs: 25, value: 1 }] }));
+  const { container } = render(<TimelineChart title="Queue" unit="requests" lines={lines} regions={[]}
+    endMs={25} windowMs={10} axisId="time:run-1" />);
+  expect(new Set([...container.querySelectorAll(".chart-line")].map(line => line.getAttribute("stroke"))).size).toBe(count);
+});
 
 function Harness({ compact = false }: { compact?: boolean }) {
   const [hoverWindow, onHover] = useState<number | null>(null);
