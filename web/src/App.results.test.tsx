@@ -12,13 +12,16 @@ describe("diagram results", () => {
   it("shows summary metrics only on a variant, while toggling preserves documents and history", async () => {
     const fetchMock = server();
     await open();
+    expect(screen.queryByRole("button", { name: "Show: Baseline" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
     expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     fireEvent.click(button("Run"));
     await screen.findByRole("table", { name: "Findings" });
     expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show: Baseline" }));
+    expect(screen.getByRole("tab", { name: "Baseline" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Show: Baseline" })).toBeNull();
     const region = screen.getByRole("region", { name: "Results context" });
     expect(region.textContent).toContain("Summary");
     const metrics = await screen.findByTestId("canvas-results-gateway");
@@ -46,9 +49,25 @@ describe("diagram results", () => {
     expect(within(region).queryByText("Results belong to a previous document version.")).toBeNull();
     expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText("Node overlay"), { target: { value: "off" } });
     fireEvent.click(screen.getByRole("tab", { name: "Model" }));
     expect(screen.queryByRole("region", { name: "Results context" })).toBeNull();
     expect(screen.queryByTestId("canvas-results-gateway")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show: Baseline" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show: Baseline" }));
+    expect(screen.getByTestId("canvas-results-gateway")).toBeTruthy();
+  });
+
+  it("blocks the Model results shortcut while an invalid field draft is open", async () => {
+    server();
+    await open();
+    fireEvent.click(button("Run"));
+    await screen.findByRole("table", { name: "Findings" });
+    await selectGateway();
+    editHandlers("not-a-number");
+    expect(button("Show: Baseline").disabled).toBe(true);
+    fireEvent.click(button("Show: Baseline"));
+    expect(screen.getByRole("tab", { name: "Model" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("shares the selected grid point, follows variants and takes the badge from the summary", async () => {

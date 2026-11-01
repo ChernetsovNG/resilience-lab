@@ -116,6 +116,8 @@
   "app.canvas.closeModelInfoSymbol": "×",
   "app.canvas.loading": "Загрузка рабочей области…",
   "app.canvas.results": "Контекст результатов",
+  "app.canvas.modelResultsHint": "Результаты — на вкладке варианта",
+  "app.canvas.openVariantResults": "Показать: {variant}",
   "app.canvas.showResults": "Показать результаты на схеме",
   "app.canvas.stale": "Результаты относятся к предыдущей версии документов.",
   "app.canvas.summaryContext": "Итог · {variant} · {pointId} · интервал измерения",

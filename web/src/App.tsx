@@ -52,6 +52,7 @@ export function App() {
   const workspace = useWorkspace(health.reportFailure, health.reportSuccess);
   const { confirm, confirmDocumentSwitch, confirmationDialog } = useConfirmation();
   const canvas = useRef<CanvasHandle>(null);
+  const focusCanvasElement = useCallback((id: string, page: string | null) => canvas.current?.focusElement(id, page), []);
   const fileMenu = useRef<FileMenuHandle>(null);
   const run = useRun();
   const [runPending, setRunPending] = useState(false);
@@ -185,6 +186,7 @@ export function App() {
   });
   const diagramResults = results.selection.window === null ? summaryDiagramResults : playback.frame;
   const resultVariantId = variantId ?? summary?.variants[0]?.id;
+  const diagramVariant = variants.find(candidate => candidate.id === resultVariantId);
   const resultPoint = summary?.variants.find(candidate => candidate.id === resultVariantId)?.points.find(point => point.id === selectedPointId);
   const resultGroups = resultPoint?.aggregate.groups ?? [];
   const member = results.selection.replicaId == null ? null : replicaMember(resultGroups, results.selection.replicaId);
@@ -203,6 +205,7 @@ export function App() {
     if (current === undefined) return;
     if (variantId === null && resultVariantId !== undefined) selectVariant(resultVariantId);
     setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null);
+    focusCanvasElement(current[0], variantId ?? resultVariantId ?? null);
     results.select({ replicaId: replica?.instance.id ?? null });
     setInspectorRequest(current => current + 1);
   };
@@ -211,7 +214,6 @@ export function App() {
     runModel: resultDocuments.model, currentModel: loaded.model, experiment: resultDocuments.experiment,
     catalog, variantId: variant.id, pointId: selectedPointId, replication: results.selection.replication,
     window: results.selection.window, selected: selectedReplica?.id ?? selected,
-    onSelectReplica: selectResultElement,
     onShowTimeline: () => {
       setSelection([selected]);
       setResultsSize("normal"); setTimelineRequest(current => current + 1);
@@ -540,7 +542,7 @@ export function App() {
             resultsOnly={analysis}
             variantChanges={variant === undefined ? undefined : <VariantChanges model={loaded.model} catalog={catalog}
               overrides={overrides} disabled={invalid || loading} onSelect={selectVariantChange} />}
-            results={elementResults === null ? null : <ElementResults {...elementResults} />}
+            results={elementResults === null ? null : <ElementResults {...elementResults} onSelectReplica={selectResultElement} />}
             resultsFirst={launchDocuments !== null && elementResults !== null && elementResults.manifest.complete && hasElementResults(elementResults)}
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
@@ -646,6 +648,15 @@ export function App() {
               onModelPage={() => { if (!invalid) { setAnalysis(false); selectVariant(null); setFieldFocus(null); } }}
               layout={loaded.layout}
               key={loaded.experimentPath}
+              modelResultsHint={!ownRun || summary === null || variant !== undefined || diagramVariant === undefined ? null : <>
+                <span>{t("app.canvas.modelResultsHint")}</span>
+                <button type="button" disabled={invalid || !editable}
+                  title={t("app.canvas.openVariantResults", { variant: variantLabel(diagramVariant, variants) })}
+                  onClick={() => {
+                    selectVariant(diagramVariant.id); setFieldFocus(null);
+                    setNodeMetric(current => current === "off" ? "utilization" : current);
+                  }}>{t("app.canvas.openVariantResults", { variant: variantLabel(diagramVariant, variants) })}</button>
+              </>}
               modelInfo={<ModelInfo key={loaded.modelPath} modelPath={loaded.modelPath} model={loaded.model} experiment={loaded.experiment}
                 notesDisabled={invalid || loading} onFullNotes={() => {
                   setAnalysis(false);

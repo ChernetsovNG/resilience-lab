@@ -116,6 +116,8 @@
   "app.canvas.closeModelInfoSymbol": "×",
   "app.canvas.loading": "Loading workspace…",
   "app.canvas.results": "Results context",
+  "app.canvas.modelResultsHint": "Results are on the variant tab",
+  "app.canvas.openVariantResults": "Show: {variant}",
   "app.canvas.showResults": "Show results on diagram",
   "app.canvas.stale": "Results belong to a previous document version.",
   "app.canvas.summaryContext": "Summary · {variant} · {pointId} · measurement interval",

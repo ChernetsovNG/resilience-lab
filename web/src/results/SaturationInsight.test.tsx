@@ -4,6 +4,19 @@ import { slotPoolResource, noSaturation } from "../test/fixtures";
 import { SaturationInsight } from "./SaturationInsight";
 
 describe("SaturationInsight", () => {
+  it("navigates to each recorded degradation step, including a connection pool", () => {
+    const onElement = vi.fn();
+    const pool = { node: "to-db", slotPool: "connections", label: { code: "RESULT_SLOT_POOL", message: "connection pool gateway → db", args: { from: "gateway", to: "db" } }, startMs: 120 };
+    render(<SaturationInsight saturation={{ ...noSaturation, withoutSaturation: 0, replications: [
+      { replication: 0, degradationPath: [pool, { node: "gateway", ...slotPoolResource("gateway"), startMs: 150 }] },
+    ] }} replications={1} onElement={onElement} />);
+    fireEvent.click(screen.getByText("Degradation paths"));
+    fireEvent.click(screen.getByRole("button", { name: "connection pool gateway → db at 120 ms" }));
+    expect(onElement).toHaveBeenLastCalledWith("to-db");
+    fireEvent.click(screen.getByRole("button", { name: "handlers gateway at 150 ms" }));
+    expect(onElement).toHaveBeenLastCalledWith("gateway");
+  });
+
   it("renders the conclusion, all rule parameters and expandable paths", () => {
     const saturation = {
       ...noSaturation,

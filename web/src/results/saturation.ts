@@ -18,6 +18,15 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
     group.push(replication);
     paths.set(key, group);
   }
+  const degradationPathGroups = [...paths.values()].sort((left, right) => right.length - left.length).map(group => ({
+    steps: group[0].degradationPath.map(({ node, label }, index) => {
+      const starts = group.map(replication => replication.degradationPath[index].startMs);
+      const min = Math.min(...starts), max = Math.max(...starts);
+      return { node, text: t("results.saturation.nodeAt", { node: backendMessage(label), time: min === max ? formatDuration(min)
+        : t("results.saturation.timeRange", { min: formatDuration(min), max: formatDuration(max) }) }) };
+    }),
+    suffix: t("results.saturation.groupedPath", { path: "", count: formatNumber(group.length), replications: formatNumber(replications) }),
+  }));
   const causes = faults.flatMap(fault => {
     if (fault.fromMs === null || fault.toMs === null) return [];
     const during = saturation.firstNodes.some(first => first.medianStartMs >= fault.fromMs! && first.medianStartMs < fault.toMs!);
@@ -32,16 +41,9 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
       })),
     withoutSaturation: t("results.saturation.without", { count: formatNumber(saturation.withoutSaturation), replications: formatNumber(replications) }),
     causes,
-    degradationPaths: [...paths.values()].sort((left, right) => right.length - left.length).map(group => t("results.saturation.groupedPath", {
-      count: formatNumber(group.length), replications: formatNumber(replications),
-      path: group[0].degradationPath.length === 0 ? t("results.saturation.noPath")
-        : group[0].degradationPath.map(({ label }, index) => {
-          const starts = group.map(replication => replication.degradationPath[index].startMs);
-          const min = Math.min(...starts), max = Math.max(...starts);
-          return t("results.saturation.nodeAt", { node: backendMessage(label), time: min === max ? formatDuration(min)
-            : t("results.saturation.timeRange", { min: formatDuration(min), max: formatDuration(max) }) });
-        }).join(t("results.saturation.pathSeparator")),
-    })),
+    degradationPathGroups,
+    degradationPaths: degradationPathGroups.map(({ steps, suffix }) =>
+      (steps.length === 0 ? t("results.saturation.noPath") : steps.map(step => step.text).join(t("results.saturation.pathSeparator"))) + suffix),
     rule: t("results.saturation.rule", {
       utilization: formatPercent(utilizationThreshold), queue: formatNumber(meanQueueLengthThreshold, 20),
       duration: formatDuration(minimumDurationMs), rejections: formatNumber(rejectionsThreshold, 20),
