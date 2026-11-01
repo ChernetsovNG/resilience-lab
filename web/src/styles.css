@@ -580,6 +580,17 @@ select {
   cursor: pointer;
 }
 .variant-changes button:hover, .variant-changes button:focus-visible { background: #ede9fe; }
+.block-port { z-index: 1; }
+.block-port::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--port-hit-size);
+  height: var(--port-hit-size);
+  transform: translate(-50%, -50%);
+  pointer-events: inherit;
+}
 .variant-canvas .react-flow__node.selectable, .variant-canvas .react-flow__handle { cursor: default; }
 .variant-canvas .react-flow__handle { pointer-events: all; }
 .block-shape--overridden { --node-stroke: #f59e0b; }

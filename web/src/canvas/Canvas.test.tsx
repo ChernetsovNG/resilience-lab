@@ -54,6 +54,12 @@ it("reuses edge geometry when node bounds and label sizes have not changed", asy
     const count = calculate.mock.calls.length;
     rerender(<Canvas {...props} layout={structuredClone(layout)} selected={["gateway-to-middle"]} />);
     expect(calculate).toHaveBeenCalledTimes(count);
+    const paths = [...container.querySelectorAll(".react-flow__edge-path")].map(path => path.getAttribute("d"));
+    const changed = structuredClone(model);
+    changed.connections[1].params.timeout = "90ms";
+    rerender(<Canvas {...props} model={changed} />);
+    expect([...container.querySelectorAll(".react-flow__edge-path")].map(path => path.getAttribute("d"))).toEqual(paths);
+    expect(calculate).toHaveBeenCalledTimes(count);
     const moved = structuredClone(layout);
     moved.positions.middle.x += 40;
     rerender(<Canvas {...props} layout={moved} />);

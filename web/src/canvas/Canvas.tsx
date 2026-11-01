@@ -119,7 +119,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
   const zoom = useStore((state) => state.transform[2]);
   const initialized = useNodesInitialized();
   const hasNodes = Object.keys(model.blocks).length > 0;
-  const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } | null }[]>([]);
+  const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } | null; anchor?: string }[]>([]);
   const [measurement, setMeasurement] = useState<{
     request: (typeof insertions)[number]; size: { width: number; height: number };
   } | null>(null);
@@ -140,7 +140,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
       const center = width > 0 && height > 0 && (initialized || !hasNodes)
         ? { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom } : null;
       if (catalog.types.some((entry) => entry.id === type && entry.category === "BLOCK")) {
-        setInsertions((current) => [...current, { type, center }]);
+        setInsertions((current) => [...current, { type, center, anchor: selected.find(id => ownEntry(model.blocks, id) !== undefined) }]);
       }
     },
   }));
@@ -170,7 +170,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     const frame = requestAnimationFrame(() => {
       setInsertions((current) => current.slice(1));
       if (editable && !disabled) {
-        const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ ...node.position,
+        const occupied = getNodes().filter((node) => node.id !== pendingId).map((node) => ({ id: node.id, ...node.position,
           width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }));
         const viewport = getViewport();
         const size = measurement.size;
@@ -181,7 +181,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
         const bounds = { x: center.x - available.width / zoom / 2, y: center.y - available.height / zoom / 2,
           width: available.width / zoom, height: available.height / zoom };
         const position = insertionPosition({ x: center.x - size.width / 2, y: center.y - size.height / 2 },
-          occupied, size, gridStep, snapToGrid, bounds);
+          occupied, size, gridStep, snapToGrid, bounds, occupied.find(node => node.id === pending.anchor));
         manualViewport.current = true;
         onCommand(addBlock(catalog, pending.type, position));
         if (zoom !== viewport.zoom || position.x < bounds.x || position.y < bounds.y ||

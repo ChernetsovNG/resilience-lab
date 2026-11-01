@@ -1,5 +1,5 @@
 import { useLayoutEffect, type CSSProperties, type ReactNode } from "react";
-import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
+import { Handle, Position, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import type { TypeDescriptor } from "../api/apiTypes";
 import { blockGeometry, minimumBlockHeight } from "./blockGeometry";
 import type { PolicyWindowState } from "../results/policyState";
@@ -25,6 +25,7 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
   const w = width > 0 ? width : type === "router" ? 144 : replicas > 1 ? 264 : 192;
   const h = height > 0 ? height : minimumBlockHeight(type, w, 0, replicas);
   const geometry = blockGeometry(type, w, h, replicas);
+  const zoom = useStore(state => state.transform[2]);
   const updateNodeInternals = useUpdateNodeInternals();
   useLayoutEffect(() => { if (width > 0 && height > 0) updateNodeInternals(id); }, [updateNodeInternals, id, type, replicas, width, height]);
   const area = geometry.content;
@@ -38,6 +39,7 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
     }).join("\n");
   const style = {
     "--node-fill": fill,
+    "--port-hit-size": `${12 / zoom}px`,
     paddingTop: area.y, paddingLeft: area.x,
     paddingRight: w - area.x - area.width,
     paddingBottom: h - area.y - area.height,
@@ -58,7 +60,7 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
     </svg>
     {ports.map(port => {
       const point = geometry.ports[port.direction === "OUT" ? "OUT" : "IN"];
-      return <Handle key={port.id} id={port.id} type={port.direction === "OUT" ? "source" : "target"}
+      return <Handle key={port.id} id={port.id} className="block-port" type={port.direction === "OUT" ? "source" : "target"}
         position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={editable}
         style={{ left: point.x, top: point.y, right: "auto", transform: "translate(-50%, -50%)" }} />;
     })}

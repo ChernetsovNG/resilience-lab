@@ -400,13 +400,63 @@ describe("structure commands", () => {
 
 
 describe("block insertion position", () => {
+  const anchor = { x: 100, y: 100, width: 180, height: 80 };
+  const bounds = { x: 0, y: 0, width: 800, height: 600 };
+
+  it("places a new block to the right of the selected node with a gap", () => {
+    expect(insertionPosition({ x: 0, y: 0 }, [anchor], { width: 180, height: 80 }, 20, true, bounds, anchor))
+      .toEqual({ x: 320, y: 100 });
+  });
+
+  it("places a new block below the selected node when its right side is occupied", () => {
+    expect(insertionPosition({ x: 0, y: 0 }, [anchor, { ...anchor, x: 320 }],
+      { width: 180, height: 80 }, 20, true, bounds, anchor)).toEqual({ x: 100, y: 220 });
+  });
+
+  it("prefers a visible position below an anchor at the right edge", () => {
+    const edge = { ...anchor, x: 600 };
+    expect(insertionPosition({ x: 300, y: 200 }, [edge], { width: 180, height: 80 }, 20, true, bounds, edge))
+      .toEqual({ x: 600, y: 220 });
+  });
+
+  it("keeps searching right or below when both preferred anchor positions are occupied", () => {
+    const selected = { ...anchor, x: 400, y: 200 };
+    const occupied = [selected, { ...selected, x: 620 }, { ...selected, y: 320 }];
+    const position = insertionPosition({ x: 0, y: 0 }, occupied, { width: 180, height: 80 },
+      20, true, { x: 0, y: 0, width: 1000, height: 800 }, selected);
+    expect(position.x >= 620 || position.y >= 320).toBe(true);
+  });
+
+  it("uses remaining visible space when an anchor has no room right or below", () => {
+    const selected = { x: 600, y: 500, width: 180, height: 80 };
+    expect(insertionPosition({ x: 320, y: 260 }, [selected], { width: 180, height: 80 },
+      20, true, bounds, selected)).toEqual({ x: 320, y: 260 });
+  });
+
+  it("finds the nearest visible free space when no node is selected", () => {
+    expect(insertionPosition({ x: 100, y: 100 }, [anchor], { width: 180, height: 80 },
+      20, true, { x: -200, y: -200, width: 1000, height: 1000 })).toEqual({ x: 100, y: -20 });
+  });
+
+  it("leaves a gap even when the requested position only touches an existing node", () => {
+    const position = insertionPosition({ x: 280, y: 100 }, [anchor], { width: 180, height: 80 });
+    expect(position.x >= 320 || position.y >= 220 || position.x + 180 <= 60 || position.y + 80 <= 60).toBe(true);
+  });
+
+  it("keeps the measured anchor gap without snapping", () => {
+    const measured = { x: 100.5, y: 100.25, width: 222.984, height: 81.375 };
+    const position = insertionPosition({ x: 0, y: 0 }, [measured], { width: 192, height: 110 }, 40, false, bounds, measured);
+    expect(position.x).toBeCloseTo(363.484, 10);
+    expect(position.y).toBe(100.25);
+  });
+
   it("finds a visible free position when diagonal offsets leave the viewport", () => {
-    const position = insertionPosition({ x: 100, y: 100 }, [{ x: 100, y: 100, width: 180, height: 100 }],
-      { width: 180, height: 100 }, 20, true, { x: 0, y: 0, width: 300, height: 200 });
+    const position = insertionPosition({ x: 100, y: 100 }, [{ x: 100, y: 140, width: 180, height: 100 }],
+      { width: 180, height: 100 }, 20, true, { x: 0, y: 0, width: 300, height: 240 });
     expect(position.x).toBeGreaterThanOrEqual(0);
     expect(position.y).toBeGreaterThanOrEqual(0);
     expect(position.x + 180).toBeLessThanOrEqual(300);
-    expect(position.y + 100).toBeLessThanOrEqual(200);
+    expect(position.y + 100).toBeLessThanOrEqual(240);
     expect(position.y).toBe(0);
   });
   it.each([
@@ -454,20 +504,23 @@ describe("block insertion position", () => {
       { x: 100, y: 40, width: 180, height: 80 },
       { x: 180, y: 120, width: 180, height: 80 },
     ];
-    expect(insertionPosition({ x: 91, y: 49 }, occupied, { width: 180, height: 80 })).toEqual({ x: 260, y: 200 });
+    const position = insertionPosition({ x: 91, y: 49 }, occupied, { width: 180, height: 80 });
+    for (const node of occupied) {
+      expect(position.x >= node.x + node.width + 40 || position.y >= node.y + node.height + 40).toBe(true);
+    }
     expect(occupied[0]).toEqual({ x: 100, y: 40, width: 180, height: 80 });
   });
 
   it("avoids a node ahead of the insertion point even when the point itself is free", () => {
     expect(insertionPosition({ x: 100, y: 40 }, [{ x: 240, y: 40, width: 180, height: 80 }], { width: 180, height: 80 }))
-      .toEqual({ x: 180, y: 120 });
+      .toEqual({ x: 220, y: 160 });
   });
 });
 
 
 it("reserves the incoming client footprint when it is wider than every existing node", () => {
   expect(insertionPosition({ x: -180, y: 200 }, [{ x: 0, y: 200, width: 176, height: 57.375 }],
-    { width: 222.984, height: 57.375 })).toEqual({ x: -100, y: 280 });
+    { width: 222.984, height: 57.375 })).toEqual({ x: -60, y: 320 });
 });
 
 

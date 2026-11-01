@@ -118,8 +118,8 @@ test("builds checkout-replicas from the palette, saves the example and exposes t
       ] as const) {
         await page.getByTestId(`rf__node-${id}`).click({ trial: true });
         const canvas = (await page.locator(".react-flow").boundingBox())!;
-        const node = (await page.getByTestId(`rf__node-${id}`).boundingBox())!;
-        await page.mouse.move(node.x + node.width / 2, node.y + 20);
+        const header = (await page.getByTestId(`rf__node-${id}`).locator(".block-node-header").boundingBox())!;
+        await page.mouse.move(header.x + header.width / 2, header.y + header.height / 2);
         await page.mouse.down();
         await page.mouse.move(canvas.x + canvas.width * x, canvas.y + canvas.height * y, { steps: 10 });
         await page.mouse.up();

@@ -35,10 +35,14 @@ export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
         ? current : { ...current, [id]: measurement };
     });
   }, []);
-  const geometries = useMemo(() => layoutEdges(connections.flatMap(connection => {
+  const nextTopology = connections.map(({ id, from, to }) => ({ id, from, to }));
+  const [topology, setTopology] = useState(nextTopology);
+  if (topology.length !== nextTopology.length || nextTopology.some((edge, index) =>
+    edge.id !== topology[index].id || edge.from !== topology[index].from || edge.to !== topology[index].to)) setTopology(nextTopology);
+  const geometries = useMemo(() => layoutEdges(topology.flatMap(connection => {
     const measurement = ownEntry(measurements, connection.id);
     return measurement === undefined ? [] : [{ ...measurement, id: connection.id, from: connection.from, to: connection.to }];
-  }), nodes), [connections, measurements, nodes]);
+  }), nodes), [topology, measurements, nodes]);
   const bounds = useMemo(() => diagramBounds([
     ...[...nodes.values()].filter(node => node.width > 0 && node.height > 0),
     ...[...geometries.values()].map(geometry => geometry.bounds),
