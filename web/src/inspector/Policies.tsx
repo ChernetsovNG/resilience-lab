@@ -46,7 +46,7 @@ export function Policies({ catalog, model, baseModel = model, experiment, select
     {enabled.map(descriptor => {
       const removed = element.params[descriptor.name] == null;
       const overridden = isOverridden(overrides, selected, descriptor.name);
-      return <details className="policy-section" data-policy={descriptor.name} data-inspector-field={descriptor.name}
+      return <details className="policy-section" data-policy={descriptor.name} data-inspector-field={removed ? descriptor.name : undefined}
         key={descriptor.name} open={!removed}>
         <summary>{descriptor.title}{removed ? <>
           <span className="param-badge">{t("editor.policies.removed")}</span>

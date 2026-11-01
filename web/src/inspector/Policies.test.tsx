@@ -1,6 +1,6 @@
 import { useReducer } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { Catalog, ModelFile } from "../api/apiTypes";
 import serverCatalog from "../test/catalog.json";
 import { experiment, layout, model } from "../test/fixtures";
@@ -18,8 +18,9 @@ const source: ModelFile = { ...model, blocks: { ...model.blocks,
 } };
 const documents = (): EditorDocuments => ({ model: structuredClone(source), experiment: structuredClone(experiment), layout });
 
-function Editor({ initial = documents(), selected = call, variantId = null }: {
+function Editor({ initial = documents(), selected = call, variantId = null, focusField }: {
   initial?: EditorDocuments; selected?: string | null; variantId?: string | null;
+  focusField?: { path: string; request: number; focus?: boolean };
 }) {
   const [state, dispatch] = useReducer(editorReducer, editorReducer(initialEditorState, { type: "open", loaded: {
     ...initial, saved: initial, experimentPath: "e.experiment.json", modelPath: "m.model.json", layoutPath: "l.layout.json",
@@ -30,7 +31,7 @@ function Editor({ initial = documents(), selected = call, variantId = null }: {
   return <>
     <button onClick={() => dispatch({ type: "undo" })}>Undo</button>
     <Inspector catalog={catalog} model={variantId === null ? loaded.model : applyOverrides(loaded.model, overrides, catalog)}
-      baseModel={loaded.model} experiment={loaded.experiment} selected={selected} editable overrides={overrides} variantId={variantId}
+      baseModel={loaded.model} experiment={loaded.experiment} selected={selected} editable overrides={overrides} variantId={variantId} focusField={focusField}
       onParam={(id, path, value) => dispatch({ type: "command", command: setModelParam(id, path, value, catalog) })}
       onCommand={command => dispatch({ type: "command", command })} onValidity={() => {}} />
     <output data-testid="stored">{JSON.stringify({ model: loaded.model, experiment: loaded.experiment, layout: loaded.layout })}</output>
@@ -178,4 +179,22 @@ it.each([
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
   expect(stored().model.blocks.middle.replicaOverrides).toEqual({ "1": { [name]: initial } });
   expect(replicas.getByRole("group", { name: title })).toBeTruthy();
+});
+
+it("reveals a collapsed policy through one field marker, opens its parent and scrolls to it", () => {
+  const initial = documents();
+  initial.model.connections[1].params.circuitBreaker = breaker;
+  const view = render(<Editor initial={initial} />);
+  const fields = document.querySelectorAll<HTMLElement>('[data-inspector-field="circuitBreaker"]');
+  expect(fields).toHaveLength(1);
+  const section = document.querySelector<HTMLDetailsElement>('[data-policy="circuitBreaker"]')!;
+  const parameters = section.closest<HTMLDetailsElement>(".inspector-parameters")!;
+  section.open = false;
+  parameters.open = false;
+  const scroll = vi.fn();
+  Object.defineProperty(fields[0], "scrollIntoView", { configurable: true, value: scroll });
+  view.rerender(<Editor initial={initial} focusField={{ path: "circuitBreaker", request: 1, focus: false }} />);
+  expect(section.open).toBe(true);
+  expect(parameters.open).toBe(true);
+  expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest" });
 });
