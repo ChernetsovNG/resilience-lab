@@ -46,7 +46,7 @@ test("gives the empty panel's space to the canvas and shows call results without
   await expect(parameters).toHaveAttribute("open");
   await parameters.locator("summary").click();
   await expect(parameters).not.toHaveAttribute("open");
-  await page.getByRole("button", { name: "Errors: 0 · Warnings: 1", exact: true }).click();
+  await page.getByRole("button", { name: "Errors: 0 · Warnings: 2", exact: true }).click();
   await page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_BUDGET"]').click();
   await expect(parameters).toHaveAttribute("open");
   await expect(page.locator(".inspector").getByLabel("Timeout", { exact: true })).toBeFocused();

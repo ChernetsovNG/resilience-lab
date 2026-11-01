@@ -69,3 +69,47 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
     await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
+  test.describe(`retry overload in ${language}`, () => {
+    test.use({ locale });
+    test("translates a shared retry budget and opens incoming attempts for grouped replicas", async ({ page }) => {
+      const directory = `retry-overload-${randomUUID()}`;
+      const root = resolve("../apps/server/build/e2e-workspace", directory);
+      const labels = JSON.parse(await readFile(resolve(`src/i18n/${language}.json`), "utf8")) as Record<string, string>;
+      const model: ModelFile = { schemaVersion: 6, blocks: {
+        client: { type: "client", params: { load: { points: [{ time: "0s", rate: "900/s" }] }, deadline: "10s" } },
+        gateway: { type: "service", params: { handlers: 100, processing: { kind: "fixed", mean: "1ms" } } },
+        catalog: { type: "service", params: { handlers: 16, replicas: 3, processing: { kind: "fixed", mean: "35ms" } } },
+      }, connections: [
+        { id: "request", type: "request", from: "client", to: "gateway" },
+        { id: "gateway-catalog", type: "call", from: "gateway", to: "catalog", params: {
+          attempts: 3, timeout: "100ms", backoff: { kind: "exponential-full-jitter", base: "1ms", max: "10ms", multiplier: 2 },
+          retryBudget: { ratio: "50%", minPerSecond: "150/s", window: "1s" },
+        } },
+      ] };
+      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+        execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 }, variants: [{ id: "baseline" }] };
+      await mkdir(root, { recursive: true });
+      try {
+        await writeFile(resolve(root, "model.model.json"), JSON.stringify(model));
+        await writeFile(resolve(root, "experiment.experiment.json"), JSON.stringify(experiment));
+        await page.goto("/");
+        await selectExperiment(page, `${directory}/experiment.experiment.json`);
+        await page.getByRole("tab", { name: labels["results.problems.title"], exact: true }).click();
+        const rows = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_RETRY_OVERLOAD"]') });
+        const warning = rows.locator('button[data-diagnostic-code="LINT_RETRY_OVERLOAD"]');
+        await expect(warning).toHaveCount(1);
+        await expect(warning).toContainText("500");
+        await expect(warning).toContainText("gateway-catalog");
+        await expect(warning).toContainText(language === "ru" ? "Бюджет ограничил" : "Retry budgets limit");
+        await expect(warning).toContainText("#1–#3");
+        await rows.getByRole("button", { name: new RegExp(labels["results.problems.explanation"]) }).click();
+        await expect(rows.getByRole("tooltip")).toContainText("ρ_max");
+        await page.keyboard.press("Escape");
+        await warning.click();
+        await expect(page.locator(".inspector").getByLabel(labels["catalog.types.call.params.attempts.title"], { exact: true })).toBeFocused();
+      } finally { await rm(root, { recursive: true, force: true }); }
+    });
+  });
+}

@@ -53,10 +53,10 @@ test("keeps status in one place and opens draft errors on Run without page scrol
   const initialZoom = await zoom.textContent();
   await page.getByRole("button", { name: "Zoom In", exact: true }).click();
   await expect(zoom).not.toHaveText(initialZoom!);
-  await expect(status.getByRole("button", { name: "Errors: 0 · Warnings: 1" })).toBeVisible();
+  await expect(status.getByRole("button", { name: "Errors: 0 · Warnings: 2" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Findings", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toBeHidden();
-  await status.getByRole("button", { name: "Errors: 0 · Warnings: 1" }).click();
+  await status.getByRole("button", { name: "Errors: 0 · Warnings: 2" }).click();
   await expect(page.getByRole("tab", { name: "Problems", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toContainText("LINT_TIMEOUT_BUDGET");
   await page.screenshot({ path: testInfo.outputPath("status-problems.png") });

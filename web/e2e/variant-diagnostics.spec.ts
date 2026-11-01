@@ -85,10 +85,10 @@ test("reveals variant warnings on Model and navigates from a field hint to its v
   await inspector.getByRole("link", { name: "In variants: Baseline — 1 warning", exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("model-client-warning.png") });
   await problems.getByRole("button", { name: "Show all problems", exact: true }).click();
-  await expect(problems.locator(".validation-problems > li")).toHaveCount(2);
+  await expect(problems.locator(".validation-problems > li")).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(problems.locator(".validation-problems > li")).toHaveCount(1);
+  await expect(problems.locator(".validation-problems > li")).toHaveCount(2);
   await expect(problems).not.toContainText("LINT_DEADLINE_BUDGET");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
