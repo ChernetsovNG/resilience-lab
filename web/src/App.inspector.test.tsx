@@ -131,7 +131,8 @@ it("follows a selected element through rename, undo and redo, then forgets a del
   fireEvent.click(button("Redo"));
   expect(screen.getByRole("heading", { name: "entry" })).toBeTruthy();
   fireEvent.keyDown(window, { key: "Delete" });
-  expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Delete selected elements?" })).getByRole("button", { name: "Delete" }));
+  await screen.findByRole("heading", { name: "Run settings" });
   fireEvent.click(button("Undo"));
   expect(screen.getByRole("heading", { name: "Run settings" })).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "entry" })).toBeNull();

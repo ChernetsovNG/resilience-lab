@@ -152,6 +152,19 @@ it("deletes a selection with its edges and overrides in one undo step, leaving f
   expect(native.defaultPrevented).toBe(false);
   expect(screen.getAllByTestId("block-node")).toHaveLength(4);
   fireEvent.keyDown(document.body, { key: "Delete" });
+  let dialog = within(await screen.findByRole("dialog", { name: "Delete selected elements?" }));
+  expect(dialog.getByText(/No retries/).textContent).toContain("retry-storm");
+  expect(dialog.getByText(/No retries/).textContent).toContain("overrides (2)");
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  expect(button("Undo").disabled).toBe(true);
+  expect(button("Save").disabled).toBe(true);
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  dialog = within(await screen.findByRole("dialog", { name: "Delete selected elements?" }));
+  fireEvent.keyDown(document.body, { key: "Delete", repeat: true });
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
   await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(3));
   expect(screen.queryByTestId("rf__edge-gateway-to-middle")).toBeNull();
   expect(screen.queryByTestId("rf__edge-middle-to-dependency")).toBeNull();
@@ -162,6 +175,61 @@ it("deletes a selection with its edges and overrides in one undo step, leaving f
   fireEvent.click(button("Undo"));
   await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(4));
   expect(screen.getByTestId("rf__edge-gateway-to-middle")).toBeTruthy();
+});
+
+it("previews faults, axes and grouped overrides once for a multi-selection", async () => {
+  const sourceExperiment = { ...experiment,
+    grid: [{ path: "middle-to-dependency.timeout", values: ["40ms", "80ms"] }],
+  };
+  server((url, init) => init?.method !== "PUT" && url === `/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`
+    ? { body: { ...documentViews[experimentPath], content: { experiment: sourceExperiment } } } : undefined);
+  await open();
+  fireEvent.click(screen.getByTestId("rf__node-middle"));
+  fireEvent.click(screen.getByTestId("rf__node-dependency"), { ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "Backspace" });
+  const dialog = await screen.findByRole("dialog", { name: "Delete selected elements?" });
+  const message = dialog.querySelector(".confirmation-message")!.textContent!;
+  expect(message).toContain("middle");
+  expect(message).toContain("dependency");
+  expect(message).toContain("Slowdown");
+  expect(message).toContain("Timeout · middle → dependency");
+  expect(message).toContain("No retries: overrides (2)");
+  expect(message.match(/middle → dependency \(middle-to-dependency\)/g)).toHaveLength(1);
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.getAllByTestId("block-node")).toHaveLength(2));
+  fireEvent.click(button("Undo"));
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  expect(button("Save").disabled).toBe(true);
+});
+
+it("confirms a connection cascade even when no block is selected", async () => {
+  server();
+  await open();
+  fireEvent.click(screen.getByTestId("rf__edge-gateway-to-middle"));
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  const dialog = within(await screen.findByRole("dialog", { name: "Delete selected elements?" }));
+  expect(screen.getByTestId("rf__edge-gateway-to-middle")).toBeTruthy();
+  fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.queryByTestId("rf__edge-gateway-to-middle")).toBeNull());
+  expect(screen.getAllByTestId("block-node")).toHaveLength(4);
+  fireEvent.click(button("Undo"));
+  expect(screen.getByTestId("rf__edge-gateway-to-middle")).toBeTruthy();
+  expect(button("Save").disabled).toBe(true);
+});
+
+it("deletes blocks and their connections immediately when no experiment settings are lost", async () => {
+  const sourceExperiment = { ...experiment, faults: [], grid: [],
+    variants: experiment.variants.map(variant => ({ ...variant, overrides: {} })),
+  };
+  server((url, init) => init?.method !== "PUT" && url === `/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`
+    ? { body: { ...documentViews[experimentPath], content: { experiment: sourceExperiment } } } : undefined);
+  await open();
+  fireEvent.click(screen.getByTestId("rf__node-middle"));
+  fireEvent.keyDown(document.body, { key: "Delete" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getAllByTestId("block-node")).toHaveLength(3);
+  expect(screen.queryByTestId("rf__edge-middle-to-dependency")).toBeNull();
 });
 
 it("copies multi-selected blocks and internal connections; variant pages reject structural shortcuts", async () => {
@@ -303,7 +371,8 @@ it("keeps reused diagram element IDs separate through clipboard replacement and 
   await selectGateway();
   fireEvent.keyDown(window, { key: "c", ctrlKey: true });
   fireEvent.keyDown(window, { key: "Delete" });
-  expect(screen.queryByTestId("rf__node-gateway")).toBeNull();
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Delete selected elements?" })).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.queryByTestId("rf__node-gateway")).toBeNull());
   fireEvent.keyDown(window, { key: "v", ctrlKey: true });
   const identifier = screen.getByLabelText("Identifier");
   fireEvent.change(identifier, { target: { value: "gateway" } });

@@ -22,6 +22,7 @@ import { useHealth } from "./components/useHealth";
 import { useConfirmation } from "./components/useConfirmation";
 import { DiagnosticLabelContext } from "./presentation/diagnosticContext";
 import { parameterLabel, variantLabel } from "./presentation/labels";
+import { deletionMessage } from "./presentation/deletion";
 import { ElementResults, type ElementResultsProps } from "./inspector/ElementResults";
 import { replicaMember } from "./results/groups";
 import { hasElementResults, resultSelection } from "./inspector/elementResultsData";
@@ -299,7 +300,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = async (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey) return;
       const target = event.target;
       const key = event.key.toLowerCase();
@@ -317,7 +318,14 @@ export function App() {
       if (structureEditable && loaded !== null) {
         if ((key === "delete" || key === "backspace") && selection.length > 0) {
           event.preventDefault();
-          execute(deleteElements(selection));
+          if (event.repeat || catalog === null) return;
+          const command = deleteElements(selection);
+          const message = deletionMessage(loaded, command(loaded), catalog, loaded.experimentPath);
+          if (message !== null && !await confirm({
+            title: t("app.confirm.deleteElements"), message,
+            confirmLabel: t("file.delete"), cancelLabel: t("file.cancel"),
+          })) return;
+          execute(current => current.model === loaded.model && current.experiment === loaded.experiment ? command(current) : current);
           setSelection([]);
         }
         if ((event.ctrlKey || event.metaKey) && key === "c") {
@@ -352,7 +360,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute]);
+  }, [invalid, loading, undo, redo, structureEditable, loaded, selection, execute, catalog, confirm]);
 
   useEffect(() => {
     if (!analysis) return;
