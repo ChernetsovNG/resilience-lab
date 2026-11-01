@@ -1,5 +1,8 @@
-import { expect, test } from "./fixtures";
+import { cleanupWorkspace, expect, test } from "./fixtures";
 import { existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import type { ExperimentFile, ModelFile, ValidationReport } from "../src/api/apiTypes";
 import { resolve } from "node:path";
 import { selectExperiment } from "./fixtures";
 
@@ -34,6 +37,68 @@ for (const locale of locales) {
         await expect(queue).toBeFocused();
         await expect(queue.locator("..").locator(".field-diagnostics")).toContainText("LINT_QUEUE_WAIT");
         await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+      });
+    }
+
+    for (const kind of ["call", "pooler"] as const) {
+      test(`localizes ${kind} pool demand from the API and opens the overridden capacity`, async ({ page }) => {
+        const directory = `pool-demand-${randomUUID()}`;
+        const root = resolve("../apps/server/build/e2e-workspace", directory);
+        const target = kind === "call" ? "caller-db" : "proxy";
+        const parameter = kind === "call" ? "caller-db.pool.size" : "proxy.poolSize";
+        const model: ModelFile = { schemaVersion: 6, blocks: {
+          client: { type: "client", params: { load: { points: [{ time: "0s", rate: "100/s" }] }, deadline: "10s" } },
+          caller: { type: "service", params: { handlers: 8, queue: 16, processing: { kind: "fixed", mean: "0ms" } } },
+          db: { type: "database", params: { maxConnections: 100, processing: { kind: "fixed", mean: "40ms" } } },
+          ...(kind === "pooler" ? { proxy: { type: "pooler", params: { maxClientConnections: 100, poolSize: 4, waitTimeout: "1s" } } } : {}),
+        }, connections: [
+          { id: "request", type: "request", from: "client", to: "caller" },
+          { id: "caller-db", type: "call", from: "caller", to: kind === "call" ? "db" : "proxy", params: {
+            timeout: "1s", network: { kind: "fixed", mean: "0ms" }, ...(kind === "call" ? { pool: { size: 4 } } : {}),
+          } },
+          ...(kind === "pooler" ? [{ id: "proxy-db", type: "call", from: "proxy", to: "db", params: {
+            timeout: "1s", network: { kind: "fixed", mean: "0ms" },
+          } }] : []),
+        ] };
+        const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+          execution: { replications: 5, warmup: "0ms", measurement: "1s", seed: 42 },
+          variants: [{ id: "roomy", overrides: { [parameter]: 8 } }, { id: "tight", overrides: { [parameter]: 4 } }] };
+        await mkdir(root, { recursive: true });
+        try {
+          await writeFile(resolve(root, "model.model.json"), JSON.stringify(model));
+          await writeFile(resolve(root, "experiment.experiment.json"), JSON.stringify(experiment));
+          const response = await page.request.post("/api/v1/validate", { data: { experiment: `${directory}/experiment.experiment.json` } });
+          expect(response.ok()).toBe(true);
+          const report: ValidationReport = await response.json();
+          expect(report.valid).toBe(true);
+          const findings = report.diagnostics.filter(diagnostic => diagnostic.code === "LINT_POOL_DEMAND");
+          expect(findings).toHaveLength(1);
+          const finding = findings[0];
+          expect(finding.variant).toBe("tight");
+          expect(finding.pointer).toBe(`/variants/1/overrides/${parameter}`);
+          expect(finding.args).toMatchObject({ demand: "4", size: 4, ratePerSecond: "100", target });
+
+          await page.goto("/");
+          await selectExperiment(page, `${directory}/experiment.experiment.json`);
+          await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+          const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_POOL_DEMAND"]') });
+          const warning = row.locator('button[data-diagnostic-code="LINT_POOL_DEMAND"]');
+          const key = `messages.LINT_POOL_DEMAND${kind === "call" ? ".limitsHandlers" : ""}`;
+          const translated = label(key).split("{target}")[1].replace(/\{(\w+)\}/g, (_, name: string) => String(finding.args?.[name]));
+          await expect(warning).toContainText(target);
+          await expect(warning).toContainText(translated);
+          await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+          await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_POOL_DEMAND_DETAILS").split(":")[0]);
+          await page.keyboard.press("Escape");
+          await warning.click();
+          const capacity = page.locator(".inspector").getByLabel(label(kind === "call"
+            ? "catalog.types.call.params.pool.size.title" : "catalog.types.pooler.params.poolSize.title"), { exact: true });
+          await expect(capacity).toBeFocused();
+          await expect(capacity).toHaveValue("4");
+          await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+        } finally {
+          await cleanupWorkspace(page, root);
+        }
       });
     }
 

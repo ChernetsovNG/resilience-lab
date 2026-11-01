@@ -163,6 +163,16 @@ internal enum class CoreMessage(
         "rateLimit",
         "Low headroom of '{target}': nominal utilization {utilization} at threshold {threshold} ({ratePerSecond} requests/s, {holdingMs} ms mean holding, {handlers} slots). Configured rate limit: {rateLimitPerSecond} requests/s",
     ),
+    LINT_POOL_DEMAND(
+        "LINT_POOL_DEMAND",
+        null,
+        "Pool of '{target}': demand {demand} for {size} connections at {ratePerSecond} requests/s",
+    ),
+    LINT_POOL_DEMAND_LIMITS_HANDLERS(
+        "LINT_POOL_DEMAND",
+        "limitsHandlers",
+        "Pool of '{target}': demand {demand} for {size} connections at {ratePerSecond} requests/s; service parallelism is limited by the pool below its {handlers} handlers",
+    ),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,
