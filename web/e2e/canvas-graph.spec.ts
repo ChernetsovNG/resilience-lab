@@ -34,7 +34,7 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
         { id: `query-${id}`, from: `replica-${id}`, to: "database", type: "call", params: { timeout: "40ms", attempts: 1 } },
       ]),
     ];
-    const layout: LayoutFile = { schemaVersion: 1, positions: {
+    const layout: LayoutFile = { schemaVersion: 2, sizes: {}, edges: {}, positions: {
       client: { x: 0, y: 100 }, gateway: { x: 340, y: 100 }, router: { x: 700, y: 100 },
       "replica-a": { x: 1060, y: 0 }, "replica-b": { x: 1060, y: 200 }, database: { x: 1420, y: 100 },
     } };
@@ -167,7 +167,7 @@ for (const count of [1, 2]) {
     const bypasses = Array.from({ length: count }, (_, index) => ({ id: `bypass-${index + 1}`, type: "call",
       from: "gateway", to: "dependency", params: { timeout: "80ms", attempts: 3 } }));
     model.connections.push(...bypasses);
-    const layout: LayoutFile = { schemaVersion: 1, positions: {
+    const layout: LayoutFile = { schemaVersion: 2, sizes: {}, edges: {}, positions: {
       client: { x: 0, y: 100 }, gateway: { x: 340, y: 100 }, middle: { x: 680, y: 100 }, dependency: { x: 1020, y: 100 },
     } };
     await writeFile(resolve(target, "graph.model.json"), JSON.stringify(model));

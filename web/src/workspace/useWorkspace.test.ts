@@ -666,7 +666,7 @@ it("rereads a known created layout when a later document conflicted before the r
 it("recovers an existing sibling on explicit reload after create conflict, retaining its other positions", async () => {
   const { documents } = storedWorkspace();
   documents[layoutPath] = { ...documentViews[layoutPath], content: {
-    layout: { schemaVersion: 1, positions: { client: { x: 90, y: 80 } } },
+    layout: { schemaVersion: 2, sizes: {}, edges: {}, positions: { client: { x: 90, y: 80 } } },
   } };
   const { result } = await loaded();
   expect(result.current.loaded?.versions.layout).toBeNull();

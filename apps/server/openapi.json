@@ -2425,6 +2425,18 @@
         },
         "required" : [ "content", "kind", "path", "version" ]
       },
+      "EdgeLayout" : {
+        "type" : "object",
+        "properties" : {
+          "points" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Position"
+            }
+          }
+        },
+        "required" : [ "points" ]
+      },
       "EstimateWarning" : {
         "type" : "object",
         "properties" : {
@@ -2794,6 +2806,12 @@
       "LayoutFile" : {
         "type" : "object",
         "properties" : {
+          "edges" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/EdgeLayout"
+            }
+          },
           "positions" : {
             "type" : "object",
             "additionalProperties" : {
@@ -2803,9 +2821,15 @@
           "schemaVersion" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "sizes" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/Size"
+            }
           }
         },
-        "required" : [ "positions", "schemaVersion" ]
+        "required" : [ "edges", "positions", "schemaVersion", "sizes" ]
       },
       "MetricSummary" : {
         "type" : "object",
@@ -3778,6 +3802,20 @@
           }
         },
         "required" : [ "admittedAttempts", "ejectedMs", "ejections", "failures", "failuresByReason", "measurementMs", "notReadyMs", "offeredAttempts", "originalArrivals", "probeFailures", "probes", "rateLimited", "retries", "slotPools", "timeouts" ]
+      },
+      "Size" : {
+        "type" : "object",
+        "properties" : {
+          "height" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "width" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "height", "width" ]
       },
       "SlotPoolLabel" : {
         "type" : "object",

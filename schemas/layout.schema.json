@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "resiliencelab.core.document.EdgeLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "points": {
+          "items": {
+            "$ref": "#/$defs/resiliencelab.core.document.Position"
+          },
+          "maxItems": 50,
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "type": "object"
+    },
     "resiliencelab.core.document.Position": {
       "additionalProperties": false,
       "properties": {
@@ -31,12 +47,52 @@
         "y"
       ],
       "type": "object"
+    },
+    "resiliencelab.core.document.Size": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "description": "Quoted numeric literals are parsed and range-checked by the document decoder and core.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://github.com/ChernetsovNG/resilience-lab/schemas/layout.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "edges": {
+      "additionalProperties": {
+        "$ref": "#/$defs/resiliencelab.core.document.EdgeLayout"
+      },
+      "type": "object"
+    },
     "positions": {
       "additionalProperties": {
         "$ref": "#/$defs/resiliencelab.core.document.Position"
@@ -46,7 +102,7 @@
     "schemaVersion": {
       "anyOf": [
         {
-          "const": 1,
+          "const": 2,
           "type": "integer"
         },
         {
@@ -54,6 +110,12 @@
           "type": "string"
         }
       ]
+    },
+    "sizes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/resiliencelab.core.document.Size"
+      },
+      "type": "object"
     }
   },
   "required": [

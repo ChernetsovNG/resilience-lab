@@ -555,6 +555,9 @@ export interface components {
             path: string;
             version: string;
         };
+        EdgeLayout: {
+            points: components["schemas"]["Position"][];
+        };
         EstimateWarning: {
             args?: {
                 [key: string]: string | number;
@@ -690,11 +693,17 @@ export interface components {
             successful?: components["schemas"]["LatencyDistribution"] | null;
         };
         LayoutFile: {
+            edges: {
+                [key: string]: components["schemas"]["EdgeLayout"];
+            };
             positions: {
                 [key: string]: components["schemas"]["Position"];
             };
             /** Format: int32 */
             schemaVersion: number;
+            sizes: {
+                [key: string]: components["schemas"]["Size"];
+            };
         };
         MetricSummary: {
             /** Format: double */
@@ -1056,6 +1065,12 @@ export interface components {
             };
             /** Format: int64 */
             timeouts: number;
+        };
+        Size: {
+            /** Format: double */
+            height: number;
+            /** Format: double */
+            width: number;
         };
         SlotPoolLabel: {
             args: {

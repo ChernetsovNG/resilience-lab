@@ -382,7 +382,7 @@ describe("workspace change polling", () => {
     const { result } = await loaded();
     views[layoutPath] = {
       path: layoutPath, kind: "LAYOUT", version: "v-layout-new",
-      content: { layout: { schemaVersion: 1, positions: { gateway: { x: 99, y: 100 } } } },
+      content: { layout: { schemaVersion: 2, sizes: {}, edges: {}, positions: { gateway: { x: 99, y: 100 } } } },
     };
     await poll();
     expect(result.current.externalChange).toEqual({ path: layoutPath, deleted: false });

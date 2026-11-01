@@ -33,7 +33,7 @@ test("compares clients, request types and refusal reasons, then selects checkout
     variants: [{ id: "baseline", label: "Baseline", overrides: {} }, { id: "fallback", label: "Fallback", overrides: {
       "gateway-to-orders.fallback": { on: ["timeout", "circuitOpen"], processing: "1ms" }, "api-gateway.failureRate": "5%",
     } }], grid: [{ path: "gateway-to-orders.timeout", values: ["10ms", "100ms"] }] };
-  const layout: LayoutFile = { schemaVersion: 1, positions: {
+  const layout: LayoutFile = { schemaVersion: 2, sizes: {}, edges: {}, positions: {
     "mobile-app": { x: 0, y: 0 }, "partner-api": { x: 0, y: 160 }, "api-gateway": { x: 260, y: 80 }, "order-service": { x: 520, y: 80 },
   } };
   await mkdir(target);

@@ -79,7 +79,7 @@ async function loadExperiment(experimentPath: string, recoveryLayoutPath?: strin
     ? experimentPath.replace(/\.experiment\.json$/, ".layout.json")
     : resolveRef(experimentPath, experiment.layoutRef);
   if (layoutPath === null) throw new MessageError("app.workspace.layoutRefOutside", { path: experimentPath });
-  let layout: LayoutFile = { schemaVersion: 1, positions: {} };
+  let layout: LayoutFile = { schemaVersion: 2, sizes: {}, edges: {}, positions: {} };
   let layoutVersion: string | null = null;
   // Recover a known or conflicting generated sibling on reload, without attaching its reference or overwriting it.
   if (experiment.layoutRef != null || recoveryLayoutPath === layoutPath) {
@@ -105,7 +105,7 @@ async function loadModel(modelPath: string, documents: readonly DocumentEntry[])
   if (model == null) throw new MessageError("app.workspace.notModel", { path: modelPath });
   const layoutPath = modelPath.replace(/\.model\.json$/, ".layout.json");
   const layoutView = documents.some(document => document.path === layoutPath) ? await api.document(layoutPath) : null;
-  const layout = layoutView?.content.layout ?? { schemaVersion: 1, positions: {} };
+  const layout = layoutView?.content.layout ?? { schemaVersion: 2, sizes: {}, edges: {}, positions: {} };
   let experimentPath = modelPath.replace(/\.model\.json$/, ".experiment.json");
   for (let suffix = 2; documents.some(document => document.path === experimentPath); suffix++) {
     experimentPath = modelPath.replace(/\.model\.json$/, `-${suffix}.experiment.json`);

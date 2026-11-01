@@ -114,7 +114,10 @@ class LabTest {
                         .replace("retry-storm.model.json", "new.model.json")
                         .replace("retry-storm.layout.json", "new.layout.json"),
                 "new/new.model.json" to files.read(model).text,
-                "new/new.layout.json" to """{"schemaVersion":1,"positions":{}}""",
+                "new/new.layout.json" to
+                    """{"schemaVersion":2,"positions":{"unknown":{"x":0,"y":1}},
+                        "sizes":{"unknown":{"width":240,"height":200}},
+                        "edges":{"unknown":{"points":[{"x":2,"y":3}]}}}""",
             )
 
         Lab(files).use { lab ->

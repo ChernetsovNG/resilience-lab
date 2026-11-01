@@ -137,7 +137,7 @@ describe("workspace file actions", () => {
     const sharedLayout = "questions/first.layout.json";
     const first = { ...experiment, modelRef: "../retry-storm/retry-storm.model.json", layoutRef: null };
     const second = { ...first, layoutRef: "first.layout.json" };
-    const storedLayout = { schemaVersion: 1, positions: { gateway: { x: 99, y: 88 } } };
+    const storedLayout = { schemaVersion: 2, sizes: {}, edges: {}, positions: { gateway: { x: 99, y: 88 } } };
     vi.spyOn(api, "documents").mockResolvedValue([
       { path: firstPath, kind: "EXPERIMENT", version: "v1", modelRef: first.modelRef },
       { path: secondPath, kind: "EXPERIMENT", version: "v2", modelRef: second.modelRef },
@@ -145,7 +145,7 @@ describe("workspace file actions", () => {
     vi.spyOn(api, "document").mockImplementation(async path => ({ path, kind: path === secondPath ? "EXPERIMENT" : "LAYOUT", version: "v",
       content: path === secondPath ? { experiment: second } : { layout: storedLayout } }));
     const drafts = await copyModel({ ...loaded, experimentPath: firstPath, experiment: first,
-      layoutPath: sharedLayout, layout: { schemaVersion: 1, positions: {} }, versions: { ...loaded.versions, layout: null } }, "copy");
+      layoutPath: sharedLayout, layout: { schemaVersion: 2, sizes: {}, edges: {}, positions: {} }, versions: { ...loaded.versions, layout: null } }, "copy");
     expect(drafts.find(draft => draft.path === "copy/questions/first.layout.json")?.content.layout).toEqual(storedLayout);
     expect(drafts.find(draft => draft.path === "copy/questions/first.experiment.json")?.content.experiment?.layoutRef).toBeNull();
   });

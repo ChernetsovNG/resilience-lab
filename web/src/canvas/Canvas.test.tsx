@@ -452,7 +452,7 @@ describe("Canvas", () => {
     const { rerender } = render(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={null} />);
     expect((await screen.findByTestId("rf__node-client")).style.transform).toBe("translate(0px,100px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
-    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={{ schemaVersion: 1, positions: { client: { x: 40, y: 60 } } }} />);
+    rerender(<Canvas catalog={catalog} onCommand={vi.fn()} {...props} layout={{ schemaVersion: 2, sizes: {}, edges: {}, positions: { client: { x: 40, y: 60 } } }} />);
     expect(screen.getByTestId("rf__node-client").style.transform).toBe("translate(40px,60px)");
     expect(screen.getByTestId("rf__node-constructor").style.transform).toBe("translate(260px,100px)");
   });

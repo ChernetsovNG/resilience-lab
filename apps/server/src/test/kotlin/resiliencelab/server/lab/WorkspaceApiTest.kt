@@ -242,7 +242,7 @@ class WorkspaceApiTest {
             apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(model = ModelFile(schemaVersion = 6, blocks = emptyMap())))
         assertThat(code(putDocument("drafts/x.layout.json", modelBody, ifMatch = null))).isEqualTo("DOCUMENT_KIND")
 
-        val futureBody = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 2)))
+        val futureBody = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 3)))
         val invalid = putDocument("drafts/future.layout.json", futureBody, ifMatch = null)
         assertThat(invalid.status).isEqualTo(400)
         assertThat(code(invalid)).isEqualTo("DOCUMENT_INVALID")
@@ -274,7 +274,7 @@ class WorkspaceApiTest {
 
     @Test
     fun `structured problem arguments distinguish document kind failures while preserving messages`() {
-        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 1)))
+        val body = apiJson.encodeToString(DocumentContent.serializer(), DocumentContent(layout = LayoutFile(schemaVersion = 2)))
         val cases =
             listOf(
                 Triple(

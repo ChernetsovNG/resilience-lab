@@ -22,6 +22,33 @@ import kotlin.test.Test
 
 class DocumentSchemasTest {
     @Test
+    fun `layout two schema accepts manual geometry with unknown IDs and rejects old versions`() {
+        val source = """{"schemaVersion":2,"positions":{"unknown":{"x":-1,"y":0}},
+            "sizes":{"unknown":{"width":240,"height":200}},
+            "edges":{"unknown-edge":{"points":[{"x":520,"y":330}]}}}"""
+        assertThat(validate("layout", source)).isEmpty()
+        assertThat(validate("layout", """{"schemaVersion":2}""")).isEmpty()
+        assertThat(validate("layout", source.replace("\"schemaVersion\":2", "\"schemaVersion\":1"))).isNotEmpty()
+        for (invalid in listOf(
+            source.replace("\"width\":240", "\"width\":0"),
+            source.replace("\"height\":200", "\"height\":-1"),
+            source.replace("\"width\":240", "\"width\":null"),
+            source.replace("\"x\":520", "\"z\":520"),
+        )) {
+            assertThat(validate("layout", invalid)).describedAs(invalid).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `layout schema bounds bend point count`() {
+        for (count in listOf(0, 50, 51)) {
+            val points = List(count) { """{"x":1,"y":2}""" }.joinToString(",")
+            val errors = validate("layout", """{"schemaVersion":2,"edges":{"edge":{"points":[$points]}}}""")
+            if (count <= 50) assertThat(errors).isEmpty() else assertThat(errors).isNotEmpty()
+        }
+    }
+
+    @Test
     fun `experiment three validates optional variant descriptions and rejects version two`() {
         val source =
             experiment().replace("\"id\":\"baseline\"", "\"id\":\"baseline\",\"description\":\"Другая реплика\"")
@@ -206,8 +233,8 @@ class DocumentSchemasTest {
                 """"connections":[{"id":"call","type":"call","from":"s","to":"s","params":{"timeout":"1s","backoff":{"kind":"fixed","multiplier":0}}}]""",
             )
         assertThat(validate("model", call)).isNotEmpty()
-        assertThat(validate("layout", """{"schemaVersion":1,"positions":{"c":{"x":0,"y":1,"z":2}}}""")).isNotEmpty()
-        assertThat(validate("layout", """{"schemaVersion":1,"positions":{"c":{"x":0}}}""")).isNotEmpty()
+        assertThat(validate("layout", """{"schemaVersion":2,"positions":{"c":{"x":0,"y":1,"z":2}}}""")).isNotEmpty()
+        assertThat(validate("layout", """{"schemaVersion":2,"positions":{"c":{"x":0}}}""")).isNotEmpty()
     }
 
     @Test
@@ -252,7 +279,7 @@ class DocumentSchemasTest {
         val experiment = experiment(overrides)
         assertThat(validate("experiment", experiment)).isEmpty()
         assertThat(DocumentCodec.decodeExperiment(experiment, "test.experiment.json")).isInstanceOf(DecodeResult.Ok::class.java)
-        assertThat(validate("layout", """{"schemaVersion":1,"positions":{"missing/path":{"x":-1.5,"y":0}}}""")).isEmpty()
+        assertThat(validate("layout", """{"schemaVersion":2,"positions":{"missing/path":{"x":-1.5,"y":0}}}""")).isEmpty()
     }
 
     @Test
@@ -270,7 +297,7 @@ class DocumentSchemasTest {
 
     @Test
     fun `does not reject numeric strings accepted by document decoding`() {
-        val layout = """{"schemaVersion":"1","positions":{"c":{"x":"-1.5","y":"0"}}}"""
+        val layout = """{"schemaVersion":"2","positions":{"c":{"x":"-1.5","y":"0"}}}"""
         assertThat(DocumentCodec.decodeLayout(layout, "test.layout.json")).isInstanceOf(DecodeResult.Ok::class.java)
         assertThat(validate("layout", layout)).isEmpty()
         val experiment = experiment().replace("\"seed\":0", "\"seed\":\"0\"").replace("\"replications\":1", "\"replications\":\"1\"")

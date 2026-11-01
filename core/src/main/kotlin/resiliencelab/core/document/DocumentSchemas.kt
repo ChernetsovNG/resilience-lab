@@ -35,7 +35,7 @@ class DocumentSchemas(
     fun generate(): Map<String, String> =
         linkedMapOf(
             "model.schema.json" to model(),
-            "layout.schema.json" to structural(LayoutFile.serializer(), DocumentCodec.LAYOUT_SCHEMA_VERSION),
+            "layout.schema.json" to layout(),
             "experiment.schema.json" to experiment(),
         ).mapValues { (name, schema) ->
             val identified =
@@ -91,6 +91,30 @@ class DocumentSchemas(
             }
             else -> element
         }
+
+    private fun layout(): JsonObject {
+        val schema = structural(LayoutFile.serializer(), DocumentCodec.LAYOUT_SCHEMA_VERSION)
+        val definitions = schema.getValue("\$defs").jsonObject.toMutableMap()
+        val positive =
+            numericStrings(
+                buildJsonObject {
+                    put("type", "number")
+                    put("exclusiveMinimum", 0)
+                },
+            )
+        val size = "resiliencelab.core.document.Size"
+        definitions[size] = definitions.getValue(size).jsonObject.properties("width" to positive, "height" to positive)
+        val edge = "resiliencelab.core.document.EdgeLayout"
+        val shape = definitions.getValue(edge).jsonObject
+        val points =
+            shape
+                .getValue("properties")
+                .jsonObject
+                .getValue("points")
+                .jsonObject
+        definitions[edge] = shape.properties("points" to JsonObject(points + ("maxItems" to JsonPrimitive(50))))
+        return JsonObject(schema + ("\$defs" to JsonObject(definitions)))
+    }
 
     private fun model(): JsonObject {
         val schema = structural(ModelFile.serializer(), DocumentCodec.MODEL_SCHEMA_VERSION)

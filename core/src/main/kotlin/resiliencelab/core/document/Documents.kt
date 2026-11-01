@@ -51,12 +51,38 @@ data class ConnectionInstance(
     val classes: List<String>? = null,
 )
 
-/** `*.layout.json`: canvas positions by block path. */
+/** `*.layout.json`: canvas positions, manual block sizes and connection bends by ID. */
 @Serializable
 data class LayoutFile(
     val schemaVersion: Int,
     val positions: Map<String, Position> = emptyMap(),
+    val sizes: Map<String, Size> = emptyMap(),
+    val edges: Map<String, EdgeLayout> = emptyMap(),
 )
+
+/** User-selected block dimensions in model coordinates; omitted entries use automatic sizing. */
+@Serializable
+data class Size(
+    val width: Double,
+    val height: Double,
+) {
+    init {
+        require(width.isFinite() && width > 0 && height.isFinite() && height > 0) {
+            "Layout size width and height must be finite positive numbers"
+        }
+    }
+}
+
+/** Ordered bends in model coordinates; an empty list uses automatic routing. */
+@Serializable
+data class EdgeLayout(
+    val points: List<Position>,
+) {
+    init {
+        require(points.size <= 50) { "Layout edge must have at most 50 bend points" }
+        require(points.all { it.x.isFinite() && it.y.isFinite() }) { "Layout bend coordinates must be finite numbers" }
+    }
+}
 
 /** Top-left corner of a block on the canvas. */
 @Serializable

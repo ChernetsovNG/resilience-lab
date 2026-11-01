@@ -836,7 +836,7 @@ test("keeps automatic connection ids and references after building, renaming, sa
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.model), JSON.stringify({
     ...source, blocks: { client: source.blocks.client }, connections: [],
   }));
-  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout), JSON.stringify({ schemaVersion: 1, positions: { client: { x: 0, y: 100 } } }));
+  await writeFile(resolve("../apps/server/build/e2e-workspace", files.layout), JSON.stringify({ schemaVersion: 2, sizes: {}, edges: {}, positions: { client: { x: 0, y: 100 } } }));
   await writeFile(resolve("../apps/server/build/e2e-workspace", files.experiment), JSON.stringify({
     ...execution, variants: [{ id: "baseline", label: "Baseline", overrides: {} }], faults: [], grid: [],
     execution: { ...execution.execution, replications: 2, warmup: "0ms", measurement: "300ms", window: "50ms" },

@@ -34,7 +34,7 @@ describe("API client", () => {
   it("creates a document without If-Match", async () => {
     const fetchMock = stubFetch(() => ({ body: { path: "new.layout.json", kind: "LAYOUT", version: "v1" } }));
 
-    await api.saveDocument("new.layout.json", { layout: { schemaVersion: 1, positions: {} } }, null);
+    await api.saveDocument("new.layout.json", { layout: { schemaVersion: 2, sizes: {}, edges: {}, positions: {} } }, null);
 
     expect((fetchMock.mock.calls[0][1]?.headers as Record<string, string>)["If-Match"]).toBeUndefined();
   });
