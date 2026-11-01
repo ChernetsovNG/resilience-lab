@@ -164,3 +164,36 @@ for (const language of ["en", "ru"] as const) {
     }
   });
 }
+
+test("edits an imported policy sweep without a base policy, saves and estimates both variants", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("resilience-lab.language", "en"));
+  const directory = `policy-axis-${randomUUID()}`;
+  const root = resolve("../apps/server/build/e2e-workspace", directory);
+  await mkdir(root);
+  try {
+    const experiment = await copySmallExperiment(root);
+    experiment.grid = [{ path: "gateway.rateLimit.burst", values: [5, 10] }];
+    experiment.variants[1].overrides["gateway.rateLimit"] = { rate: "100/s", burst: 10 };
+    await writeFile(resolve(root, "retry-storm.experiment.json"), JSON.stringify(experiment));
+    const path = `${directory}/retry-storm.experiment.json`;
+    await page.goto("/");
+    await selectExperiment(page, path);
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
+    const first = page.getByRole("textbox", { name: "Axis 1 value 1", exact: true });
+    await expect(first).toBeEditable();
+    await first.fill("6"); await first.press("Enter");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
+    const saved = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
+    expect((await saved.json()).content.experiment.grid).toEqual([{ path: "gateway.rateLimit.burst", values: [6, 10] }]);
+    const estimate = await page.request.post("/api/v1/estimate", { data: { experiment: path } });
+    expect(estimate.ok()).toBe(true);
+    expect((await estimate.json()).tasks).toBe(8);
+    await page.reload();
+    await page.getByRole("button", { name: "Run settings", exact: true }).click();
+    await expect(first).toHaveValue("6");
+    await expect(first).toBeEditable();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

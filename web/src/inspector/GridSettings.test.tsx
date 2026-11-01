@@ -1,5 +1,3 @@
-import { withParam } from "../workspace/params";
-import { initialParams } from "../workspace/initialParams";
 import { useReducer } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -38,12 +36,8 @@ it.each([
   { path: "gateway-to-middle.fallback.processing", values: ["1ms", "2ms"] },
   { path: "gateway.rateLimit.burst", values: [5, 10] },
   { path: "gateway.healthCheck.timeout", values: ["1ms", "2ms"] },
-])("edits imported policy axis $path and preserves it when adding another axis", axis => {
-  const [id, name] = axis.path.split(".");
-  const type = id === "gateway" ? "service" : "call";
-  const descriptor = serverCatalog.types.find(candidate => candidate.id === type)!.params.find(param => param.name === name)! as import("../api/apiTypes").ParamDescriptor;
-  const initialModel = withParam(model, id, name, initialParams(descriptor.fields));
-  render(<Settings initialModel={initialModel} initialCatalog={serverCatalog as Catalog} initialExperiment={{ ...experiment, grid: [axis] }} />);
+])("edits imported policy axis $path without offering absent policies as new choices", axis => {
+  render(<Settings initialCatalog={serverCatalog as Catalog} initialExperiment={{ ...experiment, grid: [axis] }} />);
   expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).disabled).toBe(false);
   expect(screen.getByLabelText<HTMLInputElement>("Axis 1 value 1").readOnly).toBe(false);
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add value to axis 1" }).disabled).toBe(false);
@@ -51,7 +45,7 @@ it.each([
   expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove grid axis 1" }).disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
   const second = screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 2 parameter" });
-  expect([...second.options].map(option => option.value)).toContain(axis.path);
+  expect([...second.options].map(option => option.value)).not.toContain(axis.path);
   fireEvent.change(second, { target: { value: "gateway-to-middle.timeout" } });
   const value = screen.getByLabelText("Axis 2 value 1");
   fireEvent.change(value, { target: { value: "70ms" } });
@@ -59,6 +53,18 @@ it.each([
   expect(JSON.parse(screen.getByTestId("grid-document").textContent!)).toEqual([
     axis, { path: "gateway-to-middle.timeout", values: ["70ms"] },
   ]);
+});
+
+it("edits a policy axis when the policy exists only in a variant and restores it with Undo", () => {
+  const initialExperiment: ExperimentFile = { ...experiment, grid: [{ path: "gateway.rateLimit.burst", values: [10, 20] }],
+    variants: [{ id: "baseline", overrides: {} }, { id: "limited", overrides: { "gateway.rateLimit": { rate: "100/s", burst: 10 } } }],
+  };
+  render(<Settings initialCatalog={serverCatalog as Catalog} initialExperiment={initialExperiment} />);
+  const input = screen.getByLabelText("Axis 1 value 1");
+  fireEvent.change(input, { target: { value: "12" } }); fireEvent.blur(input);
+  expect(JSON.parse(screen.getByTestId("grid-document").textContent!)).toEqual([{ path: "gateway.rateLimit.burst", values: [12, 20] }]);
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(JSON.parse(screen.getByTestId("grid-document").textContent!)).toEqual([{ path: "gateway.rateLimit.burst", values: [10, 20] }]);
 });
 
 it.each(["fixed", "lognormal"])("offers only applicable sweep fields for %s", kind => {

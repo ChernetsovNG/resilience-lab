@@ -8,7 +8,7 @@ import type { Catalog, Diagnostic, ExperimentFile, ModelFile, ParamDescriptor } 
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
 import { setGridAxes } from "../workspace/experimentCommands";
-import { isObject, ownEntry } from "../workspace/params";
+import { elementOf, isObject, ownEntry } from "../workspace/params";
 import { ParamField } from "./ParamField";
 import { parameterLabel } from "../presentation/labels";
 import { parseParam } from "../workspace/paramParsing";
@@ -36,7 +36,6 @@ function parametersOf(model: ModelFile, catalog: Catalog) {
     if (!parameterApplies(descriptor, isObject(values) ? values : {}, params)) return [];
     const path = `${prefix}.${descriptor.name}`;
     const value = (isObject(values) ? values[descriptor.name] : undefined) ?? descriptor.default ?? null;
-    if (policyNames.has(descriptor.name) && !isObject(value)) return [];
     const title = [...titles, descriptor.title];
     return descriptor.kind === "OBJECT" ? leaves(descriptor.fields, path, value, title)
       : descriptor.sweepable ? [{ path, title: title.join(t("editor.symbols.separator")), descriptor, value: value as GridAxis["values"][number] }] : [];
@@ -118,7 +117,10 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const id = useId();
   const grid = experiment.grid ?? [];
   const parameters = parametersOf(model, catalog);
-  const writableParameters = parameters;
+  const writableParameters = parameters.filter(parameter => {
+    const [id, name] = parameter.path.split(".");
+    return !policyNames.has(name) || isObject(elementOf(model, id)?.params[name]);
+  });
   const labels = new Map(grid.map(axis => {
     const parameter = parameters.find(candidate => candidate.path === axis.path);
     return [axis.path, parameter?.heading ?? parameterLabel(axis.path, catalog, model)];
@@ -163,6 +165,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
               replace(index, { path: selected.path, values: [selected.value] });
             }}>
             {parameter === undefined ? <option value={axis.path} title={axis.path}>{t("editor.grid.unavailableParameter", { path: heading })}</option> : null}
+            {parameter !== undefined && !writableParameters.includes(parameter) ? <option value={axis.path} title={axis.path}>{heading}</option> : null}
             {writableParameters.map((candidate) => <option key={candidate.path} value={candidate.path} title={candidate.path}>
               {candidate.heading}
             </option>)}
