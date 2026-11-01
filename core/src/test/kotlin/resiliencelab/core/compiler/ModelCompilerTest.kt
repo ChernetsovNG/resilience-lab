@@ -175,6 +175,74 @@ class ModelCompilerTest {
     }
 
     @Test
+    fun `unreachable timeout warnings retain variant override origins`() {
+        val source =
+            experiment().copy(
+                variants =
+                    experiment().variants.map { variant ->
+                        if (variant.id == "no-retries") {
+                            variant.copy(overrides = variant.overrides + ("gateway-to-dependency.timeout" to JsonPrimitive("250ms")))
+                        } else {
+                            variant
+                        }
+                    },
+            )
+        val compiled = compiler.compile(model(), "m.model.json", source, "e.experiment.json")
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(compiled.experiment!!).single { it.code == "LINT_TIMEOUT_UNREACHABLE" }
+
+        assertThat(warning.document).isEqualTo("e.experiment.json")
+        assertThat(warning.pointer).isEqualTo("/variants/1/overrides/gateway-to-dependency.timeout")
+        assertThat(warning.variant).isEqualTo("no-retries")
+        assertThat(warning.path).isEqualTo("gateway-to-dependency")
+    }
+
+    @Test
+    fun `unreachable timeout warnings retain grid origins and affected points`() {
+        val source =
+            experiment().copy(
+                grid =
+                    listOf(
+                        GridAxis(
+                            "gateway-to-dependency.timeout",
+                            listOf(JsonPrimitive("249.999ms"), JsonPrimitive("250ms"), JsonPrimitive("300ms")),
+                        ),
+                    ),
+            )
+        val compiled = compiler.compile(model(), "m.model.json", source, "e.experiment.json")
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(compiled.experiment!!).filter { it.code == "LINT_TIMEOUT_UNREACHABLE" }
+
+        assertThat(warnings.map { it.variant to it.pointer }).containsExactly(
+            "baseline" to "/grid/0/values/1",
+            "baseline" to "/grid/0/values/2",
+            "no-retries" to "/grid/0/values/1",
+            "no-retries" to "/grid/0/values/2",
+        )
+        assertThat(warnings.map { it.args?.get("points") }).containsExactly(
+            JsonPrimitive("p1"),
+            JsonPrimitive("p2"),
+            JsonPrimitive("p1"),
+            JsonPrimitive("p2"),
+        )
+        assertThat(warnings).allSatisfy { assertThat(it.document).isEqualTo("e.experiment.json") }
+    }
+
+    @Test
+    fun `common unreachable timeout warnings are grouped across variants`() {
+        val compiled = compiler.compile(model(model.replace("\"80ms\"", "\"250ms\"")), "m.model.json", experiment(), "e.experiment.json")
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(compiled.experiment!!).single { it.code == "LINT_TIMEOUT_UNREACHABLE" }
+
+        assertThat(warning.document).isEqualTo("m.model.json")
+        assertThat(warning.pointer).isEqualTo("/connections/1/params/timeout")
+        assertThat(warning.variant).isNull()
+    }
+
+    @Test
     fun `deadline warnings retain grid value origins and variant budgets`() {
         val source =
             experiment().copy(

@@ -20,17 +20,22 @@ import kotlin.math.pow
  * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
+ * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
  */
 class ModelLinter(
     private val retryAmplificationThreshold: Int = 10,
     private val minimumReplications: Int = 5,
     private val timeoutBudgetTolerance: Double = 0.05,
+    private val timeoutUnreachableThreshold: Double = 1.0,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
         require(minimumReplications >= 1) { "minimumReplications must be at least 1" }
         require(timeoutBudgetTolerance.isFinite() && timeoutBudgetTolerance >= 0.0) {
             "timeoutBudgetTolerance must be finite and non-negative"
+        }
+        require(timeoutUnreachableThreshold.isFinite() && timeoutUnreachableThreshold >= 1.0) {
+            "timeoutUnreachableThreshold must be finite and at least 1"
         }
     }
 
@@ -110,6 +115,7 @@ class ModelLinter(
         val diagnostics = mutableListOf<Diagnostic>()
         val demands = mutableMapOf<String, Double>()
         val maximumRates = mutableMapOf<String, Double>()
+        val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
         graph.clients.forEach { client ->
             client.classes.forEach { (requestClass, load) ->
                 val holdingByService = mutableMapOf<String, Double>()
@@ -119,6 +125,7 @@ class ModelLinter(
                         val outgoing = calls.associateBy { it.from }
                         val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
                         calls.forEach { call ->
+                            clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
                             timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
                                 ?.let(diagnostics::add)
                         }
@@ -139,7 +146,8 @@ class ModelLinter(
                 }
             }
         }
-        return diagnostics.distinct() + handlerDemand(graph.services, demands, maximumRates) +
+        return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
+            handlerDemand(graph.services, demands, maximumRates) +
             graph.calls
                 .filter { call ->
                     call.balancing != null &&
@@ -253,6 +261,35 @@ class ModelLinter(
         } else {
             null
         }
+    }
+
+    /**
+     * The original client deadline bounds every attempt, including those on nested and replica calls.
+     * List each affected client once even when several request types or router branches reach the call.
+     */
+    private fun timeoutUnreachable(
+        call: CallEdge,
+        clients: Set<ClientNode>,
+    ): Diagnostic? {
+        val affected = clients.filter { call.timeoutMs >= it.deadlineMs * timeoutUnreachableThreshold }
+        if (affected.isEmpty()) return null
+        val deadlines = affected.joinToString(", ") { "'${it.path}': ${number(it.deadlineMs)}" }
+        return warning(
+            CoreMessage.LINT_TIMEOUT_UNREACHABLE,
+            "Timeout ${number(call.timeoutMs)} ms on connection '${call.path}' is at least " +
+                "${number(timeoutUnreachableThreshold)} × deadline for these clients (deadlines in ms): $deadlines. " +
+                "Their deadlines expire first; reduce the timeout so it can protect these requests.",
+            call.origin,
+            call.path,
+            "/params/timeout",
+            mapOf(
+                "connection" to JsonPrimitive(call.path),
+                // Decimal strings preserve comparison operands when localized messages format numeric arguments.
+                "timeoutMs" to JsonPrimitive(number(call.timeoutMs)),
+                "clientDeadlines" to JsonPrimitive(deadlines),
+                "threshold" to JsonPrimitive(number(timeoutUnreachableThreshold)),
+            ),
+        )
     }
 
     /**
