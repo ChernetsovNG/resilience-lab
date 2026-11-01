@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { cp, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, selectExperiment, test, type Locator, type Page } from "./fixtures";
+import { expect, selectExperiment, test, type Page } from "./fixtures";
+import { dragByOffset, waitForStableRects } from "./canvasGestures";
 import type { LayoutFile } from "../src/api/apiTypes";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 // Real gestures and real storage: component tests cover the individual geometry rules.
 test.use({ locale: "ru-RU", viewport: { width: 1600, height: 1000 } });
@@ -14,19 +16,11 @@ async function stored(page: Page, path: string) {
 }
 
 async function save(page: Page) {
-  const button = page.getByRole("button", { name: "Сохранить", exact: true });
+  const button = page.getByRole("button", { name: ru["app.topBar.save"], exact: true });
   await expect(button).toBeEnabled();
   await button.click();
+  await expect(page.locator(".dirty-mark")).toBeHidden();
   await expect(button).toBeDisabled();
-}
-
-async function drag(page: Page, control: Locator, dx: number, dy: number) {
-  const rectangle = (await control.boundingBox())!;
-  const x = rectangle.x + rectangle.width / 2, y = rectangle.y + rectangle.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y + dy, { steps: 8 });
-  await page.mouse.up();
 }
 
 test("manual node size and edge bends persist independently of model and experiment", async ({ page }, testInfo) => {
@@ -41,21 +35,22 @@ test("manual node size and edge bends persist independently of model and experim
   try {
     await page.goto("/");
     await selectExperiment(page, path("experiment"));
-    await page.getByRole("tab", { name: "Модель", exact: true }).click();
+    await page.getByRole("tab", { name: ru["editor.pages.model"], exact: true }).click();
     const initial: LayoutFile = (await stored(page, path("layout"))).layout;
     const model = await stored(page, path("model"));
     const experiment = await stored(page, path("experiment"));
     const node = page.getByTestId("rf__node-gateway");
     await expect(node).toBeVisible();
     const scale = () => page.locator(".react-flow__viewport").evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a);
-    const canvas = (await page.locator(".react-flow").boundingBox())!;
+    const [canvas] = await waitForStableRects(page.locator(".react-flow"));
     const startScale = await scale();
     await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + 32);
     await page.mouse.wheel(0, Math.log2(startScale / 0.65) / 0.002);
     await expect.poll(scale).toBeCloseTo(0.65, 4);
     await node.locator(".block-node-header").click();
+    await waitForStableRects(node);
     const original = await node.evaluate(element => ({ width: element.offsetWidth, height: element.offsetHeight }));
-    await drag(page, node.locator(".react-flow__resize-control.handle.top.left"), -52, -39);
+    await dragByOffset(node.locator(".react-flow__resize-control.handle.top.left"), { x: -52, y: -39 });
     await save(page);
     const resized: LayoutFile = (await stored(page, path("layout"))).layout;
     expect(resized.positions.gateway.x).toBeCloseTo(initial.positions.gateway.x - 80, 0);
@@ -63,37 +58,50 @@ test("manual node size and edge bends persist independently of model and experim
     expect(resized.sizes.gateway.width).toBeCloseTo(original.width + 80, 0);
     expect(resized.sizes.gateway.height).toBeCloseTo(original.height + 60, 0);
     expect({ ...resized, positions: initial.positions, sizes: {} }).toEqual(initial);
-    await page.getByRole("button", { name: "Отменить действие", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.undo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(initial);
-    await page.getByRole("button", { name: "Повторить", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.redo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(resized);
 
     const edge = page.getByTestId("rf__edge-gateway-to-middle");
     await edge.press("Enter");
     await expect(edge).toHaveClass(/selected/);
-    const horizontal = page.locator('[data-edge-control="segment"][style*="ns-resize"]').first();
-    await drag(page, horizontal, 0, -52);
+    const horizontalSegments = page.locator('[data-edge-control="segment"][style*="ns-resize"]');
+    await expect(horizontalSegments.first()).toBeVisible();
+    // Short port stubs can share their hit area with a bend; exercise an actual segment handle.
+    const longestHorizontal = await edge.locator(".react-flow__edge-path").evaluate(path => {
+      const coordinates = path.getAttribute("d")!.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)!.map(Number);
+      const lengths: number[] = [];
+      for (let index = 2; index < coordinates.length; index += 2) {
+        if (coordinates[index + 1] === coordinates[index - 1] && coordinates[index] !== coordinates[index - 2]) {
+          lengths.push(Math.abs(coordinates[index] - coordinates[index - 2]));
+        }
+      }
+      return lengths.indexOf(Math.max(...lengths));
+    });
+    const horizontal = horizontalSegments.nth(longestHorizontal);
+    await dragByOffset(horizontal, { x: 0, y: -52 });
     await save(page);
     const routed: LayoutFile = (await stored(page, path("layout"))).layout;
     expect(routed.edges["gateway-to-middle"].points.length).toBeGreaterThan(0);
     expect({ ...routed, edges: {} }).toEqual(resized);
-    await page.getByRole("button", { name: "Отменить действие", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.undo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(resized);
-    await page.getByRole("button", { name: "Повторить", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.redo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(routed);
-    await drag(page, page.locator('[data-edge-control="bend"]').first(), 26, -26);
+    await dragByOffset(page.locator('[data-edge-control="bend"]').first(), { x: 26, y: -26 });
     await save(page);
     const bent: LayoutFile = (await stored(page, path("layout"))).layout;
     expect(bent.edges).not.toEqual(routed.edges);
     expect({ ...bent, edges: routed.edges }).toEqual(routed);
-    await page.getByRole("button", { name: "Отменить действие", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.undo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(routed);
-    await page.getByRole("button", { name: "Повторить", exact: true }).click();
+    await page.getByRole("button", { name: ru["app.topBar.redo"], exact: true }).click();
     await save(page);
     expect((await stored(page, path("layout"))).layout).toEqual(bent);
     await page.screenshot({ path: testInfo.outputPath("manual-edge-ru.png") });
@@ -106,18 +114,18 @@ test("manual node size and edge bends persist independently of model and experim
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await node.locator(".block-node-header").click();
     await expect(page.locator(".react-flow__resize-control")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Сбросить размер", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: ru["editor.canvas.resetSize"], exact: true })).toHaveCount(0);
     await edge.press("Enter");
     await expect(page.locator("[data-edge-control]")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Восстановить автоматический путь", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: ru["editor.canvas.resetEdge"], exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("manual-variant-readonly-ru.png") });
 
-    await page.getByRole("tab", { name: "Модель", exact: true }).click();
+    await page.getByRole("tab", { name: ru["editor.pages.model"], exact: true }).click();
     await edge.press("Enter");
-    await page.getByRole("button", { name: "Восстановить автоматический путь", exact: true }).click();
+    await page.getByRole("button", { name: ru["editor.canvas.resetEdge"], exact: true }).click();
     await node.locator(".block-node-header").click();
     await page.screenshot({ path: testInfo.outputPath("manual-node-size-ru.png") });
-    await page.getByRole("button", { name: "Сбросить размер", exact: true }).click();
+    await page.getByRole("button", { name: ru["editor.canvas.resetSize"], exact: true }).click();
     await save(page);
     const reset: LayoutFile = (await stored(page, path("layout"))).layout;
     expect(reset).toEqual({ ...initial, positions: bent.positions });
@@ -130,5 +138,8 @@ test("manual node size and edge bends persist independently of model and experim
     expect(await stored(page, path("experiment"))).toEqual(experiment);
     expect(await readFile(diskPath("model"), "utf8")).toBe(sourceModel);
     expect(await readFile(diskPath("experiment"), "utf8")).toBe(sourceExperiment);
-  } finally { await rm(target, { recursive: true }); }
+  } finally {
+    await page.goto("/api/v1/health");
+    await rm(target, { recursive: true });
+  }
 });
