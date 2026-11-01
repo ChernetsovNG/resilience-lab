@@ -127,6 +127,7 @@ export function App() {
     }
     setVariantPage({ id: variantId, variants });
   }
+  if (analysis && variantId === null) setAnalysis(false);
   const selectVariant = (id: string | null) => setVariantPage({ id, variants });
   let target = inspectorTarget;
   if ((target === "element" && selected === null) || (target === "variant" && variantId === null)) {
