@@ -2,6 +2,7 @@ import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import type { ParamDescriptor } from "../api/apiTypes";
 import { canonicalOf } from "./quantities";
+import { formatParameterValue } from "./parameterValues";
 
 export type ParsedParam = { ok: true; value: unknown } | { ok: false; message: string };
 
@@ -17,7 +18,8 @@ export function parseParam(descriptor: ParamDescriptor, draft: string, checkRang
       if (descriptor.units.length === 0) return { ok: true, value: text };
       const canonical = canonicalOf(text, descriptor.units);
       return canonical === null
-        ? { ok: false, message: t("editor.param.useUnit", { units: descriptor.units.map((unit) => unit.symbol).join(t("editor.param.unitSeparator")) }) }
+        ? { ok: false, message: t("editor.param.useUnit", { units: descriptor.units.map((unit) => unit.symbol).join(t("editor.param.unitSeparator")),
+          example: descriptor.dimension === "DURATION" ? "250ms" : descriptor.dimension === "RATE" ? "100/s" : "10%" }) }
         : inRange(descriptor, canonical, text, checkRange);
     }
     default:
@@ -33,7 +35,9 @@ function inRange(descriptor: ParamDescriptor, canonical: number, value: unknown,
   const above = maximum != null && canonical > maximum;
   if (!checkRange || (!below && !above)) return { ok: true, value };
   const unit = descriptor.units[0];
-  const shown = (bound: number) => (unit === undefined ? formatNumber(bound) : t("editor.param.rangeQuantity", { value: formatNumber((bound * unit.denominator) / unit.numerator), unit: unit.symbol }));
+  const shown = (bound: number) => unit === undefined ? formatNumber(bound) : descriptor.dimension === "DURATION"
+    ? formatParameterValue(`${bound * unit.denominator / unit.numerator}${unit.symbol}`, descriptor)
+    : t("editor.param.rangeQuantity", { value: formatNumber((bound * unit.denominator) / unit.numerator), unit: unit.symbol });
   const limits = [
     minimum == null ? null : t("editor.param.minimum", { value: shown(minimum) }),
     exclusiveMinimum == null ? null : t("editor.param.exclusiveMinimum", { value: shown(exclusiveMinimum) }),

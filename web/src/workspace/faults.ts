@@ -1,6 +1,6 @@
 import type { Catalog, ExperimentFile, ModelFile } from "../api/apiTypes";
 import { isObject, ownEntry } from "./params";
-import { canonicalOf } from "./quantities";
+import { canonicalOf, durationLiteral } from "./quantities";
 
 type Fault = ExperimentFile["faults"][number];
 export const faultKinds = ["slowdown", "errors", "unavailable", "blackhole", "capacityLoss"] as const;
@@ -74,6 +74,6 @@ export function createFault(catalog: Catalog, experiment: ExperimentFile, target
   const measurement = canonicalOf(experiment.execution.measurement, units);
   const warmup = canonicalOf(experiment.execution.warmup, units);
   if (unit === undefined || measurement === null || measurement <= 0 || warmup === null || warmup < 0) return null;
-  const time = (fraction: number) => `${((warmup + measurement * fraction) * unit.denominator) / unit.numerator}${unit.symbol}`;
+  const time = (fraction: number) => durationLiteral(warmup + measurement * fraction, units);
   return { target: target.id, from: time(0.5), to: time(0.75), kind: "slowdown", ...initialFaultFields("slowdown", target) };
 }

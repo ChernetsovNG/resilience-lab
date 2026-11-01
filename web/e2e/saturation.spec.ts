@@ -33,7 +33,7 @@ test("shows the retry-storm saturation conclusion from the real summary for each
         const insight = page.getByRole("region", { name: "Saturation insight" });
         await expect(insight.getByRole("heading")).toHaveText(variant.label);
         await expect(insight).not.toContainText(/Saturation rule:|minimumDurationMs\s*=/);
-        const rule = insight.getByText("A slot set counts as saturated", { exact: false });
+        const rule = insight.getByText("A resource pool (handlers or connections) counts as saturated", { exact: false });
         await expect(rule).toBeHidden();
         await insight.getByText("How saturation is detected", { exact: true }).click();
         await expect(rule).toBeVisible();

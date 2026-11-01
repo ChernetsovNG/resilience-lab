@@ -154,7 +154,7 @@ export function Inspector({ catalog, model, baseModel, experiment, experimentPat
           {parameters?.map((descriptor) => (
             <ParamField
               key={`${selected}.${descriptor.name}`}
-              descriptor={descriptor.name === "balancing" ? { ...descriptor, default: descriptor.default ?? "roundRobin" } : descriptor}
+              descriptor={descriptor}
               value={element.params[descriptor.name]}
               path={descriptor.name}
               editable={editable}

@@ -68,13 +68,20 @@ npm test -- --run src/i18n/catalogs.test.ts
 | Timeout | Таймаут |
 | Attempts | Попытки |
 | Backoff | Пауза перед повтором |
+| Retry budget | Бюджет повторов |
+| Circuit breaker | Предохранитель вызовов |
+| Open circuit breaker | Разомкнутый предохранитель вызовов |
+| Fallback | Заглушка |
+| Readiness check | Проверка готовности |
+| Outlier detection | Вывод неисправных экземпляров |
+| Fault | Отказ |
 | Deadline | Дедлайн |
 | Arrival rate | Интенсивность запросов |
 | Utilization | Загрузка |
 | Mean queue | Средняя очередь |
 | Queue rejections | Отказы очереди |
 | Amplification | Усиление |
-| Orphaned work | Брошенная работа |
+| Orphaned attempts | Брошенные попытки |
 | Success rate | Доля успешных |
 | Replications | Повторения |
 | Warm-up | Разогрев |
@@ -87,8 +94,10 @@ npm test -- --run src/i18n/catalogs.test.ts
 | Time | Время |
 | Estimate | Оценка |
 | Run | Запустить |
+| Stop run | Остановить прогон |
+| Expand results | Развернуть результаты |
 | Save | Сохранить |
 
 Обозначения `p50`, `p95`, `p99`, `RPS` и `CI` сохраняются. Отображаемые единицы
-`ms`, `s`, `KiB`, `MiB` в русском интерфейсе записываются как `мс`, `с`, `КиБ`,
-`МиБ`. В английском интерфейсе сохраняется прежнее написание.
+`ms`, `s`, `min`, `KiB`, `MiB` в русском интерфейсе записываются как `мс`, `с`,
+`мин`, `КиБ`, `МиБ`. В английском интерфейсе сохраняется прежнее написание.

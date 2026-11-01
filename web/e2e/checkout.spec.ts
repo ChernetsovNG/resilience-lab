@@ -148,7 +148,7 @@ test.describe("grid Findings in Russian", () => {
     await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const points = page.getByLabel("Точка сетки", { exact: true });
-    for (const [point, timeout, attempts] of [["p0", "1s", "1"], ["p8", "5s", "3"]]) {
+    for (const [point, timeout, attempts] of [["p0", "1 с", "1"], ["p8", "5 с", "3"]]) {
       await points.selectOption(point);
       for (const name of ["Сводка по вариантам", "Вывод о насыщении"]) {
         const heading = page.getByRole("region", { name, exact: true }).getByRole("heading");

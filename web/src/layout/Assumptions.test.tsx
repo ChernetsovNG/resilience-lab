@@ -21,7 +21,7 @@ it("shows shared assumptions, only used model types and manifest run conditions"
   expect(screen.getByText("Handlers are held during downstream calls and backoff.")).toBeTruthy();
 
   expect(condition("Replications")).toBe("2");
-  expect(condition("Seed")).toBe("20,261,025");
+  expect(condition("Seed")).toBe("20261025");
   expect(condition("Warmup")).toBe("100 ms");
   expect(condition("Measurement")).toBe("1 s");
   expect(condition("Series window")).toBe("10 ms");

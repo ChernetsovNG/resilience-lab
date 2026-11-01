@@ -25,7 +25,7 @@ for (const language of ["en", "ru"] as const) {
       : "3 × 3 = 9 points × 2 variants × 10 replications = 180 runs");
     const axis = inspector.getByRole("group", { name: `${russian ? "Таймаут" : "Timeout"} · order-service → payment-service`, exact: true });
     const warning = axis.locator(".field-diagnostics > li").filter({ hasText: "LINT_TIMEOUT_BUDGET" })
-      .filter({ hasText: russian ? /Таймаут.*= 1s/ : /Timeout.*= 1s/ });
+      .filter({ hasText: russian ? /Таймаут.*= 1 с/ : /Timeout.*= 1 s/ });
     await expect(warning).toHaveCount(1);
     await expect(warning).toContainText("Baseline, hello");
     await expect(warning).not.toContainText(/p[0-9]/);

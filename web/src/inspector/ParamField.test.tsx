@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import type { ParamDescriptor } from "../api/apiTypes";
+import type { Catalog, ParamDescriptor } from "../api/apiTypes";
 import { ParamField } from "./ParamField";
 import catalog from "../test/catalog.json";
 import { initialParams } from "../workspace/initialParams";
@@ -37,5 +37,16 @@ it("shows catalog arrays as read-only JSON without committing a lossy string", (
   expect(field.readOnly).toBe(true);
   expect(JSON.parse(field.value)).toEqual(entries);
   fireEvent.blur(field);
+  expect(onCommit).not.toHaveBeenCalled();
+});
+
+it("shows an empty optional array without serializing null or committing a value", () => {
+  const descriptor = (catalog as Catalog).types.find(type => type.id === "client")!.params.find(param => param.name === "classes")!;
+  const onCommit = vi.fn();
+  render(<ParamField descriptor={descriptor} value={null} path="classes" editable
+    isOverridden={() => false} onValidity={() => {}} onCommit={onCommit} />);
+  const field = screen.getByRole<HTMLTextAreaElement>("textbox");
+  expect(field.value).toBe("");
+  expect(field.placeholder).toBe("Not set");
   expect(onCommit).not.toHaveBeenCalled();
 });

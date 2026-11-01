@@ -15,6 +15,13 @@ export function canonicalOf(text: string, units: readonly ParamDescriptor["units
   return Number.isFinite(value) ? value : null;
 }
 
+/** A generated duration uses the largest catalog unit with a whole value; sub-unit values retain their precision. */
+export function durationLiteral(milliseconds: number, units: readonly ParamDescriptor["units"][number][]): string {
+  const unit = [...units].sort((a, b) => b.numerator / b.denominator - a.numerator / a.denominator)
+    .find(unit => milliseconds > 0 && Number.isInteger(milliseconds * unit.denominator / unit.numerator)) ?? units[0];
+  return `${milliseconds * unit.denominator / unit.numerator}${unit.symbol}`;
+}
+
 function decimal(text: string): [bigint, bigint] {
   const [significand, exponent = "0"] = text.toLowerCase().split("e");
   const [whole, fraction = ""] = significand.split(".");

@@ -68,7 +68,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const series = page.waitForResponse((response) => response.url().includes(`/series/baseline/p3/0`));
     await heatmap.getByRole("button").nth(3).click();
     await expect(heatmap.getByRole("button").nth(3)).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 80ms/);
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 80 ms/);
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Attempts · gateway → middle = 3/);
     const dependency = point.aggregate.services.dependency.totals;
     await expect(page.getByTestId("canvas-results-dependency")).toContainText(`Queue ${formatNumber(dependency.slotPools.handlers.queueIntegralMs / dependency.measurementMs)}`);
@@ -82,11 +82,11 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await page.getByRole("tab", { name: "Findings", exact: true }).click();
     const insight = page.getByRole("region", { name: "Saturation insight" });
     await expect(insight.getByRole("heading")).toContainText("Baseline · ");
-    await expect(insight.getByRole("heading")).toContainText("Timeout · gateway → middle = 80ms");
+    await expect(insight.getByRole("heading")).toContainText("Timeout · gateway → middle = 80 ms");
     await expect(insight.getByRole("heading")).toContainText("Attempts · gateway → middle = 3");
     await expect(insight.getByRole("heading")).not.toContainText("p3");
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p3");
-    await expect(page.getByLabel("Grid point", { exact: true }).locator("option:checked")).toContainText("Timeout · gateway → middle = 80ms");
+    await expect(page.getByLabel("Grid point", { exact: true }).locator("option:checked")).toContainText("Timeout · gateway → middle = 80 ms");
     await expect(insight).toContainText("How saturation is detected");
     await expect(page.getByRole("table", { name: "Findings", exact: true }).getByRole("row", { name: /Success rate/ }).locator("td").first()).toContainText(formatPercent(point.aggregate.entries.total.successRate!.mean));
     await page.getByRole("button", { name: /fit view/i }).click();
@@ -112,11 +112,11 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     await page.getByRole("button", { name: "Pause run", exact: true }).click();
     await page.getByRole("tab", { name: "Map", exact: true }).click();
     await heatmap.getByRole("button").nth(0).click();
-    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20ms/);
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20 ms/);
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Attempts · gateway → middle = 1/);
     await page.getByRole("button", { name: "Summary", exact: true }).click();
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Summary · Baseline ·/);
-    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20ms/);
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20 ms/);
     await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Attempts · gateway → middle = 1/);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     expect(await documents()).toEqual(savedDocuments);
@@ -134,7 +134,7 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     const points = page.getByRole("list", { name: "Map points" }).getByRole("button");
     await expect(points).toHaveCount(3);
     await points.nth(2).click();
-    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20ms/);
+    await expect(page.getByTestId("canvas-result-context")).toHaveAttribute("title", /Timeout · gateway → middle = 20 ms/);
     await expect(page.getByLabel("Grid point", { exact: true })).toHaveValue("p2");
     await page.getByRole("button", { name: "Analysis", exact: true }).click();
     expect(await page.evaluate(() => ({

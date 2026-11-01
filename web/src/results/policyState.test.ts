@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { policyWindowState } from "./policyState";
 
-it("normalizes repeated breaker openings by actual window duration and caller copies", () => {
+it("normalizes repeated circuit breaker openings by actual window duration and caller copies", () => {
   expect(policyWindowState({ durationMs: 100, circuitOpenMs: 120 }, 3).circuitOpenShare).toBe(0.4);
   expect(policyWindowState({ durationMs: 25, circuitOpenMs: 10 }).circuitOpenShare).toBe(0.4);
   expect(policyWindowState({ durationMs: 100, circuitOpenMs: 0 }, 3).circuitOpenShare).toBe(0);

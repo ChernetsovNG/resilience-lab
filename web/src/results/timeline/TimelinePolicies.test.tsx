@@ -36,7 +36,7 @@ it("colors breaker windows by the caller-average share and shares the cursor wit
     latency: recordedWindow().latency, slotPools: {} })) }]);
   const onCursorChange = vi.fn();
   const view = render(<Timeline {...props} onCursorChange={onCursorChange} />);
-  const band = await screen.findByRole("slider", { name: /Circuit open.*gateway/ });
+  const band = await screen.findByRole("slider", { name: /Circuit breaker open.*gateway/ });
   const windows = band.querySelectorAll("rect[data-share]");
   expect(windows[0].getAttribute("data-share")).toBe("0.4");
   expect(windows[1].getAttribute("data-share")).toBe("0");
@@ -64,11 +64,11 @@ it("uses a compared variant's own caller count, while leaving the baseline lane 
     inFlightIntegralMs: 0, orphanedIntegralMs: 0, backoffIntegralMs: 0, latency: recordedWindow().latency, slotPools: {},
   }] }]);
   render(<Timeline {...props} />);
-  await screen.findByRole("slider", { name: /Circuit open.*Baseline/ });
+  await screen.findByRole("slider", { name: /Circuit breaker open.*Baseline/ });
   fireEvent.change(screen.getByRole("combobox", { name: "Compare variant" }), { target: { value: "other" } });
-  const band = await screen.findByRole("slider", { name: /Circuit open.*Other/ });
+  const band = await screen.findByRole("slider", { name: /Circuit breaker open.*Other/ });
   expect(band.querySelector("rect[data-share]")?.getAttribute("data-share")).toBe("0.4");
-  expect(screen.getByRole("slider", { name: /Circuit open.*Baseline/ }).querySelector("rect[data-share]")?.getAttribute("data-share")).toBe("0.2");
+  expect(screen.getByRole("slider", { name: /Circuit breaker open.*Baseline/ }).querySelector("rect[data-share]")?.getAttribute("data-share")).toBe("0.2");
 });
 
 it("shows exclusion and readiness lanes only on the matching replica policies", async () => {
@@ -113,7 +113,7 @@ it("adds no policy lanes or request-type choices to a legacy model", async () =>
   render(<Timeline {...props} selectedNodes={["gateway"]} />);
   await screen.findByRole("region", { name: "Rates" });
   expect(screen.queryByRole("checkbox", { name: /Request type/ })).toBeNull();
-  expect(screen.queryByRole("slider", { name: /Circuit open|Ejected|Not ready/ })).toBeNull();
+  expect(screen.queryByRole("slider", { name: /Circuit breaker open|Ejected|Not ready/ })).toBeNull();
 });
 
 it("renders a request type that exists only in the compared variant, without inventing a baseline line", async () => {

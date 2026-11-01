@@ -4,7 +4,7 @@
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "Open Poisson stream of original requests with an end-to-end deadline.",
+          "description": "Generates requests at random times at the configured average rate. Each request has an overall deadline.",
           "properties": {
             "description": {
               "type": [
@@ -66,7 +66,7 @@
                           },
                           "load": {
                             "additionalProperties": false,
-                            "description": "Piecewise-linear intensity for this request class, including warm-up.",
+                            "description": "Average arrival rate for this request type over time, including warm-up; it changes linearly between points.",
                             "properties": {
                               "points": {
                                 "description": "Increasing times with linear interpolation; the nearest rate is held outside the points.",
@@ -74,7 +74,7 @@
                                   "additionalProperties": false,
                                   "properties": {
                                     "rate": {
-                                      "description": "Non-negative arrival intensity. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                                      "description": "Non-negative average request arrival rate. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
                                       "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
                                       "title": "Intensity",
                                       "type": "string",
@@ -163,7 +163,7 @@
                   "title": "Request classes"
                 },
                 "deadline": {
-                  "description": "End-to-end deadline of each original request. Initially 10s. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                  "description": "Maximum time from request arrival until the client stops waiting, including all calls, retries and pauses. Initially 10s. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                   "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
                   "title": "Deadline",
                   "type": "string",
@@ -200,7 +200,7 @@
                             "additionalProperties": false,
                             "properties": {
                               "rate": {
-                                "description": "Non-negative arrival intensity. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
+                                "description": "Non-negative average request arrival rate. Units: /ms, /s, /min. Canonical value (requests per millisecond): >= 0; numeric bounds are checked by the core.",
                                 "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:/ms|/s|/min)$",
                                 "title": "Intensity",
                                 "type": "string",
@@ -274,7 +274,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Piecewise-linear intensity from simulation start including warm-up; compare profiles in variants. Initially one point at 0s with 10/s.",
+                  "description": "Average request arrival rate over time, including warm-up; it changes linearly between points. Compare profiles in variants. Initially one point at 0s with 10/s.",
                   "title": "Load profile"
                 }
               },
@@ -602,7 +602,7 @@
                     "kind": "fixed",
                     "mean": "0ms"
                   },
-                  "description": "Local delay after acquiring a server connection, before the outgoing call. Initially fixed at 0.1ms.",
+                  "description": "Local delay after acquiring a server connection, before the outgoing call. New poolers start with a fixed delay of 0.1ms; if omitted from a document, the delay is fixed at 0ms.",
                   "title": "Pooler delay"
                 },
                 "waitTimeout": {
@@ -815,7 +815,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Blocking service: a handler is held through local work, downstream calls and backoff.",
+          "description": "A replica holds a handler while processing a request, waiting for downstream calls and pausing before retries.",
           "properties": {
             "description": {
               "type": [
@@ -859,7 +859,7 @@
                   "title": "Failure rate"
                 },
                 "handlers": {
-                  "description": "Concurrent handlers. Initially 200.",
+                  "description": "Maximum requests handled at once by each replica, similar to threads, workers or a concurrency limit. A handler stays occupied while waiting for downstream calls and retries. Initially 200.",
                   "minimum": 1.0,
                   "title": "Handlers",
                   "type": "integer"
@@ -1011,7 +1011,7 @@
                     }
                   ],
                   "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
-                  "title": "Health check"
+                  "title": "Readiness check"
                 },
                 "processing": {
                   "additionalProperties": false,
@@ -1236,7 +1236,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "Concurrent handlers. Initially 200.",
+                    "description": "Maximum requests handled at once by each replica, similar to threads, workers or a concurrency limit. A handler stays occupied while waiting for downstream calls and retries. Initially 200.",
                     "title": "Handlers"
                   },
                   "healthCheck": {
@@ -1386,7 +1386,7 @@
                       }
                     ],
                     "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
-                    "title": "Health check"
+                    "title": "Readiness check"
                   },
                   "processing": {
                     "anyOf": [
@@ -1684,7 +1684,7 @@
                             }
                           ],
                           "default": "0ms",
-                          "description": "Delay after the first failed attempt before jitter. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
+                          "description": "Base pause after the first failed attempt; full jitter chooses a random pause between zero and the current limit. Units: ms, s, min. Canonical value (milliseconds): >= 0; numeric bounds are checked by the core.",
                           "title": "Base delay"
                         },
                         "kind": {
@@ -1759,7 +1759,7 @@
                   "default": {
                     "kind": "none"
                   },
-                  "description": "Delay between attempts.",
+                  "description": "Pause before a retry (backoff). The calling handler remains occupied during the pause.",
                   "title": "Backoff"
                 },
                 "balancing": {
@@ -1776,6 +1776,7 @@
                       "type": "null"
                     }
                   ],
+                  "default": "roundRobin",
                   "description": "Choose how attempts are distributed across the target replicas. The default is round robin.",
                   "title": "Balancing"
                 },
@@ -1884,7 +1885,7 @@
                             }
                           ],
                           "default": 20,
-                          "description": "Number of most recent completed attempts in the closed-state window. Breaker rejections are excluded.",
+                          "description": "Number of most recent completed attempts in the closed circuit breaker's window. Circuit breaker rejections are excluded.",
                           "title": "Window size"
                         }
                       },
@@ -1895,7 +1896,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Reject attempts locally while open. Each calling instance keeps its own count-based window.",
+                  "description": "An open circuit breaker rejects attempts locally. Each calling instance keeps its own window of completed attempts.",
                   "title": "Circuit breaker"
                 },
                 "fallback": {
@@ -2220,7 +2221,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Slots owned by the calling instance, held until response or attempt timeout.",
+                  "description": "Connections owned by each calling instance, held until a response or attempt timeout.",
                   "title": "Connection pool"
                 },
                 "retryBudget": {

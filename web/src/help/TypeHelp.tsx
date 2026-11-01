@@ -12,8 +12,9 @@ function parameterRows(params: ParamDescriptor[], depth = 0, parent = ""): { des
 
 function bounds(descriptor: ParamDescriptor): string {
   const unit = descriptor.units[0];
-  const value = (bound: number) => formatParameterValue(unit == null ? bound : bound * unit.denominator / unit.numerator)
-    + (unit == null ? "" : " " + unit.symbol);
+  const value = (bound: number) => unit != null && descriptor.dimension === "DURATION"
+    ? formatParameterValue(`${bound * unit.denominator / unit.numerator}${unit.symbol}`, descriptor)
+    : formatParameterValue(unit == null ? bound : bound * unit.denominator / unit.numerator) + (unit == null ? "" : " " + unit.symbol);
   return [
     descriptor.minimum == null ? null : "≥ " + value(descriptor.minimum),
     descriptor.exclusiveMinimum == null ? null : "> " + value(descriptor.exclusiveMinimum),
@@ -56,12 +57,13 @@ function TypeHelpDialog({ catalog, typeId, onClose }: { catalog: Catalog; typeId
       <h3>{t("help.parameters")}</h3>
       {type.params.length === 0 ? <p>{t("editor.inspector.noParameters")}</p> : <div className="type-help-table">
         <table aria-label={t("help.parameters")}>
-          <thead><tr>{["parameter", "description", "units", "default", "bounds"].map(key => <th key={key} scope="col">{t("help." + key)}</th>)}</tr></thead>
+          <thead><tr>{["parameter", "description", "units", "default", "initial", "bounds"].map(key => <th key={key} scope="col">{t("help." + key)}</th>)}</tr></thead>
           <tbody>{parameterRows(type.params).map(({ descriptor, depth, path }) => <tr key={path}>
             <th scope="row" style={{ paddingInlineStart: (0.5 + depth * 1.25) + "rem" }}>{descriptor.title}</th>
             <td>{descriptor.description}{descriptor.options.length === 0 ? null : <p>{t("help.choices", { values: descriptor.options.map(option => formatParameterValue(option, descriptor)).join(", ") })}</p>}</td>
             <td>{descriptor.units.map(unit => unit.symbol).join(", ") || t("help.noValue")}</td>
             <td>{formatParameterValue(descriptor.default, descriptor)}</td>
+            <td>{descriptor.initial == null ? t("help.noValue") : formatParameterValue(descriptor.initial, descriptor)}</td>
             <td>{bounds(descriptor)}</td>
           </tr>)}</tbody>
         </table>

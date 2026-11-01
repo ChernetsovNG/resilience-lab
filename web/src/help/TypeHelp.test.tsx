@@ -68,7 +68,8 @@ it("shows defaults, required values, exclusive bounds and output explanations", 
   const handlers = within(dialog).getByRole("row", { name: /^Handlers / });
   expect(handlers.textContent).toContain("Required");
   expect(handlers.textContent).toContain("≥ 1");
-  expect(handlers.textContent).not.toContain("Required200");
+  expect(within(handlers).getAllByRole("cell")[2].textContent).toBe("Required");
+  expect(within(handlers).getAllByRole("cell")[3].textContent).toBe("200");
   expect(within(dialog).getByRole("row", { name: /^Failure rate / }).textContent).toContain("≤ 100 %");
   expect(dialog.textContent).toContain("Handler utilization");
 });
@@ -97,4 +98,31 @@ it("keeps type help available in the results-only inspector", () => {
     resultsOnly variantId="baseline" results={<p>Recorded metrics</p>} />);
   fireEvent.click(screen.getByRole("button", { name: "Help: Service" }));
   expect(screen.getByRole("dialog").textContent).toContain("Handler utilization");
+});
+
+
+it("distinguishes required fields, effective defaults and new-element initial values", () => {
+  inspect("pooler");
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByRole("columnheader", { name: "Initial value" })).toBeTruthy();
+  const limit = within(dialog).getByRole("row", { name: /^Maximum client connections / });
+  const cells = within(limit).getAllByRole("cell");
+  expect(cells[2].textContent).toBe("Required");
+  expect(cells[3].textContent).toBe("1,000");
+  const delay = within(dialog).getByRole("row", { name: /^Pooler delay / });
+  const delayCells = within(delay).getAllByRole("cell");
+  expect(delayCells[2].textContent).toContain("Mean: 0 ms");
+  expect(delayCells[3].textContent).toContain("Mean: 0.1 ms");
+});
+
+
+it.each(["en", "ru"] as const)("uses localized fallback reasons in help choices, defaults and initial values in %s", locale => {
+  inspect("call", locale);
+  const label = locale === "en" ? "Failure reasons" : "Срабатывает при";
+  const row = within(screen.getByRole("dialog")).getByRole("row", { name: new RegExp("^" + label + " ") });
+  expect(row.textContent).not.toMatch(/circuitOpen|noReadyTarget/);
+  const cells = within(row).getAllByRole("cell");
+  const reason = locale === "en" ? "Circuit breaker open" : "Предохранитель вызовов разомкнут";
+  expect(cells[2].textContent).toContain(reason);
+  expect(cells[3].textContent).toContain(reason);
 });

@@ -87,8 +87,8 @@ for (const language of ["en", "ru"] as const) {
       await addButton.click();
       await add(ru ? "Заглушка" : "Fallback");
       const reasons = fallback.getByRole("group", { name: ru ? "Срабатывает при" : "Failure reasons", exact: true });
-      await expect(reasons.getByRole("checkbox", { name: ru ? "breaker открыт" : "breaker open", exact: true })).toBeChecked();
-      await reasons.getByRole("checkbox", { name: ru ? "таймаут" : "timeout", exact: true }).check();
+      await expect(reasons.getByRole("checkbox", { name: ru ? "предохранитель вызовов разомкнут" : "circuit breaker open", exact: true })).toBeChecked();
+      await reasons.getByRole("checkbox", { name: ru ? "таймаут попытки" : "attempt timeout", exact: true }).check();
       await expect(reasons.getByRole("checkbox", { name: /deadline|дедлайн/i })).toHaveCount(0);
       if (ru) {
         await breaker.locator(":scope > summary").click();

@@ -21,7 +21,7 @@ for (const locale of locales) {
       await expect(warning).toHaveCount(1);
       await expect(warning).toContainText("order-service-to-payment-service");
       await expect(warning).toContainText(locale.startsWith("ru") ? "3 попыток" : "3 attempts");
-      await expect(warning).toContainText("exponential-full-jitter");
+      await expect(warning).toContainText(label("catalog.options.exponential-full-jitter"));
       await warning.click();
       const kind = page.locator(".inspector").getByLabel(label("catalog.types.call.params.backoff.kind.title"), { exact: true });
       await expect(kind).toBeFocused();
