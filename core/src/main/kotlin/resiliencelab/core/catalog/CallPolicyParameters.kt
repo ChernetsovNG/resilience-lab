@@ -11,7 +11,7 @@ internal object CallPolicyParameters {
                 "circuitBreaker",
                 ParamKind.OBJECT,
                 "Circuit breaker",
-                "Reject attempts locally while open. Each calling instance keeps its own count-based window.",
+                "An open circuit breaker rejects attempts locally. Each calling instance keeps its own window of completed attempts.",
                 fields =
                     listOf(
                         ParamDescriptor(
@@ -38,7 +38,8 @@ internal object CallPolicyParameters {
                             "window",
                             ParamKind.INTEGER,
                             "Window size",
-                            "Number of most recent completed attempts in the closed-state window. Breaker rejections are excluded.",
+                            "Number of most recent completed attempts in the closed circuit breaker's window. " +
+                                "Circuit breaker rejections are excluded.",
                             default = JsonPrimitive(20),
                             minimum = 1.0,
                             sweepable = true,

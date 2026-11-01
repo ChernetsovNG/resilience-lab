@@ -141,13 +141,13 @@ internal object Stage1Outputs {
                 SlotPoolOutputs.Quantity.QUEUE,
                 "meanQueue",
                 "Mean queue",
-                "Queue length integral divided by interval duration.",
+                "Average number of attempts waiting for a handler over the interval.",
                 OutputTimeline("queue", "Queue", 5, 0),
                 OutputInspector("Mean queue", 1, chartOrder = 1),
                 OutputOverlay(
                     "Mean queue",
                     "Queue {value}",
-                    "Queue length integral / interval duration, {interval}.",
+                    "Average number of attempts waiting for a handler, {interval}.",
                     1,
                     scaleParameter = "queue",
                     scaleTitle = "Queue fill",
@@ -218,7 +218,7 @@ internal object Stage1Outputs {
                         "Query queue rejections" to
                             "Queries rejected per second when connections and the query queue are full."
                     "utilization" -> "Connection utilization" to "Busy connection time divided by available connection time."
-                    "meanQueue" -> "Mean query queue" to "Waiting-query integral divided by interval duration."
+                    "meanQueue" -> "Mean query queue" to "Average number of queries waiting for a database connection over the interval."
                     "queueFill" ->
                         "Query queue fill" to
                             "Mean waiting queries divided by query queue capacity; no value when queueing is disabled."
@@ -252,7 +252,7 @@ internal object Stage1Outputs {
                             "meanQueue" ->
                                 overlay.copy(
                                     label = "Queue {value}",
-                                    description = "Waiting-query integral / interval duration, {interval}.",
+                                    description = "Average number of queries waiting for a database connection, {interval}.",
                                     scaleTitle = "Query queue fill",
                                 )
                             "queueRejectionRate" ->
@@ -271,12 +271,13 @@ internal object Stage1Outputs {
         field: String,
         title: String,
         inspectorTitle: String,
+        description: String,
         order: Int,
         inspectorOrder: Int,
     ) = OutputDescriptor(
         id,
         title,
-        "Occupancy integral divided by interval duration.",
+        description,
         OutputUnit.REQUESTS,
         OutputKind.MEAN_LEVEL,
         ratio(field, "durationMs"),
@@ -323,31 +324,70 @@ internal object Stage1Outputs {
             rate("succeeded", "Successes", "rates", 4).copy(id = "successesPerSecond"),
             rate("failed", "Failures", "errors", 0).copy(id = "failuresPerSecond"),
             rate("timeouts", "Timeouts", "errors", 1).copy(inspector = OutputInspector("Timeouts", 0, showValue = false, chartOrder = 1)),
-            rate("orphaned", "Orphaned attempts", "errors", 2),
-            rate("circuitRejections", "Circuit rejections", "errors", 4, summary = true)
-                .copy(inspector = OutputInspector("Circuit rejections", 21)),
+            rate("orphaned", "Orphaned attempts", "errors", 2).copy(
+                description =
+                    "Attempts whose callers timed out while downstream work or return transmission continued, per " +
+                        "second of the window.",
+            ),
+            rate("circuitRejections", "Circuit breaker rejections", "errors", 4, summary = true)
+                .copy(
+                    description = "Attempts rejected by an open circuit breaker per second, using the actual window duration.",
+                    inspector = OutputInspector("Circuit breaker rejections", 21),
+                ),
             rate("retriesDenied", "Retries denied by budget", "errors", 5, summary = true)
                 .copy(inspector = OutputInspector("Retries denied by budget", 22)),
             rate("fallbacks", "Fallbacks", "rates", 6, summary = true)
                 .copy(inspector = OutputInspector("Fallbacks", 23)),
             OutputDescriptor(
                 "circuitOpenShare",
-                "Circuit open share",
-                "Open caller-instance time divided by interval duration; grouped connections sum their instance shares.",
+                "Circuit breaker open share",
+                "Share of the interval when the calling instance's circuit breaker was open; grouped connections sum " +
+                    "their instance shares.",
                 OutputUnit.PERCENT,
                 OutputKind.FRACTION,
                 ratio("circuitOpenMs", "durationMs"),
                 pooled("circuitOpenMs", "measurementMs"),
                 OutputTimeline("circuit", "Circuit breaker", 8, 0),
-                OutputInspector("Circuit open share", 20),
+                OutputInspector("Circuit breaker open share", 20),
             ),
-            occupancy("meanInFlight", "inFlightIntegralMs", "Mean in-flight", "Mean in flight", 0, 5).let {
+            occupancy(
+                "meanInFlight",
+                "inFlightIntegralMs",
+                "Mean active attempts",
+                "Mean active attempts",
+                "Average number of sent attempts whose callers are still waiting for a response. Timed out attempts are excluded.",
+                0,
+                5,
+            ).let {
                 it.copy(summary = it.summary!!.copy(intervalField = "meanInFlight"))
             },
-            occupancy("meanOrphaned", "orphanedIntegralMs", "Mean orphaned work", "Mean orphaned work", 1, 4).copy(
-                overlay = OutputOverlay("Orphaned work", "Orphaned work {value}", "Orphaned work", 3),
+            occupancy(
+                "meanOrphaned",
+                "orphanedIntegralMs",
+                "Mean orphaned attempts",
+                "Mean orphaned attempts",
+                "Average number of timed out attempts whose downstream work or return transmission has not finished. " +
+                    "The caller has stopped waiting, but this work still uses resources.",
+                1,
+                4,
+            ).copy(
+                overlay =
+                    OutputOverlay(
+                        "Orphaned attempts",
+                        "Orphaned attempts {value}",
+                        "Average number of attempts still completing after the caller stopped waiting.",
+                        3,
+                    ),
             ),
-            occupancy("meanBackoff", "backoffIntegralMs", "Mean backoff", "Mean backoff", 2, 6),
+            occupancy(
+                "meanBackoff",
+                "backoffIntegralMs",
+                "Mean calls in backoff",
+                "Mean calls in backoff",
+                "Average number of calls pausing before a retry. Their caller handlers remain occupied.",
+                2,
+                6,
+            ),
             OutputDescriptor(
                 "timeoutRate",
                 "Timeout share",
@@ -362,7 +402,7 @@ internal object Stage1Outputs {
             OutputDescriptor(
                 "orphaned",
                 "Orphaned attempts",
-                "Attempts whose downstream work was still running when the caller stopped waiting.",
+                "Attempts whose downstream work or return transmission had not finished when the caller stopped waiting.",
                 OutputUnit.REQUESTS,
                 OutputKind.COUNT,
                 calculation(OutputCalculationKind.VALUE, "orphaned"),
@@ -383,7 +423,7 @@ internal object Stage1Outputs {
                 SlotPoolOutputs.Quantity.QUEUE,
                 "meanPoolQueue",
                 "Mean connection wait queue",
-                "Integral of callers waiting for a connection divided by interval duration.",
+                "Average number of callers waiting for a free connection over the interval.",
                 OutputTimeline("pool", "Connection pool", 7, 0),
                 OutputInspector("Mean connection wait queue", 10),
             ),

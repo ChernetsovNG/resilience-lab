@@ -12,7 +12,7 @@ function englishCatalog() {
   classes.title = "Request types";
   classes.description = "Load profiles by request type; use either one profile or request types. Variants replace the entire list; grids are not supported.";
   classes.fields.find(field => field.name === "id")!.title = "Request type ID";
-  classes.fields.find(field => field.name === "load")!.description = "Piecewise-linear intensity for this request type, including warm-up.";
+  classes.fields.find(field => field.name === "load")!.description = "Average arrival rate for this request type over time, including warm-up; it changes linearly between points.";
   return expected;
 }
 

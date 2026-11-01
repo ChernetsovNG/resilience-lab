@@ -1,8 +1,9 @@
 import type { Catalog, ExperimentFile, ModelFile, ParamDescriptor } from "../api/apiTypes";
 import { messages, t } from "../i18n";
-import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
+import { formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
 import { isObject, ownEntry } from "../workspace/params";
 import { canonicalOf } from "../workspace/quantities";
+import { formatParameterValue } from "../workspace/parameterValues";
 
 type Fault = ExperimentFile["faults"][number];
 export interface LoadPoint { timeMs: number; rate: number }
@@ -44,15 +45,14 @@ export function faultLabel(fault: Fault, model: ModelFile, catalog: Catalog): st
   const kind = Object.hasOwn(messages, key) ? t(key) : fault.kind;
   const parameters = fault.kind === "slowdown" ? [
     ...(fault.multiplier == null ? [] : [formatMultiplier(fault.multiplier)]),
-    ...(fault.delay == null ? [] : [t("course.delay", { delay: formatDuration(quantity(fault.delay, catalog, "DURATION")) })]),
+    ...(fault.delay == null ? [] : [t("course.delay", { delay: formatParameterValue(fault.delay) })]),
   ].join(" ") : fault.kind === "errors" ? formatPercent(quantity(fault.failureRate, catalog, "PROBABILITY")) : "";
   const details = fault.kind === "capacityLoss" ? t("course.capacity", { kind, capacity: formatNumber(fault.capacity) })
     : parameters === "" ? kind : t("course.parameters", { kind, parameters });
-  const from = quantity(fault.from, catalog, "DURATION"), to = quantity(fault.to, catalog, "DURATION");
-  const interval = t("course.interval", {
-    from: from === null ? fault.from : formatNumber(from / 1000, 3),
-    to: to === null ? fault.to : formatDuration(to / 1000, "s"),
-  });
+  const from = formatParameterValue(fault.from), to = formatParameterValue(fault.to);
+  const sameUnit = /[a-z]+$/.exec(fault.from)?.[0] === /[a-z]+$/.exec(fault.to)?.[0];
+  const combineUnit = sameUnit && from.includes(" ") && quantity(fault.from, catalog, "DURATION") !== null && quantity(fault.to, catalog, "DURATION") !== null;
+  const interval = t("course.interval", { from: combineUnit ? from.slice(0, from.lastIndexOf(" ")) : from, to });
   return t("course.fault", { target: targetOf(fault.target, model).label, details, interval });
 }
 

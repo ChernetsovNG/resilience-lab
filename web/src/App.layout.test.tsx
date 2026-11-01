@@ -9,7 +9,7 @@ setupAppTests();
 it("starts with collapsed results and preserves manual expansion across experiment changes", async () => {
   server(); await open();
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  fireEvent.click(button("Restore results"));
+  fireEvent.click(button("Expand results"));
   await selectGateway(); editHandlers("5");
   await waitFor(() => expect(button("Save").disabled).toBe(false));
   expect(screen.getByRole("tabpanel")).toBeTruthy();
@@ -55,7 +55,7 @@ it("resizes the results with keys and dragging within bounds without editing doc
   measuredWorkspace();
   const fetchMock = server();
   await open();
-  fireEvent.click(button("Restore results"));
+  fireEvent.click(button("Expand results"));
   const divider = screen.getByRole("separator", { name: "Resize results panel" });
   const height = () => Number(divider.getAttribute("aria-valuenow"));
   const initial = height();
@@ -81,7 +81,7 @@ it("resizes the results with keys and dragging within bounds without editing doc
   fireEvent.click(button("Collapse results"));
   expect(screen.queryByRole("separator", { name: "Resize results panel" })).toBeNull();
   expect(screen.queryByRole("tabpanel")).toBeNull();
-  fireEvent.click(button("Restore results"));
+  fireEvent.click(button("Expand results"));
   expect(height()).toBe(300);
   expect(screen.queryByRole("button", { name: "Expand results" })).toBeNull();
   expect(button("Undo").disabled).toBe(true);

@@ -37,7 +37,7 @@ internal object ServicePolicyParameters {
             ParamDescriptor(
                 "healthCheck",
                 ParamKind.OBJECT,
-                "Health check",
+                "Readiness check",
                 "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
                 fields =
                     listOf(

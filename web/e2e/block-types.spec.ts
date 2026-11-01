@@ -82,7 +82,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
     await expect(node.locator(".react-flow__handle-left")).toHaveCount(id === "client" ? 0 : 1);
   }
   await expect(page.getByTestId("canvas-param-pooler-poolSize")).toHaveText("20");
-  await expect(page.getByTestId("canvas-param-router-policy")).toHaveText("По кругу");
+  await expect(page.getByTestId("canvas-param-router-policy")).toHaveText("По очереди");
   await expect(page.getByTestId("canvas-edge-label-pooled-call")).toContainText("пул 10");
   const policy = page.getByTestId("canvas-param-router-policy");
   await policy.dblclick();
@@ -181,7 +181,7 @@ for (const language of ["en", "ru"] as const) {
     await policy.locator("select").press("Escape");
     await page.getByRole("button", { name: language === "en" ? "Undo" : "Отменить действие", exact: true }).click();
     await expect(policy.locator("del")).toHaveCount(0);
-    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По кругу");
+    await expect(policy).toHaveText(language === "en" ? "Round robin" : "По очереди");
     await save(page, language);
     expect((await experiment()).variants[0].overrides ?? {}).toEqual({});
     const stored = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);

@@ -454,7 +454,7 @@ describe("Inspector", () => {
     rangedCatalog.types.find((type) => type.id === "call")!.params.find((param) => param.name === "timeout")!.exclusiveMinimum = 100;
     const onParam = renderInspector({ catalog: rangedCatalog, selected: "gateway-to-middle" });
     commit("Timeout", "0.1s");
-    expect(screen.getByRole("alert").textContent).toContain("> 100ms");
+    expect(screen.getByRole("alert").textContent).toContain("> 100 ms");
     expect(onParam).toHaveBeenCalledWith("gateway-to-middle", "timeout", "0.1s");
     commit("Timeout", "0.101s");
     expect(onParam).toHaveBeenCalledWith("gateway-to-middle", "timeout", "0.101s");

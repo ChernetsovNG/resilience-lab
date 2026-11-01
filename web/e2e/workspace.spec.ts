@@ -388,12 +388,12 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     const points = page.getByLabel("Grid point", { exact: true });
     await expect(points.getByRole("option")).toHaveCount(6);
-    await expect(points.locator('option[value="p0"]')).toContainText("Timeout · gateway → middle = 40ms");
+    await expect(points.locator('option[value="p0"]')).toContainText("Timeout · gateway → middle = 40 ms");
     await expect(points.locator('option[value="p5"]')).toContainText("Attempts · gateway → middle = 3");
     for (let point = 0; point < 6; point += 1) {
       await points.selectOption(`p${point}`);
       const heading = page.getByRole("region", { name: "Saturation insight" }).getByRole("heading");
-      await expect(heading).toContainText(`Timeout · gateway → middle = ${grid[0].values[Math.floor(point / 3)]}`);
+      await expect(heading).toContainText(`Timeout · gateway → middle = ${["40 ms", "80 ms"][Math.floor(point / 3)]}`);
       await expect(heading).toContainText(`Attempts · gateway → middle = ${grid[1].values[point % 3]}`);
       await expect(heading).not.toContainText(`p${point}`);
       const values = summary.getByRole("row", { name: /Success rate/ }).locator("td");
@@ -453,12 +453,12 @@ test("shows summary and assumptions in resizable and Analysis layouts without pa
 
   await page.getByRole("tab", { name: "Assumptions", exact: true }).click();
   const panel = page.getByRole("tabpanel");
-  await expect(panel).toContainText("Summary metrics use the cohort");
+  await expect(panel).toContainText("Summary request and attempt metrics follow");
   await expect(panel).toContainText("A handler is allocated once");
   await expect(panel).toContainText("Late responses are discarded");
   await expect(panel).toContainText("Run conditions");
   await expect(panel).toContainText("Replications");
-  await expect(panel).toContainText("20,261,025");
+  await expect(panel).toContainText("20261025");
   await expect(panel).toContainText("1 s");
   await expect(panel).toContainText("10 ms");
   await expect(panel).toContainText("ddsketch-bitwise6-rational-v1");
@@ -471,7 +471,7 @@ test("shows summary and assumptions in resizable and Analysis layouts without pa
   await expect(page.getByRole("tab", { name: "Findings", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Status bar" }).getByTestId("job-status")).toHaveText("COMPLETED");
   await expectNoPageScroll(page);
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   await expect(panel).toBeVisible();
   await expectNoPageScroll(page);
 
@@ -515,7 +515,7 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
     const job: JobView = await (await submitted).json();
     expect(job.totalTasks).toBe(100);
     await expect.poll(async () => (await (await request.get(`/api/v1/jobs/${job.id}`)).json()).completedTasks).toBeGreaterThan(0);
-    const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+    const cancel = page.getByRole("button", { name: "Stop run", exact: true });
     await expect(cancel).toBeVisible();
     await cancel.click();
 
@@ -667,7 +667,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   };
   let jobs = 0;
   page.on("request", (request) => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   await page.getByRole("separator", { name: "Resize results panel" }).focus();
   await page.getByRole("separator", { name: "Resize results panel" }).press("End");
   const saved = await estimate();
@@ -720,7 +720,7 @@ test("refuses resume after the model changes and suggests a new run", async ({ p
     await run.click();
     const job: JobView = await (await submitted).json();
     await expect.poll(async () => (await (await request.get(`/api/v1/jobs/${job.id}`)).json()).completedTasks).toBeGreaterThan(0);
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Stop run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("CANCELLED", { timeout: 60_000 });
     const resume = page.getByRole("button", { name: "Resume", exact: true });
     await expect(resume).toBeEnabled();

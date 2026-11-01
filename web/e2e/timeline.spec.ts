@@ -116,7 +116,7 @@ test("retry-storm Timeline shows queue/errors growth, overlay and a shared pinne
   await page.getByRole("button", { name: "Summary", exact: true }).click();
   await expect(page.getByTestId("timeline-cursor")).toContainText("Hover to inspect");
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   await expect(page.getByLabel("Compare variant", { exact: true })).toHaveValue("no-retries");
 });
 

@@ -39,7 +39,7 @@ it("labels replicas and copied connections and marks their owning diagram elemen
   expect(data.faults.map(fault => [fault.index, fault.elementId, fault.target])).toEqual([
     [0, "gateway", "gateway#2"], [1, "gateway-to-middle", "gateway#2 → middle"], [2, null, "unknown#2"],
   ]);
-  expect(data.faults[0].label).toBe("gateway#2 · Slowdown 6× · 0.2–0.7 s");
+  expect(data.faults[0].label).toBe("gateway#2 · Slowdown 6× · 200–700 ms");
 });
 
 it.each([
@@ -48,20 +48,20 @@ it.each([
   [{ kind: "errors", failureRate: "25%" }, "Errors 25%"],
   [{ kind: "unavailable" }, "Fast unavailability"],
   [{ kind: "blackhole" }, "Black hole"],
-  [{ kind: "capacityLoss", capacity: 0 }, "Capacity loss: 0 slots remaining"],
+  [{ kind: "capacityLoss", capacity: 0 }, "Capacity loss: 0 available"],
 ])("describes fault parameters: %j", (parameters, expected) => {
   expect(faultLabel({ target: "dependency", from: "0s", to: "1s", ...parameters }, model, catalog))
     .toBe(`dependency · ${expected} · 0–1 s`);
 });
 
 it("summarizes constant and changing load with every fault in both languages", () => {
-  expect(runConditions(model, experiment, catalog)).toBe("Load 120 RPS; faults: dependency · Slowdown 6× · 0.2–0.7 s");
+  expect(runConditions(model, experiment, catalog)).toBe("Load 120 RPS; faults: dependency · Slowdown 6× · 200–700 ms");
   const draft = structuredClone(model);
   draft.blocks.client.params.load = { points: [{ time: "0s", rate: "10/s" }, { time: "1s", rate: "90/s" }] };
   const run = { ...experiment, faults: [...experiment.faults, { target: "gateway", kind: "blackhole", from: "0s", to: "1s" }] };
-  expect(runConditions(draft, run, catalog)).toBe("Load from 10 RPS to 90 RPS; faults: dependency · Slowdown 6× · 0.2–0.7 s; gateway · Black hole · 0–1 s");
+  expect(runConditions(draft, run, catalog)).toBe("Load from 10 RPS to 90 RPS; faults: dependency · Slowdown 6× · 200–700 ms; gateway · Black hole · 0–1 s");
   setLanguage("ru");
-  expect(runConditions(draft, run, catalog)).toBe("Нагрузка от 10 RPS до 90 RPS; отказы: dependency · Замедление 6× · 0,2–0,7 с; gateway · Чёрная дыра · 0–1 с");
+  expect(runConditions(draft, run, catalog)).toBe("Нагрузка от 10 RPS до 90 RPS; отказы: dependency · Замедление 6× · 200–700 мс; gateway · Чёрная дыра · 0–1 с");
 });
 
 it("does not invent a curve for invalid draft points or crash on unknown fault kinds", () => {
@@ -92,4 +92,21 @@ it.each([undefined, 1])("does not mark replica #1 when no group is expanded (rep
     { target: "gateway-to-middle#1", from: "0s", to: "1s", kind: "blackhole" },
   ] };
   expect(courseData(draft, run, catalog).faults.map(fault => fault.elementId)).toEqual([null, null]);
+});
+
+
+it.each([
+  ["en", "2min", "3min", "2–3 min", "+1,500 ms"],
+  ["ru", "2min", "3min", "2–3 мин", "+1 500 мс"],
+  ["en", "1500ms", "2s", "1,500 ms–2 s", "+1,500 ms"],
+  ["ru", "1500ms", "2s", "1 500 мс–2 с", "+1 500 мс"],
+] as const)("preserves chosen duration units in %s fault labels and run conditions (%s to %s)", (locale, from, to, interval, delay) => {
+  setLanguage(locale);
+  const fault = { target: "dependency", kind: "slowdown", from, to, delay: "1500ms" };
+  const label = faultLabel(fault, model, catalog);
+  expect(label).toContain(interval);
+  expect(label).toContain(delay);
+  const run = { ...experiment, execution: { ...experiment.execution, measurement: "5min" }, faults: [fault] };
+  expect(runConditions(model, run, catalog)).toContain(interval);
+  expect(runConditions(model, run, catalog)).toContain(delay);
 });

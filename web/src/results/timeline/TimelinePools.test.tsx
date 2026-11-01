@@ -45,7 +45,7 @@ it("omits pool charts and choices for a call without a pool while retaining retr
   expect(screen.queryByRole("region", { name: "Connection pool" })).toBeNull();
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
   for (const name of poolMetrics) expect(choices().queryByRole("checkbox", { name })).toBeNull();
-  for (const name of ["Retries", "Timeouts", "Mean backoff"]) fireEvent.click(choices().getByRole("checkbox", { name }));
+  for (const name of ["Retries", "Timeouts", "Mean calls in backoff"]) fireEvent.click(choices().getByRole("checkbox", { name }));
   expect(await screen.findByText("gateway → middle (gateway-to-middle) · Retries · Baseline")).toBeTruthy();
   expect(screen.getByText("gateway → middle (gateway-to-middle) · Timeouts · Baseline")).toBeTruthy();
   expect(screen.getByText("0.5 requests")).toBeTruthy();

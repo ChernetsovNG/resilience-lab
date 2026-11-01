@@ -53,9 +53,9 @@ it("describes service and nested overrides with catalog titles and values", asyn
   const banner = screen.getByTestId("variant-banner");
   fireEvent.click(banner.querySelector("summary")!);
   expect(within(banner).getByRole("button", { name: "gateway · Handlers: 4 → 1,234" })).toBeTruthy();
-  fireEvent.click(within(banner).getByRole("button", { name: "gateway · Processing time · Mean: 1ms → 9ms" }));
+  fireEvent.click(within(banner).getByRole("button", { name: "gateway · Processing time · Mean: 1 ms → 9 ms" }));
   expect(document.activeElement).toBe(screen.getByLabelText("Mean"));
-  expect(within(banner).getByRole("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Mean: 0.5ms → 7ms" })).toBeTruthy();
+  expect(within(banner).getByRole("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Mean: 0.5 ms → 7 ms" })).toBeTruthy();
 });
 
 it("focuses the first point field when a load-profile array override is selected", async () => {
@@ -139,9 +139,9 @@ it("edits canvas timeout with undo and saves variant edits only as overrides", a
   };
 
   await editTimeout("90ms");
-  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("90ms");
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("90 ms");
   fireEvent.click(button("Undo"));
-  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+  expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80 ms");
 
   fireEvent.click(screen.getByRole("tab", { name: "No retries" }));
   await editTimeout("100ms");

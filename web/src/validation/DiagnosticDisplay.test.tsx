@@ -64,7 +64,7 @@ it("resolves sweep points in ordinary field feedback and canvas badge tooltips",
   render(<DiagnosticLabelContext value={{ variants: [], catalog, model, grid: [{ path: "gateway.processing.mean", values: ["3ms", "4ms"] }] }}>
     <DiagnosticBadge diagnostics={[finding]} /><DiagnosticMessages diagnostics={[finding]} />
   </DiagnosticLabelContext>);
-  const coordinates = "Processing time · Mean · gateway = 3ms";
+  const coordinates = "Processing time · Mean · gateway = 3 ms";
   expect(screen.getByRole("img", { name: "1 problems: warning" }).title).toContain(`(points: ${coordinates})`);
   fireEvent.click(screen.getByRole("button", { name: "More about: 1 problems: warning" }));
   expect(screen.getByRole("status").textContent).toContain(`(points: ${coordinates})`);
@@ -79,7 +79,7 @@ it("resolves execution task variants and points in API error explanations and th
     grid: [{ path: "gateway.processing.mean", values: ["3ms", "4ms"] }] }}>
     <ProblemList problem={{ ...finding, diagnostics: [finding] }} />
   </DiagnosticLabelContext>);
-  const expected = "Variant 'More capacity', point 'Processing time · Mean · gateway = 4ms', replication 3: Replication ended before the workload fully drained";
+  const expected = "Variant 'More capacity', point 'Processing time · Mean · gateway = 4 ms', replication 3: Replication ended before the workload fully drained";
   expect(screen.getByRole("alert").querySelector("p")?.textContent).toBe(expected);
   expect(screen.getByRole("listitem").querySelector(".diagnostic-message")?.textContent).toBe(expected);
   expect(screen.getByRole("listitem").querySelector(".diagnostic-details")?.textContent).toContain("EXECUTION_DRAIN");

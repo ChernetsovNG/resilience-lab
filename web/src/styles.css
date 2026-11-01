@@ -470,8 +470,8 @@ select {
 .block-shape--type-router { width: 144px; height: 144px; min-width: 0; align-content: center; }
 .block-node--router .block-summary > span, .block-node--router .inline-param { font-size: 11px; column-gap: 2px; min-width: 0; }
 .block-node--router .inline-param { flex-direction: column-reverse; align-items: flex-start; overflow: hidden; text-overflow: ellipsis; }
-.block-node--router .inline-param-model { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.block-node--router .inline-param-value, .block-node--router .inline-param-current { flex: none; min-width: 24px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: inherit; }
+.block-node--router .inline-param-model { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: normal; overflow-wrap: anywhere; }
+.block-node--router .inline-param-value, .block-node--router .inline-param-current { flex: none; min-width: 24px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: inherit; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .block-node--router .inline-param-editor { flex: 1; min-width: 0; }
 .block-node--router .inline-param-editor select { width: 100%; min-width: 0; }
 .block-node-header { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -668,6 +668,8 @@ select {
 .scenario-override label { display: flex; align-items: center; gap: 0.25rem; }
 .request-type-options { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
 .request-type-options label { display: inline-flex; align-items: center; gap: 0.25rem; }
+.request-type-options label:has(.param-error) { flex-wrap: wrap; }
+.request-type-options label > .param-error { flex-basis: 100%; }
 .replica-overrides-scroll { max-width: 100%; overflow-x: auto; }
 .replica-overrides-table { width: 100%; border-collapse: collapse; font-size: var(--font-secondary); }
 .replica-overrides-table :is(th, td) { padding: 0.25rem; text-align: left; vertical-align: top; border-bottom: 1px solid #d5dbe3; }

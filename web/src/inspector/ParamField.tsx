@@ -50,13 +50,19 @@ function ArrayField({ descriptor, value, path, editable, onCommit, onFieldCommit
     const selected = Array.isArray(value) ? value : Array.isArray(descriptor.default) ? descriptor.default : [];
     return <fieldset className="param-group" data-inspector-field={path} aria-label={descriptor.title}>
       <legend>{descriptor.title} {descriptor.description ? <HelpHint id={`${id}-description`} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</legend>
-      <div className="request-type-options">{descriptor.options.map(option => <label key={option} title={option}>
-        <input type="checkbox" checked={selected.includes(option)} disabled={!editable} onChange={event => {
-          if (!editable) return;
-          const next = event.target.checked ? [...selected, option] : selected.filter(value => value !== option);
-          if (onFieldCommit === undefined) onCommit(next); else onFieldCommit(path, next);
-        }} />{t(`messages.${option}`)}
-      </label>)}</div>
+      <div className="request-type-options">{[...new Set([...descriptor.options, ...selected])].map((option, index) => {
+        const supported = descriptor.options.includes(option);
+        const errorId = `${id}-${index}-error`;
+        return <label key={String(option)} title={String(option)}>
+          <input type="checkbox" checked={selected.includes(option)} disabled={!editable}
+            aria-invalid={!supported || undefined} aria-describedby={supported ? undefined : errorId} onChange={event => {
+              if (!editable) return;
+              const next = event.target.checked ? [...selected, option] : selected.filter(value => value !== option);
+              if (onFieldCommit === undefined) onCommit(next); else onFieldCommit(path, next);
+            }} />{supported ? t(`messages.${option}`) : String(option)}
+          {supported ? null : <span id={errorId} className="param-error" role="alert">{t("editor.param.unsupportedOption")}</span>}
+        </label>;
+      })}</div>
       {isOverridden(path) ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
       <DiagnosticMessages diagnostics={[...(fieldDiagnostics ?? [])].filter(([field]) => field === path || field.startsWith(`${path}.`)).flatMap(([, messages]) => messages)} />
       <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
@@ -66,7 +72,8 @@ function ArrayField({ descriptor, value, path, editable, onCommit, onFieldCommit
   return <div className="param-field" data-inspector-field={path}>
     <div className="param-field-label"><label htmlFor={id}>{descriptor.title}</label>
       {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</div>
-    <textarea id={id} readOnly value={JSON.stringify(value ?? descriptor.default ?? null, null, 2)}
+    <textarea id={id} readOnly value={value == null && descriptor.default == null ? "" : JSON.stringify(value ?? descriptor.default, null, 2)}
+      placeholder={t("editor.param.notSet")}
       aria-describedby={descriptor.description ? id + "-description" : undefined} />
     <DiagnosticMessages diagnostics={fieldDiagnostics?.get(path)} />
     <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}

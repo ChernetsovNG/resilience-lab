@@ -86,7 +86,7 @@ describe("TopBar", () => {
       completedTasks: 0, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
     } });
     render(<TopBar {...state} />);
-    fireEvent.click(button("Cancel"));
+    fireEvent.click(button("Stop run"));
     expect(state.onCancel).toHaveBeenCalledOnce();
   });
 
@@ -95,7 +95,7 @@ describe("TopBar", () => {
       id: "job-1", experiment: "first.experiment.json", runId: "run-1", status: "RUNNING",
       completedTasks: 1, totalTasks: 4, cancelRequested: true, error: null, diagnostics: [],
     } })} />);
-    expect(button("Cancel").disabled).toBe(true);
+    expect(button("Stop run").disabled).toBe(true);
     expect(screen.queryByTestId("job-status")).toBeNull();
   });
 
@@ -104,7 +104,7 @@ describe("TopBar", () => {
       id: "job-1", experiment: "first.experiment.json", runId: "run-1", status: "COMPLETED",
       completedTasks: 4, totalTasks: 4, cancelRequested: false, error: null, diagnostics: [],
     } })} />);
-    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop run" })).toBeNull();
   });
 });
 

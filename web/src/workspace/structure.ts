@@ -122,8 +122,11 @@ export function addConnection(catalog: Catalog, from: string, to: string, source
     const rule = connectionRule(catalog, documents.model, from, to, sourcePort, targetPort);
     if (rule.type === null) return documents;
     const id = freeId(`${from}-to-${to}`, usedIds(documents.model));
+    const params = initialParams(catalog.types.find(entry => entry.id === rule.type)?.params ?? []);
+    // Keep balancing implicit; an explicit override is ignored for single targets and routers.
+    if (rule.type === "call") delete params.balancing;
     return { ...documents, model: { ...documents.model, connections: [
-      ...documents.model.connections, { id, type: rule.type, from, to, params: initialParams(catalog.types.find(entry => entry.id === rule.type)?.params ?? []) },
+      ...documents.model.connections, { id, type: rule.type, from, to, params },
     ] } };
   };
 }

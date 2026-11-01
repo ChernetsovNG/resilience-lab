@@ -28,7 +28,7 @@ test("service and call inspectors share Summary, Time and Timeline, including An
   await badge.click();
   await expect(page.locator(".inspector h2").first()).toHaveText("gateway → middle (gateway-to-middle)");
   await expect(results).toContainText("Mean call duration");
-  await expect(results).toContainText("Mean orphaned work");
+  await expect(results).toContainText("Mean orphaned attempts");
   const connection = summary.variants.find(variant => variant.id === "baseline")!.points[0].aggregate.connections["gateway-to-middle"];
   const orphaned = results.getByRole("row", { name: /^Orphaned attempts/ });
   const replications = summary.variants.find(variant => variant.id === "baseline")!.replications;

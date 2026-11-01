@@ -14,7 +14,8 @@ object Stage1Catalog {
         mapOf(
             "client" to
                 listOf(
-                    "Requests arrive as an open Poisson stream; each original request has an absolute end-to-end deadline.",
+                    "New requests arrive at random times at the configured average rate, independently of earlier " +
+                        "completions. Each request has an overall deadline measured from arrival.",
                     "After the deadline the client stops waiting, but admitted work continues.",
                 ),
             "service" to
@@ -56,13 +57,15 @@ object Stage1Catalog {
                 },
             assumptions =
                 listOf(
-                    "Summary metrics use the cohort of original requests arriving during the measurement interval; " +
-                        "their outcomes and caused attempts include run-out.",
-                    "Time series use event-time windows covering warmup and measurement; run-out is excluded from series windows.",
-                    "Latency quantiles use the ddsketch-bitwise6-rational-v1 profile with KSL interpolation; " +
-                        "representation error is at most 0.78125% in the tested 0.001–60000 ms range.",
-                    "Means over independent replications use Student 95% confidence intervals; " +
-                        "interval bounds are not clipped to physical metric ranges.",
+                    "Summary request and attempt metrics follow original requests arriving during measurement and " +
+                        "all attempts they cause, including completion after measurement ends. Summary resource values " +
+                        "cover only measurement.",
+                    "Time series cover warm-up and measurement. Events belong to the windows when they occur; " +
+                        "completion after measurement ends is excluded.",
+                    "Latency percentiles, such as p95, are estimates from compact summaries of observations. " +
+                        "Representation error is at most 0.78125% in the tested 0.001–60000 ms range.",
+                    "A 95% confidence interval expresses uncertainty in the mean across independent replications, " +
+                        "using Student's t method. Bounds are not clipped to physically possible values.",
                 ),
         )
 
@@ -91,7 +94,7 @@ object Stage1Catalog {
             version = 2,
             category = TypeCategory.BLOCK,
             title = "Client",
-            description = "Open Poisson stream of original requests with an end-to-end deadline.",
+            description = "Generates requests at random times at the configured average rate. Each request has an overall deadline.",
             ports = listOf(PortDescriptor("out", PortDirection.OUT)),
             params =
                 listOf(
@@ -115,7 +118,9 @@ object Stage1Catalog {
                                 ),
                                 load.copy(
                                     required = true,
-                                    description = "Piecewise-linear intensity for this request class, including warm-up.",
+                                    description =
+                                        "Average arrival rate for this request type over time, including warm-up; it " +
+                                            "changes linearly between points.",
                                 ),
                             ),
                     ),
@@ -123,7 +128,9 @@ object Stage1Catalog {
                         name = "deadline",
                         kind = ParamKind.QUANTITY,
                         title = "Deadline",
-                        description = "End-to-end deadline of each original request. Initially 10s.",
+                        description =
+                            "Maximum time from request arrival until the client stops waiting, including all calls, " +
+                                "retries and pauses. Initially 10s.",
                         required = true,
                         initial = JsonPrimitive("10s"),
                         dimension = Dimension.DURATION,
@@ -140,8 +147,8 @@ object Stage1Catalog {
             kind = ParamKind.OBJECT,
             title = "Load profile",
             description =
-                "Piecewise-linear intensity from simulation start including warm-up; compare profiles in " +
-                    "variants. Initially one point at 0s with 10/s.",
+                "Average request arrival rate over time, including warm-up; it changes linearly between points. " +
+                    "Compare profiles in variants. Initially one point at 0s with 10/s.",
             required = false,
             initial = Json.parseToJsonElement("""{"points":[{"time":"0s","rate":"10/s"}]}"""),
             fields =
@@ -168,7 +175,7 @@ object Stage1Catalog {
                                     name = "rate",
                                     kind = ParamKind.QUANTITY,
                                     title = "Intensity",
-                                    description = "Non-negative arrival intensity.",
+                                    description = "Non-negative average request arrival rate.",
                                     required = true,
                                     dimension = Dimension.RATE,
                                     minimum = 0.0,
@@ -187,7 +194,7 @@ object Stage1Catalog {
             version = 3,
             category = TypeCategory.BLOCK,
             title = "Service",
-            description = "Blocking service: a handler is held through local work, downstream calls and backoff.",
+            description = "A replica holds a handler while processing a request, waiting for downstream calls and pausing before retries.",
             ports = listOf(PortDescriptor("in", PortDirection.IN), PortDescriptor("out", PortDirection.OUT)),
             params =
                 listOf(
@@ -195,7 +202,10 @@ object Stage1Catalog {
                         name = "handlers",
                         kind = ParamKind.INTEGER,
                         title = "Handlers",
-                        description = "Concurrent handlers. Initially 200.",
+                        description =
+                            "Maximum requests handled at once by each replica, similar to threads, workers or a " +
+                                "concurrency limit. A handler stays occupied while waiting for downstream calls and " +
+                                "retries. Initially 200.",
                         required = true,
                         initial = JsonPrimitive(200),
                         minimum = 1.0,
@@ -293,8 +303,9 @@ object Stage1Catalog {
                         name = "processing",
                         title = "Pooler delay",
                         description =
-                            "Local delay after acquiring a server connection, before the outgoing call. Initially fixed " +
-                                "at 0.1ms.",
+                            "Local delay after acquiring a server connection, before the outgoing call. New poolers " +
+                                "start with a fixed delay of 0.1ms; if omitted from a document, the delay is fixed at " +
+                                "0ms.",
                         default =
                             buildJsonObject {
                                 put("kind", "fixed")
@@ -363,6 +374,7 @@ object Stage1Catalog {
                         kind = ParamKind.CHOICE,
                         title = "Balancing",
                         description = "Choose how attempts are distributed across the target replicas. The default is round robin.",
+                        default = JsonPrimitive("roundRobin"),
                         options = listOf("roundRobin", "random", "leastInFlight"),
                     ),
                     ParamDescriptor(
@@ -379,7 +391,7 @@ object Stage1Catalog {
                         name = "pool",
                         kind = ParamKind.OBJECT,
                         title = "Connection pool",
-                        description = "Slots owned by the calling instance, held until response or attempt timeout.",
+                        description = "Connections owned by each calling instance, held until a response or attempt timeout.",
                         fields =
                             listOf(
                                 ParamDescriptor(
@@ -412,7 +424,7 @@ object Stage1Catalog {
                         name = "backoff",
                         kind = ParamKind.OBJECT,
                         title = "Backoff",
-                        description = "Delay between attempts.",
+                        description = "Pause before a retry (backoff). The calling handler remains occupied during the pause.",
                         default = buildJsonObject { put("kind", "none") },
                         fields =
                             listOf(
@@ -430,7 +442,9 @@ object Stage1Catalog {
                                     name = "base",
                                     kind = ParamKind.QUANTITY,
                                     title = "Base delay",
-                                    description = "Delay after the first failed attempt before jitter.",
+                                    description =
+                                        "Base pause after the first failed attempt; full jitter chooses a random " +
+                                            "pause between zero and the current limit.",
                                     appliesWhen = ParamApplicability("kind", listOf("fixed", "exponential-full-jitter")),
                                     default = JsonPrimitive("0ms"),
                                     initial = JsonPrimitive("10ms"),
@@ -512,8 +526,9 @@ object Stage1Catalog {
                         id = "sentAttempts",
                         title = "Routed attempts",
                         description =
-                            "Attempts selected for this output, including retries; " +
-                                "windows use event time, totals use the arrival cohort.",
+                            "Attempts selected for this output, including retries. Windows count events when they " +
+                                "occur; summary counts follow requests arriving during measurement, including their " +
+                                "later attempts.",
                         unit = OutputUnit.REQUESTS,
                         kind = OutputKind.COUNT,
                         calculation = OutputCalculation(OutputCalculationKind.VALUE, "sentAttempts"),
