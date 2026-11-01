@@ -68,13 +68,13 @@ describe("edge edit controls", () => {
 it("rejects an oversized gesture visibly and leaves it out of history", () => {
   const commit = vi.fn();
   const preview = vi.fn();
-  const points = Array.from({ length: 52 }, (_, i) => ({ x: Math.floor(i / 2) * 20, y: Math.ceil(i / 2) * 20 }));
+  const points = Array.from({ length: 52 }, (_, i) => ({ x: Math.ceil(i / 2) * 20, y: Math.floor(i / 2) * 20 }));
   render(<EdgeEditControls id="rpc" path={points} anchors={points.slice(1, -1)} identity={{}} toFlow={toFlow} onPreview={preview} onCommit={commit} />);
-  pointer("pointerdown", 0, 20, screen.getByRole("button", { name: "Move segment 1 of rpc" }));
-  pointer("pointermove", 30, 20);
+  pointer("pointerdown", 20, 0, screen.getByRole("button", { name: "Move segment 1 of rpc" }));
+  pointer("pointermove", 20, 30);
   expect(screen.getByRole("status").textContent).toContain("at most 50 points");
   expect(preview).toHaveBeenLastCalledWith(null);
-  pointer("pointerup", 30, 20);
+  pointer("pointerup", 20, 30);
   expect(commit).not.toHaveBeenCalled();
 });
 
@@ -131,12 +131,31 @@ it.each([1, 2])("drags and double-click deletes generated diagonal corner %s in 
   expect(manualEdgePoints(path[0], path.at(-1)!, commit.mock.lastCall![0])).not.toContainEqual(original);
 });
 
-it("reports a rejected generated-corner deletion instead of silently truncating the saved path", () => {
+it("deletes a generated corner on a 26-anchor route in one command", () => {
   const anchors = Array.from({ length: 26 }, (_, index) => ({ x: index * 20 + 10, y: index * 20 + 10 }));
   const path = manualEdgePoints({ x: 0, y: 0 }, { x: 600, y: 600 }, anchors);
   const commit = vi.fn();
   render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={vi.fn()} onCommit={commit} />);
   fireEvent.doubleClick(screen.getByRole("button", { name: "Move bend 1 of rpc" }));
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(commit).toHaveBeenCalledExactlyOnceWith([{ x: 0, y: 10 }, ...anchors]);
+});
+
+it.each(["drag", "delete", "segment"])("rejects a generated-corner %s needing a 51st anchor with visible feedback and no commit", operation => {
+  const anchors = Array.from({ length: 50 }, (_, index) => ({ x: index * 20 + 10, y: index * 20 + 10 }));
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 1200, y: 1200 }, anchors);
+  const commit = vi.fn();
+  const preview = vi.fn();
+  render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={preview} onCommit={commit} />);
+  const bend = screen.getByRole("button", { name: "Move bend 1 of rpc" });
+  if (operation === "delete") fireEvent.doubleClick(bend);
+  else {
+    const handle = operation === "drag" ? bend : screen.getByRole("button", { name: "Move segment 1 of rpc" });
+    pointer("pointerdown", 20, 0, handle);
+    pointer("pointermove", 30, -10);
+    expect(preview).toHaveBeenLastCalledWith(null);
+    pointer("pointerup", 30, -10);
+  }
   expect(screen.getByRole("status").textContent).toContain("at most 50 points");
   expect(commit).not.toHaveBeenCalled();
 });
