@@ -41,7 +41,8 @@ it("protects unsaved edits through save, undo, redo and unmount", async () => {
   expect(unloadPrevented()).toBe(true);
   fireEvent.click(button("Save"));
   await waitFor(() => expect(screen.queryByText("Unsaved changes")).toBeNull());
-  expect(unloadPrevented()).toBe(false);
+  // The badge can disappear before the passive effect removes the beforeunload listener.
+  await waitFor(() => expect(unloadPrevented()).toBe(false));
   fireEvent.click(button("Undo"));
   expect(unloadPrevented()).toBe(true);
   fireEvent.click(button("Redo"));
@@ -77,7 +78,7 @@ it.each(["Model", "Experiment"])("saves before switching %s", async (kind) => {
   expect(load).toBeGreaterThan(save);
   expect(calls[save][1]?.headers).toMatchObject({ "If-Match": '"v-model"' });
   expect(JSON.parse(String(calls[save][1]?.body)).model.blocks.gateway.params.handlers).toBe(5);
-  expect(unloadPrevented()).toBe(false);
+  await waitFor(() => expect(unloadPrevented()).toBe(false));
 });
 
 it.each([409, 500])("preserves edits and selection after Save and switch fails with %s", async (status) => {
