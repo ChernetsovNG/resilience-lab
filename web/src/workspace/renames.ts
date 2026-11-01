@@ -62,7 +62,9 @@ export async function prepareRelatedRenames(loaded: LoadedExperiment, applied: R
   const ids = modelRenames(loaded.saved.model, loaded.model);
   const types = modelRequestTypeRenames(loaded.saved.model, loaded.model);
   if (ids.size === 0 && types.size === 0 && !hasPendingRelatedRenames(loaded, applied)) return [];
-  const questions = await storedExperiments((await api.documents()).filter(entry => entry.path !== loaded.experimentPath));
+  const entries = await api.documents();
+  const initialOwned = new Set(experimentsForModel(entries, loaded.modelPath).filter(path => path !== loaded.experimentPath));
+  const questions = await storedExperiments(entries.filter(entry => initialOwned.has(entry.path)));
   const owned = questions.filter(({ entry, experiment }) => resolveRef(entry.path, experiment.modelRef) === loaded.modelPath);
   const writes = owned.flatMap(question => {
     const previous = applied.get(question.entry.path);
@@ -80,7 +82,7 @@ export async function prepareRelatedRenames(loaded: LoadedExperiment, applied: R
   const latest = await api.documents();
   const ownedPaths = new Set(owned.map(({ entry }) => entry.path));
   const latestOwned = new Set(experimentsForModel(latest, loaded.modelPath).filter(path => path !== loaded.experimentPath));
-  const changedOwner = [...ownedPaths, ...latestOwned].find(path => ownedPaths.has(path) !== latestOwned.has(path));
+  const changedOwner = [...initialOwned, ...latestOwned].find(path => !ownedPaths.has(path) || !latestOwned.has(path));
   if (changedOwner !== undefined) throw new MessageError("app.workspace.renameConflict", { path: changedOwner });
   const versions = new Map(latest.map(entry => [entry.path, entry.version]));
   const expected = new Map<string, string | null>(owned.map(({ entry }) => [entry.path, entry.version]));

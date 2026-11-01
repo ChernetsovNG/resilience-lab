@@ -12,7 +12,10 @@ const unrelated = "other/grid.experiment.json";
 
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
-function storage(beforePreflight?: (documents: Record<string, DocumentView>) => void, failModelOnce = false) {
+function storage(
+  beforePreflight?: (documents: Record<string, DocumentView>) => void, failModelOnce = false,
+  afterList?: (documents: Record<string, DocumentView>, call: number) => void,
+) {
   const documents = structuredClone(documentViews);
   const question = { ...experiment, modelRef: "../retry-storm/retry-storm.model.json",
     faults: ["gateway#2", "gateway-to-middle#2"].map(target => ({ target, kind: "slowdown", from: "0ms", to: "1s", multiplier: 2 })),
@@ -28,7 +31,9 @@ function storage(beforePreflight?: (documents: Record<string, DocumentView>) => 
     if (url.startsWith("/api/v1/workspace/changes")) return { body: { cursor: "1", reset: false, changes: [] } };
     if (url === "/api/v1/workspace/documents") {
       if (++lists === 3) beforePreflight?.(documents);
-      return { body: Object.values(documents).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null })) };
+      const entries = Object.values(documents).map(({ path, kind, version, content }) => ({ path, kind, version, modelRef: content.experiment?.modelRef ?? null }));
+      afterList?.(documents, lists);
+      return { body: entries };
     }
     const path = new URL(url, "http://test").searchParams.get("path")!;
     const view = documents[path];
@@ -47,7 +52,7 @@ function storage(beforePreflight?: (documents: Record<string, DocumentView>) => 
       ? { status: 404, body: { code: "DOCUMENT_NOT_FOUND", message: `Missing: ${path}`, args: { path }, diagnostics: [] } }
       : { body: structuredClone(view) };
   });
-  return { documents, puts: () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT") };
+  return { documents, fetchMock, puts: () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT") };
 }
 
 async function opened() {
@@ -55,6 +60,31 @@ async function opened() {
   await waitFor(() => expect(hook.result.current.loaded?.experimentPath).toBe(experimentPath));
   return hook;
 }
+
+it("saves a rename without reading an unrelated experiment removed after listing", async () => {
+  const store = storage(undefined, false, (documents, call) => { if (call === 2) delete documents[unrelated]; });
+  const { result } = await opened();
+  act(() => result.current.execute(renameElement("gateway", "entry")));
+  await act(async () => { expect(await result.current.save()).toBe(true); });
+  expect(store.documents[modelPath].content.model!.blocks).toHaveProperty("entry");
+  expect(store.documents[sibling].content.experiment!.faults[0].target).toBe("entry#2");
+  expect(store.fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(unrelated)))).toBe(false);
+  expect(result.current.problem).toBeNull();
+  expect(result.current.dirty).toBe(false);
+});
+
+it.each([false, true])("writes nothing if an owned experiment disappears before reading (recreated: %s)", async recreated => {
+  const store = storage(documents => { if (recreated) documents[sibling] = original; }, false,
+    (documents, call) => { if (call === 2) delete documents[sibling]; });
+  const original = structuredClone(store.documents[sibling]);
+  const { result } = await opened();
+  act(() => result.current.execute(renameElement("gateway", "entry")));
+  await act(async () => { expect(await result.current.save()).toBe(false); });
+  expect(store.puts()).toHaveLength(0);
+  expect(result.current.problem?.code).toBe("CLIENT_ERROR");
+  expect(result.current.problem?.message).toContain(sibling);
+  expect(result.current.dirty).toBe(true);
+});
 
 it("composes renames across parameter edits and saves every owned experiment with its version", async () => {
   const store = storage();

@@ -4,7 +4,7 @@ import { ApiError, api } from "../api/apiClient";
 import { documentViews, experiment, experimentPath, layout, layoutPath, model, modelPath } from "../test/fixtures";
 import type { DocumentDraft, DocumentView } from "../api/apiTypes";
 import type { LoadedExperiment } from "./editor";
-import { copyModel, documentsToDelete, exportDocuments, newExperiment, newModel, readImports, runsToDelete, writeDocuments } from "./fileActions";
+import { checkDeletionReferences, copyModel, documentsToDelete, exportDocuments, newExperiment, newModel, readImports, runsToDelete, storedExperiments, writeDocuments } from "./fileActions";
 
 const loaded: LoadedExperiment = {
   experimentPath, modelPath, layoutPath, model, layout, experiment,
@@ -13,6 +13,40 @@ const loaded: LoadedExperiment = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("workspace file actions", () => {
+  it("checks model deletion without reading experiments belonging to another model", async () => {
+    vi.spyOn(api, "documents").mockResolvedValue([
+      { path: "other/question.experiment.json", kind: "EXPERIMENT", version: "other", modelRef: "other.model.json" },
+    ]);
+    const read = vi.spyOn(api, "document").mockRejectedValue(new ApiError(404, { code: "DOCUMENT_NOT_FOUND", message: "Missing", diagnostics: [] }));
+    await expect(checkDeletionReferences({ path: modelPath, kind: "MODEL", version: "v-model", modelRef: null })).resolves.toBeUndefined();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("ignores a referencing experiment removed between listing and deletion checks", async () => {
+    vi.spyOn(api, "documents").mockResolvedValue([
+      { path: experimentPath, kind: "EXPERIMENT", version: "v-experiment", modelRef: experiment.modelRef },
+    ]);
+    vi.spyOn(api, "document").mockRejectedValue(new ApiError(404, { code: "DOCUMENT_NOT_FOUND", message: "Missing", diagnostics: [] }));
+    await expect(checkDeletionReferences({ path: modelPath, kind: "MODEL", version: "v-model", modelRef: null })).resolves.toBeUndefined();
+  });
+
+  it("protects a layout referenced by an experiment of another model", async () => {
+    const path = "other/question.experiment.json";
+    vi.spyOn(api, "documents").mockResolvedValue([{ path, kind: "EXPERIMENT", version: "other", modelRef: "other.model.json" }]);
+    vi.spyOn(api, "document").mockResolvedValue({ path, kind: "EXPERIMENT", version: "other", content: { experiment: {
+      ...experiment, modelRef: "other.model.json", layoutRef: "../retry-storm/retry-storm.layout.json",
+    } } });
+    await expect(checkDeletionReferences({ path: layoutPath, kind: "LAYOUT", version: "v-layout", modelRef: null })).rejects.toThrow();
+  });
+
+  it("propagates experiment read failures other than 404", async () => {
+    const error = new ApiError(500, { code: "STORAGE_ERROR", message: "Cannot read", diagnostics: [] });
+    vi.spyOn(api, "document").mockRejectedValue(error);
+    await expect(storedExperiments([
+      { path: experimentPath, kind: "EXPERIMENT", version: "v-experiment", modelRef: experiment.modelRef },
+    ])).rejects.toBe(error);
+  });
+
   it("selects current and obsolete runs by the full manifest experiment path, not the shared directory name", async () => {
     const current = { id: "one", experiment: experimentPath, directory: ".results/retry-storm/one", complete: true, sizeBytes: 1024 };
     const other = { ...current, id: "two", experiment: "other/retry-storm.experiment.json", directory: ".results/retry-storm/two" };

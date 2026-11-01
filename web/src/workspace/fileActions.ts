@@ -179,19 +179,26 @@ export async function writeDocuments(
   return true;
 }
 
-/** Reads experiment contents and their current versions, including references outside the model's directory. */
+/** Reads experiment contents and their current versions, including references outside the model's directory. Omits documents removed since listing. */
 export async function storedExperiments(entries: readonly DocumentEntry[]) {
-  return Promise.all(entries.filter(entry => entry.kind === "EXPERIMENT").map(async entry => {
-    const view = await api.document(entry.path);
-    const experiment = view.content.experiment;
-    if (experiment == null) throw new MessageError("app.workspace.notExperiment", { path: entry.path });
-    return { entry: { ...entry, version: view.version }, experiment };
-  }));
+  return (await Promise.all(entries.filter(entry => entry.kind === "EXPERIMENT").map(async entry => {
+    try {
+      const view = await api.document(entry.path);
+      const experiment = view.content.experiment;
+      if (experiment == null) throw new MessageError("app.workspace.notExperiment", { path: entry.path });
+      return [{ entry: { ...entry, version: view.version }, experiment }];
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return [];
+      throw error;
+    }
+  }))).flat();
 }
 
 /** Checks surviving references immediately before removing a model or layout. */
 export async function checkDeletionReferences(entry: DocumentEntry): Promise<void> {
-  for (const { entry: source, experiment } of await storedExperiments(await api.documents())) {
+  const entries = await api.documents();
+  const paths = entry.kind === "MODEL" ? new Set(experimentsForModel(entries, entry.path)) : null;
+  for (const { entry: source, experiment } of await storedExperiments(paths === null ? entries : entries.filter(source => paths.has(source.path)))) {
     const ref = entry.kind === "MODEL" ? experiment.modelRef : experiment.layoutRef;
     if (ref != null && resolveRef(source.path, ref) === entry.path) throw new MessageError("file.deletePlanChanged");
   }

@@ -84,6 +84,34 @@ afterEach(() => {
 });
 
 describe("workspace change polling", () => {
+  it("ignores a missing related experiment and reloads its references after a document update", async () => {
+    const path = "questions/related.experiment.json";
+    let removed = false;
+    const store = harness({
+      changes: queuedChanges({ cursor: "g:1", reset: false, changes: [{ path, kind: "EXPERIMENT", version: "related-2" }] }),
+      beforeDocument: current => {
+        if (current === path && !removed) {
+          removed = true;
+          delete store.views[path];
+        }
+      },
+    });
+    const question: DocumentView = { path, kind: "EXPERIMENT", version: "related-1", content: { experiment: {
+      ...experiment, modelRef: "../retry-storm/retry-storm.model.json",
+      variants: [{ id: "baseline", overrides: { "gateway.handlers": 8 } }],
+    } } };
+    store.views[path] = question;
+    const { result } = await loaded();
+    expect(removed).toBe(true);
+    expect(result.current.problem).toBeNull();
+    expect(result.current.experimentsUsing("gateway")).toEqual([]);
+
+    store.views[path] = { ...question, version: "related-2" };
+    await poll();
+    expect(result.current.experimentsUsing("gateway")).toEqual(["related"]);
+    expect(result.current.problem).toBeNull();
+  });
+
   it("ignores unrelated documents and reports a changed open model", async () => {
     harness({ changes: queuedChanges(
       { cursor: "g:1", reset: false, changes: [{ path: "other/other.model.json", kind: "MODEL", version: "v-other" }] },
