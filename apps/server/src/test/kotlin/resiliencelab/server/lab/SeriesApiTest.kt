@@ -84,6 +84,79 @@ class SeriesApiTest {
     }
 
     @Test
+    fun `serves aggregate indexes and original gzip outputs with immutable cache headers`() {
+        val route = "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate"
+        val partRoute = "$route/{part}"
+        for (variant in run.manifest.variants) {
+            val directory = root.resolve("${run.runDirectory}/series/$variant/p0/aggregate")
+            val response = mockMvc.perform(get(route, runId, variant, "p0")).andReturn().response
+            assertThat(response.status).isEqualTo(200)
+            openApi.assertResponse("get", route, response)
+            val index = Json.decodeFromString<resiliencelab.core.results.AggregateSeriesIndex>(response.contentAsString)
+            assertThat(index.replications).isEqualTo(run.manifest.replications)
+            assertThat(
+                Json.parseToJsonElement(response.contentAsString),
+            ).isEqualTo(Json.parseToJsonElement(Files.readString(directory.resolve("index.json"))))
+            for (reference in index.parts) {
+                val number = reference.file.removePrefix("part-").removeSuffix(".json.gz")
+                val part = mockMvc.perform(get(partRoute, runId, variant, "p0", number)).andReturn().response
+                assertThat(part.status).isEqualTo(200)
+                assertThat(part.contentAsByteArray).isEqualTo(Files.readAllBytes(directory.resolve(reference.file)))
+                assertThat(part.getHeader("Content-Encoding")).isEqualTo("gzip")
+                assertThat(part.getHeader("ETag")).isEqualTo("\"${reference.sha256}\"")
+                assertThat(part.getHeader("Cache-Control")).contains("max-age=31536000", "public", "immutable")
+                val decoded = GZIPInputStream(part.contentAsByteArray.inputStream()).use { it.readAllBytes() }
+                assertThat(decoded.size).isEqualTo(reference.uncompressedBytes)
+                openApi.assertResponse("get", partRoute, part)
+            }
+        }
+        for (parameters in listOf(
+            arrayOf("missing", "baseline", "p0"),
+            arrayOf(runId, "missing", "p0"),
+            arrayOf(runId, "baseline", "p9"),
+        )) {
+            assertThat(
+                mockMvc
+                    .perform(get(route, *parameters))
+                    .andReturn()
+                    .response.status,
+            ).isEqualTo(404)
+            assertThat(
+                mockMvc
+                    .perform(get(partRoute, *(parameters + "0")))
+                    .andReturn()
+                    .response.status,
+            ).isEqualTo(404)
+        }
+        for (part in listOf("-1", "01", "2147483648", "index.json")) {
+            assertThat(
+                mockMvc
+                    .perform(get(partRoute, runId, "baseline", "p0", part))
+                    .andReturn()
+                    .response.status,
+            ).isEqualTo(400)
+        }
+        assertThat(
+            mockMvc
+                .perform(get(partRoute, runId, "baseline", "p0", "9999"))
+                .andReturn()
+                .response.status,
+        ).isEqualTo(404)
+        assertThat(
+            mockMvc
+                .perform(get(route, runId, "baseline", "p01"))
+                .andReturn()
+                .response.status,
+        ).isEqualTo(400)
+        assertThat(
+            mockMvc
+                .perform(get(route, runId, "..", "p0"))
+                .andReturn()
+                .response.status,
+        ).isEqualTo(400)
+    }
+
+    @Test
     fun `summary exposes entry totals clients classes and original failure reasons`() {
         val route = "/api/v1/runs/{id}/summary"
         val response = mockMvc.perform(get(route, runId)).andReturn().response

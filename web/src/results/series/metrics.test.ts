@@ -25,7 +25,7 @@ function window(values: Partial<RawWindow>): RawWindow {
 }
 
 function part(nodes: RawPart["nodes"]): RawPart {
-  return { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, classes: [], connections: [] };
+  return { schemaVersion: 8, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 2, nodes, classes: [], connections: [] };
 }
 
 describe("window metrics", () => {

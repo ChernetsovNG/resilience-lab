@@ -123,7 +123,7 @@ export class SeriesLoader {
       request.signal,
     );
     throwIfAborted(request.signal);
-    if (index.schemaVersion !== 7) {
+    if (index.schemaVersion !== 8) {
       throw new SeriesLoadError("INVALID_SERIES", new MessageError("results.series.unsupportedIndexSchema", { version: String(index.schemaVersion) }));
     }
     const selected = selectSeriesParts(index, "nodes" in request ? request.nodes : [],

@@ -24181,7 +24181,7 @@
       }
     ],
     "profile": "ddsketch-bitwise6-rational-v1",
-    "schemaVersion": 7,
+    "schemaVersion": 8,
     "untilWindow": 100
   },
   "quantiles": [

@@ -381,6 +381,7 @@ API получает базовый путь `/api/v1` и полностью з�
 | `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel` | Задания |
 | `GET /runs`, `POST /runs/{id}/resume`, `GET /runs/{id}/manifest`, `GET /runs/{id}/summary`, `GET /runs/{id}/series/{variant}/{cell}/{rep}`, `GET /runs/{id}/series/{variant}/{cell}/{rep}/{part}` | Прогоны, включая незаконченные, и досчёт незаконченного — к прогону, а не к заданию: задания не переживают перезапуск сервера; для задачи — индекс частей рядов, затем сами части в gzip как есть |
 | `GET /runs/obsolete`, `DELETE /runs/{id}`, `DELETE /runs?directory=…` | Список устаревших прогонов и удаление каталога прогона, включая нечитаемые артефакты |
+| `GET /runs/{id}/series/{variant}/{cell}/aggregate`, `GET /runs/{id}/series/{variant}/{cell}/aggregate/{part}` | Индекс сводных выходов по всем повторениям и исходные gzip-части; строки экземпляров реплик загружаются отдельно |
 
 Спецификацию генерирует springdoc в `apps/server/openapi.json`. Классы ядра сервер отдаёт через kotlinx-конвертер Spring, а springdoc строит схему по тем же классам через Jackson. Поэтому JSON API содержит все поля, отсутствующее значение пишется как `null`, а типы API не используют `@SerialName`, собственные сериализаторы и полиморфизм.
 

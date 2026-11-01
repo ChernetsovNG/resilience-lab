@@ -166,6 +166,7 @@ class SeriesWriter(
     private val maxPartBytes: Int = MAX_PART_BYTES,
     private val groups: List<ReplicaGroup> = emptyList(),
     private val saturation: SaturationAnalyzer.Detector = SaturationAnalyzer.Detector(),
+    private val aggregateReplications: Int? = null,
 ) {
     private val expectedWindows = windowCount(endMs, windowMs)
 
@@ -194,6 +195,43 @@ class SeriesWriter(
         connections: List<ConnectionWindow> = emptyList(),
     ) {
         uninterruptedArtifactWrite { writeClosedWindow(index, rows, connections) }
+    }
+
+    /** Writes derived outputs with replica members isolated from ordinary and group rows. */
+    fun writeAggregateWindow(
+        index: Int,
+        nodes: List<AggregateRowWindow>,
+        connections: List<AggregateRowWindow> = emptyList(),
+        classes: List<AggregateRowWindow> = emptyList(),
+    ) {
+        require(aggregateReplications != null && index == nextWindow)
+        val instanceNodes =
+            groups
+                .filter { it.kind == ReplicaGroupKind.NODE }
+                .flatMap { it.instances }
+                .map { it.id }
+                .toSet()
+        val instanceCalls =
+            groups
+                .filter { it.kind == ReplicaGroupKind.CONNECTION }
+                .flatMap { it.instances }
+                .map { it.id }
+                .toSet()
+
+        fun encode(rows: List<AggregateRowWindow>) =
+            rows.sortedBy { it.id }.map { row ->
+                bufferedSeries(row.id, json.encodeToString(AggregateWindowMetrics.serializer(), row.metrics))
+            }
+        for (kind in SeriesPartKind.entries) {
+            val instances = kind == SeriesPartKind.INSTANCE
+            val selectedNodes = encode(nodes.filter { (it.id in instanceNodes) == instances })
+            val selectedCalls = encode(connections.filter { (it.id in instanceCalls) == instances })
+            val selectedClasses = if (instances) emptyList() else encode(classes)
+            if (selectedNodes.isNotEmpty() || selectedCalls.isNotEmpty() || selectedClasses.isNotEmpty()) {
+                writeEncodedWindow(index, kind, selectedNodes, selectedCalls, selectedClasses)
+            }
+        }
+        nextWindow++
     }
 
     private fun writeClosedWindow(
@@ -255,6 +293,22 @@ class SeriesWriter(
                 )
             }
         }
+        writeEncodedWindow(
+            index,
+            kind,
+            sorted.map { bufferedSeries(it.id, json.encodeToString(WindowMetrics.serializer(), it.metrics)) },
+            sortedConnections.map { bufferedSeries(it.id, json.encodeToString(ConnectionWindowMetrics.serializer(), it.metrics)) },
+            sortedClasses.map { bufferedSeries(it.id, json.encodeToString(WindowMetrics.serializer(), it.metrics)) },
+        )
+    }
+
+    private fun writeEncodedWindow(
+        index: Int,
+        kind: SeriesPartKind,
+        sorted: List<BufferedSeries>,
+        sortedConnections: List<BufferedSeries>,
+        sortedClasses: List<BufferedSeries>,
+    ) {
         val baseBytes = prefix(index, index + 1, kind).size + PART_SUFFIX_BYTES
         var window = BufferedPart(index, index + 1, kind)
         var splitRows = false
@@ -282,15 +336,9 @@ class SeriesWriter(
             }
             window.add(row, population)
         }
-        sorted.forEach { row ->
-            add(bufferedSeries(row.id, json.encodeToString(WindowMetrics.serializer(), row.metrics)), population = 0)
-        }
-        sortedConnections.forEach { row ->
-            add(bufferedSeries(row.id, json.encodeToString(ConnectionWindowMetrics.serializer(), row.metrics)), population = 1)
-        }
-        sortedClasses.forEach { row ->
-            add(bufferedSeries(row.id, json.encodeToString(WindowMetrics.serializer(), row.metrics)), population = 2)
-        }
+        sorted.forEach { add(it, population = 0) }
+        sortedConnections.forEach { add(it, population = 1) }
+        sortedClasses.forEach { add(it, population = 2) }
         if (splitRows) {
             persist(window)
         } else {
@@ -321,6 +369,7 @@ class SeriesWriter(
     ): ByteArray =
         (
             "{\"schemaVersion\":${Versions.SERIES_SCHEMA},\"kind\":\"$kind\",\"profile\":\"${LatencySketch.PROFILE}\"," +
+                (aggregateReplications?.let { "\"replications\":$it," } ?: "") +
                 "\"fromWindow\":$from," +
                 "\"untilWindow\":$until,\"nodes\":["
         ).toByteArray(Charsets.UTF_8)
@@ -433,7 +482,16 @@ class SeriesWriter(
                     parts = parts.toList(),
                     groups = groups,
                 )
-            workspace.create("$directory/index.json", DocumentCodec.encode(SeriesIndex.serializer(), index))
+            val encoded =
+                if (aggregateReplications == null) {
+                    DocumentCodec.encode(SeriesIndex.serializer(), index)
+                } else {
+                    DocumentCodec.encode(
+                        AggregateSeriesIndex.serializer(),
+                        AggregateSeriesIndex(index.schemaVersion, endMs, windowMs, aggregateReplications, index.parts, groups),
+                    )
+                }
+            workspace.create("$directory/index.json", encoded)
             index
         }
 

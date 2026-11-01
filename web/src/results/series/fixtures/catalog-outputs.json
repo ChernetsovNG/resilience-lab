@@ -1,0 +1,2741 @@
+[
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "originalArrivals",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "originalArrivals": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "successes",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "successes": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "failures",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "failures": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "degraded",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "degraded": 12,
+          "durationMs": 400
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "latency",
+      "kind": "MEAN"
+    },
+    "cases": [
+      {
+        "context": {
+          "latency": {
+            "count": 2,
+            "sumMs": 15
+          }
+        },
+        "expected": 7.5
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "latency",
+      "kind": "QUANTILE",
+      "percentile": 0.5
+    },
+    "cases": [
+      {
+        "context": {
+          "latency": {
+            "p50Ms": 5,
+            "p95Ms": 8,
+            "p99Ms": 9
+          }
+        },
+        "expected": 5.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "latency",
+      "kind": "QUANTILE",
+      "percentile": 0.95
+    },
+    "cases": [
+      {
+        "context": {
+          "latency": {
+            "p50Ms": 5,
+            "p95Ms": 8,
+            "p99Ms": 9
+          }
+        },
+        "expected": 8.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "latency",
+      "kind": "QUANTILE",
+      "percentile": 0.99
+    },
+    "cases": [
+      {
+        "context": {
+          "latency": {
+            "p50Ms": 5,
+            "p95Ms": 8,
+            "p99Ms": 9
+          }
+        },
+        "expected": 9.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "offeredAttempts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "offeredAttempts": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "admittedAttempts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "admittedAttempts": 12,
+          "durationMs": 400
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.admittedAttempts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "admittedAttempts": 12,
+            "measurementMs": 400
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "retries",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "retries": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "timeouts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "timeouts": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "slotPools.handlers.queueFullCount",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "slotPools": {
+            "handlers": {
+              "queueFullCount": 12
+            }
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.handlers.queueFullCount",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "slotPools": {
+              "handlers": {
+                "queueFullCount": 12
+              }
+            }
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.handlers.capacityIntegralMs",
+      "field": "slotPools.handlers.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "busyIntegralMs": 12,
+              "capacityIntegralMs": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.handlers.capacityIntegralMs",
+      "field": "totals.slotPools.handlers.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "busyIntegralMs": 12,
+                "capacityIntegralMs": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "slotPools.handlers.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "slotPools": {
+            "handlers": {
+              "queueIntegralMs": 12
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.handlers.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "slotPools": {
+              "handlers": {
+                "queueIntegralMs": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "capacity": "params.queue",
+      "divisor": "durationMs",
+      "field": "slotPools.handlers.queueIntegralMs",
+      "kind": "NORMALIZED_RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "params": {
+            "queue": 3
+          },
+          "slotPools": {
+            "handlers": {
+              "queueIntegralMs": 12
+            }
+          }
+        },
+        "expected": 0.01
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "capacity": "params.queue",
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.handlers.queueIntegralMs",
+      "kind": "NORMALIZED_RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "params": {
+            "queue": 3
+          },
+          "totals": {
+            "measurementMs": 400,
+            "slotPools": {
+              "handlers": {
+                "queueIntegralMs": 12
+              }
+            }
+          }
+        },
+        "expected": 0.01
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "offeredAttempts",
+      "field": "slotPools.handlers.queueFullCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "offeredAttempts": 3,
+          "slotPools": {
+            "handlers": {
+              "queueFullCount": 12
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.offeredAttempts",
+      "field": "totals.slotPools.handlers.queueFullCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "offeredAttempts": 3,
+            "slotPools": {
+              "handlers": {
+                "queueFullCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.handlers.waitCount",
+      "field": "slotPools.handlers.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "totalWaitMs": 12,
+              "waitCount": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.handlers.waitCount",
+      "field": "totals.slotPools.handlers.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "totalWaitMs": 12,
+                "waitCount": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.handlers.waitLimitCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "waitLimitCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.handlers.waitLimitCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "waitLimitCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "measurementLatency",
+      "kind": "MEAN"
+    },
+    "cases": [
+      {
+        "context": {
+          "measurementLatency": {
+            "count": 2,
+            "sumMs": 15
+          }
+        },
+        "expected": 7.5
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "rateLimited",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "rateLimited": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.rateLimited",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "rateLimited": 12
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "offeredAttempts",
+      "field": "rateLimited",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "offeredAttempts": 3,
+          "rateLimited": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.offeredAttempts",
+      "field": "totals.rateLimited",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "offeredAttempts": 3,
+            "rateLimited": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "probeFailures",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "probeFailures": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.probeFailures",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "probeFailures": 12
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "notReadyMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "notReadyMs": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.notReadyMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "notReadyMs": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "ejections",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "ejections": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.ejections",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "ejections": 12
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "ejectedMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "ejectedMs": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.ejectedMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "ejectedMs": 12,
+            "measurementMs": 3
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.handlers.replicaExtrema.minUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "replicaExtrema": {
+                "minUtilization": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.handlers.replicaExtrema.minUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "replicaExtrema": {
+                  "minUtilization": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.handlers.replicaExtrema.maxUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "replicaExtrema": {
+                "maxUtilization": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.handlers.replicaExtrema.maxUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "replicaExtrema": {
+                  "maxUtilization": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.handlers.replicaExtrema.minMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "replicaExtrema": {
+                "minMeanQueueLength": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.handlers.replicaExtrema.minMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "replicaExtrema": {
+                  "minMeanQueueLength": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.handlers.replicaExtrema.maxMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "handlers": {
+              "replicaExtrema": {
+                "maxMeanQueueLength": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.handlers.replicaExtrema.maxMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "handlers": {
+                "replicaExtrema": {
+                  "maxMeanQueueLength": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "pooledLatency.meanMs",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "pooledLatency": {
+            "meanMs": 12
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "pooledLatency.p99Ms",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "pooledLatency": {
+            "p99Ms": 12
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "retries",
+      "field": "sentAttempts",
+      "kind": "RATIO_TO_DIFFERENCE"
+    },
+    "cases": [
+      {
+        "context": {
+          "retries": 4,
+          "sentAttempts": 12
+        },
+        "expected": 1.5
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.retries",
+      "field": "totals.sentAttempts",
+      "kind": "RATIO_TO_DIFFERENCE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "retries": 4,
+            "sentAttempts": 12
+          }
+        },
+        "expected": 1.5
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "entries.total.originalArrivals",
+      "field": "target.admittedAttempts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "entries": {
+            "total": {
+              "originalArrivals": 3
+            }
+          },
+          "target": {
+            "admittedAttempts": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "target.admittedAmplification.mean",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "target": {
+            "admittedAmplification": {
+              "mean": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "sentAttempts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "sentAttempts": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.sentAttempts",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "sentAttempts": 12
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.retries",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "retries": 12
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "succeeded",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "succeeded": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "failed",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "failed": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "orphaned",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "orphaned": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "circuitRejections",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "circuitRejections": 12,
+          "durationMs": 400
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.circuitRejections",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "circuitRejections": 12,
+            "measurementMs": 400
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "retriesDenied",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "retriesDenied": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.retriesDenied",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 400,
+            "retriesDenied": 12
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "fallbacks",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 400,
+          "fallbacks": 12
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.fallbacks",
+      "kind": "RATE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "fallbacks": 12,
+            "measurementMs": 400
+          }
+        },
+        "expected": 30.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "circuitOpenMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "circuitOpenMs": 12,
+          "durationMs": 3
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.circuitOpenMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "circuitOpenMs": 12,
+            "measurementMs": 3
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "inFlightIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "inFlightIntegralMs": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.inFlightIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "inFlightIntegralMs": 12,
+            "measurementMs": 3
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "orphanedIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "orphanedIntegralMs": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.orphanedIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "orphanedIntegralMs": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "backoffIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "backoffIntegralMs": 12,
+          "durationMs": 3
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.backoffIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "backoffIntegralMs": 12,
+            "measurementMs": 3
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "sentAttempts",
+      "field": "timeouts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "sentAttempts": 3,
+          "timeouts": 12
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.sentAttempts",
+      "field": "totals.timeouts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "sentAttempts": 3,
+            "timeouts": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "orphaned",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "orphaned": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.orphaned",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "orphaned": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.pool.capacityIntegralMs",
+      "field": "slotPools.pool.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "busyIntegralMs": 12,
+              "capacityIntegralMs": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.pool.capacityIntegralMs",
+      "field": "totals.slotPools.pool.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "busyIntegralMs": 12,
+                "capacityIntegralMs": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "slotPools.pool.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "slotPools": {
+            "pool": {
+              "queueIntegralMs": 12
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.pool.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "slotPools": {
+              "pool": {
+                "queueIntegralMs": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.waitLimitCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "waitLimitCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.pool.waitLimitCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "waitLimitCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.pool.waitCount",
+      "field": "slotPools.pool.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "totalWaitMs": 12,
+              "waitCount": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.pool.waitCount",
+      "field": "totals.slotPools.pool.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "totalWaitMs": 12,
+                "waitCount": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.queueFullCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "queueFullCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.pool.queueFullCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "queueFullCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.replicaExtrema.minUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "replicaExtrema": {
+                "minUtilization": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.pool.replicaExtrema.minUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "replicaExtrema": {
+                  "minUtilization": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.replicaExtrema.maxUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "replicaExtrema": {
+                "maxUtilization": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.pool.replicaExtrema.maxUtilization",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "replicaExtrema": {
+                  "maxUtilization": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.replicaExtrema.minMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "replicaExtrema": {
+                "minMeanQueueLength": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.pool.replicaExtrema.minMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "replicaExtrema": {
+                  "minMeanQueueLength": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.pool.replicaExtrema.maxMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "pool": {
+              "replicaExtrema": {
+                "maxMeanQueueLength": 12
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "totals.slotPools.pool.replicaExtrema.maxMeanQueueLength",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "pool": {
+                "replicaExtrema": {
+                  "maxMeanQueueLength": 12
+                }
+              }
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "sentAttempts",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "sentAttempts": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.sentAttempts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "sentAttempts": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.serverConnections.capacityIntegralMs",
+      "field": "slotPools.serverConnections.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "serverConnections": {
+              "busyIntegralMs": 12,
+              "capacityIntegralMs": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.serverConnections.capacityIntegralMs",
+      "field": "totals.slotPools.serverConnections.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "serverConnections": {
+                "busyIntegralMs": 12,
+                "capacityIntegralMs": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.clientConnections.capacityIntegralMs",
+      "field": "slotPools.clientConnections.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "clientConnections": {
+              "busyIntegralMs": 12,
+              "capacityIntegralMs": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.clientConnections.capacityIntegralMs",
+      "field": "totals.slotPools.clientConnections.busyIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "clientConnections": {
+                "busyIntegralMs": 12,
+                "capacityIntegralMs": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "slotPools.serverConnections.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "slotPools": {
+            "serverConnections": {
+              "queueIntegralMs": 12
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.serverConnections.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "slotPools": {
+              "serverConnections": {
+                "queueIntegralMs": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "offeredAttempts",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "offeredAttempts": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.offeredAttempts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "offeredAttempts": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "admittedAttempts",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "admittedAttempts": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.admittedAttempts",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "admittedAttempts": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.clientConnections.queueFullCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "clientConnections": {
+              "queueFullCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.clientConnections.queueFullCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "clientConnections": {
+                "queueFullCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.serverConnections.waitLimitCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "serverConnections": {
+              "waitLimitCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.serverConnections.waitLimitCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "serverConnections": {
+                "waitLimitCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "successes",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "successes": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.successes",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "successes": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "failures",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "failures": 12
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.failures",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "failures": 12
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.serverConnections.waitCount",
+      "field": "slotPools.serverConnections.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "serverConnections": {
+              "totalWaitMs": 12,
+              "waitCount": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.serverConnections.waitCount",
+      "field": "totals.slotPools.serverConnections.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "serverConnections": {
+                "totalWaitMs": 12,
+                "waitCount": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "durationMs",
+      "field": "slotPools.clientConnections.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "durationMs": 3,
+          "slotPools": {
+            "clientConnections": {
+              "queueIntegralMs": 12
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.measurementMs",
+      "field": "totals.slotPools.clientConnections.queueIntegralMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "measurementMs": 3,
+            "slotPools": {
+              "clientConnections": {
+                "queueIntegralMs": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "slotPools.clientConnections.waitCount",
+      "field": "slotPools.clientConnections.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "clientConnections": {
+              "totalWaitMs": 12,
+              "waitCount": 3
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "totals.slotPools.clientConnections.waitCount",
+      "field": "totals.slotPools.clientConnections.totalWaitMs",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "totals": {
+            "slotPools": {
+              "clientConnections": {
+                "totalWaitMs": 12,
+                "waitCount": 3
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.clientConnections.waitLimitCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "clientConnections": {
+              "waitLimitCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.clientConnections.waitLimitCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "clientConnections": {
+                "waitLimitCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "field": "slotPools.serverConnections.queueFullCount",
+      "kind": "VALUE"
+    },
+    "cases": [
+      {
+        "context": {
+          "slotPools": {
+            "serverConnections": {
+              "queueFullCount": 12
+            }
+          }
+        },
+        "expected": 12.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  },
+  {
+    "calculation": {
+      "divisor": "replications",
+      "field": "totals.slotPools.serverConnections.queueFullCount",
+      "kind": "RATIO"
+    },
+    "cases": [
+      {
+        "context": {
+          "replications": 3,
+          "totals": {
+            "slotPools": {
+              "serverConnections": {
+                "queueFullCount": 12
+              }
+            }
+          }
+        },
+        "expected": 4.0
+      },
+      {
+        "context": {}
+      }
+    ]
+  }
+]

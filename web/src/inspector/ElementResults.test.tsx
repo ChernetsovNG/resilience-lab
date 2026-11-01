@@ -11,7 +11,7 @@ import { setConfidenceLevel } from "../layout/confidenceLevel";
 import { SummaryTable } from "../layout/SummaryTable";
 
 const raw: SeriesPart = {
-  schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
+  schemaVersion: 8, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 3,
   nodes: ["gateway", "middle"].map(id => ({ id, windows: [0, 100, 200].map((startMs, index) => ({
     clientOriginalArrivals: 0, failuresByReason: {}, degraded: 0, rateLimited: 0, probes: 0, probeFailures: 0, notReadyMs: 0, ejections: 0, ejectedMs: 0, startMs,
       durationMs: 100,

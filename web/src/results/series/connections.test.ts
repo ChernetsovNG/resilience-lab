@@ -24,7 +24,7 @@ function window(values: Partial<RawWindow> = {}): RawWindow {
 
 function part(windows: RawWindow[] = [window()]): RawPart {
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     kind: "INSTANCE",
     profile: "ddsketch-bitwise6-rational-v1",
     fromWindow: 0,
@@ -39,7 +39,7 @@ describe("connection window decoding", () => {
   it("retains common slot fields in schema 7", () => {
     const slot = { busyIntegralMs: 8, queueIntegralMs: 4, capacityIntegralMs: 10,
       waitCount: 2, totalWaitMs: 4, queueFullCount: 0, waitLimitCount: 1 };
-    const raw = { schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
+    const raw = { schemaVersion: 8, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
       nodes: [], classes: [], connections: [{ id: "pooled", windows: [{
         clientOriginalArrivals: 0, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0, startMs: 0, durationMs: 10,
         sentAttempts: 1, retries: 0, succeeded: 1, failed: 0, timeouts: 0, orphaned: 0,
@@ -116,7 +116,7 @@ describe("connection window decoding", () => {
     expect(decoded.connections[0].id).toBe("client-to-service");
   });
 
-  it.each([1, 2, 3, 4, 5, 6, 8])("rejects unsupported part schema version %s", (schemaVersion) => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 9])("rejects unsupported part schema version %s", (schemaVersion) => {
     expect(() => decodeSeriesPart(JSON.stringify({ ...part(), schemaVersion }))).toThrow(/schema version/i);
   });
 

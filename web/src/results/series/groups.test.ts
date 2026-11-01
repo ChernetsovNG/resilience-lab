@@ -9,7 +9,7 @@ const extrema = {
 };
 function groupPart() {
   return {
-    schemaVersion: 7, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1",
+    schemaVersion: 8, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1",
     fromWindow: 0, untilWindow: 1, nodes: [], classes: [],
     connections: [{ id: "worker-to-db", windows: [{
       clientOriginalArrivals: 7, failuresByReason: {}, circuitOpenMs: 0, circuitRejections: 0, retriesDenied: 0, fallbacks: 0,
@@ -38,7 +38,7 @@ describe("replica group series", () => {
     const instance = { ...group, kind: "INSTANCE", connections: group.connections.map(row => ({ ...row, id: "worker-to-db#1" })) };
     const texts = [JSON.stringify(instance), JSON.stringify(group)];
     const index = {
-      schemaVersion: 7, endMs: 10, windowMs: 10,
+      schemaVersion: 8, endMs: 10, windowMs: 10,
       groups: [{ id: "worker-to-db", kind: "CONNECTION", instances: [
         { id: "worker-to-db#1", replica: 1 }, { id: "worker-to-db#2", replica: 2 }, { id: "worker-to-db#3", replica: 3 },
       ] }],
@@ -79,13 +79,13 @@ it.each([false, true])("loads a service group and shared client context without 
     latency: { count: 3, sumMs: 3, sketch: [1, 0, 1, 64, 1] },
     slotPools: { handlers: { busyIntegralMs: 18, queueIntegralMs: 30, capacityIntegralMs: 30,
       waitCount: 2, totalWaitMs: 4, queueFullCount: 0, waitLimitCount: 1, replicaExtrema: extrema } } };
-  const group = { schemaVersion: 7, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
+  const group = { schemaVersion: 8, kind: "GROUP", profile: "ddsketch-bitwise6-rational-v1", fromWindow: 0, untilWindow: 1,
     nodes: [{ id: "workers", windows: [{ ...window, clientOriginalArrivals: 7 }] }], classes: [], connections: [] };
   const instance = { ...group, kind: "INSTANCE", nodes: [{ id: "workers#1", windows: [window] }] };
   const client = { ...group, kind: "INSTANCE", nodes: [{ id: "client", windows: [{ ...window, originalArrivals: 7, slotPools: {} }] }] };
   const parts = [instance, group, client];
   const texts = parts.map(part => JSON.stringify(part));
-  const index = { schemaVersion: 7, endMs: 10, windowMs: 10,
+  const index = { schemaVersion: 8, endMs: 10, windowMs: 10,
     groups: [{ id: "workers", kind: "NODE", instances: [1, 2, 3].map(replica => ({ id: `workers#${replica}`, replica })) }],
     parts: parts.map((part, number) => ({ file: `part-${number}.json.gz`, kind: part.kind,
       nodes: part.nodes.map(node => node.id), classes: [], connections: [], fromWindow: 0, untilWindow: 1,

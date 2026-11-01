@@ -232,6 +232,21 @@ class RunCatalog(
         rep: Int,
     ): SeriesIndex? = seriesDirectory(id, variant, cell, rep)?.let { readSeriesIndex(it) }
 
+    /** Reads derived timeline outputs across replications; replica members remain independently addressable parts. */
+    fun aggregateSeriesIndex(
+        id: String,
+        variant: String,
+        cell: String,
+    ): AggregateSeriesIndex? = pointDirectory(id, variant, cell)?.let { readAggregateSeriesIndex("$it/aggregate") }
+
+    /** Returns the original aggregate gzip bytes with their index checksum. */
+    fun aggregateSeriesPart(
+        id: String,
+        variant: String,
+        cell: String,
+        part: Int,
+    ): StoredSeriesPart? = storedPart(pointDirectory(id, variant, cell)?.let { "$it/aggregate" }, part, aggregate = true)
+
     /** Reads only a part named by the index, without decompressing or re-encoding its stored gzip bytes. */
     fun seriesPart(
         id: String,
@@ -239,10 +254,17 @@ class RunCatalog(
         cell: String,
         rep: Int,
         part: Int,
+    ): StoredSeriesPart? = storedPart(seriesDirectory(id, variant, cell, rep), part)
+
+    private fun storedPart(
+        directory: String?,
+        part: Int,
+        aggregate: Boolean = false,
     ): StoredSeriesPart? {
         if (part < 0) throw InvalidSeriesPathException()
-        val directory = seriesDirectory(id, variant, cell, rep) ?: return null
-        val reference = readSeriesIndex(directory)?.parts?.find { it.file == "part-$part.json.gz" } ?: return null
+        if (directory == null) return null
+        val parts = if (aggregate) readAggregateSeriesIndex(directory)?.parts else readSeriesIndex(directory)?.parts
+        val reference = parts?.find { it.file == "part-$part.json.gz" } ?: return null
         val bytes = readSeriesFile(directory, reference.file) ?: return null
         return StoredSeriesPart(bytes, reference.sha256)
     }
@@ -253,14 +275,26 @@ class RunCatalog(
         cell: String,
         rep: Int,
     ): String? {
-        if (!RUN_ID.matches(id) || !ModelCompiler.ID.matches(variant) || !CELL.matches(cell) || rep < 0) {
+        if (rep < 0) throw InvalidSeriesPathException()
+        return pointDirectory(id, variant, cell)?.let { "$it/rep-$rep" }
+    }
+
+    private fun pointDirectory(
+        id: String,
+        variant: String,
+        cell: String,
+    ): String? {
+        if (!RUN_ID.matches(id) || !ModelCompiler.ID.matches(variant) || !CELL.matches(cell)) {
             throw InvalidSeriesPathException()
         }
-        return find(id)?.let { "${it.directory}/series/$variant/$cell/rep-$rep" }
+        return find(id)?.let { "${it.directory}/series/$variant/$cell" }
     }
 
     private fun readSeriesIndex(directory: String): SeriesIndex? =
         readSeriesFile(directory, "index.json")?.let { json.decodeFromString<SeriesIndex>(it.toString(Charsets.UTF_8)) }
+
+    private fun readAggregateSeriesIndex(directory: String): AggregateSeriesIndex? =
+        readSeriesFile(directory, "index.json")?.let { json.decodeFromString<AggregateSeriesIndex>(it.toString(Charsets.UTF_8)) }
 
     private fun readSeriesFile(
         directory: String,

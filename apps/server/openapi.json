@@ -950,6 +950,195 @@
         "tags" : [ "run-controller" ]
       }
     },
+    "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate" : {
+      "get" : {
+        "operationId" : "getRunAggregateSeriesIndex",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variant",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cell",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AggregateSeriesIndex"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
+    "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate/{part}" : {
+      "get" : {
+        "operationId" : "getRunAggregateSeriesPart",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variant",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cell",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "part",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AggregateSeriesPart"
+                }
+              }
+            },
+            "description" : "Original aggregate gzip part; Content-Encoding: gzip. Clients decode it as AggregateSeriesPart."
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Bad Request"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Not Found"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Conflict"
+          },
+          "428" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Precondition Required"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description" : "Internal Server Error"
+          }
+        },
+        "tags" : [ "run-controller" ]
+      }
+    },
     "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}" : {
       "get" : {
         "operationId" : "getRunSeriesIndex",
@@ -1898,6 +2087,35 @@
         },
         "required" : [ "connections", "entries", "groups", "poolers", "services" ]
       },
+      "AggregateOutput" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "max" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "mean" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "min" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "quantile" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "stdDev" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          }
+        }
+      },
       "AggregatePoolerMetrics" : {
         "type" : "object",
         "properties" : {
@@ -1920,6 +2138,102 @@
           }
         },
         "required" : [ "totals" ]
+      },
+      "AggregateRowSeries" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "windows" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AggregateWindowMetrics"
+            }
+          }
+        },
+        "required" : [ "id", "windows" ]
+      },
+      "AggregateSeriesIndex" : {
+        "type" : "object",
+        "properties" : {
+          "endMs" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "groups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReplicaGroup"
+            }
+          },
+          "parts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SeriesPartReference"
+            }
+          },
+          "replications" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "windowMs" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "endMs", "groups", "parts", "replications", "schemaVersion", "windowMs" ]
+      },
+      "AggregateSeriesPart" : {
+        "type" : "object",
+        "properties" : {
+          "classes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AggregateRowSeries"
+            }
+          },
+          "connections" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AggregateRowSeries"
+            }
+          },
+          "fromWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "INSTANCE", "GROUP" ]
+          },
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AggregateRowSeries"
+            }
+          },
+          "profile" : {
+            "type" : "string"
+          },
+          "replications" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "schemaVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "untilWindow" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "classes", "connections", "fromWindow", "kind", "nodes", "profile", "replications", "schemaVersion", "untilWindow" ]
       },
       "AggregateServiceMetrics" : {
         "type" : "object",
@@ -1989,6 +2303,18 @@
             } ]
           }
         }
+      },
+      "AggregateWindowMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "outputs" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/AggregateOutput"
+            }
+          }
+        },
+        "required" : [ "outputs" ]
       },
       "ApiProblem" : {
         "type" : "object",

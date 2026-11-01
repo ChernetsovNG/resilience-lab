@@ -196,6 +196,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRunAggregateSeriesIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate/{part}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRunAggregateSeriesPart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}": {
         parameters: {
             query?: never;
@@ -370,10 +402,56 @@ export interface components {
                 [key: string]: components["schemas"]["AggregateServiceMetrics"];
             };
         };
+        AggregateOutput: {
+            /** Format: int32 */
+            count?: number | null;
+            /** Format: double */
+            max?: number | null;
+            /** Format: double */
+            mean?: number | null;
+            /** Format: double */
+            min?: number | null;
+            /** Format: double */
+            quantile?: number | null;
+            /** Format: double */
+            stdDev?: number | null;
+        };
         AggregatePoolerMetrics: {
             admittedAmplification?: components["schemas"]["MetricSummary"] | null;
             pooledLatency?: components["schemas"]["LatencyDistribution"] | null;
             totals: components["schemas"]["PoolerTotals"];
+        };
+        AggregateRowSeries: {
+            id: string;
+            windows: components["schemas"]["AggregateWindowMetrics"][];
+        };
+        AggregateSeriesIndex: {
+            /** Format: double */
+            endMs: number;
+            groups: components["schemas"]["ReplicaGroup"][];
+            parts: components["schemas"]["SeriesPartReference"][];
+            /** Format: int32 */
+            replications: number;
+            /** Format: int32 */
+            schemaVersion: number;
+            /** Format: double */
+            windowMs: number;
+        };
+        AggregateSeriesPart: {
+            classes: components["schemas"]["AggregateRowSeries"][];
+            connections: components["schemas"]["AggregateRowSeries"][];
+            /** Format: int32 */
+            fromWindow: number;
+            /** @enum {string} */
+            kind: "INSTANCE" | "GROUP";
+            nodes: components["schemas"]["AggregateRowSeries"][];
+            profile: string;
+            /** Format: int32 */
+            replications: number;
+            /** Format: int32 */
+            schemaVersion: number;
+            /** Format: int32 */
+            untilWindow: number;
         };
         AggregateServiceMetrics: {
             admittedAmplification?: components["schemas"]["MetricSummary"] | null;
@@ -389,6 +467,11 @@ export interface components {
             meanQueueLength?: components["schemas"]["MetricSummary"] | null;
             meanWaitMs?: components["schemas"]["MetricSummary"] | null;
             utilization?: components["schemas"]["MetricSummary"] | null;
+        };
+        AggregateWindowMetrics: {
+            outputs: {
+                [key: string]: components["schemas"]["AggregateOutput"];
+            };
         };
         ApiProblem: {
             args?: {
@@ -2067,6 +2150,145 @@ export interface operations {
             };
             /** @description Precondition Required */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getRunAggregateSeriesIndex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                variant: string;
+                cell: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AggregateSeriesIndex"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getRunAggregateSeriesPart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                variant: string;
+                cell: string;
+                part: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original aggregate gzip part; Content-Encoding: gzip. Clients decode it as AggregateSeriesPart. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AggregateSeriesPart"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
