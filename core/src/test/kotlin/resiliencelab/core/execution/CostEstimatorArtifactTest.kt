@@ -22,12 +22,9 @@ class CostEstimatorArtifactTest {
         val examples = Path.of(System.getProperty("resilience-lab.project-root"), "examples")
         for (name in listOf("retry-storm", "checkout")) {
             val source = examples.resolve(name)
-            Files.list(source).use { files ->
-                files.filter { Files.isRegularFile(it) }.forEach { file ->
-                    val destination = temp.resolve(name).resolve(file.fileName)
-                    Files.createDirectories(destination.parent)
-                    Files.copy(file, destination)
-                }
+            val directory = Files.createDirectories(temp.resolve(name))
+            for (file in listOf("$name.model.json", "$name.layout.json", "$name.experiment.json")) {
+                Files.copy(source.resolve(file), directory.resolve(file))
             }
         }
         val graph = temp.resolve("graph")

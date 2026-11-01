@@ -258,8 +258,9 @@ class CheckoutPoliciesTest {
         control: Boolean = false,
     ): RunSummary {
         val directory = Files.createDirectories(root.resolve("$example-$experiment-$workers-$control"))
-        Files.list(Path.of("../examples", example)).use { paths ->
-            paths.filter { it.toString().endsWith(".json") }.forEach { Files.copy(it, directory.resolve(it.fileName)) }
+        val source = Path.of("../examples", example)
+        for (file in listOf("$example.model.json", "$example.layout.json", "$experiment.experiment.json")) {
+            Files.copy(source.resolve(file), directory.resolve(file))
         }
         if (control) {
             val path = directory.resolve("$experiment.experiment.json")

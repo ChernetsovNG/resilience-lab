@@ -37,13 +37,10 @@ class LabTest {
 
     private fun exampleWorkspace(): Path {
         val target = Files.createTempDirectory(temp, "lab-test")
-        val source = Path.of("../examples")
-        Files.walk(source.resolve("retry-storm")).use { paths ->
-            paths.filter { Files.isRegularFile(it) }.forEach { file ->
-                val destination = target.resolve(source.relativize(file).toString())
-                destination.parent.createDirectories()
-                file.copyTo(destination)
-            }
+        val source = Path.of("../examples/retry-storm")
+        val directory = target.resolve("retry-storm").createDirectories()
+        for (file in listOf("retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json")) {
+            source.resolve(file).copyTo(directory.resolve(file))
         }
         return target
     }

@@ -431,12 +431,9 @@ class ArtifactPipelineTest {
     private fun example(name: String): Path {
         val root = Files.createDirectory(temp.resolve(name))
         val source = Path.of(System.getProperty("resilience-lab.project-root"), "examples", "retry-storm")
-        Files.walk(source).use { paths ->
-            paths.filter { Files.isRegularFile(it) }.forEach { file ->
-                val destination = root.resolve("retry-storm").resolve(source.relativize(file))
-                Files.createDirectories(destination.parent)
-                Files.copy(file, destination)
-            }
+        val directory = Files.createDirectories(root.resolve("retry-storm"))
+        for (file in listOf("retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json")) {
+            Files.copy(source.resolve(file), directory.resolve(file))
         }
         return root
     }
