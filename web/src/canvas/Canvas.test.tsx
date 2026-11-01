@@ -352,7 +352,7 @@ describe("Canvas", () => {
         else super.observe(target);
       }
     };
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"] });
     try {
       const onZoomChange = vi.fn();
       render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={vi.fn()}

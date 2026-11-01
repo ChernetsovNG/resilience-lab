@@ -43,7 +43,10 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
   const h = Math.max(height, minimumHeight);
   const geometry = blockGeometry(type, w, h, replicas);
   const updateNodeInternals = useUpdateNodeInternals();
-  useLayoutEffect(() => { updateNodeInternals(id); }, [updateNodeInternals, id, type, replicas, w, h]);
+  useLayoutEffect(() => {
+    // The first measurement belongs to React Flow; fallback geometry must not mark a node ready.
+    if (width > 0 && height > 0) updateNodeInternals(id);
+  }, [updateNodeInternals, id, type, replicas, width, height, w, h]);
   const area = geometry.content;
   const inactive = (state?: PolicyWindowState) => (state?.ejectedShare ?? 0) > 0 || (state?.notReadyShare ?? 0) > 0;
   const singleInactive = replicas === 1 && inactive(policyState);
