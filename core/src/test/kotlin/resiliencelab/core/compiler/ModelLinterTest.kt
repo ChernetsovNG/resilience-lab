@@ -695,7 +695,7 @@ class ModelLinterTest {
     }
 
     @Test
-    fun `a single service has only the capacity rule`() {
+    fun `a single queue free service has capacity and rejection rules`() {
         val single =
             chain.copy(
                 clients = listOf(chain.client.copy(classes = mapOf("default" to LoadProfile.constant(1.0)))),
@@ -703,7 +703,7 @@ class ModelLinterTest {
                 calls = emptyList(),
             )
 
-        assertThat(linter.lint(experiment(single)).map { it.code }).containsExactly("LINT_HANDLERS_LITTLE")
+        assertThat(linter.lint(experiment(single)).map { it.code }).containsExactly("LINT_HANDLERS_LITTLE", "LINT_REJECTION_RISK")
     }
 
     private fun warnings(

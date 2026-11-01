@@ -75,6 +75,37 @@ class ExampleDocumentsTest {
                 .describedAs(example)
                 .isEqualTo(warnings)
 
+            val target =
+                when (modelName) {
+                    "retry-storm" -> "gateway"
+                    "checkout-replicas" -> "orders-db"
+                    else -> "psp"
+                }
+            val capacityParameter = if (target == "orders-db") "maxConnections" else "handlers"
+            val queueFree =
+                experiment.copy(
+                    variants =
+                        listOf(
+                            experiment.variants.first().let {
+                                it.copy(
+                                    overrides =
+                                        it.overrides +
+                                            mapOf("$target.queue" to JsonPrimitive(0), "$target.$capacityParameter" to JsonPrimitive(1)),
+                                )
+                            },
+                        ),
+                )
+            val lossCompiled = ModelCompiler().compile(model, modelPath.toString(), queueFree, experimentPath.toString())
+            assertThat(lossCompiled.diagnostics).describedAs(example).isEmpty()
+            val loss =
+                ModelLinter().lint(requireNotNull(lossCompiled.experiment)).single {
+                    it.code == "LINT_REJECTION_RISK" &&
+                        it.path == target
+                }
+            assertThat(loss.severity).isEqualTo(Severity.WARNING)
+            assertThat(loss.pointer).isEqualTo("/variants/0/overrides/$target.queue")
+            assertThat(loss.variant).isEqualTo(queueFree.variants.single().id)
+
             if (example.startsWith("checkout-policies/")) return@forEach
             val (parameter, capacity, waitMs, limitMs) =
                 when (example) {
