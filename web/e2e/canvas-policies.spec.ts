@@ -62,7 +62,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByTestId(`canvas-policies-${payment.id}`)).toHaveCount(0);
       const withoutPolicies = await dimensions();
       await page.getByRole("tab", { name: ru ? "С политиками" : "Policies", exact: true }).click();
-      const badge = page.getByTestId(`canvas-policies-${payment.id}`).getByRole("button", { name: ru ? "Предохранитель вызовов" : "Circuit breaker", exact: true });
+      const badge = page.getByTestId(`canvas-policies-${payment.id}`).getByRole("button", { name: ru ? "Circuit breaker" : "Circuit breaker", exact: true });
       await expect(badge).toBeVisible();
       const paymentBadges = (await page.getByTestId(`canvas-policies-${payment.id}`).boundingBox())!;
       const databaseBadges = (await page.getByTestId(`canvas-policies-${database.id}`).boundingBox())!;
@@ -74,9 +74,9 @@ for (const language of ["en", "ru"] as const) {
       await testInfo.attach("policy-density.json", { path: densityPath, contentType: "application/json" });
       const more = page.getByTestId(`canvas-policies-${incoming.id}`).locator("summary");
       await expect(more).toHaveText("+2");
-      await expect(more).toHaveAttribute("title", ru ? /Вывод неисправных экземпляров/ : /Outlier detection/);
+      await expect(more).toHaveAttribute("title", ru ? /Outlier detection/ : /Outlier detection/);
       await more.click();
-      await page.getByTestId(`canvas-policies-${incoming.id}`).getByRole("button", { name: ru ? "Бюджет повторов" : "Retry budget", exact: true }).click();
+      await page.getByTestId(`canvas-policies-${incoming.id}`).getByRole("button", { name: ru ? "Retry budget" : "Retry budget", exact: true }).click();
       const inspector = page.getByRole("complementary", { name: ru ? "Инспектор" : "Inspector" });
       await expect(inspector.locator('[data-inspector-field="retryBudget"]')).toBeInViewport();
       await badge.click();

@@ -33,7 +33,7 @@ it("shows policies on their owning elements and opens their inspector fields", a
   fireEvent.click(within(edge).getByRole("button", { name: "Retry budget" }));
   expect(onOpen).toHaveBeenLastCalledWith("gateway-to-middle", "retryBudget");
   expect(within(screen.getByTestId("rf__node-gateway")).getByRole("button", { name: "Rate limit" })).toBeDefined();
-  expect(within(screen.getByTestId("rf__node-middle")).getByRole("button", { name: "Readiness check" })).toBeDefined();
+  expect(within(screen.getByTestId("rf__node-middle")).getByRole("button", { name: "Health-check" })).toBeDefined();
 });
 
 it("uses effective variant policies and keeps models without policies unchanged", async () => {
@@ -79,7 +79,7 @@ it("shows a policy enabled only for an individual replica and opens that replica
   const onOpen = vi.fn();
   render(<Canvas model={snapshot} catalog={catalog} layout={layout} selected={[]} onSelect={vi.fn()}
     onSelectChange={onOpen} onCommand={vi.fn()} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Readiness check" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Health-check" }));
   expect(onOpen).toHaveBeenLastCalledWith("gateway", "replicaOverrides.2.healthCheck");
 });
 

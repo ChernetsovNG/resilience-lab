@@ -15,7 +15,7 @@ describe("readable saturation evidence", () => {
 
   it.each([20000, 21600, 39999])("names a fault overlapping the recorded onset (%s)", onset => {
     expect(formatSaturation(saturatedAt(onset), 2, [fault]).causes).toEqual([
-      "The median saturation onset is during fault psp · slowdown 8× · 20–40 s.",
+      "The median saturation onset is during fault “psp · slowdown 8× · 20–40 s”.",
     ]);
   });
   it.each([19999, 40000, 80000])("does not associate an onset outside the fault (%s)", onset => {
@@ -23,7 +23,7 @@ describe("readable saturation evidence", () => {
   });
   it("names a just-ended fault only within the next recorded window", () => {
     expect(formatSaturation(saturatedAt(40300), 2, [fault], 600).causes).toEqual([
-      "The median saturation onset is just after fault psp · slowdown 8× · 20–40 s (within one series window).",
+      "The median saturation onset is just after fault “psp · slowdown 8× · 20–40 s” (within one series window).",
     ]);
     expect(formatSaturation(saturatedAt(40600), 2, [fault], 600).causes).toEqual([]);
     expect(formatSaturation(noSaturation, 2, [fault], 600).causes).toEqual([]);

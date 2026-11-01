@@ -17,7 +17,7 @@ it("shows phases, intensity and timed faults from the document before a run", ()
   expect(container.querySelector('[data-phase="measurement"]')?.getAttribute("data-to-ms")).toBe("1100");
   expect(screen.getByRole("img", { name: "client: arrival intensity" })).toBeTruthy();
   expect(screen.getAllByText("120 RPS").length).toBeGreaterThan(0);
-  const fault = screen.getByRole("button", { name: "dependency · Slowdown 6× · 200–700 ms" });
+  const fault = screen.getByRole("button", { name: "Service dependency · Slowdown 6× · 200–700 ms" });
   expect(fault.querySelector<HTMLElement>(".course-fault-interval")!.style.left).toBe("18.181818181818183%");
   fireEvent.click(fault);
   expect(onFault).toHaveBeenCalledWith(0);
@@ -67,7 +67,7 @@ it("ignores malformed browser preferences and unreadable storage", () => {
   vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
   render(<ExperimentCourse {...props} />);
   openCourse();
-  expect(screen.getByRole("button", { name: "dependency · Slowdown 6× · 200–700 ms" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Service dependency · Slowdown 6× · 200–700 ms" })).toBeTruthy();
 });
 
 it("reports the expanded overlay height so the canvas can fit above it", () => {

@@ -154,7 +154,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
         const warning = rows.locator('button[data-diagnostic-code="LINT_LOW_HEADROOM"]');
         await expect(warning).toHaveCount(1);
         await expect(warning).toContainText(language === "ru" ? "Малый запас ёмкости" : "Little spare capacity");
-        await expect(warning).toContainText(language === "ru" ? "ограничение интенсивности 400" : "rate limit: 400");
+        await expect(warning).toContainText(`${labels["catalog.types.service.params.rateLimit.title"].toLowerCase()}${language === "ru" ? " " : ": "}400`);
         await expect(warning).toContainText("#1–#3");
         await expect(warning).toContainText("Base, Equivalent");
         await rows.getByRole("button", { name: new RegExp(labels["results.problems.explanation"]) }).click();

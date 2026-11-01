@@ -318,7 +318,7 @@ it("shows the submitted load and faults above the Findings using variant and poi
   const result = structuredClone(summary);
   result.variants[0].points.push({ ...structuredClone(result.variants[0].points[0]), id: "p1", coordinates: { "client.load.points": [{ time: "0s", rate: "90/s" }] } });
   const view = render(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p0" />);
-  expect(screen.getByTestId("run-conditions").textContent).toBe("Load 30 RPS; faults: dependency · Slowdown 6× · 200–700 ms");
+  expect(screen.getByTestId("run-conditions").textContent).toBe("Load 30 RPS; faults: Service dependency · Slowdown 6× · 200–700 ms");
   view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p1" />);
   expect(screen.getByTestId("run-conditions").textContent).toContain("Load 90 RPS");
   view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} />);

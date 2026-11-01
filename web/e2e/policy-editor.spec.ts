@@ -45,7 +45,7 @@ for (const language of ["en", "ru"] as const) {
       const fallback = inspector.locator('[data-policy="fallback"]');
       const addButton = inspector.getByRole("button", { name: ru ? "+ Добавить политику" : "+ Add policy", exact: true });
       const removeName = ru ? "Удалить политику" : "Remove policy";
-      const breakerName = ru ? "Предохранитель вызовов" : "Circuit breaker";
+      const breakerName = ru ? "Circuit breaker" : "Circuit breaker";
       const canvasPolicies = page.getByTestId("canvas-policies-order-to-payment");
       const breakerBadge = canvasPolicies.getByRole("button", { name: breakerName, exact: true });
       const add = async (name: string) => {
@@ -76,7 +76,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(breakerBadge).toBeVisible();
       await addButton.click();
       await expect(inspector.getByRole("menuitem", { name: new RegExp(`^${breakerName}`) })).toBeDisabled();
-      await expect(inspector.getByRole("menuitem", { name: ru ? /Вывод неисправных экземпляров/ : /Outlier detection/ })).toBeDisabled();
+      await expect(inspector.getByRole("menuitem", { name: ru ? /Outlier detection/ : /Outlier detection/ })).toBeDisabled();
       await expect(inspector.getByRole("menu")).toContainText(ru ? "Только у вызова в группу реплик" : "Only for a call to a replica group");
       if (ru) {
         await expect(page.getByRole("button", { name: "Запустить", exact: true })).toBeEnabled();
@@ -85,9 +85,9 @@ for (const language of ["en", "ru"] as const) {
         await page.screenshot({ path: testInfo.outputPath("policy-menu-ru.png") });
       }
       await addButton.click();
-      await add(ru ? "Заглушка" : "Fallback");
+      await add(ru ? "Fallback" : "Fallback");
       const reasons = fallback.getByRole("group", { name: ru ? "Срабатывает при" : "Failure reasons", exact: true });
-      await expect(reasons.getByRole("checkbox", { name: ru ? "предохранитель вызовов разомкнут" : "circuit breaker open", exact: true })).toBeChecked();
+      await expect(reasons.getByRole("checkbox", { name: ru ? "circuit breaker открыт" : "circuit breaker open", exact: true })).toBeChecked();
       await reasons.getByRole("checkbox", { name: ru ? "таймаут попытки" : "attempt timeout", exact: true }).check();
       await expect(reasons.getByRole("checkbox", { name: /deadline|дедлайн/i })).toHaveCount(0);
       if (ru) {
@@ -103,7 +103,7 @@ for (const language of ["en", "ru"] as const) {
       await breaker.getByRole("button", { name: removeName, exact: true }).click();
       await expect(breaker).not.toHaveAttribute("open");
       await expect(breakerBadge).toHaveCount(0);
-      await expect(canvasPolicies.getByRole("button", { name: ru ? "Заглушка" : "Fallback", exact: true })).toBeVisible();
+      await expect(canvasPolicies.getByRole("button", { name: ru ? "Fallback" : "Fallback", exact: true })).toBeVisible();
       await expect(breaker).toContainText(ru ? "Удалена в этом варианте" : "Removed in this variant");
       await save();
       const first = await saved();
@@ -128,7 +128,7 @@ for (const language of ["en", "ru"] as const) {
       await selectCall();
       await breaker.getByRole("button", { name: ru ? "Вернуть" : "Restore", exact: true }).click();
       await expect(breakerBadge).toBeVisible();
-      const duration = breaker.getByRole("textbox", { name: ru ? "Время размыкания" : "Open duration", exact: true });
+      const duration = breaker.getByRole("textbox", { name: ru ? "Время в открытом состоянии" : "Open duration", exact: true });
       await duration.fill("7s"); await duration.press("Enter");
       await page.getByRole("tab", { name: ru ? "Модель" : "Model", exact: true }).click();
       await page.getByRole("button", { name: ru ? "Настройки прогона" : "Run settings", exact: true }).click();

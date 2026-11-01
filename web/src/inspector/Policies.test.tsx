@@ -7,6 +7,8 @@ import { experiment, layout, model } from "../test/fixtures";
 import { editorReducer, initialEditorState, setModelParam, type EditorDocuments } from "../workspace/editor";
 import { applyOverrides, elementOf } from "../workspace/params";
 import { Inspector } from "./Inspector";
+import { setLanguage, t } from "../i18n";
+import { localizeCatalog } from "../i18n/catalog";
 
 const catalog = serverCatalog as Catalog;
 const call = "gateway-to-middle";
@@ -30,7 +32,7 @@ function Editor({ initial = documents(), selected = call, variantId = null, focu
   const overrides = loaded.experiment.variants.find(variant => variant.id === variantId)?.overrides ?? {};
   return <>
     <button onClick={() => dispatch({ type: "undo" })}>Undo</button>
-    <Inspector catalog={catalog} model={variantId === null ? loaded.model : applyOverrides(loaded.model, overrides, catalog)}
+    <Inspector catalog={localizeCatalog(catalog)} model={variantId === null ? loaded.model : applyOverrides(loaded.model, overrides, catalog)}
       baseModel={loaded.model} experiment={loaded.experiment} selected={selected} editable overrides={overrides} variantId={variantId} focusField={focusField}
       onParam={(id, path, value) => dispatch({ type: "command", command: setModelParam(id, path, value, catalog) })}
       onCommand={command => dispatch({ type: "command", command })} onValidity={() => {}} />
@@ -49,7 +51,7 @@ const add = (title: string) => {
 const edit = (input: HTMLElement, value: string) => {
   fireEvent.change(input, { target: { value } }); fireEvent.blur(input);
 };
-afterEach(() => localStorage.clear());
+afterEach(async () => { localStorage.clear(); await setLanguage("en"); });
 
 it.each([
   [call, "circuitBreaker", "Circuit breaker", breaker],
@@ -57,7 +59,7 @@ it.each([
   [call, "fallback", "Fallback", { on: ["circuitOpen"], processing: "1ms" }],
   [call, "outlierDetection", "Outlier detection", { consecutiveFailures: 5, baseEjection: "30s", maxEjected: "50%" }],
   ["gateway", "rateLimit", "Rate limit", { rate: "100/s", burst: 10 }],
-  ["gateway", "healthCheck", "Readiness check", healthCheck],
+  ["gateway", "healthCheck", "Health-check", healthCheck],
   ["router", "outlierDetection", "Outlier detection", { consecutiveFailures: 5, baseEjection: "30s", maxEjected: "50%" }],
 ] as const)("adds/removes %s %s as atomic Undo commands using catalog field defaults", (selected, name, title, initial) => {
   const before = documents();
@@ -165,7 +167,7 @@ it("offers numeric sweep fields only for enabled policies", () => {
 });
 
 it.each([
-  ["healthCheck", "Readiness check", healthCheck, "Probe timeout", "250ms", { ...healthCheck, timeout: "250ms" }],
+  ["healthCheck", "Health-check", healthCheck, "Probe timeout", "250ms", { ...healthCheck, timeout: "250ms" }],
   ["rateLimit", "Rate limit", { rate: "100/s", burst: 10 }, "Token rate", "50/s", { rate: "50/s", burst: 10 }],
 ] as const)("adds and edits replica %s as a complete policy object", (name, title, initial, field, value, changed) => {
   render(<Editor selected="middle" />);
@@ -216,4 +218,28 @@ it.each(["deadline", "unknownFailure"])("lets an imported unsupported fallback r
   expect(stored()).toEqual(initial);
   expect(within(reasons).getByRole<HTMLInputElement>("checkbox", { name: new RegExp(reason, "i") }).checked).toBe(true);
   history(0);
+});
+
+it.each(["en", "ru"] as const)("explains every offered policy and labels call order in %s", async locale => {
+  await setLanguage(locale);
+  render(<Editor />);
+  fireEvent.click(screen.getByRole("button", { name: t("editor.policies.add") }));
+  const descriptors = localizeCatalog(catalog).types.find(type => type.id === "call")!.params
+    .filter(param => ["circuitBreaker", "retryBudget", "fallback", "outlierDetection"].includes(param.name));
+  for (const descriptor of descriptors) {
+    const item = screen.getByRole("menuitem", { name: descriptor.title, description: descriptor.description });
+    expect(within(item).getByText(descriptor.description)).toBeTruthy();
+  }
+  fireEvent.click(screen.getByRole("menuitem", { name: "Circuit breaker" }));
+  expect(screen.getByText(t("editor.policies.order"), { exact: true })).toBeTruthy();
+});
+
+it.each(["en", "ru"] as const)("explains service policies in %s", async locale => {
+  await setLanguage(locale);
+  render(<Editor selected="gateway" />);
+  fireEvent.click(screen.getByRole("button", { name: t("editor.policies.add") }));
+  for (const descriptor of localizeCatalog(catalog).types.find(type => type.id === "service")!.params
+    .filter(param => ["rateLimit", "healthCheck"].includes(param.name))) {
+    expect(screen.getByRole("menuitem", { name: descriptor.title, description: descriptor.description })).toBeTruthy();
+  }
 });

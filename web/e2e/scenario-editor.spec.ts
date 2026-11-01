@@ -906,7 +906,7 @@ test("keeps automatic connection ids and references after building, renaming, sa
   await page.screenshot({ path: testInfo.outputPath("link-rename-scenario-ru.png") });
   await page.getByRole("button", { name: "Настройки прогона", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Цель отказа", exact: true }).locator("option:checked"))
-    .toHaveText("catalog → pricing (catalog-to-pricing)");
+    .toHaveText("Связь catalog → pricing (catalog-to-pricing)");
   await page.locator(".inspector-execution > summary").click();
   await page.mouse.move(700, 70);
   await page.screenshot({ path: testInfo.outputPath("link-rename-fault-ru.png") });

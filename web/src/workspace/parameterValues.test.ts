@@ -37,7 +37,7 @@ it.each([
 
 it.each([
   ["en", "Attempt timeout, Circuit breaker open, unknownFailure"],
-  ["ru", "Таймаут попытки, Предохранитель вызовов разомкнут, unknownFailure"],
+  ["ru", "Таймаут попытки, Circuit breaker открыт, unknownFailure"],
 ] as const)("localizes known array choices in %s while preserving unsupported literals", (locale, expected) => {
   setLanguage(locale);
   const descriptor = (rawCatalog as Catalog).types.find(type => type.id === "call")!.params.find(param => param.name === "fallback")!

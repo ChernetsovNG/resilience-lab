@@ -187,7 +187,7 @@ it("groups only model outputs by element, without unrelated types or duplicate m
 
 it.each([
   { policy: "rateLimit", metrics: ["Rate-limit rejections", "Rate-limited share"] },
-  { policy: "healthCheck", metrics: ["Failed readiness checks", "Not-ready share"] },
+  { policy: "healthCheck", metrics: ["Failed health-check probes", "Not-ready share"] },
 ])("offers $policy outputs only for the service enabled in another variant", async ({ policy, metrics }) => {
   stubSeries();
   const fullCatalog = (await import("../../test/catalog.json")).default as import("../../api/apiTypes").Catalog;
@@ -217,7 +217,7 @@ it("offers health outputs for a policy enabled only on one replica", async () =>
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
   const enabled = within(screen.getByRole("group", { name: "gateway · Service" }));
   const disabled = within(screen.getByRole("group", { name: "middle · Service" }));
-  for (const name of ["Failed readiness checks", "Not-ready share"]) {
+  for (const name of ["Failed health-check probes", "Not-ready share"]) {
     expect(enabled.getByRole("checkbox", { name })).toBeTruthy();
     expect(disabled.queryByRole("checkbox", { name })).toBeNull();
   }
@@ -234,7 +234,7 @@ it("hides health outputs when every replica disables the base policy", async () 
   await screen.findByRole("region", { name: "Utilization" });
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
   const service = within(screen.getByRole("group", { name: "gateway · Service" }));
-  expect(service.queryByRole("checkbox", { name: "Failed readiness checks" })).toBeNull();
+  expect(service.queryByRole("checkbox", { name: "Failed health-check probes" })).toBeNull();
   expect(service.queryByRole("checkbox", { name: "Not-ready share" })).toBeNull();
 });
 
@@ -253,7 +253,7 @@ it("offers health outputs when a grid point adds a replica inheriting the policy
   await screen.findByRole("region", { name: "Utilization" });
   fireEvent.click(screen.getByText("Elements and metrics", { exact: true }));
   const service = within(screen.getByRole("group", { name: "gateway · Service" }));
-  expect(service.getByRole("checkbox", { name: "Failed readiness checks" })).toBeTruthy();
+  expect(service.getByRole("checkbox", { name: "Failed health-check probes" })).toBeTruthy();
   expect(service.getByRole("checkbox", { name: "Not-ready share" })).toBeTruthy();
 });
 

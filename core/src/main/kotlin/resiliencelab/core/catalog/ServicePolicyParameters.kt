@@ -10,7 +10,7 @@ internal object ServicePolicyParameters {
                 "rateLimit",
                 ParamKind.OBJECT,
                 "Rate limit",
-                "Per-instance token bucket before the handler queue. Rejections occupy no handler; probes bypass the bucket.",
+                "Protects the service from excessive incoming traffic by rejecting attempts over the limit before the handler queue. Each instance has its own token bucket; rejections occupy no handler and health-check probes bypass the bucket.",
                 fields =
                     listOf(
                         ParamDescriptor(
@@ -37,8 +37,8 @@ internal object ServicePolicyParameters {
             ParamDescriptor(
                 "healthCheck",
                 ParamKind.OBJECT,
-                "Readiness check",
-                "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
+                "Health-check",
+                "Keeps user requests away from instances that are not ready. Probes share the service handler queue and processing capacity; all routers skip an instance while it is not ready.",
                 fields =
                     listOf(
                         ParamDescriptor(

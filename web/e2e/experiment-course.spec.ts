@@ -13,7 +13,7 @@ test("checkout exposes PSP timing and opens its fault even with a collapsed insp
   const path = "/api/v1/workspace/document?path=checkout%2Fcheckout.experiment.json";
   const before = await (await request.get(path)).json();
   const course = page.getByRole("region", { name: "Experiment course", exact: true });
-  await expect(course).toContainText("psp · Slowdown 8× · 20–40 s");
+  await expect(course).toContainText("Service psp · Slowdown 8× · 20–40 s");
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
   const collapsedHeight = (await course.boundingBox())!.height;
   const withCourse = (await canvas.boundingBox())!.height;
@@ -29,11 +29,11 @@ test("checkout exposes PSP timing and opens its fault even with a collapsed insp
   expect(collapsedHeight).toBe(32);
   await page.getByRole("button", { name: "Experiment course", exact: true }).click();
   expect((await canvas.boundingBox())!.height).toBe(withCourse);
-  const badge = page.getByTestId("rf__node-psp").getByRole("button", { name: /Open fault: psp/ });
+  const badge = page.getByTestId("rf__node-psp").getByRole("button", { name: /Open fault: Service psp/ });
   await expect(badge).toBeVisible();
   await expect(page.getByTestId("rf__node-payment-service").locator(".fault-badge")).toHaveCount(0);
   await page.getByRole("button", { name: "Collapse inspector", exact: true }).click();
-  await course.getByRole("button", { name: "psp · Slowdown 8× · 20–40 s", exact: true }).click();
+  await course.getByRole("button", { name: "Service psp · Slowdown 8× · 20–40 s", exact: true }).click();
   const target = page.locator('[data-inspector-field="faults.0.target"] select');
   await expect(target).toBeFocused();
   await expect(target).toHaveValue("psp");
@@ -64,7 +64,7 @@ test("a real checkout result shares the course cursor with Timeline and playback
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
-    await expect(page.getByTestId("run-conditions")).toHaveText("Load 30 RPS; faults: psp · Slowdown 8× · 20–40 s");
+    await expect(page.getByTestId("run-conditions")).toHaveText("Load 30 RPS; faults: Service psp · Slowdown 8× · 20–40 s");
     await page.getByTestId("rf__node-psp").locator(".block-node > strong").click();
     await page.getByRole("button", { name: "Experiment course", exact: true }).click();
     const axis = page.getByRole("slider", { name: "Experiment time", exact: true });
@@ -100,7 +100,7 @@ test("a real checkout result shares the course cursor with Timeline and playback
     await page.screenshot({ path: testInfo.outputPath("course-after.png") });
     await page.getByRole("button", { name: "Analysis", exact: true }).click();
     await page.getByRole("button", { name: "Experiment course", exact: true }).click();
-    await page.getByTestId("rf__node-psp").getByRole("button", { name: /Open fault: psp/ }).click();
+    await page.getByTestId("rf__node-psp").getByRole("button", { name: /Open fault: Service psp/ }).click();
     await expect(page.locator('[data-inspector-field="faults.0.target"] select')).toBeFocused();
   } finally { await cleanupWorkspace(page, directory); }
 });

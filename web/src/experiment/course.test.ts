@@ -37,9 +37,11 @@ it("labels replicas and copied connections and marks their owning diagram elemen
   grouped.blocks.gateway.params.replicas = 2;
   const data = courseData(grouped, run, catalog);
   expect(data.faults.map(fault => [fault.index, fault.elementId, fault.target])).toEqual([
-    [0, "gateway", "gateway#2"], [1, "gateway-to-middle", "gateway#2 → middle"], [2, null, "unknown#2"],
+    [0, "gateway", "Service gateway, replica 2"],
+    [1, "gateway-to-middle", "Connection gateway → middle (gateway-to-middle), from replica 2"],
+    [2, null, "unknown, replica 2"],
   ]);
-  expect(data.faults[0].label).toBe("gateway#2 · Slowdown 6× · 200–700 ms");
+  expect(data.faults[0].label).toBe("Service gateway, replica 2 · Slowdown 6× · 200–700 ms");
 });
 
 it.each([
@@ -51,17 +53,17 @@ it.each([
   [{ kind: "capacityLoss", capacity: 0 }, "Capacity loss: 0 available"],
 ])("describes fault parameters: %j", (parameters, expected) => {
   expect(faultLabel({ target: "dependency", from: "0s", to: "1s", ...parameters }, model, catalog))
-    .toBe(`dependency · ${expected} · 0–1 s`);
+    .toBe(`Service dependency · ${expected} · 0–1 s`);
 });
 
 it("summarizes constant and changing load with every fault in both languages", () => {
-  expect(runConditions(model, experiment, catalog)).toBe("Load 120 RPS; faults: dependency · Slowdown 6× · 200–700 ms");
+  expect(runConditions(model, experiment, catalog)).toBe("Load 120 RPS; faults: Service dependency · Slowdown 6× · 200–700 ms");
   const draft = structuredClone(model);
   draft.blocks.client.params.load = { points: [{ time: "0s", rate: "10/s" }, { time: "1s", rate: "90/s" }] };
   const run = { ...experiment, faults: [...experiment.faults, { target: "gateway", kind: "blackhole", from: "0s", to: "1s" }] };
-  expect(runConditions(draft, run, catalog)).toBe("Load from 10 RPS to 90 RPS; faults: dependency · Slowdown 6× · 200–700 ms; gateway · Black hole · 0–1 s");
+  expect(runConditions(draft, run, catalog)).toBe("Load from 10 RPS to 90 RPS; faults: Service dependency · Slowdown 6× · 200–700 ms; Service gateway · Black hole · 0–1 s");
   setLanguage("ru");
-  expect(runConditions(draft, run, catalog)).toBe("Нагрузка от 10 RPS до 90 RPS; отказы: dependency · Замедление 6× · 200–700 мс; gateway · Чёрная дыра · 0–1 с");
+  expect(runConditions(draft, run, catalog)).toBe("Нагрузка от 10 RPS до 90 RPS; отказы: Сервис dependency · Замедление 6× · 200–700 мс; Сервис gateway · Чёрная дыра · 0–1 с");
 });
 
 it("does not invent a curve for invalid draft points or crash on unknown fault kinds", () => {

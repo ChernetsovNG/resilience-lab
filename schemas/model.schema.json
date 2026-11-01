@@ -1158,7 +1158,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Temporarily excludes failing targets. State is shared by all callers of the router or replica group.",
+                  "description": "Directs new attempts away from failing instances toward the remaining targets. The router temporarily excludes targets after consecutive failures; state is shared by all callers.",
                   "title": "Outlier detection"
                 },
                 "policy": {
@@ -1214,7 +1214,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "A replica holds a handler while processing a request, waiting for downstream calls and pausing before retries.",
+          "description": "A service processes requests and makes downstream calls. Each replica holds a handler while processing, waiting for downstream calls and pausing before retries.",
           "properties": {
             "description": {
               "type": [
@@ -1409,8 +1409,8 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
-                  "title": "Readiness check"
+                  "description": "Keeps user requests away from instances that are not ready. Probes share the service handler queue and processing capacity; all routers skip an instance while it is not ready.",
+                  "title": "Health-check"
                 },
                 "processing": {
                   "additionalProperties": false,
@@ -1571,7 +1571,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Per-instance token bucket before the handler queue. Rejections occupy no handler; probes bypass the bucket.",
+                  "description": "Protects the service from excessive incoming traffic by rejecting attempts over the limit before the handler queue. Each instance has its own token bucket; rejections occupy no handler and health-check probes bypass the bucket.",
                   "title": "Rate limit"
                 },
                 "replicas": {
@@ -1784,8 +1784,8 @@
                         "type": "null"
                       }
                     ],
-                    "description": "Probes share the handler queue and processing capacity. All routers skip an instance while it is not ready.",
-                    "title": "Readiness check"
+                    "description": "Keeps user requests away from instances that are not ready. Probes share the service handler queue and processing capacity; all routers skip an instance while it is not ready.",
+                    "title": "Health-check"
                   },
                   "processing": {
                     "anyOf": [
@@ -1964,7 +1964,7 @@
                         "type": "null"
                       }
                     ],
-                    "description": "Per-instance token bucket before the handler queue. Rejections occupy no handler; probes bypass the bucket.",
+                    "description": "Protects the service from excessive incoming traffic by rejecting attempts over the limit before the handler queue. Each instance has its own token bucket; rejections occupy no handler and health-check probes bypass the bucket.",
                     "title": "Rate limit"
                   }
                 },
@@ -2279,7 +2279,7 @@
                             }
                           ],
                           "default": "5s",
-                          "description": "Time before allowing half-open probes; rejected attempts use no pool, network or target work. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "description": "Time the circuit breaker stays open before allowing probe attempts to the dependency. Attempts rejected by the circuit breaker use no connection pool, network or target work. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
                           "title": "Open duration"
                         },
                         "window": {
@@ -2293,7 +2293,7 @@
                             }
                           ],
                           "default": 20,
-                          "description": "Number of most recent completed attempts in the closed circuit breaker's window. Circuit breaker rejections are excluded.",
+                          "description": "Number of recent completed dependency-call attempts used by the closed circuit breaker to calculate the failure share. Attempts rejected by this circuit breaker are not included.",
                           "title": "Window size"
                         }
                       },
@@ -2304,7 +2304,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "An open circuit breaker rejects attempts locally. Each calling instance keeps its own window of completed attempts.",
+                  "description": "Stops sending attempts to a failing dependency so it has time to recover. When open, it rejects attempts at the caller; each calling instance tracks its own completed attempts.",
                   "title": "Circuit breaker"
                 },
                 "fallback": {
@@ -2385,7 +2385,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Replace a matching final call failure after all attempts. Successful originals with a fallback count as degraded.",
+                  "description": "Lets the scenario continue when a dependency call ultimately fails. Replaces selected final failure reasons after all attempts; successful originals with a fallback count as degraded.",
                   "title": "Fallback"
                 },
                 "network": {
@@ -2570,7 +2570,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Temporarily excludes failing targets. State is shared by all callers of the router or replica group.",
+                  "description": "Directs new attempts away from failing instances toward the remaining targets. The router temporarily excludes targets after consecutive failures; state is shared by all callers.",
                   "title": "Outlier detection"
                 },
                 "pool": {
@@ -2741,7 +2741,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "Bound retries by a share of first attempts plus a minimum allowance over a rolling time window.",
+                  "description": "Limits the extra load that retries send to a failing dependency. Retries are bounded by a share of first attempts plus a minimum allowance over a rolling time window.",
                   "title": "Retry budget"
                 },
                 "retryTarget": {
