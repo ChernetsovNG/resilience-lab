@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalog, model, summary } from "../test/fixtures";
+import outputCatalog from "../test/catalog.json";
+import { entryResults } from "../test/entryResults";
 import { GridMap } from "./GridMap";
 import { gridCells, mapMetric } from "./map";
 import { setConfidenceLevel } from "../layout/confidenceLevel";
@@ -148,4 +150,50 @@ it("offers group aggregates and keeps instances inside their group", () => {
   const replicas = screen.getByText("Replicas · workers").closest("details")!;
   expect(within(replicas).getAllByRole("radio").map(radio => radio.closest("label")!.textContent))
     .toEqual(["workers", "workers#1", "workers#2", "workers#3"]);
+});
+
+
+it("switches entry metrics between total, client and request type without changing service metrics", () => {
+  const scenario = entryResults();
+  scenario.summary.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
+  render(<GridMap {...scenario} activeVariantId="baseline" pointId="p0" />);
+  const population = screen.getByRole("combobox", { name: "Entry" });
+  const points = screen.getByRole("list", { name: "Map points" });
+  expect(within(points).getByRole("button").textContent).toContain("80%");
+  fireEvent.change(population, { target: { value: "classes:checkout" } });
+  expect(within(points).getByRole("button").textContent).toContain("50%");
+  fireEvent.change(population, { target: { value: "clients:partner" } });
+  expect(within(points).getByRole("button").textContent).toContain("100%");
+  fireEvent.change(screen.getByLabelText("Map metric"), { target: { value: "handlerUtilization" } });
+  expect(screen.queryByRole("combobox", { name: "Entry" })).toBeNull();
+  expect(within(points).getByRole("button").textContent).toContain("50%");
+});
+
+it("hides the entry selector for a single client and default request type", () => {
+  render(<GridMap summary={gridSummary(false)} model={model} activeVariantId="baseline" pointId="p0" />);
+  expect(screen.queryByRole("combobox", { name: "Entry" })).toBeNull();
+});
+
+
+it("keeps an absent population unavailable when switching variants", () => {
+  const scenario = entryResults();
+  scenario.summary.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
+  delete scenario.summary.variants[1].points[0].aggregate.entries.classes.checkout;
+  const view = render(<GridMap {...scenario} activeVariantId="baseline" pointId="p0" />);
+  fireEvent.change(screen.getByRole("combobox", { name: "Entry" }), { target: { value: "classes:checkout" } });
+  view.rerender(<GridMap {...scenario} activeVariantId="no-retries" pointId="p0" />);
+  expect(within(screen.getByRole("list", { name: "Map points" })).getByRole("button").textContent).toContain("n/a");
+});
+
+
+it("omits a selector for a single effective request type replacing the base load", () => {
+  const run = gridSummary(false);
+  for (const variant of run.variants) for (const point of variant.points) point.aggregate.entries = {
+    ...point.aggregate.entries, clients: { client: point.aggregate.entries.total }, classes: { checkout: point.aggregate.entries.total },
+  };
+  const variants = run.variants.map(variant => ({ ...variant, overrides: {
+    "client.classes": [{ id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }] } }],
+  } }));
+  render(<GridMap summary={run} model={model} catalog={outputCatalog as typeof catalog} variants={variants} activeVariantId="baseline" pointId="p0" />);
+  expect(screen.queryByRole("combobox", { name: "Entry" })).toBeNull();
 });

@@ -77,6 +77,10 @@ test.describe("readable checkout answer", () => {
     await expect(overview.getByTestId("comparison-conclusion")).toContainText("Лучшая наблюдаемая доля успешных запросов: Bigger payment pool");
     await expect(overview.getByTestId("comparison-conclusion")).toContainText("Наименьший наблюдаемый p99:");
     const table = page.getByRole("table", { name: "Выводы", exact: true });
+    await expect(page.getByText("По клиентам", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("По видам запросов", { exact: true })).toHaveCount(0);
+    await expect(table.getByRole("rowheader", { name: "Причины отказа", exact: true })).toHaveCount(0);
+    await expect(table.getByRole("rowheader", { name: "Успешные с заглушкой", exact: true })).toHaveCount(0);
     for (const variant of summary.variants) await expect(table.getByRole("columnheader", { name: new RegExp(variant.label) })).toBeVisible();
     await expect(table.getByRole("row", { name: /p99/ }).getByRole("cell").first()).toContainText("совпадает с таймаутом 5 с");
     const first = summary.variants[0].points[0].saturation.firstNodes[0];
@@ -145,5 +149,9 @@ test.describe("grid Findings in Russian", () => {
     }
     await page.getByRole("button", { name: "Анализ", exact: true }).click();
     await page.screenshot({ path: testInfo.outputPath("checkout-grid-findings-ru.png") });
+    await expect(page.getByText("По клиентам", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("По видам запросов", { exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Карта", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Вход", exact: true })).toHaveCount(0);
   });
 });

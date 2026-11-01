@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { catalog, model, slotPoolResource, noSaturation, summary } from "../test/fixtures";
+import outputCatalog from "../test/catalog.json";
+import { entryResults } from "../test/entryResults";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
 import { setLanguage } from "../i18n";
@@ -502,4 +504,93 @@ describe("Findings conclusions", () => {
     expect(cells("p99")[0].textContent).not.toContain("limited by");
   });
 
+});
+
+
+describe("entry populations", () => {
+  it("keeps client and request-type groups collapsed and compares their own saved metrics", () => {
+    const scenario = entryResults();
+    render(<SummaryTable {...scenario} catalog={catalog} />);
+    for (const title of ["By clients", "By request types"]) {
+      const toggle = screen.getByText(title, { exact: true });
+      expect(toggle.closest("details")!.open).toBe(false);
+      fireEvent.click(toggle);
+    }
+    const client = screen.getByRole("table", { name: "Client · client" });
+    expect(cells("Success rate", client)[0].textContent).toContain("80%");
+    expect(cells("Success rate", client)[1].textContent).toContain("10 pp");
+    expect(cells("p95", client)[0].textContent).toContain("95% CI");
+    expect(cells("Success rate", screen.getByRole("table", { name: "Request type · checkout" }))[0].textContent).toContain("50%");
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("90%");
+  });
+
+  it("orders the top three reasons, expands all codes, and compares an absent reason as zero", () => {
+    const scenario = entryResults();
+    render(<SummaryTable {...scenario} catalog={catalog} />);
+    const reasons = cells("Failure reasons")[0].querySelector("summary")!;
+    expect(reasons.textContent).toBe("timeout 4% · breaker open 3% · processing error 3%");
+    expect(reasons.textContent).not.toContain("queue full");
+    fireEvent.click(reasons);
+    expect(cells("Failure reasons")[0].textContent).toContain("queue full");
+    expect(cells("Failure reasons")[0].querySelector('[title="timeout"]')).toBeTruthy();
+    fireEvent.click(screen.getByText("By request types", { exact: true }));
+    const status = screen.getByRole("table", { name: "Request type · status" });
+    expect(cells("Failure reasons", status)[0].textContent).toContain("No failures");
+    fireEvent.click(cells("Failure reasons", status)[0].querySelector("summary")!);
+    expect(cells("Failure reasons", status)[0].textContent).toContain("timeout0%");
+    fireEvent.click(cells("Failure reasons", status)[1].querySelector("summary")!);
+    expect(cells("Failure reasons", status)[1].textContent).toContain("2 pp");
+    expect(cells("Successful with fallback")[1].textContent).toContain("4.6%");
+  });
+
+  it("leaves old examples unchanged and shows zero fallback only when configured", () => {
+    const { rerender } = render(<SummaryTable summary={summary} model={model} catalog={catalog} />);
+    expect(screen.queryByText("By clients", { exact: true })).toBeNull();
+    expect(screen.queryByText("By request types", { exact: true })).toBeNull();
+    expect(screen.queryByRole("rowheader", { name: "Failure reasons" })).toBeNull();
+    expect(screen.queryByRole("rowheader", { name: "Successful with fallback" })).toBeNull();
+    const variants = summary.variants.map(variant => ({ ...variant, overrides: variant.id === "no-retries"
+      ? { "gateway-to-middle.fallback": { on: ["timeout"], processing: "1ms" } } : {} }));
+    rerender(<SummaryTable summary={summary} model={model} variants={variants} catalog={outputCatalog as typeof catalog} />);
+    expect(cells("Successful with fallback")[0].textContent).toContain("0%");
+  });
+});
+
+
+it("shows only groups with more than one population", () => {
+  const scenario = entryResults();
+  delete scenario.model.blocks.partner;
+  scenario.model.blocks.client.params.classes = [{ id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }] } }];
+  for (const variant of scenario.summary.variants) {
+    delete variant.points[0].aggregate.entries.clients.partner;
+    delete variant.points[0].aggregate.entries.classes.status;
+  }
+  render(<SummaryTable {...scenario} catalog={catalog} />);
+  expect(screen.queryByText("By clients", { exact: true })).toBeNull();
+  expect(screen.queryByText("By request types", { exact: true })).toBeNull();
+});
+
+
+it.each(["clients", "classes"] as const)("warns about sparse %s even when the total has ten observations", kind => {
+  const scenario = entryResults();
+  const id = kind === "clients" ? "client" : "checkout";
+  const entries = scenario.summary.variants[0].points[0].aggregate.entries;
+  entries[kind][id] = { ...entries[kind][id], successRate: { ...entries[kind][id].successRate!, count: 2 } };
+  render(<SummaryTable {...scenario} catalog={catalog} />);
+  fireEvent.click(screen.getByText(kind === "clients" ? "By clients" : "By request types", { exact: true }));
+  const table = screen.getByRole("table", { name: `${kind === "clients" ? "Client" : "Request type"} · ${id}` });
+  expect(table.textContent).toContain("Unreliable interval: increase Replications.");
+});
+
+it("does not resurrect base default requests replaced in every saved variant", () => {
+  const run = structuredClone(summary);
+  for (const variant of run.variants) variant.points[0].aggregate.entries = {
+    ...variant.points[0].aggregate.entries, clients: { client: variant.points[0].aggregate.entries.total },
+    classes: { checkout: variant.points[0].aggregate.entries.total },
+  };
+  const variants = run.variants.map(variant => ({ ...variant, overrides: {
+    "client.classes": [{ id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }] } }],
+  } }));
+  render(<SummaryTable summary={run} model={model} catalog={outputCatalog as typeof catalog} variants={variants} />);
+  expect(screen.queryByText("By request types", { exact: true })).toBeNull();
 });
