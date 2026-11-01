@@ -572,7 +572,7 @@ class LabTest {
     fun `validates the example with advisory warnings for baseline only`() {
         val report = Lab(FileWorkspace(exampleWorkspace())).validate(experiment)
 
-        assertThat(report.diagnostics.map { it.code }).containsExactly("LINT_TIMEOUT_BUDGET")
+        assertThat(report.diagnostics.map { it.code }).containsExactly("LINT_TIMEOUT_BUDGET", "LINT_RETRY_OVERLOAD")
         assertThat(report.diagnostics).allSatisfy {
             assertThat(it.severity).isEqualTo(resiliencelab.core.compiler.Severity.WARNING)
             assertThat(it.document).isEqualTo(model)

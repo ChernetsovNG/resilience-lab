@@ -29,6 +29,7 @@ import kotlin.math.sqrt
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
+ * [retryOverloadThreshold] is the positive accepted-utilization threshold for worst-case retries (1 by default).
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
@@ -43,8 +44,12 @@ class ModelLinter(
     private val retryNoJitterThreshold: Int = 1,
     private val timeoutLatencyQuantile: Double = 0.99,
     private val queueWaitThreshold: Double = 1.0,
+    private val retryOverloadThreshold: Double = 1.0,
 ) {
     init {
+        require(retryOverloadThreshold.isFinite() && retryOverloadThreshold > 0.0) {
+            "retryOverloadThreshold must be finite and positive"
+        }
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
         require(retryNoJitterThreshold >= 1) { "retryNoJitterThreshold must be at least 1" }
         require(minimumReplications >= 1) { "minimumReplications must be at least 1" }
@@ -143,61 +148,90 @@ class ModelLinter(
         val queuePatience = mutableMapOf<String, QueuePatience>()
         val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
         val normalResponses = mutableMapOf<String, MutableMap<String, NormalResponse>>()
-        graph.clients.forEach { client ->
-            client.classes.forEach { (requestClass, load) ->
-                val holdingByService = mutableMapOf<String, BigDecimal>()
-                val shares = arrivalShares(graph, client, requestClass)
-                graph.entryServices(client, requestClass).forEach { entry ->
-                    graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
-                        val outgoing = calls.associateBy { it.from }
-                        val incoming = calls.associateBy { it.to }
-                        val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
-                        calls.forEach { call ->
-                            clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
-                            retryNoJitter(call)?.let(diagnostics::add)
-                            timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
-                                ?.let(diagnostics::add)
-                        }
-                        retryAmplification(calls, calls.firstOrNull())?.let(diagnostics::add)
-                        deadlineBudget(client, processingMs(graph, entry, requestClass), calls.firstOrNull())?.let(diagnostics::add)
-                        var holdingMs = BigDecimal.ZERO
-                        ordered.asReversed().forEach { service ->
-                            val outgoingNetworkMs = BigDecimal.valueOf(outgoing[service.path]?.network?.meanMs ?: 0.0) * BigDecimal.TWO
-                            val downstreamMs = (holdingMs + outgoingNetworkMs).toDouble()
-                            incoming[service.path]?.let { call ->
-                                val processingQuantile =
-                                    graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
-                                        quantileMs(it.processing ?: service.processing)
-                                    }
-                                val response = NormalResponse(service.path, 2.0 * call.network.meanMs + processingQuantile + downstreamMs)
-                                val byClass = normalResponses.getOrPut(call.path) { mutableMapOf() }
-                                val previous = byClass[requestClass]
-                                if (previous == null || response.ms > previous.ms) byClass[requestClass] = response
-                            }
-                            holdingMs +=
-                                graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
-                                    BigDecimal.valueOf((it.processing ?: service.processing).meanMs)
-                                } + outgoingNetworkMs
-                            holdingByService[service.path] = maxOf(holdingByService[service.path] ?: BigDecimal.ZERO, holdingMs)
-                            val patience =
-                                incoming[service.path]?.let { QueuePatience(it.timeoutMs, it.path, false) }
-                                    ?: QueuePatience(client.deadlineMs, client.path, true)
-                            val previous = queuePatience[service.path]
-                            if (previous == null || patience.ms < previous.ms) queuePatience[service.path] = patience
+        val sources =
+            graph.clients.flatMap { client ->
+                client.classes.map { (requestClass, load) ->
+                    ArrivalSource(client, requestClass, load.maximum(graph.run.warmupMs + graph.run.measurementMs))
+                }
+            }
+        val arrivals = arrivalShares(graph, sources)
+        val retryDemands = mutableMapOf<String, Fraction>()
+        val retryRates = mutableMapOf<String, Fraction>()
+        val retryPaths = mutableMapOf<String, MutableSet<List<CallEdge>>>()
+        sources.forEach { source ->
+            val client = source.client
+            val requestClass = source.requestClass
+            val holdingByService = mutableMapOf<String, BigDecimal>()
+            val shares = arrivals.nominal.getValue(source)
+            graph.entryServices(client, requestClass).forEach { entry ->
+                graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
+                    val outgoing = calls.associateBy { it.from }
+                    val incoming = calls.associateBy { it.to }
+                    val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
+                    ordered.forEachIndexed { index, service ->
+                        val prefix = calls.take(index)
+                        if ((arrivals.worst.getValue(source)[service.path] ?: Fraction.ZERO).signum() > 0 &&
+                            prefix.any { it.attempts > 1 }
+                        ) {
+                            retryPaths.getOrPut(service.path) { linkedSetOf() }.add(prefix)
                         }
                     }
+                    calls.forEach { call ->
+                        clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
+                        retryNoJitter(call)?.let(diagnostics::add)
+                        timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
+                            ?.let(diagnostics::add)
+                    }
+                    retryAmplification(calls, calls.firstOrNull())?.let(diagnostics::add)
+                    deadlineBudget(client, processingMs(graph, entry, requestClass), calls.firstOrNull())?.let(diagnostics::add)
+                    var holdingMs = BigDecimal.ZERO
+                    ordered.asReversed().forEach { service ->
+                        val outgoingNetworkMs = BigDecimal.valueOf(outgoing[service.path]?.network?.meanMs ?: 0.0) * BigDecimal.TWO
+                        val downstreamMs = (holdingMs + outgoingNetworkMs).toDouble()
+                        incoming[service.path]?.let { call ->
+                            val processingQuantile =
+                                graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
+                                    quantileMs(it.processing ?: service.processing)
+                                }
+                            val response = NormalResponse(service.path, 2.0 * call.network.meanMs + processingQuantile + downstreamMs)
+                            val byClass = normalResponses.getOrPut(call.path) { mutableMapOf() }
+                            val previous = byClass[requestClass]
+                            if (previous == null || response.ms > previous.ms) byClass[requestClass] = response
+                        }
+                        holdingMs +=
+                            graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
+                                BigDecimal.valueOf((it.processing ?: service.processing).meanMs)
+                            } + outgoingNetworkMs
+                        holdingByService[service.path] = maxOf(holdingByService[service.path] ?: BigDecimal.ZERO, holdingMs)
+                        val patience =
+                            incoming[service.path]?.let { QueuePatience(it.timeoutMs, it.path, false) }
+                                ?: QueuePatience(client.deadlineMs, client.path, true)
+                        val previous = queuePatience[service.path]
+                        if (previous == null || patience.ms < previous.ms) queuePatience[service.path] = patience
+                    }
                 }
-                val maximumRate = load.maximum(graph.run.warmupMs + graph.run.measurementMs)
-                holdingByService.forEach { (path, holdingMs) ->
-                    val rate = BigDecimal.valueOf(maximumRate * (shares[path] ?: 0.0))
-                    demands[path] = (demands[path] ?: BigDecimal.ZERO) + rate * holdingMs
-                    maximumRates[path] = (maximumRates[path] ?: BigDecimal.ZERO) + rate
-                }
+            }
+            holdingByService.forEach { (path, holdingMs) ->
+                val rate = BigDecimal.valueOf(source.maximumRate * (shares[path] ?: 0.0))
+                demands[path] = (demands[path] ?: BigDecimal.ZERO) + rate * holdingMs
+                maximumRates[path] = (maximumRates[path] ?: BigDecimal.ZERO) + rate
+                val retryRate = arrivals.worst.getValue(source)[path] ?: Fraction.ZERO
+                retryDemands[path] = (retryDemands[path] ?: Fraction.ZERO) + retryRate * Fraction.of(holdingMs)
+                retryRates[path] = (retryRates[path] ?: Fraction.ZERO) + retryRate
             }
         }
         return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
             graph.calls.flatMap { call -> timeoutBelowLatency(call, normalResponses[call.path].orEmpty()) } +
             handlerDemand(graph.services, demands, maximumRates, queuePatience) +
+            graph.services.flatMap { service ->
+                retryOverload(
+                    service,
+                    retryDemands[service.path] ?: Fraction.ZERO,
+                    retryRates[service.path] ?: Fraction.ZERO,
+                    retryPaths[service.path].orEmpty(),
+                    arrivals,
+                )
+            } +
             graph.calls
                 .filter { call ->
                     call.balancing != null &&
@@ -234,44 +268,224 @@ class ModelLinter(
             }
     }
 
+    /** Exact rates and ratios keep recurring routing/budget fractions intact until after threshold comparison. */
+    private class Fraction private constructor(
+        val numerator: BigInteger,
+        val denominator: BigInteger,
+    ) : Comparable<Fraction> {
+        operator fun plus(other: Fraction): Fraction =
+            reduced(
+                numerator * other.denominator + other.numerator * denominator,
+                denominator * other.denominator,
+            )
+
+        operator fun times(other: Fraction): Fraction = reduced(numerator * other.numerator, denominator * other.denominator)
+
+        operator fun div(other: Fraction): Fraction = reduced(numerator * other.denominator, denominator * other.numerator)
+
+        override fun compareTo(other: Fraction): Int = (numerator * other.denominator).compareTo(other.numerator * denominator)
+
+        fun signum(): Int = numerator.signum()
+
+        fun decimal(): BigDecimal = numerator.toBigDecimal().divide(denominator.toBigDecimal(), MathContext.DECIMAL128)
+
+        companion object {
+            val ZERO = Fraction(BigInteger.ZERO, BigInteger.ONE)
+            val ONE = Fraction(BigInteger.ONE, BigInteger.ONE)
+
+            fun of(value: Double): Fraction = of(BigDecimal.valueOf(value))
+
+            fun of(value: BigDecimal): Fraction =
+                if (value.scale() < 0) {
+                    reduced(value.unscaledValue() * BigInteger.TEN.pow(-value.scale()), BigInteger.ONE)
+                } else {
+                    reduced(value.unscaledValue(), BigInteger.TEN.pow(value.scale()))
+                }
+
+            private fun reduced(
+                numerator: BigInteger,
+                denominator: BigInteger,
+            ): Fraction {
+                require(denominator.signum() > 0)
+                if (numerator.signum() == 0) return ZERO
+                val divisor = numerator.gcd(denominator)
+                return Fraction(numerator / divisor, denominator / divisor)
+            }
+        }
+    }
+
+    private data class ArrivalSource(
+        val client: ClientNode,
+        val requestClass: String,
+        val maximumRate: Double,
+    )
+
+    private data class ArrivalShares(
+        val nominal: Map<ArrivalSource, MutableMap<String, Double>>,
+        val worst: Map<ArrivalSource, MutableMap<String, Fraction>>,
+        val factors: Map<String, Fraction>,
+        val budgetLimited: Set<String>,
+    )
+
     /**
      * Static shares without retries or failures. Random routers use normalized eligible weights;
      * round robin and least-in-flight assume equal conditions. As with the longest holding-path estimate,
      * common services and repeated calls contribute at most once per client and class.
+     *
+     * Propagate retry rates alongside the existing nominal shares, in the same topological traversal.
+     * A connection's budget minimum is shared by all its client/request-type sources before router splitting.
+     * Converging routes sum; repeated visits remain capped by the largest unweighted path amplification,
+     * preserving the existing once-per-source convention when every connection has one attempt.
      */
     private fun arrivalShares(
         graph: GraphIr,
-        client: ClientNode,
-        requestClass: String,
-    ): Map<String, Double> {
-        val shares = mutableMapOf(client.entry to 1.0)
+        sources: List<ArrivalSource>,
+    ): ArrivalShares {
+        val nominal = sources.associateWith { mutableMapOf(it.client.entry to 1.0) }
+        val worst = sources.associateWith { mutableMapOf(it.client.entry to Fraction.of(it.maximumRate)) }
+        val ceilings = sources.associateWith { mutableMapOf(it.client.entry to Fraction.of(it.maximumRate)) }
+        val factors = mutableMapOf<String, Fraction>()
+        val limited = mutableSetOf<String>()
         val routers = graph.routers.associateBy { it.path }
         val services = graph.services.associateBy { it.path }
 
         fun add(
+            source: ArrivalSource,
             path: String,
             share: Double,
+            rate: Fraction,
+            ceiling: Fraction,
         ) {
+            val shares = nominal.getValue(source)
             shares[path] = minOf(1.0, (shares[path] ?: 0.0) + share)
+            val caps = ceilings.getValue(source)
+            caps[path] = maxOf(caps[path] ?: Fraction.ZERO, ceiling)
+            val rates = worst.getValue(source)
+            rates[path] = minOf(caps.getValue(path), (rates[path] ?: Fraction.ZERO) + rate)
         }
         graph.topologicalPaths.forEach { path ->
-            val share = shares[path] ?: 0.0
             val router = routers[path]
             if (router != null) {
-                val outputs = graph.outgoingRoutes(path, requestClass)
-                val scale = outputs.maxOfOrNull { it.weight } ?: return@forEach
-                val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
-                val total = weights.sum()
-                outputs.zip(weights).forEach { (route, weight) -> add(route.to, share * (weight / total)) }
+                sources.forEach { source ->
+                    val outputs = graph.outgoingRoutes(path, source.requestClass)
+                    val scale = outputs.maxOfOrNull { it.weight } ?: return@forEach
+                    val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
+                    val total = weights.sum()
+                    val share = nominal.getValue(source)[path] ?: 0.0
+                    val rate = worst.getValue(source)[path] ?: Fraction.ZERO
+                    val ceiling = ceilings.getValue(source)[path] ?: Fraction.ZERO
+                    val exactWeights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) Fraction.of(it.weight) else Fraction.ONE }
+                    val exactTotal = exactWeights.fold(Fraction.ZERO) { sum, weight -> sum + weight }
+                    outputs.forEachIndexed { index, route ->
+                        add(source, route.to, share * (weights[index] / total), rate * exactWeights[index] / exactTotal, ceiling)
+                    }
+                }
             } else {
-                graph
-                    .scenario(services.getValue(path), requestClass)
-                    .filterIsInstance<ServiceStep.Call>()
-                    .distinctBy { it.edge }
-                    .forEach { add(graph.call(it.edge).to, share) }
+                val users =
+                    sources
+                        .flatMap { source ->
+                            graph
+                                .scenario(services.getValue(path), source.requestClass)
+                                .filterIsInstance<ServiceStep.Call>()
+                                .distinctBy { it.edge }
+                                .map { graph.call(it.edge) to source }
+                        }.groupBy({ it.first }, { it.second })
+                users.forEach { (call, callers) ->
+                    val firstRate = callers.fold(Fraction.ZERO) { sum, source -> sum + (worst.getValue(source)[path] ?: Fraction.ZERO) }
+                    val unconstrained = firstRate * Fraction.of(call.attempts.toBigDecimal())
+                    val allowed =
+                        call.retryBudget?.let { budget ->
+                            minOf(unconstrained, firstRate * (Fraction.ONE + Fraction.of(budget.ratio)) + Fraction.of(budget.minPerMs))
+                        } ?: unconstrained
+                    val factor = if (firstRate.signum() == 0) Fraction.ONE else allowed / firstRate
+                    factors[call.path] = factor
+                    if (allowed < unconstrained) limited.add(call.path)
+                    callers.forEach { source ->
+                        val first = worst.getValue(source)[path] ?: Fraction.ZERO
+                        add(
+                            source,
+                            call.to,
+                            nominal.getValue(source)[path] ?: 0.0,
+                            first * factor,
+                            (ceilings.getValue(source)[path] ?: Fraction.ZERO) * factor,
+                        )
+                    }
+                }
             }
         }
-        return shares
+        return ArrivalShares(nominal, worst, factors, limited)
+    }
+
+    private data class ServiceLoad(
+        val rate: Fraction,
+        val holdingMs: Fraction,
+        val utilization: Fraction,
+    )
+
+    /** Rate-weighted holding time and accepted occupancy; service IR already contains replica overrides. */
+    private fun serviceLoad(
+        service: ServiceNode,
+        demand: Fraction,
+        offeredRate: Fraction,
+    ): ServiceLoad {
+        if (offeredRate.signum() == 0) return ServiceLoad(Fraction.ZERO, Fraction.ZERO, Fraction.ZERO)
+        val rate = minOf(offeredRate, service.rateLimit?.let { Fraction.of(it.ratePerMs) } ?: offeredRate)
+        val holdingMs = demand / offeredRate
+        return ServiceLoad(rate, holdingMs, rate * holdingMs / Fraction.of(service.handlers.toBigDecimal()))
+    }
+
+    private fun retryOverload(
+        service: ServiceNode,
+        demand: Fraction,
+        offeredRate: Fraction,
+        paths: Set<List<CallEdge>>,
+        arrivals: ArrivalShares,
+    ): List<Diagnostic> {
+        if (service.pooler != null || offeredRate.signum() == 0) return emptyList()
+        val load = serviceLoad(service, demand, offeredRate)
+        if (load.utilization < Fraction.of(retryOverloadThreshold)) return emptyList()
+        val chains =
+            paths
+                .map { calls ->
+                    calls.joinToString(" × ") { "${it.path}: ${Quantities.plain(arrivals.factors.getValue(it.path).decimal())}" }
+                }.distinct()
+                .sorted()
+                .joinToString("; ")
+        val budgetLimited =
+            paths
+                .flatten()
+                .map { it.path }
+                .filter { it in arrivals.budgetLimited }
+                .distinct()
+                .sorted()
+                .joinToString(", ")
+        val rateText = Quantities.plain((load.rate * Fraction.of(BigDecimal(1_000))).decimal())
+        val utilizationText = Quantities.plain(load.utilization.decimal())
+        val args =
+            mapOf(
+                "target" to JsonPrimitive(service.path.substringBeforeLast('#', service.path)),
+                "ratePerSecond" to JsonPrimitive(rateText),
+                "offeredRatePerSecond" to JsonPrimitive(Quantities.plain((offeredRate * Fraction.of(BigDecimal(1_000))).decimal())),
+                "utilization" to JsonPrimitive(utilizationText),
+                "holdingMs" to JsonPrimitive(Quantities.plain(load.holdingMs.decimal())),
+                "handlers" to JsonPrimitive(service.handlers),
+                "threshold" to JsonPrimitive(number(retryOverloadThreshold)),
+                "attemptChain" to JsonPrimitive(chains),
+            )
+        return paths.mapNotNull { it.lastOrNull { call -> call.attempts > 1 } }.distinctBy { it.path }.map { call ->
+            warning(
+                if (budgetLimited.isEmpty()) CoreMessage.LINT_RETRY_OVERLOAD else CoreMessage.LINT_RETRY_OVERLOAD_BUDGET,
+                "Worst retry load of '${service.path}': $rateText requests/s accepted, utilization $utilizationText " +
+                    "at threshold ${number(retryOverloadThreshold)}; attempts: $chains. " +
+                    (if (budgetLimited.isEmpty()) "" else "Retry budgets limit connections: $budgetLimited. ") +
+                    "Retries may exhaust capacity during failures; reduce attempts or load, or increase capacity.",
+                call.origin,
+                call.path,
+                "/params/attempts",
+                if (budgetLimited.isEmpty()) args else args + ("budgetLimited" to JsonPrimitive(budgetLimited)),
+                replicaPath = service.path,
+            )
+        }
     }
 
     private fun processingMs(
@@ -477,7 +691,7 @@ class ModelLinter(
             services.forEach { service ->
                 val demand = demands[service.path] ?: BigDecimal.ZERO
                 val maximumRate = maximumRates[service.path] ?: BigDecimal.ZERO
-                val holdingMs = if (maximumRate.signum() == 0) 0.0 else demand.divide(maximumRate, MathContext.DECIMAL128).toDouble()
+                val holdingMs = serviceLoad(service, Fraction.of(demand), Fraction.of(maximumRate)).holdingMs.decimal().toDouble()
                 if (service.pooler == null && service.handlers.toBigDecimal() < demand) {
                     val database = service.type == "database"
                     val resource = if (database) "Connections" else "Handlers"
@@ -646,20 +860,21 @@ class ModelLinter(
         path: String,
         suffix: String,
         args: Map<String, JsonPrimitive>,
+        replicaPath: String = path,
     ): Diagnostic {
-        val replica = path.substringAfterLast('#', "").toIntOrNull()
+        val replica = replicaPath.substringAfterLast('#', "").toIntOrNull()
         val context =
             if (replica ==
                 null
             ) {
                 emptyMap()
             } else {
-                mapOf("replica" to JsonPrimitive(replica), "service" to JsonPrimitive(path.substringBeforeLast('#')))
+                mapOf("replica" to JsonPrimitive(replica), "service" to JsonPrimitive(replicaPath.substringBeforeLast('#')))
             }
         return Diagnostic(
             code,
             Severity.WARNING,
-            if (replica == null) message else "Replica '$path': $message",
+            if (replica == null) message else "Replica '$replicaPath': $message",
             origin.document,
             origin.pointer + suffix,
             path,

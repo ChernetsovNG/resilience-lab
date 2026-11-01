@@ -138,6 +138,16 @@ internal enum class CoreMessage(
         "Connection '{connection}' allows {attempts} attempts with backoff '{backoff}', above threshold {threshold}; use exponential-full-jitter",
     ),
     LINT_RETRY_AMPLIFICATION("LINT_RETRY_AMPLIFICATION", null, "Retry amplification {amplification} exceeds threshold {threshold}"),
+    LINT_RETRY_OVERLOAD(
+        "LINT_RETRY_OVERLOAD",
+        null,
+        "Worst retry load of '{target}': {ratePerSecond} requests/s, utilization {utilization} at threshold {threshold}; attempts: {attemptChain}",
+    ),
+    LINT_RETRY_OVERLOAD_BUDGET(
+        "LINT_RETRY_OVERLOAD",
+        "retryBudget",
+        "Worst retry load of '{target}': {ratePerSecond} requests/s, utilization {utilization} at threshold {threshold}; attempts: {attemptChain}. Retry budgets limit connections: {budgetLimited}",
+    ),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,

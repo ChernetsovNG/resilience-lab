@@ -14,7 +14,7 @@ class ExampleDocumentsTest {
     fun `example lint warnings match the documented variants`() {
         val expected =
             mapOf(
-                "retry-storm" to mapOf("LINT_TIMEOUT_BUDGET/baseline" to 1),
+                "retry-storm" to mapOf("LINT_TIMEOUT_BUDGET/baseline" to 1, "LINT_RETRY_OVERLOAD/baseline" to 1),
                 "checkout" to
                     mapOf(
                         "LINT_TIMEOUT_BUDGET/baseline" to 2,
@@ -39,10 +39,30 @@ class ExampleDocumentsTest {
                         "LINT_RETRY_NO_JITTER/no-backoff" to 1,
                     ),
             )
-        expected.forEach { (example, warnings) ->
-            val directory = Path.of("../examples", example)
-            val modelPath = directory.resolve("$example.model.json")
-            val experimentPath = directory.resolve("$example.experiment.json")
+        val policies =
+            mapOf(
+                "checkout-policies/slow-replica" to mapOf("LINT_TIMEOUT_BUDGET/all" to 3),
+                "checkout-policies/partner-burst" to
+                    mapOf(
+                        "LINT_TIMEOUT_BUDGET/all" to 3,
+                        "LINT_HANDLERS_LITTLE/baseline" to 3,
+                        "LINT_HANDLERS_LITTLE/rate-limit" to 3,
+                    ),
+                "checkout-policies/psp-outage" to
+                    mapOf(
+                        "LINT_TIMEOUT_BUDGET/all" to 3,
+                        "LINT_TIMEOUT_BUDGET/retries" to 1,
+                        "LINT_TIMEOUT_BUDGET/retry-budget" to 1,
+                        "LINT_RETRY_NO_JITTER/retries" to 3,
+                        "LINT_RETRY_NO_JITTER/retry-budget" to 3,
+                    ),
+            )
+        (expected + policies).forEach { (example, warnings) ->
+            val directory = Path.of("../examples", example.substringBefore('/'))
+            val modelName = example.substringBefore('/')
+            val experimentName = example.substringAfter('/')
+            val modelPath = directory.resolve("$modelName.model.json")
+            val experimentPath = directory.resolve("$experimentName.experiment.json")
             val model = (DocumentCodec.decodeModel(Files.readString(modelPath), modelPath.toString()) as DecodeResult.Ok).value
             val experiment =
                 (DocumentCodec.decodeExperiment(Files.readString(experimentPath), experimentPath.toString()) as DecodeResult.Ok).value
@@ -55,6 +75,7 @@ class ExampleDocumentsTest {
                 .describedAs(example)
                 .isEqualTo(warnings)
 
+            if (example.startsWith("checkout-policies/")) return@forEach
             val (parameter, capacity, waitMs, limitMs) =
                 when (example) {
                     "retry-storm" -> listOf("gateway.queue", "80", "260", "250")
