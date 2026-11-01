@@ -543,6 +543,7 @@ export function App() {
             key={JSON.stringify([loaded.experimentPath, variant?.id ?? null])}
             catalog={catalog}
             model={model}
+            baseModel={loaded.model}
             experiment={loaded.experiment}
             experimentPath={loaded.experimentPath}
             selected={selected}

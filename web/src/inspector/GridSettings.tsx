@@ -8,13 +8,13 @@ import type { Catalog, Diagnostic, ExperimentFile, ModelFile, ParamDescriptor } 
 import { DiagnosticMessages } from "../validation/DiagnosticDisplay";
 import type { EditorCommand } from "../workspace/editor";
 import { setGridAxes } from "../workspace/experimentCommands";
-import { isObject, ownEntry } from "../workspace/params";
+import { elementOf, isObject, ownEntry } from "../workspace/params";
 import { ParamField } from "./ParamField";
 import { parameterLabel } from "../presentation/labels";
 import { parseParam } from "../workspace/paramParsing";
 import { parameterApplies } from "../workspace/parameterApplicability";
 import { canonicalOf, equivalentQuantities } from "../workspace/quantities";
-import { readOnlyPolicies } from "../workspace/policyParameters";
+import { policyNames } from "../workspace/policyParameters";
 
 type GridAxis = NonNullable<ExperimentFile["grid"]>[number];
 
@@ -117,7 +117,10 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
   const id = useId();
   const grid = experiment.grid ?? [];
   const parameters = parametersOf(model, catalog);
-  const writableParameters = parameters.filter(parameter => !readOnlyPolicies.has(parameter.path.split(".")[1]));
+  const writableParameters = parameters.filter(parameter => {
+    const [id, name] = parameter.path.split(".");
+    return !policyNames.has(name) || isObject(elementOf(model, id)?.params[name]);
+  });
   const labels = new Map(grid.map(axis => {
     const parameter = parameters.find(candidate => candidate.path === axis.path);
     return [axis.path, parameter?.heading ?? parameterLabel(axis.path, catalog, model)];
@@ -143,8 +146,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
     {grid.length === 0 ? <p>{t("editor.grid.empty")}</p> : null}
     {grid.map((axis, index) => {
       const parameter = parameters.find((candidate) => candidate.path === axis.path);
-      const readOnly = readOnlyPolicies.has(axis.path.split(".")[1]);
-      const axisEditable = editable && !readOnly;
+      const axisEditable = editable;
       const prefix = `grid.${index}`;
       const heading = parameter?.heading ?? parameterLabel(axis.path, catalog, model);
       const nextValue = parameter === undefined ? undefined : nextGridValue(parameter.descriptor, axis.values, parameter.value);
@@ -163,7 +165,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
               replace(index, { path: selected.path, values: [selected.value] });
             }}>
             {parameter === undefined ? <option value={axis.path} title={axis.path}>{t("editor.grid.unavailableParameter", { path: heading })}</option> : null}
-            {parameter !== undefined && readOnly ? <option value={axis.path} title={axis.path}>{heading}</option> : null}
+            {parameter !== undefined && !writableParameters.includes(parameter) ? <option value={axis.path} title={axis.path}>{heading}</option> : null}
             {writableParameters.map((candidate) => <option key={candidate.path} value={candidate.path} title={candidate.path}>
               {candidate.heading}
             </option>)}

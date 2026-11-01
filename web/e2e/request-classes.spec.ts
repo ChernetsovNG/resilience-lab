@@ -85,8 +85,8 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     expected.blocks.client.params.deadline = "3s";
 
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
-    await expect(page.locator('[data-inspector-field="rateLimit.rate"] input')).not.toBeEditable();
-    await expect(page.locator('[data-inspector-field="healthCheck.timeout"] input')).not.toBeEditable();
+    await expect(page.locator('[data-inspector-field="rateLimit.rate"] input')).toBeEditable();
+    await expect(page.locator('[data-inspector-field="healthCheck.timeout"] input')).toBeEditable();
     const scenario = page.locator(".inspector-scenario");
     if (await scenario.getAttribute("open") === null) await scenario.locator("summary").click();
     await page.getByRole("group", { name: "Step 1", exact: true }).getByRole("combobox", { name: "Step type", exact: true }).selectOption("call");

@@ -1687,5 +1687,21 @@
   "results.timeline.policyWindow": "{state} {share} of window",
   "results.timeline.policyCallers": ", averaged over {copies} caller replicas",
   "editor.canvas.morePolicies": "{count} more policies",
-  "editor.canvas.policyOverflow": "+{count}"
+  "editor.canvas.policyOverflow": "+{count}",
+  "editor.policies.add": "+ Add policy",
+  "editor.policies.menu": "Add policy",
+  "editor.policies.alreadyAdded": "Already added",
+  "editor.policies.replicaGroupOnly": "Only for a call to a replica group",
+  "editor.policies.noneAvailable": "All applicable policies are already added.",
+  "editor.policies.removed": "Removed in this variant",
+  "editor.policies.restore": "Restore",
+  "editor.policies.remove": "Remove policy",
+  "editor.policies.order": "Policy order",
+  "editor.policies.callOrder": "Retry → retry budget → breaker → attempt; after all attempts — fallback. Outlier detection acts when selecting a target.",
+  "editor.policies.state.circuitBreaker": "Each calling replica has its own breaker for this connection.",
+  "editor.policies.state.retryBudget": "Each calling replica has its own retry budget for this connection.",
+  "editor.policies.state.fallback": "Fallback has no state; it applies to the final call failure after all attempts.",
+  "editor.policies.state.rateLimit": "Each service instance has its own token bucket.",
+  "editor.policies.state.healthCheck": "Each instance has its own readiness state, shared by all routers.",
+  "editor.policies.state.outlierDetection": "State belongs to the router or replica-group balancer and is shared by all callers. All calls to the same replica group must use identical settings."
 }

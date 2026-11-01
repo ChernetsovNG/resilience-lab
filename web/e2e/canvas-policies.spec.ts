@@ -80,6 +80,15 @@ for (const language of ["en", "ru"] as const) {
       const inspector = page.getByRole("complementary", { name: ru ? "Инспектор" : "Inspector" });
       await expect(inspector.locator('[data-inspector-field="retryBudget"]')).toBeInViewport();
       await badge.click();
+      const breakerSection = inspector.locator('[data-policy="circuitBreaker"]');
+      const parameters = inspector.locator(".inspector-parameters");
+      await expect(breakerSection).toHaveAttribute("open");
+      await expect(inspector.locator('[data-inspector-field="circuitBreaker"]')).toBeInViewport();
+      await breakerSection.locator(":scope > summary").click();
+      await parameters.locator(":scope > summary").click();
+      await badge.click();
+      await expect(parameters).toHaveAttribute("open");
+      await expect(breakerSection).toHaveAttribute("open");
       await expect(inspector.locator('[data-inspector-field="circuitBreaker"]')).toBeInViewport();
       if (ru) await page.screenshot({ path: testInfo.outputPath("canvas-policy-inspector-ru.png") });
       const completed = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));

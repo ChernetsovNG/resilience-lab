@@ -1627,3 +1627,15 @@ select {
 .annotation-group legend { font-weight: 600; }
 .annotation-text { white-space: pre-wrap; }
 .canvas-edge-name { display: flex; align-items: center; gap: .25rem; font-size: var(--font-secondary); }
+
+.policy-editor { display: grid; gap: 8px; margin-top: 8px; }
+.policy-section { min-width: 0; }
+.policy-section > summary { cursor: pointer; }
+.policy-section > summary > :is(span, button) { margin-inline-start: 6px; }
+.policy-section > .param-group { margin-top: 8px; }
+.policy-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.policy-menu { display: grid; gap: 4px; }
+.policy-menu > button { height: auto; min-height: var(--control-height); text-align: left; white-space: normal; }
+.policy-menu > button > span { display: block; color: #52606d; font-size: var(--font-secondary); }
+.policy-editor .request-type-options { display: grid; grid-template-columns: minmax(0, 1fr); }
+.policy-editor .request-type-options label { min-width: 0; overflow-wrap: anywhere; }

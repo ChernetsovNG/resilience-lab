@@ -84,7 +84,7 @@
 ### Параметр или объект политики
 
 - Описать [`ParamDescriptor`][catalog-contract] и подключить его в `Stage1Catalog`; образцы объектов — [`CallPolicyParameters`][call-policies] и [`ServicePolicyParameters`][service-policies]. Чтение и межполевые ограничения находятся в [`ParamReader`][param-reader]/`ModelCompiler`, значение — в IR, поведение — в движке. Для групп проверить передачу настройки в [`ReplicaExpansion.kt`][replicas]; состояние политики размещать по [ADR 0015](adr/0015-resilience-policies.md).
-- Формы строит [`ParamField`][param-field]; умолчания и применимость — [`initialParams.ts`][initial-params] и [`parameterApplicability.ts`][applicability], разбор и значения — [`paramParsing.ts`][param-parsing]/[`parameterValues.ts`][parameter-values], запись — `editor.ts` и [`experimentCommands.ts`][experiment-commands]. Проверить вложенные переопределения и [`policyParameters.ts`][policy-parameters]: перечисленные там `readOnlyPolicies` пока нельзя редактировать. Обновить переводы, снимок каталога и схемы/API.
+- Формы строит [`ParamField`][param-field]; умолчания и применимость — [`initialParams.ts`][initial-params] и [`parameterApplicability.ts`][applicability], разбор и значения — [`paramParsing.ts`][param-parsing]/[`parameterValues.ts`][parameter-values], запись — `editor.ts` и [`experimentCommands.ts`][experiment-commands]. Проверить вложенные переопределения, меню и разделы в [`Policies.tsx`][policy-editor], а также перечень `policyNames` в [`policyParameters.ts`][policy-parameters]: он используется при добавлении политик, выборе осей и удалении зависимых настроек. Обновить переводы, снимок каталога и схемы/API.
 - Если меняется структура документа, нужны [`Documents.kt`][documents], версия в `DocumentCodec`, примеры и фикстуры. Параметры каталога хранятся в обобщённом `params` и не требуют нового поля документа для каждого параметра.
 
 ### Выход каталога и его показ
@@ -177,6 +177,7 @@ apps/cli/build/install/cli/bin/cli catalog > web/src/test/catalog.json
 [parameter-values]: ../../web/src/workspace/parameterValues.ts
 [experiment-commands]: ../../web/src/workspace/experimentCommands.ts
 [policy-parameters]: ../../web/src/workspace/policyParameters.ts
+[policy-editor]: ../../web/src/inspector/Policies.tsx
 [documents]: ../../core/src/main/kotlin/resiliencelab/core/document/Documents.kt
 [stage-outputs]: ../../core/src/main/kotlin/resiliencelab/core/catalog/Stage1Outputs.kt
 [outputs-contract]: ../../core/src/main/kotlin/resiliencelab/core/catalog/Outputs.kt

@@ -2,6 +2,7 @@ import type { Catalog, DocumentDraft, ExperimentFile, LayoutFile, ModelFile } fr
 import { applyOverrides, elementOf, isObject, ownEntry, withParam, type Params } from "./params";
 import { reconcileParameter } from "./parameterApplicability";
 import { catalogParameter } from "./parameterValues";
+import { policyNames } from "./policyParameters";
 
 /** Document content only: selection, pages and panels do not belong in the history. */
 export interface EditorDocuments {
@@ -141,6 +142,8 @@ export function setModelParam(id: string, name: string, value: unknown, catalog?
       const keep = (path: string, before: Params, after: Params): boolean => {
         if (!path.startsWith(`${id}.`)) return true;
         const relative = path.slice(id.length + 1);
+        if (name === root && value == null && policyNames.has(root)
+          && (relative === root || relative.startsWith(`${root}.`))) return false;
         return catalogParameter(catalog, element.type, before, relative) === undefined
           || catalogParameter(catalog, element.type, after, relative) !== undefined;
       };

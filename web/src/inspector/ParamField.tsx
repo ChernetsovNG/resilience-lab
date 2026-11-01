@@ -9,7 +9,6 @@ import { isObject } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { parseParam } from "../workspace/paramParsing";
 import { parameterApplies, reconcileParameter } from "../workspace/parameterApplicability";
-import { readOnlyPolicies } from "../workspace/policyParameters";
 
 export interface ParamFieldProps {
   descriptor: ParamDescriptor;
@@ -40,14 +39,30 @@ export interface ParamFieldProps {
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
 export function ParamField(props: ParamFieldProps) {
-  // Policy editing is introduced by T4; preserve their values while editing existing fields.
-  if (readOnlyPolicies.has(props.descriptor.name)) return <ObjectField {...props} editable={false} />;
+  // Policy objects use the shared object editor below; preserve their values while editing existing fields.
   if (props.descriptor.kind === "ARRAY") return <ArrayField {...props} />;
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
 
-function ArrayField({ descriptor, value, path, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
+function ArrayField({ descriptor, value, path, editable, onCommit, onFieldCommit, isOverridden, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, navigationDisabled }: ParamFieldProps) {
   const id = useId();
+  if (descriptor.options.length > 0) {
+    const selected = Array.isArray(value) ? value : Array.isArray(descriptor.default) ? descriptor.default : [];
+    return <fieldset className="param-group" data-inspector-field={path} aria-label={descriptor.title}>
+      <legend>{descriptor.title} {descriptor.description ? <HelpHint id={`${id}-description`} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</legend>
+      <div className="request-type-options">{descriptor.options.map(option => <label key={option} title={option}>
+        <input type="checkbox" checked={selected.includes(option)} disabled={!editable} onChange={event => {
+          if (!editable) return;
+          const next = event.target.checked ? [...selected, option] : selected.filter(value => value !== option);
+          if (onFieldCommit === undefined) onCommit(next); else onFieldCommit(path, next);
+        }} />{t(`messages.${option}`)}
+      </label>)}</div>
+      {isOverridden(path) ? <span className="param-badge">{t("editor.param.overridden")}</span> : null}
+      <DiagnosticMessages diagnostics={[...(fieldDiagnostics ?? [])].filter(([field]) => field === path || field.startsWith(`${path}.`)).flatMap(([, messages]) => messages)} />
+      <VariantDiagnosticLinks diagnostics={variantFieldDiagnostics?.get(path)} disabled={navigationDisabled}
+        onSelect={variant => onVariantDiagnostic?.(variant, path)} />
+    </fieldset>;
+  }
   return <div className="param-field" data-inspector-field={path}>
     <div className="param-field-label"><label htmlFor={id}>{descriptor.title}</label>
       {descriptor.description ? <HelpHint id={id + "-description"} label={descriptor.title}>{descriptor.description}</HelpHint> : null}</div>
