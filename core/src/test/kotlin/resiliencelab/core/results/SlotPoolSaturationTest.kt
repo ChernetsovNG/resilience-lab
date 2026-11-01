@@ -110,6 +110,7 @@ class SlotPoolSaturationTest {
         }
         assertThat(writer.finish().parts.size).isGreaterThan(1)
         val result = SaturationArtifactReader(workspace).read(directory, 0, listOf("to-db"))
+        assertThat(writer.saturation(0)).isEqualTo(result)
         assertThat(result.degradationPath.map { it.node to it.startMs }).containsExactly("to-db" to 0.0)
     }
 

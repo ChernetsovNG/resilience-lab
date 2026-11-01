@@ -70,6 +70,7 @@ internal object CostEstimator {
         CONNECTIONS("connections", "call connection rows"),
         ROUTES("routerOutputs", "router output rows"),
         GROUPS("groups", "replica group rows"),
+        CLASSES("classes", "request class rows"),
     }
 
     private data class StorageRow(
@@ -105,6 +106,7 @@ internal object CostEstimator {
         var rows = 0L
         var rawBytes = 0L
         var artifactBytes = 0L
+        var summaryBytes = 0L
         var parts = 0L
         experiment.variants.forEach { variant ->
             variant.points.forEach { point ->
@@ -151,13 +153,20 @@ internal object CostEstimator {
                 events += perReplication.events * count
                 rows = Math.addExact(rows, Math.multiplyExact(perReplication.rows, count.toLong()))
                 rawBytes = Math.addExact(rawBytes, Math.multiplyExact(perReplication.rawBytes, count.toLong()))
+                summaryBytes = Math.addExact(summaryBytes, perReplication.summaryBytes)
                 artifactBytes = Math.addExact(artifactBytes, perReplication.summaryBytes)
                 artifactBytes = Math.addExact(artifactBytes, Math.multiplyExact(perReplication.artifactBytes, count.toLong()))
                 parts = Math.addExact(parts, Math.multiplyExact(perReplication.parts, count.toLong()))
             }
         }
         val effectiveWorkers = minOf(workers, taskCount).coerceAtLeast(1)
-        val seconds = maxOf(totalWork / speedup(effectiveWorkers), longestTask)
+        val files = Math.addExact(parts, 2L * taskCount + 1)
+        val finalizationSeconds =
+            FINALIZATION_BASE_SECONDS +
+                summaryBytes * SUMMARY_SECONDS_PER_BYTE +
+                artifactBytes * PUBLISH_SECONDS_PER_BYTE +
+                files * PUBLISH_SECONDS_PER_FILE
+        val seconds = maxOf(totalWork / speedup(effectiveWorkers), longestTask) + finalizationSeconds
         require(events.isFinite() && events >= 0.0 && seconds.isFinite()) { "Experiment cost estimate exceeds numeric range" }
         return ExperimentEstimate(
             tasks = taskCount,
@@ -255,6 +264,10 @@ internal object CostEstimator {
         val rowKinds =
             buildList {
                 graph.clients.forEach { add(StorageRow(BYTES_PER_NODE_WINDOW, StorageSource.NODES)) }
+                graph.clients
+                    .flatMap { it.classes.keys }
+                    .toSet()
+                    .forEach { add(StorageRow(BYTES_PER_NODE_WINDOW, StorageSource.CLASSES)) }
                 graph.services.forEach { service ->
                     val sets = if (service.pooler == null) 1 else 2
                     val source = if (service.path in replicaNodes) StorageSource.REPLICAS else StorageSource.NODES
@@ -351,4 +364,10 @@ internal object CostEstimator {
     private const val GZIP_RATIO = 0.125
     private const val UI_CACHE_BYTES = 64L * 1024 * 1024
     private const val WRITE_SECONDS_PER_ROW = 7.6316 / 3_000_000
+
+    // Final publication is estimated separately and is never divided by the task-pool speedup.
+    private const val FINALIZATION_BASE_SECONDS = 0.005
+    private const val SUMMARY_SECONDS_PER_BYTE = 2.0e-8
+    private const val PUBLISH_SECONDS_PER_BYTE = 1.0e-9
+    private const val PUBLISH_SECONDS_PER_FILE = 1.0e-4
 }

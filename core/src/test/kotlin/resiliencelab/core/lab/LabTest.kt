@@ -295,6 +295,22 @@ class LabTest {
     }
 
     @Test
+    fun `resume rejects the previous artifact schema before changing saved tasks`() {
+        val root = exampleWorkspace()
+        createIncomplete(root)
+        val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
+        val manifest = root.resolve("$runDirectory/manifest.json")
+        Files.writeString(manifest, Files.readString(manifest).replace("\"schemaVersion\": 18", "\"schemaVersion\": 17"))
+        val before = artifactHashes(FileWorkspace(root), runDirectory)
+
+        assertThatThrownBy { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }
+            .hasMessageContaining("schemaVersion 17")
+            .hasMessageContaining("expected 18")
+            .hasMessageContaining("run again")
+        assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
+    }
+
+    @Test
     fun `resume rejects an incompatible application without mutating the artifact`() {
         val root = exampleWorkspace()
         createIncomplete(root)
@@ -587,7 +603,7 @@ class LabTest {
         assertThat(calls.get()).isZero()
         assertThat(estimate.tasks).isEqualTo(20)
         assertThat(estimate.expectedEvents).isPositive()
-        assertThat(estimate.expectedRows).isEqualTo(12_000)
+        assertThat(estimate.expectedRows).isEqualTo(14_000)
         assertThat(estimate.estimatedParts).isEqualTo(20)
         assertThat(estimate.estimatedSeconds).isPositive()
         assertThat(estimate.estimatedArtifactBytes).isPositive()

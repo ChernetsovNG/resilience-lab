@@ -174,6 +174,7 @@ class CapacityHeadroomTest {
                             ),
                     ),
             ),
+            ReplicationSaturation(0, emptyList()),
         )
         val series = SeriesWriter(workspace, "$directory/series/v/p0/rep-0", 100.0, 100.0)
         series.writeWindow(0, listOf(NodeWindow("client", WindowMetrics(0.0, 100.0))))
@@ -185,7 +186,6 @@ class CapacityHeadroomTest {
                 listOf("v" to "V"),
                 1,
                 listOf(GridPoint("p0", emptyMap())),
-                emptyList(),
                 emptyList(),
             )
         val point =

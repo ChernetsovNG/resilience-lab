@@ -280,7 +280,11 @@ class GraphArtifactDeterminismTest {
                     },
                     onReplication = { id, _, replication, replicationResult ->
                         series.getValue(id to replication).finish()
-                        writer.writeReplication(taskDirectory(id, replication), replicationResult)
+                        writer.writeReplication(
+                            taskDirectory(id, replication),
+                            replicationResult,
+                            series.getValue(id to replication).saturation(replication),
+                        )
                     },
                 )
             }
@@ -292,7 +296,6 @@ class GraphArtifactDeterminismTest {
                 graph.run.replications,
                 listOf(GridPoint("p0", emptyMap())),
                 emptyList(),
-                graph.topologicalServices.map { it.path },
             )
         val manifest =
             RunManifest(

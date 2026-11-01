@@ -54,7 +54,7 @@ class RunArtifactTest {
                 services = emptyMap(),
             )
 
-        writer.writeReplication(directory, result)
+        writer.writeReplication(directory, result, ReplicationSaturation(0, emptyList()))
 
         assertThat(workspace.exists("$directory/replication.json.gz")).isTrue()
         assertThat(workspace.exists("$directory/replication.json")).isFalse()
@@ -66,7 +66,13 @@ class RunArtifactTest {
         assertThat(text).isEqualTo(
             DocumentCodec.encode(
                 ReplicationArtifact.serializer(),
-                ReplicationArtifact(Versions.REPLICATION_SCHEMA, LatencySketch.PROFILE, "ms", result),
+                ReplicationArtifact(
+                    Versions.REPLICATION_SCHEMA,
+                    LatencySketch.PROFILE,
+                    "ms",
+                    result,
+                    ReplicationSaturation(0, emptyList()),
+                ),
             ),
         )
         assertThat(text).doesNotContain("arrivalTimesMs")
@@ -279,7 +285,7 @@ class RunArtifactTest {
         val bytes =
             ByteArrayOutputStream()
                 .also { buffer ->
-                    GZIPOutputStream(buffer).use { it.write("{\"schemaVersion\":5,\"result\":{}}".toByteArray()) }
+                    GZIPOutputStream(buffer).use { it.write("{\"schemaVersion\":6,\"result\":{}}".toByteArray()) }
                 }.toByteArray()
         workspace.createBytes("$directory/series/baseline/p0/rep-0/replication.json.gz", bytes)
         assertThatThrownBy {
@@ -290,11 +296,10 @@ class RunArtifactTest {
                 1,
                 listOf(GridPoint("p0", emptyMap())),
                 emptyList(),
-                emptyList(),
             )
         }.isInstanceOf(UnsupportedArtifactVersionException::class.java)
-            .hasMessageContaining("replication schemaVersion 5")
-            .hasMessageContaining("expected 6")
+            .hasMessageContaining("replication schemaVersion 6")
+            .hasMessageContaining("expected 7")
             .hasMessageContaining("run again")
     }
 

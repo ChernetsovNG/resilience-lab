@@ -28,8 +28,10 @@ import resiliencelab.core.results.ResultsLayout
 import resiliencelab.core.results.ResumeArtifact
 import resiliencelab.core.results.RunManifest
 import resiliencelab.core.results.RunSummary
+import resiliencelab.core.results.SaturationAnalyzer
 import resiliencelab.core.results.SeriesMetadata
 import resiliencelab.core.results.SeriesWriter
+import resiliencelab.core.results.SlotPoolLabels
 import resiliencelab.core.results.UnsupportedArtifactVersionException
 import resiliencelab.core.results.Versions
 import resiliencelab.core.results.uninterruptedArtifactWrite
@@ -171,7 +173,7 @@ class Lab(
             )
         }
         if (workspace.listFiles(runDirectory).isNotEmpty()) throw DocumentExistsException(runDirectory)
-        val writer = ArtifactWriter(workspace)
+        val writer = ArtifactWriter(workspace, executor)
         val series = seriesWriters(compiled, runDirectory)
         val manifest = newManifest(experimentPath, loaded.artifactVersions, compiled, loaded.snapshots)
         try {
@@ -182,8 +184,13 @@ class Lab(
                     series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows, connections)
                 },
                 onReplication = { variant, point, replication, result ->
-                    writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
-                    series.getValue(ExperimentTask(variant, point, replication)).finish()
+                    val taskSeries = series.getValue(ExperimentTask(variant, point, replication))
+                    taskSeries.finish()
+                    writer.writeReplication(
+                        "$runDirectory/series/$variant/$point/rep-$replication",
+                        result,
+                        taskSeries.saturation(replication),
+                    )
                 },
                 onProgress = onProgress,
             )
@@ -197,7 +204,6 @@ class Lab(
                         compiled.run.replications,
                         requireNotNull(manifest.series).points,
                         manifest.grid,
-                        callOrder(compiled),
                         compiled.variants.associate { variant -> variant.id to variant.points.associate { it.id to it.graph } },
                     )
                 RunOutcome(runDirectory, writer.write(runDirectory, manifest, summary), summary)
@@ -243,7 +249,7 @@ class Lab(
                     }
                 }
             val invalid = ResumeArtifact(workspace).prepare(runDirectory, manifest, tasks)
-            val writer = ArtifactWriter(workspace)
+            val writer = ArtifactWriter(workspace, executor)
             val series = seriesWriters(compiled, runDirectory)
             try {
                 executor.runSelected(
@@ -254,8 +260,13 @@ class Lab(
                         series.getValue(ExperimentTask(variant, point, replication)).writeWindow(window, rows, connections)
                     },
                     onReplication = { variant, point, replication, result ->
-                        writer.writeReplication("$runDirectory/series/$variant/$point/rep-$replication", result)
-                        series.getValue(ExperimentTask(variant, point, replication)).finish()
+                        val taskSeries = series.getValue(ExperimentTask(variant, point, replication))
+                        taskSeries.finish()
+                        writer.writeReplication(
+                            "$runDirectory/series/$variant/$point/rep-$replication",
+                            result,
+                            taskSeries.saturation(replication),
+                        )
                     },
                     onProgress = onProgress,
                 )
@@ -269,7 +280,6 @@ class Lab(
                             compiled.run.replications,
                             requireNotNull(manifest.series).points,
                             manifest.grid,
-                            callOrder(compiled),
                             compiled.variants.associate { variant -> variant.id to variant.points.associate { it.id to it.graph } },
                         )
                     RunOutcome(runDirectory, writer.rewrite(runDirectory, manifest.copy(complete = true), summary), summary)
@@ -345,6 +355,8 @@ class Lab(
             .variants
             .flatMap { variant ->
                 variant.points.flatMap { point ->
+                    val labels = SlotPoolLabels.from(point.graph)
+                    val positions = SlotPoolLabels.positions(point.graph)
                     (0 until compiled.run.replications).map { replication ->
                         ExperimentTask(variant.id, point.id, replication) to
                             SeriesWriter(
@@ -354,6 +366,7 @@ class Lab(
                                 compiled.run.windowMs,
                                 groups =
                                     ReplicaGroups.membership(point.graph),
+                                saturation = SaturationAnalyzer.Detector(labels = labels, positions = positions),
                             )
                     }
                 }
@@ -592,12 +605,3 @@ class Lab(
         }
     }
 }
-
-/** Variants and grid points override parameters only, so the validated call topology is shared. */
-private fun callOrder(compiled: CompiledExperiment): List<String> =
-    compiled.variants
-        .first()
-        .points
-        .first()
-        .graph.topologicalServices
-        .map { it.path }

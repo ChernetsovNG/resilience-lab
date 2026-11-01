@@ -41,7 +41,15 @@ class SaturationArtifactReaderTest {
                     )
                 json.encodeToString(SeriesPart.serializer(), part).toByteArray(Charsets.UTF_8).size
             }
-        val writer = SeriesWriter(workspace, directory, 100.0, 25.0, maxPartBytes = budget)
+        val writer =
+            SeriesWriter(
+                workspace,
+                directory,
+                100.0,
+                25.0,
+                maxPartBytes = budget,
+                saturation = SaturationAnalyzer.Detector(positions = mapOf("a" to 0, "b" to 1)),
+            )
         repeat(4) { window ->
             val metrics = hot.copy(startMs = window * 25.0)
             writer.writeWindow(
@@ -53,6 +61,7 @@ class SaturationArtifactReaderTest {
         assertThat(index.parts).hasSize(8)
 
         val result = SaturationArtifactReader(workspace).read(directory, 0, listOf("a", "b"))
+        assertThat(writer.saturation(0)).isEqualTo(result)
 
         assertThat(result)
             .isEqualTo(

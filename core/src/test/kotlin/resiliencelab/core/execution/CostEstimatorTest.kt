@@ -17,6 +17,7 @@ import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.windowCount
 import kotlin.test.Test
 
 class CostEstimatorTest {
@@ -84,8 +85,8 @@ class CostEstimatorTest {
     fun `replicas add instance group and router output rows in separately packed parts`() {
         val single = CostEstimator.estimate(experiment(replicaGraph(1)), 1)
         val replicas = CostEstimator.estimate(experiment(replicaGraph(3)), 1)
-        assertThat(single.expectedRows).isEqualTo(216)
-        assertThat(replicas.expectedRows).isEqualTo(432)
+        assertThat(single.expectedRows).isEqualTo(240)
+        assertThat(replicas.expectedRows).isEqualTo(456)
         assertThat(replicas.estimatedUncompressedBytes).isGreaterThan(single.estimatedUncompressedBytes)
         assertThat(replicas.estimatedArtifactBytes).isGreaterThan(single.estimatedArtifactBytes)
         assertThat(replicas.estimatedParts).isGreaterThanOrEqualTo(4)
@@ -93,7 +94,7 @@ class CostEstimatorTest {
         val reordered = graph.copy(services = graph.services.reversed(), calls = graph.calls.reversed(), routes = graph.routes.reversed())
         assertThat(CostEstimator.estimate(experiment(reordered), 1)).isEqualTo(replicas)
         val partialWindow = graph.copy(run = graph.run.copy(measurementMs = 850.0))
-        assertThat(CostEstimator.estimate(experiment(partialWindow), 1).expectedRows).isEqualTo(396)
+        assertThat(CostEstimator.estimate(experiment(partialWindow), 1).expectedRows).isEqualTo(418)
     }
 
     @Test
@@ -138,13 +139,46 @@ class CostEstimatorTest {
 
         assertThat(estimate.tasks).isEqualTo(2)
         assertThat(estimate.expectedEvents).isEqualTo(586.0)
-        assertThat(estimate.expectedRows).isEqualTo(800)
-        assertThat(estimate.estimatedUncompressedBytes).isEqualTo(294_400)
-        // 36,800 series + 1,024 part metadata + 3,112 compressed totals + 12,448 summary bytes.
-        assertThat(estimate.estimatedArtifactBytes).isEqualTo(53_384)
+        assertThat(estimate.expectedRows).isEqualTo(1_000)
+        assertThat(estimate.estimatedUncompressedBytes).isEqualTo(345_600)
+        // 43,200 series + 1,024 part metadata + 3,890 compressed totals + 15,560 summary bytes.
+        assertThat(estimate.estimatedArtifactBytes).isEqualTo(63_674)
         assertThat(estimate.estimatedParts).isEqualTo(2)
         assertThat(estimate.estimatedSeconds).isPositive()
         assertThat(estimate.warnings.map { it.code }).doesNotContain("ESTIMATE_EXTRAPOLATION")
+    }
+
+    @Test
+    fun `class rows use the union across clients including classes with no arrivals`() {
+        val graph = TestChains.simple()
+        val first = graph.client
+        val second = first.copy(pathSegments = listOf("second"))
+        val shared = graph.copy(clients = listOf(first, second))
+        val extra = shared.copy(clients = listOf(first, second.copy(classes = second.classes + ("extra" to LoadProfile.constant(0.0)))))
+        val one = CostEstimator.estimate(experiment(graph), 1)
+        val two = CostEstimator.estimate(experiment(shared), 1)
+        val classes = CostEstimator.estimate(experiment(extra), 1)
+        val rowsPerElement =
+            windowCount(graph.run.warmupMs + graph.run.measurementMs, graph.run.windowMs).toLong() * graph.run.replications
+        assertThat(two.expectedRows - one.expectedRows).isEqualTo(rowsPerElement)
+        assertThat(classes.expectedRows - two.expectedRows).isEqualTo(rowsPerElement)
+    }
+
+    @Test
+    fun `publication shared by a point is counted once and is not accelerated by workers`() {
+        fun fixedCost(workers: Int): Double {
+            val graph = TestChains.simple()
+            val eight = CostEstimator.estimate(experiment(graph.copy(run = TestChains.run(replications = 8))), workers)
+            val sixteen = CostEstimator.estimate(experiment(graph.copy(run = TestChains.run(replications = 16))), workers)
+            return 2 * eight.estimatedSeconds - sixteen.estimatedSeconds
+        }
+        val sequential = fixedCost(1)
+        assertThat(sequential).isPositive()
+        assertThat(fixedCost(8)).isCloseTo(
+            sequential,
+            org.assertj.core.data.Offset
+                .offset(1e-10),
+        )
     }
 
     @Test

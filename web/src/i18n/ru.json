@@ -1436,6 +1436,7 @@
   "messages.storageSource.connections": "строки связей вызова",
   "messages.storageSource.routerOutputs": "строки выходов маршрутизаторов",
   "messages.storageSource.groups": "строки групп реплик",
+  "messages.storageSource.classes": "строки классов запросов",
   "editor.grid.axisTitle": "{parameter} · {element}",
   "editor.grid.connection": "{from} → {to}",
   "editor.grid.coordinate": "{parameter} = {value}",

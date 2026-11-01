@@ -243,6 +243,18 @@ class ExperimentExecutor internal constructor(
         return results
     }
 
+    /** Runs independent finalization work in the shared fair pool, returning values in input order. */
+    internal fun <T, R : Any> mapOrdered(
+        items: List<T>,
+        transform: (T) -> R,
+    ): List<R> {
+        val results = MutableList<R?>(items.size) { null }
+        scheduler.run(items.mapIndexed { index, item -> { results[index] = transform(item) } }, { false })
+        return results.map { requireNotNull(it) }
+    }
+
+    internal val isClosed: Boolean get() = scheduler.isClosed
+
     /** Stops the worker threads; tasks still running are interrupted. */
     override fun close() {
         scheduler.close()
@@ -276,6 +288,7 @@ private class RoundRobinScheduler(
     private val jobs = mutableSetOf<Job>()
     private var active = 0
     private var closed = false
+    val isClosed: Boolean get() = synchronized(lock) { closed }
 
     fun run(
         tasks: List<() -> Unit>,

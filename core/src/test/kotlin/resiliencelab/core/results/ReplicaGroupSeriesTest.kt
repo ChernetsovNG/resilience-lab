@@ -110,6 +110,7 @@ class ReplicaGroupSeriesTest {
             writer.finish()
             val result = SaturationArtifactReader(workspace).read("series", 0, listOf("worker#1", "worker#2", "worker#3", "worker"))
             assertThat(result.degradationPath).isEmpty()
+            assertThat(writer.saturation(0)).isEqualTo(result)
         }
     }
 }
