@@ -16,6 +16,7 @@ import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
 import { RequestTypes } from "./RequestTypes";
+import { RequestTypeFilter } from "./RequestTypeFilter";
 import { ReplicaTargetField } from "./ReplicaTargetField";
 import { elementLabel, variantLabel } from "../presentation/labels";
 
@@ -168,6 +169,19 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
               navigationDisabled={invalid}
             />
           ))}
+          {connection?.type === "route" ? <RequestTypeFilter model={model} value={connection.classes}
+            label={t("editor.requestTypeFilter.route", { target: elementLabel(connection.to, model) })}
+            path="classes" editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}
+            readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")} fieldDiagnostics={fieldDiagnostics}
+            onChange={classes => onCommand?.(documents => ({ ...documents, model: { ...documents.model,
+              connections: documents.model.connections.map(edge => {
+                if (edge.id !== selected) return edge;
+                const next = { ...edge };
+                if (classes.length === 0) delete next.classes;
+                else next.classes = classes;
+                return next;
+              }),
+            } }))} /> : null}
           </InspectorSection> : null}
           {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <RequestTypes key={selected}
             catalog={catalog} model={model} experiment={experiment} clientId={selected}

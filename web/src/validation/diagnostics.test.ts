@@ -49,6 +49,8 @@ describe("diagnostic locations", () => {
     [modelPath, "/blocks/gateway/replicaOverrides/4", "gateway", "replicaOverrides.4", null],
     [modelPath, "/blocks/gateway/replicaOverrides/2/processing/mean", "gateway", "replicaOverrides.2.processing.mean", null],
     [modelPath, "/connections/1/params/backoff/base", "gateway-to-middle", "backoff.base", null],
+    [modelPath, "/connections/1/classes", "gateway-to-middle", "classes", null],
+    [modelPath, "/connections/1/classes/0", "gateway-to-middle", "classes.0", null],
     [experimentPath, "/variants/1/overrides/gateway-to-middle.timeout", "gateway-to-middle", "timeout", "no-retries"],
     [experimentPath, "/variants/0/overrides/gateway.processing/mean", "gateway", "processing.mean", "baseline"],
     [experimentPath, "/execution/replications", null, "execution.replications", null],

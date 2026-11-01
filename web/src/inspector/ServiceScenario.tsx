@@ -9,6 +9,7 @@ import type { EditorCommand } from "../workspace/editor";
 import { initialParams } from "../workspace/initialParams";
 import { InspectorSection } from "./InspectorSection";
 import { ParamField } from "./ParamField";
+import { RequestTypeFilter } from "./RequestTypeFilter";
 
 type Step = NonNullable<BlockInstance["scenario"]>[number];
 
@@ -110,6 +111,14 @@ export function ServiceScenario({ catalog, model, serviceId, editable, invalid, 
                   {outgoing.map(edge => <option key={edge.id} value={edge.id}>{elementLabel(edge.id, model)}</option>)}
                 </select>
               </label> : null}
+              <RequestTypeFilter model={model} value={step.classes} label={t("editor.requestTypeFilter.execute")}
+                path={`${path}.classes`} editable={canEdit} invalid={invalid} readOnlyHint={readOnlyHint}
+                fieldDiagnostics={fieldDiagnostics} onChange={classes => {
+                  const next = { ...step };
+                  if (classes.length === 0) delete next.classes;
+                  else next.classes = classes;
+                  replace(index, next);
+                }} />
               {step.type === "process" ? parameters.map(descriptor => {
                 const name = descriptor.name as "processing" | "failureRate";
                 const own = step[name] != null;
@@ -126,7 +135,7 @@ export function ServiceScenario({ catalog, model, serviceId, editable, invalid, 
                     onValidity={(field, valid) => onValidity(`${serviceId}.${field}`, valid)} /> : null}
                 </div>;
               }) : null}
-              <DiagnosticMessages diagnostics={diagnostics} />
+              <DiagnosticMessages diagnostics={diagnostics.filter(finding => !finding.pointer?.includes(`/scenario/${index}/classes`))} />
               {!implicit ? <div className="scenario-actions">
                 <button type="button" data-scenario-move="up" disabled={disabled || index === 0} onClick={() => move(index, index - 1)}>{t("editor.scenario.up")}</button>
                 <button type="button" data-scenario-move="down" disabled={disabled || index === steps.length - 1} onClick={() => move(index, index + 1)}>{t("editor.scenario.down")}</button>

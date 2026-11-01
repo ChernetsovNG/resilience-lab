@@ -2,6 +2,7 @@ import { HelpHint } from "../help/HelpHint";
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
+import { formatNumber } from "../i18n/format";
 import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
@@ -78,6 +79,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const { x: labelX, y: labelY } = geometry?.label ?? { x: initialX, y: initialY };
   const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect } = data!;
   const connectionLabel = elementLabel(connection.id, { connections: [connection] });
+  const routeTypes = connection.type === "route" ? connection.classes ?? [] : [];
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     modelParams: data?.modelParams, editable: parametersEditable, disabled, onValidity };
@@ -86,7 +88,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
   const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
-  const labelled = Boolean(connection.description) || connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
+  const labelled = routeTypes.length > 0 || Boolean(connection.description) || connection.type === "call" || overridden || (data?.faults?.length ?? 0) > 0 || result !== undefined || diagnostics.length > 0 || variantDiagnostics.length > 0;
   const label = useRef<HTMLDivElement>(null);
   const onMeasure = layout?.onMeasure;
   const measure = useEffectEvent(() => {
@@ -141,6 +143,11 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
                 <InlineParamEditor {...editorProps} path={param.name} overridden onCommit={value => onParam(connection.id, param.name, value)} />
               </span>)}
             <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span>
+          </div> : null}
+          {routeTypes.length > 0 ? <div className="canvas-edge-parameters">
+            <span>{routeTypes.length <= 2 ? routeTypes.join(", ")
+              : t("editor.requestTypeFilter.more", { id: routeTypes[0], count: formatNumber(routeTypes.length - 1) })}</span>
+            <HelpHint label={t("editor.requestTypeFilter.routeHelp")}>{t("editor.requestTypeFilter.routeDescription", { types: routeTypes.join(", ") })}</HelpHint>
           </div> : null}
           <FaultBadge faults={data?.faults} onOpen={data?.onFault} disabled={disabled} />
           <DiagnosticBadge diagnostics={diagnostics} />
