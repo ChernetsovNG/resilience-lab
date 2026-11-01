@@ -2922,7 +2922,7 @@
           },
           "kind" : {
             "type" : "string",
-            "enum" : [ "VALUE", "RATE", "RATIO", "NORMALIZED_RATIO", "MEAN", "QUANTILE" ]
+            "enum" : [ "VALUE", "RATE", "RATIO", "RATIO_TO_DIFFERENCE", "NORMALIZED_RATIO", "MEAN", "QUANTILE" ]
           },
           "percentile" : {
             "type" : [ "number", "null" ],

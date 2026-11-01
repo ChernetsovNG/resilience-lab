@@ -286,11 +286,31 @@ internal object Stage1Outputs {
         OutputInspector(inspectorTitle, inspectorOrder),
     )
 
+    private val attemptsPerCall =
+        OutputDescriptor(
+            "attemptsPerCall",
+            "Attempts per call",
+            "Sent attempts divided by first attempts (sent attempts minus retries); no value without first attempts.",
+            OutputUnit.MULTIPLIER,
+            OutputKind.RATIO,
+            calculation(OutputCalculationKind.RATIO_TO_DIFFERENCE, "sentAttempts", "retries"),
+            OutputSummary(calculation(OutputCalculationKind.RATIO_TO_DIFFERENCE, "totals.sentAttempts", "totals.retries")),
+            inspector = OutputInspector("Attempts per call", 8),
+            overlay =
+                OutputOverlay(
+                    "Attempts per call",
+                    "Attempts per call {value}",
+                    "Sent attempts / first attempts, pooled across replications.",
+                    0,
+                    windowDescription = "Sent attempts / first attempts in this window; no value without first attempts.",
+                ),
+        )
+
     private val amplification =
         OutputDescriptor(
             "amplification",
-            "Attempts per request",
-            "Attempts admitted by the destination per original client request; values below 1 mean that not every request reached it.",
+            "Attempts per original request",
+            "Attempts admitted by the destination per original client request. Request-type routing and load balancing can make this less than 1.",
             OutputUnit.MULTIPLIER,
             OutputKind.RATIO,
             ratio("target.admittedAttempts", "entries.total.originalArrivals"),
@@ -298,21 +318,23 @@ internal object Stage1Outputs {
                 calculation(OutputCalculationKind.VALUE, "target.admittedAmplification.mean"),
                 intervalField = "target.admittedAmplification",
             ),
+            inspector = OutputInspector("Attempts per original request", 9),
             overlay =
                 OutputOverlay(
-                    "Attempts per request",
-                    "Attempts per request {value}",
-                    "Attempts admitted by the destination per original request, averaged across replications.",
-                    0,
+                    "Attempts per original request",
+                    "Attempts per original request {value}",
+                    "Attempts admitted by the destination per original request, averaged across replications. " +
+                        "Request-type routing and load balancing can make this less than 1.",
+                    4,
                     windowDescription =
                         "Window approximation: admitted attempts / original client arrivals; " +
-                            "attempts may belong to earlier requests.",
+                            "attempts may belong to earlier requests. Request-type routing and load balancing can make this less than 1.",
                 ),
             approximateWindow = true,
         )
 
-    // Request has no own row; its existing canvas badge refers to the target service.
-    val request: List<OutputDescriptor> = listOf(amplification)
+    // Request has no own row; its attempt counts come from the source client, with no retries.
+    val request: List<OutputDescriptor> = listOf(attemptsPerCall, amplification)
 
     val call: List<OutputDescriptor> =
         listOf(
@@ -416,7 +438,7 @@ internal object Stage1Outputs {
                 "Connection pool utilization",
                 "Occupied connection time divided by available pool capacity time; absent pools have no utilization.",
                 OutputTimeline("poolUtilization", "Pool utilization", 6, 0),
-                OutputInspector("Connection pool utilization", 9),
+                OutputInspector("Connection pool utilization", 10),
             ),
             SlotPoolOutputs.output(
                 "pool",
@@ -425,7 +447,7 @@ internal object Stage1Outputs {
                 "Mean connection wait queue",
                 "Average number of callers waiting for a free connection over the interval.",
                 OutputTimeline("pool", "Connection pool", 7, 0),
-                OutputInspector("Mean connection wait queue", 10),
+                OutputInspector("Mean connection wait queue", 11),
             ),
             SlotPoolOutputs.output(
                 "pool",
@@ -434,9 +456,10 @@ internal object Stage1Outputs {
                 "Connection acquisition timeouts",
                 "Attempts rejected by the acquisition timeout before sending; deadline expiry is excluded.",
                 OutputTimeline("pool", "Connection pool", 7, 1),
-                OutputInspector("Connection acquisition timeouts", 11),
+                OutputInspector("Connection acquisition timeouts", 12),
             ),
-            amplification.copy(inspector = OutputInspector("Attempts per request", 8)),
+            attemptsPerCall,
+            amplification,
             SlotPoolOutputs.output(
                 "pool",
                 SlotPoolOutputs.Quantity.WAIT,

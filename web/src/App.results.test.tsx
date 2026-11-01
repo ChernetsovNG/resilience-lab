@@ -28,7 +28,9 @@ describe("diagram results", () => {
     expect(metrics.textContent).toContain("Util. 50%");
     expect(metrics.textContent).toContain("Queue 0.1");
     expect(metrics.textContent).toContain("Rejected 7.7%");
-    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per request 1.2×");
+    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per call");
+    fireEvent.change(screen.getByLabelText("Connection overlay"), { target: { value: "amplification" } });
+    expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per original request 1.2×");
     expect(screen.queryByTestId("canvas-results-middle")).toBeNull();
     expect(screen.queryByRole("img", { name: "First saturated node" })).toBeNull();
 

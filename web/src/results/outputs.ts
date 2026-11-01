@@ -36,6 +36,8 @@ export function calculateOutput(calculation: OutputCalculation, context: unknown
     case "VALUE": return value;
     case "RATE": return divide(value === null ? null : value * 1000, divisor);
     case "RATIO": return divide(value, divisor);
+    case "RATIO_TO_DIFFERENCE": return divide(value,
+      value === null || divisor === null || divisor < 0 ? null : value - divisor);
     case "NORMALIZED_RATIO": {
       const capacity = number(outputField(context, calculation.capacity));
       return divide(value, divisor === null || capacity === null || capacity <= 0 ? null : divisor * capacity);
@@ -73,13 +75,20 @@ export function formatOutput(output: Pick<OutputDescriptor, "unit">, value: numb
   }
 }
 
-/** Amplification is relative to all original requests, including those that never reached this destination. */
+/** Amplification is relative to all original requests, including traffic routed to other destinations. */
 export type AmplificationUnavailableReason = "noArrivals" | "unsupportedTarget" | "missingData";
 
 export function outputNote(output: Pick<OutputDescriptor, "id">, value: number | null | undefined, reason: AmplificationUnavailableReason = "missingData"): string | null {
   if (output.id !== "amplification") return null;
   if (value == null) return t(`results.amplification.${reason}`);
-  return value < 1 ? t("results.amplification.belowOne") : null;
+  return null;
+}
+
+/** A request has one attempt per source arrival and no retries; Summary counts the completed original-request cohort. */
+export function requestAttemptContext(source: unknown, windowed = false) {
+  const sentAttempts = number(outputField(source, windowed ? "originalArrivals" : "pooledLatency.all.statistics.count"));
+  const counts = { sentAttempts, retries: 0 };
+  return windowed ? counts : { totals: counts };
 }
 
 /** Output prose accepts the same named value/interval placeholders as the message catalogs. */

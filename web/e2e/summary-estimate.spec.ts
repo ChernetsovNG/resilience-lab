@@ -46,7 +46,7 @@ test("Findings and all service metrics fit at 1440 px without editing documents"
   for (const service of ["dependency", "gateway", "middle"]) {
     const metrics = page.getByRole("table", { name: `Element metrics: ${service}`, exact: true });
     await expect(metrics).toBeVisible();
-    for (const cell of await metrics.getByRole("row", { name: /Attempts per request/ }).locator("td").all()) {
+    for (const cell of await metrics.getByRole("row", { name: /Attempts per original request/ }).locator("td").all()) {
       await expect(cell).toContainText("×");
       await expect(cell).toContainText("95% CI");
     }

@@ -55,7 +55,7 @@ describe("window metrics", () => {
       successesPerSecond: 1500, failuresPerSecond: 500, degradedPerSecond: 0, meanLatencyMs: 5,
       p50LatencyMs: 1.0078125, p95LatencyMs: 1.0078125, p99LatencyMs: 1.0078125 });
     const frame = decoded.nodes[1].windows[0].metrics;
-    expect(calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: frame, entries: frame.entries })).toBe(1.2);
+    expect(calculateOutput(outputsOf(catalog, "request").find(output => output.id === "amplification")!.calculation, { target: frame, entries: frame.entries })).toBe(1.2);
     expect(outputWindow(outputsOf(catalog, "service"), frame)).toMatchObject({
       startMs: 0,
       durationMs: 10,

@@ -1,6 +1,6 @@
 import type { Catalog, ExperimentFile, ModelFile, OutputDescriptor, RunManifest, RunSummary } from "../api/apiTypes";
 import type { DecodedConnection, NodeSeriesMetrics } from "../results/series/types";
-import { outputValue, outputWindow, outputsOf, type AmplificationUnavailableReason, type OutputValue } from "../results/outputs";
+import { outputValue, outputWindow, outputsOf, requestAttemptContext, type AmplificationUnavailableReason, type OutputValue } from "../results/outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 import { groupInspectorOutputs, replicaMember, type ReplicaGroup } from "../results/groups";
@@ -47,12 +47,12 @@ export function resultSelection(runModel: ModelFile, currentModel: ModelFile, se
   const member = replicaMember(groups, selected);
   const elementId = member?.group.id ?? selected;
   const block = ownEntry(runModel.blocks, elementId);
-  if (block !== undefined && sameBlock(elementId)) return { id: selected, elementId, replica: member?.instance.replica, kind: block.type, category: "BLOCK" as const, target: null };
+  if (block !== undefined && sameBlock(elementId)) return { id: selected, elementId, replica: member?.instance.replica, kind: block.type, category: "BLOCK" as const, source: null, target: null };
   const original = runModel.connections.find(connection => connection.id === elementId);
   const current = currentModel.connections.find(connection => connection.id === elementId);
   return original !== undefined && current?.type === original.type && original.from === current.from && original.to === current.to
     && elementIdentity(original) === elementIdentity(current) && sameBlock(original.from) && sameBlock(original.to)
-    ? { id: selected, elementId, replica: member?.instance.replica, kind: original.type, category: "CONNECTION" as const, target: original.to } : null;
+    ? { id: selected, elementId, replica: member?.instance.replica, kind: original.type, category: "CONNECTION" as const, source: original.from, target: original.to } : null;
 }
 
 /** Availability includes direct client aggregates as well as catalog-defined element outputs. */
@@ -81,7 +81,8 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const aggregate = block
     ? selection.kind === "client" ? ownEntry(point.aggregate.entries.clients, selection.id)
       : selection.kind === "pooler" ? ownEntry(point.aggregate.poolers, selection.id) : ownEntry(point.aggregate.services, selection.id)
-    : ownEntry(point.aggregate.connections, selection.id);
+    : selection.kind === "request" ? ownEntry(point.aggregate.entries.clients, selection.source!)
+      : ownEntry(point.aggregate.connections, selection.id);
   if (aggregate === undefined) return null;
   const descriptor = catalog.types.find(type => type.id === selection.kind)!;
   const effective = applyOverrides(applyOverrides(runModel,
@@ -90,10 +91,12 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const params: Record<string, unknown> = { ...Object.fromEntries(descriptor.params.map(param => [param.name, param.default])), ...element?.params,
     ...(block && selection.replica !== undefined ? ownEntry(effective.blocks, selection.elementId)?.replicaOverrides?.[String(selection.replica)] : {}) };
   const node = context.nodes?.find(node => node.id === selection.id);
-  const frames = block ? node?.windows ?? [] : context.connections?.find(connection => connection.id === selection.id)?.windows ?? [];
+  const source = context.nodes?.find(node => node.id === selection.source);
+  const frames = block ? node?.windows ?? [] : selection.kind === "request" ? source?.windows ?? []
+    : context.connections?.find(connection => connection.id === selection.id)?.windows ?? [];
   const target = context.nodes?.find(node => node.id === selection.target);
   const frameContext = (index: number) => frames[index] === undefined ? undefined : {
-    ...frames[index], params, target: target?.windows[index],
+    ...frames[index], ...(selection.kind === "request" ? requestAttemptContext(frames[index], true) : {}), params, target: target?.windows[index],
     entries: (block ? node?.windows[index] : target?.windows[index])?.entries,
   };
   const metadata = manifest.series;
@@ -109,7 +112,7 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   }
   const targetSummary = selection.target === null ? undefined
     : ownEntry(point.aggregate.services, selection.target) ?? ownEntry(point.aggregate.poolers, selection.target);
-  const summaryContext = { ...aggregate, params, replications: variant.replications, target: targetSummary,
+  const summaryContext = { ...(selection.kind === "request" ? requestAttemptContext(aggregate) : aggregate), params, replications: variant.replications, target: targetSummary,
     measurementLatency: { count, sumMs } };
   const valueContext = window === null ? summaryContext : Number.isInteger(window) && window >= 0 ? frameContext(window) : undefined;
   const threshold = outputs.find(output => output.inspector?.thresholdParameter != null)?.inspector?.thresholdParameter;

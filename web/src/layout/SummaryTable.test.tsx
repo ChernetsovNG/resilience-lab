@@ -5,7 +5,7 @@ import outputCatalog from "../test/catalog.json";
 import { entryResults } from "../test/entryResults";
 import { ProblemList } from "./ProblemList";
 import { SummaryTable } from "./SummaryTable";
-import { setLanguage } from "../i18n";
+import { setLanguage, t } from "../i18n";
 import { setConfidenceLevel } from "./confidenceLevel";
 
 const comparison = () => screen.getByRole("table", { name: "Findings" });
@@ -13,6 +13,17 @@ const cells = (name: string, table = comparison()) => within(within(table).getBy
 afterEach(() => { act(() => { setConfidenceLevel(95); setLanguage("en"); }); localStorage.clear(); });
 
 describe("SummaryTable", () => {
+  it.each(["en", "ru"] as const)("explains routing in the %s original-request metrics", locale => {
+    setLanguage(locale);
+    const run = structuredClone(summary);
+    run.variants[0].points[0].aggregate.services.gateway.admittedAmplification!.mean = 0.18;
+    render(<SummaryTable summary={run} />);
+    const table = screen.getByRole("table", { name: t("results.answer.servicesFor", { service: "gateway" }) });
+    fireEvent.click(within(table).getByRole("button", { name: t("help.more", { field: t("results.metrics.admittedAmplification") }) }));
+    expect(screen.getByRole("tooltip").textContent).toContain(locale === "en" ? "Request-type routing and load balancing" : "Разделение потока по видам запросов и балансировка");
+    expect(table.textContent).not.toContain(locale === "en" ? "Not every request reached it" : "дошли не все запросы");
+  });
+
   it("uses the total entry for Findings when clients and classes have different results", () => {
     const run = structuredClone(summary);
     const aggregate = run.variants[0].points[0].aggregate;
@@ -205,9 +216,9 @@ describe("SummaryTable", () => {
     render(<SummaryTable summary={run} />);
     fireEvent.click(screen.getByText("gateway metrics"));
     const table = screen.getByRole("table", { name: "Element metrics: gateway" });
-    expect(cells("Attempts per request", table)[0].textContent).toContain("95% CI 1.02×–1.38×");
-    expect(cells("Attempts per request", table)[1].textContent).toContain("+0.5×");
-    expect(cells("Attempts per request", table)[1].textContent).toContain("Intervals do not overlap");
+    expect(cells("Attempts per original request", table)[0].textContent).toContain("95% CI 1.02×–1.38×");
+    expect(cells("Attempts per original request", table)[1].textContent).toContain("+0.5×");
+    expect(cells("Attempts per original request", table)[1].textContent).toContain("Intervals do not overlap");
     const utilization = cells("Resource utilization", table);
     expect(utilization[0].textContent).toBe("50%");
     expect(utilization[1].textContent).toContain("75%");

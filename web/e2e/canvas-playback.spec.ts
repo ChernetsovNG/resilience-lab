@@ -4,26 +4,92 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatDuration, formatMultiplier, formatNumber } from "../src/i18n/format";
 import type { components } from "../src/api/schema";
-import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
+import type { ExperimentFile, ModelFile, RunSummary } from "../src/api/apiTypes";
+import en from "../src/i18n/en.json" with { type: "json" };
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 type Window = components["schemas"]["WindowMetrics"];
 
-async function windows(request: APIRequestContext, runId: string) {
-  const route = `/api/v1/runs/${runId}/series/baseline/p0/0`;
+async function windows(request: APIRequestContext, runId: string, variant = "baseline") {
+  const route = `/api/v1/runs/${runId}/series/${variant}/p0/0`;
   const index: components["schemas"]["SeriesIndex"] = await (await request.get(route)).json();
   const nodes = new Map<string, Window[]>();
+  const connections = new Map<string, components["schemas"]["ConnectionWindowMetrics"][]>();
   for (const reference of index.parts) {
     const number = reference.file.replace(/^part-(\d+)\.json\.gz$/, "$1");
     const part: components["schemas"]["SeriesPart"] = await (await request.get(`${route}/${number}`)).json();
     for (const node of part.nodes) nodes.set(node.id, [...(nodes.get(node.id) ?? []), ...node.windows]);
+    for (const connection of part.connections) connections.set(connection.id, [...(connections.get(connection.id) ?? []), ...connection.windows]);
   }
   for (const rows of nodes.values()) rows.sort((a, b) => a.startMs - b.startMs);
-  return nodes;
+  for (const rows of connections.values()) rows.sort((a, b) => a.startMs - b.startMs);
+  return { nodes, connections };
 }
 
 async function seek(slider: Locator, index: number) {
   await slider.fill(String(index));
 }
+
+test("attempts per call distinguish routing from retries in Russian", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.addInitScript(() => localStorage.setItem("resilience-lab.language", "ru"));
+  const directory = resolve("../apps/server/build/e2e-workspace/connection-attempts");
+  await mkdir(directory);
+  try {
+    for (const name of ["psp-outage.experiment.json", "checkout-policies.model.json", "checkout-policies.layout.json"])
+      await copyFile(resolve("../examples/checkout-policies", name), resolve(directory, name));
+    const experimentPath = resolve(directory, "psp-outage.experiment.json");
+    const experiment: ExperimentFile = JSON.parse(await readFile(experimentPath, "utf8"));
+    experiment.execution = { ...experiment.execution, replications: 2, warmup: "200ms", measurement: "2s", window: "100ms" };
+    experiment.variants = [{ id: "baseline", label: "Базовый" },
+      { id: "retries", label: "С повторами", overrides: { "payment-service-to-psp.attempts": 3 } }];
+    experiment.faults = [{ kind: "blackhole", target: "psp", from: "800ms", to: "1500ms" }];
+    await writeFile(experimentPath, JSON.stringify(experiment));
+    const modelPath = resolve(directory, "checkout-policies.model.json");
+    const model: ModelFile = JSON.parse(await readFile(modelPath, "utf8"));
+    model.connections.find(connection => connection.id === "payment-service-to-psp")!.params!.timeout = "100ms";
+    await writeFile(modelPath, JSON.stringify(model));
+    await page.goto("/");
+    await selectExperiment(page, "connection-attempts/psp-outage.experiment.json");
+    const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));
+    await page.getByRole("button", { name: ru["app.topBar.run"], exact: true }).click();
+    const result = await response;
+    const summary: RunSummary = await result.json();
+    const runId = /\/runs\/([^/]+)\/summary$/.exec(result.url())![1];
+    await page.getByRole("tab", { name: "Базовый", exact: true }).click();
+    await page.getByRole("button", { name: ru["results.collapse"], exact: true }).click();
+    await page.locator(".react-flow__controls-fitview").click();
+    const routed = page.getByTestId("canvas-edge-label-order-service-to-payment-service");
+    const label = ru["catalog.types.call.outputs.attemptsPerCall.overlay.label"];
+    const format = (value: number) => `${new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(value)}×`;
+    const original = summary.variants[0].points[0].aggregate.services["payment-service"].admittedAmplification!.mean;
+    expect(original).toBeGreaterThan(0);
+    expect(original).toBeLessThan(1);
+    await expect(routed).toContainText(label.replace("{value}", format(1)));
+    await expect(routed).not.toContainText("дошли не все запросы");
+    await routed.locator(".canvas-edge-results").click();
+    const inspector = page.getByRole("complementary", { name: ru["editor.inspector.label"], exact: true });
+    await expect(inspector.getByRole("row", { name: new RegExp(`^${ru["catalog.types.call.outputs.attemptsPerCall.title"]}`) })).toContainText(format(1));
+    await expect(inspector.getByRole("row", { name: new RegExp(`^${ru["catalog.types.call.outputs.amplification.title"]}`) })).toContainText(format(original));
+    await page.screenshot({ path: testInfo.outputPath("attempts-routing-ru.png") });
+
+    await page.getByRole("tab", { name: "С повторами", exact: true }).click();
+    const { connections } = await windows(request, runId, "retries");
+    const calls = connections.get("payment-service-to-psp")!;
+    const during = calls.findIndex(frame => frame.startMs >= 800 && frame.startMs < 1500
+      && frame.retries > 0 && frame.sentAttempts > frame.retries);
+    expect(during).toBeGreaterThanOrEqual(0);
+    await page.getByRole("button", { name: ru["results.context.time"], exact: true }).click();
+    await seek(page.getByRole("slider", { name: ru["results.playback.window"], exact: true }), during);
+    const retries = calls[during].sentAttempts / (calls[during].sentAttempts - calls[during].retries);
+    expect(retries).toBeGreaterThan(1);
+    const retryEdge = page.getByTestId("canvas-edge-label-payment-service-to-psp");
+    await expect(retryEdge).toContainText(label.replace("{value}", format(retries)));
+    await retryEdge.locator(".canvas-edge-results").click();
+    await expect(inspector.getByRole("row", { name: new RegExp(`^${ru["catalog.types.call.outputs.attemptsPerCall.title"]}`) })).toContainText(format(retries));
+    await page.screenshot({ path: testInfo.outputPath("attempts-retries-ru.png") });
+  } finally { await cleanupWorkspace(page, directory); }
+});
 
 test("pooler Summary and replica cursor values agree with recorded results in Russian", async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -55,15 +121,17 @@ test("pooler Summary and replica cursor values agree with recorded results in Ru
     await page.locator(".react-flow__controls-fitview").click();
     const edge = page.getByTestId("canvas-edge-label-order-service-to-pgbouncer");
     const multiplier = `${new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(amplification!.mean)}×`;
-    await expect(edge).toContainText(multiplier);
+    const totals = aggregate.connections["order-service-to-pgbouncer"].totals;
+    const perCall = `${new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(totals.sentAttempts / (totals.sentAttempts - totals.retries))}×`;
+    await expect(edge).toContainText(ru["catalog.types.call.outputs.attemptsPerCall.overlay.label"].replace("{value}", perCall));
     await edge.locator(".canvas-edge-results").click();
     const inspector = page.getByRole("complementary", { name: "Инспектор", exact: true });
-    const attempts = inspector.getByRole("row", { name: /^Попытки на запрос/ });
+    const attempts = inspector.getByRole("row", { name: new RegExp(`^${ru["catalog.types.call.outputs.amplification.title"]}`) });
     await expect(attempts).toContainText(multiplier);
     await expect(attempts).not.toContainText("нет данных");
     await page.screenshot({ path: testInfo.outputPath("pooler-summary-ru.png") });
 
-    const recorded = await windows(request, runId);
+    const { nodes: recorded } = await windows(request, runId);
     const samples = recorded.get("order-service#2")!;
     const utilization = (index: number) => samples[index].slotPools.handlers.busyIntegralMs / samples[index].slotPools.handlers.capacityIntegralMs;
     const candidates = samples.map((_, index) => index).filter(index => samples[index].startMs >= 200);
@@ -110,18 +178,19 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     const response = page.waitForResponse((response) => /\/runs\/[^/]+\/summary$/.test(response.url()));
     await page.getByRole("button", { name: "Run", exact: true }).click();
     const runId = /\/runs\/([^/]+)\/summary$/.exec((await response).url())![1];
-    const nodes = await windows(request, runId);
+    const { nodes, connections } = await windows(request, runId);
     const dependency = nodes.get("dependency")!;
     const client = nodes.get("client")!;
     const queue = (index: number) => dependency[index].slotPools.handlers.queueIntegralMs / dependency[index].durationMs;
-    const amplification = (index: number) => dependency[index].admittedAttempts / client[index].originalArrivals;
+    const calls = connections.get("middle-to-dependency")!;
+    const amplification = (index: number) => calls[index].sentAttempts / (calls[index].sentAttempts - calls[index].retries);
     const candidates = dependency.map((_, index) => index).filter((index) =>
-      dependency[index].startMs < 200 && client[index].originalArrivals > 0 && dependency[index].admittedAttempts > 0);
+      dependency[index].startMs < 200 && client[index].originalArrivals > 0 && calls[index].sentAttempts > calls[index].retries);
     const before = candidates.sort((a, b) => queue(a) - queue(b) || amplification(a) - amplification(b))[0];
     expect(before).toBeDefined();
     const during = dependency.map((_, index) => index).filter((index) =>
       dependency[index].startMs >= 200 && dependency[index].startMs < 700 &&
-      client[index].originalArrivals > 0 && queue(index) > queue(before) && amplification(index) > amplification(before))
+      client[index].originalArrivals > 0 && calls[index].sentAttempts > calls[index].retries && queue(index) > queue(before) && amplification(index) > amplification(before))
       .sort((a, b) => queue(b) - queue(a))[0];
     expect(during).toBeDefined();
 
@@ -137,11 +206,11 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(status).toContainText(`Cursor ${formatDuration(dependency[before].startMs)}`);
     await page.getByRole("button", { name: /fit view/i }).click();
     await expect(metrics).toContainText(`Queue ${formatNumber(queue(before))}`);
-    await expect(edge).toContainText(`Attempts per request ${formatMultiplier(amplification(before))}`);
+    await expect(edge).toContainText(en["catalog.types.call.outputs.attemptsPerCall.overlay.label"].replace("{value}", formatMultiplier(amplification(before))));
     await seek(slider, during);
     await expect(metrics).toContainText(`Queue ${formatNumber(queue(during))}`);
-    await expect(edge).toContainText(`Attempts per request ${formatMultiplier(amplification(during))}`);
-    await expect(edge).toHaveAttribute("title", /Window approximation/);
+    await expect(edge).toContainText(en["catalog.types.call.outputs.attemptsPerCall.overlay.label"].replace("{value}", formatMultiplier(amplification(during))));
+    await expect(edge).toHaveAttribute("title", en["catalog.types.call.outputs.attemptsPerCall.overlay.windowDescription"]);
     const frame = { metrics: await metrics.locator("span").allTextContents(), edge: await edge.innerText() };
     await page.getByRole("button", { name: "Previous window", exact: true }).click();
     await expect(slider).toHaveValue(String(during - 1));

@@ -202,7 +202,7 @@ it("projects connection totals independently of the target service", () => {
   };
   const result = canvasResults(run, model, "baseline", "p0", catalog)!;
   expect(result.connections.get("gateway-to-middle")?.values).toMatchObject({
-    sentAttemptsPerSecond: 20, timeoutRate: 0.3, meanOrphaned: 0.125, amplification: 2.5,
+    sentAttemptsPerSecond: 20, timeoutRate: 0.3, meanOrphaned: 0.125, amplification: 2.5, attemptsPerCall: 4 / 3,
   });
   // A connection has its own result even if the target has no service totals.
   delete run.variants[0].points[0].aggregate.services.middle;
@@ -231,6 +231,23 @@ it("projects connection totals independently of the target service", () => {
       latency: { count: 0, sumMs: 0, meanMs: null, p50Ms: null, p95Ms: null, p99Ms: null },
       slotPools: {  } }] }])!;
   expect(frame.connections.get("gateway-to-middle")?.values).toMatchObject({
-    sentAttemptsPerSecond: 20, timeoutRate: 0.5, meanOrphaned: 0.5, amplification: 77,
+    sentAttemptsPerSecond: 20, timeoutRate: 0.5, meanOrphaned: 0.5, amplification: 77, attemptsPerCall: 2,
   });
+});
+
+it("uses only a request's source client when other traffic reaches its destination", () => {
+  const run = fixture();
+  const entries = run.variants[0].points[0].aggregate.entries;
+  entries.clients.client = { ...entries.total, pooledLatency: { all: { meanMs: 1, p95Ms: 1, p99Ms: 1, statistics: { count: 10, sumMs: 10, sketch: [10] } } } };
+  const result = canvasResults(run, model, "baseline", "p0", catalog)!;
+  expect(result.connections.get("client-to-gateway")?.values.attemptsPerCall).toBe(1);
+  const nodes = ["client", "gateway", "middle"].map(id => ({ id, windows: [recordedWindow({
+    originalArrivals: 0, admittedAttempts: 18, entries: { total: { originalArrivals: 100 } },
+  })] }));
+  const empty = windowCanvasResults(result, nodes, 0)!;
+  expect(empty.connections.get("client-to-gateway")?.values.attemptsPerCall).toBeNull();
+  nodes[0].windows[0].originalArrivals = 2;
+  expect(windowCanvasResults(result, nodes, 0)?.connections.get("client-to-gateway")?.values.attemptsPerCall).toBe(1);
+  entries.clients.client.pooledLatency.all!.statistics.count = 0;
+  expect(canvasResults(run, model, "baseline", "p0", catalog)?.connections.get("client-to-gateway")?.values.attemptsPerCall).toBeNull();
 });

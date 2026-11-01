@@ -91,13 +91,13 @@ it("follows the selected window in every replica row and labels the measurement 
   expect(table().querySelector("caption")!.textContent).toContain("Measurement summary");
 });
 
-it("explains attempts below one in the Findings tables, including individual replicas", () => {
+it("retains subunit routing ratios without claiming loss in individual replica metrics", () => {
   const { run } = replicaFixture();
   run.variants[0].points[0].aggregate.services["gateway#1"].admittedAmplification!.mean = 0.27;
   render(<SummaryTable summary={run} />);
   const table = screen.getByRole("table", { name: "Element metrics: gateway#1" });
   expect(table.textContent).toContain("0.27×");
-  expect(table.textContent).toContain("Not every request reached it");
+  expect(table.textContent).not.toContain("Not every request reached it");
 });
 
 it("distinguishes an absent replica in another variant from a zero-arrival result", () => {
@@ -108,7 +108,7 @@ it("distinguishes an absent replica in another variant from a zero-arrival resul
   run.variants.push(other);
   render(<SummaryTable summary={run} />);
   const table = screen.getByRole("table", { name: "Element metrics: gateway#3" });
-  const absent = within(table).getByRole("rowheader", { name: "Attempts per request" }).closest("tr")!.querySelectorAll("td")[1];
+  const absent = within(table).getByRole("rowheader", { name: "Attempts per original request" }).closest("tr")!.querySelectorAll("td")[1];
   expect(absent.textContent).not.toContain("no original requests");
   expect(absent.textContent).toContain("no recorded data in the selected context");
 });

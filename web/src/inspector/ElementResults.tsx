@@ -15,6 +15,7 @@ import { useConfidenceLevel } from "../layout/confidenceLevel";
 import { ReplicaResults } from "./ReplicaResults";
 import { replicaMember } from "../results/groups";
 import { pointLabel, variantLabel } from "../presentation/labels";
+import { HelpHint } from "../help/HelpHint";
 
 export interface ElementResultsProps {
   runId: string;
@@ -93,10 +94,11 @@ export function ElementResults(props: ElementResultsProps) {
   const needsTarget = selection?.category === "CONNECTION" && (window !== null
     || outputsUseTarget(inspectorOutputs(outputsOf(catalog, selection.kind), true)));
   const nodeIds = selection?.category === "BLOCK" ? [selection.id] : needsTarget ? [selection.target!] : [];
+  if (selection?.kind === "request" && window !== null) nodeIds.push(selection.source!);
   const primary = useTimelineSeries(seriesLoader, runId, enabled ? variantId : null, pointId, replication, nodeIds, count);
   const replicas = useTimelineSeries(seriesLoader, runId, enabled && window !== null && group !== undefined ? variantId : null,
     pointId, replication, group?.instances.map(instance => instance.id) ?? [], (window ?? 0) + 1, window ?? 0);
-  const calls = useConnectionSeries(seriesLoader, runId, enabled && selection?.category === "CONNECTION" ? variantId : null,
+  const calls = useConnectionSeries(seriesLoader, runId, enabled && selection?.category === "CONNECTION" && selection.kind !== "request" ? variantId : null,
     pointId, replication, selection?.category === "CONNECTION" ? [selection.id] : [], count);
   const result = projectElementResults({ ...props, nodes: primary.nodes, connections: calls.connections });
   const regions = timelineRegions(metadata?.warmupMs ?? 0, metadata?.measurementMs ?? 0, experiment.faults, catalog);
@@ -164,6 +166,7 @@ export function ElementResults(props: ElementResultsProps) {
             const interval = intervalFor(value);
             const note = outputNote(output, value.value, result.amplificationUnavailableReason);
             return <tr key={key}><th scope="row">{label}</th><td>{format(value.value)}
+              {output.id === "amplification" || output.id === "attemptsPerCall" ? <HelpHint label={label}>{output.description}</HelpHint> : null}
               {interval === null ? null : <span className={`summary-interval${(value.count ?? 0) < 5 ? " summary-interval--unreliable" : ""}`}>
                 {t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) })}
               </span>}

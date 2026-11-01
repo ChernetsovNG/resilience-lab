@@ -118,7 +118,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const [initialPath, initialX, initialY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const path = geometry?.path ?? initialPath;
   const { x: labelX, y: labelY } = geometry?.label ?? { x: initialX, y: initialY };
-  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect } = data!;
+  const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "attemptsPerCall", onSelect } = data!;
   const connectionLabel = elementLabel(connection.id, { connections: [connection] });
   const routeTypes = connection.type === "route" ? connection.classes ?? [] : [];
   const summary = summarizeDiagnostics(diagnostics);

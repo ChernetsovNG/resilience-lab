@@ -3,7 +3,7 @@ import { formatNumber } from "../i18n/format";
 import type { Catalog, ExperimentFile, ModelFile, OutputDescriptor, RunSummary } from "../api/apiTypes";
 import type { NodeSeriesMetrics } from "./series";
 import type { DecodedConnection } from "./series/types";
-import { outputsOf, outputValue, outputField, type AmplificationUnavailableReason } from "./outputs";
+import { outputsOf, outputValue, outputField, requestAttemptContext, type AmplificationUnavailableReason } from "./outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 import { policyOutputAvailable } from "../workspace/policyParameters";
@@ -113,7 +113,9 @@ export function canvasResults(
       outputs, params, hasOwnSeries: own !== undefined,
       amplificationUnavailableReason: target === undefined ? "unsupportedTarget" : target.admittedAmplification === null ? "noArrivals" : "missingData",
       copies: Number(effective.blocks[connection.from]?.params.replicas ?? 1),
-      values: valuesOf(outputs, { ...own, params, replications: variant.replications, target }),
+      values: valuesOf(outputs, { ...(connection.type === "request"
+        ? requestAttemptContext(ownEntry(point.aggregate.entries.clients, connection.from)) : own),
+        params, replications: variant.replications, target }),
     });
   }
   return { services, connections };
@@ -143,7 +145,9 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
       amplificationUnavailableReason: connection.amplificationUnavailableReason === "unsupportedTarget" ? "unsupportedTarget"
         : target?.entries.total.originalArrivals === 0 ? "noArrivals" : "missingData",
       policyState: frame === undefined ? undefined : policyWindowState(frame, connection.copies ?? 1),
-      values: valuesOf(connection.outputs, { ...frame, params: connection.params, target, entries: target?.entries }, true) });
+      values: valuesOf(connection.outputs, { ...(connection.type === "request"
+        ? requestAttemptContext(metrics.get(connection.from), true) : frame),
+        params: connection.params, target, entries: target?.entries }, true) });
   }
   return { services, connections, window };
 }

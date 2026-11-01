@@ -332,7 +332,7 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request").find(output => output.id === "amplification")!.calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(api.seriesPart.mock.calls.map(call => call[4])).toEqual([1]);
     expect(cache.get({ runId: "run", variant: "baseline", cell: "p0", replication: 0, part: 0 })).toBeUndefined();
   });
@@ -381,7 +381,7 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request").find(output => output.id === "amplification")!.calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(factory).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
     expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([1]);
@@ -415,7 +415,7 @@ describe("series loader", () => {
 
     const result = await loader.load(request(["service"]));
 
-    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request")[0].calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
+    expect(result[0].windows.map((value) => calculateOutput(outputsOf(catalog, "request").find(output => output.id === "amplification")!.calculation, { target: value, entries: value.entries }))).toEqual([1.5, 2]);
     expect(api.seriesPart.mock.calls.map((call) => call[4])).toEqual([0, 1]);
   });
 
