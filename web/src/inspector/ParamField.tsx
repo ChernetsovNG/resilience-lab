@@ -39,6 +39,7 @@ export interface ParamFieldProps {
 
 /** A form field built from a catalog parameter descriptor (ADR 0001). */
 export function ParamField(props: ParamFieldProps) {
+  // Policy objects use the shared object editor below; preserve their values while editing existing fields.
   if (props.descriptor.kind === "ARRAY") return <ArrayField {...props} />;
   return props.descriptor.kind === "OBJECT" ? <ObjectField {...props} /> : <ScalarField {...props} />;
 }
