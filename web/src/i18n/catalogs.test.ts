@@ -66,6 +66,8 @@ describe("language catalogs", () => {
 
   it("preserves the API catalog prose in English", () => {
     const english: Record<string, string> = en;
-    for (const [key, text] of catalogEntries.filter(([key]) => !key.startsWith("catalog.options."))) expect(english[key], key).toBe(text);
+    // The interface calls classes “request types”; serialized names and the core catalog stay unchanged.
+    for (const [key, text] of catalogEntries.filter(([key]) => !key.startsWith("catalog.options.")
+      && !key.startsWith("catalog.types.client.params.classes"))) expect(english[key], key).toBe(text);
   });
 });

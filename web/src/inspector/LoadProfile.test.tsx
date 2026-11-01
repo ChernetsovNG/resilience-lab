@@ -181,3 +181,103 @@ it("labels a zero-intensity profile as zero rather than its nonzero plotting sca
   expect(plot.querySelector("text")?.textContent).toBe("0 RPS");
   expect(plot.querySelector("polyline")?.getAttribute("points")).toBe("0,80 300,80");
 });
+
+it("creates, renames, reorders and removes request types as single undoable edits", () => {
+  render(<Editor />);
+  fireEvent.click(screen.getByRole("radio", { name: "Several request types" }));
+  expect(stored().model.blocks.client.params.load).toBeUndefined();
+  expect(stored().model.blocks.client.params.classes).toEqual([{ id: "request-1", load: ramp }]);
+  history(1);
+  click("Add request type");
+  const ids = screen.getAllByLabelText("Request type ID");
+  fireEvent.change(ids[0], { target: { value: "status" } });
+  fireEvent.blur(ids[0]);
+  fireEvent.change(screen.getAllByLabelText("Request type ID")[1], { target: { value: "checkout" } });
+  fireEvent.blur(screen.getAllByLabelText("Request type ID")[1]);
+  history(4);
+  click("Move checkout up");
+  expect((stored().model.blocks.client.params.classes as { id: string }[]).map(type => type.id)).toEqual(["checkout", "status"]);
+  click("Delete checkout");
+  history(6);
+  click("Undo");
+  expect(screen.getAllByRole("table", { name: "Load points" })).toHaveLength(2);
+  const course = screen.getByRole("region", { name: "Experiment course" });
+  expect(course.querySelectorAll(".course-load")).toHaveLength(3);
+  expect(course.textContent).toContain("client · checkout");
+  expect(course.textContent).toContain("client · total");
+  fireEvent.click(screen.getByRole("radio", { name: "One profile" }));
+  expect(stored().model.blocks.client.params.classes).toBeUndefined();
+  expect(load()).toEqual({ points: [{ time: "0ms", rate: "20/s" }, { time: "30000ms", rate: "200/s" }] });
+  click("Undo");
+  expect(screen.getAllByLabelText("Request type ID")).toHaveLength(2);
+});
+
+it("keeps duplicate and reserved identifiers at their fields without overwriting a type", () => {
+  render(<Editor />);
+  fireEvent.click(screen.getByRole("radio", { name: "Several request types" }));
+  click("Add request type");
+  const id = screen.getAllByLabelText("Request type ID")[1];
+  fireEvent.change(id, { target: { value: "request-1" } });
+  fireEvent.blur(id);
+  expect(id.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toContain("already used");
+  history(2);
+  fireEvent.change(id, { target: { value: "default" } });
+  expect(screen.getByRole("alert").textContent).toContain("reserved");
+  fireEvent.keyDown(id, { key: "Escape" });
+  expect((id as HTMLInputElement).value).toBe("request-2");
+});
+
+it("edits a request type profile on a variant as one whole-list override and resets the mode", () => {
+  render(<Editor variantId="baseline" />);
+  fireEvent.click(screen.getByRole("radio", { name: "Several request types" }));
+  const intensity = within(screen.getAllByRole("table", { name: "Load points" })[0]).getAllByLabelText("Intensity")[0];
+  fireEvent.change(intensity, { target: { value: "20/s" } });
+  fireEvent.blur(intensity);
+  expect(stored().model).toEqual(source);
+  const overrides = stored().experiment.variants[0].overrides;
+  expect(Object.keys(overrides).sort()).toEqual(["client.classes", "client.load"]);
+  expect((overrides["client.classes"] as { load: typeof ramp }[])[0].load.points[0].rate).toBe("20/s");
+  click("Reset client load");
+  expect(stored().experiment.variants[0].overrides).toEqual({});
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: "One profile" }).checked).toBe(true);
+  click("Undo");
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: "Several request types" }).checked).toBe(true);
+});
+
+it("reports rename conflicts in another variant at the identifier draft", () => {
+  const initial = withParam(withParam(source, "client", "load", undefined), "client", "classes", [{ id: "checkout", load: ramp }]);
+  const initialExperiment = { ...run, variants: [{ id: "baseline", overrides: { "client.classes": [
+    { id: "checkout", load: ramp }, { id: "order", load: ramp },
+  ] } }] };
+  render(<Editor initial={initial} initialExperiment={initialExperiment} />);
+  const id = screen.getByLabelText("Request type ID");
+  fireEvent.change(id, { target: { value: "order" } });
+  fireEvent.blur(id);
+  expect(id.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toContain("variant");
+  expect(stored().model).toEqual(initial);
+  history(0);
+});
+
+it("opens a malformed request type profile from a diagnostic on the whole load object", () => {
+  localStorage.setItem("resilience-lab.inspector-load-open", "false");
+  const initial = withParam(withParam(source, "client", "load", undefined), "client", "classes", [{ id: "checkout", load: "bad" }]);
+  const diagnostic: Diagnostic = { code: "PARAM_TYPE", message: "Expected object", severity: "ERROR", path: "client" };
+  render(<Editor initial={initial} fieldDiagnostics={new Map([["classes.0.load", [diagnostic]]])}
+    focusField={{ path: "classes.0.load", request: 1 }} />);
+  expect(screen.getByRole("table", { name: "Load points" }).closest("details")!.open).toBe(true);
+  expect(screen.getByText("PARAM_TYPE")).toBeTruthy();
+});
+
+it("shows malformed imported request types before explicitly replacing them with one undoable action", () => {
+  const raw = { unexpected: "preserve-me" };
+  const initial = withParam(withParam(source, "client", "load", undefined), "client", "classes", raw);
+  render(<Editor initial={initial} />);
+  expect(screen.getByLabelText("Invalid request types").textContent).toContain("preserve-me");
+  click("Replace invalid request types");
+  expect(screen.getByLabelText("Request type ID")).toBeTruthy();
+  history(1);
+  click("Undo");
+  expect(stored().model.blocks.client.params.classes).toEqual(raw);
+});

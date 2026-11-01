@@ -15,7 +15,7 @@ import { RunSettings } from "./RunSettings";
 import { VariantSettings } from "./VariantSettings";
 import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
-import { LoadProfile } from "./LoadProfile";
+import { RequestTypes } from "./RequestTypes";
 import { ReplicaTargetField } from "./ReplicaTargetField";
 import { elementLabel, variantLabel } from "../presentation/labels";
 
@@ -102,7 +102,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const destination = connection === undefined ? undefined : ownEntry(model.blocks, connection.to);
   const attempts = element?.params.attempts ?? type?.params.find(param => param.name === "attempts")?.default ?? 1;
   const parameters = type?.params.filter(descriptor =>
-    !(element?.type === "client" && descriptor.name === "load") &&
+    !(element?.type === "client" && ["load", "classes"].includes(descriptor.name)) &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
   const heading = showElement ? elementLabel(selectedReplica?.id ?? selected!, model) : resultsOnly ? null
@@ -164,11 +164,12 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
             />
           ))}
           </InspectorSection> : null}
-          {element.type === "client" && element.params.classes == null && type?.params.find(param => param.name === "load") !== undefined ? <LoadProfile key={selected}
+          {element.type === "client" && type?.params.find(param => param.name === "load") !== undefined ? <RequestTypes key={selected}
             catalog={catalog} model={model} experiment={experiment} clientId={selected}
+            onCommand={onCommand} variantId={variantId}
             descriptor={type.params.find(param => param.name === "load")!}
             editable={editable && (variantId === null || onCommand !== undefined)} invalid={invalid}
-            overridden={isOverridden(overrides, selected, "load")} onCommit={value => {
+            overridden={isOverridden(overrides, selected, "load") || isOverridden(overrides, selected, "classes")} onCommit={value => {
               if (variantId === null) onParam(selected, "load", value);
               else onCommand?.(setVariantParam(variantId, selected, "load", value, catalog));
             }}

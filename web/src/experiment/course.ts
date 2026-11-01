@@ -56,24 +56,52 @@ export function faultLabel(fault: Fault, model: ModelFile, catalog: Catalog): st
   return t("course.fault", { target: targetOf(fault.target, model).label, details, interval });
 }
 
-/** Interpolate at run boundaries and hold the nearest point outside a valid, increasing profile. */
-function loadCurve(load: unknown, endMs: number, catalog: Catalog): LoadPoint[] {
-  if (!isObject(load) || !Array.isArray(load.points) || load.points.length === 0 || endMs <= 0) return [];
+function loadPoints(load: unknown, catalog: Catalog): LoadPoint[] | null {
+  if (!isObject(load) || !Array.isArray(load.points) || load.points.length === 0) return null;
   const points: LoadPoint[] = [];
   for (const value of load.points) {
-    if (!isObject(value)) return [];
+    if (!isObject(value)) return null;
     const timeMs = quantity(value.time, catalog, "DURATION"), rate = quantity(value.rate, catalog, "RATE");
-    if (timeMs === null || rate === null || timeMs <= (points.at(-1)?.timeMs ?? -1)) return [];
+    if (timeMs === null || rate === null || rate < 0 || timeMs <= (points.at(-1)?.timeMs ?? -1)) return null;
     points.push({ timeMs, rate: rate * 1000 });
   }
-  const at = (timeMs: number): LoadPoint => {
+  return points;
+}
+
+function rateAt(points: LoadPoint[], timeMs: number): number {
     const next = points.findIndex(point => point.timeMs > timeMs);
-    if (next === 0) return { timeMs, rate: points[0].rate };
-    if (next < 0) return { timeMs, rate: points.at(-1)!.rate };
+    if (next === 0) return points[0].rate;
+    if (next < 0) return points.at(-1)!.rate;
     const left = points[next - 1], right = points[next];
-    return { timeMs, rate: left.rate + (right.rate - left.rate) * (timeMs - left.timeMs) / (right.timeMs - left.timeMs) };
-  };
+    return left.rate + (right.rate - left.rate) * (timeMs - left.timeMs) / (right.timeMs - left.timeMs);
+}
+
+/** Sum on every profile knot, without clipping to the current run duration. Invalid drafts cannot be combined. */
+export function sumLoadProfiles(loads: unknown[], catalog: Catalog): { points: { time: string; rate: string }[] } | null {
+  const parsed = loads.map(load => loadPoints(load, catalog));
+  if (parsed.some(points => points === null)) return null;
+  const profiles = parsed as LoadPoint[][];
+  const times = [...new Set([0, ...profiles.flatMap(points => points.map(point => point.timeMs))])].sort((a, b) => a - b);
+  return { points: times.map(time => ({ time: `${time}ms`, rate: `${profiles.reduce((sum, points) => sum + rateAt(points, time), 0)}/s` })) };
+}
+
+/** Interpolate at run boundaries and hold the nearest point outside a valid, increasing profile. */
+export function loadCurve(load: unknown, endMs: number, catalog: Catalog): LoadPoint[] {
+  const points = loadPoints(load, catalog);
+  if (points === null || endMs <= 0) return [];
+  const at = (timeMs: number): LoadPoint => ({ timeMs, rate: rateAt(points, timeMs) });
   return [at(0), ...points.filter(point => point.timeMs > 0 && point.timeMs < endMs), at(endMs)];
+}
+
+/** Request types keep their document order; a malformed profile leaves the total invalid as well. */
+export function clientLoadCurves(params: Record<string, unknown>, endMs: number, catalog: Catalog) {
+  const types = Array.isArray(params.classes) ? params.classes.map((value, index) => ({
+    id: isObject(value) && typeof value.id === "string" ? value.id : String(index + 1),
+    points: loadCurve(isObject(value) ? value.load : undefined, endMs, catalog),
+  })) : [];
+  const combined = params.classes == null ? params.load : Array.isArray(params.classes)
+    ? sumLoadProfiles(params.classes.map(value => isObject(value) ? value.load : undefined), catalog) : null;
+  return { points: loadCurve(combined, endMs, catalog), types };
 }
 
 /** Read-only document projection; malformed drafts remain visible without inventing valid data. */
@@ -84,7 +112,7 @@ export function courseData(model: ModelFile, experiment: ExperimentFile, catalog
   return {
     warmupMs, endMs,
     loads: Object.entries(model.blocks).filter(([, block]) => block.type === "client")
-      .map(([id, block]) => ({ id, points: loadCurve(block.params.load, endMs, catalog) })),
+      .map(([id, block]) => ({ id, ...clientLoadCurves(block.params, endMs, catalog) })),
     faults: experiment.faults.map((fault, index): CourseFault => ({
       index, elementId: targetOf(fault.target, model).elementId, target: targetOf(fault.target, model).label,
       label: faultLabel(fault, model, catalog),

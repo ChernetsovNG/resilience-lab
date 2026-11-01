@@ -80,17 +80,20 @@ export function ExperimentCourse({ model, experiment, catalog, onFault, disabled
             <span data-phase="measurement" data-to-ms={data.endMs} style={{ width: `${100 - x(data.warmupMs)}%` }}
               title={t("course.phase", { phase: t("editor.run.measurement"), from: time(data.warmupMs), to: time(data.endMs) })}>{t("editor.run.measurement")}</span>
           </div>
-          {data.loads.map(load => {
+          {data.loads.flatMap(load => [
+            ...load.types.map((type, index) => ({ ...type, key: JSON.stringify([load.id, "type", index]), compact: true, label: t("course.requestType", { client: load.id, id: type.id }) })),
+            { ...load, key: JSON.stringify([load.id, "total"]), compact: load.types.length > 0, label: load.types.length === 0 ? load.id : t("course.total", { client: load.id }) },
+          ]).map(load => {
             const maximumRate = Math.max(1, ...load.points.map(point => point.rate));
             const y = (rate: number) => 64 - rate / maximumRate * 40;
-            return <figure className="course-load" key={load.id}>
-              <figcaption>{load.id}</figcaption>
-              <svg viewBox="0 0 1000 72" preserveAspectRatio="none" role="img" aria-label={t("course.intensity", { client: load.id })}>
+            return <figure className={load.compact ? "course-load course-load--compact" : "course-load"} key={load.key}>
+              <figcaption>{load.label}</figcaption>
+              <svg viewBox="0 0 1000 72" preserveAspectRatio="none" role="img" aria-label={t("course.intensity", { client: load.label })}>
                 <polyline points={load.points.map(point => `${x(point.timeMs) * 10},${y(point.rate)}`).join(" ")}
                   fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
               </svg>
               {load.points.length === 0 ? <span>{t("course.invalidLoad")}</span> : load.points.map(point => <span className="course-load-point" key={point.timeMs}
-                style={{ left: `${x(point.timeMs)}%`, top: y(point.rate),
+                style={{ left: `${x(point.timeMs)}%`, top: load.compact ? y(point.rate) / 2 : y(point.rate),
                   transform: `translateX(${point.timeMs === 0 ? 0 : point.timeMs === data.endMs ? -100 : -50}%)` }}
                 title={t("course.point", { time: time(point.timeMs), rate: formatRate(point.rate) })}>{formatRate(point.rate)}</span>)}
             </figure>;

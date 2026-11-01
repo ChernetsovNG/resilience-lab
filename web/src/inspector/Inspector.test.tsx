@@ -608,7 +608,7 @@ it("marks an unset optional object whose nested field is supplied by the sweep",
   expect(screen.getByRole("button", { name: "Enable Connection pool" })).toBeTruthy();
 });
 
-it("shows client request classes read-only without offering a competing load profile", () => {
+it("shows request type profiles without offering a competing single profile", () => {
   const classes = [{ id: "status", load: { points: [{ time: "0s", rate: "80/s" }] } }];
   const source = structuredClone(model);
   source.blocks.client.params = { deadline: "2s", classes };
@@ -619,9 +619,10 @@ it("shows client request classes read-only without offering a competing load pro
       description: "Independent load profiles", fields: [], options: [], sweepable: false, units: [] });
   }
   const onParam = renderInspector({ catalog: sourceCatalog, model: source, selected: "client" });
-  const field = screen.getByLabelText("Request classes") as HTMLTextAreaElement;
+  const field = screen.getByLabelText("Request type ID") as HTMLInputElement;
   expect(field.readOnly).toBe(true);
-  expect(JSON.parse(field.value)).toEqual(classes);
-  expect(screen.queryByRole("table", { name: "Load points" })).toBeNull();
+  expect(field.value).toBe("status");
+  expect(screen.getAllByRole("table", { name: "Load points" })).toHaveLength(1);
+  expect(screen.getByRole<HTMLInputElement>("radio", { name: "Several request types" }).checked).toBe(true);
   expect(onParam).not.toHaveBeenCalled();
 });

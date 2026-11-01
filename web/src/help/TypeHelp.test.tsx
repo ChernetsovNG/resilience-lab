@@ -59,7 +59,7 @@ it("shows nested array fields and parameter bounds, without treating initial val
   expect(intensities).toHaveLength(2);
   for (const row of times) expect(row.textContent).toContain("≥ 0 ms");
   for (const row of intensities) expect(row.textContent).toContain("≥ 0 /ms");
-  expect(within(dialog).getByRole("row", { name: /^Class id / }).textContent).toContain("Required");
+  expect(within(dialog).getByRole("row", { name: /^Request type ID / }).textContent).toContain("Required");
 });
 
 it("shows defaults, required values, exclusive bounds and output explanations", () => {

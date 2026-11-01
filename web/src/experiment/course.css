@@ -13,6 +13,8 @@
 .course-load svg { position: absolute; top: 18px; width: 100%; height: 72px; }
 .course-load figcaption { position: absolute; top: 0; color: #52606d; font-size: var(--font-secondary); }
 .course-load-point { position: absolute; white-space: nowrap; font-size: var(--font-secondary); }
+.course-load--compact { height: 54px; }
+.course-load--compact svg { height: 36px; }
 .course-fault { position: relative; display: block; width: 100%; height: 28px; margin: 3px 0; padding: 0 6px; border: 1px solid #e6c284; background: #fffaf0; text-align: left; overflow: hidden; }
 .course-fault-interval { position: absolute; top: 0; bottom: 0; background: #f3c16b; border-inline: 1px solid #a96c12; }
 .course-fault-label { position: relative; white-space: nowrap; text-shadow: 0 0 3px #fff; font-size: var(--font-secondary); }
