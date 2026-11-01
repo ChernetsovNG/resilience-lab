@@ -3,7 +3,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
 import { expect, test, type Locator, type Page } from "./fixtures";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection, dragNode } from "./canvasGestures";
 
 test.use({ viewport: { width: 1920, height: 1100 }, actionTimeout: 10_000 });
 
@@ -117,12 +117,10 @@ test("builds checkout-replicas from the palette, saves the example and exposes t
         ["payment-service", 0.7, 0.45], ["psp", 0.9, 0.45],
       ] as const) {
         await page.getByTestId(`rf__node-${id}`).click({ trial: true });
-        const canvas = (await page.locator(".react-flow").boundingBox())!;
-        const header = (await page.getByTestId(`rf__node-${id}`).locator(".block-node-header").boundingBox())!;
-        await page.mouse.move(header.x + header.width / 2, header.y + header.height / 2);
-        await page.mouse.down();
-        await page.mouse.move(canvas.x + canvas.width * x, canvas.y + canvas.height * y, { steps: 10 });
-        await page.mouse.up();
+        await dragNode(page.getByTestId(`rf__node-${id}`), (header, canvas) => ({
+          x: canvas.x + canvas.width * x - header.x - header.width / 2,
+          y: canvas.y + canvas.height * y - header.y - header.height / 2,
+        }));
       }
       await page.locator(".react-flow__controls-fitview").click();
     });

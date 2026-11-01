@@ -1,5 +1,5 @@
 import { copyRetryStorm, selectExperiment } from "./fixtures";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection } from "./canvasGestures";
 import { expect, test as base, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";

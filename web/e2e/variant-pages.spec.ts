@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
+import { dragNode } from "./canvasGestures";
 
 test("variant changes navigate to fields and structural gestures explain the Model page", async ({ page }, testInfo) => {
   await page.goto("/");
@@ -23,11 +24,7 @@ test("variant changes navigate to fields and structural gestures explain the Mod
   await page.screenshot({ path: testInfo.outputPath("no-retries-changes.png") });
 
   const position = await gateway.evaluate(node => getComputedStyle(node).transform);
-  const title = await gateway.locator(".block-node-header").boundingBox();
-  await page.mouse.move(title!.x + 10, title!.y + title!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(title!.x + 70, title!.y + 30, { steps: 6 });
-  await page.mouse.up();
+  await dragNode(gateway, { x: 60, y: 30 });
   await expect(page.getByRole("alert")).toContainText("Structure is edited on the Model page");
   await expect(gateway).toHaveCSS("transform", position);
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
