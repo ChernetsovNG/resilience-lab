@@ -460,6 +460,7 @@
   "results.cancelled": "Прогон отменён; он не завершён и не содержит итогов.",
   "results.canvas.firstSaturation": "Повторений: {count} из {replications}",
   "results.analysis": "Анализ",
+  "results.analysisHint": "Переключить компоновку «Анализ». Esc для выхода.",
   "results.resize.height": "Высота результатов: {height} пикселей",
   "results.resize.label": "Изменить высоту панели результатов",
   "results.collapse": "Свернуть результаты",

@@ -94,7 +94,7 @@ export function ResultsContextBar({ catalog, model, summary, variant, selection,
     </>}
     {stale ? <span className="canvas-results-stale" role="status" title={t("app.canvas.stale")}>{t("app.canvas.stale")}</span> : null}
     <span className="results-context-actions">
-      <button type="button" title={t("results.analysis")} aria-pressed={analysis} onClick={onAnalysisChange}>{t("results.analysis")}</button>
+      <button type="button" title={t("results.analysisHint")} aria-pressed={analysis} onClick={onAnalysisChange}>{t("results.analysis")}</button>
     </span>
   </div>;
 }

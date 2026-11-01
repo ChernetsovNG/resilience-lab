@@ -460,6 +460,7 @@
   "results.cancelled": "Run cancelled; the run is incomplete and has no summary.",
   "results.canvas.firstSaturation": "{count} of {replications} replications",
   "results.analysis": "Analysis",
+  "results.analysisHint": "Toggle analysis layout. Esc to exit.",
   "results.resize.height": "Results height: {height} px",
   "results.resize.label": "Resize results panel",
   "results.collapse": "Collapse results",

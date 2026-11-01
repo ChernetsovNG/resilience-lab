@@ -125,6 +125,7 @@ it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   fireEvent.click(button("Run"));
   await screen.findByRole("table", { name: "Findings" });
+  expect(button("Analysis").title).toContain("Esc");
   fireEvent.click(button("Analysis"));
   expect(button("Analysis").getAttribute("aria-pressed")).toBe("true");
   expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(true);
@@ -139,4 +140,27 @@ it.each(["button", "Escape"])("enters Analysis and exits via %s while preserving
   expect((document.querySelector(".inspector") as HTMLElement).hidden).toBe(false);
   expect(button("Save").disabled).toBe(true);
   expect(button("Undo").disabled).toBe(true);
+});
+
+it("exits Analysis on the Model page and restores palette and parameter editing", async () => {
+  server(); await open();
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  fireEvent.click(button("Run"));
+  await screen.findByRole("table", { name: "Findings" });
+  await selectGateway();
+  fireEvent.click(button("Analysis"));
+  expect(screen.queryByRole("textbox", { name: "Handlers" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+  expect((document.querySelector(".palette") as HTMLElement).hidden).toBe(false);
+  expect(button("Service").disabled).toBe(false);
+  expect((screen.getByRole("textbox", { name: "Handlers" }) as HTMLInputElement).value).toBe("4");
+  expect(button("Save").disabled).toBe(true);
+  expect(button("Undo").disabled).toBe(true);
+  editHandlers("5");
+  await waitFor(() => expect(button("Save").disabled).toBe(false));
+  expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("5");
+  fireEvent.click(button("Undo"));
+  fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
+  expect(button("Analysis").getAttribute("aria-pressed")).toBe("false");
 });

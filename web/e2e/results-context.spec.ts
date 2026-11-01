@@ -61,6 +61,7 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 1");
     await expect(page.getByText("Loading series…", { exact: true })).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath("normal-layout.png") });
+    await expect(row.getByRole("button", { name: "Analysis", exact: true })).toHaveAttribute("title", /Esc/);
     await row.getByRole("button", { name: "Analysis", exact: true }).click();
     await expect(page.locator(".palette")).toBeHidden();
     await expect(page.locator(".inspector")).toBeVisible();
@@ -118,10 +119,35 @@ test("one context row gives the diagram more height and shares time with Timelin
     await expect(row.getByLabel("Replication", { exact: true })).toHaveValue("0");
     await row.getByLabel("Node overlay", { exact: true }).selectOption("off");
     await expect(page.locator(".block-results:visible")).toHaveCount(0);
+    await row.getByRole("button", { name: "Analysis", exact: true }).click();
     await page.getByRole("tab", { name: "Model", exact: true }).click();
     await expect(row).toHaveCount(0);
+    await expect(page.locator(".palette")).toBeVisible();
+    await expect(page.locator(".inspector").getByRole("textbox", { name: "Handlers", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
+
+    await page.getByRole("button", { name: "View", exact: true }).click();
+    await page.getByLabel("Language", { exact: true }).selectOption("ru");
+    await page.getByRole("button", { name: "Вид", exact: true }).click();
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }]) {
+      await page.setViewportSize(viewport);
+      await page.locator("#variant-baseline").click();
+      const analysis = page.getByRole("button", { name: "Анализ", exact: true });
+      await expect(analysis).toHaveAttribute("aria-pressed", "false");
+      await expect(analysis).toHaveAttribute("title", /Esc/);
+      await analysis.click();
+      await expect(page.locator(".palette")).toBeHidden();
+      await page.screenshot({ path: testInfo.outputPath(`analysis-ru-${viewport.width}.png`) });
+      await page.getByRole("tab", { name: "Модель", exact: true }).click();
+      await expect(page.locator(".palette")).toBeVisible();
+      await expect(page.locator(".palette").getByRole("button", { name: "Сервис", exact: true })).toBeEnabled();
+      const handlers = page.locator(".inspector").getByRole("textbox", { name: "Обработчики", exact: true });
+      await handlers.scrollIntoViewIfNeeded();
+      await expect(handlers).toBeVisible();
+      await expect(handlers).toBeEditable();
+      await page.screenshot({ path: testInfo.outputPath(`model-after-analysis-ru-${viewport.width}.png`) });
+    }
   } finally {
     await rm(directory, { recursive: true });
   }
