@@ -390,7 +390,7 @@ describe("Findings conclusions", () => {
     run.variants[0].points[0].aggregate.entries.total.successRate = measured(0.4, 0.1, 5);
     run.variants[1].points[0].aggregate.entries.total.successRate = measured(0.55, 0.1);
     render(<SummaryTable summary={run} />);
-    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("difference within the spread: Baseline");
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: No retries, 55%)");
     fireEvent.change(screen.getByRole("combobox", { name: "Intervals" }), { target: { value: "80" } });
     expect(screen.getByTestId("comparison-conclusion").textContent).not.toContain("difference within the spread");
     expect(screen.getByTestId("comparison-conclusion").textContent).toContain("intervals do not overlap");
@@ -402,7 +402,7 @@ describe("Findings conclusions", () => {
     run.variants[1].points[0].aggregate.entries.total.p99LatencyMs = { mean: 150, count: 1, min: 150, max: 150 };
     render(<SummaryTable summary={run} />);
     const conclusion = screen.getByTestId("comparison-conclusion");
-    expect(conclusion.textContent).toContain("Best observed success rate: Baseline, No retries (90%)");
+    expect(conclusion.textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: Baseline, No retries, 90%)");
     expect(conclusion.textContent).toContain("interval comparison unavailable: No retries");
   });
 

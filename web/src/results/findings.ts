@@ -14,6 +14,8 @@ export function comparisonConclusion(observations: readonly Observation[], crite
   if (available.length === 0) return t(criterion === "successRate" ? "results.answer.noSuccess" : "results.answer.noLatency");
   const best = available.reduce((best, item) => (criterion === "successRate" ? item.metric.mean > best.metric.mean
     : item.metric.mean < best.metric.mean) ? item : best);
+  const value = criterion === "successRate" ? formatPercent(best.metric.mean) : formatDuration(best.metric.mean);
+  if (observations.length === 1) return t(criterion === "successRate" ? "results.answer.singleSuccess" : "results.answer.singleLatency", { value });
   const leaders = available.filter(item => item.metric.mean === best.metric.mean);
   const intervals = leaders.map(leader => confidenceInterval(leader.metric, level));
   const overlap: string[] = [], separate: string[] = [], unknown: string[] = [];
@@ -24,6 +26,14 @@ export function comparisonConclusion(observations: readonly Observation[], crite
     else if (intervals.every(interval => interval !== null && (interval[1] < otherInterval[0] || otherInterval[1] < interval[0]))) separate.push(other.label);
     else overlap.push(other.label);
   }
+  const allOverlap = observations.every(other => {
+    const otherInterval = confidenceInterval(other.metric, level);
+    return otherInterval !== null && intervals.every(interval => interval !== null
+      && interval[1] >= otherInterval[0] && otherInterval[1] >= interval[0]);
+  });
+  if (allOverlap) return t(criterion === "successRate" ? "results.answer.noClearSuccess" : "results.answer.noClearLatency", {
+    variants: leaders.map(item => item.label).join(", "), value,
+  });
   const comparison = [
     overlap.length === 0 ? null : t("results.answer.withinSpread", { variants: overlap.join(", ") }),
     separate.length === 0 ? null : t("results.answer.separateFrom", { variants: separate.join(", ") }),
@@ -34,7 +44,7 @@ export function comparisonConclusion(observations: readonly Observation[], crite
     }));
   return t(criterion === "successRate" ? "results.answer.bestSuccess" : "results.answer.bestLatency", {
     variants: leaders.map(item => item.label).join(", "),
-    value: criterion === "successRate" ? formatPercent(best.metric.mean) : formatDuration(best.metric.mean), comparison,
+    value, comparison,
   });
 }
 
