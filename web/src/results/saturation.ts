@@ -32,7 +32,7 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
       })),
     withoutSaturation: t("results.saturation.without", { count: formatNumber(saturation.withoutSaturation), replications: formatNumber(replications) }),
     causes,
-    degradationPaths: [...paths.values()].map(group => t("results.saturation.groupedPath", {
+    degradationPaths: [...paths.values()].sort((left, right) => right.length - left.length).map(group => t("results.saturation.groupedPath", {
       count: formatNumber(group.length), replications: formatNumber(replications),
       path: group[0].degradationPath.length === 0 ? t("results.saturation.noPath")
         : group[0].degradationPath.map(({ label }, index) => {

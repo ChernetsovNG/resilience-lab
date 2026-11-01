@@ -6,7 +6,8 @@ import { useId, type ReactNode } from "react";
 import { HelpHint } from "../help/HelpHint";
 import type { Catalog, MetricSummary, ModelFile, RunSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
-import { backendMessage } from "../i18n/backendMessage";
+import { applyOverrides, type Params } from "../workspace/params";
+import { comparisonConclusion, latencyLimitMatch, latencyLimits, saturationConclusions } from "../results/findings";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
@@ -52,7 +53,7 @@ interface SummaryTableProps {
   windowMs?: number;
   catalog?: Catalog | null;
   model?: ModelFile | null;
-  variants?: readonly NamedVariant[];
+  variants?: readonly (NamedVariant & { overrides?: Params })[];
 }
 
 /** Findings for the active page and a baseline comparison at the selected grid point (stage 1 §6.3). */
@@ -63,25 +64,33 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const ordered = baseline === undefined ? [] : [baseline, ...summary.variants.filter(variant => variant !== baseline)];
   const columns = ordered.flatMap(variant => {
     const point = variant.points.find(point => point.id === selectedPointId);
-    return point === undefined ? [] : [{ variant, point }];
+    if (point === undefined) return [];
+    const effective = model == null || catalog == null ? null : applyOverrides(applyOverrides(model,
+      variants.find(source => source.id === variant.id)?.overrides ?? {}, catalog), point.coordinates, catalog);
+    return [{ variant, point, limits: effective === null || catalog == null ? [] : latencyLimits(effective, catalog) }];
   });
   const reference = baseline?.points.find(point => point.id === selectedPointId);
   const activeVariant = activeVariantId === null ? summary.variants[0] : summary.variants.find(variant => variant.id === activeVariantId);
   const activePoint = activeVariant?.points.find(point => point.id === selectedPointId);
-  const coordinates = summary.grid.length === 0 ? "" : pointLabel(selectedPointId, summary.grid, activePoint?.coordinates, catalog, model);
+  const coordinates = summary.grid.length === 0 ? "" : pointLabel(selectedPointId, summary.grid, (activePoint ?? columns[0]?.point)?.coordinates, catalog, model);
   const activeLabel = variantLabel(activeVariant, variants);
-  const selectedPointLabel = pointLabel(selectedPointId, summary.grid, activePoint?.coordinates, catalog, model);
+  const selectedPointLabel = pointLabel(selectedPointId, summary.grid, (activePoint ?? columns[0]?.point)?.coordinates, catalog, model);
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
     && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
   const services = serviceResultRows(columns.map(({ point }) => point.aggregate));
   const columnClass = (id: string) => id === activeVariantId ? "summary-column--active-variant" : undefined;
-  const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format) => (
+  const row = (label: string, value: (point: Point) => Metric | null | undefined, format: Format, difference: Format = format,
+    quantile?: "p95LatencyMs" | "p99LatencyMs") => (
     <tr>
       <th scope="row">{label}</th>
-      {columns.map(({ variant, point }) => <td key={variant.id} className={columnClass(variant.id)}>
-        {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
-          level, format, difference)}
-      </td>)}
+      {columns.map(({ variant, point, limits }) => {
+        const limit = quantile === undefined ? null : latencyLimitMatch(point.aggregate.entries.total[quantile], limits);
+        return <td key={variant.id} className={columnClass(variant.id)}>
+          {metric(value(point), variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
+            level, format, difference)}
+          {limit === null ? null : <span className="summary-limit" title={t("results.answer.ceilingHelp")}>{limit}</span>}
+        </td>;
+      })}
     </tr>
   );
   const serviceDetails = (service: string, instances: { id: string; replica: number }[] = [], replica = false): ReactNode => <details key={service} className="summary-services">
@@ -107,13 +116,12 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     </details>;
   return <div className="answer">
     <section className="answer-variants" aria-label={t("results.answer.variants")}>
-      <h3>{t("results.answer.variants")}</h3>
-      {columns.map(({ variant, point }) => <p key={variant.id}>
-        {t(point.saturation.firstNodes.length === 0 ? "results.answer.variantUnsaturated" : "results.answer.variantSaturated", {
-          variant: variantLabel(variant, variants), resources: point.saturation.firstNodes.map(first => backendMessage(first.label)).join(", "),
-          success: formatPercent(point.aggregate.entries.total.successRate?.mean),
-        })}
-      </p>)}
+      <h3>{coordinates === "" ? t("results.answer.variants") : t("results.answer.forPoint", { point: coordinates })}</h3>
+      <p data-testid="comparison-conclusion">{(["successRate", "p99LatencyMs"] as const).map(criterion => comparisonConclusion(
+        columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), metric: point.aggregate.entries.total[criterion] })), criterion, level,
+      )).join(" ")}</p>
+      {saturationConclusions(columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), saturation: point.saturation })),
+        columns.length === summary.variants.length).map((conclusion, index) => <p key={index}>{conclusion}</p>)}
     </section>
     <section className="answer-insight" aria-label={t("results.saturation.title")}>
       <header className="answer-heading">
@@ -147,8 +155,8 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       </tr></thead>
       <tbody>
         {row(t("results.metrics.successRate"), point => point.aggregate.entries.total.successRate, formatPercent, percentagePoints)}
-        {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.entries.total.p95LatencyMs, formatDuration)}
-        {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.entries.total.p99LatencyMs, formatDuration)}
+        {row(t("results.metrics.p95LatencyMs"), point => point.aggregate.entries.total.p95LatencyMs, formatDuration, formatDuration, "p95LatencyMs")}
+        {row(t("results.metrics.p99LatencyMs"), point => point.aggregate.entries.total.p99LatencyMs, formatDuration, formatDuration, "p99LatencyMs")}
       </tbody>
     </table>
     {services.map(service => serviceDetails(service.id, service.instances))}
