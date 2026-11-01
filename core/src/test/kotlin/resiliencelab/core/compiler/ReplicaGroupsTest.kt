@@ -289,6 +289,65 @@ class ReplicaGroupsTest {
     }
 
     @Test
+    fun `normal latency selects replica overrides and locates each outgoing timeout override`() {
+        val source = model(3, overrides = """, "replicaOverrides":{"2":{"processing":{"mean":"9ms"}}}""")
+        val changed =
+            experiment().copy(
+                variants =
+                    listOf(
+                        Variant("baseline"),
+                        Variant(
+                            "candidate",
+                            overrides =
+                                mapOf(
+                                    "gateway-to-worker.timeout" to JsonPrimitive("5ms"),
+                                    "worker-to-tail.timeout" to JsonPrimitive("2ms"),
+                                ),
+                        ),
+                    ),
+            )
+        val compiled = compile(source, changed)
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(requireNotNull(compiled.experiment)).filter { it.code == "LINT_TIMEOUT_BELOW_LATENCY" }
+
+        assertThat(warnings.map { it.path }).containsExactlyInAnyOrder(
+            "gateway-to-worker",
+            "worker-to-tail#1",
+            "worker-to-tail#2",
+            "worker-to-tail#3",
+        )
+        assertThat(warnings.single { it.path == "gateway-to-worker" }.args).containsEntry("target", JsonPrimitive("worker#2"))
+        warnings.forEach { warning ->
+            assertThat(warning.variant).isEqualTo("candidate")
+            assertThat(warning.document).isEqualTo("e.experiment.json")
+            val connection = warning.path!!.substringBefore('#')
+            assertThat(warning.pointer).isEqualTo("/variants/1/overrides/$connection.timeout")
+            if ('#' in warning.path) assertThat(warning.message).contains("Replica '${warning.path}'")
+        }
+    }
+
+    @Test
+    fun `normal latency grid warnings name only affected points and locate the axis`() {
+        val changed =
+            experiment().copy(
+                grid = listOf(GridAxis("worker-to-tail.timeout", listOf(JsonPrimitive("2ms"), JsonPrimitive("100ms")))),
+            )
+        val compiled = compile(model(3), changed)
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(requireNotNull(compiled.experiment)).filter { it.code == "LINT_TIMEOUT_BELOW_LATENCY" }
+
+        assertThat(warnings).hasSize(3)
+        assertThat(warnings).allSatisfy { warning ->
+            assertThat(warning.variant).isEqualTo("baseline")
+            assertThat(warning.document).isEqualTo("e.experiment.json")
+            assertThat(warning.pointer).startsWith("/grid/0")
+            assertThat(warning.args).containsEntry("points", JsonPrimitive("p0"))
+        }
+    }
+
+    @Test
     fun `invalid counts and balancing are reported at catalog parameters`() {
         for (count in listOf(JsonPrimitive(0), JsonPrimitive(-1), JsonPrimitive(1.5), JsonPrimitive("3"))) {
             val source =

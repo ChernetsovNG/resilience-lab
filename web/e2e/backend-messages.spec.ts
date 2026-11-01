@@ -30,6 +30,30 @@ for (const locale of locales) {
       await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
     });
 
+    for (const [timeoutMs, estimatedMs] of [["500", "845"], ["845", "845.2"]]) {
+      test(`localizes the normal latency estimate for timeout ${timeoutMs} ms and opens the affected timeout`, async ({ page }) => {
+        await page.goto("/");
+        await selectExperiment(page, "checkout/checkout.experiment.json");
+        await page.getByTestId("canvas-edge-label-payment-service-to-psp").click();
+        const timeout = page.getByLabel(label("catalog.types.call.params.timeout.title"), { exact: true });
+        await timeout.fill(`${timeoutMs}ms`);
+        await timeout.press("Enter");
+        await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+        const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_BELOW_LATENCY"]');
+
+        await expect(warning).toHaveCount(1);
+        await expect(warning).toContainText(locale.startsWith("ru") ? `Таймаут ${timeoutMs} мс` : `Timeout ${timeoutMs} ms`);
+        await expect(warning).toContainText(locale.startsWith("ru") ? `: ${estimatedMs} мс` : `response ${estimatedMs} ms`);
+        await expect(warning).toContainText("psp");
+        await expect(warning).toContainText("p99");
+        await expect(warning).toContainText("q=0.99");
+        await warning.click();
+        await expect(timeout).toBeFocused();
+        await expect(timeout.locator("..").locator(".field-diagnostics")).toContainText("LINT_TIMEOUT_BELOW_LATENCY");
+        await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+      });
+    }
+
     test("localizes unreachable timeout warnings and opens the affected connection", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "retry-storm/retry-storm.experiment.json");

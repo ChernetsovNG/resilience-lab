@@ -1,18 +1,28 @@
 package resiliencelab.core.compiler
 
 import kotlinx.serialization.json.JsonPrimitive
+import ksl.utilities.distributions.Normal
 import resiliencelab.core.catalog.Quantities
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
 import resiliencelab.core.ir.ClientNode
+import resiliencelab.core.ir.Distribution
+import resiliencelab.core.ir.DistributionShape
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
+import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.MathContext
+import java.math.RoundingMode
+import kotlin.math.exp
+import kotlin.math.ln
+import kotlin.math.ln1p
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 /**
  * Advisory checks on valid, compiled paths from the client (stage-1 design §3.4).
@@ -22,6 +32,7 @@ import kotlin.math.pow
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
+ * [timeoutLatencyQuantile] selects the target processing quantile for normal-response estimates (0.99 by default).
  */
 class ModelLinter(
     private val retryAmplificationThreshold: Int = 10,
@@ -29,6 +40,7 @@ class ModelLinter(
     private val timeoutBudgetTolerance: Double = 0.05,
     private val timeoutUnreachableThreshold: Double = 1.0,
     private val retryNoJitterThreshold: Int = 1,
+    private val timeoutLatencyQuantile: Double = 0.99,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
@@ -39,6 +51,9 @@ class ModelLinter(
         }
         require(timeoutUnreachableThreshold.isFinite() && timeoutUnreachableThreshold >= 1.0) {
             "timeoutUnreachableThreshold must be finite and at least 1"
+        }
+        require(timeoutLatencyQuantile.isFinite() && timeoutLatencyQuantile > 0.0 && timeoutLatencyQuantile < 1.0) {
+            "timeoutLatencyQuantile must be finite and strictly between 0 and 1"
         }
     }
 
@@ -121,6 +136,7 @@ class ModelLinter(
         val demands = mutableMapOf<String, Double>()
         val maximumRates = mutableMapOf<String, Double>()
         val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
+        val normalResponses = mutableMapOf<String, MutableMap<String, NormalResponse>>()
         graph.clients.forEach { client ->
             client.classes.forEach { (requestClass, load) ->
                 val holdingByService = mutableMapOf<String, Double>()
@@ -128,6 +144,7 @@ class ModelLinter(
                 graph.entryServices(client, requestClass).forEach { entry ->
                     graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
                         val outgoing = calls.associateBy { it.from }
+                        val incoming = calls.associateBy { it.to }
                         val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
                         calls.forEach { call ->
                             clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
@@ -139,7 +156,19 @@ class ModelLinter(
                         deadlineBudget(client, processingMs(graph, entry, requestClass), calls.firstOrNull())?.let(diagnostics::add)
                         var holdingMs = 0.0
                         ordered.asReversed().forEach { service ->
-                            holdingMs += processingMs(graph, service, requestClass) + 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
+                            val outgoingNetworkMs = 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
+                            val downstreamMs = holdingMs + outgoingNetworkMs
+                            incoming[service.path]?.let { call ->
+                                val processingQuantile =
+                                    graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
+                                        quantileMs(it.processing ?: service.processing)
+                                    }
+                                val response = NormalResponse(service.path, 2.0 * call.network.meanMs + processingQuantile + downstreamMs)
+                                val byClass = normalResponses.getOrPut(call.path) { mutableMapOf() }
+                                val previous = byClass[requestClass]
+                                if (previous == null || response.ms > previous.ms) byClass[requestClass] = response
+                            }
+                            holdingMs += processingMs(graph, service, requestClass) + outgoingNetworkMs
                             holdingByService[service.path] = maxOf(holdingByService[service.path] ?: 0.0, holdingMs)
                         }
                     }
@@ -153,6 +182,7 @@ class ModelLinter(
             }
         }
         return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
+            graph.calls.flatMap { call -> timeoutBelowLatency(call, normalResponses[call.path].orEmpty()) } +
             handlerDemand(graph.services, demands, maximumRates) +
             graph.calls
                 .filter { call ->
@@ -238,6 +268,75 @@ class ModelLinter(
         graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
             it.processing?.meanMs
                 ?: service.processing.meanMs
+        }
+
+    private data class NormalResponse(
+        val target: String,
+        val ms: Double,
+    )
+
+    /** Target process-step quantiles plus both incoming network means and the longest downstream mean path. */
+    private fun timeoutBelowLatency(
+        call: CallEdge,
+        responses: Map<String, NormalResponse>,
+    ): List<Diagnostic> =
+        responses.entries.groupBy({ it.value }, { it.key }).mapNotNull { (response, classes) ->
+            if (call.timeoutMs >= response.ms) {
+                null
+            } else {
+                val requestTypes = classes.sorted().joinToString(", ")
+                val estimateText = responseNumber(response.ms, call.timeoutMs)
+                warning(
+                    CoreMessage.LINT_TIMEOUT_BELOW_LATENCY,
+                    "Timeout ${number(call.timeoutMs)} ms on connection '${call.path}' is below the normal " +
+                        "p${number(timeoutLatencyQuantile * 100.0)} response $estimateText ms of '${response.target}' " +
+                        "(q=${number(timeoutLatencyQuantile)}; request types: $requestTypes). " +
+                        "Timeouts may occur without failures; increase the timeout or reduce normal processing time.",
+                    call.origin,
+                    call.path,
+                    "/params/timeout",
+                    mapOf(
+                        "connection" to JsonPrimitive(call.path),
+                        "target" to JsonPrimitive(response.target),
+                        "timeoutMs" to JsonPrimitive(number(call.timeoutMs)),
+                        "estimatedMs" to JsonPrimitive(estimateText),
+                        "percentile" to JsonPrimitive(number(timeoutLatencyQuantile * 100.0)),
+                        "quantile" to JsonPrimitive(number(timeoutLatencyQuantile)),
+                        "requestTypes" to JsonPrimitive(requestTypes),
+                    ),
+                )
+            }
+        }
+
+    /** Rounds only an emitted estimate, adding digits until it remains visibly above its timeout. */
+    private fun responseNumber(
+        responseMs: Double,
+        timeoutMs: Double,
+    ): String {
+        if (!responseMs.isFinite()) return number(responseMs)
+        val exact = BigDecimal.valueOf(responseMs)
+        val timeout = BigDecimal.valueOf(timeoutMs)
+        var precision = 3
+        var rounded = exact.round(MathContext(precision, RoundingMode.HALF_UP))
+        while (rounded <= timeout) rounded = exact.round(MathContext(++precision, RoundingMode.HALF_UP))
+        return Quantities.plain(rounded)
+    }
+
+    private fun quantileMs(distribution: Distribution): Double =
+        when (distribution.shape) {
+            DistributionShape.FIXED -> distribution.meanMs
+            DistributionShape.EXPONENTIAL -> -distribution.meanMs * ln1p(-timeoutLatencyQuantile)
+            DistributionShape.LOGNORMAL -> {
+                // Compute ln(1 + (stdDev / mean)^2) without overflowing the ratio or its square.
+                val logRatio = ln(requireNotNull(distribution.stdDevMs)) - ln(distribution.meanMs)
+                val sigmaSquared =
+                    if (logRatio > 0.0) 2.0 * logRatio + ln1p(exp(-2.0 * logRatio)) else ln1p(exp(2.0 * logRatio))
+                if (sigmaSquared == 0.0) {
+                    distribution.meanMs
+                } else {
+                    exp(ln(distribution.meanMs) - sigmaSquared / 2.0 + sqrt(sigmaSquared) * Normal.stdNormalInvCDF(timeoutLatencyQuantile))
+                }
+            }
         }
 
     /**

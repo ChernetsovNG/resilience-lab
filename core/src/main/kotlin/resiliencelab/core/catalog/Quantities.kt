@@ -72,5 +72,8 @@ object Quantities {
         }
 
     /** Prints a number without exponent or trailing zeros. */
-    fun plain(value: Double): String = BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
+    fun plain(value: Double): String = plain(BigDecimal.valueOf(value))
+
+    /** Prints a rounded decimal without converting it back to binary floating point. */
+    fun plain(value: BigDecimal): String = value.stripTrailingZeros().toPlainString()
 }

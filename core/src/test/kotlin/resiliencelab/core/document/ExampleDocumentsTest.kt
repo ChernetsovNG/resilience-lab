@@ -1,5 +1,6 @@
 package resiliencelab.core.document
 
+import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.compiler.ModelLinter
@@ -75,5 +76,32 @@ class ExampleDocumentsTest {
                 assertThat(canonical).describedAs(file.toString()).isEqualTo(text)
             }
         }
+    }
+
+    @Test
+    fun `original checkout PSP timeout warns even with aligned downstream budgets`() {
+        val directory = Path.of("../examples/checkout")
+        val modelPath = directory.resolve("checkout.model.json").toString()
+        val experimentPath = directory.resolve("checkout.experiment.json").toString()
+        val model = (DocumentCodec.decodeModel(Files.readString(Path.of(modelPath)), modelPath) as DecodeResult.Ok).value
+        val source = (DocumentCodec.decodeExperiment(Files.readString(Path.of(experimentPath)), experimentPath) as DecodeResult.Ok).value
+        val aligned = source.variants.single { it.id == "aligned-timeouts" }
+        val experiment =
+            source.copy(
+                variants =
+                    listOf(
+                        aligned.copy(overrides = aligned.overrides + ("payment-service-to-psp.timeout" to JsonPrimitive("500ms"))),
+                    ),
+            )
+        val compiled = ModelCompiler().compile(model, modelPath, experiment, experimentPath)
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(requireNotNull(compiled.experiment)).single { it.code == "LINT_TIMEOUT_BELOW_LATENCY" }
+
+        assertThat(warning.args).containsEntry("target", JsonPrimitive("psp")).containsEntry("timeoutMs", JsonPrimitive("500"))
+        assertThat(warning.args).containsEntry("estimatedMs", JsonPrimitive("845"))
+        assertThat(warning.pointer).isEqualTo("/variants/0/overrides/payment-service-to-psp.timeout")
+        assertThat(warning.document).isEqualTo(experimentPath)
+        assertThat(warning.variant).isEqualTo("aligned-timeouts")
     }
 }
