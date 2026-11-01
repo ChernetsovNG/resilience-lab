@@ -4,6 +4,7 @@ import type { ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
 import { dragConnection } from "./canvasGestures";
 import { readWorkspaceDocument, cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 test.use({ locale: "ru-RU", viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -26,6 +27,8 @@ test("published checkout-policies compares PSP outcomes and replays the breaker"
 
   await page.getByRole("tab", { name: "Оплата будет позже", exact: true }).click();
   await page.getByRole("button", { name: "Анализ", exact: true }).click();
+  await page.getByRole("region", { name: ru["results.answer.variants"], exact: true })
+    .screenshot({ path: testInfo.outputPath("checkout-policies-summary-ru.png") });
   await page.getByText("По видам запросов", { exact: true }).click();
   const status = page.getByRole("table", { name: "Вид запроса · status", exact: true });
   const checkout = page.getByRole("table", { name: "Вид запроса · checkout", exact: true });

@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { slotPoolResource, noSaturation } from "../test/fixtures";
 import { SaturationInsight } from "./SaturationInsight";
+import { setLanguage } from "../i18n";
+
+afterEach(() => setLanguage("en"));
 
 describe("SaturationInsight", () => {
   it("navigates to each recorded degradation step, including a connection pool", () => {
@@ -78,10 +81,30 @@ it("shows the three most frequent paths and discloses the remaining paths", () =
   fireEvent.click(screen.getByText("Degradation paths"));
   const paths = screen.getByText("Degradation paths").closest("details")!;
   expect(paths.querySelector("li")?.textContent).toBe("handlers frequent at 21 ms–24 ms — 4 of 8 replications");
-  const more = screen.getByText("More 2 paths").closest("details")!;
+  const more = screen.getByText("2 more paths").closest("details")!;
   expect(more.open).toBe(false);
   expect(more.querySelectorAll("li")).toHaveLength(2);
-  fireEvent.click(screen.getByText("More 2 paths"));
+  fireEvent.click(screen.getByText("2 more paths"));
   expect(more.open).toBe(true);
   expect(more.textContent).toContain("handlers rare-d");
+});
+
+it.each([
+  { locale: "ru", count: 1, label: "Ещё 1 путь" },
+  { locale: "ru", count: 2, label: "Ещё 2 пути" },
+  { locale: "ru", count: 5, label: "Ещё 5 путей" },
+  { locale: "ru", count: 11, label: "Ещё 11 путей" },
+  { locale: "ru", count: 21, label: "Ещё 21 путь" },
+  { locale: "ru", count: 22, label: "Ещё 22 пути" },
+  { locale: "en", count: 1, label: "1 more path" },
+  { locale: "en", count: 2, label: "2 more paths" },
+  { locale: "en", count: 5, label: "5 more paths" },
+] as const)("agrees path counts in $locale: $count", ({ locale, count, label }) => {
+  setLanguage(locale);
+  const replications = Array.from({ length: count + 3 }, (_, replication) => ({ replication,
+    degradationPath: [{ node: `node-${replication}`, ...slotPoolResource(`node-${replication}`), startMs: 10 }],
+  }));
+  render(<SaturationInsight saturation={{ ...noSaturation, replications }} replications={replications.length} />);
+  fireEvent.click(screen.getByText(locale === "en" ? "Degradation paths" : "Пути деградации"));
+  expect(screen.getByText(label).closest("details")!.querySelectorAll("li")).toHaveLength(count);
 });
