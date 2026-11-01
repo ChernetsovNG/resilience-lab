@@ -1,8 +1,9 @@
 import { t } from "../../i18n";
 import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../../i18n/format";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { downsample, replicaBand, windowAt, type TimelinePoint, type TimelineRegion, type TimelineMetricValues } from "./data";
+import type { PolicyState } from "../policyState";
 
 export interface TimelineLine {
   id: string;
@@ -22,10 +23,19 @@ export interface TimelineThreshold {
   comparison: boolean;
 }
 
+export interface TimelineStateBand {
+  id: string;
+  label: string;
+  state: PolicyState;
+  copies: number;
+  windows: readonly { startMs: number; durationMs: number; share: number | null }[];
+}
+
 interface TimelineChartProps {
   title: string;
   unit: string;
   lines: TimelineLine[];
+  bands?: TimelineStateBand[];
   regions: TimelineRegion[];
   thresholds?: TimelineThreshold[];
   endMs: number;
@@ -37,7 +47,7 @@ interface TimelineChartProps {
 }
 
 /** Numeric time axes stay aligned across independently sampled lines; readouts always use original windows. */
-export function TimelineChart({ title, unit, lines, regions, thresholds = [], endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
+export function TimelineChart({ title, unit, lines, bands = [], regions, thresholds = [], endMs, windowMs, hoverWindow, cursorWindow, onHover, onCursor }: TimelineChartProps) {
   const [width, setWidth] = useState(640);
   const seconds = endMs >= 1000;
   const durationSeconds = unit === "ms" && (thresholds.some(threshold => Math.abs(threshold.value) >= 1000)
@@ -66,6 +76,16 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
     const bounds = event.currentTarget.getBoundingClientRect();
     return windowAt((event.clientX - bounds.left) / bounds.width * endMs, windowMs, endMs);
   };
+  const seekByKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const current = cursorWindow ?? 0;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? lastWindow
+      : event.key === "ArrowRight" ? Math.min(lastWindow, current + 1)
+        : event.key === "ArrowLeft" ? Math.max(0, current - 1) : null;
+    if (next !== null) { event.preventDefault(); onCursor(next); }
+  };
+  const stateDescription = (band: TimelineStateBand, share: number | null) => share === null ? t("results.timeline.noValue")
+    : t("results.timeline.policyWindow", { state: t(`results.timeline.policyValue.${band.state}`), share: formatPercent(share) })
+      + (band.state === "circuitOpenShare" && band.copies > 1 ? t("results.timeline.policyCallers", { copies: formatNumber(band.copies) }) : "");
   return <section className="timeline-chart" aria-label={title}>
     <h3>{title} <span>{t("results.unitInParens", { unit: t(durationSeconds ? "results.units.s" : `results.units.${unit}`) })}</span></h3>
     <div className="timeline-plot">
@@ -102,15 +122,33 @@ export function TimelineChart({ title, unit, lines, regions, thresholds = [], en
         aria-valuetext={cursorWindow === null ? t("results.timeline.noPinnedWindow") : t("results.timeline.pinnedWindow", { window: formatNumber(cursorWindow), time: formatDuration(cursorWindow * windowMs) })}
         onPointerMove={(event) => onHover(pointerWindow(event))} onPointerLeave={() => onHover(null)}
         onClick={(event) => onCursor(pointerWindow(event))}
-        onKeyDown={(event) => {
-          const current = cursorWindow ?? 0;
-          const next = event.key === "Home" ? 0 : event.key === "End" ? lastWindow
-            : event.key === "ArrowRight" ? Math.min(lastWindow, current + 1)
-              : event.key === "ArrowLeft" ? Math.max(0, current - 1) : null;
-          if (next !== null) { event.preventDefault(); onCursor(next); }
-        }} />
+        onKeyDown={seekByKey} />
     </div>
     <p className="timeline-axis">{t(seconds ? "results.timeline.timeAxisSeconds" : "results.timeline.timeAxis")}</p>
+    {bands.length === 0 ? null : <div className="timeline-policy-states">
+      {bands.map(band => <div key={band.id} className="timeline-policy-state">
+        <div>{band.label}</div>
+        <div className="timeline-state-band" role="slider" tabIndex={0} aria-label={band.label}
+          aria-valuemin={0} aria-valuemax={lastWindow} aria-valuenow={cursorWindow ?? 0}
+          aria-valuetext={stateDescription(band, active === null ? null : band.windows[active]?.share ?? null)}
+          onPointerMove={event => onHover(pointerWindow(event))} onPointerLeave={() => onHover(null)}
+          onClick={event => onCursor(pointerWindow(event))} onKeyDown={seekByKey}>
+          <svg viewBox={`0 0 ${endMs || 1} 12`} preserveAspectRatio="none" aria-hidden="true">
+            {band.windows.map((window, index) => <rect key={index} data-window={index} data-share={window.share ?? undefined}
+              x={window.startMs} width={window.durationMs} y={0} height={12}
+              fill={band.state === "circuitOpenShare" ? "#b91c1c" : band.state === "ejectedShare" ? "#b45309" : "#475569"}
+              opacity={window.share === null ? 0.03 : 0.06 + 0.84 * Math.min(1, Math.max(0, window.share))}>
+              <title>{stateDescription(band, window.share)}</title>
+            </rect>)}
+            {cursorWindow === null ? null : <line data-cursor-window={cursorWindow} x1={cursorWindow * windowMs} x2={cursorWindow * windowMs}
+              y1={0} y2={12} stroke="#111827" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
+            {hoverWindow === null ? null : <line x1={hoverWindow * windowMs} x2={hoverWindow * windowMs}
+              y1={0} y2={12} stroke="#475569" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+          </svg>
+        </div>
+        <small>{stateDescription(band, active === null ? null : band.windows[active]?.share ?? null)}</small>
+      </div>)}
+    </div>}
     {unit === "ms" ? <p className="timeline-latency-note">{t("results.timeline.latencyNote")}</p> : null}
     <dl className="timeline-readout">
       {thresholds.map((threshold) => <div key={threshold.id}>

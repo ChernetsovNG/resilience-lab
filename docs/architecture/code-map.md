@@ -72,6 +72,7 @@
 1. `useRun` загружает манифест и сводку. В `App` вариант задаёт `variantPage`; [`useResultsSelection`][selection] хранит точку, повторение, окно и реплику. [`canvasResults`][canvas-results] проецирует выбранный итог и снимок параметров прогона на схему; [`ElementResults`][element-results] показывает выбранный элемент.
 2. [`RunTimeline`][timeline] и [`usePlayback`][playback] используют [`SeriesLoader`][loader]: индекс, выбор частей диапазона, общий кэш, [`series.worker.ts`][worker] и [`decode.ts`][decode]. [`outputs.ts`][outputs] вычисляет метрики каталога для графиков и инспектора.
 3. Закреплённый курсор Timeline через `App` вызывает `usePlayback.seek`; `windowCanvasResults` превращает окно в слой схемы. Воспроизведение подгружает текущий и следующий диапазоны; наведение на график имеет отдельный временный курсор. Популяции клиентов и классов, включая причины отказов, показывает [`EntryResults`][entry-results].
+4. Ряды видов запросов загружает `SeriesLoader.loadClasses` из `classes` через тот же кэш частей, отдельно от одноимённых узлов. Общая проекция [`policyWindowState`](../../web/src/results/policyState.ts) переводит интегралы состояния в доли окон для полос Timeline и потребителей воспроизведения; число копий связи берётся из групп выбранного варианта и точки.
 
 ## Как добавить
 

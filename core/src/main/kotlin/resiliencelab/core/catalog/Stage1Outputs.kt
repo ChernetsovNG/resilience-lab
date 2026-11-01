@@ -105,7 +105,8 @@ internal object Stage1Outputs {
             rate("originalArrivals", "Original requests", "rates", 1),
             rate("successes", "Successes", "rates", 4),
             rate("failures", "Failures", "errors", 0),
-            rate("degraded", "Successful requests with fallback", "rates", 6),
+            rate("degraded", "Successful requests with fallback", "rates", 6)
+                .copy(inspector = OutputInspector("Successful requests with fallback", 20)),
         ) + latencies()
 
     val service: List<OutputDescriptor> =
@@ -323,9 +324,12 @@ internal object Stage1Outputs {
             rate("failed", "Failures", "errors", 0).copy(id = "failuresPerSecond"),
             rate("timeouts", "Timeouts", "errors", 1).copy(inspector = OutputInspector("Timeouts", 0, showValue = false, chartOrder = 1)),
             rate("orphaned", "Orphaned attempts", "errors", 2),
-            rate("circuitRejections", "Circuit rejections", "errors", 4, summary = true),
-            rate("retriesDenied", "Retries denied by budget", "errors", 5, summary = true),
-            rate("fallbacks", "Fallbacks", "rates", 6, summary = true),
+            rate("circuitRejections", "Circuit rejections", "errors", 4, summary = true)
+                .copy(inspector = OutputInspector("Circuit rejections", 21)),
+            rate("retriesDenied", "Retries denied by budget", "errors", 5, summary = true)
+                .copy(inspector = OutputInspector("Retries denied by budget", 22)),
+            rate("fallbacks", "Fallbacks", "rates", 6, summary = true)
+                .copy(inspector = OutputInspector("Fallbacks", 23)),
             OutputDescriptor(
                 "circuitOpenShare",
                 "Circuit open share",
@@ -335,6 +339,7 @@ internal object Stage1Outputs {
                 ratio("circuitOpenMs", "durationMs"),
                 pooled("circuitOpenMs", "measurementMs"),
                 OutputTimeline("circuit", "Circuit breaker", 8, 0),
+                OutputInspector("Circuit open share", 20),
             ),
             occupancy("meanInFlight", "inFlightIntegralMs", "Mean in-flight", "Mean in flight", 0, 5).let {
                 it.copy(summary = it.summary!!.copy(intervalField = "meanInFlight"))

@@ -5,6 +5,8 @@ import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
 import { groupInspectorOutputs, replicaMember, type ReplicaGroup } from "../results/groups";
 import { canonicalOf } from "../workspace/quantities";
+import { policyOutputAvailable } from "../workspace/policyParameters";
+import { entryModels } from "../results/entries";
 
 export interface ElementResultsContext {
   summary: RunSummary;
@@ -70,7 +72,9 @@ export function projectElementResults(context: ElementResultsContext): ElementRe
   const selection = resultSelection(runModel, currentModel, selected, point?.aggregate.groups);
   if (selection === null || point === undefined || variant === undefined || replication < 0 || replication >= variant.replications) return null;
   const grouped = selection.replica !== undefined || point.aggregate.groups.some(group => group.kind === "NODE" && group.id === selection.id);
-  const outputs = grouped ? groupInspectorOutputs(outputsOf(catalog, selection.kind)) : outputsOf(catalog, selection.kind).filter(output => output.inspector != null);
+  const models = entryModels(summary, runModel, catalog, experiment.variants);
+  const outputs = (grouped ? groupInspectorOutputs(outputsOf(catalog, selection.kind)) : outputsOf(catalog, selection.kind).filter(output => output.inspector != null))
+    .filter(output => policyOutputAvailable(output.id, selection.elementId, models, selection.replica));
   if (outputs.length === 0) return null;
   const block = selection.category === "BLOCK";
   const aggregate = block

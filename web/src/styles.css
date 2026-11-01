@@ -900,6 +900,11 @@ select {
 .timeline-plot .recharts-text { font-size: var(--font-secondary); }
 .timeline-interaction { position: absolute; inset: 0.75rem 0.75rem 2rem 3.5rem; cursor: crosshair; touch-action: none; }
 .timeline-interaction:focus-visible { outline: 2px solid #2563eb; }
+.timeline-policy-states { margin-top: 0.25rem; font-size: var(--font-secondary); }
+.timeline-policy-state { margin-bottom: 0.35rem; overflow-wrap: anywhere; }
+.timeline-state-band { margin: 0.2rem 0.75rem 0.2rem 3.5rem; height: 0.9rem; background: #f1f5f9; cursor: crosshair; touch-action: none; }
+.timeline-state-band svg { display: block; width: 100%; height: 100%; }
+.timeline-state-band:focus-visible { outline: 2px solid #2563eb; }
 .timeline-axis { margin: 0 0.75rem 0.25rem 3.5rem; text-align: center; color: #52606d; font-size: var(--font-secondary); }
 .timeline-latency-note { margin: 0.25rem 0; color: #52606d; font-size: var(--font-secondary); }
 .timeline-readout { margin: 0.25rem 0 0; font-size: var(--font-secondary); }
@@ -1603,6 +1608,9 @@ select {
 .replica-results-scroll { overflow-x: auto; }
 .element-results .replica-results { font-size: var(--font-secondary); table-layout: fixed; }
 .element-results .replica-results th { width: auto; }
+.element-results .replica-results--policies { min-width: 42rem; table-layout: auto; }
+.replica-results--policies th:first-child { position: sticky; left: 0; z-index: 1; background: #fff; }
+.replica-results--policies tr[aria-selected="true"] th:first-child { background: #e0efff; }
 .replica-results button { padding: .15rem; font-size: inherit; }
 .replica-results tr[aria-selected="true"] { background: #e0efff; }
 .replica-results tbody tr { cursor: pointer; }

@@ -44,10 +44,15 @@ function clientHasFallback(model: ModelFile, id: string): boolean {
 }
 
 /** Policy outputs are relevant when an effective variant enables the policy, including replica overrides. */
-export function policyOutputAvailable(output: string, id: string, models: readonly ModelFile[]): boolean {
+export function policyOutputAvailable(output: string, id: string, models: readonly ModelFile[], replica?: number): boolean {
   const policy = ownEntry(outputPolicies, output);
   if (policy === undefined) return true;
   return models.some(model => {
+    if (replica !== undefined) {
+      const owner = ownEntry(model.blocks, id)
+        ?? ownEntry(model.blocks, model.connections.find(connection => connection.id === id)?.from ?? "");
+      if (replica > Number(owner?.params.replicas ?? 1)) return false;
+    }
     if (policy === "outlierDetection") {
       const replicas = Number(ownEntry(model.blocks, id)?.params.replicas ?? 1);
       return model.connections.some(edge => edge.to === id && (
@@ -60,6 +65,10 @@ export function policyOutputAvailable(output: string, id: string, models: readon
     const enabled = isObject(element?.params[policy]);
     const block = ownEntry(model.blocks, id);
     if (block?.type !== "service") return enabled;
+    if (replica !== undefined) {
+      const override = block.replicaOverrides?.[String(replica)];
+      return override !== undefined && Object.hasOwn(override, policy) ? isObject(override[policy]) : enabled;
+    }
     const overrides = Object.values(block.replicaOverrides ?? {});
     return (enabled && overrides.length < Number(block.params.replicas ?? 1))
       || overrides.some(params => Object.hasOwn(params, policy) ? isObject(params[policy]) : enabled);

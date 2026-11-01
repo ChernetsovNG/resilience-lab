@@ -16,6 +16,7 @@ internal object ServicePolicyOutputs {
         OutputCalculation(OutputCalculationKind.RATE, field, "durationMs"),
         OutputSummary(OutputCalculation(OutputCalculationKind.RATE, "totals.$field", "totals.measurementMs")),
         OutputTimeline("servicePolicies", "Service policies", 8, order),
+        OutputInspector(title, 20 + order),
     )
 
     val outputs =
@@ -30,6 +31,7 @@ internal object ServicePolicyOutputs {
                 OutputCalculation(OutputCalculationKind.RATIO, "rateLimited", "offeredAttempts"),
                 OutputSummary(OutputCalculation(OutputCalculationKind.RATIO, "totals.rateLimited", "totals.offeredAttempts")),
                 OutputTimeline("servicePolicies", "Service policies", 8, 1),
+                OutputInspector("Rate-limited share", 21),
             ),
             rate("probeFailuresPerSecond", "probeFailures", "Failed health probes", 2),
             OutputDescriptor(
@@ -41,6 +43,7 @@ internal object ServicePolicyOutputs {
                 OutputCalculation(OutputCalculationKind.RATIO, "notReadyMs", "durationMs"),
                 OutputSummary(OutputCalculation(OutputCalculationKind.RATIO, "totals.notReadyMs", "totals.measurementMs")),
                 OutputTimeline("readiness", "Readiness", 9, 0),
+                OutputInspector("Not-ready share", 23),
             ),
         )
 }

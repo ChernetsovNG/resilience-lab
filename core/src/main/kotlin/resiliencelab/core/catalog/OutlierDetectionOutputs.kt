@@ -13,6 +13,7 @@ internal object OutlierDetectionOutputs {
                 OutputCalculation(OutputCalculationKind.VALUE, "ejections"),
                 OutputSummary(OutputCalculation(OutputCalculationKind.VALUE, "totals.ejections")),
                 OutputTimeline("outlierDetection", "Outlier detection", 10, 0),
+                OutputInspector("Ejections", 24),
             ),
             OutputDescriptor(
                 "ejectedShare",
@@ -23,6 +24,7 @@ internal object OutlierDetectionOutputs {
                 OutputCalculation(OutputCalculationKind.RATIO, "ejectedMs", "durationMs"),
                 OutputSummary(OutputCalculation(OutputCalculationKind.RATIO, "totals.ejectedMs", "totals.measurementMs")),
                 OutputTimeline("outlierDetection", "Outlier detection", 10, 1),
+                OutputInspector("Ejected share", 25),
             ),
         )
 }
