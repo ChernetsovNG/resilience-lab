@@ -13,6 +13,7 @@ import { catalogParameter, formatParameterValue } from "../workspace/parameterVa
 import { HelpHint } from "../help/HelpHint";
 import { BlockIcon } from "../layout/BlockIcon";
 import { BlockShape } from "./BlockShape";
+import { PolicyBadges } from "./PolicyBadges";
 
 export type BlockNodeType = Node<{
   id: string;
@@ -33,6 +34,7 @@ export type BlockNodeType = Node<{
   onProblems?: () => void;
   faults?: readonly CourseFault[];
   onFault?: (index: number) => void;
+  onPolicy?: (path: string) => void;
   result?: ServiceCanvasResults;
   resultsPending?: string;
   resultsEmpty?: boolean;
@@ -90,8 +92,13 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
   const replicas = data.block.type === "service" ? Number(data.block.params.replicas ?? 1) : 1;
   return (
     <BlockShape id={data.id} type={data.block.type} replicas={replicas} overridden={data.overridden}
+      policyState={data.result?.policyState} instances={data.result?.instances}
       ports={data.ports} editable={data.editable} width={width} height={height}
       fill={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : utilizationColor(colorValue / maximum)}>
+      <PolicyBadges id={data.id} type={data.block.type} params={data.block.params} catalog={data.catalog}
+        replicaOverrides={data.block.replicaOverrides}
+        state={data.result?.policyState}
+        className="policy-badges--node" disabled={data.disabled} onOpen={path => data.onPolicy?.(path)} />
       <strong className="block-node-header">
         <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
         <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>

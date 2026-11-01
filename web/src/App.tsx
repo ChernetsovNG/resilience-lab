@@ -160,6 +160,7 @@ export function App() {
   };
   const selectVariantChange = (id: string, path: string) => {
     if (invalid || loading) return;
+    results.select({ replicaId: null });
     setAnalysis(false);
     setSelection([id]); setInspectorTarget("element");
     setInspectorRequest(current => current + 1);

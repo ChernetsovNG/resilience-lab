@@ -19,6 +19,7 @@ import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
 import { CallEdge, EdgeLayoutProvider } from "./CallEdge";
 import { VariantChanges } from "./VariantChanges";
+import { canvasPolicyPaths } from "./policyPresentation";
 import "@xyflow/react/dist/style.css";
 
 const baseFitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
@@ -226,6 +227,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
       needsConnection: block.type === "client"
         ? !model.connections.some(connection => connection.from === id && connection.type === "request") : !reachable.has(id),
       faults: faults.filter(fault => fault.elementId === id), onFault,
+      onPolicy: (path: string) => { if (!disabled) { if (onSelectChange) onSelectChange(id, path); else onSelect([id]); } },
       id, block, modelBlock: baseModel === undefined ? undefined : ownEntry(baseModel.blocks, id), overrides,
       catalog, overridden: overridden(id), diagnostics: elementDiagnostics?.get(id),
       variantDiagnostics: variantElementDiagnostics?.get(id), onProblems: () => onProblems?.(id),
@@ -247,7 +249,11 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     return previous === undefined || !Object.is(previous.x, bounds.x) || !Object.is(previous.y, bounds.y) ||
       !Object.is(previous.width, bounds.width) || !Object.is(previous.height, bounds.height);
   })) setNodeBounds(nextBounds);
+  const policyRows = new Map<string, number>();
   const edges: Edge[] = model.connections.map((connection) => {
+    const targetGroup = Number(ownEntry(model.blocks, connection.to)?.params.replicas ?? 1) > 1;
+    const policyRow = policyRows.get(connection.from) ?? 0;
+    if (canvasPolicyPaths(connection.type, connection.params, targetGroup).length > 0) policyRows.set(connection.from, policyRow + 1);
     const result = results?.connections.get(connection.id);
     const matched = result?.from === connection.from && result.to === connection.to && result.type === connection.type
       ? result : undefined;
@@ -262,6 +268,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
         faults: faults.filter(fault => fault.elementId === connection.id), onFault,
+        onPolicy: (path: string) => { if (!disabled) { if (onSelectChange) onSelectChange(connection.id, path); else onSelect([connection.id]); } },
         modelParams: baseModel === undefined ? undefined : elementOf(baseModel, connection.id)?.params, overrides,
         resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
         result: matched, connectionMetric,
@@ -270,7 +277,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
         },
         variantDiagnostics: variantElementDiagnostics?.get(connection.id), onProblems: () => onProblems?.(connection.id),
         windowed: results?.window !== undefined, connection, catalog, diagnostics, overridden: overridden(connection.id), parametersEditable, disabled,
-        targetGroup: Number(ownEntry(model.blocks, connection.to)?.params.replicas ?? 1) > 1,
+        targetGroup, policyRow,
         onParam: (elementId: string, path: string, value: unknown) => onParam?.(elementId, path, value),
         onValidity: (key: string, valid: boolean) => onValidity?.(key, valid),
       },

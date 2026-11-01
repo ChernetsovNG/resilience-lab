@@ -1,4 +1,4 @@
-import type { ModelFile } from "../api/apiTypes";
+import type { BlockInstance, ModelFile } from "../api/apiTypes";
 import { elementOf, isObject, ownEntry } from "./params";
 
 /** Policy editing is introduced by T4; existing policy values remain readable and preserved. */
@@ -19,6 +19,18 @@ const outputPolicies: Record<string, string> = {
 };
 
 const poolOutputs = new Set(["poolUtilization", "meanPoolQueue", "poolAcquireTimeouts"]);
+
+/** A service policy is active when at least one effective instance enables it. */
+export function servicePolicyAvailable(policy: string, block: Pick<BlockInstance, "params" | "replicaOverrides">, replica?: number): boolean {
+  const enabled = isObject(block.params[policy]);
+  if (replica !== undefined) {
+    const override = block.replicaOverrides?.[String(replica)];
+    return override !== undefined && Object.hasOwn(override, policy) ? isObject(override[policy]) : enabled;
+  }
+  const overrides = Object.values(block.replicaOverrides ?? {});
+  return (enabled && overrides.length < Number(block.params.replicas ?? 1))
+    || overrides.some(params => Object.hasOwn(params, policy) ? isObject(params[policy]) : enabled);
+}
 
 /** Connection-pool outputs require a pool in at least one displayed effective model. */
 export function poolOutputAvailable(output: string, id: string, models: readonly ModelFile[]): boolean {
@@ -65,12 +77,6 @@ export function policyOutputAvailable(output: string, id: string, models: readon
     const enabled = isObject(element?.params[policy]);
     const block = ownEntry(model.blocks, id);
     if (block?.type !== "service") return enabled;
-    if (replica !== undefined) {
-      const override = block.replicaOverrides?.[String(replica)];
-      return override !== undefined && Object.hasOwn(override, policy) ? isObject(override[policy]) : enabled;
-    }
-    const overrides = Object.values(block.replicaOverrides ?? {});
-    return (enabled && overrides.length < Number(block.params.replicas ?? 1))
-      || overrides.some(params => Object.hasOwn(params, policy) ? isObject(params[policy]) : enabled);
+    return servicePolicyAvailable(policy, block, replica);
   });
 }

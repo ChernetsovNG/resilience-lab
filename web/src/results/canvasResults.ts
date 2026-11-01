@@ -6,18 +6,22 @@ import type { DecodedConnection } from "./series/types";
 import { outputsOf, outputValue, outputField } from "./outputs";
 import { elementIdentity } from "../workspace/editor";
 import { applyOverrides, ownEntry } from "../workspace/params";
+import { policyOutputAvailable } from "../workspace/policyParameters";
+import { policyWindowState, type PolicyWindowState } from "./policyState";
 
 interface ElementCanvasValues {
   values: Record<string, number | null>;
   outputs: OutputDescriptor[];
   /** Parameters of the immutable run context, including defaults, variant and grid overrides. */
   params: Record<string, unknown>;
+  policyState?: PolicyWindowState;
 }
 
 export interface ServiceCanvasResults extends ElementCanvasValues {
   windowed?: boolean;
   worst?: Record<string, { replica: number; value: number } | null>;
   replicaParams?: Record<number, Record<string, unknown>>;
+  instances?: { id: string; replica: number; policyState?: PolicyWindowState }[];
   firstSaturation: string | null;
 }
 
@@ -30,6 +34,7 @@ export interface ConnectionCanvasResults extends ElementCanvasValues {
   to: string;
   type: string;
   hasOwnSeries: boolean;
+  copies?: number;
 }
 
 export interface CanvasResults {
@@ -86,7 +91,9 @@ export function canvasResults(
       if (value !== null && (previous == null || value > previous.value || (value === previous.value && instance.replica < previous.replica)))
         worst.queueRejectionRate = { value, replica: instance.replica };
     }
-    services.set(id, { outputs, params, worst, replicaParams,
+    const instances = group !== undefined && ["ejectedShare", "notReadyShare"].some(output => policyOutputAvailable(output, id, [effective]))
+      ? group.instances : undefined;
+    services.set(id, { outputs, params, worst, replicaParams, instances,
       values: valuesOf(outputs, { ...aggregate, params, replications: variant.replications }),
       firstSaturation: (first?.node === id || group?.instances.some(instance => instance.id === first?.node)) ? t("results.canvas.firstSaturation", { count: formatNumber(first.replicationCount), replications: formatNumber(variant.replications) }) : null,
     });
@@ -102,6 +109,7 @@ export function canvasResults(
     const params = paramsOf(connection.type, effective.connections.find(candidate => candidate.id === connection.id)?.params ?? {});
     connections.set(connection.id, { from: connection.from, to: connection.to, type: connection.type,
       outputs, params, hasOwnSeries: own !== undefined,
+      copies: Number(effective.blocks[connection.from]?.params.replicas ?? 1),
       values: valuesOf(outputs, { ...own, params, replications: variant.replications, target: ownEntry(point.aggregate.services, connection.to) }),
     });
   }
@@ -116,7 +124,10 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
   for (const [id, service] of summary.services) {
     const frame = metrics.get(id);
     if (frame === undefined) return null;
+    if (service.instances?.some(instance => metrics.get(instance.id) === undefined)) return null;
     services.set(id, { ...service, windowed: true,
+      policyState: policyWindowState(frame, Number(service.params.replicas ?? 1)),
+      instances: service.instances?.map(instance => ({ ...instance, policyState: policyWindowState(metrics.get(instance.id)!) })),
       worst: service.worst === undefined ? undefined : worstReplicas(frame.slotPools.handlers?.replicaExtrema),
       values: valuesOf(service.outputs, { ...frame, params: service.params }, true) });
   }
@@ -126,6 +137,7 @@ export function windowCanvasResults(summary: CanvasResults, nodes: readonly Node
     if (connection.hasOwnSeries && frame === undefined) return null;
     const target = metrics.get(connection.to);
     connections.set(id, { ...connection,
+      policyState: frame === undefined ? undefined : policyWindowState(frame, connection.copies ?? 1),
       values: valuesOf(connection.outputs, { ...frame, params: connection.params, target, entries: target?.entries }, true) });
   }
   return { services, connections, window };
