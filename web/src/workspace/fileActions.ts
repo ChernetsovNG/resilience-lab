@@ -144,7 +144,9 @@ export async function readImports(files: readonly Pick<File, "name" | "text">[],
 }
 
 /** Checks all collisions before writing. Only an explicit confirmation permits version-conditional replacement. */
-export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate = true): Promise<boolean> {
+export async function writeDocuments(
+  drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate = true, onWritten?: (entry: DocumentEntry) => void,
+): Promise<boolean> {
   const entries = await api.documents();
   const versions = new Map(entries.map(entry => [entry.path, entry.version]));
   const collisions = drafts.filter(draft => versions.has(draft.path)).map(draft => draft.path);
@@ -162,7 +164,8 @@ export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: C
     // Publish experiment references only after their model and layout have been written.
     const ordered = [...drafts].sort((a, b) => Number(a.content.experiment != null) - Number(b.content.experiment != null));
     for (const draft of ordered) {
-      await api.saveDocument(draft.path, draft.content, versions.get(draft.path) ?? null);
+      const entry = await api.saveDocument(draft.path, draft.content, versions.get(draft.path) ?? null);
+      onWritten?.(entry);
       written.push(draft.path);
     }
   } catch (error) {
