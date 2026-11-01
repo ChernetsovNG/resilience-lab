@@ -137,6 +137,11 @@ internal enum class CoreMessage(
         null,
         "Connection '{connection}' allows {attempts} attempts with backoff '{backoff}', above threshold {threshold}; use exponential-full-jitter",
     ),
+    LINT_RETRY_UNGUARDED(
+        "LINT_RETRY_UNGUARDED",
+        null,
+        "Connection '{connection}' allows {attempts} attempts without retryBudget or circuitBreaker; target load may grow by up to {amplification} times on failure",
+    ),
     LINT_RETRY_AMPLIFICATION("LINT_RETRY_AMPLIFICATION", null, "Retry amplification {amplification} exceeds threshold {threshold}"),
     LINT_RETRY_SAME_TARGET(
         "LINT_RETRY_SAME_TARGET",

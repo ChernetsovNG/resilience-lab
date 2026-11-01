@@ -185,6 +185,40 @@ for (const locale of locales) {
       await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
     });
 
+    test("localizes unguarded retries and clears the finding after reducing attempts", async ({ page }) => {
+      const experiment = "retry-storm/retry-storm.experiment.json";
+      const response = await page.request.post("/api/v1/validate", { data: { experiment } });
+      expect(response.ok()).toBe(true);
+      const report: ValidationReport = await response.json();
+      expect(report.valid).toBe(true);
+      const finding = report.diagnostics.find(diagnostic => diagnostic.code === "LINT_RETRY_UNGUARDED"
+        && diagnostic.path === "gateway-to-middle")!;
+      expect(finding.severity).toBe("WARNING");
+      expect(finding.args).toMatchObject({ attempts: 3, amplification: 3 });
+      const translated = label("messages.LINT_RETRY_UNGUARDED").split("{connection}")[1]
+        .replace(/\{(\w+)\}/g, (_, name: string) => String(finding.args?.[name]));
+
+      await page.goto("/");
+      await selectExperiment(page, experiment);
+      await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_RETRY_UNGUARDED"]') })
+        .filter({ hasText: "gateway-to-middle" });
+      const warning = row.locator('button[data-diagnostic-code="LINT_RETRY_UNGUARDED"]');
+      await expect(warning).toContainText("gateway-to-middle");
+      await expect(warning).toContainText(translated);
+      await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+      await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_RETRY_UNGUARDED_DETAILS"));
+      await page.keyboard.press("Escape");
+      await warning.click();
+      const attempts = page.locator(".inspector").getByLabel(label("catalog.types.call.params.attempts.title"), { exact: true });
+      await expect(attempts).toBeFocused();
+      await expect(attempts).toHaveValue("3");
+      await attempts.fill("1");
+      await attempts.press("Enter");
+      await expect(warning).toHaveCount(0);
+      await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+    });
+
     test("localizes retries without jitter and opens the backoff parameter", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "checkout/checkout.experiment.json");

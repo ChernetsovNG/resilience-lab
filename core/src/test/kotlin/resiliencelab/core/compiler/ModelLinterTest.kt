@@ -663,8 +663,8 @@ class ModelLinterTest {
             )
 
         val warnings = linter.lint(experiment(checkout))
-        assertThat(warnings.map { it.code }).containsExactly("LINT_RETRY_NO_JITTER")
-        assertThat(warnings.single().path).isEqualTo("order-payment")
+        assertThat(warnings.map { it.code }).containsExactly("LINT_RETRY_NO_JITTER", "LINT_RETRY_UNGUARDED", "LINT_RETRY_UNGUARDED")
+        assertThat(warnings.single { it.code == "LINT_RETRY_NO_JITTER" }.path).isEqualTo("order-payment")
         assertThat(
             warnings(checkout.copy(clients = listOf(checkout.client.copy(deadlineMs = 8_001.0))), "LINT_DEADLINE_BUDGET").single().message,
         ).contains("Deadline 8001 ms", "estimated 8002 ms")
