@@ -29,7 +29,8 @@ import { Inspector } from "./inspector/Inspector";
 import { Palette } from "./layout/Palette";
 import { ProblemList } from "./layout/ProblemList";
 import { ResultsWorkspace } from "./layout/ResultsWorkspace";
-import { ResultsPanel, type ResultsPanelSize, type ResultsPanelView } from "./layout/ResultsPanel";
+import { ResultsPanel, type ResultsPanelView } from "./layout/ResultsPanel";
+import { useResultsPanelSize } from "./layout/useResultsPanelSize";
 import { TopBar } from "./layout/TopBar";
 import { FileMenu, type FileMenuHandle } from "./layout/FileMenu";
 import { ZoomStatusBar } from "./layout/StatusBar";
@@ -73,7 +74,7 @@ export function App() {
   const [estimatePanel, setEstimatePanel] = useState<{ source: "manual" } | { source: "run"; previousJobId: string | null } | null>(null);
   const showEstimate = estimatePanel !== null && (estimatePanel.source === "manual" || run.job === null ||
     estimatePanel.previousJobId === run.job.id);
-  const [resultsSize, setResultsSize] = useState<ResultsPanelSize>("collapsed");
+  const [resultsSize, setResultsSize] = useResultsPanelSize();
   const [resultsView, setResultsView] = useState<ResultsPanelView>("answer");
   const [analysis, setAnalysis] = useState(false);
   const [problemsRequest, setProblemsRequest] = useState(0);
@@ -205,7 +206,7 @@ export function App() {
     if (current === undefined) return;
     if (variantId === null && resultVariantId !== undefined) selectVariant(resultVariantId);
     setSelection([current[0]]); setInspectorTarget("element"); setFieldFocus(null);
-    focusCanvasElement(current[0], variantId ?? resultVariantId ?? null);
+    if (resultsSize !== "expanded") focusCanvasElement(current[0], variantId ?? resultVariantId ?? null);
     results.select({ replicaId: replica?.instance.id ?? null });
     setInspectorRequest(current => current + 1);
   };
@@ -216,7 +217,7 @@ export function App() {
     window: results.selection.window, selected: selectedReplica?.id ?? selected,
     onShowTimeline: () => {
       setSelection([selected]);
-      setResultsSize("normal"); setTimelineRequest(current => current + 1);
+      setResultsSize(current => current === "collapsed" ? "normal" : current); setTimelineRequest(current => current + 1);
     },
   };
   const diagnostics = validation.report?.diagnostics ?? [];
@@ -286,7 +287,7 @@ export function App() {
     setProblemsElement(null);
     setProblemsRequest(current => current + 1);
     setResultsSize(current => current === "collapsed" ? "normal" : current);
-  }, []);
+  }, [setResultsSize]);
 
   const onValidity = useCallback((key: string, valid: boolean) => {
     setInvalidFields((current) => {
@@ -385,7 +386,7 @@ export function App() {
     setEstimatePanel({ source: "manual" });
     const cost = await estimate.request();
     if (cost?.problem?.diagnostics.some(finding => finding.severity === "ERROR")) setEstimatePanel(null);
-  }, [validationFailed, openProblems, resultsSize, estimate]);
+  }, [validationFailed, openProblems, resultsSize, estimate, setResultsSize]);
 
   const resetExperimentView = () => {
     setCommand(null);
@@ -438,7 +439,7 @@ export function App() {
       runInFlight.current = false;
       setRunPending(false);
     }
-  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize, confirm, hasClient, validationFailed, openProblems]);
+  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize, confirm, hasClient, validationFailed, openProblems, setResultsSize]);
 
   useEffect(() => {
     if (command === null) return;
@@ -533,7 +534,10 @@ export function App() {
         ) : null}
       />
       <ResultsWorkspace canvasFooterHeight={loaded === null || catalog === null ? 0 : 32} inspectorRequest={inspectorRequest}
-        onInspectorCollapsedChange={setInspectorCollapsed} view={resultsView} collapsed={resultsSize === "collapsed"} analysis={analysis}
+        onInspectorCollapsedChange={setInspectorCollapsed} view={resultsView} size={resultsSize} onSizeChange={setResultsSize} analysis={analysis}
+        onShowSelection={() => {
+          if (selected !== null) requestAnimationFrame(() => focusCanvasElement(selected, variantId));
+        }}
         inspectorSelection={target === "element" ? selected : null}
         inspector={model === null || loaded === null || catalog === null ? (
           <aside hidden={analysis} className="inspector" aria-label={t("app.canvas.inspector")} />

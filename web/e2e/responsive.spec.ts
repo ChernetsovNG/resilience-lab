@@ -147,10 +147,10 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
       await page.mouse.down();
       await page.mouse.move(boundary.x + boundary.width / 2 - 48, boundary.y + boundary.height / 2);
       await page.mouse.up();
-      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(Math.min(480, initialWidth + 48));
+      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(Math.min(viewport.width / 2, initialWidth + 48));
       await divider.dblclick();
       await divider.press("End");
-      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(480);
+      expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(viewport.width / 2);
       await divider.dblclick();
       expect(Number(await divider.getAttribute("aria-valuenow"))).toBe(initialWidth);
       await page.getByRole("button", { name: "Collapse inspector", exact: true }).click();

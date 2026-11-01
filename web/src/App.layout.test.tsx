@@ -5,6 +5,14 @@ import { setupAppTests, otherPath, completed, deferred, server, open, selectGate
 
 setupAppTests();
 
+it.each(["Findings", "Problems", "Expand results", "Run", "Estimate"])("starts collapsed with expanded preferred and opens it through %s", async action => {
+  localStorage.setItem("resilience-lab.results-panel-size", "expanded");
+  server(); await open();
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(action === "Findings" || action === "Problems" ? screen.getByRole("tab", { name: action }) : button(action));
+  await waitFor(() => expect(document.querySelector(".results-panel--expanded")).not.toBeNull());
+  expect(localStorage.getItem("resilience-lab.results-panel-size")).toBe("expanded");
+});
 
 it("starts with collapsed results and preserves manual expansion across experiment changes", async () => {
   server(); await open();
@@ -68,21 +76,25 @@ it("resizes the results with keys and dragging within bounds without editing doc
   fireEvent(divider, new MouseEvent("pointermove", { bubbles: true, clientY: 460 }));
   expect(height()).toBe(initial + 40);
   fireEvent(divider, new MouseEvent("pointermove", { bubbles: true, clientY: -10000 }));
-  expect(height()).toBe(300);
+  expect(document.querySelector(".workspace-panels--expanded")).not.toBeNull();
   fireEvent(divider, new MouseEvent("pointerup", { bubbles: true }));
+  fireEvent.doubleClick(divider);
+  expect(height()).toBe(initial + 40);
   fireEvent.keyDown(divider, { key: "Home" });
   expect(height()).toBe(160);
   fireEvent.keyDown(divider, { key: "ArrowDown" });
   expect(height()).toBe(160);
   fireEvent.keyDown(divider, { key: "End" });
-  expect(height()).toBe(300);
+  expect(height()).toBe(360);
   fireEvent.keyDown(divider, { key: "ArrowUp" });
-  expect(height()).toBe(300);
+  expect(document.querySelector(".workspace-panels--expanded")).not.toBeNull();
+  fireEvent.doubleClick(divider);
+  expect(height()).toBe(360);
   fireEvent.click(button("Collapse results"));
   expect(screen.queryByRole("separator", { name: "Resize results panel" })).toBeNull();
   expect(screen.queryByRole("tabpanel")).toBeNull();
   fireEvent.click(button("Expand results"));
-  expect(height()).toBe(300);
+  expect(height()).toBe(360);
   expect(screen.queryByRole("button", { name: "Expand results" })).toBeNull();
   expect(button("Undo").disabled).toBe(true);
   expect(button("Save").disabled).toBe(true);

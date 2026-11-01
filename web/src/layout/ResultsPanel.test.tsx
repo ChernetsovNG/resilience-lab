@@ -177,6 +177,23 @@ it("collapses and restores while preserving tabs", () => {
   expect(screen.getByRole("tabpanel")).toBeTruthy();
 });
 
+it("expands results and restores their size without changing the selected tab", () => {
+  function Panel() {
+    const [size, setSize] = useState<ResultsPanelSize>("normal");
+    return <ResultsPanel job={null} summary={null} problem={null} size={size} onSizeChange={setSize} />;
+  }
+  render(<Panel />);
+  const tab = screen.getByRole("tab", { name: "Assumptions" });
+  fireEvent.click(tab);
+  fireEvent.click(screen.getByRole("button", { name: "Maximize results" }));
+  expect(screen.getByRole("region", { name: "Results" }).classList.contains("results-panel--expanded")).toBe(true);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  expect(screen.getByRole("region", { name: "Results" }).classList.contains("results-panel--expanded")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Restore results size" }));
+  expect(screen.getByRole("tab", { name: "Problems" }).getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByRole("region", { name: "Results" }).classList.contains("results-panel--normal")).toBe(true);
+});
+
 it.each(["Findings", "Timeline", "Assumptions", "Map", "Problems"])("opens collapsed %s and keeps it open on repeated selection", async name => {
   const grid = structuredClone(summary);
   grid.grid = [{ path: "gateway-to-middle.timeout", values: ["80ms"] }];
