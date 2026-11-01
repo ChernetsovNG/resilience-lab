@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -57,7 +57,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       const modelURL = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.model.json`)}`;
       const ramp = { points: [{ time: "0s", rate: "10/s" }, { time: "30s", rate: "100/s" }] };
-      expect((await (await page.request.get(modelURL)).json()).content.model.blocks.client.params.load).toEqual(ramp);
+      expect((await readWorkspaceDocument(page.request, modelURL)).content.model.blocks.client.params.load).toEqual(ramp);
       await page.reload();
       await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
       await expect(rows.nth(1).getByRole("textbox", { name: rate, exact: true })).toHaveValue("100/s");
@@ -90,10 +90,10 @@ for (const language of ["en", "ru"] as const) {
       await save.click();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       const experimentURL = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`;
-      const saved = (await (await page.request.get(experimentURL)).json()).content.experiment;
+      const saved = (await readWorkspaceDocument(page.request, experimentURL)).content.experiment;
       expect(saved.variants[0].overrides["client.load"]).toEqual({ points: [ramp.points[0], { time: "30s", rate: "120/s" }] });
       expect(Object.keys(saved.variants[0].overrides).filter(path => path.startsWith("client.load"))).toEqual(["client.load"]);
-      expect((await (await page.request.get(modelURL)).json()).content.model.blocks.client.params.load).toEqual(ramp);
+      expect((await readWorkspaceDocument(page.request, modelURL)).content.model.blocks.client.params.load).toEqual(ramp);
       await page.reload();
       await page.getByRole("tab", { name: "Baseline", exact: true }).click();
       await page.getByTestId("rf__node-client").locator(".block-node > strong").click();
@@ -102,7 +102,7 @@ for (const language of ["en", "ru"] as const) {
       await page.mouse.move(700, 100);
       if (ru) await page.screenshot({ path: testInfo.outputPath("load-profile-variant-ru.png") });
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }

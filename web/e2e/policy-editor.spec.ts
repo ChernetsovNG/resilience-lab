@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -56,7 +56,7 @@ for (const language of ["en", "ru"] as const) {
         await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       };
       const saved = async () => {
-        const document = async (kind: string) => (await (await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.${kind}.json`)}`)).json()).content;
+        const document = async (kind: string) => (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.${kind}.json`)}`)).content;
         return { model: (await document("model")).model as ModelFile, experiment: (await document("experiment")).experiment as ExperimentFile };
       };
       const run = async (points: number) => {
@@ -167,7 +167,7 @@ for (const language of ["en", "ru"] as const) {
       await save();
       expect(await saved()).toEqual(beforeRemoval);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }
@@ -192,6 +192,7 @@ test("edits an imported policy sweep without a base policy, saves and estimates 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
     const saved = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
+    expect(saved.ok(), `HTTP ${saved.status()}: ${await saved.text()}`).toBe(true);
     expect((await saved.json()).content.experiment.grid).toEqual([{ path: "gateway.rateLimit.burst", values: [6, 10] }]);
     const estimate = await page.request.post("/api/v1/estimate", { data: { experiment: path } });
     expect(estimate.ok()).toBe(true);
@@ -201,6 +202,6 @@ test("edits an imported policy sweep without a base policy, saves and estimates 
     await expect(first).toHaveValue("6");
     await expect(first).toBeEditable();
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupWorkspace(page, root);
   }
 });

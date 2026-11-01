@@ -1,6 +1,6 @@
-import { expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile, ValidationReport } from "../src/api/apiTypes";
 
@@ -68,8 +68,7 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
     await queueWarning.click();
     await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
   } finally {
-    await page.goto("/api/v1/health");
-    await rm(root, { recursive: true, force: true });
+    await cleanupWorkspace(page, root);
   }
 });
 
@@ -112,7 +111,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
         await page.keyboard.press("Escape");
         await warning.click();
         await expect(page.locator(".inspector").getByLabel(labels["catalog.types.call.params.attempts.title"], { exact: true })).toBeFocused();
-      } finally { await rm(root, { recursive: true, force: true }); }
+      } finally { await cleanupWorkspace(page, root); }
     });
   });
 }
@@ -181,8 +180,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
         await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
         await expect(page.getByRole("button", { name: labels["app.topBar.run"], exact: true })).toBeEnabled();
       } finally {
-        await page.goto("/api/v1/health");
-        await rm(root, { recursive: true, force: true });
+        await cleanupWorkspace(page, root);
       }
     });
   });

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -53,7 +53,7 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
     await expect(page.getByText("Несохранённые изменения", { exact: true })).toBeHidden();
     const url = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`;
-    const faults = (await (await page.request.get(url)).json()).content.experiment.faults;
+    const faults = (await readWorkspaceDocument(page.request, url)).content.experiment.faults;
     expect(faults).toEqual([
       { target: "gateway#2", from: "20s", to: "30s", kind: "slowdown", multiplier: 4, delay: null, failureRate: null, capacity: null },
     ]);
@@ -80,6 +80,6 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     await page.mouse.move(700, 100);
     await page.screenshot({ path: testInfo.outputPath("fault-editor-results-ru.png") });
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupWorkspace(page, root);
   }
 });

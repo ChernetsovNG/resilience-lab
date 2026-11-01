@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test("reload asks before losing edits and stops asking after Save", async ({ page }) => {
   const directory = `unsaved-reload-${randomUUID()}`;
@@ -38,7 +38,7 @@ test("reload asks before losing edits and stops asking after Save", async ({ pag
     await page.reload();
     await expect(replications).toHaveValue("3");
     expect(prompts).toEqual([]);
-  } finally { await rm(target, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, target); }
 });
 
 test.describe("Russian unsaved changes", () => {
@@ -75,16 +75,16 @@ test.describe("Russian unsaved changes", () => {
       await expect(dialog).not.toBeVisible();
       await expect(page.getByLabel("Модель", { exact: true })).toHaveValue("checkout/checkout.model.json");
       const modelResponse = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(modelPath)}`);
-      expect(modelResponse.ok()).toBe(true);
+      expect(modelResponse.ok(), `HTTP ${modelResponse.status()}: ${await modelResponse.text()}`).toBe(true);
       expect((await modelResponse.json()).content.model.blocks.gateway.params.handlers).toBe(7);
       const experimentResponse = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
-      expect(experimentResponse.ok()).toBe(true);
+      expect(experimentResponse.ok(), `HTTP ${experimentResponse.status()}: ${await experimentResponse.text()}`).toBe(true);
       expect((await experimentResponse.json()).content.experiment.execution.replications).toBe(3);
       await selectExperiment(page, path);
       await expect(replications).toHaveValue("3");
       await expect(page.locator(".dirty-mark")).toBeHidden();
       await page.getByTestId("rf__node-gateway").click();
       await expect(handlers).toHaveValue("7");
-    } finally { await rm(target, { recursive: true, force: true }); }
+    } finally { await cleanupWorkspace(page, target); }
   });
 });

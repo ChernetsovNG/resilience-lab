@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, selectExperiment, test, type Page } from "./fixtures";
+import { cleanupWorkspace, expect, selectExperiment, test, type Page } from "./fixtures";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
 
 test.use({ viewport: { width: 1600, height: 1000 } });
 
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
-  expect(response.ok()).toBe(true);
+  expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
   return (await response.json()).content;
 }
 
@@ -88,6 +88,7 @@ test("checkout-replicas explanations survive editing, saving and reloading in Ru
     await expect(inspector.getByRole("textbox", { name: "Описание", exact: true })).toHaveValue(description);
 
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(page.locator(".dirty-mark")).toBeHidden();
     await expect(page.getByRole("button", { name: "Сохранить", exact: true })).toBeDisabled();
     const expectedModel = structuredClone(beforeModel);
     expectedModel.blocks["order-service"].description = description;
@@ -113,6 +114,6 @@ test("checkout-replicas explanations survive editing, saving and reloading in Ru
     expect(savedModel.blocks["order-service"].notes).toBe(sourceModel.blocks["order-service"].notes);
     expect(savedModel.notes).toBe(sourceModel.notes);
   } finally {
-    await rm(target, { recursive: true, force: true });
+    await cleanupWorkspace(page, target);
   }
 });

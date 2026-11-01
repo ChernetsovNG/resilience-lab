@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
-import { expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -123,6 +123,6 @@ for (const language of ["en", "ru"] as const) {
         await breaker.locator("..").screenshot({ path: testInfo.outputPath("policy-breaker-window-ru.png") });
       }
       expect(JSON.parse(await readFile(resolve(root, "checkout-replicas.model.json"), "utf8"))).toEqual(model);
-    } finally { await rm(root, { recursive: true, force: true }); }
+    } finally { await cleanupWorkspace(page, root); }
   });
 }

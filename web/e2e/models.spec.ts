@@ -1,6 +1,6 @@
-import { copyRetryStorm, expect, test } from "./fixtures";
+import { cleanupWorkspace, copyRetryStorm, expect, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
@@ -100,7 +100,7 @@ test("long model information scrolls within the canvas and keeps full notes reac
     await notes.click();
     await expect(page.locator(".inspector-annotations")).toHaveAttribute("open");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-  } finally { await rm(target, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, target); }
 });
 
 test("checkout keeps its diagram while switching its two questions and remembers the last one", async ({ page }, testInfo) => {
@@ -156,7 +156,7 @@ test("a model without experiment or layout creates its baseline on the first Run
     const cancelled = await page.request.post(`/api/v1/jobs/${job.id}/cancel`);
     expect(cancelled.ok()).toBe(true);
     await expect(page.getByTestId("job-status")).toHaveText(/^CANCELLED\b/);
-  } finally { await rm(target, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, target); }
 });
 
 test("deleting the only experiment keeps the model open with an in-memory default", async ({ page }) => {
@@ -183,5 +183,5 @@ test("deleting the only experiment keeps the model open with an in-memory defaul
     expect((await readdir(target)).sort()).toEqual(["retry-storm.layout.json", "retry-storm.model.json"]);
     await page.getByRole("button", { name: "File", exact: true }).click();
     await expect(page.getByRole("button", { name: "Delete experiment…", exact: true })).toBeDisabled();
-  } finally { await rm(target, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, target); }
 });
