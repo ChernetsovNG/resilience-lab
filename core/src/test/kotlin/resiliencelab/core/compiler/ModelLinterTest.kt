@@ -49,6 +49,79 @@ class ModelLinterTest {
         )
 
     @Test
+    fun `retries without jitter warn only above one attempt for none and fixed backoffs`() {
+        listOf(
+            Backoff(BackoffKind.NONE, 0.0, 0.0, 2.0) to "none",
+            Backoff(BackoffKind.FIXED, 500.125, 500.125, 2.0) to "fixed",
+            Backoff(BackoffKind.EXPONENTIAL_FULL_JITTER, 25.0, 1_000.0, 2.0) to "exponential-full-jitter",
+        ).forEach { (backoff, kind) ->
+            listOf(1, 2, 3).forEach { attempts ->
+                val changed = chain.copy(calls = listOf(chain.calls[0].copy(attempts = attempts, backoff = backoff), chain.calls[1]))
+                val findings = warnings(changed, "LINT_RETRY_NO_JITTER")
+
+                assertThat(findings)
+                    .describedAs("$kind, $attempts attempts")
+                    .hasSize(if (attempts > 1 && kind != "exponential-full-jitter") 1 else 0)
+                findings.forEach { warning ->
+                    assertThat(warning.severity).isEqualTo(Severity.WARNING)
+                    assertThat(warning.document).isEqualTo("m.model.json")
+                    assertThat(warning.pointer).isEqualTo("/connections/1/params/backoff/kind")
+                    assertThat(warning.path).isEqualTo("a-b")
+                    assertThat(
+                        warning.message,
+                    ).contains("'a-b'", "$attempts attempts", "'$kind'", "threshold of 1", "exponential-full-jitter")
+                    assertThat(warning.args).containsAllEntriesOf(
+                        mapOf(
+                            "connection" to JsonPrimitive("a-b"),
+                            "attempts" to JsonPrimitive(attempts),
+                            "backoff" to JsonPrimitive(kind),
+                            "threshold" to JsonPrimitive(1),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `jitter warning threshold is a positive attempt count with equality allowed`() {
+        val configurable = ModelLinter(retryNoJitterThreshold = 2)
+        val atThreshold = chain.copy(calls = listOf(chain.calls[0].copy(attempts = 2), chain.calls[1]))
+        val aboveThreshold = atThreshold.copy(calls = listOf(atThreshold.calls[0].copy(attempts = 3), atThreshold.calls[1]))
+
+        assertThat(configurable.lint(experiment(atThreshold)).filter { it.code == "LINT_RETRY_NO_JITTER" }).isEmpty()
+        val warning = configurable.lint(experiment(aboveThreshold)).single { it.code == "LINT_RETRY_NO_JITTER" }
+        assertThat(warning.message).contains("3 attempts", "threshold of 2")
+        assertThat(warning.args).containsEntry("threshold", JsonPrimitive(2))
+        listOf(0, -1).forEach { threshold ->
+            assertThatThrownBy { ModelLinter(retryNoJitterThreshold = threshold) }.isInstanceOf(IllegalArgumentException::class.java)
+        }
+    }
+
+    @Test
+    fun `jitter warning follows request type paths and ignores retry budgets`() {
+        val changed =
+            chain.copy(
+                clients =
+                    listOf(
+                        chain.client.copy(
+                            classes = mapOf("checkout" to LoadProfile.constant(0.001), "lookup" to LoadProfile.constant(0.001)),
+                        ),
+                        chain.client.copy(pathSegments = listOf("second"), classes = mapOf("checkout" to LoadProfile.constant(0.001))),
+                    ),
+                services =
+                    listOf(
+                        chain.services[0].copy(scenario = listOf(ServiceStep.Process(), ServiceStep.Call("a-b", setOf("checkout")))),
+                        chain.services[1].copy(scenario = listOf(ServiceStep.Process(), ServiceStep.Call("b-c", setOf("unused")))),
+                        chain.services[2],
+                    ),
+                calls = chain.calls.map { it.copy(attempts = 3, retryBudget = RetryBudgetConfig(0.1, 0.01, 1_000.0)) },
+            )
+
+        assertThat(warnings(changed, "LINT_RETRY_NO_JITTER").map { it.path }).containsExactly("a-b")
+    }
+
+    @Test
     fun `timeout warns at the client deadline including fractional equality`() {
         listOf(100.124 to 0, 100.125 to 1, 100.25 to 1).forEach { (timeout, count) ->
             val changed =
@@ -597,7 +670,9 @@ class ModelLinterTest {
                     ),
             )
 
-        assertThat(linter.lint(experiment(checkout))).isEmpty()
+        val warnings = linter.lint(experiment(checkout))
+        assertThat(warnings.map { it.code }).containsExactly("LINT_RETRY_NO_JITTER")
+        assertThat(warnings.single().path).isEqualTo("order-payment")
         assertThat(
             warnings(checkout.copy(clients = listOf(checkout.client.copy(deadlineMs = 8_001.0))), "LINT_DEADLINE_BUDGET").single().message,
         ).contains("Deadline 8001 ms", "estimated 8002 ms")

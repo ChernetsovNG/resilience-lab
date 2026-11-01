@@ -1,11 +1,61 @@
 package resiliencelab.core.document
 
 import org.assertj.core.api.Assertions.assertThat
+import resiliencelab.core.compiler.ModelCompiler
+import resiliencelab.core.compiler.ModelLinter
+import resiliencelab.core.compiler.Severity
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 
 class ExampleDocumentsTest {
+    @Test
+    fun `example lint warnings match the documented variants`() {
+        val expected =
+            mapOf(
+                "retry-storm" to mapOf("LINT_TIMEOUT_BUDGET/baseline" to 1),
+                "checkout" to
+                    mapOf(
+                        "LINT_TIMEOUT_BUDGET/baseline" to 2,
+                        "LINT_TIMEOUT_BUDGET/no-order-retries" to 1,
+                        "LINT_TIMEOUT_BUDGET/bigger-payment-pool" to 2,
+                        "LINT_RETRY_NO_JITTER/baseline" to 1,
+                        "LINT_RETRY_NO_JITTER/aligned-timeouts" to 1,
+                        "LINT_RETRY_NO_JITTER/bigger-payment-pool" to 1,
+                    ),
+                "checkout-replicas" to
+                    mapOf(
+                        "LINT_TIMEOUT_BUDGET/all" to 1,
+                        "LINT_DEADLINE_BUDGET/baseline" to 1,
+                        "LINT_DEADLINE_BUDGET/other-replica" to 1,
+                        "LINT_DEADLINE_BUDGET/least-in-flight" to 1,
+                        "LINT_DEADLINE_BUDGET/bigger-pool" to 1,
+                        "LINT_DEADLINE_BUDGET/no-backoff" to 1,
+                        "LINT_RETRY_NO_JITTER/baseline" to 1,
+                        "LINT_RETRY_NO_JITTER/other-replica" to 1,
+                        "LINT_RETRY_NO_JITTER/least-in-flight" to 1,
+                        "LINT_RETRY_NO_JITTER/bigger-pool" to 1,
+                        "LINT_RETRY_NO_JITTER/no-backoff" to 1,
+                    ),
+            )
+        expected.forEach { (example, warnings) ->
+            val directory = Path.of("../examples", example)
+            val modelPath = directory.resolve("$example.model.json")
+            val experimentPath = directory.resolve("$example.experiment.json")
+            val model = (DocumentCodec.decodeModel(Files.readString(modelPath), modelPath.toString()) as DecodeResult.Ok).value
+            val experiment =
+                (DocumentCodec.decodeExperiment(Files.readString(experimentPath), experimentPath.toString()) as DecodeResult.Ok).value
+            val compiled = ModelCompiler().compile(model, modelPath.toString(), experiment, experimentPath.toString())
+            assertThat(compiled.diagnostics).describedAs(example).isEmpty()
+            val diagnostics = ModelLinter().lint(requireNotNull(compiled.experiment))
+
+            assertThat(diagnostics).allSatisfy { assertThat(it.severity).isEqualTo(Severity.WARNING) }
+            assertThat(diagnostics.groupingBy { "${it.code}/${it.variant ?: "all"}" }.eachCount())
+                .describedAs(example)
+                .isEqualTo(warnings)
+        }
+    }
+
     @Test
     fun `example documents are in canonical form`() {
         Files.walk(Path.of("../examples")).use { paths ->
