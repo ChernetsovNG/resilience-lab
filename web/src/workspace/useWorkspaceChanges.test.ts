@@ -162,6 +162,107 @@ describe("workspace change polling", () => {
     expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
   });
 
+  it("ignores a delayed loaded version retried after saving a newer version", async () => {
+    const gate = deferred();
+    harness({ changes: async (since, call) => {
+      if (call === 0) return { body: emptyChanges("g:0") };
+      if (since === "g:0") {
+        await gate.promise;
+        return { body: modelChange("v-model", "g:1") };
+      }
+      return { body: modelChange("v-external", "g:2") };
+    } });
+    const { result } = await loaded();
+    await poll();
+    act(() => result.current.setParam("gateway", "handlers", 6));
+    await act(async () => { expect(await result.current.save()).toBe(true); });
+
+    await act(async () => { gate.release(); });
+    await poll();
+
+    expect(result.current.loaded?.versions.model).toBe("v-model-2");
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.externalChange).toBeNull();
+    await poll();
+    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+  });
+
+  it("ignores an earlier own save version after another save", async () => {
+    let version = 1;
+    harness({
+      changes: queuedChanges(modelChange("v-model-2", "g:1")),
+      put: (path) => ({ body: { path, kind: "MODEL", version: `v-model-${++version}` } }),
+    });
+    const { result } = await loaded();
+    for (const handlers of [6, 7]) {
+      act(() => result.current.setParam("gateway", "handlers", handlers));
+      await act(async () => { expect(await result.current.save()).toBe(true); });
+    }
+
+    await poll();
+
+    expect(result.current.loaded?.versions.model).toBe("v-model-3");
+    expect(result.current.externalChange).toBeNull();
+  });
+
+  it("remembers a successful file-action write when a later document fails", async () => {
+    harness({
+      changes: queuedChanges(modelChange("v-model-imported", "g:1")),
+      put: (path) => path === modelPath
+        ? { body: { path, kind: "MODEL", version: "v-model-imported" } }
+        : { status: 500, body: { code: "SAVE_FAILED", message: "write failed", diagnostics: [] } },
+    });
+    const { result } = await loaded();
+    await act(async () => {
+      expect(await result.current.storeDocuments([
+        { path: modelPath, content: documentViews[modelPath].content },
+        { path: experimentPath, content: documentViews[experimentPath].content },
+      ], async () => true, false)).toBe(false);
+    });
+    expect(result.current.problem?.code).toBe("FILE_PARTIAL_WRITE");
+
+    await poll();
+
+    expect(result.current.externalChange).toBeNull();
+  });
+
+  it.each([
+    ["model", modelPath, "MODEL", "v-model"],
+    ["layout", layoutPath, "LAYOUT", "v-layout"],
+    ["experiment", experimentPath, "EXPERIMENT", "v-experiment"],
+  ] as const)("remembers the loaded %s version across reloads", async (_kind, path, kind, version) => {
+    const { views } = harness({ changes: queuedChanges({ cursor: "g:1", reset: false, changes: [{ path, kind, version }] }) });
+    const { result } = await loaded();
+    views[path].version = "v-reloaded";
+    await act(async () => { await result.current.reload(); });
+
+    await poll();
+
+    expect(result.current.externalChange).toBeNull();
+  });
+
+  it("does not treat a version known for another path as a known model version", async () => {
+    harness({ changes: queuedChanges(modelChange("v-layout", "g:1")) });
+    const { result } = await loaded();
+
+    await poll();
+
+    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+  });
+
+  it("does not reuse known versions from an earlier workspace session", async () => {
+    const { views } = harness({ changes: (since) => ({ body: since === null ? emptyChanges("g:0") : modelChange("v-model", "g:1") }) });
+    const first = await loaded();
+    views[modelPath].version = "v-reloaded";
+    await act(async () => { await first.result.current.reload(); });
+    first.unmount();
+    const { result } = await loaded();
+
+    await poll();
+
+    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+  });
+
   it("reconciles open versions and refreshes experiments after reset", async () => {
     const otherPath = "retry-storm/other.experiment.json";
     const other: DocumentView = { path: otherPath, kind: "EXPERIMENT", version: "v-other", content: { experiment } };
@@ -266,7 +367,7 @@ describe("workspace change polling", () => {
     expect(result.current.externalChange).toBeNull();
   });
 
-  it("defers an old-version revert until the PUT response", async () => {
+  it("ignores a known old version buffered until the PUT response", async () => {
     const gate = deferred();
     harness({
       changes: queuedChanges({ cursor: "g:1", reset: false, changes: [
@@ -287,7 +388,7 @@ describe("workspace change polling", () => {
     expect(result.current.externalChange).toBeNull();
     gate.release();
     await act(async () => { await saving; });
-    expect(result.current.externalChange).toEqual({ path: modelPath, deleted: false });
+    expect(result.current.externalChange).toBeNull();
   });
 
   it("defers deletion of a newly created layout until the PUT response", async () => {

@@ -142,6 +142,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   const saveInFlight = useRef(false);
   const loadInFlight = useRef(false);
   const loadedRef = useRef<LoadedExperiment | null>(null);
+  const knownVersions = useRef(new Map<string, Set<string>>());
   const savingPaths = useRef(new Set<string>());
   const deferredChanges = useRef(new Map<string, WorkspaceChangeView>());
   const cursor = useRef<string | null>(null);
@@ -154,6 +155,13 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   const recoveryLayoutPath = loaded !== null && (
     loaded.versions.layout !== null || conflictPath === loaded.layoutPath || externalChanges[loaded.layoutPath] !== undefined
   ) ? loaded.layoutPath : undefined;
+
+  const rememberVersion = useCallback((path: string, version: string | null) => {
+    if (version === null) return;
+    const versions = knownVersions.current.get(path) ?? new Set<string>();
+    versions.add(version);
+    knownVersions.current.set(path, versions);
+  }, []);
 
   useEffect(() => {
     const modelPath = loaded?.modelPath;
@@ -180,7 +188,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
         continue;
       }
       setExternalChanges((previous) => {
-        if (version === current.versions[kind]) {
+        if (version !== null && knownVersions.current.get(path)?.has(version)) {
           if (previous[path] === undefined) return previous;
           const next = { ...previous };
           delete next[path];
@@ -209,6 +217,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
     try {
       const next = model === undefined ? await loadExperiment(experimentPath, recoveryLayoutPath) : await loadModel(model.path, model.documents);
       if (current === generation.current) {
+        for (const kind of ["model", "layout", "experiment"] as const) rememberVersion(next[`${kind}Path`], next.versions[kind]);
         persistenceRevision.current += 1;
         loadedRef.current = next;
         deferredChanges.current.clear();
@@ -227,7 +236,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
       }
     }
     return false;
-  }, []);
+  }, [rememberVersion]);
 
   const open = useCallback(
     async (experimentPath: string, discardChanges = false) => {
@@ -358,6 +367,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
       for (const { entry, experiment } of related) {
         try {
           const written = await api.saveDocument(entry.path, { experiment }, entry.version);
+          rememberVersion(entry.path, written.version);
           setAppliedRenames(previous => new Map([...previous, [entry.path, { modelPath: saved.modelPath, model: saved.model, version: written.version }]]));
           persistenceRevision.current += 1;
           setDocuments(previous => previous.map(document => document.path === entry.path ? { ...document, version: written.version } : document));
@@ -372,6 +382,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
         savingPaths.current.add(path);
         try {
           const entry = await api.saveDocument(path, { [kind]: saved[kind] }, saved.versions[kind]);
+          rememberVersion(path, entry.version);
           if (current !== generation.current) return false;
           persistenceRevision.current += 1;
           const latest = loadedRef.current;
@@ -405,7 +416,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [loaded, dirty, conflictPath, flushChange, appliedRenames]);
+  }, [loaded, dirty, conflictPath, flushChange, appliedRenames, rememberVersion]);
 
   const reportProblem = useCallback((error: unknown) => setProblem(problemOf(error)), []);
 
@@ -417,7 +428,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
     setProblem(null);
     for (const draft of drafts) savingPaths.current.add(draft.path);
     try {
-      if (!await writeDocuments(drafts, confirmReplace, validate)) return false;
+      if (!await writeDocuments(drafts, confirmReplace, validate, entry => rememberVersion(entry.path, entry.version))) return false;
       const experiment = drafts.find(draft => draft.content.experiment != null)?.path;
       const affectsOpen = loaded !== null && drafts.some(draft =>
         [loaded.modelPath, loaded.layoutPath, loaded.experimentPath].includes(draft.path));
@@ -437,7 +448,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
       loadInFlight.current = false;
       setLoading(false);
     }
-  }, [loaded, load, flushChange, reportProblem]);
+  }, [loaded, load, flushChange, reportProblem, rememberVersion]);
 
   const removeDocuments = useCallback(async (plan: DocumentEntry[], discardChanges = false, runs: RunStorageEntry[] = []) => {
     if (loaded === null || plan.length === 0 || loadInFlight.current || saveInFlight.current || (dirty && !discardChanges)) return false;

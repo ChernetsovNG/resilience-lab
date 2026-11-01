@@ -429,6 +429,60 @@ test("does not show an external-change banner for an own save journal entry", as
   await expect(page.getByRole("alert").filter({ hasText: "The document changed on disk" })).toHaveCount(0);
 });
 
+test("ignores a delayed loaded version after reload and save but reports a new external version", async ({ page, files }) => {
+  await writeHandlers(files, 9);
+  const known = await stored(page, files.model);
+  await page.reload();
+  await page.getByTestId("rf__node-gateway").click();
+  const handlers = page.getByLabel("Handlers", { exact: true });
+  await expect(handlers).toHaveValue("9");
+
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let captured!: () => void;
+  const waiting = new Promise<void>(resolve => { captured = resolve; });
+  let processed!: () => void;
+  const reconciled = new Promise<void>(resolve => { processed = resolve; });
+  const changes = /\/api\/v1\/workspace\/changes\?/;
+  let polls = 0;
+  await page.route(changes, async route => {
+    const call = ++polls;
+    const response = await route.fetch();
+    const body = await response.json();
+    if (call >= 3) {
+      // The next poll starts only after the retried response has been classified.
+      processed();
+      await route.fulfill({ response, json: { ...body, reset: false, changes: [] } });
+      return;
+    }
+    if (call === 1) {
+      captured();
+      await gate;
+    }
+    await route.fulfill({ response, json: { ...body, reset: false, changes: [
+      { path: files.model, kind: "MODEL", version: known.version },
+    ] } });
+  });
+  try {
+    await waiting;
+    await handlers.fill("7");
+    await handlers.press("Enter");
+    await save(page);
+    release();
+    await reconciled;
+
+    const alert = page.getByRole("alert").filter({ hasText: files.model });
+    await expect(alert).toHaveCount(0);
+    expect((await stored(page, files.model)).content.model.blocks.gateway.params.handlers).toBe(7);
+    await page.unroute(changes);
+    await writeHandlers(files, 11);
+    await expect(alert).toContainText("The document changed on disk", { timeout: 5000 });
+  } finally {
+    release();
+    await page.unroute(changes);
+  }
+});
+
 async function writeHandlers(files: Files, value: number) {
   const path = resolve("../apps/server/build/e2e-workspace", files.model);
   const source: ModelFile = JSON.parse(await readFile(path, "utf8"));
@@ -443,7 +497,7 @@ async function stored(page: Page, path: string) {
 }
 async function save(page: Page) {
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Unsaved changes")).toBeHidden();
+  await expect(page.locator(".dirty-mark")).toBeHidden();
 }
 async function move(page: Page, locator: Locator, dx: number, dy: number) {
   const header = locator.locator(".block-node > strong");
