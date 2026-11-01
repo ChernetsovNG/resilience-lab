@@ -91,6 +91,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
       await expect.poll(() => grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(columns);
     }
   } finally {
+    await page.goto("/api/v1/health");
     await rm(directory, { recursive: true });
   }
 });
@@ -170,6 +171,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
         expect(await page.locator("html").evaluate(element => getComputedStyle(element).fontSize)).toBe("20px");
       }
     } finally {
+      await page.goto("/api/v1/health");
       await rm(directory, { recursive: true });
     }
   });
