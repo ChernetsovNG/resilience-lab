@@ -88,6 +88,15 @@ export function Canvas(props: CanvasProps) {
   return <ReactFlowProvider><ModelCanvas {...props} /></ReactFlowProvider>;
 }
 
+/** Keep viewport updates outside model rendering; ports inherit their screen-sized hit area from the canvas. */
+function CanvasViewport({ ready, onZoomChange }: { ready: boolean; onZoomChange?: (zoom: number) => void }) {
+  const zoom = useStore(state => state.transform[2]);
+  const container = useStore(state => state.domNode);
+  useLayoutEffect(() => { container?.style.setProperty("--port-hit-size", `${12 / zoom}px`); }, [container, zoom]);
+  useEffect(() => { if (ready) onZoomChange?.(zoom); }, [ready, zoom, onZoomChange]);
+  return null;
+}
+
 function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
   replicaSelection, nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
@@ -116,7 +125,6 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
   const width = useStore((state) => state.width);
   const minZoom = useStore(state => state.minZoom);
   const maxZoom = useStore(state => state.maxZoom);
-  const zoom = useStore((state) => state.transform[2]);
   const initialized = useNodesInitialized();
   const hasNodes = Object.keys(model.blocks).length > 0;
   const [insertions, setInsertions] = useState<{ type: string; center: { x: number; y: number } | null; anchor?: string }[]>([]);
@@ -149,9 +157,6 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     const center = { x: (width / 2 - viewport.x) / viewport.zoom, y: (height / 2 - viewport.y) / viewport.zoom };
     setInsertions([{ ...pending, center }, ...insertions.slice(1)]);
   }
-  useEffect(() => {
-    if (initialized || !hasNodes) onZoomChange?.(zoom);
-  }, [initialized, hasNodes, zoom, onZoomChange]);
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [bounds, setBounds] = useState<Rect | null>(null);
   const onBounds = useCallback((next: Rect | null) => setBounds(current =>
@@ -416,6 +421,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
         if (connection.fromNode !== null && connection.isValid !== true) setNotice({ get message() { return t("editor.canvas.connectionHint"); } });
       }}
     >
+      <CanvasViewport ready={initialized || !hasNodes} onZoomChange={onZoomChange} />
       {showGrid && <Background gap={gridStep} />}
       {modelInfo == null ? null : <Panel position="top-left" className="model-info-position"
         style={{ top: variantVisible ? bannerHeight + 8 : 0, maxHeight: Math.max(0, height - (variantVisible ? bannerHeight + 48 : 40)) }}>

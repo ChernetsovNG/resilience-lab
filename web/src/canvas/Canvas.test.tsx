@@ -16,8 +16,27 @@ import { setViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
 import { applyOverrides } from "../workspace/params";
 import * as edgeGeometry from "./edgeGeometry";
+import * as blockGeometry from "./blockGeometry";
 
 beforeAll(mockReactFlowDom);
+
+it("updates zoom without rendering block shapes again", async () => {
+  const renders = vi.spyOn(blockGeometry, "blockGeometry");
+  const onZoomChange = vi.fn();
+  try {
+    const { container } = render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]}
+      onSelect={vi.fn()} onCommand={vi.fn()} onZoomChange={onZoomChange} />);
+    await waitFor(() => expect(onZoomChange).toHaveBeenCalled());
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    const before = renders.mock.calls.length;
+    const initial = onZoomChange.mock.lastCall![0] as number;
+    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }));
+    await waitFor(() => expect(onZoomChange.mock.lastCall![0]).toBeCloseTo(initial * 1.2, 6));
+    expect(renders).toHaveBeenCalledTimes(before);
+    expect(container.querySelector<HTMLElement>(".react-flow")!.style.getPropertyValue("--port-hit-size"))
+      .toBe(`${12 / (initial * 1.2)}px`);
+  } finally { renders.mockRestore(); }
+});
 
 it.each([
   { classes: ["status"], label: "status" },

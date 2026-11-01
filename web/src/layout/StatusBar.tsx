@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useImperativeHandle, useState, type Ref } from "react";
 import { HelpHint } from "../help/HelpHint";
 import type { Diagnostic, HealthView, JobView } from "../api/apiTypes";
 import { HealthBadge } from "../components/HealthBadge";
@@ -15,6 +15,15 @@ export interface StatusBarProps {
   cursorMs: number | null;
   zoom: number | null;
   onProblems: () => void;
+}
+
+/** Own frequent viewport updates without rendering the editor that supplies the other status fields. */
+export function ZoomStatusBar({ ref, hasModel, ...props }: Omit<StatusBarProps, "zoom"> & {
+  ref: Ref<(zoom: number) => void>; hasModel: boolean;
+}) {
+  const [zoom, setZoom] = useState<number | null>(null);
+  useImperativeHandle(ref, () => setZoom, []);
+  return <StatusBar {...props} zoom={hasModel ? zoom : null} />;
 }
 
 /** Persistent status for the current experiment; commands remain in the top bar. */
