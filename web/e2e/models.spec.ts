@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { copyRetryStorm, expect, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { copyFile, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
@@ -78,7 +78,7 @@ test("checkout opens its main experiment and remembers a dismissible information
 test("long model information scrolls within the canvas and keeps full notes reachable", async ({ page }) => {
   const directory = `model-info-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
-  await cp(resolve("../examples/retry-storm"), target, { recursive: true });
+  await copyRetryStorm(target);
   try {
     const path = resolve(target, "retry-storm.model.json");
     const model = JSON.parse(await readFile(path, "utf8"));
@@ -162,7 +162,7 @@ test("a model without experiment or layout creates its baseline on the first Run
 test("deleting the only experiment keeps the model open with an in-memory default", async ({ page }) => {
   const directory = `model-delete-question-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
-  await cp(resolve("../examples/retry-storm"), target, { recursive: true });
+  await copyRetryStorm(target);
   try {
     await page.goto("/");
     const modelPath = `${directory}/retry-storm.model.json`;

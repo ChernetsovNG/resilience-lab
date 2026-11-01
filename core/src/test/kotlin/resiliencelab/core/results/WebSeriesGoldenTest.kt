@@ -79,12 +79,9 @@ class WebSeriesGoldenTest {
 
     private fun copyExamples(temporary: Path) {
         val source = root.resolve("examples/retry-storm")
-        Files.walk(source).use { paths ->
-            paths.filter(Files::isRegularFile).forEach { file ->
-                val destination = temporary.resolve("retry-storm").resolve(source.relativize(file))
-                Files.createDirectories(destination.parent)
-                Files.copy(file, destination)
-            }
+        val directory = Files.createDirectories(temporary.resolve("retry-storm"))
+        for (file in listOf("retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json")) {
+            Files.copy(source.resolve(file), directory.resolve(file))
         }
     }
 }

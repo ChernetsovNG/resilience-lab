@@ -102,6 +102,7 @@ jobs:
             core/build/reports/jacoco/test
             apps/cli/build/reports/jacoco/test
             apps/server/build/reports/jacoco/test
+            core/build/test-results/test/TEST-resiliencelab.core.lab.CheckoutPoliciesTest.xml
           if-no-files-found: error
 
   build-web:

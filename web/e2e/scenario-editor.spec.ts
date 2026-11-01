@@ -1,7 +1,7 @@
-import { selectExperiment } from "./fixtures";
+import { copyRetryStorm, selectExperiment } from "./fixtures";
 import { dragConnection, waitForStablePorts } from "./connectionGestures";
 import { expect, test as base, type Locator, type Page } from "./fixtures";
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
@@ -11,7 +11,7 @@ const test = base.extend<{ files: Files }>({
   files: async ({ page }, provide) => {
     const directory = `canvas-editor-${randomUUID()}`;
     const target = resolve("../apps/server/build/e2e-workspace", directory);
-    await cp(resolve("../examples/retry-storm"), target, { recursive: true, errorOnExist: true, force: false });
+    await copyRetryStorm(target);
     const files = {
       model: `${directory}/retry-storm.model.json`, layout: `${directory}/retry-storm.layout.json`,
       experiment: `${directory}/retry-storm.experiment.json`,

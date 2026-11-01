@@ -1,14 +1,14 @@
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { expect, selectExperiment, test } from "./fixtures";
+import { copyRetryStorm, expect, selectExperiment, test } from "./fixtures";
 
 test("confirms dependent sweep and override removal, undoes both documents, then saves and reloads valid documents", async ({ page }) => {
   const directory = `param-dependents-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const experimentPath = `${directory}/retry-storm.experiment.json`;
-  await cp(resolve("../examples/retry-storm"), target, { recursive: true, errorOnExist: true, force: false });
+  await copyRetryStorm(target);
   try {
     const sourceModel: ModelFile = JSON.parse(await readFile(resolve(target, "retry-storm.model.json"), "utf8"));
     sourceModel.blocks.gateway.params.processing = { kind: "lognormal", mean: "2ms", stdDev: "1ms" };
@@ -66,7 +66,7 @@ test("saves and reloads a valid connection after fixed, lognormal and fixed dist
   const directory = `param-applicability-${randomUUID()}`;
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const modelPath = `${directory}/retry-storm.model.json`;
-  await cp(resolve("../examples/retry-storm"), target, { recursive: true, errorOnExist: true, force: false });
+  await copyRetryStorm(target);
   try {
     await page.goto("/");
     await selectExperiment(page, `${directory}/retry-storm.experiment.json`);

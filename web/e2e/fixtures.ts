@@ -1,4 +1,4 @@
-import { copyFile, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 import type { Page } from "@playwright/test";
@@ -36,6 +36,14 @@ export async function selectExperiment(page: Page, path: string): Promise<void> 
   const model = new URL(content.experiment.modelRef, `http://workspace/${path}`).pathname.slice(1);
   await page.getByRole("combobox", { name: /^(Model|Модель)$/ }).selectOption(model);
   await page.getByRole("combobox", { name: /^(Experiment|Эксперимент)$/ }).selectOption(path);
+}
+
+/** Creates a workspace containing only the three documents used by the retry-storm fixture. */
+export async function copyRetryStorm(directory: string): Promise<void> {
+  await mkdir(directory);
+  for (const file of ["retry-storm.model.json", "retry-storm.layout.json", "retry-storm.experiment.json"]) {
+    await copyFile(resolve("../examples/retry-storm", file), resolve(directory, file));
+  }
 }
 
 /** Copies a short UI fixture into an existing, test-owned workspace directory. */

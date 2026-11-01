@@ -1,15 +1,15 @@
-import { selectExperiment } from "./fixtures";
+import { copyRetryStorm, selectExperiment } from "./fixtures";
 import { dragConnection } from "./connectionGestures";
 import { expect, test as base, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve("../apps/server/build/e2e-workspace");
 const test = base.extend<{ directory: string }>({
   directory: async ({ page }, provide) => {
     const directory = `file-source-${randomUUID()}`;
-    await cp(resolve("../examples/retry-storm"), resolve(root, directory), { recursive: true });
+    await copyRetryStorm(resolve(root, directory));
     try {
       await page.goto("/");
       await selectExperiment(page, `${directory}/retry-storm.experiment.json`);

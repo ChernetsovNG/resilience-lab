@@ -1,8 +1,8 @@
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { expect, selectExperiment, test, type Page } from "./fixtures";
+import { copyRetryStorm, expect, selectExperiment, test, type Page } from "./fixtures";
 
 test.use({ actionTimeout: 10_000 });
 
@@ -17,7 +17,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
   const target = resolve("../apps/server/build/e2e-workspace", directory);
   const modelPath = `${directory}/retry-storm.model.json`;
   const experimentPath = `${directory}/retry-storm.experiment.json`;
-  await cp(resolve("../examples/retry-storm"), target, { recursive: true, errorOnExist: true, force: false });
+  await copyRetryStorm(target);
   try {
     const source: ModelFile = JSON.parse(await readFile(resolve(target, "retry-storm.model.json"), "utf8"));
     source.schemaVersion = 6;

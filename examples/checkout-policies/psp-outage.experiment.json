@@ -1,0 +1,85 @@
+{
+  "description": "Отказ PSP: общий ресурс status и checkout, breaker, отложенная оплата и бюджет повторов.",
+  "execution": {
+    "measurement": "60s",
+    "replications": 10,
+    "seed": 20261101,
+    "warmup": "10s",
+    "window": "100ms"
+  },
+  "faults": [
+    {
+      "from": "20s",
+      "kind": "blackhole",
+      "target": "psp",
+      "to": "40s"
+    }
+  ],
+  "layoutRef": "checkout-policies.layout.json",
+  "modelRef": "checkout-policies.model.json",
+  "notes": "Чёрная дыра PSP действует [20 с, 40 с). Все значения синтетические. У каждой реплики order-service свой breaker на вызове payment-service; он освобождает общие обработчики после накопления отказов. Заглушка означает «оплата будет позже»: 1 мс, причины timeout и circuitOpen. Успех с заглушкой не означает проведённый платёж. Вариант бюджета включает три попытки оплаты у обоих сравниваемых вариантов, бюджет разрешает не более 20% повторов от первых попыток за 1 с.\n\nПолный прогон при указанных параметрах и 10 независимых повторениях: успешность status без политик 68.249%, 95% CI [67.303%; 69.195%], с breaker 99.998%, CI [99.994%; 100.002%]. Интервалы Стьюдента не обрезаются до 100%. Успешность checkout с breaker 45.856%, с заглушкой 100.000%; доля успешных с заглушкой от всех исходных запросов 12.905%. Это отложенная оплата, а не подтверждение платежа. Бюджет в варианте с тремя попытками отклонил 3100 повторов; отправлено 554 повтора против 2503 без бюджета. Эти числа не гарантируют, что бюджет сам по себе повысит успешность любого сценария.",
+  "schemaVersion": 3,
+  "variants": [
+    {
+      "description": "Одна попытка оплаты; зависшая оплата занимает обработчики заказов.",
+      "id": "baseline",
+      "label": "Без политик"
+    },
+    {
+      "description": "Breaker быстро отказывает на оплате; status не вызывает оплату.",
+      "id": "circuit-breaker",
+      "label": "Предохранитель вызовов",
+      "overrides": {
+        "order-service-to-payment-service.circuitBreaker": {
+          "failureRate": "50%",
+          "halfOpenCalls": 1,
+          "minimumCalls": 4,
+          "openDuration": "2s",
+          "window": 8
+        }
+      }
+    },
+    {
+      "description": "Breaker и заглушка после отказа оплаты; такие успешные запросы учитываются отдельно.",
+      "id": "fallback",
+      "label": "Оплата будет позже",
+      "overrides": {
+        "order-service-to-payment-service.circuitBreaker": {
+          "failureRate": "50%",
+          "halfOpenCalls": 1,
+          "minimumCalls": 4,
+          "openDuration": "2s",
+          "window": 8
+        },
+        "order-service-to-payment-service.fallback": {
+          "on": [
+            "timeout",
+            "circuitOpen"
+          ],
+          "processing": "1ms"
+        }
+      }
+    },
+    {
+      "description": "Три попытки оплаты, без ограничения повторов.",
+      "id": "retries",
+      "label": "Повторы без бюджета",
+      "overrides": {
+        "order-service-to-payment-service.attempts": 3
+      }
+    },
+    {
+      "description": "Те же три попытки, повторы ограничены бюджетом 20%.",
+      "id": "retry-budget",
+      "label": "Бюджет повторов",
+      "overrides": {
+        "order-service-to-payment-service.attempts": 3,
+        "order-service-to-payment-service.retryBudget": {
+          "minPerSecond": "0/s",
+          "ratio": "20%",
+          "window": "1s"
+        }
+      }
+    }
+  ]
+}
