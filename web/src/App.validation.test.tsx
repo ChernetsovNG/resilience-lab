@@ -76,8 +76,9 @@ it("keeps the panel collapsed when an added block produces a validation error", 
   fireEvent.click(screen.getByRole("tab", { name: "Findings" }));
   fireEvent.click(button("Collapse results"));
   fireEvent.doubleClick(button("Service"));
+  const node = await screen.findByTestId("rf__node-service-1");
+  await waitFor(() => expect(node.classList.contains("selected")).toBe(true));
   await screen.findByRole("button", { name: "Errors: 1 · Warnings: 0" });
-  expect(screen.getByTestId("rf__node-service-1")).toBeTruthy();
   expect(screen.queryByRole("tabpanel")).toBeNull();
   expect(screen.getByRole("tab", { name: "Findings" }).getAttribute("aria-selected")).toBe("true");
   fireEvent.click(button("Run"));

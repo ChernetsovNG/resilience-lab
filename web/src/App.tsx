@@ -79,7 +79,7 @@ export function App() {
   const [problemsElement, setProblemsElement] = useState<string | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
-  const [observedErrors, setObservedErrors] = useState<{ path: string | null; run: string; estimate: string }>({ path: null, run: "[]", estimate: "[]" });
+  const [observedErrors, setObservedErrors] = useState<{ path: string | null; run: string; estimate: string; workspace: string }>({ path: null, run: "[]", estimate: "[]", workspace: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
   const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
   const [courseHeight, setCourseHeight] = useState(0);
@@ -223,20 +223,23 @@ export function App() {
   const workspaceDiagnostics = problemDiagnostics(workspace.problem);
   const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics, workspaceDiagnostics, estimate.problem?.diagnostics ?? []);
   const path = loaded?.experimentPath ?? null;
-  const previousErrors = observedErrors.path === path ? observedErrors : { run: "[]", estimate: "[]" };
+  const previousErrors = observedErrors.path === path ? observedErrors : { run: "[]", estimate: "[]", workspace: "[]" };
   const waitingForSubmission = ownRun && run.running && run.problem === null &&
     (run.job === null || (run.job.status !== "QUEUED" && run.job.status !== "RUNNING"));
   const runErrors = waitingForSubmission ? previousErrors.run
     : JSON.stringify(runDiagnostics.filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
   const estimateErrors = estimate.pending ? previousErrors.estimate
     : JSON.stringify((estimate.problem?.diagnostics ?? []).filter(finding => finding.severity === "ERROR").map(diagnosticKey));
-  if (observedErrors.path !== path || observedErrors.run !== runErrors || observedErrors.estimate !== estimateErrors) {
+  const workspaceErrors = JSON.stringify(workspaceDiagnostics.filter(finding => finding.severity === "ERROR").map(diagnosticKey));
+  if (observedErrors.path !== path || observedErrors.run !== runErrors || observedErrors.estimate !== estimateErrors || observedErrors.workspace !== workspaceErrors) {
     const previousRun = new Set<string>(JSON.parse(previousErrors.run));
     const previousEstimate = new Set<string>(JSON.parse(previousErrors.estimate));
+    const previousWorkspace = new Set<string>(JSON.parse(previousErrors.workspace));
     const currentRun = new Set(currentRunDiagnostics.map(diagnosticKey));
     const hasNewError = (launchDocuments !== null && JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key))) ||
-      JSON.parse(estimateErrors).some((key: string) => !previousEstimate.has(key));
-    setObservedErrors({ path, run: runErrors, estimate: estimateErrors });
+      JSON.parse(estimateErrors).some((key: string) => !previousEstimate.has(key)) ||
+      JSON.parse(workspaceErrors).some((key: string) => !previousWorkspace.has(key));
+    setObservedErrors({ path, run: runErrors, estimate: estimateErrors, workspace: workspaceErrors });
     if (hasNewError) {
       setProblemsElement(null);
       setProblemsRequest((current) => current + 1);
