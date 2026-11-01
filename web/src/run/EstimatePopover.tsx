@@ -1,10 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
 
 /** A nonmodal estimate beside the run controls; dismissal never cancels the request or changes its budget decision. */
 export function EstimatePopover({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   const panel = useRef<HTMLElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const outside = (event: PointerEvent) => {
       if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       if (event.target instanceof Node && !panel.current?.contains(event.target)) onClose();
