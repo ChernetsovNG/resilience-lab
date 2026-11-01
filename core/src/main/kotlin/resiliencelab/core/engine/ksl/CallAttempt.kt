@@ -1,5 +1,6 @@
 package resiliencelab.core.engine.ksl
 
+import ksl.modeling.entity.ProcessModel
 import ksl.simulation.KSLEvent
 
 /**
@@ -10,7 +11,7 @@ import ksl.simulation.KSLEvent
 internal class CallAttempt(
     val child: ReliabilityModel.ServiceInvocation,
     val timeoutEvent: KSLEvent<*>,
-    private val caller: ReliabilityModel.ServiceInvocation,
+    private val caller: ProcessModel.Entity,
     private val recordTimeout: (Boolean) -> Unit,
     private val recordResponse: (AttemptOutcome) -> Unit,
     private val recordOrphanCompleted: () -> Unit,

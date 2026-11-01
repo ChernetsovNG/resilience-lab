@@ -8,6 +8,7 @@ import resiliencelab.core.ir.FaultKind
 import resiliencelab.core.ir.FaultSpan
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
+import resiliencelab.core.ir.walk
 
 /**
  * Owns a service's bounded FIFO admission path, blocking handler pool, and its random sources.
@@ -30,8 +31,14 @@ internal class ServiceRuntime(
     val serviceId: String = node.path
     private val processingStream = streams.stream(node.pathSegments, StreamRole.PROCESSING)
     private val durationSamplers =
-        (listOf(node.processing) + scenario.filterIsInstance<ServiceStep.Process>().mapNotNull { it.processing })
-            .associateWith { DurationSamplerFactory.create(it, processingStream) }
+        (
+            listOf(node.processing) +
+                scenario
+                    .walk()
+                    .filterIsInstance<ServiceStep.Process>()
+                    .mapNotNull { it.processing }
+                    .toList()
+        ).associateWith { DurationSamplerFactory.create(it, processingStream) }
     private val outcomeStream by lazy { streams.stream(node.pathSegments, StreamRole.OUTCOME) }
     val faults = FaultState()
     val rateLimit = node.rateLimit?.let(::TokenBucket)
