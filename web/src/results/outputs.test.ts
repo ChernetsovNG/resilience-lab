@@ -32,15 +32,15 @@ describe("catalog output contract", () => {
     expect(timelineGroups(catalog).map(group => [group.title, group.unit, group.scale, group.metrics.map(metric => metric.label)])).toEqual([
       ["Rates", "RPS", 1, ["Sent attempts", "Original requests", "Offered attempts", "Admitted attempts", "Successes", "Retries", "Successful requests with fallback", "Fallbacks"]],
       ["Latency", "ms", 1, ["Mean latency", "p50 latency", "p95 latency", "p99 latency"]],
-      ["Errors and rejections", "RPS", 1, ["Failures", "Timeouts", "Orphaned attempts", "Queue rejections", "Circuit rejections", "Retries denied by budget"]],
+      ["Errors and rejections", "RPS", 1, ["Failures", "Timeouts", "Orphaned attempts", "Queue rejections", "Circuit breaker rejections", "Retries denied by budget"]],
       ["Utilization", "%", 100, ["Handler utilization"]],
-      ["Call state", "requests", 1, ["Mean in-flight", "Mean orphaned work", "Mean backoff"]],
+      ["Call state", "requests", 1, ["Mean active attempts", "Mean orphaned attempts", "Mean calls in backoff"]],
       ["Queue", "requests", 1, ["Mean queue"]],
       ["Pool utilization", "%", 100, ["Connection pool utilization"]],
       ["Connection pool", "requests", 1, ["Mean connection wait queue", "Connection acquisition timeouts"]],
-      ["Service policies", "RPS", 1, ["Rate-limit rejections", "Failed health probes"]],
+      ["Service policies", "RPS", 1, ["Rate-limit rejections", "Failed readiness checks"]],
       ["Service policies", "%", 100, ["Rate-limited share"]],
-      ["Circuit breaker", "%", 100, ["Circuit open share"]],
+      ["Circuit breaker", "%", 100, ["Circuit breaker open share"]],
       ["Readiness", "%", 100, ["Not-ready share"]],
       ["Outlier detection", "requests", 1, ["Ejections"]],
       ["Outlier detection", "%", 100, ["Ejected share"]],
@@ -63,18 +63,18 @@ describe("catalog output contract", () => {
     expect(inspectorOutputs(outputsOf(catalog, "service")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Handler utilization", "PERCENT"], ["Mean queue", "REQUESTS"], ["Queue fill", "PERCENT"],
       ["Queue rejection share", "PERCENT"], ["Admitted attempts", "PER_SECOND"], ["Mean latency", "MILLISECONDS"],
-      ["Rate-limit rejections", "PER_SECOND"], ["Rate-limited share", "PERCENT"], ["Failed health probes", "PER_SECOND"],
+      ["Rate-limit rejections", "PER_SECOND"], ["Rate-limited share", "PERCENT"], ["Failed readiness checks", "PER_SECOND"],
       ["Not-ready share", "PERCENT"], ["Ejections", "REQUESTS"], ["Ejected share", "PERCENT"],
     ]);
     expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
-      ["Orphaned attempts", "REQUESTS"], ["Mean orphaned work", "REQUESTS"], ["Mean in flight", "REQUESTS"],
-      ["Mean backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per request", "MULTIPLIER"],
+      ["Orphaned attempts", "REQUESTS"], ["Mean orphaned attempts", "REQUESTS"], ["Mean active attempts", "REQUESTS"],
+      ["Mean calls in backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per request", "MULTIPLIER"],
       ["Connection pool utilization", "PERCENT"], ["Mean connection wait queue", "REQUESTS"], ["Connection acquisition timeouts", "REQUESTS"],
-      ["Circuit open share", "PERCENT"], ["Circuit rejections", "PER_SECOND"], ["Retries denied by budget", "PER_SECOND"], ["Fallbacks", "PER_SECOND"],
+      ["Circuit breaker open share", "PERCENT"], ["Circuit breaker rejections", "PER_SECOND"], ["Retries denied by budget", "PER_SECOND"], ["Fallbacks", "PER_SECOND"],
     ]);
     expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
-    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per request", "Sent attempts", "Timeout share", "Orphaned work"]);
+    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per request", "Sent attempts", "Timeout share", "Orphaned attempts"]);
   });
 
   it("keeps different type-local outputs with the same id as separate overlay choices", () => {

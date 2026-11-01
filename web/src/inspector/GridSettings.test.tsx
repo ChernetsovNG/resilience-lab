@@ -300,7 +300,7 @@ it("groups sweep warnings across variants and replaces point IDs with axis value
     onCommand={vi.fn()} onValidity={vi.fn()} fieldDiagnostics={new Map([["grid.0.values.0", [warning, { ...warning, args: { points: "p0, p1, p2", requiredMs: 2000, timeoutMs: 1000 }, variant: "hello" }]]])} />);
   const findings = screen.getAllByText(/LINT_TIMEOUT_BUDGET/).map(code => code.closest("li")!);
   expect(findings).toHaveLength(1);
-  expect(findings[0].textContent).toContain("at Timeout · gateway → middle = 1s");
+  expect(findings[0].textContent).toContain("at Timeout · gateway → middle = 1 s");
   expect(findings[0].textContent).toContain("in variants: Baseline, Hello");
   expect(findings[0].textContent).not.toMatch(/p[0-9]/);
 });
@@ -325,7 +325,7 @@ it("preserves correlated combinations and unknown point IDs", () => {
   render(<RunSettings catalog={gridCatalog} model={model} experiment={sweep} editable invalid={false}
     onCommand={vi.fn()} onValidity={vi.fn()} fieldDiagnostics={new Map([["grid.0.values.0", findings]])} />);
   const messages = screen.getAllByText(/LINT_TIMEOUT_BUDGET/).map(code => code.closest("li")!);
-  expect(messages[0].textContent).toContain("Timeout · gateway → middle = 1s, Attempts · gateway → middle = 1; Timeout · gateway → middle = 3s, Attempts · gateway → middle = 2");
+  expect(messages[0].textContent).toContain("Timeout · gateway → middle = 1 s, Attempts · gateway → middle = 1; Timeout · gateway → middle = 3 s, Attempts · gateway → middle = 2");
   expect(messages[1].textContent).toContain("Point 100");
   expect(messages[1].textContent).not.toContain("p99");
 });
@@ -344,7 +344,7 @@ it("resolves points in legacy fallback messages and names unknown variants witho
   render(<RunSettings catalog={gridCatalog} model={model} experiment={sweep} editable invalid={false}
     onCommand={vi.fn()} onValidity={vi.fn()} fieldDiagnostics={new Map([["grid", [legacy, { ...legacy, variant: "hello" }]]])} />);
   const message = screen.getByText(/CUSTOM_WARNING/).closest("li")!;
-  expect(message.textContent).toContain("Original warning (at Timeout · gateway → middle = 1s, Attempts · gateway → middle = 1, 2)");
+  expect(message.textContent).toContain("Original warning (at Timeout · gateway → middle = 1 s, Attempts · gateway → middle = 1, 2)");
   expect(message.textContent).toContain("in variants: Baseline, Variant");
   expect(message.textContent).not.toMatch(/p0|p1|hello/);
 });
@@ -357,5 +357,5 @@ it("distinguishes axes with the same parameter title by their elements", () => {
   render(<RunSettings catalog={gridCatalog} model={model} experiment={sameTitle} editable invalid={false}
     onCommand={vi.fn()} onValidity={vi.fn()} fieldDiagnostics={new Map([["grid", [{ ...warning, args: { ...warning.args, points: "p0" } }]]])} />);
   expect(screen.getByText(/LINT_TIMEOUT_BUDGET/).closest("li")!.textContent)
-    .toContain("Timeout · gateway → middle = 1s, Timeout · middle → dependency = 1s");
+    .toContain("Timeout · gateway → middle = 1 s, Timeout · middle → dependency = 1 s");
 });

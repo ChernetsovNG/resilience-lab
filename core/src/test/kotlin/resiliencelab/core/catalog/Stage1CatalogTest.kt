@@ -162,7 +162,9 @@ class Stage1CatalogTest {
     @Test
     fun `documents model and measurement assumptions`() {
         val shared = catalog.assumptions.joinToString("\n")
-        assertThat(shared).contains("cohort", "run-out", "event-time", "0.78125%", "Student", "not clipped")
+        assertThat(
+            shared,
+        ).contains("arriving during measurement", "after measurement ends", "when they occur", "0.78125%", "Student", "not clipped")
         assertThat(catalog.types).allSatisfy { type -> assertThat(type.assumptions).isNotEmpty() }
 
         val service = catalog.type("service")!!.assumptions.joinToString("\n")

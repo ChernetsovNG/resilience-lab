@@ -14,7 +14,7 @@ it("labels and navigates a field applicable only in the variant", () => {
   render(<VariantChanges model={model} catalog={fullCatalog as Catalog} onSelect={onSelect} overrides={{
     "gateway-to-middle.network.kind": "lognormal", "gateway-to-middle.network.stdDev": "1ms",
   }} />);
-  const field = screen.getByRole<HTMLButtonElement>("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Standard deviation: Not set → 1ms" });
+  const field = screen.getByRole<HTMLButtonElement>("button", { name: "gateway → middle (gateway-to-middle) · Network delay · Standard deviation: Not set → 1 ms" });
   expect(field.disabled).toBe(false);
   fireEvent.click(field);
   expect(onSelect).toHaveBeenCalledWith("gateway-to-middle", "network.stdDev");
@@ -27,9 +27,9 @@ it("shows effective defaults for omitted and null fields of whole-object overrid
     "gateway-to-middle.pool": { size: 2, acquireTimeout: null },
   }} />);
   const row = screen.getByRole("button");
-  expect(row.textContent).toContain("Acquisition timeout: 30s");
+  expect(row.textContent).toContain("Acquisition timeout: 30 s");
   expect(row.textContent).not.toContain("Not set");
-  expect(row.textContent?.match(/30s/g)).toHaveLength(2);
+  expect(row.textContent?.match(/30 s/g)).toHaveLength(2);
 });
 
 it("keeps enough numeric precision to distinguish parameter overrides", () => {
@@ -46,8 +46,8 @@ it("resolves defaults within absent objects and formats whole objects with catal
   render(<VariantChanges model={snapshot} catalog={catalog} onSelect={vi.fn()} overrides={{
     "gateway-to-middle.backoff.base": "3ms", "gateway.processing": { kind: "fixed", mean: "5ms" },
   }} />);
-  expect(screen.getByRole("button", { name: "gateway → middle (gateway-to-middle) · Backoff · Base delay: 0ms → 3ms" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "gateway · Processing time: Distribution: Fixed · Mean: 1ms → Distribution: Fixed · Mean: 5ms" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "gateway → middle (gateway-to-middle) · Backoff · Base delay: 0 ms → 3 ms" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "gateway · Processing time: Distribution: Fixed · Mean: 1 ms → Distribution: Fixed · Mean: 5 ms" })).toBeTruthy();
 });
 
 it("uses the current language for parameter labels, numbers and empty variants", () => {
@@ -64,4 +64,16 @@ it("keeps invalid override paths visible and disables navigation while a draft i
   }} />);
   expect((screen.getByRole("button", { name: "gateway · Handlers: 4 → 5" }) as HTMLButtonElement).disabled).toBe(true);
   expect((screen.getByRole("button", { name: /gateway · unknown:/ }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+
+it("shows the effective round robin default when balancing is absent or null", () => {
+  const snapshot = structuredClone(model);
+  snapshot.blocks.middle.params.replicas = 3;
+  snapshot.connections.find(connection => connection.id === "gateway-to-middle")!.params.balancing = null;
+  render(<VariantChanges model={snapshot} catalog={fullCatalog as Catalog} overrides={{ "gateway-to-middle.balancing": "random" }} />);
+  const change = screen.getByRole("button");
+  expect(change.textContent).toContain("Round robin");
+  expect(change.textContent).toContain("Random");
+  expect(change.textContent).not.toContain("Not set");
 });

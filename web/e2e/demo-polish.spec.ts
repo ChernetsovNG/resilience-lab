@@ -37,7 +37,7 @@ test("canvas fits without navigation overlap after panel changes and viewport re
   await expectFitted(page);
   await page.getByRole("button", { name: "Collapse results", exact: true }).click();
   await expectFitted(page);
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   await expectFitted(page);
   await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await expectFitted(page);

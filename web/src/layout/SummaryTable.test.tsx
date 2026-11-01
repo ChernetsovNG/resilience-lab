@@ -256,7 +256,7 @@ describe("SummaryTable", () => {
       coordinates: { "gateway.handlers": 6, "dependency.processing.mean": "12ms" } });
     render(<SummaryTable summary={run} activeVariantId="baseline" selectedPointId="p3" />);
     expect(within(screen.getByRole("region", { name: "Saturation insight" })).getByRole("heading").textContent)
-      .toBe("Baseline · Handlers · gateway = 6, Processing time · Mean · dependency = 12ms");
+      .toBe("Baseline · Handlers · gateway = 6, Processing time · Mean · dependency = 12 ms");
   });
 
   it("shows recorded capacity headroom and pooled entry p99", () => {
@@ -528,7 +528,7 @@ describe("entry populations", () => {
     const scenario = entryResults();
     render(<SummaryTable {...scenario} catalog={catalog} />);
     const reasons = cells("Failure reasons")[0].querySelector("summary")!;
-    expect(reasons.textContent).toBe("timeout 4% · breaker open 3% · processing error 3%");
+    expect(reasons.textContent).toBe("attempt timeout 4% · circuit breaker open 3% · processing error 3%");
     expect(reasons.textContent).not.toContain("queue full");
     fireEvent.click(reasons);
     expect(cells("Failure reasons")[0].textContent).toContain("queue full");

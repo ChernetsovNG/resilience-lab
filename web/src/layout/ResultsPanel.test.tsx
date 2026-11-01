@@ -52,8 +52,8 @@ it("formats run errors with their saved grid and variants rather than the curren
       problem={{ code: "EXECUTION_DRAIN", message: "Incomplete workload", args: { variant: "variant-2", point: "p1", replication: 3 }, diagnostics: [] }} />
   </DiagnosticLabelContext>);
   const error = screen.getByRole("alert");
-  expect(error.textContent).toContain("Variant 'Recorded label', point 'Processing time · Mean · gateway = 4ms'");
-  expect(error.textContent).not.toMatch(/Current label|100ms|p1|variant-2/);
+  expect(error.textContent).toContain("Variant 'Recorded label', point 'Processing time · Mean · gateway = 4 ms'");
+  expect(error.textContent).not.toMatch(/Current label|100 ms|p1|variant-2/);
 });
 
 it("preserves a deliberately entered variant label even when it resembles a generated ID", () => {
@@ -136,7 +136,7 @@ it("uses the shared point without offering another context selector in Findings 
   const view = render(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p0" onPointChange={onPointChange} />);
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   view.rerender(<ResultsPanel job={null} summary={grid} problem={null} selectedPointId="p1" onPointChange={onPointChange} />);
-  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Timeout · gateway-to-middle = 80ms");
+  expect(screen.getByRole("region", { name: "Saturation insight" }).textContent).toContain("Timeout · gateway-to-middle = 80 ms");
   fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
   expect(screen.queryByRole("combobox", { name: "Grid point" })).toBeNull();
   expect(screen.queryByRole("combobox", { name: "Replication" })).toBeNull();
@@ -170,7 +170,7 @@ it("collapses and restores while preserving tabs", () => {
   expect(screen.getByRole("tab", { name: "Findings" })).toBeTruthy();
   expect(screen.queryByText(/RUNNING/)).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: "Restore results" }));
+  fireEvent.click(screen.getByRole("button", { name: "Expand results" }));
   expect(onSizeChange).toHaveBeenCalledWith("normal");
   view.rerender(panel("normal"));
   expect(screen.queryByRole("button", { name: "Expand results" })).toBeNull();
@@ -318,7 +318,7 @@ it("shows the submitted load and faults above the Findings using variant and poi
   const result = structuredClone(summary);
   result.variants[0].points.push({ ...structuredClone(result.variants[0].points[0]), id: "p1", coordinates: { "client.load.points": [{ time: "0s", rate: "90/s" }] } });
   const view = render(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p0" />);
-  expect(screen.getByTestId("run-conditions").textContent).toBe("Load 30 RPS; faults: dependency · Slowdown 6× · 0.2–0.7 s");
+  expect(screen.getByTestId("run-conditions").textContent).toBe("Load 30 RPS; faults: dependency · Slowdown 6× · 200–700 ms");
   view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} activeVariantId="baseline" selectedPointId="p1" />);
   expect(screen.getByTestId("run-conditions").textContent).toContain("Load 90 RPS");
   view.rerender(<ResultsPanel job={null} summary={result} problem={null} catalog={catalog} model={model} experiment={run} />);

@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { HelpHint } from "../help/HelpHint";
 import { formatDuration, formatNumber } from "../i18n/format";
 import type { Catalog, ModelFile, RunManifest } from "../api/apiTypes";
 
@@ -16,13 +17,13 @@ export function Assumptions({ catalog, model, manifest }: AssumptionsProps) {
   ]);
   const types = catalog.types.filter((type) => usedTypes.has(type.id));
   const series = manifest?.series;
-  const conditions: [string, string | number][] = manifest === null ? [] : [
+  const conditions: [string, string | number, string?][] = manifest === null ? [] : [
     [t("results.replications"), formatNumber(manifest.replications)],
-    [t("results.assumptions.seed"), formatNumber(manifest.seed)],
+    [t("results.assumptions.seed"), String(manifest.seed)],
     [t("results.assumptions.warmup"), formatDuration(series?.warmupMs)],
     [t("results.assumptions.measurement"), formatDuration(series?.measurementMs)],
     [t("results.assumptions.seriesWindow"), formatDuration(series?.windowMs)],
-    [t("results.assumptions.sketchProfile"), series?.sketchProfile ?? formatNumber(null)],
+    [t("results.assumptions.sketchProfile"), series?.sketchProfile ?? formatNumber(null), t("results.assumptions.sketchProfile.description")],
     [t("results.assumptions.applicationVersion"), manifest.applicationVersion],
     [t("results.assumptions.kslVersion"), manifest.kslVersion],
   ];
@@ -42,8 +43,8 @@ export function Assumptions({ catalog, model, manifest }: AssumptionsProps) {
       <section>
         <h2>{t("results.assumptions.runConditions")}</h2>
         {manifest === null ? <p>{t("results.assumptions.noConditions")}</p> : <dl className="run-settings">
-          {conditions.map(([name, value]) => <div key={name}>
-            <dt>{name}</dt>
+          {conditions.map(([name, value, help]) => <div key={name}>
+            <dt>{name}{help === undefined ? null : <HelpHint label={name}>{help}</HelpHint>}</dt>
             <dd>{value}</dd>
           </div>)}
         </dl>}

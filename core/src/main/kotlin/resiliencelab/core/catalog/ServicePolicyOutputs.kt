@@ -33,7 +33,7 @@ internal object ServicePolicyOutputs {
                 OutputTimeline("servicePolicies", "Service policies", 8, 1),
                 OutputInspector("Rate-limited share", 21),
             ),
-            rate("probeFailuresPerSecond", "probeFailures", "Failed health probes", 2),
+            rate("probeFailuresPerSecond", "probeFailures", "Failed readiness checks", 2),
             OutputDescriptor(
                 "notReadyShare",
                 "Not-ready share",

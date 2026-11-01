@@ -57,7 +57,7 @@ it.each([
   [call, "fallback", "Fallback", { on: ["circuitOpen"], processing: "1ms" }],
   [call, "outlierDetection", "Outlier detection", { consecutiveFailures: 5, baseEjection: "30s", maxEjected: "50%" }],
   ["gateway", "rateLimit", "Rate limit", { rate: "100/s", burst: 10 }],
-  ["gateway", "healthCheck", "Health check", healthCheck],
+  ["gateway", "healthCheck", "Readiness check", healthCheck],
   ["router", "outlierDetection", "Outlier detection", { consecutiveFailures: 5, baseEjection: "30s", maxEjected: "50%" }],
 ] as const)("adds/removes %s %s as atomic Undo commands using catalog field defaults", (selected, name, title, initial) => {
   const before = documents();
@@ -101,7 +101,7 @@ it("sorts call policies by execution order and edits fallback failure reasons wi
   const reasons = policy("fallback").getByRole("group", { name: "Failure reasons" });
   expect(within(reasons).queryByRole("checkbox", { name: /deadline/i })).toBeNull();
   expect(within(reasons).getAllByRole("checkbox")).toHaveLength(9);
-  fireEvent.click(within(reasons).getByRole("checkbox", { name: "timeout" }));
+  fireEvent.click(within(reasons).getByRole("checkbox", { name: "attempt timeout" }));
   expect(elementOf(stored().model, call)?.params.fallback).toEqual({ on: ["circuitOpen", "timeout"], processing: "1ms" });
   history(4);
 });
@@ -165,7 +165,7 @@ it("offers numeric sweep fields only for enabled policies", () => {
 });
 
 it.each([
-  ["healthCheck", "Health check", healthCheck, "Probe timeout", "250ms", { ...healthCheck, timeout: "250ms" }],
+  ["healthCheck", "Readiness check", healthCheck, "Probe timeout", "250ms", { ...healthCheck, timeout: "250ms" }],
   ["rateLimit", "Rate limit", { rate: "100/s", burst: 10 }, "Token rate", "50/s", { rate: "50/s", burst: 10 }],
 ] as const)("adds and edits replica %s as a complete policy object", (name, title, initial, field, value, changed) => {
   render(<Editor selected="middle" />);
@@ -197,4 +197,23 @@ it("reveals a collapsed policy through one field marker, opens its parent and sc
   expect(section.open).toBe(true);
   expect(parameters.open).toBe(true);
   expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest" });
+});
+
+
+it.each(["deadline", "unknownFailure"])("lets an imported unsupported fallback reason %s be removed in one Undo entry", reason => {
+  const initial = documents();
+  initial.model.connections[1].params.fallback = { on: ["timeout", reason], processing: "1ms" };
+  render(<Editor initial={initial} />);
+  const reasons = policy("fallback").getByRole("group", { name: "Failure reasons" });
+  const unsupported = within(reasons).getByRole<HTMLInputElement>("checkbox", { name: new RegExp(reason, "i") });
+  expect(unsupported.checked).toBe(true);
+  expect(unsupported.getAttribute("aria-invalid")).toBe("true");
+  fireEvent.click(unsupported);
+  expect(elementOf(stored().model, call)?.params.fallback).toEqual({ on: ["timeout"], processing: "1ms" });
+  history(1);
+  expect(within(reasons).queryByRole("checkbox", { name: new RegExp(reason, "i") })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(stored()).toEqual(initial);
+  expect(within(reasons).getByRole<HTMLInputElement>("checkbox", { name: new RegExp(reason, "i") }).checked).toBe(true);
+  history(0);
 });

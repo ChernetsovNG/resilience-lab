@@ -19,8 +19,8 @@ it("shows axis names and actual coordinates without raw paths or point IDs", () 
   expect(table.textContent).not.toMatch(/gateway-to-middle\.(timeout|attempts)|p\d/);
   expect(table.textContent).toContain("Timeout · gateway → middle");
   expect(screen.getByRole("region", { name: "Map · Variant 2" }).textContent).not.toContain("variant-2");
-  expect(within(table).getAllByRole("button")[1].getAttribute("aria-label")).toContain("Timeout · gateway → middle = 80ms, Attempts · gateway → middle = 1");
-  expect(within(table).getAllByRole("button")[1].textContent).toContain("80ms · 1");
+  expect(within(table).getAllByRole("button")[1].getAttribute("aria-label")).toContain("Timeout · gateway → middle = 80 ms, Attempts · gateway → middle = 1");
+  expect(within(table).getAllByRole("button")[1].textContent).toContain("80 ms · 1");
 });
 
 it.each([false, true])("updates Map intervals and descriptions without changing the mean (two axes: %s)", twoAxes => {
@@ -104,9 +104,9 @@ it("renders the heatmap in grid order, selects points and reads service metrics 
   const onPointChange = vi.fn();
   render(<GridMap summary={grid} activeVariantId="baseline" pointId="p0" onPointChange={onPointChange} />);
   const heatmap = screen.getByRole("table", { name: "Parameter heatmap" });
-  expect(within(heatmap).getAllByRole("rowheader").map((node) => node.textContent)).toEqual(["80ms", "40ms", "80ms"]);
+  expect(within(heatmap).getAllByRole("rowheader").map((node) => node.textContent)).toEqual(["80 ms", "40 ms", "80 ms"]);
   const cells = within(heatmap).getAllByRole("button");
-  expect(cells.map((node) => node.textContent)).toEqual(["80ms · 30%", "80ms · 110%", "40ms · 320%", "40ms · 130%", "80ms · 340%", "80ms · 150%"]);
+  expect(cells.map((node) => node.textContent)).toEqual(["80 ms · 30%", "80 ms · 110%", "40 ms · 320%", "40 ms · 130%", "80 ms · 340%", "80 ms · 150%"]);
   fireEvent.click(cells[5]);
   expect(onPointChange).toHaveBeenCalledWith("p5");
   expect(screen.getByLabelText("Map color scale").textContent).toContain("50%");
@@ -140,7 +140,7 @@ it("formats numeric grid axis values while preserving document quantities", () =
   render(<GridMap summary={run} activeVariantId="baseline" pointId="p0" />);
   const table = screen.getByRole("table", { name: "Parameter heatmap" });
   expect(within(table).getByRole("columnheader", { name: "1,000" })).toBeTruthy();
-  expect(within(table).getAllByRole("rowheader")[0].textContent).toBe("80ms");
+  expect(within(table).getAllByRole("rowheader")[0].textContent).toBe("80 ms");
   expect(run.grid[1].values[0]).toBe(1000);
 });
 

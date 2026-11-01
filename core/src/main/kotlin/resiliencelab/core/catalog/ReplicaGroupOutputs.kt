@@ -38,7 +38,8 @@ internal object ReplicaGroupOutputs {
             OutputDescriptor(
                 "groupMeanLatencyMs",
                 "Group mean latency",
-                "Merged group latency observations of the measured arrival cohort, including run-out.",
+                "Combined latency observations across group instances for requests arriving during measurement, " +
+                    "including completion after measurement ends.",
                 OutputUnit.MILLISECONDS,
                 OutputKind.LATENCY,
                 OutputCalculation(OutputCalculationKind.MEAN, "latency"),
@@ -47,7 +48,8 @@ internal object ReplicaGroupOutputs {
             OutputDescriptor(
                 "groupP99LatencyMs",
                 "Group p99 latency",
-                "The p99 of merged group latency sketches; instance percentiles are never averaged.",
+                "p99 is estimated from the combined latency observations of all group instances. " +
+                    "Individual replicas' p99 values are not averaged.",
                 OutputUnit.MILLISECONDS,
                 OutputKind.LATENCY,
                 OutputCalculation(OutputCalculationKind.QUANTILE, "latency", percentile = 0.99),

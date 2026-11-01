@@ -31,7 +31,16 @@ export function formatParameterValue(value: unknown, descriptor?: ParamDescripto
   if (value == null) return t(descriptor?.required ? "editor.param.required" : "editor.param.notSet");
   if (typeof value === "number") return new Intl.NumberFormat(language, { maximumSignificantDigits: 17 }).format(value);
   if (descriptor?.kind === "CHOICE") return catalogOption(String(value));
-  if (Array.isArray(value)) return JSON.stringify(value);
+  if (typeof value === "string" && (descriptor === undefined || (descriptor.kind === "QUANTITY" && descriptor.dimension === "DURATION"))) {
+    const duration = /^([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)(ms|s|min)$/.exec(value);
+    if (duration !== null && Number.isFinite(Number(duration[1]))) {
+      const unit = { ms: "common.durationMs", s: "common.durationS", min: "common.durationMin" }[duration[2]]!;
+      return t(unit, { value: new Intl.NumberFormat(language, { maximumSignificantDigits: 17 }).format(Number(duration[1])) });
+    }
+  }
+  if (descriptor?.kind === "ARRAY" && typeof value === "string" && descriptor.options.includes(value)) return catalogOption(value);
+  if (Array.isArray(value)) return descriptor?.options.length
+    ? value.map(option => formatParameterValue(option, descriptor)).join(", ") : JSON.stringify(value);
   if (isObject(value)) {
     const current = value;
     const keys = new Set([...(descriptor?.fields.map(field => field.name) ?? []), ...Object.keys(current)]);

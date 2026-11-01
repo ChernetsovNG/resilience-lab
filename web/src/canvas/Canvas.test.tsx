@@ -139,7 +139,7 @@ it("marks only overridden elements and shows their model values while preserving
   expect(gateway.querySelector(".block-node--overridden")).not.toBeNull();
   expect(screen.getByTestId("rf__node-middle").querySelector(".block-node--overridden")).toBeNull();
   expect(screen.getByTestId("canvas-param-gateway-handlers").querySelector("del")?.textContent).toBe("4");
-  expect(screen.getByTestId("canvas-param-gateway-processing.mean").querySelector("del")?.textContent).toBe("1ms");
+  expect(screen.getByTestId("canvas-param-gateway-processing.mean").querySelector("del")?.textContent).toBe("1 ms");
   expect(screen.getByTestId("canvas-param-gateway-queue").querySelector("del")).toBeNull();
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").classList.contains("canvas-edge-label--overridden")).toBe(true);
   expect(screen.getByTestId("canvas-param-gateway-to-middle-attempts").querySelector("del")?.textContent).toBe("3");
@@ -189,7 +189,7 @@ it("includes the full metric label and a large queue value in its tooltip", asyn
   const tooltip = within(metrics).getByRole("tooltip");
   expect(tooltip.textContent).toContain("Mean queue");
   expect(tooltip.textContent).toContain("9,999,999.99");
-  expect(tooltip.textContent).toContain("Queue length integral / interval duration");
+  expect(tooltip.textContent).toContain("Average number of attempts waiting for a handler");
 });
 
 it("explains attempts below one beside the connection value", async () => {
@@ -256,7 +256,7 @@ describe("Canvas", () => {
       const node = await screen.findByTestId("rf__node-gateway");
       const pairs = node.querySelectorAll(".block-summary > span");
       expect([...pairs].map(pair => pair.textContent?.trim()))
-        .toEqual([`обработчики: ${handlers}`, "очередь: 16", "среднее: 1ms"]);
+        .toEqual([`обработчики: ${handlers}`, "очередь: 16", "среднее: 1 мс"]);
       for (const pair of pairs) expect(pair.querySelector(".inline-param")).not.toBeNull();
     } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
   });
@@ -321,9 +321,9 @@ describe("Canvas", () => {
     expect(await screen.findAllByTestId("block-node")).toHaveLength(4);
     expect(screen.getByTestId("canvas-param-gateway-handlers").textContent).toBe("4");
     expect(screen.getByTestId("canvas-param-gateway-queue").textContent).toBe("16");
-    expect(screen.getByTestId("canvas-param-gateway-processing.mean").textContent).toBe("1ms");
+    expect(screen.getByTestId("canvas-param-gateway-processing.mean").textContent).toBe("1 ms");
     expect(screen.getByTestId("canvas-param-client-load.points.0.rate").textContent).toBe("120/s");
-    expect(screen.getByTestId("canvas-param-client-deadline").textContent).toBe("250ms");
+    expect(screen.getByTestId("canvas-param-client-deadline").textContent).toBe("250 ms");
     fireEvent.click(screen.getByTestId("rf__node-gateway"));
     expect(onSelect).toHaveBeenCalledWith(["gateway"]);
   });
@@ -332,9 +332,9 @@ describe("Canvas", () => {
     const onSelect = vi.fn();
     const { container } = render(<Canvas catalog={catalog} onCommand={vi.fn()} model={model} layout={layout} selected={[]} onSelect={onSelect} />);
     const edge = await screen.findByTestId("rf__edge-gateway-to-middle");
-    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80 ms");
     expect(screen.getByTestId("canvas-param-gateway-to-middle-attempts").textContent).toBe("3");
-    expect(screen.getByTestId("canvas-param-middle-to-dependency-timeout").textContent).toBe("60ms");
+    expect(screen.getByTestId("canvas-param-middle-to-dependency-timeout").textContent).toBe("60 ms");
     expect(screen.getByTestId("rf__edge-client-to-gateway").textContent).toBe("");
     fireEvent.click(edge);
     expect(onSelect).toHaveBeenLastCalledWith(["gateway-to-middle"]);
@@ -468,7 +468,7 @@ describe("Canvas", () => {
     fireEvent.change(input, { target: { value: "invalid" } });
     fireEvent.keyDown(input, { key: "Escape" });
 
-    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80ms");
+    expect(screen.getByTestId("canvas-param-gateway-to-middle-timeout").textContent).toBe("80 ms");
     expect(screen.queryByRole("textbox", { name: "Timeout" })).toBeNull();
     expect(onParam).not.toHaveBeenCalled();
     expect(onValidity).toHaveBeenLastCalledWith("gateway-to-middle.timeout", true);
@@ -564,7 +564,7 @@ it("changes connection overlay labels without borrowing target node values", asy
   view.rerender(<Canvas {...props} connectionMetric="timeoutRate" />);
   expect(badge.textContent).toContain("Timeout share 25%");
   view.rerender(<Canvas {...props} connectionMetric="meanOrphaned" />);
-  expect(badge.textContent).toContain("Orphaned work 0.5");
+  expect(badge.textContent).toContain("Orphaned attempts 0.5");
 });
 
 
@@ -653,7 +653,7 @@ it("marks only fault targets including replica groups and connection copies", as
   expect(screen.getByTestId("rf__node-dependency").querySelector(".fault-badge")).toBeNull();
   const edge = screen.getByTestId("canvas-edge-label-gateway-to-middle");
   const badge = edge.querySelector<HTMLButtonElement>(".fault-badge")!;
-  expect(badge.title).toBe("gateway#2 → middle · Slowdown 2× · 0.2–0.7 s");
+  expect(badge.title).toBe("gateway#2 → middle · Slowdown 2× · 200–700 ms");
   fireEvent.click(badge);
   expect(onFault).toHaveBeenCalledWith(1);
 });

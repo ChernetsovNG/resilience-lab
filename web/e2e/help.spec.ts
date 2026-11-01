@@ -42,7 +42,7 @@ test("reads service and connection help from the real catalog without editing do
   const hint = inspector.getByRole("button", { name: "More about: Handlers", exact: true });
   await hint.hover();
   const tooltip = page.getByRole("tooltip");
-  await expect(tooltip).toContainText("Concurrent handlers");
+  await expect(tooltip).toContainText("Maximum requests handled at once by each replica");
   await withinViewport(page, tooltip);
   await hint.focus();
   await page.keyboard.press("Escape");

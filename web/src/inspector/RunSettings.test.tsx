@@ -28,8 +28,8 @@ function Settings({ editable = true, source = experiment, sourceModel = model, s
 }
 
 it.each([
-  { warmup: "10s", measurement: "60s", from: "40000ms", to: "55000ms" },
-  { warmup: "1min", measurement: "120s", from: "120000ms", to: "150000ms" },
+  { warmup: "10s", measurement: "60s", from: "40s", to: "55s" },
+  { warmup: "1min", measurement: "120s", from: "2min", to: "150s" },
   { warmup: "0ms", measurement: "1s", from: "500ms", to: "750ms" },
 ])("adds a fault inside measurement with $warmup warmup and $measurement measurement", ({ warmup, measurement, from, to }) => {
   render(<Settings source={{ ...experiment, faults: [], execution: { ...experiment.execution, warmup, measurement } }} />);

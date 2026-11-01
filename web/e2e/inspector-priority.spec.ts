@@ -14,7 +14,7 @@ test("gives the empty panel's space to the canvas and shows call results without
   console.log("INITIAL_CANVAS", initial);
   await page.screenshot({ path: testInfo.outputPath("after-initial.png") });
 
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   await expect(page.getByRole("tabpanel")).toBeVisible();
   expect((await canvas.boundingBox())!.height).toBeLessThan(initial.height);
   await page.getByRole("tab", { name: "Baseline", exact: true }).click();

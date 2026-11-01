@@ -324,21 +324,21 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
   const originalModel = (await stored(page, files.model)).content.model as ModelFile;
   const timeout = page.getByTestId("canvas-param-gateway-to-middle-timeout");
   const input = timeout.getByRole("textbox", { name: "Timeout", exact: true });
-  await expect(timeout).toHaveText("80ms");
+  await expect(timeout).toHaveText("80 ms");
 
   await timeout.dblclick();
   await input.fill("90ms");
   await input.press("Enter");
-  await expect(timeout).toHaveText("90ms");
+  await expect(timeout).toHaveText("90 ms");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(timeout).toHaveText("80ms");
+  await expect(timeout).toHaveText("80 ms");
 
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await timeout.dblclick();
   await input.fill("100ms");
   await input.press("Enter");
-  await expect(timeout.getByRole("button")).toHaveText("100ms");
-  await expect(timeout.locator("del")).toHaveText("80ms");
+  await expect(timeout.getByRole("button")).toHaveText("100 ms");
+  await expect(timeout.locator("del")).toHaveText("80 ms");
   await save(page);
 
   const experiment = (await stored(page, files.experiment)).content.experiment as ExperimentFile;
@@ -347,8 +347,8 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
 
   await page.reload();
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
-  await expect(timeout.getByRole("button")).toHaveText("100ms");
-  await expect(timeout.locator("del")).toHaveText("80ms");
+  await expect(timeout.getByRole("button")).toHaveText("100 ms");
+  await expect(timeout.locator("del")).toHaveText("80 ms");
 });
 
 test("keeps every canvas value clickable and opens gateway mean with an error-colored message", async ({ page, files }) => {

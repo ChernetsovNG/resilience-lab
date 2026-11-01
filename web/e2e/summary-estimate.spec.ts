@@ -64,7 +64,7 @@ test("estimate popover preserves diagram height and closes by button, outside cl
   let jobs = 0;
   page.on("request", request => { if (request.url().endsWith("/api/v1/jobs") && request.method() === "POST") jobs += 1; });
   const canvas = page.getByRole("application", { name: "Model canvas", exact: true });
-  await page.getByRole("button", { name: "Restore results", exact: true }).click();
+  await page.getByRole("button", { name: "Expand results", exact: true }).click();
   const before = await canvas.boundingBox();
   await page.getByRole("button", { name: "Estimate", exact: true }).click();
   const estimate = page.getByRole("region", { name: "Cost estimate", exact: true });

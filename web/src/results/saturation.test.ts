@@ -126,7 +126,7 @@ describe("formatSaturation", () => {
         utilizationThreshold: Number(utilizationThreshold), meanQueueLengthThreshold: Number(meanQueueLengthThreshold),
         rejectionsThreshold: Number(rejectionsThreshold) } };
       const text = formatSaturation(saturation, 2);
-      expect(text.rule).toBe(`A slot set counts as saturated when utilization stays at or above ${utilization} and the mean queue stays above ${queue} for at least ${duration}. It also counts as saturated when each consecutive window has more than ${rejections} rejections (queue full or wait limit) and the window starts span at least ${duration}. Slot sets without a waiting queue use only the rejection rule.`);
+      expect(text.rule).toBe(`A resource pool (handlers or connections) counts as saturated when utilization stays at or above ${utilization} and the mean queue stays above ${queue} for at least ${duration}. It also counts as saturated when each consecutive window has more than ${rejections} rejections (queue full or wait limit) and the window starts span at least ${duration}. Pools without a waiting queue use only the rejection rule.`);
       expect(text.rule).not.toMatch(/minimumDurationMs|utilizationThreshold|meanQueueLengthThreshold|rejectionsThreshold/);
     });
 
