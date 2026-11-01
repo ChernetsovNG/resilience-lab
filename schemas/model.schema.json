@@ -680,6 +680,97 @@
             "params": {
               "additionalProperties": false,
               "properties": {
+                "outlierDetection": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "baseEjection": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "30s",
+                          "description": "Time excluded on the first ejection; multiplied by the target's ejection number thereafter. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Base ejection time"
+                        },
+                        "consecutiveFailures": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 5,
+                          "description": "Target failures required for ejection; a successful attempt resets the streak.",
+                          "title": "Consecutive failures"
+                        },
+                        "maxEjected": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "PROBABILITY",
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 100.0,
+                                    "numerator": 1.0,
+                                    "symbol": "%"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "50%",
+                          "description": "Maximum fraction of distinct targets excluded at once, rounded down; at least one target remains. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                          "title": "Maximum ejected share"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Temporarily excludes failing targets. State is shared by all callers of the router or replica group.",
+                  "title": "Outlier detection"
+                },
                 "policy": {
                   "anyOf": [
                     {
@@ -1981,6 +2072,97 @@
                   },
                   "description": "One-way network delay, drawn separately for the request and the response. Initially fixed at 1ms.",
                   "title": "Network delay"
+                },
+                "outlierDetection": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "baseEjection": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:ms|s|min)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "DURATION",
+                                "exclusiveMinimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1.0,
+                                    "symbol": "ms"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 1000.0,
+                                    "symbol": "s"
+                                  },
+                                  {
+                                    "denominator": 1.0,
+                                    "numerator": 60000.0,
+                                    "symbol": "min"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "30s",
+                          "description": "Time excluded on the first ejection; multiplied by the target's ejection number thereafter. Units: ms, s, min. Canonical value (milliseconds): > 0; numeric bounds are checked by the core.",
+                          "title": "Base ejection time"
+                        },
+                        "consecutiveFailures": {
+                          "anyOf": [
+                            {
+                              "minimum": 1.0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": 5,
+                          "description": "Target failures required for ejection; a successful attempt resets the streak.",
+                          "title": "Consecutive failures"
+                        },
+                        "maxEjected": {
+                          "anyOf": [
+                            {
+                              "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?:%)$",
+                              "type": "string",
+                              "x-quantity": {
+                                "dimension": "PROBABILITY",
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "units": [
+                                  {
+                                    "denominator": 100.0,
+                                    "numerator": 1.0,
+                                    "symbol": "%"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": "50%",
+                          "description": "Maximum fraction of distinct targets excluded at once, rounded down; at least one target remains. Units: %. Canonical value (probability from 0 to 1): >= 0 and <= 1; numeric bounds are checked by the core.",
+                          "title": "Maximum ejected share"
+                        }
+                      },
+                      "required": [],
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Temporarily excludes failing targets. State is shared by all callers of the router or replica group.",
+                  "title": "Outlier detection"
                 },
                 "pool": {
                   "anyOf": [

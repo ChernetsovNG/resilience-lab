@@ -27,7 +27,9 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     ];
     source.blocks.client.params = { deadline: "2s", classes };
     source.blocks.partner = { type: "client", params: { deadline: "1s", classes: [classes[0]] } };
-    source.blocks.router = { type: "router", params: { policy: "roundRobin" } };
+    const outlierDetection = { consecutiveFailures: 2, baseEjection: "20ms", maxEjected: "50%" };
+    source.blocks.router = { type: "router", params: { policy: "roundRobin", outlierDetection } };
+    source.blocks.middle.params.replicas = 3;
     source.blocks.gateway.scenario = [
       { type: "process", classes: ["checkout"] },
       { type: "call", connection: "gateway-to-middle", classes: ["checkout"] },
@@ -36,6 +38,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
       circuitBreaker: { failureRate: "40%", minimumCalls: 5, window: 10, openDuration: "20ms", halfOpenCalls: 2 },
       retryBudget: { ratio: "20%", minPerSecond: "0/s", window: "100ms" },
       fallback: { on: ["circuitOpen", "timeout"], processing: "2ms" },
+      outlierDetection,
     };
     const call = source.connections.find(edge => edge.id === "gateway-to-middle")!;
     call.params = { ...call.params, ...policies };
@@ -55,6 +58,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     experiment.variants[1].overrides["client.classes"] = override;
     experiment.variants[1].overrides["gateway-to-middle.retryBudget.ratio"] = "35%";
     experiment.variants[1].overrides["gateway.healthCheck.timeout"] = "500ms";
+    experiment.variants[1].overrides["gateway-to-middle.outlierDetection.baseEjection"] = "30ms";
     experiment.grid = [
       { path: "gateway-to-middle.retryBudget.ratio", values: ["10%", "20%"] },
       { path: "gateway.rateLimit.burst", values: [5, 10] },
@@ -98,6 +102,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     expect(savedOverrides["client.classes"]).toEqual(override);
     expect(savedOverrides["gateway-to-middle.retryBudget.ratio"]).toBe("35%");
     expect(savedOverrides["gateway.healthCheck.timeout"]).toBe("500ms");
+    expect(savedOverrides["gateway-to-middle.outlierDetection.baseEjection"]).toBe("30ms");
     const validation = await page.request.post("/api/v1/validate", { data: { experiment: experimentPath } });
     expect(validation.ok()).toBe(true);
     expect((await validation.json()).valid).toBe(true);

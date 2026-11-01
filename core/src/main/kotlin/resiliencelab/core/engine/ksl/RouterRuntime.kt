@@ -10,8 +10,12 @@ internal class RouterRuntime(
     private val outputs: List<RouteEdge>,
     streams: StreamSource,
     private val isReady: (String, String) -> Boolean = { _, _ -> true },
+    private val onEjected: (String, Double) -> Unit = { _, _ -> },
+    private val onReturned: (String) -> Unit = {},
 ) {
     private val defaultPolicy = node.policy
+    private val outlierDetection = node.outlierDetection
+    private val targets = outputs.map { it.to }.distinct().associateWith { TargetState() }
     val isReplicaGroup = node.pathSegments.last() == "#lb"
     private val random by lazy { streams.stream(node.pathSegments, StreamRole.ROUTING) }
     private val inFlight = outputs.associate { it.path to 0 }.toMutableMap()
@@ -25,6 +29,11 @@ internal class RouterRuntime(
     fun reset() {
         cursor = 0
         inFlight.replaceAll { _, _ -> 0 }
+        targets.values.forEach {
+            it.failures = 0
+            it.ejections = 0
+            it.ejected = false
+        }
     }
 
     fun select(
@@ -32,7 +41,10 @@ internal class RouterRuntime(
         policy: RoutingPolicy = defaultPolicy,
         requestClass: String = "default",
     ): RouteEdge? {
-        val applicable = outputs.filter { (it.classes == null || requestClass in it.classes) && isReady(it.to, requestClass) }
+        val applicable =
+            outputs.filter {
+                (it.classes == null || requestClass in it.classes) && !targets.getValue(it.to).ejected && isReady(it.to, requestClass)
+            }
         if (applicable.isEmpty()) return null
         val eligible = applicable.filterNot { it.path in tried }.ifEmpty { applicable }
         val selected =
@@ -63,4 +75,39 @@ internal class RouterRuntime(
     }
 
     fun hasRoute(requestClass: String): Boolean = outputs.any { it.classes == null || requestClass in it.classes }
+
+    /** Called once at the caller-observed outcome, independently of eventual orphan completion. */
+    fun observe(
+        route: RouteEdge,
+        outcome: AttemptOutcome,
+    ) {
+        val config = outlierDetection ?: return
+        if (outcome == AttemptOutcome.PENDING || outcome == AttemptOutcome.DEADLINE_EXCEEDED) return
+        val target = targets.getValue(route.to)
+        if (target.ejected) return
+        if (outcome == AttemptOutcome.SUCCEEDED) {
+            target.failures = 0
+            return
+        }
+        if (target.failures < config.consecutiveFailures) target.failures++
+        val maximum = (targets.size * config.maxEjected).toInt().coerceAtMost(targets.size - 1)
+        if (target.failures < config.consecutiveFailures || targets.values.count { it.ejected } >= maximum) return
+        target.failures = 0
+        target.ejections++
+        target.ejected = true
+        onEjected(route.to, (config.baseEjectionMs * target.ejections).coerceAtMost(Double.MAX_VALUE))
+    }
+
+    fun restore(target: String) {
+        val state = targets.getValue(target)
+        if (!state.ejected) return
+        state.ejected = false
+        onReturned(target)
+    }
+
+    private class TargetState {
+        var failures = 0
+        var ejections = 0
+        var ejected = false
+    }
 }

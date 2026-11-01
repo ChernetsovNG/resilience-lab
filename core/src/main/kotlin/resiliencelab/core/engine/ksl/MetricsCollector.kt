@@ -119,6 +119,7 @@ class MetricsCollector(
         val metrics = serviceMetrics.getValue(serviceId)
         metrics.slots.start()
         metrics.notReadySeries.record(measurementStartMs, if (metrics.ready) 0.0 else 1.0)
+        metrics.ejectedSeries.record(measurementStartMs, metrics.ejected.toDouble())
         metrics.queueLengthSeries.record(measurementStartMs, queueLength.toDouble())
         metrics.busyHandlerSeries.record(measurementStartMs, busyHandlers.toDouble())
     }
@@ -328,6 +329,20 @@ class MetricsCollector(
         }
     }
 
+    /** Policy events use event time; overlapping exclusions by different routers are summed. */
+    internal fun recordEjection(
+        serviceId: String,
+        ejected: Boolean,
+    ) {
+        val metrics = serviceMetrics[serviceId] ?: return
+        val timeMs = currentTimeMs()
+        windows.ejection(serviceId, timeMs, ejected)
+        metrics.ejected += if (ejected) 1 else -1
+        check(metrics.ejected >= 0)
+        if (ejected && timeMs >= measurementStartMs && timeMs < measurementEndMs) metrics.ejections++
+        metrics.ejectedSeries.record(timeMs, metrics.ejected.toDouble())
+    }
+
     internal fun recordAdmitted(
         serviceId: String,
         measured: Boolean = true,
@@ -493,6 +508,9 @@ class MetricsCollector(
         var probes = 0
         var probeFailures = 0
         var ready = true
+        var ejections = 0
+        var ejected = 0
+        var ejectedSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var notReadySeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
         var busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
@@ -511,6 +529,9 @@ class MetricsCollector(
             probes = 0
             probeFailures = 0
             ready = true
+            ejections = 0
+            ejected = 0
+            ejectedSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             notReadySeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             queueLengthSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
             busyHandlerSeries = TimeWeightedSeries(measurementStartMs, measurementEndMs)
@@ -521,6 +542,7 @@ class MetricsCollector(
             queueLengthSeries.finish(timeMs)
             busyHandlerSeries.finish(timeMs)
             notReadySeries.finish(timeMs)
+            ejectedSeries.finish(timeMs)
         }
 
         fun snapshot(): ServiceMetrics =
@@ -535,6 +557,8 @@ class MetricsCollector(
                 probes = probes,
                 probeFailures = probeFailures,
                 notReadyMs = notReadySeries.integral,
+                ejections = ejections,
+                ejectedMs = ejectedSeries.integral,
                 measurementMs = measurementEndMs - measurementStartMs,
                 queueDurationsMs = queueLengthSeries.durations,
                 latency = latency.snapshot(),

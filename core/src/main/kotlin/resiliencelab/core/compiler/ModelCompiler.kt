@@ -31,6 +31,7 @@ import resiliencelab.core.ir.HealthCheckConfig
 import resiliencelab.core.ir.LoadPoint
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.OutlierDetectionConfig
 import resiliencelab.core.ir.PoolerSettings
 import resiliencelab.core.ir.RateLimitConfig
 import resiliencelab.core.ir.RetryBudgetConfig
@@ -1102,6 +1103,49 @@ class ModelCompiler(
                         (instance ?: service).copy(scenario = service.scenario)
                     }
             }
+        graph.calls.forEach { call ->
+            if (call.outlierDetection != null && instances[call.to].orEmpty().size < 2) {
+                val index = model.connections.indexOfFirst { it.id == call.path }
+                reader(
+                    "call",
+                    TypeCategory.CONNECTION,
+                    model.connections[index].params,
+                    document,
+                    JsonPointer.of("connections", index, "params"),
+                    call.path,
+                    sink,
+                    origins[call.path],
+                )?.fail<Unit>(
+                    CoreMessage.OUTLIER_TARGET,
+                    "outlierDetection",
+                    "Outlier detection on connection '${call.path}' requires a replica-group target",
+                    args = mapOf("connection" to JsonPrimitive(call.path)),
+                )
+            }
+        }
+        graph.calls.groupBy { it.to }.forEach { (target, calls) ->
+            if (instances[target].orEmpty().size > 1 && calls.map { it.outlierDetection }.distinct().size > 1) {
+                calls.forEach { call ->
+                    val index = model.connections.indexOfFirst { it.id == call.path }
+                    val override = origins[call.path]
+                    val source =
+                        override
+                            ?.pointers
+                            ?.entries
+                            ?.firstOrNull { it.key.startsWith("outlierDetection") }
+                            ?.value
+                    sink.error(
+                        CoreMessage.OUTLIER_CONFIG,
+                        "All calls to replica group '$target' must use identical outlier detection parameters",
+                        if (source == null) document else override.document,
+                        source ?: JsonPointer.of("connections", index, "params", "outlierDetection"),
+                        call.path,
+                        override?.variant,
+                        args = mapOf("group" to JsonPrimitive(target)),
+                    )
+                }
+            }
+        }
         return if (sink.errorCount() > before) graph else graph.expandReplicaGroups(instances)
     }
 
@@ -1225,6 +1269,7 @@ class ModelCompiler(
         val circuitBreaker = if (reader.has("circuitBreaker")) reader.obj("circuitBreaker")?.let(::circuitBreaker) else null
         val retryBudget = if (reader.has("retryBudget")) reader.obj("retryBudget")?.let(::retryBudget) else null
         val fallback = if (reader.has("fallback")) reader.obj("fallback")?.let(::fallback) else null
+        val outlierDetection = if (reader.has("outlierDetection")) reader.obj("outlierDetection")?.let(::outlierDetection) else null
         return if (network == null || timeout == null || attempts == null || backoff == null || retryTarget == null) {
             null
         } else {
@@ -1244,6 +1289,7 @@ class ModelCompiler(
                 circuitBreaker,
                 retryBudget,
                 fallback,
+                outlierDetection,
             )
         }
     }
@@ -1288,7 +1334,15 @@ class ModelCompiler(
             reader("router", TypeCategory.BLOCK, params, document, JsonPointer.of("blocks", id, "params"), id, sink, overrides)
                 ?: return null
         val policy = routingPolicy(reader.choice("policy") ?: return null)
-        return RouterNode(id, policy, Origin(document, JsonPointer.of("blocks", id)))
+        val outlierDetection = if (reader.has("outlierDetection")) reader.obj("outlierDetection")?.let(::outlierDetection) else null
+        return RouterNode(id, policy, Origin(document, JsonPointer.of("blocks", id)), outlierDetection)
+    }
+
+    private fun outlierDetection(reader: ParamReader): OutlierDetectionConfig? {
+        val failures = reader.int("consecutiveFailures")
+        val duration = reader.quantity("baseEjection")
+        val fraction = reader.quantity("maxEjected")
+        return if (failures == null || duration == null || fraction == null) null else OutlierDetectionConfig(failures, duration, fraction)
     }
 
     private fun readRoute(

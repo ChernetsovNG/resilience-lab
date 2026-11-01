@@ -48,8 +48,13 @@ internal fun GraphIr.expandReplicaGroups(instances: Map<String, List<ServiceNode
             }
         }
     val generatedRouters =
-        groups.toSortedMap().map { (_, copies) ->
-            RouterNode(copies.first().pathSegments + "#lb", RoutingPolicy.ROUND_ROBIN, copies.first().origin)
+        groups.toSortedMap().map { (path, copies) ->
+            RouterNode(
+                copies.first().pathSegments + "#lb",
+                RoutingPolicy.ROUND_ROBIN,
+                copies.first().origin,
+                calls.firstOrNull { it.to == path }?.outlierDetection,
+            )
         }
     val generatedRoutes =
         groups.toSortedMap().flatMap { (path, copies) ->
