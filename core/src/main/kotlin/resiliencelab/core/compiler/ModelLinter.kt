@@ -28,6 +28,7 @@ import kotlin.math.sqrt
  * Advisory checks on valid, compiled paths from the client (stage-1 design §3.4).
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
+ * [healthCheckCascadeThreshold] is the positive group-utilization threshold after removing one health-checked instance (1 by default).
  * [poolDemandThreshold] is the finite positive pool occupancy threshold, including equality, defaulting to one.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  * [lowHeadroomThreshold] is the nominal accepted-utilization threshold, strictly between zero and one.
@@ -51,8 +52,12 @@ class ModelLinter(
     private val lowHeadroomThreshold: Double = 0.8,
     private val rejectionRiskThreshold: Double = 0.01,
     private val poolDemandThreshold: Double = 1.0,
+    private val healthCheckCascadeThreshold: Double = 1.0,
 ) {
     init {
+        require(healthCheckCascadeThreshold.isFinite() && healthCheckCascadeThreshold > 0.0) {
+            "healthCheckCascadeThreshold must be finite and positive"
+        }
         require(poolDemandThreshold.isFinite() && poolDemandThreshold > 0.0) {
             "poolDemandThreshold must be finite and positive"
         }
@@ -94,9 +99,17 @@ class ModelLinter(
                     .flatMap { point ->
                         lintGraph(point.graph).map { diagnostic ->
                             val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
+                            val parameterPath = "${diagnostic.path}.$parameter"
+                            val overrideOrigin =
+                                point.parameterOrigins.entries
+                                    .firstOrNull { (path, origin) ->
+                                        (path == parameterPath || path.startsWith("$parameterPath.")) &&
+                                            origin.document != diagnostic.document
+                                    }?.value
                             val origin =
-                                generateSequence(parameter) { it.substringBeforeLast('.', "").takeIf { parent -> parent.isNotEmpty() } }
-                                    .firstNotNullOfOrNull { point.parameterOrigins["${diagnostic.path}.$it"] }
+                                overrideOrigin ?: generateSequence(parameter) {
+                                    it.substringBeforeLast('.', "").takeIf { parent -> parent.isNotEmpty() }
+                                }.firstNotNullOfOrNull { point.parameterOrigins["${diagnostic.path}.$it"] }
                             val located =
                                 if (origin == null) {
                                     diagnostic
@@ -256,6 +269,7 @@ class ModelLinter(
         return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
             graph.calls.flatMap { call -> timeoutBelowLatency(call, normalResponses[call.path].orEmpty()) } +
             handlerDemand(graph.services, demands, maximumRates, queuePatience) +
+            healthCheckCascade(graph, demands, arrivals) +
             graph.calls.mapNotNull { call ->
                 poolDemand(
                     call,
@@ -503,6 +517,84 @@ class ModelLinter(
         val holdingMs: Fraction,
         val utilization: Fraction,
     )
+
+    /**
+     * Group demand uses the same nominal offered occupancy as handlerDemand, without retries or policy-state predictions.
+     * Request types retain their eligible target sets; shared members include demand from every source.
+     * Keep rate-weighted holding fixed and remove the largest health-checked capacity; only display ratios are rounded.
+     */
+    private fun healthCheckCascade(
+        graph: GraphIr,
+        demands: Map<String, Fraction>,
+        arrivals: ArrivalShares,
+    ): List<Diagnostic> =
+        graph.routers
+            .flatMap { router ->
+                val groups =
+                    arrivals.nominal.entries
+                        .filter { (source, shares) -> source.maximumRate > 0.0 && (shares[router.path] ?: Fraction.ZERO).signum() > 0 }
+                        .map { it.key }
+                        .groupBy { source ->
+                            graph.entryServices(source.client.copy(entry = router.path), source.requestClass).sortedBy { it.path }
+                        }
+                groups.flatMap group@{ (members, sources) ->
+                    val checked = members.filter { it.healthCheck != null }
+                    if (members.size <= 1 || checked.isEmpty()) return@group emptyList()
+                    val capacity = members.sumOf { it.handlers.toLong() }
+                    val remaining = capacity - checked.maxOf { it.handlers }
+                    val demand = members.fold(Fraction.ZERO) { sum, service -> sum + (demands[service.path] ?: Fraction.ZERO) }
+                    val threshold = Fraction.of(healthCheckCascadeThreshold)
+                    if (demand >= threshold * Fraction.of(capacity.toBigDecimal()) ||
+                        demand < threshold * Fraction.of(remaining.toBigDecimal())
+                    ) {
+                        return@group emptyList()
+                    }
+                    val exactUtilization = (demand / Fraction.of(capacity.toBigDecimal())).decimal()
+                    val roundedUtilization = exactUtilization.round(MathContext(3, RoundingMode.HALF_UP))
+                    val utilization =
+                        Quantities.plain(
+                            if (Fraction.of(roundedUtilization) >= threshold) {
+                                exactUtilization.round(MathContext(3, RoundingMode.FLOOR))
+                            } else {
+                                roundedUtilization
+                            },
+                        )
+                    val remainingUtilization =
+                        Quantities.plain(
+                            (demand / Fraction.of(remaining.toBigDecimal())).decimal().round(MathContext(3, RoundingMode.CEILING)),
+                        )
+                    val group = router.path.substringBeforeLast('#', router.path)
+                    val requestTypes =
+                        sources
+                            .map { it.requestClass }
+                            .distinct()
+                            .sorted()
+                            .joinToString(", ")
+                    val thresholdText = number(healthCheckCascadeThreshold)
+                    checked.map { service ->
+                        warning(
+                            CoreMessage.LINT_HEALTHCHECK_CASCADE,
+                            "Health-check of '${service.path}': ${members.size} instances in '$group', " +
+                                "request types $requestTypes, utilization $utilization with all instances, " +
+                                "$remainingUtilization after removing the largest health-checked capacity (threshold $thresholdText). " +
+                                "Removing an instance may overload the rest; increase replicas or make health checks less aggressive " +
+                                "by increasing unhealthyThreshold or interval.",
+                            service.origin,
+                            service.path,
+                            "/params/healthCheck",
+                            mapOf(
+                                "target" to JsonPrimitive(service.path.substringBeforeLast('#', service.path)),
+                                "group" to JsonPrimitive(group),
+                                "requestTypes" to JsonPrimitive(requestTypes),
+                                "replicas" to JsonPrimitive(members.size),
+                                "utilization" to JsonPrimitive(utilization),
+                                "remainingUtilization" to JsonPrimitive(remainingUtilization),
+                                "threshold" to JsonPrimitive(thresholdText),
+                            ),
+                        )
+                    }
+                }
+            }.distinct()
 
     /** Rate-weighted holding time and accepted occupancy; service IR already contains replica overrides. */
     private fun serviceLoad(
