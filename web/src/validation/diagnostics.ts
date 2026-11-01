@@ -20,7 +20,9 @@ export interface DiagnosticGroup {
   members: Diagnostic[];
 }
 
-/** Collapse equivalent structured linter warnings across replicas and variants, preserving all source locations. */
+const severityOrder = { ERROR: 0, WARNING: 1, ADVICE: 2 };
+
+/** Collapse equivalent structured lint findings, preserving source locations and ordering groups by severity. */
 export function groupDiagnostics(diagnostics: readonly Diagnostic[]): DiagnosticGroup[] {
   const groups = new Map<string, DiagnosticGroup>();
   return diagnostics.flatMap((original, index) => {
@@ -38,7 +40,7 @@ export function groupDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic
     const group = { diagnostic, members: [original] };
     groups.set(key, group);
     return [group];
-  });
+  }).sort((left, right) => severityOrder[left.diagnostic.severity] - severityOrder[right.diagnostic.severity]);
 }
 
 /** A transport or launch failure without compiler diagnostics still counts as one visible error. */

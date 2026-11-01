@@ -113,3 +113,12 @@ it("groups advice across replicas and keeps risks above advice", () => {
   expect(summarizeDiagnostics([advice, other])).toEqual({ count: 1, severity: "ADVICE" });
   expect(summarizeDiagnostics([advice, { ...advice, severity: "WARNING" }])).toEqual({ count: 2, severity: "WARNING" });
 });
+
+it("orders grouped findings by severity without changing their navigation members", () => {
+  const advice: Diagnostic = { code: "LINT_RETRY_UNGUARDED", severity: "ADVICE", message: "Use a retry budget" };
+  const warning: Diagnostic = { ...advice, code: "LINT_RETRY_OVERLOAD", severity: "WARNING", message: "Overload risk" };
+  const error: Diagnostic = { ...advice, code: "PARAM_RANGE", severity: "ERROR", message: "Invalid value" };
+  const groups = groupDiagnostics([advice, warning, error]);
+  expect(groups.map(group => group.diagnostic.severity)).toEqual(["ERROR", "WARNING", "ADVICE"]);
+  expect(groups.map(group => group.members[0])).toEqual([error, warning, advice]);
+});

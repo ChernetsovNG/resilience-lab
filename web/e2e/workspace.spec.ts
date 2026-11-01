@@ -69,7 +69,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   await expect(fieldMessages).toBeHidden();
   await expect(page.getByRole("img", { name: /problems: warning/ })).toBeHidden();
-  await expect(callLabel.getByRole("button", { name: "Warnings in variants: Baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
+  await expect(callLabel.getByRole("button", { name: "Warnings in variants: Baseline; Advice in variants: Baseline", exact: true })).toHaveClass(/diagnostic-badge--variants/);
   await timeout.locator("..").locator(".field-feedback--variants button").click();
   await expect(timeout.locator("..").getByRole("link", { name: /^In variants: Baseline — / })).toBeVisible();
 
