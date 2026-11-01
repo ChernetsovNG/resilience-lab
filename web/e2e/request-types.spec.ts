@@ -106,7 +106,8 @@ for (const language of ["en", "ru"] as const) {
       await page.getByRole("tab", { name: ru ? "Модель" : "Model", exact: true }).click();
       await client.locator(".block-node > strong").click();
       await page.getByRole("button", { name: ru ? "Удалить checkout" : "Delete checkout", exact: true }).click();
-      await expect(run).toBeDisabled();
+      await page.getByRole("region", { name: ru ? "Строка состояния" : "Status bar", exact: true })
+        .getByRole("button", { name: ru ? /^Ошибок: 2\b/ : /^Errors: 2\b/ }).click();
       const problems = page.getByRole("tabpanel", { name: ru ? "Проблемы" : "Problems", exact: true });
       await expect(problems.getByRole("button", { name: /CLASS_UNKNOWN/ })).toHaveCount(2);
       await expect(problems.getByRole("button", { name: /gateway CLASS_UNKNOWN/ })).toBeVisible();
