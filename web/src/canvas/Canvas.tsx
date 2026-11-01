@@ -13,7 +13,7 @@ import { elementOf, ownEntry } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { useViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
-import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf, resizeBlock } from "../workspace/structure";
+import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf, resizeBlock, setEdgePoints } from "../workspace/structure";
 import type { CourseFault } from "../experiment/course";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
@@ -223,6 +223,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
   type Resize = { id: string; x: number; y: number; width: number; height: number; model: ModelFile; layout: LayoutFile | null };
   const resizing = useRef<Resize | null>(null);
   const [resizePreview, setResizePreview] = useState<Resize | null>(null);
+  const edgeEditIdentity = useMemo(() => ({ model, layout, variant: variant?.id }), [model, layout, variant?.id]);
   const canResize = editable && !disabled && variant === undefined;
   const activeResize = canResize && resizePreview?.model === model && resizePreview.layout === layout
     && selected.includes(resizePreview.id) ? resizePreview : null;
@@ -357,6 +358,10 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       sourceHandle: catalog.types.find((type) => type.id === model.blocks[connection.from]?.type)?.ports.find((port) => port.direction === "OUT")?.id,
       targetHandle: catalog.types.find((type) => type.id === model.blocks[connection.to]?.type)?.ports.find((port) => port.direction === "IN")?.id,
       data: {
+        edgePoints: layout === null ? undefined : ownEntry(layout.edges, connection.id)?.points,
+        routeEditable: canResize, editIdentity: edgeEditIdentity,
+        onEdgePoints: (points: { x: number; y: number }[]) => onCommand(setEdgePoints(connection.id, points)),
+        onEditStart: () => { manualViewport.current = true; },
         faults: faults.filter(fault => fault.elementId === connection.id), onFault,
         onPolicy: (path: string) => { if (!disabled) { if (onSelectChange) onSelectChange(connection.id, path); else onSelect([connection.id]); } },
         modelParams: baseModel === undefined ? undefined : elementOf(baseModel, connection.id)?.params, overrides,
@@ -460,7 +465,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       </summary>
       <VariantChanges model={baseModel ?? model} catalog={catalog} overrides={overrides} disabled={disabled} onSelect={onSelectChange} />
     </details>}
-    <EdgeLayoutProvider nodes={nodeBounds} connections={model.connections} onBounds={onBounds}>
+    <EdgeLayoutProvider nodes={nodeBounds} connections={model.connections} manual={layout?.edges} onBounds={onBounds}>
     <ReactFlow
       aria-label={t("editor.canvas.label")}
       ariaLabelConfig={ariaLabelConfig()}

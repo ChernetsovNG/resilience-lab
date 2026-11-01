@@ -972,3 +972,62 @@ it.each(["disabled", "selection", "document"])("cannot resurrect an interrupted 
   resizeMouse("mouseup", window, 220, 220);
   expect(props.onCommand).not.toHaveBeenCalled();
 });
+
+it("offers segment and bend controls on selected model edges and hides them on variants", async () => {
+  const onCommand = vi.fn();
+  const props = { catalog, model, layout, selected: ["gateway-to-middle"], onSelect: vi.fn(), onCommand, editable: true };
+  const { rerender } = render(<Canvas {...props} />);
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /Move segment .*gateway-to-middle/ }).length).toBeGreaterThan(0));
+  expect(screen.getAllByRole("button", { name: /Move bend .*gateway-to-middle/ }).length).toBeGreaterThan(0);
+  expect(onCommand).not.toHaveBeenCalled();
+  rerender(<Canvas {...props} variant={experiment.variants[0]} />);
+  expect(screen.queryByRole("button", { name: /Move segment/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Move bend/ })).toBeNull();
+});
+
+it("routes saved model points on readonly variants and includes them in common Fit bounds", async () => {
+  const points = [{ x: 400, y: -1800 }, { x: 2200, y: -1800 }];
+  const manual = { ...layout, edges: { "gateway-to-middle": { points } } };
+  const calculate = vi.spyOn(edgeGeometry, "layoutEdges");
+  try {
+    render(<Canvas catalog={catalog} model={model} layout={manual} selected={["gateway-to-middle"]} onSelect={vi.fn()} onCommand={vi.fn()}
+      variant={experiment.variants[0]} editable={false} />);
+    await waitFor(() => {
+      const route = calculate.mock.results.at(-1)?.value?.get("gateway-to-middle");
+      expect(route?.points).toEqual(expect.arrayContaining(points));
+      expect(route?.bounds.y).toBeLessThanOrEqual(-1800);
+      expect(route?.bounds.x + route?.bounds.width).toBeGreaterThanOrEqual(2200);
+    });
+    expect(screen.queryByRole("button", { name: /Move segment/ })).toBeNull();
+  } finally { calculate.mockRestore(); }
+});
+
+it.each(["variant", "layout"])("creates one manual route and discards previews on %s changes", async reason => {
+  const onCommand = vi.fn();
+  const props = { catalog, model, layout, selected: ["gateway-to-middle"], onSelect: vi.fn(), onCommand, editable: true };
+  const { rerender, container } = render(<Canvas {...props} />);
+  const path = () => container.querySelector<SVGPathElement>('#gateway-to-middle')!.getAttribute("d");
+  const handle = await screen.findByRole("button", { name: "Move bend 1 of gateway-to-middle" });
+  const pointer = (type: string, x: number, y: number, target: EventTarget = window) => {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: 7 });
+    act(() => { target.dispatchEvent(event); });
+  };
+  const before = path();
+  pointer("pointerdown", 100, 100, handle);
+  pointer("pointermove", 130, 140);
+  expect(path()).not.toBe(before);
+  expect(onCommand).not.toHaveBeenCalled();
+  pointer("pointerup", 130, 140);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  const after = (onCommand.mock.lastCall![0] as EditorCommand)({ model, layout, experiment });
+  expect(after.layout.edges["gateway-to-middle"].points.length).toBeGreaterThan(0);
+  expect(after.model).toBe(model);
+  pointer("pointerdown", 100, 100, screen.getByRole("button", { name: "Move bend 1 of gateway-to-middle" }));
+  pointer("pointermove", 130, 140);
+  rerender(<Canvas {...props} layout={{ ...layout, edges: {} }} variant={reason === "variant" ? experiment.variants[0] : undefined} />);
+  pointer("pointerup", 130, 140);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  rerender(<Canvas {...props} />);
+  expect(path()).toBe(before);
+});

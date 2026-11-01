@@ -9,7 +9,7 @@ import { elementIdentity, type EditorCommand } from "../workspace/editor";
 import { addFault, resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
 import { createFault, faultTargets, type FaultTarget } from "../workspace/faults";
 import { elementOf, isOverridden, ownEntry } from "../workspace/params";
-import { resetBlockSize } from "../workspace/structure";
+import { resetBlockSize, resetEdgePoints } from "../workspace/structure";
 import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
 import { RunSettings } from "./RunSettings";
@@ -150,6 +150,9 @@ export function Inspector({ catalog, model, layout, baseModel, experiment, exper
           {variantId === null && ownEntry(model.blocks, selected) !== undefined && layout != null && Object.hasOwn(layout.sizes, selected) ?
             <button type="button" disabled={!editable || invalid || onCommand === undefined}
               onClick={() => onCommand?.(resetBlockSize(selected))}>{t("editor.canvas.resetSize")}</button> : null}
+          {variantId === null && connection !== undefined && layout != null && Object.hasOwn(layout.edges, selected) ?
+            <button type="button" disabled={!editable || invalid || onCommand === undefined}
+              onClick={() => onCommand?.(resetEdgePoints(selected))}>{t("editor.canvas.resetEdge")}</button> : null}
           <AnnotationFields key={annotationTarget.key} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
             editable={editable && variantId === null && onCommand !== undefined}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}

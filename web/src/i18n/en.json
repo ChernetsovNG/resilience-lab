@@ -1,4 +1,8 @@
 {
+  "editor.canvas.moveSegment": "Move segment {index} of {id}",
+  "editor.canvas.moveBend": "Move bend {index} of {id}",
+  "editor.canvas.resetEdge": "Reset to automatic route",
+  "editor.canvas.edgePointLimit": "A route can contain at most 50 points. This edit was not applied.",
   "editor.canvas.resetSize": "Reset size",
   "results.entries.context": "{variant} · {point}",
   "results.entries.byClients": "By clients",

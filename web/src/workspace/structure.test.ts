@@ -5,7 +5,7 @@ import type { Catalog } from "../api/apiTypes";
 import { documentDrafts, editorReducer, initialEditorState, setModelParam, type EditorCommand, type EditorDocuments } from "./editor";
 import {
   addBlock, addConnection, connectionRule, copySelection, deleteElements, identifierError,
-  insertionPosition, moveBlocks, pasteSelection, renameElement, resizeBlock, resetBlockSize,
+  insertionPosition, moveBlocks, pasteSelection, renameElement, resizeBlock, resetBlockSize, setEdgePoints, resetEdgePoints,
 } from "./structure";
 
 const documents = (): EditorDocuments => structuredClone({ model, layout, experiment });
@@ -625,4 +625,29 @@ it("renames authored sizes and incident paths over stale destination layout ids"
   expect(renamed.layout.edges["entry-to-middle"]).toEqual({ points: [{ x: 400, y: 10 }] });
   renamed.layout.edges.rpc = { points: [{ x: 0, y: 0 }] };
   expect(roundTrip(renamed, renameElement("entry-to-middle", "rpc")).layout.edges.rpc).toEqual({ points: [{ x: 400, y: 10 }] });
+});
+
+
+describe("edge layout commands", () => {
+  it("sets and resets points as single undoable operations without changing the model", () => {
+    const before = documents();
+    const points = [{ x: 400, y: -200 }, { x: 700, y: -200 }];
+    const after = roundTrip(before, setEdgePoints("gateway-to-middle", points));
+    expect(after.layout.edges["gateway-to-middle"]).toEqual({ points });
+    expect(after.model).toEqual(before.model);
+    const reset = roundTrip(after, resetEdgePoints("gateway-to-middle"));
+    expect(reset.layout.edges).not.toHaveProperty("gateway-to-middle");
+    expect(resetEdgePoints("missing")(before)).toBe(before);
+    expect(setEdgePoints("missing", points)(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", points)(after)).toBe(after);
+  });
+
+  it("accepts at most 50 finite points, rejecting the whole invalid edit", () => {
+    const before = documents();
+    const points = Array.from({ length: 50 }, (_, i) => ({ x: i, y: -i }));
+    expect(setEdgePoints("gateway-to-middle", points)(before).layout.edges["gateway-to-middle"].points).toHaveLength(50);
+    expect(setEdgePoints("gateway-to-middle", [...points, { x: 51, y: 0 }])(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", [{ x: Infinity, y: 0 }])(before)).toBe(before);
+    expect(setEdgePoints("gateway-to-middle", [])(before)).toBe(before);
+  });
 });

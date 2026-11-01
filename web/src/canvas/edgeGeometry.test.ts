@@ -271,3 +271,36 @@ describe("diagram fitting bounds", () => {
     }
   });
 });
+
+
+describe("manual edge geometry", () => {
+  it("passes through model-space anchors, keeps exact ports and labels the longest segment", () => {
+    const anchors = [{ x: 220, y: -400 }, { x: 1200, y: -400 }];
+    const route = layoutEdges([{ ...bypass, points: anchors }], nodes).get(bypass.id)!;
+    expect(route.points[0]).toEqual({ x: bypass.sourceX, y: bypass.sourceY });
+    expect(route.points.at(-1)).toEqual({ x: bypass.targetX, y: bypass.targetY });
+    for (const anchor of anchors) expect(route.points).toContainEqual(anchor);
+    expect(route.points.slice(1).every((point, index) => point.x === route.points[index].x || point.y === route.points[index].y)).toBe(true);
+    expect(route.label).toEqual({ x: 710, y: -400 });
+    expect(route.bounds.x + route.bounds.width).toBeGreaterThanOrEqual(1200);
+    expect(route.bounds.y).toBeLessThanOrEqual(-400);
+    const moved = layoutEdges([{ ...bypass, sourceX: 100, sourceY: 220, points: anchors }], nodes).get(bypass.id)!;
+    for (const anchor of anchors) expect(moved.points).toContainEqual(anchor);
+  });
+
+  it("does not avoid nodes for a manual path", () => {
+    const route = layoutEdges([{ ...bypass, points: [{ x: 400, y: 140 }] }], nodes).get(bypass.id)!;
+    expect(crosses(route.points, nodes.get("middle")!)).toBe(true);
+  });
+
+  it("routes automatic paths around manual labels even when the manual edge comes last", () => {
+    const manual = { ...bypass, id: "manual", points: [{ x: 220, y: 140 }, { x: 640, y: 140 }] };
+    const routes = layoutEdges([bypass, manual], new Map());
+    const label = routes.get(manual.id)!.label;
+    expect(label).toEqual({ x: 430, y: 140 });
+    const rect = { x: label.x - 50, y: label.y - 15, width: 100, height: 30 };
+    expect(crosses(routes.get(bypass.id)!.points, rect)).toBe(false);
+    const autoLabel = routes.get(bypass.id)!.label;
+    expect(overlaps(rect, { x: autoLabel.x - 50, y: autoLabel.y - 15, width: 100, height: 30 })).toBe(false);
+  });
+});

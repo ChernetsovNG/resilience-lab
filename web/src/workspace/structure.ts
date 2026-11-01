@@ -283,6 +283,29 @@ export function resetBlockSize(id: string): EditorCommand {
   };
 }
 
+/** Stores finite authored anchors only; an oversized gesture is rejected as a whole. */
+export function setEdgePoints(id: string, points: readonly Position[]): EditorCommand {
+  const anchors = points.map(point => ({ ...point }));
+  return documents => {
+    if (!documents.model.connections.some(edge => edge.id === id) || anchors.length > 50
+      || anchors.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return documents;
+    if (anchors.length === 0) return resetEdgePoints(id)(documents);
+    const previous = ownEntry(documents.layout.edges, id)?.points;
+    if (previous?.length === anchors.length && previous.every((point, index) => point.x === anchors[index].x && point.y === anchors[index].y)) return documents;
+    return { ...documents, layout: { ...documents.layout, edges: { ...documents.layout.edges, [id]: { points: anchors } } } };
+  };
+}
+
+/** Restores the automatic route without changing connection parameters. */
+export function resetEdgePoints(id: string): EditorCommand {
+  return documents => {
+    if (!Object.hasOwn(documents.layout.edges, id)) return documents;
+    const edges = { ...documents.layout.edges };
+    delete edges[id];
+    return { ...documents, layout: { ...documents.layout, edges } };
+  };
+}
+
 export interface ClipboardFragment {
   blocks: ModelFile["blocks"];
   connections: ModelFile["connections"];

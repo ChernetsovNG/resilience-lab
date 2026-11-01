@@ -13,6 +13,7 @@ export interface EdgeLayoutInput extends EdgeMeasurement {
   id: string;
   from: string;
   to: string;
+  points?: readonly XYPosition[];
 }
 
 export interface EdgeGeometry {
@@ -219,10 +220,43 @@ function placeLabel(points: XYPosition[], size: EdgeMeasurement, obstacles: Rect
   return best?.point;
 }
 
-/** Routes in document order so labels never depend on React render or observer delivery order. */
+/** Orthogonal connectors preserve the authored anchors when either endpoint moves. */
+export function manualEdgePoints(source: XYPosition, target: XYPosition, anchors: readonly XYPosition[]): XYPosition[] {
+  const points = [source];
+  for (const anchor of anchors) {
+    const previous = points.at(-1)!;
+    if (previous.x !== anchor.x && previous.y !== anchor.y) points.push({ x: anchor.x, y: previous.y });
+    if (distance(points.at(-1)!, anchor) > 0) points.push({ ...anchor });
+  }
+  const previous = points.at(-1)!;
+  if (previous.x !== target.x && previous.y !== target.y) points.push({ x: previous.x, y: target.y });
+  if (distance(points.at(-1)!, target) > 0) points.push(target);
+  return points;
+}
+
+function geometryFor(points: XYPosition[], label: XYPosition, size: EdgeMeasurement): EdgeGeometry {
+  return { points, label,
+    bounds: diagramBounds([...points.map(point => ({ ...point, width: 0, height: 0 })), labelRect(label, size)])!,
+    path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ") };
+}
+
+/** Automatic routes follow document order; every authored label is reserved first. */
 export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string, Rect>): Map<string, EdgeGeometry> {
   const geometries = new Map<string, EdgeGeometry>();
   const labels: Rect[] = [];
+  for (const edge of edges) {
+    if (!edge.points?.length) continue;
+    const points = manualEdgePoints({ x: edge.sourceX, y: edge.sourceY }, { x: edge.targetX, y: edge.targetY }, edge.points);
+    let longest = 0;
+    for (let index = 1; index + 1 < points.length; index++) {
+      if (distance(points[index], points[index + 1]) > distance(points[longest], points[longest + 1])) longest = index;
+    }
+    const start = points[longest];
+    const end = points[longest + 1] ?? start;
+    const label = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    geometries.set(edge.id, geometryFor(points, label, edge));
+    if (edge.width > 0 && edge.height > 0) labels.push(labelRect(label, edge));
+  }
   const previousPaths: Rect[] = [];
   const outgoing = new Map<string, Rect[][]>();
   const incoming = new Map<string, Rect[][]>();
@@ -236,6 +270,7 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
     if (separation > 0) diagramClearance = Math.min(diagramClearance, separation / 3);
   }));
   for (const edge of edges) {
+    if (edge.points?.length) continue;
     const source = { x: edge.sourceX, y: edge.sourceY };
     const target = { x: edge.targetX, y: edge.targetY };
     const from = nodes.get(edge.from);
@@ -278,9 +313,7 @@ export function layoutEdges(edges: EdgeLayoutInput[], nodes: ReadonlyMap<string,
       points = [source, ...corridor(start, entry, obstacles, occupied), ...corridor(exit, end, obstacles, occupied), target];
     }
     points = simplify(points);
-    geometries.set(edge.id, { points, label: label ?? source,
-      bounds: diagramBounds([...points.map(point => ({ ...point, width: 0, height: 0 })), labelRect(label ?? source, edge)])!,
-      path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ") });
+    geometries.set(edge.id, geometryFor(points, label ?? source, edge));
     if (edge.width > 0 && edge.height > 0) labels.push(labelRect(label!, edge));
     previousPaths.push(...pathBounds(points));
     const reserved = occupiedPath(points);
