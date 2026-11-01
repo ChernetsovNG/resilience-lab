@@ -102,6 +102,60 @@ for (const locale of locales) {
       });
     }
 
+    test("localizes health-check cascade and opens the overridden probe threshold", async ({ page }) => {
+      const directory = `healthcheck-cascade-${randomUUID()}`;
+      const root = resolve("../apps/server/build/e2e-workspace", directory);
+      const parameter = "worker.healthCheck.unhealthyThreshold";
+      const model: ModelFile = { schemaVersion: 6, blocks: {
+        client: { type: "client", params: { load: { points: [{ time: "0s", rate: "200/s" }] }, deadline: "10s" } },
+        gateway: { type: "service", params: { handlers: 100, processing: { kind: "fixed", mean: "0ms" } } },
+        worker: { type: "service", params: { replicas: 3, handlers: 2, queue: 100,
+          processing: { kind: "fixed", mean: "20ms" }, healthCheck: { interval: "100ms" } } },
+      }, connections: [
+        { id: "request", type: "request", from: "client", to: "gateway" },
+        { id: "gateway-worker", type: "call", from: "gateway", to: "worker", params: { timeout: "1s" } },
+      ] };
+      const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
+        execution: { replications: 5, warmup: "0ms", measurement: "1s", seed: 42 },
+        variants: [{ id: "roomy", overrides: { "worker.handlers": 4 } }, { id: "tight", overrides: { [parameter]: 2 } }] };
+      await mkdir(root, { recursive: true });
+      try {
+        await writeFile(resolve(root, "model.model.json"), JSON.stringify(model));
+        await writeFile(resolve(root, "experiment.experiment.json"), JSON.stringify(experiment));
+        const response = await page.request.post("/api/v1/validate", { data: { experiment: `${directory}/experiment.experiment.json` } });
+        expect(response.ok()).toBe(true);
+        const report: ValidationReport = await response.json();
+        expect(report.valid).toBe(true);
+        const findings = report.diagnostics.filter(diagnostic => diagnostic.code === "LINT_HEALTHCHECK_CASCADE");
+        expect(findings).toHaveLength(3);
+        for (const finding of findings) {
+          expect(finding.variant).toBe("tight");
+          expect(finding.pointer).toBe(`/variants/1/overrides/${parameter}`);
+          expect(finding.args).toMatchObject({ replicas: 3, utilization: "0.667", remainingUtilization: "1" });
+        }
+
+        await page.goto("/");
+        await selectExperiment(page, `${directory}/experiment.experiment.json`);
+        await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+        const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_HEALTHCHECK_CASCADE"]') });
+        const warning = row.locator('button[data-diagnostic-code="LINT_HEALTHCHECK_CASCADE"]');
+        await expect(warning).toHaveCount(1);
+        const translated = label("messages.LINT_HEALTHCHECK_CASCADE").split("{target}")[1]
+          .replace(/\{(\w+)\}/g, (_, name: string) => String(findings[0].args?.[name]));
+        await expect(warning).toContainText(translated);
+        await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+        await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_HEALTHCHECK_CASCADE_DETAILS").split(";")[0]);
+        await page.keyboard.press("Escape");
+        await warning.click();
+        const threshold = page.locator(".inspector").getByLabel(label("catalog.types.service.params.healthCheck.unhealthyThreshold.title"), { exact: true });
+        await expect(threshold).toBeFocused();
+        await expect(threshold).toHaveValue("2");
+        await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+      } finally {
+        await cleanupWorkspace(page, root);
+      }
+    });
+
     test("localizes retries without jitter and opens the backoff parameter", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "checkout/checkout.experiment.json");

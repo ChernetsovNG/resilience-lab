@@ -173,6 +173,11 @@ internal enum class CoreMessage(
         "limitsHandlers",
         "Pool of '{target}': demand {demand} for {size} connections at {ratePerSecond} requests/s; service parallelism is limited by the pool below its {handlers} handlers",
     ),
+    LINT_HEALTHCHECK_CASCADE(
+        "LINT_HEALTHCHECK_CASCADE",
+        null,
+        "Health-check of '{target}': {replicas} instances in '{group}' for request types {requestTypes}, utilization {utilization} with all instances, {remainingUtilization} after removing one (threshold {threshold})",
+    ),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",
         null,
