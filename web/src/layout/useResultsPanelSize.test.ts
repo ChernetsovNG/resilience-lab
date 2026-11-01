@@ -4,16 +4,30 @@ import { useResultsPanelSize } from "./useResultsPanelSize";
 
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
-it("restores expanded results after a remount", () => {
+it.each(["normal", "expanded"] as const)("starts collapsed after a reload with %s preferred and uses it on opening", preferred => {
+  localStorage.setItem("resilience-lab.results-panel-size", preferred);
   const first = renderHook(useResultsPanelSize);
   expect(first.result.current[0]).toBe("collapsed");
-  act(() => first.result.current[1]("expanded"));
+  expect(localStorage.getItem("resilience-lab.results-panel-size")).toBe(preferred);
+  act(() => first.result.current[1]("normal"));
+  expect(first.result.current[0]).toBe(preferred);
+  act(() => first.result.current[1]("collapsed"));
+  expect(localStorage.getItem("resilience-lab.results-panel-size")).toBe(preferred);
   first.unmount();
   const next = renderHook(useResultsPanelSize);
-  expect(next.result.current[0]).toBe("expanded");
-  act(() => next.result.current[1]("normal"));
-  next.unmount();
-  expect(renderHook(useResultsPanelSize).result.current[0]).toBe("normal");
+  expect(next.result.current[0]).toBe("collapsed");
+  act(() => next.result.current[1](current => current === "collapsed" ? "normal" : current));
+  expect(next.result.current[0]).toBe(preferred);
+});
+
+it("remembers an explicit return from expanded to normal", () => {
+  const { result } = renderHook(useResultsPanelSize);
+  act(() => result.current[1]("expanded"));
+  act(() => result.current[1]("normal"));
+  act(() => result.current[1]("collapsed"));
+  expect(localStorage.getItem("resilience-lab.results-panel-size")).toBe("normal");
+  act(() => result.current[1]("normal"));
+  expect(result.current[0]).toBe("normal");
 });
 
 it.each(["invalid", "null", "{}"])("defaults to collapsed for invalid state %s", saved => {

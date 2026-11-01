@@ -5,6 +5,14 @@ import { setupAppTests, otherPath, completed, deferred, server, open, selectGate
 
 setupAppTests();
 
+it.each(["Findings", "Problems", "Expand results", "Run", "Estimate"])("starts collapsed with expanded preferred and opens it through %s", async action => {
+  localStorage.setItem("resilience-lab.results-panel-size", "expanded");
+  server(); await open();
+  expect(screen.queryByRole("tabpanel")).toBeNull();
+  fireEvent.click(action === "Findings" || action === "Problems" ? screen.getByRole("tab", { name: action }) : button(action));
+  await waitFor(() => expect(document.querySelector(".results-panel--expanded")).not.toBeNull());
+  expect(localStorage.getItem("resilience-lab.results-panel-size")).toBe("expanded");
+});
 
 it("starts with collapsed results and preserves manual expansion across experiment changes", async () => {
   server(); await open();
