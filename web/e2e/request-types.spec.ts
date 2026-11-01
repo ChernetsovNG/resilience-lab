@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -137,7 +137,7 @@ for (const language of ["en", "ru"] as const) {
       expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
       expect((await (await page.request.get(siblingURL)).json()).content.experiment.variants[0].overrides["mobile-app.classes"][0].id).toBe("checkout");
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await removeWorkspacePath(page, root);
     }
   });
 }

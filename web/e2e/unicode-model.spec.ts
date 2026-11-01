@@ -1,7 +1,7 @@
-import { expect, test } from "./fixtures";
+import { expect, test, removeWorkspacePath } from "./fixtures";
 import { selectExperiment } from "./fixtures";
 import { dragConnection } from "./connectionGestures";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ locale: "ru-RU", viewport: { width: 1280, height: 800 }, actionTimeout: 10_000 });
@@ -45,6 +45,6 @@ test("runs a Cyrillic model built from the palette", async ({ page }, testInfo) 
     expect(owned).toHaveLength(1);
     expect(owned[0].directory).toMatch(/^\.results\/[a-f0-9]{64}\/[^/]+$/);
   } finally {
-    await rm(resolve("../apps/server/build/e2e-workspace", name), { recursive: true, force: true });
+    await removeWorkspacePath(page, resolve("../apps/server/build/e2e-workspace", name));
   }
 });

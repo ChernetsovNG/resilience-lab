@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { expect, test, removeWorkspacePath } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { copySmallExperiment, selectExperiment } from "./fixtures";
 
@@ -68,6 +68,6 @@ for (const language of ["en", "ru"] as const) {
       await expect(save).toBeDisabled();
       const saved = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`);
       expect((await saved.json()).content.experiment.execution.seed).toBe(44);
-    } finally { release(); await rm(root, { recursive: true, force: true }); }
+    } finally { release(); await removeWorkspacePath(page, root); }
   });
 }

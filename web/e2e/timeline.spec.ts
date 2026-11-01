@@ -1,6 +1,6 @@
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "./fixtures";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
@@ -150,6 +150,6 @@ test("grid point and replication persist across views; warmup and the last short
     await page.getByRole("tab", { name: "Timeline", exact: true }).click();
     await expect(page.getByTestId("timeline-cursor")).toContainText("Window 27 · 1.08 s–1.1 s");
   } finally {
-    await rm(folder, { recursive: true, force: true });
+    await removeWorkspacePath(page, folder);
   }
 });

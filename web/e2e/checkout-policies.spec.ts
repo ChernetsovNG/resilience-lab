@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
 import { dragConnection } from "./connectionGestures";
-import { expect, selectExperiment, test } from "./fixtures";
+import { expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -132,6 +132,6 @@ test("builds a new model with two clients, request types and a policy using the 
     expect(Object.keys(entries.classes).sort()).toEqual(["checkout", "default", "status"]);
     expect(entries.clients["client-2"].pooledLatency.all!.statistics.count).toBeGreaterThan(0);
   } finally {
-    await rm(resolve("../apps/server/build/e2e-workspace", name), { recursive: true, force: true });
+    await removeWorkspacePath(page, resolve("../apps/server/build/e2e-workspace", name));
   }
 });

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -80,6 +80,6 @@ test("creates, changes, persists and runs a replica fault from its inspector", a
     await page.mouse.move(700, 100);
     await page.screenshot({ path: testInfo.outputPath("fault-editor-results-ru.png") });
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeWorkspacePath(page, root);
   }
 });

@@ -1,6 +1,6 @@
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
 import { formatDuration, formatNumber } from "../src/i18n/format";
@@ -66,6 +66,6 @@ test("shows the retry-storm saturation conclusion from the real summary for each
     expect(overflow).toEqual({ horizontal: false, vertical: false });
     await page.screenshot({ path: testInfo.outputPath("saturation-summary.png") });
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });

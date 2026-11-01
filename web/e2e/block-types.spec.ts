@@ -1,9 +1,9 @@
 import { expect, test as base, type Page } from "@playwright/test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 
 const test = base.extend<{ graph: { directory: string; model: ModelFile } }>({
   graph: async ({ page }, provide) => {
@@ -50,7 +50,7 @@ const test = base.extend<{ graph: { directory: string; model: ModelFile } }>({
       await expect(page.getByTestId("block-node")).toHaveCount(6);
       const stored = await page.request.get(`/api/v1/workspace/document?path=${directory}/types.model.json`);
       await provide({ directory, model: (await stored.json()).content.model });
-    } finally { await rm(target, { recursive: true }); }
+    } finally { await removeWorkspacePath(page, target); }
   },
 });
 

@@ -1,7 +1,7 @@
-import { copyRetryStorm, selectExperiment } from "./fixtures";
+import { copyRetryStorm, selectExperiment, removeWorkspacePath } from "./fixtures";
 import { dragConnection, waitForStablePorts } from "./connectionGestures";
 import { expect, test as base, type Locator, type Page } from "./fixtures";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
@@ -22,7 +22,7 @@ const test = base.extend<{ files: Files }>({
       await expect(page.getByTestId("block-node")).toHaveCount(4);
       await provide(files);
     } finally {
-      await rm(target, { recursive: true });
+      await removeWorkspacePath(page, target);
     }
   },
 });

@@ -1,6 +1,6 @@
-import { expect, selectExperiment, test } from "./fixtures";
+import { expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile, ValidationReport } from "../src/api/apiTypes";
 
@@ -55,5 +55,5 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
     await warning.click();
     await expect(page.getByRole("tab", { name: "Базовый", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.handlers.title"], { exact: true })).toBeFocused();
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, root); }
 });

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, selectExperiment, test, type Page } from "./fixtures";
+import { expect, selectExperiment, test, type Page, removeWorkspacePath } from "./fixtures";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
 
 test.use({ viewport: { width: 1600, height: 1000 } });
@@ -113,6 +113,6 @@ test("checkout-replicas explanations survive editing, saving and reloading in Ru
     expect(savedModel.blocks["order-service"].notes).toBe(sourceModel.blocks["order-service"].notes);
     expect(savedModel.notes).toBe(sourceModel.notes);
   } finally {
-    await rm(target, { recursive: true, force: true });
+    await removeWorkspacePath(page, target);
   }
 });

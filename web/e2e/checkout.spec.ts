@@ -1,6 +1,6 @@
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test } from "./fixtures";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import type { JobView, RunSummary } from "../src/api/apiTypes";
 
 const experiments = ["checkout/checkout.experiment.json", "checkout/checkout-grid.experiment.json"];
@@ -130,7 +130,7 @@ test.describe("readable checkout answer", () => {
       await expect(insight.getByRole("listitem")).toHaveText(["нет насыщения — 10 из 10 повторений"]);
       await expect(page.getByRole("table", { name: "Выводы", exact: true }).getByRole("caption")).toContainText("средние квантилей отдельных повторений");
       await page.screenshot({ path: testInfo.outputPath("checkout-headroom.png") });
-    } finally { await rm(file, { force: true }); }
+    } finally { await removeWorkspacePath(page, file); }
   });
 });
 

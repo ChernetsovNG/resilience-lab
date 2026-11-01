@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
-import { expect, test, type Locator, type Page } from "./fixtures";
+import { expect, test, type Locator, type Page, removeWorkspacePath } from "./fixtures";
 import { dragConnection } from "./connectionGestures";
 
 test.use({ viewport: { width: 1920, height: 1100 }, actionTimeout: 10_000 });
@@ -230,6 +230,6 @@ test("builds checkout-replicas from the palette, saves the example and exposes t
     await expect(page.getByRole("tabpanel")).toContainText("pgbouncer");
     await page.getByRole("tabpanel").screenshot({ path: testInfo.outputPath("checkout-replicas-findings-ru.png") });
   } finally {
-    await rm(resolve("../apps/server/build/e2e-workspace", directory), { recursive: true, force: true });
+    await removeWorkspacePath(page, resolve("../apps/server/build/e2e-workspace", directory));
   }
 });

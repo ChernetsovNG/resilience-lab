@@ -1,5 +1,5 @@
-import { expect, test as base, type Page } from "./fixtures";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { expect, test as base, type Page, removeWorkspacePath } from "./fixtures";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
@@ -55,7 +55,7 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
       await expect(page.getByTestId("block-node")).toHaveCount(6);
       await expect(page.getByRole("combobox", { name: "Модель", exact: true })).toBeEnabled();
       await provide({ directory, layout });
-    } finally { await rm(target, { recursive: true }); }
+    } finally { await removeWorkspacePath(page, target); }
   },
 });
 

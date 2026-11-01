@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test("reload asks before losing edits and stops asking after Save", async ({ page }) => {
   const directory = `unsaved-reload-${randomUUID()}`;
@@ -38,7 +38,7 @@ test("reload asks before losing edits and stops asking after Save", async ({ pag
     await page.reload();
     await expect(replications).toHaveValue("3");
     expect(prompts).toEqual([]);
-  } finally { await rm(target, { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, target); }
 });
 
 test.describe("Russian unsaved changes", () => {
@@ -85,6 +85,6 @@ test.describe("Russian unsaved changes", () => {
       await expect(page.locator(".dirty-mark")).toBeHidden();
       await page.getByTestId("rf__node-gateway").click();
       await expect(handlers).toHaveValue("7");
-    } finally { await rm(target, { recursive: true, force: true }); }
+    } finally { await removeWorkspacePath(page, target); }
   });
 });

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 import type { Page } from "@playwright/test";
@@ -58,4 +58,14 @@ export async function copySmallExperiment(directory: string, name = "retry-storm
   experiment.faults = experiment.faults?.map(fault => ({ ...fault, from: "60ms", to: "210ms" }));
   await writeFile(resolve(directory, name), JSON.stringify(experiment));
   return experiment;
+}
+
+/**
+ * Leaves the app before deleting workspace files it may have open: otherwise the workspace poll can request a
+ * deleted document, and the browser's 404 resource error fails the scenario. The health response stays on the
+ * app origin, so init scripts that use localStorage still run; about:blank would reject them.
+ */
+export async function removeWorkspacePath(page: Page, path: string): Promise<void> {
+  if (!page.isClosed()) await page.goto("/api/v1/health").catch(() => undefined);
+  await rm(path, { recursive: true, force: true });
 }

@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, test, type Page, removeWorkspacePath } from "./fixtures";
 import { selectExperiment, copySmallExperiment } from "./fixtures";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.afterEach(async ({ page }) => {
@@ -91,7 +91,7 @@ test("long document, variant and backend labels fit supported desktop widths", a
       await expect.poll(() => grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(columns);
     }
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });
 
@@ -170,7 +170,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900
         expect(await page.locator("html").evaluate(element => getComputedStyle(element).fontSize)).toBe("20px");
       }
     } finally {
-      await rm(directory, { recursive: true });
+      await removeWorkspacePath(page, directory);
     }
   });
 }

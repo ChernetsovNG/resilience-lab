@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { expect, test, removeWorkspacePath } from "./fixtures";
 import { selectExperiment, copySmallExperiment } from "./fixtures";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -149,6 +149,6 @@ test("one context row gives the diagram more height and shares time with Timelin
       await page.screenshot({ path: testInfo.outputPath(`model-after-analysis-ru-${viewport.width}.png`) });
     }
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });

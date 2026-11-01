@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -167,7 +167,7 @@ for (const language of ["en", "ru"] as const) {
       await save();
       expect(await saved()).toEqual(beforeRemoval);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await removeWorkspacePath(page, root);
     }
   });
 }
@@ -201,6 +201,6 @@ test("edits an imported policy sweep without a base policy, saves and estimates 
     await expect(first).toHaveValue("6");
     await expect(first).toBeEditable();
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeWorkspacePath(page, root);
   }
 });

@@ -1,8 +1,8 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { copyRetryStorm, expect, selectExperiment, test, type Page } from "./fixtures";
+import { copyRetryStorm, expect, selectExperiment, test, type Page, removeWorkspacePath } from "./fixtures";
 
 test.use({ actionTimeout: 10_000 });
 
@@ -112,6 +112,6 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     await expect(page.getByTestId("block-node")).toHaveCount(6);
     expect(await stored(page, modelPath)).toEqual(expected);
   } finally {
-    await rm(target, { recursive: true });
+    await removeWorkspacePath(page, target);
   }
 });

@@ -1,7 +1,7 @@
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test } from "./fixtures";
 import type { Page } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ExperimentEstimate, ExperimentFile, JobView, ModelFile } from "../src/api/apiTypes";
 
@@ -559,7 +559,7 @@ async function withExperimentFixture(path: string, edit: (document: ExperimentFi
     await writeFile(resolve(workspace, path), JSON.stringify(document));
     await exercise();
   } finally {
-    await rm(root, { recursive: true });
+    await removeWorkspacePath(page, root);
   }
 }
 

@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "./fixtures";
+import { expect, test, type Page, removeWorkspacePath } from "./fixtures";
 import { selectExperiment, copySmallExperiment } from "./fixtures";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { RunSummary } from "../src/api/apiTypes";
 import { formatNumber, formatPercent } from "../src/i18n/format";
@@ -143,6 +143,6 @@ test("stage 1: edit a variant and timeout × attempts, inspect Map, Timeline, pl
     }))).toEqual({ x: false, y: false });
     await page.screenshot({ path: testInfo.outputPath("parameter-line.png") });
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });

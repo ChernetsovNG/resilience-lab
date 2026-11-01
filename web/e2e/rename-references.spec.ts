@@ -1,6 +1,6 @@
-import { expect, selectExperiment, test } from "./fixtures";
+import { expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { cp, rm } from "node:fs/promises";
+import { cp } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 
@@ -46,5 +46,5 @@ test("saves checkout block and automatic link renames into checkout-grid before 
     const response = await estimate;
     expect(response.ok()).toBe(true);
     expect((await response.json()).tasks).toBeGreaterThan(0);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, root); }
 });

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
 
@@ -102,7 +102,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByTestId("job-status")).toHaveText(ru ? "ЗАВЕРШЕНО" : "COMPLETED");
       expect((await document("model")).model).toEqual(expected);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await removeWorkspacePath(page, root);
     }
   });
 }

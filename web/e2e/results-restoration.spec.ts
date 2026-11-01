@@ -1,6 +1,6 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { copySmallExperiment, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1440, height: 900 } });
 
@@ -66,6 +66,6 @@ test("restores completed Findings and diagram results after reload and reopening
     await page.mouse.move(800, 570);
     await page.screenshot({ path: testInfo.outputPath("restored-stale-results-ru.png") });
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });

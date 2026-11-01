@@ -1,8 +1,8 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { copyRetryStorm, expect, selectExperiment, test } from "./fixtures";
+import { copyRetryStorm, expect, selectExperiment, test, removeWorkspacePath } from "./fixtures";
 
 test("confirms dependent sweep and override removal, undoes both documents, then saves and reloads valid documents", async ({ page }) => {
   const directory = `param-dependents-${randomUUID()}`;
@@ -58,7 +58,7 @@ test("confirms dependent sweep and override removal, undoes both documents, then
     expect(validation.ok()).toBe(true);
     expect((await validation.json()).valid).toBe(true);
   } finally {
-    await rm(target, { recursive: true });
+    await removeWorkspacePath(page, target);
   }
 });
 
@@ -93,6 +93,6 @@ test("saves and reloads a valid connection after fixed, lognormal and fixed dist
     expect(saved.connections.find(edge => edge.id === "gateway-to-middle")!.params.network).toEqual({ kind: "fixed", mean });
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   } finally {
-    await rm(target, { recursive: true });
+    await removeWorkspacePath(page, target);
   }
 });

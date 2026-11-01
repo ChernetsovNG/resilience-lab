@@ -1,8 +1,8 @@
-import { copyRetryStorm, selectExperiment } from "./fixtures";
+import { copyRetryStorm, selectExperiment, removeWorkspacePath } from "./fixtures";
 import { dragConnection } from "./connectionGestures";
 import { expect, test as base, type Page } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve("../apps/server/build/e2e-workspace");
@@ -15,7 +15,7 @@ const test = base.extend<{ directory: string }>({
       await selectExperiment(page, `${directory}/retry-storm.experiment.json`);
       await expect(page.getByTestId("block-node")).toHaveCount(4);
       await provide(directory);
-    } finally { await rm(resolve(root, directory), { recursive: true, force: true }); }
+    } finally { await removeWorkspacePath(page, resolve(root, directory)); }
   },
 });
 test.use({ actionTimeout: 10_000 });
@@ -116,7 +116,7 @@ test("cleans up an old artifact through the file menu and removes its directory"
     await expect(stat(resolve(root, directory))).rejects.toMatchObject({ code: "ENOENT" });
     const remaining: { directory: string }[] = await (await page.request.get("/api/v1/runs/obsolete")).json();
     expect(remaining.map(run => run.directory)).not.toContain(directory);
-  } finally { await rm(resolve(root, directory), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, directory)); }
 });
 
 test("deletes a newly created model and its files, then returns to the last model", async ({ page, directory }) => {
@@ -139,7 +139,7 @@ test("deletes a newly created model and its files, then returns to the last mode
     }
     await expect(stat(resolve(root, target))).rejects.toMatchObject({ code: "ENOENT" });
     expect((await stored(page, `${directory}/retry-storm.model.json`)).content.model).toBeDefined();
-  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, target)); }
 });
 
 test("creates an empty model and runs a system built from the palette", async ({ page, directory }, testInfo) => {
@@ -186,7 +186,7 @@ test("creates an empty model and runs a system built from the palette", async ({
     await page.getByRole("button", { name: "Run", exact: true }).click();
     await expect(page.getByTestId("job-status")).toHaveText("COMPLETED");
     expect(directory).not.toBe(target);
-  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, target)); }
 });
 
 test("creates a new question for the current model without changing its source experiment", async ({ page, directory }) => {
@@ -217,7 +217,7 @@ test("save as copies unsaved edits and leaves every source file unchanged", asyn
     expect((await stored(page, `${target}/retry-storm.experiment.json`)).content.experiment.modelRef).toBe("retry-storm.model.json");
     expect(await Promise.all(names.map(name => readFile(resolve(root, directory, name), "utf8")))).toEqual(before);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, target)); }
 });
 
 test("exports canonical files and imports the same experiment into another directory", async ({ page, directory }) => {
@@ -244,7 +244,7 @@ test("exports canonical files and imports the same experiment into another direc
       expect((await stored(page, `${target}/${file.name}`)).content).toEqual((await stored(page, `${directory}/${file.name}`)).content);
       expect(await readFile(resolve(root, target, file.name), "utf8")).toBe(file.buffer.toString("utf8"));
     }
-  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, target)); }
 });
 
 test("rejects an unsupported seed through ordinary validation without writing files", async ({ page, directory }) => {
@@ -268,7 +268,7 @@ test("rejects an unsupported seed through ordinary validation without writing fi
       const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${target}/retry-storm.${kind}.json`)}`);
       expect(response.status()).toBe(404);
     }
-  } finally { await rm(resolve(root, target), { recursive: true, force: true }); }
+  } finally { await removeWorkspacePath(page, resolve(root, target)); }
 });
 
 test("canceling replacement preserves existing files", async ({ page, directory }) => {

@@ -1,6 +1,6 @@
-import { selectExperiment, copySmallExperiment } from "./fixtures";
+import { selectExperiment, copySmallExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test, type APIRequestContext, type Locator } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatDuration, formatMultiplier, formatNumber } from "../src/i18n/format";
 import type { components } from "../src/api/schema";
@@ -89,7 +89,7 @@ test("pooler Summary and replica cursor values agree with recorded results in Ru
     }
     await page.getByRole("button", { name: "Итог", exact: true }).click();
     await expect(table.locator("caption")).toContainText("Итог за измерение");
-  } finally { await rm(directory, { recursive: true }); }
+  } finally { await removeWorkspacePath(page, directory); }
 });
 
 test("retry-storm playback has deterministic window frames and a shared Timeline cursor without document writes", async ({ page, request }, testInfo) => {
@@ -202,7 +202,7 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
       y: document.documentElement.scrollHeight > document.documentElement.clientHeight,
     }))).toEqual({ x: false, y: false });
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });
 
@@ -270,6 +270,6 @@ test("retry-storm nodes and edge labels retain their geometry while playback ran
     }
   } finally {
     release();
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });

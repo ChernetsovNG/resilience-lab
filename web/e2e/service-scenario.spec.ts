@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { expect, test, removeWorkspacePath } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
 import { copySmallExperiment, selectExperiment } from "./fixtures";
@@ -74,7 +74,7 @@ for (const language of ["en", "ru"] as const) {
       expect(calls["gateway-to-dependency"].totals.sentAttempts).toBeGreaterThan(0);
       expect(calls["gateway-to-middle"].totals.sentAttempts).toBeGreaterThan(calls["gateway-to-dependency"].totals.sentAttempts);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await removeWorkspacePath(page, root);
     }
   });
 }

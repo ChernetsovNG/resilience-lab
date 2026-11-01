@@ -1,6 +1,6 @@
-import { selectExperiment } from "./fixtures";
+import { selectExperiment, removeWorkspacePath } from "./fixtures";
 import { expect, test } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatMultiplier, formatNumber, formatPercent } from "../src/i18n/format";
 import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
@@ -106,6 +106,6 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
     expect(overflow).toEqual({ horizontal: false, vertical: false });
     await page.screenshot({ path: testInfo.outputPath("canvas-results.png") });
   } finally {
-    await rm(directory, { recursive: true });
+    await removeWorkspacePath(page, directory);
   }
 });
