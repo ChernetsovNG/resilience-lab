@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
 import type { ModelFile } from "../api/apiTypes";
 import { model } from "../test/fixtures";
-import { policyOutputAvailable, readOnlyPolicies } from "./policyParameters";
+import { policyOutputAvailable, policyNames } from "./policyParameters";
 
 it("keeps outlier settings read-only and hides their outputs while disabled", () => {
-  expect(readOnlyPolicies.has("outlierDetection")).toBe(true);
+  expect(policyNames.has("outlierDetection")).toBe(true);
   expect(policyOutputAvailable("ejectionsCount", "middle", [model])).toBe(false);
   expect(policyOutputAvailable("ejectedShare", "middle", [model])).toBe(false);
 });

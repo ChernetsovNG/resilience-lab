@@ -1,3 +1,4 @@
+import { policyNames } from "../workspace/policyParameters";
 import { useState } from "react";
 import type { Catalog, Diagnostic, ModelFile } from "../api/apiTypes";
 import { HelpHint } from "../help/HelpHint";
@@ -24,6 +25,8 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
   const overrides = service.replicaOverrides ?? {};
   const parameters = catalog.types.find(type => type.id === "service")?.params.filter(param => param.name !== "replicas") ?? [];
   const selected = parameters.find(param => param.name === parameter) ?? parameters[0];
+  const initialValue = (descriptor: (typeof parameters)[number]) => policyNames.has(descriptor.name)
+    ? descriptor.initial ?? descriptor.default ?? initialParams(descriptor.fields) : initialParams([descriptor])[descriptor.name];
   const count = Number(service.params.replicas ?? 1);
   const entries = Object.entries(overrides).filter(([number]) => selectedReplica === undefined || Number(number) === selectedReplica).sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b));
   const names = new Set(entries.flatMap(([, params]) => Object.keys(params)));
@@ -94,12 +97,13 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
               {columns.map(name => {
                 const descriptor = parameters.find(param => param.name === name);
                 const value = ownEntry(params, name);
-                const shown = isObject(value) ? { ...(isObject(service.params[name]) ? service.params[name] : {}), ...value } : value;
+                const shown = isObject(value) ? { ...(descriptor !== undefined && policyNames.has(name) ? initialParams(descriptor.fields) : {}),
+                  ...(isObject(service.params[name]) ? service.params[name] : {}), ...value } : value;
                 return <td key={name}>{!Object.hasOwn(params, name) ? t("editor.replicas.inherited") : <>
                   {descriptor === undefined ? <code>{JSON.stringify(value)}</code> : <ParamField descriptor={{ ...descriptor, description: "" }}
                     value={shown} path={`${path}.${name}`} editable={editable} isOverridden={() => false}
                     onCommit={value => change(number, name, value)}
-                    onFieldCommit={(field, value) => change(number, field.slice(path.length + 1), value)}
+                    onFieldCommit={policyNames.has(name) ? undefined : (field, value) => change(number, field.slice(path.length + 1), value)}
                     onValidity={(field, valid) => onValidity(`${serviceId}.${field}`, valid)} />}
                   {selectedReplica === undefined ? <button type="button" disabled={disabled} aria-label={t("editor.replicas.reset", { parameter: descriptor?.title ?? name, number })}
                     onClick={() => change(number, name, undefined)}>{t("editor.replicas.useGroup")}</button> : null}
@@ -108,7 +112,7 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
               {selectedReplica === undefined ? <td><select value="" disabled={disabled || parameters.every(param => Object.hasOwn(params, param.name))}
                 aria-label={t("editor.replicas.addParameter", { number })} onChange={event => {
                   const descriptor = parameters.find(param => param.name === event.target.value);
-                  if (!disabled && descriptor !== undefined) change(number, descriptor.name, initialParams([descriptor])[descriptor.name]);
+                  if (!disabled && descriptor !== undefined) change(number, descriptor.name, initialValue(descriptor));
                 }}>
                 <option value="" disabled>{t("editor.replicas.parameter")}</option>
                 {parameters.filter(param => !Object.hasOwn(params, param.name)).map(param => <option key={param.name} value={param.name}>{param.title}</option>)}
@@ -123,7 +127,7 @@ export function ReplicaOverrides({ catalog, model, serviceId, editable, invalid,
       {selectedReplica === undefined ? <form className="replica-overrides-add" onSubmit={event => {
         event.preventDefault();
         if (!canAdd) return;
-        write(replica, current => current ?? initialParams([selected]));
+        write(replica, current => current ?? { [selected.name]: initialValue(selected) });
         setDraft("");
       }}>
         <label>{t("editor.replicas.number")}<input type="number" min={1} max={count} step={1} value={replica}

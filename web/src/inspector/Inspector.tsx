@@ -17,6 +17,8 @@ import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
 import { RequestTypes } from "./RequestTypes";
 import { RequestTypeFilter } from "./RequestTypeFilter";
+import { Policies } from "./Policies";
+import { policyNames } from "../workspace/policyParameters";
 import { ReplicaTargetField } from "./ReplicaTargetField";
 import { elementLabel, variantLabel } from "../presentation/labels";
 
@@ -34,6 +36,8 @@ export interface InspectorProps {
   hidden?: boolean;
   /** The model as the active variant page sees it. */
   model: ModelFile;
+  /** Shared model, before applying the active variant overrides. */
+  baseModel?: ModelFile;
   experiment: ExperimentFile;
   experimentPath?: string;
   selected: string | null;
@@ -77,7 +81,7 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
 }
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
-export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
+export function Inspector({ catalog, model, baseModel, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences, requestTypeReferences,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
@@ -110,6 +114,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
   const destination = connection === undefined ? undefined : ownEntry(model.blocks, connection.to);
   const attempts = element?.params.attempts ?? type?.params.find(param => param.name === "attempts")?.default ?? 1;
   const parameters = type?.params.filter(descriptor =>
+    !policyNames.has(descriptor.name) &&
     !(element?.type === "client" && ["load", "classes"].includes(descriptor.name)) &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
@@ -171,6 +176,10 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
               navigationDisabled={invalid}
             />
           ))}
+          <Policies key={`policies-${selected}`} catalog={catalog} model={model} baseModel={baseModel} experiment={experiment}
+            selected={selected} editable={editable} invalid={invalid} variantId={variantId} overrides={overrides}
+            onParam={onParam} onCommand={onCommand} onValidity={onValidity} fieldDiagnostics={fieldDiagnostics}
+            variantFieldDiagnostics={variantFieldDiagnostics} onVariantDiagnostic={onVariantDiagnostic} />
           {connection?.type === "route" ? <RequestTypeFilter model={model} value={connection.classes}
             label={t("editor.requestTypeFilter.route", { target: elementLabel(connection.to, model) })}
             path="classes" editable={editable && variantId === null && onCommand !== undefined} invalid={invalid}

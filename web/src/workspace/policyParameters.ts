@@ -1,8 +1,8 @@
 import type { BlockInstance, ModelFile } from "../api/apiTypes";
 import { elementOf, isObject, ownEntry } from "./params";
 
-/** Policy editing is introduced by T4; existing policy values remain readable and preserved. */
-export const readOnlyPolicies = new Set(["circuitBreaker", "retryBudget", "fallback", "rateLimit", "healthCheck", "outlierDetection"]);
+/** Optional resilience policy objects; absent policies leave the original behavior unchanged. */
+export const policyNames = new Set(["circuitBreaker", "retryBudget", "fallback", "rateLimit", "healthCheck", "outlierDetection"]);
 
 const outputPolicies: Record<string, string> = {
   circuitOpenShare: "circuitBreaker",

@@ -1,3 +1,5 @@
+import { withParam } from "../workspace/params";
+import { initialParams } from "../workspace/initialParams";
 import { useReducer } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -36,16 +38,20 @@ it.each([
   { path: "gateway-to-middle.fallback.processing", values: ["1ms", "2ms"] },
   { path: "gateway.rateLimit.burst", values: [5, 10] },
   { path: "gateway.healthCheck.timeout", values: ["1ms", "2ms"] },
-])("preserves imported policy axis $path read-only and excludes policies from new choices", axis => {
-  render(<Settings initialCatalog={serverCatalog as Catalog} initialExperiment={{ ...experiment, grid: [axis] }} />);
-  expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).disabled).toBe(true);
-  expect(screen.getByLabelText<HTMLInputElement>("Axis 1 value 1").readOnly).toBe(true);
-  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add value to axis 1" }).disabled).toBe(true);
-  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove axis 1 value 1" }).disabled).toBe(true);
-  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove grid axis 1" }).disabled).toBe(true);
+])("edits imported policy axis $path and preserves it when adding another axis", axis => {
+  const [id, name] = axis.path.split(".");
+  const type = id === "gateway" ? "service" : "call";
+  const descriptor = serverCatalog.types.find(candidate => candidate.id === type)!.params.find(param => param.name === name)! as import("../api/apiTypes").ParamDescriptor;
+  const initialModel = withParam(model, id, name, initialParams(descriptor.fields));
+  render(<Settings initialModel={initialModel} initialCatalog={serverCatalog as Catalog} initialExperiment={{ ...experiment, grid: [axis] }} />);
+  expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 1 parameter" }).disabled).toBe(false);
+  expect(screen.getByLabelText<HTMLInputElement>("Axis 1 value 1").readOnly).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add value to axis 1" }).disabled).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove axis 1 value 1" }).disabled).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>("button", { name: "Remove grid axis 1" }).disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Add grid axis" }));
   const second = screen.getByRole<HTMLSelectElement>("combobox", { name: "Axis 2 parameter" });
-  expect([...second.options].some(option => /\.(circuitBreaker|retryBudget|fallback|rateLimit|healthCheck)\./.test(option.value))).toBe(false);
+  expect([...second.options].map(option => option.value)).toContain(axis.path);
   fireEvent.change(second, { target: { value: "gateway-to-middle.timeout" } });
   const value = screen.getByLabelText("Axis 2 value 1");
   fireEvent.change(value, { target: { value: "70ms" } });

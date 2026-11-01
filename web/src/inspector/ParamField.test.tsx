@@ -6,14 +6,23 @@ import catalog from "../test/catalog.json";
 import { initialParams } from "../workspace/initialParams";
 
 it.each([
-  ["call", "circuitBreaker"], ["call", "retryBudget"], ["call", "fallback"],
-  ["service", "rateLimit"], ["service", "healthCheck"],
-  ["call", "outlierDetection"], ["router", "outlierDetection"],
-])("keeps %s %s read-only until the policy editor is available", (typeId, name) => {
+  ["call", "circuitBreaker", "Open duration", "openDuration", "7s"],
+  ["call", "retryBudget", "Budget window", "window", "5s"],
+  ["call", "fallback", "Fallback processing time", "processing", "2ms"],
+  ["service", "rateLimit", "Token rate", "rate", "50/s"],
+  ["service", "healthCheck", "Probe timeout", "timeout", "500ms"],
+  ["call", "outlierDetection", "Base ejection time", "baseEjection", "10s"],
+  ["router", "outlierDetection", "Base ejection time", "baseEjection", "10s"],
+])("edits %s %s while preserving its other fields", (typeId, name, title, field, value) => {
   const descriptor = catalog.types.find(type => type.id === typeId)!.params.find(param => param.name === name)! as ParamDescriptor;
-  render(<ParamField descriptor={descriptor} value={initialParams(descriptor.fields)} path={name} editable
-    isOverridden={() => false} onCommit={vi.fn()} onValidity={vi.fn()} />);
-  for (const input of screen.getAllByRole("textbox")) expect(input).toHaveProperty("readOnly", true);
+  const initial = initialParams(descriptor.fields);
+  const onCommit = vi.fn();
+  render(<ParamField descriptor={descriptor} value={initial} path={name} editable
+    isOverridden={() => false} onCommit={onCommit} onValidity={vi.fn()} />);
+  const input = screen.getByRole<HTMLInputElement>("textbox", { name: title });
+  expect(input.readOnly).toBe(false);
+  fireEvent.change(input, { target: { value } }); fireEvent.blur(input);
+  expect(onCommit).toHaveBeenCalledExactlyOnceWith({ ...initial, [field]: value });
 });
 
 it("shows catalog arrays as read-only JSON without committing a lossy string", () => {
