@@ -112,7 +112,7 @@ it("leaves field undo native and prevents history actions from discarding invali
   expect(input.value).toBe("4");
 });
 
-it("renames a block with cascading document writes and restores all documents with undo", async () => {
+it("renames a block with cascading document writes and restores the editor snapshot with undo", async () => {
   const fetchMock = server();
   await open();
   fireEvent.click(screen.getByTestId("rf__node-dependency"));
@@ -131,10 +131,11 @@ it("renames a block with cascading document writes and restores all documents wi
   await waitFor(() => expect(button("Save").disabled).toBe(true));
   const contents = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
     .map(([, init]) => JSON.parse(String(init?.body)));
-  expect(contents.map((content) => Object.keys(content)[0])).toEqual(["layout", "model", "experiment"]);
-  expect(contents[0].layout.positions.storage).toEqual({ x: 780, y: 100 });
-  expect(contents[1].model.connections[2].to).toBe("storage");
-  expect(contents[2].experiment.faults[0].target).toBe("storage");
+  expect(contents.map((content) => Object.keys(content)[0])).toEqual(["experiment", "layout", "model", "experiment"]);
+  expect(contents[0].experiment.faults[0].target).toBe("storage");
+  expect(contents[1].layout.positions.storage).toEqual({ x: 780, y: 100 });
+  expect(contents[2].model.connections[2].to).toBe("storage");
+  expect(contents[3].experiment.faults[0].target).toBe("storage");
   fireEvent.click(button("Undo"));
   await screen.findByTestId("rf__node-dependency");
   expect(screen.queryByTestId("rf__node-storage")).toBeNull();

@@ -10,8 +10,9 @@ import {
   type DocumentKind, type EditorCommand, type LoadedExperiment,
 } from "./editor";
 import { resolveRef } from "./paths";
-import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, runsToDelete, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
+import { checkDeletionReferences, defaultExperiment, documentsToDelete, exportDocuments, runsToDelete, storedExperiments, writeDocuments, type ConfirmReplace, type DownloadDocument } from "./fileActions";
 import { experimentsForModel, preferredExperiment, preferredModel, readSelection, rememberSelection } from "./modelSelection";
+import { experimentsUsing, hasPendingRelatedRenames, prepareRelatedRenames, type AppliedRename, type StoredExperiment } from "./renames";
 
 export interface ExternalDocumentChange {
   path: string;
@@ -46,6 +47,8 @@ export interface Workspace {
   openModel: (modelPath: string, discardChanges?: boolean) => Promise<boolean>;
   setParam: (id: string, name: string, value: unknown) => void;
   save: () => Promise<boolean>;
+  /** Names of other stored questions whose references follow this element's rename. */
+  experimentsUsing: (id: string) => string[];
   /** Writes a checked file action, refreshes the picker and opens the imported or created experiment. */
   storeDocuments: (drafts: DocumentDraft[], confirmReplace?: ConfirmReplace, validate?: boolean) => Promise<boolean>;
   /** Deletes a confirmed snapshot in order, stops at the first failure and reconciles the open documents. */
@@ -117,11 +120,15 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   const [sourceCatalog, setCatalog] = useState<Catalog | null>(null);
   const catalog = useMemo(() => sourceCatalog === null ? null : localizeCatalog(sourceCatalog, language), [sourceCatalog, language]);
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
+  const [relatedExperiments, setRelatedExperiments] = useState<{ modelPath: string; questions: StoredExperiment[] } | null>(null);
+  const [appliedRenames, setAppliedRenames] = useState(new Map<string, AppliedRename>());
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const preferences = useRef<ReturnType<typeof readSelection> | null>(null);
   if (preferences.current === null) preferences.current = readSelection();
   const [editor, dispatch] = useReducer(editorReducer, initialEditorState);
   const { loaded, conflictPath } = editor;
+  const relatedEntries = useMemo(() => documents.filter(entry => entry.kind === "EXPERIMENT" && entry.path !== loaded?.experimentPath &&
+    entry.modelRef != null && resolveRef(entry.path, entry.modelRef) === loaded?.modelPath), [documents, loaded?.experimentPath, loaded?.modelPath]);
   const models = documents.filter(document => document.kind === "MODEL").map(document => document.path).sort();
   const experiments = selectedModel === null ? [] : experimentsForModel(documents, selectedModel);
   if (loaded?.modelPath === selectedModel && loaded?.versions.experiment === null && !experiments.includes(loaded.experimentPath)) experiments.push(loaded.experimentPath);
@@ -139,13 +146,23 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   const cursor = useRef<string | null>(null);
   const persistenceRevision = useRef(0);
   const changed = dirtyDocuments(loaded);
-  const dirty = Object.values(changed).some(Boolean);
+  const dirty = Object.values(changed).some(Boolean) || hasPendingRelatedRenames(loaded, appliedRenames);
   const openedExperimentPath = loaded?.experimentPath;
   const externalList = Object.values(externalChanges);
   const externalChange = externalList.find((change) => change.deleted) ?? externalList[0] ?? null;
   const recoveryLayoutPath = loaded !== null && (
     loaded.versions.layout !== null || conflictPath === loaded.layoutPath || externalChanges[loaded.layoutPath] !== undefined
   ) ? loaded.layoutPath : undefined;
+
+  useEffect(() => {
+    const modelPath = loaded?.modelPath;
+    if (modelPath === undefined) return;
+    let active = true;
+    void storedExperiments(relatedEntries).then(questions => {
+      if (active) setRelatedExperiments({ modelPath, questions });
+    }).catch(error => { if (active) setProblem(problemOf(error)); });
+    return () => { active = false; };
+  }, [relatedEntries, loaded?.modelPath]);
 
   const classifyChanges = useCallback((changes: readonly WorkspaceChangeView[]) => {
     const current = loadedRef.current;
@@ -336,6 +353,18 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
     setSaving(true);
     setProblem(null);
     try {
+      const related = await prepareRelatedRenames(saved, appliedRenames);
+      for (const { entry, experiment } of related) {
+        try {
+          const written = await api.saveDocument(entry.path, { experiment }, entry.version);
+          setAppliedRenames(previous => new Map([...previous, [entry.path, { modelPath: saved.modelPath, model: saved.model, version: written.version }]]));
+          persistenceRevision.current += 1;
+          setDocuments(previous => previous.map(document => document.path === entry.path ? { ...document, version: written.version } : document));
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 409) throw new MessageError("app.workspace.renameConflict", { path: entry.path });
+          throw error;
+        }
+      }
       for (const kind of ["layout", "model", "experiment"] as const) {
         if (!dirtyDocuments(saved)[kind] && !(kind === "experiment" && saved.versions.experiment === null)) continue;
         const path = saved[`${kind}Path`];
@@ -365,12 +394,17 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
           flushChange(path);
         }
       }
+      if (appliedRenames.size > 0 || related.length > 0) setAppliedRenames(previous =>
+        new Map([...previous].filter(([, applied]) => applied.modelPath !== saved.modelPath)));
       return true;
+    } catch (error) {
+      setProblem(problemOf(error));
+      return false;
     } finally {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [loaded, dirty, conflictPath, flushChange]);
+  }, [loaded, dirty, conflictPath, flushChange, appliedRenames]);
 
   const reportProblem = useCallback((error: unknown) => setProblem(problemOf(error)), []);
 
@@ -522,6 +556,7 @@ export function useWorkspace(onRequestFailure?: (reason: unknown) => void, onReq
   }, [loaded, load, recoveryLayoutPath, externalChange, documents]);
 
   return {
+    experimentsUsing: id => loaded === null || relatedExperiments?.modelPath !== loaded.modelPath ? [] : experimentsUsing(loaded, id, relatedExperiments.questions, appliedRenames),
     catalog, models, selectedModel, experiments, loaded, loading, dirty, dirtyDocuments: changed, saving,
     conflict: conflictPath !== null, conflictPath, externalChange, problem, open, openModel, setParam, execute,
     canUndo: editor.past.length > 0, canRedo: editor.future.length > 0, undo, redo, save, reload, storeDocuments, removeDocuments, exportFiles, reportProblem,

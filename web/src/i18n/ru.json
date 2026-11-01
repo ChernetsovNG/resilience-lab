@@ -1608,5 +1608,7 @@
   "catalog.types.service.outputs.ejectedShare.description": "Время исключения из выбора, делённое на длительность интервала, в сумме по маршрутизаторам и экземплярам группы.",
   "catalog.types.service.outputs.ejectedShare.timeline.groupTitle": "Вывод неисправных экземпляров",
   "messages.OUTLIER_TARGET": "Для вывода неисправных экземпляров связь «{connection}» должна вызывать группу реплик",
-  "messages.OUTLIER_CONFIG": "У всех вызовов группы «{group}» должны совпадать параметры вывода неисправных экземпляров"
+  "messages.OUTLIER_CONFIG": "У всех вызовов группы «{group}» должны совпадать параметры вывода неисправных экземпляров",
+  "app.workspace.renameConflict": "Документ «{path}» изменился. Проверьте его текущую версию и повторите сохранение.",
+  "editor.identifier.references": "Ссылки обновятся также в: {experiments}"
 }

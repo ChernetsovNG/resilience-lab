@@ -20,6 +20,7 @@ import { ReplicaTargetField } from "./ReplicaTargetField";
 import { elementLabel, variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
+  renameReferences?: readonly string[];
   catalog: Catalog;
   results?: ReactNode;
   variantChanges?: ReactNode;
@@ -75,7 +76,7 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
-  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
+  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
@@ -129,7 +130,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
           {selectedReplica == null ? <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
-              onRename={onRename} onValidity={onValidity} />
+              onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
           <AnnotationFields key={`annotations-${selected}`} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
             editable={editable && variantId === null && onCommand !== undefined}

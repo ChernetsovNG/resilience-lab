@@ -72,7 +72,7 @@ it.each(["Model", "Experiment"])("saves before switching %s", async (kind) => {
   await screen.findByRole("heading", { name: "Run settings" });
   const calls = fetchMock.mock.calls;
   const save = calls.findIndex(([, init]) => init?.method === "PUT");
-  const load = calls.findIndex(([url]) => String(url).includes(encodeURIComponent(target)));
+  const load = save + 1 + calls.slice(save + 1).findIndex(([url]) => String(url).includes(encodeURIComponent(target)));
   expect(save).toBeGreaterThanOrEqual(0);
   expect(load).toBeGreaterThan(save);
   expect(calls[save][1]?.headers).toMatchObject({ "If-Match": '"v-model"' });

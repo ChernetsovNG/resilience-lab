@@ -115,7 +115,8 @@ export function addConnection(catalog: Catalog, from: string, to: string, source
 // Grid arrives in a later track; preserve and cascade it if a document already contains it.
 type WithGrid = ExperimentFile & { grid?: { path: string; values: unknown[] }[] | null };
 
-function references(experiment: ExperimentFile, mapId: (id: string) => string | null): ExperimentFile {
+/** Rewrites experiment references by exact element id, retaining parameter paths and replica suffixes. */
+export function experimentReferences(experiment: ExperimentFile, mapId: (id: string) => string | null): ExperimentFile {
   const mapPath = (path: string): string | null => {
     const dot = path.indexOf(".");
     const id = dot < 0 ? path : path.slice(0, dot);
@@ -174,9 +175,18 @@ export function deleteElements(selection: string[]): EditorCommand {
         connections: documents.model.connections.filter((edge) => !removed.has(edge.id)),
       },
       layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).filter(([id]) => !removed.has(id))) },
-      experiment: references(documents.experiment, mapId),
+      experiment: experimentReferences(documents.experiment, mapId),
     };
   };
+}
+
+/** Connections whose generated ids follow a renamed endpoint; manually named connections stay independent. */
+export function incidentAutomaticConnections(model: ModelFile, id: string): ModelFile["connections"] {
+  return model.connections.filter(edge => {
+    const prefix = `${edge.from}-to-${edge.to}`;
+    const suffix = edge.id.slice(prefix.length);
+    return (edge.from === id || edge.to === id) && edge.id.startsWith(prefix) && (suffix === "" || /^-[1-9][0-9]*$/.test(suffix));
+  });
 }
 
 /** Renames an element and incident automatic connection ids, including every document reference, in one operation. */
@@ -185,12 +195,8 @@ export function renameElement(id: string, next: string): EditorCommand {
     if (id === next || elementOf(documents.model, id) === null || identifierError(documents.model, next, id) !== null) return documents;
     const ids = new Map([[id, next]]);
     const mapId = (value: string) => ids.get(value) ?? value;
-    const automatic = documents.model.connections.flatMap(edge => {
-      const prefix = `${edge.from}-to-${edge.to}`;
-      const suffix = edge.id.slice(prefix.length);
-      return (edge.from === id || edge.to === id) && edge.id.startsWith(prefix) && (suffix === "" || /^-[1-9][0-9]*$/.test(suffix))
-        ? [{ edge, suffix }] : [];
-    });
+    const automatic = incidentAutomaticConnections(documents.model, id)
+      .map(edge => ({ edge, suffix: edge.id.slice(`${edge.from}-to-${edge.to}`.length) }));
     const used = usedIds(documents.model);
     used.delete(id);
     for (const { edge } of automatic) used.delete(edge.id);
@@ -209,7 +215,7 @@ export function renameElement(id: string, next: string): EditorCommand {
         connections: documents.model.connections.map((edge) => ({ ...edge, id: mapId(edge.id), from: mapId(edge.from), to: mapId(edge.to) })),
       },
       layout: { ...documents.layout, positions: Object.fromEntries(Object.entries(documents.layout.positions).map(([key, value]) => [mapId(key), value])) },
-      experiment: references(documents.experiment, mapId),
+      experiment: experimentReferences(documents.experiment, mapId),
     };
   };
 }

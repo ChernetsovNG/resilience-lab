@@ -176,7 +176,8 @@ export async function writeDocuments(drafts: DocumentDraft[], confirmReplace?: C
   return true;
 }
 
-async function storedExperiments(entries: readonly DocumentEntry[]) {
+/** Reads experiment contents and their current versions, including references outside the model's directory. */
+export async function storedExperiments(entries: readonly DocumentEntry[]) {
   return Promise.all(entries.filter(entry => entry.kind === "EXPERIMENT").map(async entry => {
     const view = await api.document(entry.path);
     const experiment = view.content.experiment;

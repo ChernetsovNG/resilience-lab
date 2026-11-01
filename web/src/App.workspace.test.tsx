@@ -71,7 +71,8 @@ describe("App stage 1 integration", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(experimentSelect().value).toBe(experimentPath);
     expect((screen.getByLabelText("Handlers") as HTMLInputElement).value).toBe("5");
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes(encodeURIComponent(otherPath)))).toBe(false);
+    expect(screen.getByRole("heading", { name: "gateway" })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
     fireEvent.change(experimentSelect(), { target: { value: otherPath } });
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Don't save" }));
     await waitFor(() => expect((screen.getByLabelText("Seed") as HTMLInputElement).value).toBe("99"));
