@@ -148,6 +148,11 @@ internal enum class CoreMessage(
         "retryBudget",
         "Worst retry load of '{target}': {ratePerSecond} requests/s, utilization {utilization} at threshold {threshold}; attempts: {attemptChain}. Retry budgets limit connections: {budgetLimited}",
     ),
+    LINT_REJECTION_RISK(
+        "LINT_REJECTION_RISK",
+        null,
+        "'{target}' has no queue: estimated rejections {rejectionPercent}% at threshold {thresholdPercent}% ({ratePerSecond} requests/s, {holdingMs} ms mean holding, {handlers} slots)",
+    ),
     LINT_LOW_HEADROOM(
         "LINT_LOW_HEADROOM",
         null,

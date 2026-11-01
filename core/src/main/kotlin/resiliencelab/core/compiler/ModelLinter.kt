@@ -30,6 +30,7 @@ import kotlin.math.sqrt
  * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  * [lowHeadroomThreshold] is the nominal accepted-utilization threshold, strictly between zero and one.
+ * [rejectionRiskThreshold] is the queue-free Erlang B probability threshold (0.01 by default), in (0, 1].
  * [retryOverloadThreshold] is the positive accepted-utilization threshold for worst-case retries (1 by default).
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
@@ -47,8 +48,12 @@ class ModelLinter(
     private val queueWaitThreshold: Double = 1.0,
     private val retryOverloadThreshold: Double = 1.0,
     private val lowHeadroomThreshold: Double = 0.8,
+    private val rejectionRiskThreshold: Double = 0.01,
 ) {
     init {
+        require(rejectionRiskThreshold.isFinite() && rejectionRiskThreshold > 0.0 && rejectionRiskThreshold <= 1.0) {
+            "rejectionRiskThreshold must be finite and in (0, 1]"
+        }
         require(lowHeadroomThreshold.isFinite() && lowHeadroomThreshold > 0.0 && lowHeadroomThreshold < 1.0) {
             "lowHeadroomThreshold must be finite and strictly between 0 and 1"
         }
@@ -437,6 +442,50 @@ class ModelLinter(
         return ServiceLoad(rate, holdingMs, rate * holdingMs / Fraction.of(service.handlers.toBigDecimal()))
     }
 
+    /** Erlang B for queue-free capacity: B(0, A) = 1; B(n, A) = A B(n - 1, A) / (n + A B(n - 1, A)). */
+    private fun rejectionRisk(
+        service: ServiceNode,
+        load: ServiceLoad,
+        offeredRate: Fraction,
+    ): Diagnostic? {
+        if (service.pooler != null || service.queueCapacity != 0 || load.rate.signum() == 0 || load.holdingMs.signum() == 0) return null
+        val offeredLoad = load.rate * load.holdingMs
+        val threshold = Fraction.of(rejectionRiskThreshold)
+        // Keep B as an unreduced ratio: exact equality without repeated GCD reductions at every capacity.
+        var numerator = BigInteger.ONE
+        var denominator = BigInteger.ONE
+        for (slots in 1..service.handlers) {
+            numerator *= offeredLoad.numerator
+            denominator = slots.toBigInteger() * offeredLoad.denominator * denominator + numerator
+            // B decreases with capacity; later slots cannot restore a warning below the threshold.
+            if (numerator * threshold.denominator < threshold.numerator * denominator) return null
+        }
+        val probability = numerator.toBigDecimal().divide(denominator.toBigDecimal(), MathContext.DECIMAL128)
+        val percent = number((probability * BigDecimal(100)).toDouble())
+        val thresholdPercent = number(rejectionRiskThreshold * 100.0)
+        val rateText = Quantities.plain((load.rate * Fraction.of(BigDecimal(1_000))).decimal())
+        val holdingText = Quantities.plain(load.holdingMs.decimal())
+        return warning(
+            CoreMessage.LINT_REJECTION_RISK,
+            "'${service.path}' has no queue: estimated rejections $percent% at threshold $thresholdPercent% " +
+                "($rateText requests/s, $holdingText ms mean holding, ${service.handlers} slots). " +
+                "Random arrival bursts may reject requests; add a queue, increase capacity or reduce load.",
+            service.origin,
+            service.path,
+            "/params/queue",
+            mapOf(
+                "target" to JsonPrimitive(service.path.substringBeforeLast('#', service.path)),
+                "rejectionPercent" to JsonPrimitive(percent),
+                "thresholdPercent" to JsonPrimitive(thresholdPercent),
+                "offeredLoad" to JsonPrimitive(Quantities.plain(offeredLoad.decimal())),
+                "ratePerSecond" to JsonPrimitive(rateText),
+                "offeredRatePerSecond" to JsonPrimitive(Quantities.plain((offeredRate * Fraction.of(BigDecimal(1_000))).decimal())),
+                "holdingMs" to JsonPrimitive(holdingText),
+                "handlers" to JsonPrimitive(service.handlers),
+            ),
+        )
+    }
+
     private fun lowHeadroom(
         service: ServiceNode,
         load: ServiceLoad,
@@ -752,6 +801,7 @@ class ModelLinter(
                     )
                 }
                 lowHeadroom(service, load, maximumRate)?.let(::add)
+                rejectionRisk(service, load, maximumRate)?.let(::add)
                 queueWait(service, demand.decimal(), maximumRate.decimal(), holdingMs, queuePatience[service.path])?.let(::add)
             }
         }

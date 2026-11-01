@@ -12,7 +12,7 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
   const labels = JSON.parse(await readFile(resolve("src/i18n/ru.json"), "utf8")) as Record<string, string>;
   const model: ModelFile = { schemaVersion: 6, blocks: {
     client: { type: "client", params: { load: { points: [{ time: "0s", rate: "900/s" }] }, deadline: "1s" } },
-    catalog: { type: "service", params: { handlers: 16, replicas: 3, processing: { kind: "fixed", mean: "35ms" } } },
+    catalog: { type: "service", params: { handlers: 16, replicas: 3, queue: 1, processing: { kind: "fixed", mean: "35ms" } } },
   }, connections: [{ id: "request", type: "request", from: "client", to: "catalog" }] };
   const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
     execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 },
@@ -67,7 +67,10 @@ test("routes replica load and groups equivalent warnings from the real API in Ru
     await expect(queueWarning).toContainText("реплики #1–#3; варианты: Базовый, Пул 16");
     await queueWarning.click();
     await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    await page.goto("/api/v1/health");
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
@@ -117,7 +120,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
 for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
   test.describe(`nominal headroom in ${language}`, () => {
     test.use({ locale });
-    test("translates rate-limited headroom and opens handlers for grouped replicas and variants", async ({ page }) => {
+    test("translates headroom and rejection risk and opens their fields for grouped replicas and variants", async ({ page }) => {
       const directory = `low-headroom-${randomUUID()}`;
       const root = resolve("../apps/server/build/e2e-workspace", directory);
       const labels = JSON.parse(await readFile(resolve(`src/i18n/${language}.json`), "utf8")) as Record<string, string>;
@@ -128,7 +131,7 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
       }, connections: [{ id: "request", type: "request", from: "client", to: "catalog" }] };
       const experiment: ExperimentFile = { schemaVersion: 3, modelRef: "model.model.json",
         execution: { replications: 10, warmup: "0ms", measurement: "1s", seed: 42 },
-        variants: ["Base", "Equivalent"].map((label, index) => ({ id: `v${index}`, label, overrides: { "catalog.handlers": 16 } })) };
+        variants: ["Base", "Equivalent"].map((label, index) => ({ id: `v${index}`, label, overrides: { "catalog.handlers": 16, "catalog.queue": 0 } })) };
       await mkdir(root, { recursive: true });
       try {
         await writeFile(resolve(root, "model.model.json"), JSON.stringify(model));
@@ -140,6 +143,10 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
         const findings = report.diagnostics.filter(diagnostic => diagnostic.code === "LINT_LOW_HEADROOM");
         expect(findings).toHaveLength(6);
         expect(findings.every(diagnostic => diagnostic.severity === "WARNING" && diagnostic.args?.utilization === "0.875")).toBe(true);
+        const rejections = report.diagnostics.filter(diagnostic => diagnostic.code === "LINT_REJECTION_RISK");
+        expect(rejections).toHaveLength(6);
+        expect(rejections.every(diagnostic => diagnostic.severity === "WARNING" && diagnostic.args?.ratePerSecond === "400"
+          && diagnostic.pointer === `/variants/${diagnostic.variant === "v0" ? 0 : 1}/overrides/catalog.queue`)).toBe(true);
 
         await page.goto("/");
         await selectExperiment(page, `${directory}/experiment.experiment.json`);
@@ -158,7 +165,25 @@ for (const [language, locale] of [["en", "en-US"], ["ru", "ru-RU"]] as const) {
         await warning.click();
         await expect(page.getByRole("tab", { name: "Base", exact: true })).toHaveAttribute("aria-selected", "true");
         await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.handlers.title"], { exact: true })).toBeFocused();
-      } finally { await rm(root, { recursive: true, force: true }); }
+
+        const rejectionRows = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_REJECTION_RISK"]') });
+        const rejection = rejectionRows.locator('button[data-diagnostic-code="LINT_REJECTION_RISK"]');
+        await expect(rejection).toHaveCount(1);
+        await expect(rejection).toContainText(language === "ru" ? "расчётная доля отказов" : "estimated rejections");
+        await expect(rejection).toContainText("400");
+        await expect(rejection).toContainText("#1–#3");
+        await expect(rejection).toContainText("Base, Equivalent");
+        await rejectionRows.getByRole("button", { name: new RegExp(labels["results.problems.explanation"]) }).click();
+        await expect(rejectionRows.getByRole("tooltip")).toContainText(language === "ru" ? "Эрланг B" : "Erlang B");
+        await expect(rejectionRows.getByRole("tooltip")).toContainText("LINT_REJECTION_RISK");
+        await page.keyboard.press("Escape");
+        await rejection.click();
+        await expect(page.locator(".inspector").getByLabel(labels["catalog.types.service.params.queue.title"], { exact: true })).toBeFocused();
+        await expect(page.getByRole("button", { name: labels["app.topBar.run"], exact: true })).toBeEnabled();
+      } finally {
+        await page.goto("/api/v1/health");
+        await rm(root, { recursive: true, force: true });
+      }
     });
   });
 }
