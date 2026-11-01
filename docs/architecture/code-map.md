@@ -14,7 +14,7 @@
 
 | Пакет | Ответственность и граница |
 |---|---|
-| `catalog` | Типы, параметры, порты, единицы и выходы. Описывает контракт, не исполняет блоки. |
+| `catalog` | Типы, параметры, порты, единицы, выходы и закрытый вычислитель выходов. Не исполняет блоки. |
 | `document` | Документы, строгий JSON, версии и генерация схем. Семантическая проверка находится в `compiler`. |
 | `compiler` | Переопределения, проверка параметров и графа, разворачивание реплик, IR и диагностика. Не запускает KSL. |
 | `ir` | Типизированный граф, параметры и происхождение элементов. Не зависит от JSON-документов и KSL. |
@@ -54,7 +54,7 @@
 1. [`Lab.loadDocuments`][lab] читает эксперимент и его ссылки через [`Workspace`][workspace]. [`DocumentCodec`][codec] проверяет JSON и версии. [`ModelCompiler.compile`][compiler] применяет варианты и сетку, проверяет модель и разворачивает реплики в [`GraphIr`][ir]; `Lab.validate` добавляет [`ModelLinter`][linter].
    Сценарий в IR — дерево `ServiceStep`: `onMiss` у `CacheRead` и ветки `Parallel`. [Обход дерева][scenario-tree] сохраняет фильтры видов запросов и ссылки на связи при разворачивании реплик; `repeat.count` адресуется через идентификатор шага. Параметры хранилища кэша находятся в `CacheSettings` узла `ServiceNode`. До реализации движка `Lab` и адаптер KSL отвергают новые конструкции кодом `EXECUTION_UNSUPPORTED_SCENARIO`.
 2. [`Lab.run`][lab] вызывает [`ExperimentExecutor.run`][executor]. Каждое повторение получает свежую модель KSL; [`ReliabilityModel.runReplication`][engine] возвращает итоги [`MetricsCollector`][metrics], а [`WindowCollector`][windows] передаёт закрытые окна через callback.
-3. [`SeriesWriter`][series] пишет части и индекс; его детектор потоково считает путь деградации. [`ArtifactWriter`][artifact] сохраняет путь вместе с итогами повторения. Его `summarize` параллельно читает итоги повторений и собирает сводку через [`MetricsAggregator`][aggregator] и анализаторы выводов в общем пуле исполнителя; затем публикуются сводка и манифест. Итоги когорты и временные окна собираются отдельно.
+3. [`SeriesWriter`][series] пишет части и индекс; его детектор потоково считает путь деградации. [`ArtifactWriter`][artifact] сохраняет путь вместе с итогами повторения. После успешного расчёта [`AggregateSeriesWriter`](../../core/src/main/kotlin/resiliencelab/core/results/AggregateSeriesWriter.kt) читает окна в порядке повторений, вычисляет выходы через [`OutputCalculator`](../../core/src/main/kotlin/resiliencelab/core/catalog/OutputCalculator.kt) и записывает сводные части тем же `SeriesWriter`. Затем `ArtifactWriter.summarize` параллельно читает итоги повторений и собирает сводку через [`MetricsAggregator`][aggregator] и анализаторы выводов в общем пуле исполнителя; публикуются сводка и манифест. Итоги когорты и временные окна собираются отдельно.
 
 ### Задание через API
 
@@ -91,6 +91,7 @@
 ### Выход каталога и его показ
 
 - По [ADR 0011](adr/0011-type-outputs.md) описать выход в [`Stage1Outputs`][stage-outputs] либо специализированном файле выходов и подключить через `TypeDescriptor.outputs`: расчёт, источник сводки, нужные `timeline`/`inspector`/`overlay`. Обновить снимок каталога и переводы `catalog.types.<typeId>.outputs.<id>.*`.
+- Вычисления Kotlin и web проверяются по `catalog-outputs.json` в [`fixtures`](../../web/src/results/series/fixtures/): при новом вычислении пересоздать общий эталон командой `UPDATE_SERIES_GOLDEN` из `AGENTS.md`. Выход с `timeline` автоматически попадает в сводные ряды; новый вид операции требует расширить оба вычислителя.
 - Существующие данные и операции обслуживает `outputs.ts`; новая операция меняет контракт [`Outputs.kt`][outputs-contract] и интерпретатор в `outputs.ts`. Для выхода политики проверить `policyOutputAvailable` в `policyParameters.ts`. Потребители — `RunTimeline`, [`elementResultsData.ts`][element-data], `canvasResults`; проверки — [`Stage1CatalogTest`][catalog-test] и [`catalogOutputs.test.tsx`][outputs-test]. Новое измерение требует рецепта поля ниже.
 
 ### Сообщение ядра

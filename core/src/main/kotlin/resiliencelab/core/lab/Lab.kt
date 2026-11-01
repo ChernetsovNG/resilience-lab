@@ -24,6 +24,7 @@ import resiliencelab.core.execution.ExperimentTask
 import resiliencelab.core.execution.checkCancellation
 import resiliencelab.core.experiment.LatencySketch
 import resiliencelab.core.experiment.ReplicaGroups
+import resiliencelab.core.results.AggregateSeriesWriter
 import resiliencelab.core.results.ArtifactWriter
 import resiliencelab.core.results.GridPoint
 import resiliencelab.core.results.ResultsLayout
@@ -214,6 +215,7 @@ class Lab(
             )
             checkCancellation(isCancelled)
             return uninterruptedArtifactWrite {
+                AggregateSeriesWriter(workspace).write(runDirectory, compiled)
                 val summary =
                     writer.summarize(
                         runDirectory,
@@ -290,6 +292,7 @@ class Lab(
                 )
                 checkCancellation(isCancelled)
                 return@withResumeLock uninterruptedArtifactWrite {
+                    AggregateSeriesWriter(workspace).write(runDirectory, compiled)
                     val summary =
                         writer.summarize(
                             runDirectory,

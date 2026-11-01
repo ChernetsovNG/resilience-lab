@@ -58,8 +58,20 @@ class ArtifactPipelineTest {
             }
         ExperimentExecutor(2).use { executor ->
             Lab(workspace, executor = executor).use { lab ->
-                val original = lab.run(experiment, "r", onProgress = { done, total -> summarizing.set(done == total) })
-                assertThat(original.manifest.schemaVersion).isEqualTo(19)
+                val original = lab.run(experiment, "r")
+                summarizing.set(true)
+                val summary =
+                    ArtifactWriter(workspace, executor).summarize(
+                        original.runDirectory,
+                        experiment,
+                        original.summary.variants.map { it.id to it.label },
+                        original.manifest.replications,
+                        requireNotNull(original.manifest.series).points,
+                        original.manifest.grid,
+                    )
+                summarizing.set(false)
+                assertThat(summary).isEqualTo(original.summary)
+                assertThat(original.manifest.schemaVersion).isEqualTo(20)
                 val task = "${original.runDirectory}/series/baseline/p0/rep-0/replication.json.gz"
                 val stored =
                     Json
@@ -77,7 +89,6 @@ class ArtifactPipelineTest {
                 val resumed =
                     lab.resume(original.runDirectory, onProgress = { done, total ->
                         progress += done to total
-                        summarizing.set(done == total)
                     })
                 assertThat(progress).containsExactly(19 to 20, 20 to 20)
                 assertThat(resumed.summary).isEqualTo(original.summary)
@@ -309,14 +320,15 @@ class ArtifactPipelineTest {
         assertThat(experimentSnapshot["grid"]).isNotNull()
         val files = workspace.listFiles(first.runDirectory)
         assertThat(files).anyMatch { it.endsWith("/replication.json.gz") }.anyMatch { it.endsWith("/index.json") }
-        val indexes = files.filter { it.endsWith("/index.json") }
+        val indexes = files.filter { it.endsWith("/index.json") && !it.endsWith("/aggregate/index.json") }
         assertThat(indexes).hasSize(20)
+        assertThat(files.filter { it.endsWith("/aggregate/index.json") }).hasSize(2)
         indexes.forEach { path ->
             val index = Json.decodeFromString(SeriesIndex.serializer(), workspace.read(path).text)
             assertThat(index.parts).hasSize(1)
             assertThat(index.parts.single().fromWindow).isZero()
             assertThat(index.parts.single().untilWindow).isEqualTo(100)
-            assertThat(index.schemaVersion).isEqualTo(7)
+            assertThat(index.schemaVersion).isEqualTo(8)
             assertThat(index.parts.single().connections).containsExactly("gateway-to-middle", "middle-to-dependency")
         }
         for (path in files) {
@@ -345,7 +357,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(19)
+        assertThat(first.manifest.schemaVersion).isEqualTo(20)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

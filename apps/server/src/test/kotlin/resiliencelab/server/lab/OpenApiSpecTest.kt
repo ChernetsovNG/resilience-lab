@@ -194,6 +194,8 @@ class OpenApiSpecTest {
             "/api/v1/runs/{id}/summary",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}",
             "/api/v1/runs/{id}/series/{variant}/{cell}/{rep}/{part}",
+            "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate",
+            "/api/v1/runs/{id}/series/{variant}/{cell}/aggregate/{part}",
             "/api/v1/validate",
             "/api/v1/workspace/changes",
             "/api/v1/workspace/document",

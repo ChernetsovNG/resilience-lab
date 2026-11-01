@@ -11,7 +11,7 @@ const entryWindow = (originalArrivals: number) => ({
   latency: { count: 0, sumMs: 0, sketch: [0] }, slotPools: {},
 });
 const part = {
-  schemaVersion: 7, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1",
+  schemaVersion: 8, kind: "INSTANCE", profile: "ddsketch-bitwise6-rational-v1",
   fromWindow: 0, untilWindow: 1,
   nodes: [
     { id: "mobile-app", windows: [entryWindow(3)] },
@@ -38,7 +38,7 @@ describe("entry series", () => {
       { ...part, nodes: [], classes: [{ id: "status", windows: [{ ...entryWindow(2), startMs: 10, durationMs: 5 }] }], connections: [], fromWindow: 1, untilWindow: 2 },
     ];
     const texts = data.map(value => JSON.stringify(value));
-    const index = { schemaVersion: 7, endMs: 15, windowMs: 10, groups: [], parts: data.map((value, number) => ({
+    const index = { schemaVersion: 8, endMs: 15, windowMs: 10, groups: [], parts: data.map((value, number) => ({
       file: `part-${number}.json.gz`, kind: "INSTANCE", nodes: value.nodes.map(node => node.id),
       classes: value.classes.map(row => row.id), connections: [], fromWindow: value.fromWindow, untilWindow: value.untilWindow,
       uncompressedBytes: texts[number].length, sha256: String(number).repeat(64),
@@ -88,7 +88,7 @@ describe("entry series", () => {
     const selectedId = "checkout#2";
     parts.find(value => value.nodes.includes(service))!.nodes = [{ ...service, id: selectedId }];
     const texts = parts.map(value => JSON.stringify(value));
-    const index = { schemaVersion: 7, endMs: 10, windowMs: 10, groups: [], parts: parts.map((value, number) => ({
+    const index = { schemaVersion: 8, endMs: 10, windowMs: 10, groups: [], parts: parts.map((value, number) => ({
       file: `part-${number}.json.gz`, kind: "INSTANCE", nodes: value.nodes.map(node => node.id),
       classes: value.classes.map(row => row.id), connections: [], fromWindow: 0, untilWindow: 1,
       uncompressedBytes: texts[number].length, sha256: String(number).repeat(64),

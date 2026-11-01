@@ -25,6 +25,11 @@ class WebSeriesGoldenTest {
         }
 
     @Test
+    fun `catalog calculations match the shared web interpreter fixture`() {
+        WebOutputGolden.verify(root)
+    }
+
+    @Test
     fun `committed web retry storm fixture round trips and matches core quantile bits`(
         @TempDir temporary: Path,
     ) {

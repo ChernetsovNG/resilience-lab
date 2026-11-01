@@ -45,7 +45,10 @@ class CostEstimatorArtifactTest {
                         val run = lab.run(path, "cost-check")
                         val root = temp.resolve(run.runDirectory)
                         val files = Files.walk(root).use { paths -> paths.filter { Files.isRegularFile(it) }.toList() }
-                        val indexes = files.filter { it.fileName.toString() == "index.json" }
+                        val indexes =
+                            files.filter {
+                                it.fileName.toString() == "index.json" && it.parent.fileName.toString() != "aggregate"
+                            }
                         var rows = 0L
                         var rawBytes = 0L
                         var parts = 0L

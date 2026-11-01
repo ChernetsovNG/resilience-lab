@@ -300,12 +300,12 @@ class LabTest {
         createIncomplete(root)
         val runDirectory = ".results/26318c50525ea0dca051f54916f6b8eeb27cd29956a9bf1ff6be770b1bafd10a/cancelled"
         val manifest = root.resolve("$runDirectory/manifest.json")
-        Files.writeString(manifest, Files.readString(manifest).replace("\"schemaVersion\": 19", "\"schemaVersion\": 18"))
+        Files.writeString(manifest, Files.readString(manifest).replace("\"schemaVersion\": 20", "\"schemaVersion\": 19"))
         val before = artifactHashes(FileWorkspace(root), runDirectory)
 
         assertThatThrownBy { Lab(FileWorkspace(root)).use { it.resume(runDirectory) } }
-            .hasMessageContaining("schemaVersion 18")
-            .hasMessageContaining("expected 19")
+            .hasMessageContaining("schemaVersion 19")
+            .hasMessageContaining("expected 20")
             .hasMessageContaining("run again")
         assertThat(artifactHashes(FileWorkspace(root), runDirectory)).isEqualTo(before)
     }
