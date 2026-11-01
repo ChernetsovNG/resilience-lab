@@ -9,6 +9,11 @@ import { Inspector } from "./Inspector";
 import type { InspectorProps } from "./Inspector";
 import type { Catalog, ModelFile } from "../api/apiTypes";
 
+it("identifies a selected manually named connection by its endpoints", () => {
+  renderInspector({ selected: "rpc", model: { ...model, connections: [{ ...model.connections[1], id: "rpc" }] } });
+  expect(screen.getByRole("heading", { name: "gateway → middle (rpc)" })).toBeTruthy();
+});
+
 it.each([
   { targetType: "database", replicas: 1, attempts: 1, balancing: false, backoff: false },
   { targetType: "service", replicas: 1, attempts: 2, balancing: false, backoff: true },

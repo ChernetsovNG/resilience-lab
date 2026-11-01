@@ -11,9 +11,9 @@ test("variant changes navigate to fields and structural gestures explain the Mod
   await expect(banner.locator("summary")).toHaveText("No retries · Structure is read-only · 2 changes");
   await page.screenshot({ path: testInfo.outputPath("no-retries-before.png") });
   await banner.locator("summary").click();
-  await expect(banner.getByRole("button", { name: "middle-to-dependency · Attempts: 3 → 1", exact: true })).toBeVisible();
+  await expect(banner.getByRole("button", { name: "middle → dependency (middle-to-dependency) · Attempts: 3 → 1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Collapse inspector", exact: true }).click();
-  await banner.getByRole("button", { name: "gateway-to-middle · Attempts: 3 → 1", exact: true }).click();
+  await banner.getByRole("button", { name: "gateway → middle (gateway-to-middle) · Attempts: 3 → 1", exact: true }).click();
   await expect(page.getByLabel("Attempts", { exact: true })).toBeFocused();
   await expect(page.getByTestId("canvas-edge-label-gateway-to-middle")).toHaveAttribute("aria-pressed", "true");
   const bannerBox = await banner.boundingBox();

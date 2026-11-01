@@ -5,6 +5,19 @@ import { catalog, experiment, model, summary } from "../test/fixtures";
 import { ResultsPanel, type ResultsPanelSize } from "./ResultsPanel";
 import { DiagnosticLabelContext } from "../presentation/diagnosticContext";
 
+it("shows connection endpoints in Problems while preserving navigation and filter ids", () => {
+  const finding = { code: "CUSTOM_WARNING", severity: "WARNING" as const, message: "Inspect this connection", path: "gateway-to-middle" };
+  const onDiagnostic = vi.fn();
+  render(<ResultsPanel job={null} summary={null} problem={null} model={model} diagnostics={[finding]}
+    problemsElement="gateway-to-middle" onDiagnostic={onDiagnostic} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Problems" }));
+  const row = screen.getByRole("button", { name: /Inspect this connection/ });
+  expect(row.querySelector(".diagnostic-context")!.textContent).toContain("gateway → middle (gateway-to-middle)");
+  expect(document.querySelector(".problems-filter")!.textContent).toContain("gateway → middle (gateway-to-middle)");
+  fireEvent.click(row);
+  expect(onDiagnostic).toHaveBeenCalledWith(finding);
+});
+
 it("groups equivalent linter rows, counts groups and keeps formulas and rule codes in help", () => {
   const onDiagnostic = vi.fn();
   const findings = ["baseline", "pool"].flatMap(variant => [1, 2, 3].map(replica => ({

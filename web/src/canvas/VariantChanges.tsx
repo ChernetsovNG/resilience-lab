@@ -1,5 +1,6 @@
 import type { Catalog, ModelFile } from "../api/apiTypes";
 import { t } from "../i18n";
+import { elementLabel } from "../presentation/labels";
 import { applyOverrides, elementOf, type Params } from "../workspace/params";
 import { catalogParameter, formatParameterValue } from "../workspace/parameterValues";
 
@@ -25,7 +26,7 @@ export function VariantChanges({ model, catalog, overrides, disabled = false, on
         const after = current === null ? undefined : catalogParameter(catalog, current.type, current.params, path);
         return <li key={key}><button type="button" disabled={disabled || element === null || after === undefined}
           onClick={() => onSelect?.(id, path)}>
-          {t("editor.variant.change", { element: id, parameter: after?.title ?? before?.title ?? path,
+          {t("editor.variant.change", { element: elementLabel(id, model), parameter: after?.title ?? before?.title ?? path,
             model: formatParameterValue(before?.value, before?.descriptor),
             variant: formatParameterValue(after?.value ?? overrides[key], after?.descriptor) })}
         </button></li>;

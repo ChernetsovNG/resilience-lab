@@ -2,6 +2,7 @@ import { HelpHint } from "../help/HelpHint";
 import { FaultBadge } from "../experiment/FaultBadge";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
+import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
 import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
@@ -76,6 +77,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const path = geometry?.path ?? initialPath;
   const { x: labelX, y: labelY } = geometry?.label ?? { x: initialX, y: initialY };
   const { connection, catalog, overridden, diagnostics, variantDiagnostics = [], onProblems, parametersEditable, disabled, onParam, onValidity, windowed, result, resultsPending, resultsEmpty, connectionMetric = "amplification", onSelect } = data!;
+  const connectionLabel = elementLabel(connection.id, { connections: [connection] });
   const summary = summarizeDiagnostics(diagnostics);
   const editorProps = { catalog, elementId: connection.id, elementType: connection.type, params: connection.params,
     modelParams: data?.modelParams, editable: parametersEditable, disabled, onValidity };
@@ -108,7 +110,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
         <div ref={label}
           className={`canvas-edge-label nodrag nopan${selected ? " canvas-edge-label--selected" : ""}${overridden ? " canvas-edge-label--overridden" : ""}${summary === null ? "" : ` diagnostic--${summary.severity.toLowerCase()}`}`}
           data-testid={`canvas-edge-label-${connection.id}`}
-          role="button" tabIndex={0} aria-label={connection.id} aria-pressed={selected}
+          role="button" tabIndex={0} aria-label={connectionLabel} aria-pressed={selected}
           onClick={event => { event.stopPropagation(); onSelect?.(event.ctrlKey || event.metaKey || event.shiftKey); }}
           onKeyDown={event => {
             if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
@@ -117,8 +119,8 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           }}
           style={{ pointerEvents: "all", transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
         >
-          {connection.description ? <div className="canvas-edge-name">{connection.id}
-            <HelpHint label={connection.id}><span className="annotation-text">{connection.description}</span></HelpHint>
+          {connection.description ? <div className="canvas-edge-name">{connectionLabel}
+            <HelpHint label={connectionLabel}><span className="annotation-text">{connection.description}</span></HelpHint>
           </div> : null}
           {connection.type === "call" ? <div className="canvas-edge-parameters">
             <InlineParamEditor {...editorProps} path="timeout" overridden={isOverridden(data?.overrides ?? {}, connection.id, "timeout")} onCommit={(value) => onParam(connection.id, "timeout", value)} />

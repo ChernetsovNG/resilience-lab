@@ -26,7 +26,7 @@ test("service and call inspectors share Summary, Time and Timeline, including An
 
   const badge = page.getByTestId("canvas-edge-label-gateway-to-middle");
   await badge.click();
-  await expect(page.locator(".inspector h2").first()).toHaveText("gateway-to-middle");
+  await expect(page.locator(".inspector h2").first()).toHaveText("gateway → middle (gateway-to-middle)");
   await expect(results).toContainText("Mean call duration");
   await expect(results).toContainText("Mean orphaned work");
   const connection = summary.variants.find(variant => variant.id === "baseline")!.points[0].aggregate.connections["gateway-to-middle"];
@@ -56,8 +56,8 @@ test("service and call inspectors share Summary, Time and Timeline, including An
 
   await results.getByRole("button", { name: "Show on Timeline", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("region", { name: "Rates", exact: true })).toContainText("gateway-to-middle · Sent attempts");
-  await expect(page.getByRole("region", { name: "Latency", exact: true })).toContainText("gateway-to-middle");
+  await expect(page.getByRole("region", { name: "Rates", exact: true })).toContainText("gateway → middle (gateway-to-middle) · Sent attempts");
+  await expect(page.getByRole("region", { name: "Latency", exact: true })).toContainText("gateway → middle (gateway-to-middle)");
   await page.getByRole("button", { name: "Time", exact: true }).click();
   await expect(results).toContainText("Window 0");
   await expect(results.locator('[data-testid="mini-cursor"]')).toHaveCount(3);
@@ -85,9 +85,9 @@ test("service and call inspectors share Summary, Time and Timeline, including An
     return { x: screen.x, y: screen.y + 7 };
   });
   await page.mouse.click(point.x, point.y);
-  await expect(page.locator(".inspector h2").first()).toHaveText("middle-to-dependency");
+  await expect(page.locator(".inspector h2").first()).toHaveText("middle → dependency (middle-to-dependency)");
   await page.getByTestId("rf__node-gateway").click({ modifiers: ["ControlOrMeta"] });
-  await expect(page.getByRole("region", { name: "Rates", exact: true })).toContainText("middle-to-dependency · Sent attempts");
+  await expect(page.getByRole("region", { name: "Rates", exact: true })).toContainText("middle → dependency (middle-to-dependency) · Sent attempts");
   await expect(page.getByRole("region", { name: "Rates", exact: true })).toContainText("gateway ·");
   await page.getByRole("button", { name: "Analysis", exact: true }).click();
   await page.getByRole("tab", { name: "Model", exact: true }).click();

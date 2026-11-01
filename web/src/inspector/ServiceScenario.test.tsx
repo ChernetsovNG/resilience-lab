@@ -49,6 +49,16 @@ const click = (name: string, root?: HTMLElement) => fireEvent.click((root ? with
 const history = (size: number) => expect(screen.getByTestId("history").textContent).toBe(String(size));
 afterEach(() => localStorage.clear());
 
+it("shows endpoints and distinct ids when selecting parallel or manually named calls", () => {
+  render(<Editor initial={explicit} />);
+  const choices = within(step(2)).getByRole("combobox", { name: "Connection" });
+  expect(within(choices).getByRole<HTMLOptionElement>("option", { name: "gateway → middle (gateway-to-middle)" }).value).toBe("gateway-to-middle");
+  expect(within(choices).getByRole<HTMLOptionElement>("option", { name: "gateway → dependency (a-call)" }).value).toBe("a-call");
+  fireEvent.change(choices, { target: { value: "a-call" } });
+  expect(scenario()![1].connection).toBe("a-call");
+  history(1);
+});
+
 it("reconciles the distribution of a scenario-local process in one Undo", () => {
   const initial = { ...explicit, blocks: { ...explicit.blocks, gateway: { ...explicit.blocks.gateway,
     scenario: [{ type: "process", processing: { kind: "fixed", mean: "3ms" } }, { type: "call", connection: "gateway-to-middle" }],

@@ -19,6 +19,13 @@ import * as edgeGeometry from "./edgeGeometry";
 
 beforeAll(mockReactFlowDom);
 
+it("selects a connection from its endpoint label while retaining its document id", async () => {
+  const onSelect = vi.fn();
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={onSelect} onCommand={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "gateway → middle (gateway-to-middle)" }));
+  expect(onSelect).toHaveBeenCalledWith(["gateway-to-middle"]);
+});
+
 it("reuses edge geometry when node bounds and label sizes have not changed", async () => {
   const calculate = vi.spyOn(edgeGeometry, "layoutEdges");
   try {
@@ -745,7 +752,7 @@ it("shows block and every connection type description through HelpHint without e
   fireEvent.keyDown(window, { key: "Escape" });
   for (const connection of annotated.connections) {
     const label = screen.getByTestId(`canvas-edge-label-${connection.id}`);
-    fireEvent.click(within(label).getByRole("button", { name: `More about: ${connection.id}` }));
+    fireEvent.click(within(label).getByRole("button", { name: `More about: ${connection.from} → ${connection.to} (${connection.id})` }));
     expect(screen.getByRole("tooltip").textContent).toBe(`${connection.id} explanation`);
     expect(label.textContent).not.toContain("Connection notes");
     fireEvent.keyDown(window, { key: "Escape" });

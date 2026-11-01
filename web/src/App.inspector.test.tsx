@@ -101,7 +101,7 @@ it("shows only the current Inspector target and keeps target navigation out of h
   expect(screen.queryByRole("heading", { name: "Run settings" })).toBeNull();
   expect(screen.queryByLabelText("Variant ID")).toBeNull();
   fireEvent.click(screen.getByTestId("rf__edge-gateway-to-middle"));
-  expect(screen.getByRole("heading", { name: "gateway-to-middle" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "gateway → middle (gateway-to-middle)" })).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));
   expect(screen.getByLabelText("Timeout")).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "Baseline" }));

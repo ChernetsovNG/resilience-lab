@@ -91,11 +91,64 @@ describe("structure commands", () => {
     expect(after.model.connections.map(edge => edge.id)).toEqual(["client-to-gateway", "gateway-to-middle-extra"]);
   });
 
-  it("renames a service without changing its scenario connection ids", () => {
+  it("renames a service and its automatic scenario connections in one undo step", () => {
     const before = scenarioDocuments();
     const after = roundTrip(before, renameElement("gateway", "entry"));
-    expect(after.model.blocks.entry.scenario).toEqual(before.model.blocks.gateway.scenario);
+    expect(after.model.blocks.entry.scenario).toEqual([
+      { type: "process", processing: { kind: "fixed", mean: "3ms" }, failureRate: "1%" },
+      { type: "call", connection: "entry-to-middle" },
+      { type: "process" },
+      { type: "call", connection: "entry-to-middle" },
+      { type: "call", connection: "gateway-to-middle-extra" },
+    ]);
     expect(after.model.connections[1].from).toBe("entry");
+  });
+
+  it.each([
+    ["gateway", "catalog", "catalog-to-middle", "catalog-to-middle-2"],
+    ["middle", "pricing", "gateway-to-pricing", "gateway-to-pricing-2"],
+  ])("renames automatic connections at endpoint %s with every reference and keeps manual ids", (id, next, automatic, numbered) => {
+    const before = scenarioDocuments();
+    before.model.connections.push(
+      { ...before.model.connections[1], id: "gateway-to-middle-2" },
+      { ...before.model.connections[1], id: "gateway-to-middle-custom" },
+    );
+    before.model.blocks.gateway.scenario!.push(
+      { type: "call", connection: "gateway-to-middle-2" },
+      { type: "call", connection: "gateway-to-middle-custom" },
+    );
+    before.experiment.variants[1].overrides = {
+      "gateway-to-middle.timeout": "90ms", "gateway-to-middle-2.attempts": 2, "gateway-to-middle-custom.timeout": "30ms",
+    };
+    before.experiment.grid = [{ path: "gateway-to-middle-2.timeout", values: ["60ms", "90ms"] }];
+    before.experiment.faults = ["gateway-to-middle", "gateway-to-middle-2#2", "gateway-to-middle-custom"].map(target =>
+      ({ target, from: "0ms", to: "1s", kind: "slowdown", multiplier: 2 }));
+    const after = roundTrip(before, renameElement(id, next));
+    const calls = after.model.blocks[id === "gateway" ? next : "gateway"].scenario!.filter(step => step.type === "call");
+    expect(calls.map(step => step.connection)).toEqual([automatic, automatic, "gateway-to-middle-extra", numbered, "gateway-to-middle-custom"]);
+    expect(after.model.connections.map(edge => edge.id)).toContain(numbered);
+    expect(after.experiment.variants[1].overrides).toEqual({
+      [`${automatic}.timeout`]: "90ms", [`${numbered}.attempts`]: 2, "gateway-to-middle-custom.timeout": "30ms",
+    });
+    expect(after.experiment.grid).toEqual([{ path: `${numbered}.timeout`, values: ["60ms", "90ms"] }]);
+    expect(after.experiment.faults.map(fault => fault.target)).toEqual([automatic, `${numbered}#2`, "gateway-to-middle-custom"]);
+    expect(after.model.connections.find(edge => edge.id === "gateway-to-middle-custom")).toMatchObject({
+      from: id === "gateway" ? next : "gateway", to: id === "middle" ? next : "middle",
+    });
+    expect(after.model.blocks.dependency).toEqual(before.model.blocks.dependency);
+  });
+
+  it("avoids block and manual connection collisions and stays automatic across subsequent renames", () => {
+    const before = scenarioDocuments();
+    before.model.blocks["catalog-to-middle"] = { type: "service", params: {} };
+    before.model.connections.push({ id: "catalog-to-middle-1", type: "call", from: "middle", to: "dependency", params: {} });
+    const first = roundTrip(before, renameElement("gateway", "catalog"));
+    expect(first.model.connections[1].id).toBe("catalog-to-middle-2");
+    expect(first.model.blocks.catalog.scenario![1].connection).toBe("catalog-to-middle-2");
+    const second = roundTrip(first, renameElement("middle", "pricing"));
+    expect(second.model.connections[1]).toMatchObject({ id: "catalog-to-pricing-2", from: "catalog", to: "pricing" });
+    expect(second.model.blocks.catalog.scenario![1].connection).toBe("catalog-to-pricing-2");
+    expect(second.model.connections.at(-1)).toMatchObject({ id: "catalog-to-middle-1", from: "pricing", to: "dependency" });
   });
 
   it("pastes repeated and downstream calls using copied connection ids in one undo step", () => {
@@ -157,7 +210,7 @@ describe("structure commands", () => {
     const before = documents();
     before.experiment.faults = ["middle#2", "gateway-to-middle#2", "dependency"].map(target => ({ target, from: "0ms", to: "1s", kind: "slowdown", multiplier: 2 }));
     const renamed = renameElement("middle", "worker")(before);
-    expect(renamed.experiment.faults.map(fault => fault.target)).toEqual(["worker#2", "gateway-to-middle#2", "dependency"]);
+    expect(renamed.experiment.faults.map(fault => fault.target)).toEqual(["worker#2", "gateway-to-worker#2", "dependency"]);
     const deleted = deleteElements(["worker"])(renamed);
     expect(deleted.experiment.faults.map(fault => fault.target)).toEqual(["dependency"]);
   });

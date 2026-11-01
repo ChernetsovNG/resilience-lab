@@ -524,6 +524,7 @@ export function App() {
             experiment={loaded.experiment}
             experimentPath={loaded.experimentPath}
             selected={selected}
+            renameReferences={selected === null ? undefined : workspace.experimentsUsing(selected)}
             selectedReplica={selectedReplica}
             replicaModel={replicaModel}
             target={target}

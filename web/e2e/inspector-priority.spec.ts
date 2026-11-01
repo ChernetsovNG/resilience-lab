@@ -26,7 +26,7 @@ test("gives the empty panel's space to the canvas and shows call results without
   await page.getByTestId("canvas-edge-label-middle-to-dependency").click();
   const results = page.locator(".element-results");
   const parameters = page.locator(".inspector-parameters");
-  await expect(page.locator(".inspector h2")).toHaveText("middle-to-dependency");
+  await expect(page.locator(".inspector h2")).toHaveText("middle → dependency (middle-to-dependency)");
   await expect(results.getByRole("heading", { name: "Results", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(results).toContainText("Mean call duration");
   await expect(parameters).not.toHaveAttribute("open");

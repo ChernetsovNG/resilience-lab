@@ -17,9 +17,10 @@ import { InspectorSection } from "./InspectorSection";
 import { ServiceScenario } from "./ServiceScenario";
 import { LoadProfile } from "./LoadProfile";
 import { ReplicaTargetField } from "./ReplicaTargetField";
-import { variantLabel } from "../presentation/labels";
+import { elementLabel, variantLabel } from "../presentation/labels";
 
 export interface InspectorProps {
+  renameReferences?: readonly string[];
   catalog: Catalog;
   results?: ReactNode;
   variantChanges?: ReactNode;
@@ -63,9 +64,9 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
   const target = targets.find(target => target.id === selected);
   return <div className="param-field">
     {targets.length > 1 ? <label>{t("editor.fault.creationTarget")}
-      <select aria-label={t("editor.fault.creationTarget")} value={selected} disabled={disabled} onChange={event => setSelected(event.target.value)}>
-        {target === undefined ? <option value={selected} disabled>{selected}</option> : null}
-        {targets.map(target => <option key={target.id} value={target.id}>{target.id}</option>)}
+      <select aria-label={t("editor.fault.creationTarget")} value={selected} title={elementLabel(selected, model)} disabled={disabled} onChange={event => setSelected(event.target.value)}>
+        {target === undefined ? <option value={selected} disabled>{elementLabel(selected, model)}</option> : null}
+        {targets.map(target => <option key={target.id} value={target.id}>{elementLabel(target.id, model)}</option>)}
       </select>
     </label> : null}
     <ReplicaTargetField target={targets[0]} value={selected} path="new-fault.replica" editable={editable} onTarget={setSelected} onValidity={onValidity} />
@@ -75,7 +76,7 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
 export function Inspector({ catalog, model, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
-  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic,
+  hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const prioritizeResults = resultsFirst && variantId !== null && target === "element" && results != null;
@@ -104,7 +105,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
     !(element?.type === "client" && descriptor.name === "load") &&
     (descriptor.name !== "balancing" || (destination?.type === "service" && Number(destination.params.replicas ?? 1) > 1)) &&
     (descriptor.name !== "backoff" || Number(attempts) > 1));
-  const heading = showElement ? selectedReplica?.id ?? selected : resultsOnly ? null
+  const heading = showElement ? elementLabel(selectedReplica?.id ?? selected!, model) : resultsOnly ? null
     : target === "experiment" ? t("editor.run.title") : variant === undefined ? null : variantLabel(variant, experiment.variants);
   const subtitle = showElement ? (type?.title ?? element?.type) + (variantId === null ? "" : t("editor.inspector.variantOverrides"))
     : target === "variant" ? t("editor.variant.type") : experimentPath?.split("/").at(-1)?.replace(/\.experiment\.json$/, "");
@@ -129,7 +130,7 @@ export function Inspector({ catalog, model, experiment, experimentPath, selected
           {selectedReplica == null ? <InspectorSection name="parameters" title={t("editor.inspector.parameters")} defaultOpen={!prioritizeResults}>
           {onRename === undefined ? null : (
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
-              onRename={onRename} onValidity={onValidity} />
+              onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
           <AnnotationFields key={`annotations-${selected}`} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
             editable={editable && variantId === null && onCommand !== undefined}

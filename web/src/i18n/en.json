@@ -1608,5 +1608,7 @@
   "catalog.types.router.params.outlierDetection.maxEjected.title": "Maximum ejected share",
   "catalog.types.router.params.outlierDetection.maxEjected.description": "Maximum fraction of distinct targets excluded at once, rounded down; at least one target remains.",
   "messages.OUTLIER_TARGET": "Outlier detection on connection '{connection}' requires a replica-group target",
-  "messages.OUTLIER_CONFIG": "All calls to replica group '{group}' must use identical outlier detection parameters"
+  "messages.OUTLIER_CONFIG": "All calls to replica group '{group}' must use identical outlier detection parameters",
+  "app.workspace.renameConflict": "Document '{path}' changed. Check its current version and save again.",
+  "editor.identifier.references": "References will also be updated in: {experiments}"
 }
