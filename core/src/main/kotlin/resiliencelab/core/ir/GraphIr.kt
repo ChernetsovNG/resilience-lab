@@ -171,6 +171,8 @@ data class CallEdge(
     val retryBudget: RetryBudgetConfig? = null,
     val fallback: FallbackConfig? = null,
     val outlierDetection: OutlierDetectionConfig? = null,
+    /** Whether retryTarget was explicitly set, retained for advisory diagnostic pointers. */
+    val retryTargetExplicit: Boolean = false,
 ) {
     /** Construct a stage-1 or hierarchical path from its slash-separated address. */
     constructor(
@@ -189,6 +191,7 @@ data class CallEdge(
         retryBudget: RetryBudgetConfig? = null,
         fallback: FallbackConfig? = null,
         outlierDetection: OutlierDetectionConfig? = null,
+        retryTargetExplicit: Boolean = false,
     ) : this(
         path.split('/'),
         from,
@@ -205,6 +208,7 @@ data class CallEdge(
         retryBudget,
         fallback,
         outlierDetection,
+        retryTargetExplicit,
     )
 
     val path: String get() = displayPath(pathSegments)

@@ -156,6 +156,35 @@ for (const locale of locales) {
       }
     });
 
+    test("localizes same-target retries and clears the edited variant after choosing other", async ({ page }) => {
+      const example = JSON.parse(readFileSync(resolve("../examples/checkout-replicas/checkout-replicas.experiment.json"), "utf8")) as ExperimentFile;
+      const baseline = example.variants.find(variant => variant.id === "baseline")!;
+      const baselineLabel = baseline.label ?? baseline.id;
+      await page.goto("/");
+      await selectExperiment(page, "checkout-replicas/checkout-replicas.experiment.json");
+      await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      const row = page.locator(".validation-problems > li").filter({ has: page.locator('[data-diagnostic-code="LINT_RETRY_SAME_TARGET"]') });
+      const warning = row.locator('button[data-diagnostic-code="LINT_RETRY_SAME_TARGET"]');
+      const args: Record<string, string> = { connection: "api-gateway-to-order-service", attempts: "3", targets: "3", requestType: "default", threshold: "2" };
+      const translated = label("messages.LINT_RETRY_SAME_TARGET").split("{connection}")[1]
+        .replace(/\{(\w+)\}/g, (_, name: string) => args[name]);
+      await expect(warning).toHaveCount(1);
+      await expect(warning).toContainText(args.connection);
+      await expect(warning).toContainText(translated);
+      await expect(warning).toContainText(baselineLabel);
+      await row.getByRole("button", { name: new RegExp(label("results.problems.explanation")) }).click();
+      await expect(row.getByRole("tooltip")).toContainText(label("messages.LINT_RETRY_SAME_TARGET_DETAILS"));
+      await page.keyboard.press("Escape");
+      await warning.click();
+      const target = page.locator(".inspector").getByLabel(label("catalog.types.call.params.retryTarget.title"), { exact: true });
+      await expect(target).toBeFocused();
+      await expect(target).toHaveValue("any");
+      await target.selectOption("other");
+      await expect(warning).not.toContainText(baselineLabel);
+      await expect(warning).toContainText(translated);
+      await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+    });
+
     test("localizes retries without jitter and opens the backoff parameter", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "checkout/checkout.experiment.json");
