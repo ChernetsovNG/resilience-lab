@@ -91,13 +91,14 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     quantile?: "p95LatencyMs" | "p99LatencyMs") => (
     <tr>
       <th scope="row">{label}</th>
-      {columns.map(({ variant, point, limits }) => {
+      {columns.map(({ variant, point, limits }, index) => {
         const limit = quantile === undefined ? null : latencyLimitMatch(point.aggregate.entries.total[quantile], limits);
         const current = value(point);
         const note = format === formatMultiplier ? outputNote({ id: "amplification" }, current?.mean, current === null ? "noArrivals" : "missingData") : null;
         return <td key={variant.id} className={columnClass(variant.id)}>
           {metric(current, variant.id === baseline?.id || reference === undefined ? undefined : value(reference),
             level, format, difference)}
+          {index === 0 && format === formatMultiplier ? <HelpHint label={label}>{t("catalog.types.call.outputs.amplification.description")}</HelpHint> : null}
           {note === null ? null : <small className="output-note">{note}</small>}
           {limit === null ? null : <span className="summary-limit" title={t("results.answer.ceilingHelp")}>{limit}</span>}
         </td>;

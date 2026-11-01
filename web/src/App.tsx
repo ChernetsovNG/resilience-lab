@@ -67,7 +67,7 @@ export function App() {
   const [variantPage, setVariantPage] = useState<{ id: string | null; variants: Variant[] }>({ id: null, variants: [] });
   const results = useResultsSelection(run.result?.jobId ?? run.result?.runId ?? null);
   const [nodeMetric, setNodeMetric] = useState<NodeOverlayMetric | "off">("utilization");
-  const [connectionMetric, setConnectionMetric] = useState<ConnectionOverlayMetric>("amplification");
+  const [connectionMetric, setConnectionMetric] = useState<ConnectionOverlayMetric>("attemptsPerCall");
   const [timelineRequest, setTimelineRequest] = useState(0);
   const showDiagramResults = nodeMetric !== "off";
   const [estimatePanel, setEstimatePanel] = useState<{ source: "manual" } | { source: "run"; previousJobId: string | null } | null>(null);

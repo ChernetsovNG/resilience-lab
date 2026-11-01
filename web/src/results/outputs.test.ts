@@ -7,9 +7,21 @@ import { decodeSeriesPart } from "./series/decode";
 import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
 
 describe("catalog output contract", () => {
-  it("explains zero and subunit amplification while preserving one and other output kinds", () => {
-    expect(outputNote({ id: "amplification" }, 0)).toBe("Not every request reached it");
-    expect(outputNote({ id: "amplification" }, 0.8)).toBe("Not every request reached it");
+  it.each([
+    [10, 0, 1], [27, 17, 2.7], [0, 0, null], [5, 5, null], [4, 5, null],
+  ])("computes attempts per call from %s sent attempts and %s retries", (sentAttempts, retries, expected) => {
+    const calculation = { kind: "RATIO_TO_DIFFERENCE", field: "sentAttempts", divisor: "retries" } as OutputCalculation;
+    expect(calculateOutput(calculation, { sentAttempts, retries })).toBe(expected);
+  });
+
+  it("does not report loss for routing ratios below one", () => {
+    expect(outputNote({ id: "amplification" }, 0.18)).toBeNull();
+    expect(outputNote({ id: "amplification" }, 0)).toBeNull();
+  });
+
+  it("explains unavailable amplification without inferring loss from defined ratios", () => {
+    expect(outputNote({ id: "amplification" }, 0)).toBeNull();
+    expect(outputNote({ id: "amplification" }, 0.8)).toBeNull();
     expect(outputNote({ id: "amplification" }, 1)).toBeNull();
     expect(outputNote({ id: "amplification" }, 2)).toBeNull();
     expect(outputNote({ id: "utilization" }, 0.8)).toBeNull();
@@ -69,12 +81,12 @@ describe("catalog output contract", () => {
     expect(inspectorOutputs(outputsOf(catalog, "call")).map(output => [output.inspector!.title, output.unit])).toEqual([
       ["Sent attempts", "PER_SECOND"], ["Retries", "PER_SECOND"], ["Timeout share", "PERCENT"],
       ["Orphaned attempts", "REQUESTS"], ["Mean orphaned attempts", "REQUESTS"], ["Mean active attempts", "REQUESTS"],
-      ["Mean calls in backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per request", "MULTIPLIER"],
+      ["Mean calls in backoff", "REQUESTS"], ["Mean call duration", "MILLISECONDS"], ["Attempts per call", "MULTIPLIER"], ["Attempts per original request", "MULTIPLIER"],
       ["Connection pool utilization", "PERCENT"], ["Mean connection wait queue", "REQUESTS"], ["Connection acquisition timeouts", "REQUESTS"],
       ["Circuit breaker open share", "PERCENT"], ["Circuit breaker rejections", "PER_SECOND"], ["Retries denied by budget", "PER_SECOND"], ["Fallbacks", "PER_SECOND"],
     ]);
     expect(overlayOutputs(catalog, "BLOCK").map(output => output.overlay!.title)).toEqual(["Utilization", "Mean queue", "Queue rejections"]);
-    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per request", "Sent attempts", "Timeout share", "Orphaned attempts"]);
+    expect(overlayOutputs(catalog, "CONNECTION").map(output => output.overlay!.title)).toEqual(["Attempts per call", "Sent attempts", "Timeout share", "Orphaned attempts", "Attempts per original request"]);
   });
 
   it("keeps different type-local outputs with the same id as separate overlay choices", () => {

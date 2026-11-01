@@ -85,17 +85,20 @@ describe("ElementResults", () => {
     vi.mocked(seriesLoader.load).mockRejectedValue(new Error("Recorded series unavailable"));
     render(<ElementResults {...props()} selected="gateway-to-middle" window={1} />);
     await screen.findByText("Recorded series unavailable");
-    expect(row("Attempts per request").textContent).not.toContain("no original requests");
-    expect(row("Attempts per request").textContent).toContain("no recorded data in the selected context");
+    expect(row("Attempts per original request").textContent).not.toContain("no original requests");
+    expect(row("Attempts per original request").textContent).toContain("no recorded data in the selected context");
   });
 
-  it("explains attempts below one beside the call metric", () => {
+  it("distinguishes call retries from routing share and explains the original-request denominator", () => {
     loadSeries();
     const options = { ...props(), selected: "gateway-to-middle" };
     options.summary.variants[0].points[0].aggregate.services.middle.admittedAmplification!.mean = 0.8;
     render(<ElementResults {...options} />);
-    expect(row("Attempts per request").textContent).toContain("0.8×");
-    expect(row("Attempts per request").textContent).toContain("Not every request reached it");
+    expect(row("Attempts per call").textContent).toContain("1.5×");
+    expect(row("Attempts per original request").textContent).toContain("0.8×");
+    expect(row("Attempts per original request").textContent).not.toContain("Not every request reached it");
+    fireEvent.click(screen.getByRole("button", { name: "More about: Attempts per original request" }));
+    expect(screen.getByRole("tooltip").textContent).toContain("Request-type routing and load balancing");
   });
 
   it("names the stored variant and point coordinates in the selected-element context", () => {
@@ -185,8 +188,8 @@ describe("ElementResults", () => {
     const view = render(<ElementResults {...options} />);
     await waitFor(() => expect(row("Sent attempts").textContent).toContain("40 RPSWindow 1"));
     expect(row("Timeout share").textContent).toContain("50%Window 1");
-    expect(row("Attempts per request").textContent).toContain("2.5×");
-    expect(row("Attempts per request").textContent).toContain("Approximate");
+    expect(row("Attempts per original request").textContent).toContain("2.5×");
+    expect(row("Attempts per original request").textContent).toContain("Approximate");
     expect(document.querySelector(".summary-interval")).toBeNull();
     expect(document.querySelector('[data-cursor-window="1"]')).toBeTruthy();
     view.rerender(<ElementResults {...options} window={2} />);

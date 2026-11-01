@@ -740,7 +740,7 @@ export interface components {
             divisor?: string | null;
             field: string;
             /** @enum {string} */
-            kind: "VALUE" | "RATE" | "RATIO" | "NORMALIZED_RATIO" | "MEAN" | "QUANTILE";
+            kind: "VALUE" | "RATE" | "RATIO" | "RATIO_TO_DIFFERENCE" | "NORMALIZED_RATIO" | "MEAN" | "QUANTILE";
             /** Format: double */
             percentile?: number | null;
         };

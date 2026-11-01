@@ -12,7 +12,7 @@ enum class OutputUnit { PER_SECOND, MILLISECONDS, PERCENT, REQUESTS, MULTIPLIER 
 
 /** Closed operations, never executable expressions. RATE multiplies by 1000 before dividing milliseconds. */
 @Serializable
-enum class OutputCalculationKind { VALUE, RATE, RATIO, NORMALIZED_RATIO, MEAN, QUANTILE }
+enum class OutputCalculationKind { VALUE, RATE, RATIO, RATIO_TO_DIFFERENCE, NORMALIZED_RATIO, MEAN, QUANTILE }
 
 /**
  * References existing artifact fields by dotted paths. Window paths are relative to the element's row;
@@ -20,6 +20,7 @@ enum class OutputCalculationKind { VALUE, RATE, RATIO, NORMALIZED_RATIO, MEAN, Q
  * `entries.total` to all clients' original-arrival counts for the same window, `params` to effective run parameters.
  * `measurementLatency` and `replications` are the selected replication's covered-window statistics and run count.
  * NORMALIZED_RATIO divides [field] by the product of [divisor] and [capacity]; zero divisors mean no value.
+ * RATIO_TO_DIFFERENCE divides [field] by ([field] minus [divisor]); a nonpositive difference means no value.
  * MEAN and QUANTILE refer to a latency object; only QUANTILE uses [percentile].
  */
 @Serializable

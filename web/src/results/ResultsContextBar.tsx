@@ -31,7 +31,7 @@ interface ResultsContextBarProps {
 
 /** Controls the shared result context without changing documents or editor history. */
 export function ResultsContextBar({ catalog, model, summary, variant, selection, onSelect, replications, playback,
-  windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "amplification", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
+  windowCount, windowMs, endMs, metric, onMetricChange, connectionMetric = "attemptsPerCall", onConnectionMetricChange, stale, analysis, onAnalysisChange }: ResultsContextBarProps) {
   const points = [...new Map(summary.variants.flatMap(candidate => candidate.points).map(point => [point.id, point])).values()];
   const pointLabels = new Map(points.map(point => [point.id, pointLabel(point.id, summary.grid, point.coordinates, catalog, model)]));
   const name = variantLabel(variant, summary.variants);

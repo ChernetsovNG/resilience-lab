@@ -104,7 +104,7 @@ function CanvasViewport({ ready, onZoomChange }: { ready: boolean; onZoomChange?
 
 function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHint, onSelectChange, onModelPage, layout, catalog, selected, onSelect, editable = false, parametersEditable = false,
   disabled = false, onCommand, onParam, onValidity, elementDiagnostics, variantElementDiagnostics, onProblems, onZoomChange, overrides = variant?.overrides ?? {}, results = null,
-  replicaSelection, nodeMetric = "utilization", connectionMetric = "amplification", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
+  replicaSelection, nodeMetric = "utilization", connectionMetric = "attemptsPerCall", faults = [], onFault, bottomInset = 0 }: CanvasProps) {
   const { gridStep, snapToGrid, showGrid } = useViewSettings();
   const variantVisible = variant !== undefined;
   const banner = useRef<HTMLDetailsElement>(null);

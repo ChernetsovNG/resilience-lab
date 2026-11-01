@@ -274,14 +274,38 @@ it("includes the full metric label and a large queue value in its tooltip", asyn
   expect(tooltip.textContent).toContain("Average number of attempts waiting for a handler");
 });
 
-it("explains attempts below one beside the connection value", async () => {
+it("preserves subunit original-request ratios without claiming request loss", async () => {
   const run = structuredClone(summary);
   run.variants[0].points[0].aggregate.services.gateway.admittedAmplification!.mean = 0.8;
   render(<Canvas catalog={catalog} model={model} layout={layout} selected={[]} onSelect={vi.fn()}
-    onCommand={vi.fn()} results={canvasResults(run, model, "baseline", "p0", catalog)} />);
+    onCommand={vi.fn()} connectionMetric="amplification" results={canvasResults(run, model, "baseline", "p0", catalog)} />);
   const badge = await screen.findByTestId("canvas-edge-label-client-to-gateway");
   expect(badge.textContent).toContain("0.8×");
-  expect(badge.textContent).toContain("Not every request reached it");
+  expect(badge.textContent).not.toContain("Not every request reached it");
+});
+
+it("shows attempts per call by default in Russian, including retries and an empty window", async () => {
+  setLanguage("ru");
+  try {
+    const localized = localizeCatalog(catalog);
+    const connection = {
+      from: "gateway", to: "middle", type: "call", hasOwnSeries: true, params: {},
+      outputs: localized.types.find(type => type.id === "call")!.outputs.filter(output => output.overlay != null),
+      values: { attemptsPerCall: 1 as number | null, amplification: 0.18 },
+    };
+    const props = { catalog: localized, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn(),
+      results: { services: new Map(), connections: new Map([["gateway-to-middle", connection]]) } };
+    const view = render(<Canvas {...props} />);
+    const badge = await screen.findByTestId("canvas-edge-label-gateway-to-middle");
+    expect(badge.textContent).toContain("Попытки на вызов 1×");
+    expect(badge.textContent).not.toContain("дошли не все запросы");
+    connection.values.attemptsPerCall = 2.7;
+    view.rerender(<Canvas {...props} results={{ ...props.results }} />);
+    expect(badge.textContent).toContain("Попытки на вызов 2,7×");
+    connection.values.attemptsPerCall = null;
+    view.rerender(<Canvas {...props} results={{ ...props.results, window: 1 }} />);
+    expect(badge.textContent).not.toContain("0×");
+  } finally { setLanguage("en"); localStorage.removeItem("resilience-lab.language"); }
 });
 
 it("one shared utilization choice colors both services and databases", async () => {
@@ -613,7 +637,7 @@ it("does not give old results to new nodes, new edges or retargeted edges", asyn
   expect(screen.queryByTestId("canvas-results-added")).toBeNull();
   expect(screen.getByTestId("canvas-edge-label-new-call").textContent).not.toContain("Amplification");
   expect(screen.getByTestId("canvas-edge-label-gateway-to-middle").textContent).not.toContain("Amplification");
-  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per request 1.2×");
+  expect(screen.getByTestId("canvas-edge-label-client-to-gateway").textContent).toContain("Attempts per call");
 });
 
 

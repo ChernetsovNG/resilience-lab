@@ -17,6 +17,28 @@ class Stage1CatalogTest {
     private val json = Json { encodeDefaults = true }
 
     @Test
+    fun `connection output measures retries per call independently of traffic share`() {
+        val output = catalog.type("call")!!.outputs.firstOrNull { it.id == "attemptsPerCall" }
+        assertThat(output).isNotNull()
+        val calculation = output!!.calculation
+        assertThat(calculation.kind.name).isEqualTo("RATIO_TO_DIFFERENCE")
+        listOf(Triple(10, 0, 1.0), Triple(27, 17, 2.7), Triple(0, 0, null), Triple(5, 5, null)).forEach { (sent, retries, expected) ->
+            val row =
+                json
+                    .encodeToJsonElement(
+                        ConnectionWindowMetrics.serializer(),
+                        ConnectionWindowMetrics(0.0, 100.0, sentAttempts = sent, retries = retries),
+                    ).jsonObject
+            val numerator = row.getValue(calculation.field).toString().toDouble()
+            val denominator = numerator - row.getValue(calculation.divisor!!).toString().toDouble()
+            assertThat(if (denominator > 0) numerator / denominator else null).isEqualTo(expected)
+        }
+        assertThat(output.summary!!.calculation.field).isEqualTo("totals.sentAttempts")
+        assertThat(output.summary.calculation.divisor).isEqualTo("totals.retries")
+        assertThat(catalog.type("request")!!.outputs.first { it.id == "attemptsPerCall" }).isEqualTo(output)
+    }
+
+    @Test
     fun `policy outputs are available to the element inspector`() {
         val expected =
             mapOf(
@@ -119,8 +141,7 @@ class Stage1CatalogTest {
     fun `request has no own series and summary populations retain their semantics`() {
         assertThat(catalog.type("request")!!.outputs).allSatisfy { output ->
             assertThat(output.timeline).isNull()
-            assertThat(output.inspector).isNull()
-            assertThat(output.calculation.field).startsWith("target.")
+            assertThat(output.inspector).isNotNull()
         }
         val residence = catalog.type("service")!!.outputs.first { it.id == "meanLatencyMs" }
         assertThat(residence.summary!!.source).isEqualTo(OutputSummarySource.REPLICATION)

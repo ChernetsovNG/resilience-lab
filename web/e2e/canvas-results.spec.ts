@@ -4,6 +4,7 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatMultiplier, formatNumber, formatPercent } from "../src/i18n/format";
 import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
+import en from "../src/i18n/en.json" with { type: "json" };
 
 test("maps real summary metrics and the saturation badge to the variant diagram without document writes", async ({ page, request }, testInfo) => {
   const directory = resolve("../apps/server/build/e2e-workspace/canvas-results");
@@ -53,8 +54,11 @@ test("maps real summary metrics and the saturation badge to the variant diagram 
           await expect(services.getByRole("row", { name: /Resource utilization/ }).locator("td").nth(column)).toContainText(utilization);
           const amplification = formatMultiplier(service.admittedAmplification!.mean);
           const connection = id === "gateway" ? "client-to-gateway" : id === "middle" ? "gateway-to-middle" : "middle-to-dependency";
-          await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(`Attempts per request ${amplification}`);
-          await expect(services.getByRole("row", { name: /Attempts per request/ }).locator("td").nth(column)).toContainText(amplification);
+          const callTotals = point.aggregate.connections[connection]?.totals;
+          const perCall = callTotals === undefined ? 1 : callTotals.sentAttempts / (callTotals.sentAttempts - callTotals.retries);
+          await expect(page.getByTestId(`canvas-edge-label-${connection}`)).toContainText(
+            en["catalog.types.call.outputs.attemptsPerCall.overlay.label"].replace("{value}", formatMultiplier(perCall)));
+          await expect(services.getByRole("row", { name: new RegExp(en["results.metrics.admittedAmplification"]) }).locator("td").nth(column)).toContainText(amplification);
           expect(await page.getByTestId(`rf__node-${id}`).locator(".block-node").evaluate((node) =>
             (node as HTMLElement).style.getPropertyValue("--node-fill"))).not.toBe("");
         }

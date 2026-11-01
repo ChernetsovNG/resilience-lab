@@ -78,6 +78,27 @@ it("uses the destination pooler's replication ratios for a call in Summary", () 
 });
 const values = (context: ElementResultsContext) => projectElementResults(context)!.values;
 
+it("shows attempts per call independently of request routing in Summary and Time", () => {
+  const context = { ...fixture(), selected: "gateway-to-middle" };
+  context.summary.variants[0].points[0].aggregate.services.middle.admittedAmplification!.mean = 0.18;
+  expect(values(context).attemptsPerCall).toMatchObject({ value: 1.5, source: "pooled" });
+  expect(values(context).amplification.value).toBe(0.18);
+  expect(values({ ...context, window: 0 }).attemptsPerCall.value).toBeCloseTo(4 / 3);
+  context.connections![0].windows[0].retries = 4;
+  expect(values({ ...context, window: 0 }).attemptsPerCall.value).toBeNull();
+});
+
+it("exposes request ratios without a connection row and does not borrow another client's arrivals", () => {
+  const context = { ...fixture(), selected: "client-to-gateway" };
+  const entries = context.summary.variants[0].points[0].aggregate.entries;
+  entries.clients.client = { ...entries.total, pooledLatency: { all: { meanMs: 1, p95Ms: 1, p99Ms: 1, statistics: { count: 10, sumMs: 10, sketch: [10] } } } };
+  expect(values(context).attemptsPerCall.value).toBe(1);
+  context.nodes = [...context.nodes!, { id: "client", windows: [recordedWindow({ originalArrivals: 0 })] }];
+  expect(values({ ...context, window: 0 }).attemptsPerCall.value).toBeNull();
+  context.nodes!.at(-1)!.windows[0].originalArrivals = 2;
+  expect(values({ ...context, window: 0 }).attemptsPerCall.value).toBe(1);
+});
+
 describe("element results sources", () => {
   it("resolves client summary bindings from the selected client's actual ID", () => {
     const context = fixture();
