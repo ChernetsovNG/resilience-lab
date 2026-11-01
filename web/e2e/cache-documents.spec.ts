@@ -38,7 +38,8 @@ test("opens and saves nested cache documents without changing read-only fields",
     const beforeExperiment = await readWorkspaceDocument(page.request, documentUrl(experimentPath));
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
     await expect(page.getByLabel(en["editor.scenario.readOnly"], { exact: true })).toContainText('"keySpace": "product"');
-    await expect(page.getByLabel(en["editor.block.title"], { exact: true })).toHaveAttribute("readonly");
+    await expect(page.getByLabel(en["editor.block.title"], { exact: true })).toBeEditable();
+    await expect(page.getByLabel(en["editor.block.title"], { exact: true })).toHaveValue("Товары");
     await expect(page.getByRole("combobox", { name: en["editor.scenario.type"], exact: true })).toHaveCount(0);
     await page.getByLabel(en["catalog.types.service.params.handlers.title"], { exact: true }).fill("5");
     await page.getByLabel(en["catalog.types.service.params.handlers.title"], { exact: true }).press("Enter");
@@ -56,6 +57,7 @@ test("opens and saves nested cache documents without changing read-only fields",
     await expect(page.getByLabel(en["editor.scenario.readOnly"], { exact: true })).toContainText('"count": 20');
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
+    await expect(page.getByLabel(en["editor.block.title"], { exact: true })).toHaveAttribute("readonly");
     await expect.poll(async () => {
       const steps = JSON.parse(await page.getByLabel(en["editor.scenario.readOnly"], { exact: true }).innerText());
       return steps[0].branches[0][0].repeat.count;

@@ -353,6 +353,8 @@
   "editor.grid.title": "Перебор параметров",
   "editor.grid.unavailableParameter": "{path} (недоступен)",
   "editor.identifier": "Идентификатор",
+  "editor.identifier.blockInvalid": "Только латиница, цифры, _ и -; русское имя задайте в поле «Название».",
+  "editor.identifier.reverted": "Неверный идентификатор отменён; оставлен «{id}».",
   "editor.inspector.experimentSettings": "Настройки эксперимента (общие)",
   "editor.inspector.label": "Инспектор",
   "editor.inspector.noParameters": "Нет параметров.",

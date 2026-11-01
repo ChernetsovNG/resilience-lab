@@ -102,14 +102,14 @@ export function BlockNode({ data, width, height, selected }: NodeProps<BlockNode
       authoredSize={data.authoredSize !== undefined} resizable={selected && data.resizable} onResizeStart={data.onResizeStart}
       onResize={data.onResize} onResizeEnd={data.onResizeEnd}
       fill={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : utilizationColor(colorValue / maximum)}>
-      <PolicyBadges id={data.id} type={data.block.type} params={data.block.params} catalog={data.catalog}
+      <PolicyBadges id={data.id} owner={data.block.title ?? data.id} type={data.block.type} params={data.block.params} catalog={data.catalog}
         replicaOverrides={data.block.replicaOverrides}
         state={data.result?.policyState}
         className="policy-badges--node" disabled={data.disabled} onOpen={path => data.onPolicy?.(path)} />
       <strong className="block-node-header">
         <span className="block-type-icon" role="img" aria-label={type.title} title={type.title}><BlockIcon type={type} /></span>
-        <span className="block-node-name" title={data.id}>{data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
-        {data.block.description ? <span className="nodrag nopan"><HelpHint label={data.id}>
+        <span className="block-node-name" title={data.id}>{data.block.title ?? data.id} {data.overridden ? <span role="img" aria-label={t("editor.canvas.overriddenParameters")}>{t("editor.symbols.overridden")}</span> : null}</span>
+        {data.block.description ? <span className="nodrag nopan"><HelpHint label={data.block.title ?? data.id}>
           <span className="annotation-text">{data.block.description}</span>
         </HelpHint></span> : null}
         {replicas > 1 ? <span className="block-replica-count" aria-label={t("editor.replicas.count", { count: formatNumber(replicas) })}>

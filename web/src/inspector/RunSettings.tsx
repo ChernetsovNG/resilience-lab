@@ -118,12 +118,12 @@ export function RunSettings({ catalog, model, experiment, editable, invalid, onC
           <div className="param-field" data-inspector-field={`faults.${index}.target`}>
             <div className="param-field-label"><label htmlFor={targetId}>{t("editor.fault.target")}</label>
               <HelpHint id={`${targetId}-help`} label={t("editor.fault.target")}>{t("editor.fault.target.description")}</HelpHint></div>
-            <select id={targetId} value={fault.target} title={elementLabel(fault.target, model)} disabled={!editable || invalid} aria-describedby={`${targetId}-help`} onChange={(event) => {
+            <select id={targetId} value={fault.target} title={fault.target} disabled={!editable || invalid} aria-describedby={`${targetId}-help`} onChange={(event) => {
               const next = targets.find(target => target.id === event.target.value);
               if (next !== undefined && (fault.kind !== "capacityLoss" || next.capacity !== null)) onCommand(setFaultParam(index, "target", next.id));
             }}>
               {target === undefined ? <option value={fault.target} disabled>{elementLabel(fault.target, model)}</option> : null}
-              {targets.map(target => <option key={target.id} value={target.id}
+              {targets.map(target => <option key={target.id} value={target.id} title={target.id}
                 disabled={fault.kind === "capacityLoss" && target.capacity === null}>{elementLabel(target.id, model)}</option>)}
             </select>
             <DiagnosticMessages diagnostics={fieldDiagnostics?.get(`faults.${index}.target`)} />

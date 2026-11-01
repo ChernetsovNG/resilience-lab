@@ -353,6 +353,8 @@
   "editor.grid.title": "Parameter sweep",
   "editor.grid.unavailableParameter": "{path} (unavailable)",
   "editor.identifier": "Identifier",
+  "editor.identifier.blockInvalid": "Use Latin letters, digits, _ or -; enter a display name in “Display name”.",
+  "editor.identifier.reverted": "Invalid identifier discarded; kept “{id}”.",
   "editor.inspector.experimentSettings": "Experiment settings (shared)",
   "editor.inspector.label": "Inspector",
   "editor.inspector.noParameters": "No parameters.",

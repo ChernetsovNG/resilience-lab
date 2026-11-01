@@ -14,7 +14,7 @@ import { confidenceInterval } from "../results/confidence";
 import { useConfidenceLevel } from "../layout/confidenceLevel";
 import { ReplicaResults } from "./ReplicaResults";
 import { replicaMember } from "../results/groups";
-import { pointLabel, variantLabel } from "../presentation/labels";
+import { elementLabel, pointLabel, variantLabel } from "../presentation/labels";
 import { HelpHint } from "../help/HelpHint";
 
 export interface ElementResultsProps {
@@ -188,7 +188,7 @@ export function ElementResults(props: ElementResultsProps) {
         {calls.problem === null ? null : <p role="status">{calls.problem}</p>}
         {replicas.problem === null ? null : <p role="status">{replicas.problem}</p>}
         {metadata == null ? <p>{t("results.timeline.metadataUnavailable")}</p> : <div className="element-results-charts">
-          {charts.map(chart => <MiniChart key={chart.id} {...chart} element={result.id} replication={replication} regions={regions}
+          {charts.map(chart => <MiniChart key={chart.id} {...chart} element={selection?.category === "CONNECTION" ? result.id : elementLabel(result.id, runModel)} replication={replication} regions={regions}
             endMs={endMs} windowMs={windowMs} cursorWindow={window} />)}
         </div>}
         <button type="button" onClick={onShowTimeline}>{t("inspector.results.showTimeline")}</button>

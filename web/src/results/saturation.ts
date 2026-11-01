@@ -1,12 +1,12 @@
-import type { RunSummary, SaturationSummary } from "../api/apiTypes";
+import type { ModelFile, RunSummary, SaturationSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
 import { t } from "../i18n";
-import { backendMessage } from "../i18n/backendMessage";
+import { diagnosticMessage } from "../presentation/labels";
 import { formatDuration, formatNumber, formatPercent } from "../i18n/format";
 
 /** Formats recorded saturation insight without recalculating the rule, onset statistics or core ordering. */
 export function formatSaturation(saturation: SaturationSummary, replications: number,
-  faults: readonly Pick<CourseFault, "label" | "fromMs" | "toMs">[] = [], windowMs = 0) {
+  faults: readonly Pick<CourseFault, "label" | "fromMs" | "toMs">[] = [], windowMs = 0, model?: ModelFile | null) {
   const { minimumDurationMs, utilizationThreshold, meanQueueLengthThreshold, rejectionsThreshold, ...additional } = saturation.rule;
   const extra = Object.entries(additional).map(([name, value]) => t("results.saturation.ruleParameter", {
     name, value: typeof value === "number" ? formatNumber(value, 20) : JSON.stringify(value),
@@ -22,7 +22,7 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
     steps: group[0].degradationPath.map(({ node, label }, index) => {
       const starts = group.map(replication => replication.degradationPath[index].startMs);
       const min = Math.min(...starts), max = Math.max(...starts);
-      return { node, text: t("results.saturation.nodeAt", { node: backendMessage(label), time: min === max ? formatDuration(min)
+      return { node, text: t("results.saturation.nodeAt", { node: diagnosticMessage(label, undefined, model), time: min === max ? formatDuration(min)
         : t("results.saturation.timeRange", { min: formatDuration(min), max: formatDuration(max) }) }) };
     }),
     suffix: t("results.saturation.groupedPath", { path: "", count: formatNumber(group.length), replications: formatNumber(replications) }),
@@ -36,7 +36,7 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
   return {
     firstNodes: saturation.firstNodes.length === 0 ? [t("results.saturation.none")] : saturation.firstNodes.map((first) =>
       t("results.saturation.first", {
-        node: backendMessage(first.label), count: formatNumber(first.replicationCount), replications: formatNumber(replications),
+        node: diagnosticMessage(first.label, undefined, model), count: formatNumber(first.replicationCount), replications: formatNumber(replications),
         median: formatDuration(first.medianStartMs), min: formatDuration(first.minStartMs), max: formatDuration(first.maxStartMs),
       })),
     withoutSaturation: t("results.saturation.without", { count: formatNumber(saturation.withoutSaturation), replications: formatNumber(replications) }),
@@ -55,12 +55,13 @@ export function formatSaturation(saturation: SaturationSummary, replications: nu
 export function formatHeadroom(
   aggregate: RunSummary["variants"][number]["points"][number]["aggregate"],
   headroom: RunSummary["variants"][number]["points"][number]["headroom"],
+  model?: ModelFile | null,
 ): string {
   return t("results.answer.headroom", {
     utilization: formatPercent(headroom.utilization?.value),
-    utilizationResource: headroom.utilization == null ? t("common.na") : backendMessage(headroom.utilization.label),
+    utilizationResource: headroom.utilization == null ? t("common.na") : diagnosticMessage(headroom.utilization.label, undefined, model),
     queue: formatNumber(headroom.meanQueueLength?.value),
-    queueResource: headroom.meanQueueLength == null ? t("common.na") : backendMessage(headroom.meanQueueLength.label),
+    queueResource: headroom.meanQueueLength == null ? t("common.na") : diagnosticMessage(headroom.meanQueueLength.label, undefined, model),
     p99: formatDuration(aggregate.entries.total.pooledLatency.all?.p99Ms),
   });
 }

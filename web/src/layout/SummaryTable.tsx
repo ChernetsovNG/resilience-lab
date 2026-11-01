@@ -14,7 +14,7 @@ import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
 import { setConfidenceLevel, useConfidenceLevel } from "./confidenceLevel";
-import { pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
+import { elementLabel, pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
 import { outputNote } from "../results/outputs";
 
 const MIN_RELIABLE_REPLICATIONS = 5;
@@ -79,7 +79,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   const activeLabel = variantLabel(activeVariant, variants);
   const selectedPointLabel = pointLabel(selectedPointId, summary.grid, (activePoint ?? columns[0]?.point)?.coordinates, catalog, model);
   const headroom = activePoint !== undefined && activeVariant !== undefined && activeVariant.replications > 0
-    && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom) : null;
+    && activePoint.saturation.withoutSaturation === activeVariant.replications ? formatHeadroom(activePoint.aggregate, activePoint.headroom, model) : null;
   const aggregates = columns.map(({ point }) => point.aggregate);
   const models = columns.map(column => column.effective ?? model);
   const populations = entryPopulations(aggregates, models);
@@ -121,8 +121,10 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   </>;
   const populationGroup = (kind: "clients" | "classes", ids: string[]) => ids.length < 2 ? null : <details className="summary-services">
     <summary>{t(kind === "clients" ? "results.entries.byClients" : "results.entries.byRequestTypes")}</summary>
-    {ids.map(id => <table key={id} className="summary-table" aria-label={t(kind === "clients" ? "results.entries.client" : "results.entries.requestType", { id })}>
-      <caption>{id}</caption><thead><tr><th scope="col">{t("results.answer.metric")}</th>
+    {ids.map(id => <table key={id} className="summary-table" aria-label={t(kind === "clients" ? "results.entries.client" : "results.entries.requestType", {
+      id: kind === "clients" ? elementLabel(id, model) : id,
+    })}>
+      <caption title={id}>{kind === "clients" ? elementLabel(id, model) : id}</caption><thead><tr><th scope="col">{t("results.answer.metric")}</th>
         {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}
           {hasUnreliableEntryInterval(ownEntry(point.aggregate.entries[kind], id))
             ? <span className="summary-reliability-warning">{t("results.answer.lowReplications")}</span> : null}
@@ -131,8 +133,10 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     </table>)}
   </details>;
   const serviceDetails = (service: string, instances: { id: string; replica: number }[] = [], replica = false): ReactNode => <details key={service} className="summary-services">
-      <summary onClick={event => { event.stopPropagation(); onElement?.(service); }}>{t(instances.length === 0 ? "results.answer.serviceMetrics" : "results.groups.metrics", { service, group: service })}</summary>
-      <table className="summary-table" aria-label={t("results.answer.servicesFor", { service })}>
+      <summary title={service} onClick={event => { event.stopPropagation(); onElement?.(service); }}>{t(instances.length === 0 ? "results.answer.serviceMetrics" : "results.groups.metrics", {
+        service: elementLabel(service, model), group: elementLabel(service, model),
+      })}</summary>
+      <table className="summary-table" aria-label={t("results.answer.servicesFor", { service: elementLabel(service, model) })}>
         <thead><tr>
           <th scope="col">{t("results.answer.metric")}</th>
           {columns.map(({ variant }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>{variantLabel(variant, variants)}</th>)}
@@ -175,7 +179,7 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
       {activePoint === undefined || activeVariant === undefined ?
         <p>{t("results.answer.noPoint", { variant: activeLabel, point: selectedPointLabel })}</p> :
         <SaturationInsight saturation={activePoint.saturation} replications={activeVariant.replications} headroom={headroom}
-          faults={faults} windowMs={windowMs} onElement={onElement} />}
+          faults={faults} windowMs={windowMs} onElement={onElement} model={model} />}
     </section>
     {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: variantLabel(baseline, variants), point: selectedPointLabel })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>

@@ -166,7 +166,7 @@ export function GridSettings({ catalog, model, experiment, editable, invalid, on
         <legend>{heading} {parameter?.descriptor.description ? <HelpHint id={descriptionId} label={heading}>{parameter.descriptor.description}</HelpHint> : null}</legend>
         <DiagnosticMessages diagnostics={fieldMessages.get(prefix)} />
         <label className="param-field" data-inspector-field={`${prefix}.path`}>{t("editor.grid.axisParameter", { number: formatNumber(index + 1) })}
-          <select value={axis.path} disabled={!axisEditable || invalid}
+          <select value={axis.path} title={axis.path} disabled={!axisEditable || invalid}
             onChange={(event) => {
               const selected = parameters.find((candidate) => candidate.path === event.target.value)!;
               replace(index, { path: selected.path, values: [selected.value] });

@@ -1,9 +1,23 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { slotPoolResource, noSaturation } from "../test/fixtures";
+import { model, slotPoolResource, noSaturation } from "../test/fixtures";
 import { SaturationInsight } from "./SaturationInsight";
 
 describe("SaturationInsight", () => {
+  it("uses display names for recorded saturation resources without changing navigation targets", () => {
+    const onElement = vi.fn();
+    const named = { ...model, blocks: { ...model.blocks, gateway: { ...model.blocks.gateway, title: "Магазин" } } };
+    render(<SaturationInsight model={named} saturation={{ ...noSaturation, withoutSaturation: 0,
+      firstNodes: [{ node: "gateway", ...slotPoolResource("gateway"), replicationCount: 1, medianStartMs: 150, minStartMs: 150, maxStartMs: 150 }],
+      replications: [{ replication: 0, degradationPath: [{ node: "gateway", ...slotPoolResource("gateway"), startMs: 150 }] }],
+    }} replications={1} onElement={onElement} />);
+    const first = screen.getByRole("button", { name: /handlers Магазин first/ });
+    expect(first.getAttribute("title")).toBe("gateway");
+    fireEvent.click(first);
+    expect(onElement).toHaveBeenCalledWith("gateway");
+    fireEvent.click(screen.getByText("Degradation paths"));
+    expect(screen.getByRole("button", { name: "handlers Магазин at 150 ms" })).toBeTruthy();
+  });
   it("navigates to each recorded degradation step, including a connection pool", () => {
     const onElement = vi.fn();
     const pool = { node: "to-db", slotPool: "connections", label: { code: "RESULT_SLOT_POOL", message: "connection pool gateway → db", args: { from: "gateway", to: "db" } }, startMs: 120 };

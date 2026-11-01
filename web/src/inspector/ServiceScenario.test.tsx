@@ -59,7 +59,7 @@ it("keeps nested steps and their metadata read only while editing annotations", 
   render(<Editor initial={initial} />);
   expect(screen.getByLabelText("Scenario (read only)").textContent).toContain('"keySpace": "product"');
   expect(screen.queryByRole("combobox", { name: "Step type" })).toBeNull();
-  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Display name" }).readOnly).toBe(true);
+  expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Display name" }).readOnly).toBe(false);
   const description = screen.getByRole("textbox", { name: "Description" });
   fireEvent.change(description, { target: { value: "Documented" } });
   fireEvent.blur(description);
