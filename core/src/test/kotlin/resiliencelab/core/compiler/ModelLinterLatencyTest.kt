@@ -3,7 +3,6 @@ package resiliencelab.core.compiler
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
-import org.assertj.core.data.Offset.offset
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
@@ -44,34 +43,53 @@ class ModelLinterLatencyTest {
         assertThat(warning.path).isEqualTo("a-b")
         assertThat(warning.document).isEqualTo("m.model.json")
         assertThat(warning.pointer).isEqualTo("/connections/0/params/timeout")
-        assertThat(warning.message).contains("106.624 ms", "106.625 ms", "p99", "b", "0.99")
+        assertThat(warning.message).contains("106.624 ms", "response 107 ms", "p99", "b", "0.99")
         assertThat(warning.args)
             .containsEntry("timeoutMs", JsonPrimitive("106.624"))
-            .containsEntry("estimatedMs", JsonPrimitive("106.625"))
+            .containsEntry("estimatedMs", JsonPrimitive("107"))
             .containsEntry("quantile", JsonPrimitive("0.99"))
         assertThat(warnings(graph.copy(calls = listOf(graph.calls.single().copy(timeoutMs = 106.625))))).isEmpty()
     }
 
     @Test
+    fun `formats normal response estimates with significant digits without contradicting the timeout`() {
+        listOf(
+            Triple(845.23374, 500.0, "845"),
+            Triple(845.23374, 845.0, "845.2"),
+            Triple(845.23374, 845.1, "845.2"),
+            Triple(845.23374, 845.22, "845.23"),
+            Triple(0.012345, 0.01, "0.0123"),
+            Triple(12_345.0, 10_000.0, "12300"),
+        ).forEach { (estimate, timeout, displayed) ->
+            val changed =
+                graph.copy(
+                    services = listOf(graph.services.first(), service("b", fixed(estimate))),
+                    calls = listOf(graph.calls.single().copy(timeoutMs = timeout, network = fixed(0.0))),
+                )
+
+            val warning = warnings(changed).single()
+
+            assertThat(warning.args).containsEntry("estimatedMs", JsonPrimitive(displayed))
+            assertThat(warning.message).contains("response $displayed ms")
+        }
+    }
+
+    @Test
     fun `exponential and lognormal processing use p99 rather than the mean`() {
         listOf(
-            Triple(Distribution(DistributionShape.EXPONENTIAL, 100.0), 470.0, 470.5170185988091),
-            Triple(Distribution(DistributionShape.LOGNORMAL, 300.0, 150.0), 500.0, 815.2337429414625),
-            Triple(Distribution(DistributionShape.LOGNORMAL, 300.0, 0.0), 309.0, 310.0),
-        ).forEach { (processing, timeout, expected) ->
+            Triple(Distribution(DistributionShape.EXPONENTIAL, 100.0), 470.5170185988091, "471"),
+            Triple(Distribution(DistributionShape.LOGNORMAL, 300.0, 150.0), 815.2337429414625, "815.234"),
+            Triple(Distribution(DistributionShape.LOGNORMAL, 300.0, 0.0), 310.0, "310"),
+        ).forEach { (processing, expected, displayed) ->
             val changed =
                 graph.copy(
                     services = listOf(graph.services.first(), service("b", processing)),
-                    calls = listOf(graph.calls.single().copy(timeoutMs = timeout, network = fixed(5.0))),
+                    calls = listOf(graph.calls.single().copy(timeoutMs = expected - 0.001, network = fixed(5.0))),
                 )
             val warning = warnings(changed).single()
 
-            assertThat(
-                warning.args
-                    ?.get("estimatedMs")
-                    ?.content
-                    ?.toDouble(),
-            ).isCloseTo(expected, offset(0.00001))
+            val estimate = warning.args?.get("estimatedMs")?.content
+            assertThat(estimate).isEqualTo(displayed)
             assertThat(warnings(changed.copy(calls = listOf(changed.calls.single().copy(timeoutMs = expected + 0.001))))).isEmpty()
         }
     }

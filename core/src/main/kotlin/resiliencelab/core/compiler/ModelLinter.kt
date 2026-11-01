@@ -14,7 +14,10 @@ import resiliencelab.core.ir.Origin
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.ServiceNode
 import resiliencelab.core.ir.ServiceStep
+import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.MathContext
+import java.math.RoundingMode
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.ln1p
@@ -282,10 +285,11 @@ class ModelLinter(
                 null
             } else {
                 val requestTypes = classes.sorted().joinToString(", ")
+                val estimateText = responseNumber(response.ms, call.timeoutMs)
                 warning(
                     CoreMessage.LINT_TIMEOUT_BELOW_LATENCY,
                     "Timeout ${number(call.timeoutMs)} ms on connection '${call.path}' is below the normal " +
-                        "p${number(timeoutLatencyQuantile * 100.0)} response ${number(response.ms)} ms of '${response.target}' " +
+                        "p${number(timeoutLatencyQuantile * 100.0)} response $estimateText ms of '${response.target}' " +
                         "(q=${number(timeoutLatencyQuantile)}; request types: $requestTypes). " +
                         "Timeouts may occur without failures; increase the timeout or reduce normal processing time.",
                     call.origin,
@@ -295,7 +299,7 @@ class ModelLinter(
                         "connection" to JsonPrimitive(call.path),
                         "target" to JsonPrimitive(response.target),
                         "timeoutMs" to JsonPrimitive(number(call.timeoutMs)),
-                        "estimatedMs" to JsonPrimitive(number(response.ms)),
+                        "estimatedMs" to JsonPrimitive(estimateText),
                         "percentile" to JsonPrimitive(number(timeoutLatencyQuantile * 100.0)),
                         "quantile" to JsonPrimitive(number(timeoutLatencyQuantile)),
                         "requestTypes" to JsonPrimitive(requestTypes),
@@ -303,6 +307,20 @@ class ModelLinter(
                 )
             }
         }
+
+    /** Rounds only an emitted estimate, adding digits until it remains visibly above its timeout. */
+    private fun responseNumber(
+        responseMs: Double,
+        timeoutMs: Double,
+    ): String {
+        if (!responseMs.isFinite()) return number(responseMs)
+        val exact = BigDecimal.valueOf(responseMs)
+        val timeout = BigDecimal.valueOf(timeoutMs)
+        var precision = 3
+        var rounded = exact.round(MathContext(precision, RoundingMode.HALF_UP))
+        while (rounded <= timeout) rounded = exact.round(MathContext(++precision, RoundingMode.HALF_UP))
+        return Quantities.plain(rounded)
+    }
 
     private fun quantileMs(distribution: Distribution): Double =
         when (distribution.shape) {

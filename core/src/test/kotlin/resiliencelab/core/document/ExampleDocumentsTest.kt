@@ -2,7 +2,6 @@ package resiliencelab.core.document
 
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.data.Offset.offset
 import resiliencelab.core.compiler.ModelCompiler
 import resiliencelab.core.compiler.ModelLinter
 import resiliencelab.core.compiler.Severity
@@ -100,12 +99,7 @@ class ExampleDocumentsTest {
         val warning = ModelLinter().lint(requireNotNull(compiled.experiment)).single { it.code == "LINT_TIMEOUT_BELOW_LATENCY" }
 
         assertThat(warning.args).containsEntry("target", JsonPrimitive("psp")).containsEntry("timeoutMs", JsonPrimitive("500"))
-        assertThat(
-            warning.args
-                ?.get("estimatedMs")
-                ?.content
-                ?.toDouble(),
-        ).isCloseTo(845.2337429414625, offset(0.00001))
+        assertThat(warning.args).containsEntry("estimatedMs", JsonPrimitive("845"))
         assertThat(warning.pointer).isEqualTo("/variants/0/overrides/payment-service-to-psp.timeout")
         assertThat(warning.document).isEqualTo(experimentPath)
         assertThat(warning.variant).isEqualTo("aligned-timeouts")
