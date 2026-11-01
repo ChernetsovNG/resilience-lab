@@ -12,6 +12,28 @@ for (const locale of locales) {
     const catalog = JSON.parse(readFileSync(resolve(`src/i18n/${locale.startsWith("ru") ? "ru" : "en"}.json`), "utf8")) as Record<string, string>;
     const label = (key: string) => catalog[key];
 
+    test("localizes unreachable timeout warnings and opens the affected connection", async ({ page }) => {
+      await page.goto("/");
+      await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+      await page.getByTestId("rf__node-client").click();
+      const deadline = page.getByLabel(catalog["catalog.types.client.params.deadline.title"] ?? "Deadline", { exact: true });
+      await deadline.fill("100.124ms");
+      await deadline.press("Enter");
+      await page.getByTestId("canvas-edge-label-middle-to-dependency").click();
+      const timeout = page.getByLabel(catalog["catalog.types.call.params.timeout.title"] ?? "Timeout", { exact: true });
+      await timeout.fill("100.124ms");
+      await timeout.press("Enter");
+      await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_TIMEOUT_UNREACHABLE"]');
+
+      await expect(warning).toHaveCount(1);
+      await expect(warning).toContainText(locale.startsWith("ru") ? "Таймаут 100.124 мс" : "Timeout 100.124 ms");
+      await expect(warning).toContainText("'client': 100.124");
+      await warning.click();
+      await expect(timeout).toBeFocused();
+      await expect(timeout.locator("..").locator(".field-diagnostics")).toContainText("LINT_TIMEOUT_UNREACHABLE");
+    });
+
     test("localizes linter, inspector validation and estimate warnings from the real API", async ({ page }, testInfo) => {
       await page.goto("/");
       await selectExperiment(page, "retry-storm/retry-storm.experiment.json");

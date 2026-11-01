@@ -18,7 +18,7 @@ test("keeps inspector and toolbar controls still when delayed lint warnings arri
   }));
 
   let initial: Awaited<ReturnType<typeof positions>> | undefined;
-  for (const value of ["10ms", "500ms"]) {
+  for (const value of ["10ms", "200ms"]) {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     await page.route("**/api/v1/validate", async route => {

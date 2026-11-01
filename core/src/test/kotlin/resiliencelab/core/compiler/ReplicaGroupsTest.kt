@@ -197,6 +197,28 @@ class ReplicaGroupsTest {
     }
 
     @Test
+    fun `unreachable timeout checks every outgoing replica copy with its override origin`() {
+        val source = model(3, overrides = """, "replicaOverrides":{"2":{"processing":{"mean":"9ms"}}}""")
+        val experiment =
+            experiment().copy(
+                variants = listOf(Variant("candidate", overrides = mapOf("worker-to-tail.timeout" to JsonPrimitive("1s")))),
+            )
+        val compiled = compile(source, experiment)
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(requireNotNull(compiled.experiment)).filter { it.code == "LINT_TIMEOUT_UNREACHABLE" }
+
+        assertThat(warnings.map { it.path }).containsExactly("worker-to-tail#1", "worker-to-tail#2", "worker-to-tail#3")
+        assertThat(warnings.map { it.args?.get("replica") }).containsExactly(JsonPrimitive(1), JsonPrimitive(2), JsonPrimitive(3))
+        warnings.forEachIndexed { index, warning ->
+            assertThat(warning.message).contains("Replica 'worker-to-tail#${index + 1}'", "'client': 1000")
+            assertThat(warning.document).isEqualTo("e.experiment.json")
+            assertThat(warning.pointer).isEqualTo("/variants/0/overrides/worker-to-tail.timeout")
+            assertThat(warning.variant).isEqualTo("candidate")
+        }
+    }
+
+    @Test
     fun `incoming calls retain their own policy including the default`() {
         val source =
             model(3).let { model ->

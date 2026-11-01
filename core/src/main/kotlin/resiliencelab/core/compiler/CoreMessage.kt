@@ -122,6 +122,11 @@ internal enum class CoreMessage(
     VARIANT_EMPTY("VARIANT_EMPTY", null, "The experiment must define at least one variant"),
     VARIANT_DUPLICATE("VARIANT_DUPLICATE", null, "Variant id '{id}' is repeated"),
     LINT_TIMEOUT_BUDGET("LINT_TIMEOUT_BUDGET", null, "Timeout {timeoutMs} ms is below the downstream budget {requiredMs} ms"),
+    LINT_TIMEOUT_UNREACHABLE(
+        "LINT_TIMEOUT_UNREACHABLE",
+        null,
+        "Timeout {timeoutMs} ms on connection '{connection}' is at least {threshold} × deadline for clients (deadlines in ms): {clientDeadlines}",
+    ),
     LINT_RETRY_AMPLIFICATION("LINT_RETRY_AMPLIFICATION", null, "Retry amplification {amplification} exceeds threshold {threshold}"),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",

@@ -11,17 +11,21 @@ import resiliencelab.core.document.GridAxis
 import resiliencelab.core.ir.Backoff
 import resiliencelab.core.ir.BackoffKind
 import resiliencelab.core.ir.CallEdge
+import resiliencelab.core.ir.CircuitBreakerConfig
 import resiliencelab.core.ir.ClientNode
 import resiliencelab.core.ir.Distribution
 import resiliencelab.core.ir.DistributionShape
+import resiliencelab.core.ir.FallbackConfig
 import resiliencelab.core.ir.GraphIr
 import resiliencelab.core.ir.LoadProfile
 import resiliencelab.core.ir.Origin
+import resiliencelab.core.ir.RetryBudgetConfig
 import resiliencelab.core.ir.RouteEdge
 import resiliencelab.core.ir.RouterNode
 import resiliencelab.core.ir.RoutingPolicy
 import resiliencelab.core.ir.RunSettings
 import resiliencelab.core.ir.ServiceNode
+import resiliencelab.core.ir.ServiceStep
 import java.time.Duration
 import kotlin.test.Test
 
@@ -43,6 +47,142 @@ class ModelLinterTest {
             emptyList(),
             RunSettings(5, 0.0, 1.0, 1L, 30L),
         )
+
+    @Test
+    fun `timeout warns at the client deadline including fractional equality`() {
+        listOf(100.124 to 0, 100.125 to 1, 100.25 to 1).forEach { (timeout, count) ->
+            val changed =
+                chain.copy(
+                    clients = listOf(chain.client.copy(deadlineMs = 100.125)),
+                    calls = listOf(chain.calls[0].copy(timeoutMs = timeout), chain.calls[1]),
+                )
+            val findings = warnings(changed, "LINT_TIMEOUT_UNREACHABLE")
+
+            assertThat(findings).describedAs("timeout $timeout").hasSize(count)
+            findings.forEach { warning ->
+                assertThat(warning.severity).isEqualTo(Severity.WARNING)
+                assertThat(warning.document).isEqualTo("m.model.json")
+                assertThat(warning.pointer).isEqualTo("/connections/1/params/timeout")
+                assertThat(warning.path).isEqualTo("a-b")
+                assertThat(warning.message).contains("'a-b'", "'client': 100.125", "1 × deadline")
+                assertThat(warning.args)
+                    .containsEntry("connection", JsonPrimitive("a-b"))
+                    .containsEntry("timeoutMs", JsonPrimitive(timeout.toString()))
+                    .containsEntry("clientDeadlines", JsonPrimitive("'client': 100.125"))
+                    .containsEntry("threshold", JsonPrimitive("1"))
+            }
+        }
+    }
+
+    @Test
+    fun `unreachable timeout threshold can require a larger multiple of the deadline`() {
+        val changed = chain.copy(clients = listOf(chain.client.copy(deadlineMs = 50.0)))
+        val configurable = ModelLinter(timeoutUnreachableThreshold = 2.0)
+
+        assertThat(configurable.lint(experiment(changed)).filter { it.code == "LINT_TIMEOUT_UNREACHABLE" }).hasSize(1)
+        assertThat(
+            configurable
+                .lint(experiment(changed.copy(calls = listOf(chain.calls[0].copy(timeoutMs = 99.999), chain.calls[1]))))
+                .filter { it.code == "LINT_TIMEOUT_UNREACHABLE" },
+        ).isEmpty()
+        assertThat(configurable.lint(experiment(changed)).single { it.code == "LINT_TIMEOUT_UNREACHABLE" }.args)
+            .containsEntry("threshold", JsonPrimitive("2"))
+        val fractional = ModelLinter(timeoutUnreachableThreshold = 1.000125).lint(experiment(changed))
+        assertThat(fractional.single { it.code == "LINT_TIMEOUT_UNREACHABLE" }.args)
+            .containsEntry("threshold", JsonPrimitive("1.000125"))
+        listOf(0.0, 0.5, Double.NaN, Double.POSITIVE_INFINITY).forEach { threshold ->
+            assertThatThrownBy { ModelLinter(timeoutUnreachableThreshold = threshold) }.isInstanceOf(IllegalArgumentException::class.java)
+        }
+    }
+
+    @Test
+    fun `a larger inner timeout below the client deadline only warns about the outer budget`() {
+        val changed = chain.copy(calls = listOf(chain.calls[0], chain.calls[1].copy(timeoutMs = 200.0)))
+
+        val findings = linter.lint(experiment(changed))
+
+        assertThat(findings.map { it.code }).containsExactly("LINT_TIMEOUT_BUDGET")
+        assertThat(findings.single().path).isEqualTo("a-b")
+    }
+
+    @Test
+    fun `unreachable timeout lists only affected clients once across their request types`() {
+        val changed =
+            chain.copy(
+                clients =
+                    listOf(
+                        chain.client.copy(
+                            classes = mapOf("checkout" to LoadProfile.constant(0.001), "lookup" to LoadProfile.constant(0.001)),
+                            deadlineMs = 100.0,
+                        ),
+                        chain.client.copy(
+                            pathSegments = listOf("batch"),
+                            classes = mapOf("checkout" to LoadProfile.constant(0.001)),
+                            deadlineMs = 150.0,
+                        ),
+                        chain.client.copy(
+                            pathSegments = listOf("long"),
+                            classes = mapOf("checkout" to LoadProfile.constant(0.001)),
+                            deadlineMs = 500.0,
+                        ),
+                        chain.client.copy(
+                            pathSegments = listOf("status-only"),
+                            classes = mapOf("status" to LoadProfile.constant(0.001)),
+                            deadlineMs = 50.0,
+                        ),
+                    ),
+                services =
+                    listOf(
+                        chain.services[0].copy(
+                            scenario = listOf(ServiceStep.Process(), ServiceStep.Call("a-b", setOf("checkout", "lookup"))),
+                        ),
+                        chain.services[1],
+                    ),
+                calls = listOf(chain.calls[0].copy(timeoutMs = 150.0)),
+            )
+
+        val warning = warnings(changed, "LINT_TIMEOUT_UNREACHABLE").single()
+
+        assertThat(warning.args).containsEntry("clientDeadlines", JsonPrimitive("'client': 100, 'batch': 150"))
+        assertThat(warning.args).containsEntry("timeoutMs", JsonPrimitive("150"))
+        assertThat(warning.message).contains("'client': 100", "'batch': 150").doesNotContain("long", "status-only", ".0")
+    }
+
+    @Test
+    fun `router branches do not duplicate unreachable timeouts on their shared prefix`() {
+        val changed =
+            chain.copy(
+                clients = listOf(chain.client.copy(deadlineMs = 100.0)),
+                calls = listOf(chain.calls[0].copy(to = "router")),
+                routers = listOf(RouterNode("router", RoutingPolicy.RANDOM)),
+                routes = listOf(RouteEdge("to-b", "router", "b"), RouteEdge("to-c", "router", "c")),
+            )
+
+        val warning = warnings(changed, "LINT_TIMEOUT_UNREACHABLE").single()
+
+        assertThat(warning.args).containsEntry("clientDeadlines", JsonPrimitive("'client': 100"))
+        assertThat(warning.args).doesNotContainKey("points")
+        assertThat(warning.message).doesNotContain("points:")
+    }
+
+    @Test
+    fun `call policies do not make a timeout beyond the original deadline protective`() {
+        val changed =
+            chain.copy(
+                clients = listOf(chain.client.copy(deadlineMs = 100.0)),
+                calls =
+                    listOf(
+                        chain.calls[0].copy(
+                            circuitBreaker = CircuitBreakerConfig(0.5, 2, 10, 1_000.0, 1),
+                            retryBudget = RetryBudgetConfig(0.1, 0.01, 1_000.0),
+                            fallback = FallbackConfig(setOf("timeout", "breaker-open"), 1.0),
+                        ),
+                        chain.calls[1],
+                    ),
+            )
+
+        assertThat(warnings(changed, "LINT_TIMEOUT_UNREACHABLE").map { it.path }).containsExactly("a-b")
+    }
 
     @Test
     fun `three replicas receive their share of the client load`() {

@@ -861,6 +861,8 @@
   "messages.VARIANT_EMPTY": "The experiment must define at least one variant",
   "messages.VARIANT_DUPLICATE": "Variant id '{id}' is repeated",
   "messages.LINT_TIMEOUT_BUDGET": "Timeout {timeoutMs} ms is shorter than the estimated {requiredMs} ms for downstream processing and calls. Replies may arrive too late; increase this timeout or reduce downstream timeouts and retries.",
+  "messages.LINT_TIMEOUT_UNREACHABLE": "Timeout {timeoutMs} ms on connection '{connection}' is at least {threshold} × deadline for these clients (deadlines in ms): {clientDeadlines}. Their deadlines expire first; reduce the timeout so it can protect these requests.",
+  "messages.LINT_TIMEOUT_UNREACHABLE_DETAILS": "The rule compares the call timeout with each client deadline on paths that use the connection: timeout ≥ threshold × deadline, with threshold 1 by default. Clients appear once across request types and router branches. Inner and outer call timeouts are compared separately by LINT_TIMEOUT_BUDGET.",
   "messages.LINT_RETRY_AMPLIFICATION": "Nested retries allow up to {amplification} attempts per request, above the warning threshold of {threshold}. Failures may overload dependencies; reduce attempts at one or more layers.",
   "messages.LINT_HANDLERS_LITTLE": "{elementType}: {handlers}; estimated simultaneous demand: {demand} at {ratePerSecond} requests/s. Queues may grow; increase capacity or reduce load or processing time.",
   "messages.LINT_DEADLINE_BUDGET": "Deadline {deadlineMs} ms is shorter than the entry service's estimated {requiredMs} ms. The client may stop waiting before completion; increase its deadline or reduce the entry call's timeout and retries.",
