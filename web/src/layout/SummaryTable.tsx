@@ -9,7 +9,7 @@ import { HelpHint } from "../help/HelpHint";
 import type { Catalog, MetricSummary, ModelFile, RunSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
 import { applyOverrides, ownEntry, type Params } from "../workspace/params";
-import { comparisonConclusion, latencyLimitMatch, latencyLimits, saturationConclusions } from "../results/findings";
+import { comparisonConclusion, latencyLimitMatch, latencyLimits, saturationConclusions, worstSliceConclusions } from "../results/findings";
 import { SaturationInsight } from "../results/SaturationInsight";
 import { formatHeadroom } from "../results/saturation";
 import { CONFIDENCE_LEVELS, confidenceInterval, type ConfidenceLevel } from "../results/confidence";
@@ -154,8 +154,10 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
   return <div className="answer">
     <section className="answer-variants" aria-label={t("results.answer.variants")}>
       <h3>{coordinates === "" ? t("results.answer.variants") : t("results.answer.forPoint", { point: coordinates })}</h3>
+      {worstSliceConclusions(columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), aggregate: point.aggregate })))
+        .map((conclusion, index) => <p key={index}>{conclusion}</p>)}
       <p data-testid="comparison-conclusion">{(["successRate", "p99LatencyMs"] as const).map(criterion => comparisonConclusion(
-        columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), metric: point.aggregate.entries.total[criterion] })), criterion, level,
+        columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), metric: point.aggregate.entries.total[criterion], aggregate: point.aggregate })), criterion, level,
       )).join(" ")}</p>
       {saturationConclusions(columns.map(({ variant, point }) => ({ label: variantLabel(variant, variants), saturation: point.saturation })),
         columns.length === summary.variants.length).map((conclusion, index) => <p key={index}>{conclusion}</p>)}
@@ -179,7 +181,8 @@ export function SummaryTable({ summary, activeVariantId = null, selectedPointId 
     </section>
     {baseline !== undefined && reference === undefined ? <p>{t("results.answer.baselineMissing", { variant: variantLabel(baseline, variants), point: selectedPointLabel })}</p> : null}
     <table className="summary-table" aria-label={t("results.answer.title")}>
-      <caption>{t("results.answer.comparison", { variant: variantLabel(baseline, variants) })}</caption>
+      <caption>{summary.variants.length > 1 ? <>{t("results.answer.comparison", { variant: variantLabel(baseline, variants) })} </> : null}
+        {t("results.answer.metricNotes")}</caption>
       <thead><tr>
         <th scope="col">{t("results.answer.metric")}</th>
         {columns.map(({ variant, point }) => <th key={variant.id} scope="col" className={columnClass(variant.id)}>

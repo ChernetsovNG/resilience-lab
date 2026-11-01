@@ -39,7 +39,7 @@ describe("SummaryTable", () => {
     expect(cells("Success rate")[0].textContent).toContain("75%");
     expect(cells("p95")[0].textContent).toContain("40 ms");
     expect(cells("p99")[0].textContent).toContain("80 ms");
-    expect(screen.getByRole("region", { name: "Variant summary" }).textContent).toContain("Best observed success rate: Baseline (75%)");
+    expect(screen.getByRole("region", { name: "Variant summary" }).textContent).toContain("Best observed success rate: “Baseline” (75%)");
   });
   it.each(["en", "ru"] as const)("resolves stored variant fallbacks and parameter paths in the %s Findings", locale => {
     setLanguage(locale);
@@ -61,8 +61,8 @@ describe("SummaryTable", () => {
       firstNodes: [{ node: "dependency", ...slotPoolResource("dependency"), replicationCount: 2, medianStartMs: 80, minStartMs: 70, maxStartMs: 90 }] };
     render(<SummaryTable summary={run} activeVariantId="baseline" />);
     const overview = screen.getByRole("region", { name: "Variant summary" });
-    expect(overview.textContent).toContain("Baseline: no saturation.");
-    expect(overview.textContent).toContain("No retries: first saturation at handlers dependency.");
+    expect(overview.textContent).toContain("“Baseline”: no saturation.");
+    expect(overview.textContent).toContain("“No retries”: first saturation at handlers dependency.");
     expect(overview.compareDocumentPosition(comparison()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -168,7 +168,7 @@ describe("SummaryTable", () => {
     run.variants[1].points[0].aggregate.entries.total.successRate = { count: 2, mean: 0.975, min: 0.97, max: 0.98 };
     render(<SummaryTable summary={run} />);
     expect(within(comparison()).getAllByRole("columnheader")[1].textContent).toContain("Control");
-    expect(within(comparison()).getByRole("caption").textContent).toContain("Differences from Control");
+    expect(within(comparison()).getByRole("caption").textContent).toContain("Differences from “Control”");
     expect(cells("Success rate")[1].querySelector(".summary-difference")?.textContent).toBe("0 pp");
   });
 
@@ -393,8 +393,8 @@ describe("Findings conclusions", () => {
   it("names the higher success rate and lower p99 independently", () => {
     render(<SummaryTable summary={compared()} />);
     const conclusion = screen.getByTestId("comparison-conclusion");
-    expect(conclusion.textContent).toContain("Best observed success rate: No retries (90%)");
-    expect(conclusion.textContent).toContain("Lowest observed p99: Baseline (100 ms)");
+    expect(conclusion.textContent).toContain("Best observed success rate: “No retries” (90%)");
+    expect(conclusion.textContent).toContain("Lowest observed p99: “Baseline” (100 ms)");
     expect(conclusion.textContent).toContain("intervals do not overlap");
   });
 
@@ -403,7 +403,7 @@ describe("Findings conclusions", () => {
     run.variants[0].points[0].aggregate.entries.total.successRate = measured(0.4, 0.1, 5);
     run.variants[1].points[0].aggregate.entries.total.successRate = measured(0.55, 0.1);
     render(<SummaryTable summary={run} />);
-    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: No retries, 55%)");
+    expect(screen.getByTestId("comparison-conclusion").textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: “No retries”, 55%)");
     fireEvent.change(screen.getByRole("combobox", { name: "Intervals" }), { target: { value: "80" } });
     expect(screen.getByTestId("comparison-conclusion").textContent).not.toContain("difference within the spread");
     expect(screen.getByTestId("comparison-conclusion").textContent).toContain("intervals do not overlap");
@@ -415,8 +415,8 @@ describe("Findings conclusions", () => {
     run.variants[1].points[0].aggregate.entries.total.p99LatencyMs = { mean: 150, count: 1, min: 150, max: 150 };
     render(<SummaryTable summary={run} />);
     const conclusion = screen.getByTestId("comparison-conclusion");
-    expect(conclusion.textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: Baseline, No retries, 90%)");
-    expect(conclusion.textContent).toContain("interval comparison unavailable: No retries");
+    expect(conclusion.textContent).toContain("No clear best success rate — the difference is within the spread (highest observed: “Baseline”, “No retries”, 90%)");
+    expect(conclusion.textContent).toContain("interval comparison unavailable: “No retries”");
   });
 
   it("does not declare a winner from missing metrics", () => {
@@ -447,8 +447,8 @@ describe("Findings conclusions", () => {
     const distinct = structuredClone(run);
     distinct.variants[1].points[0].saturation.firstNodes = [{ ...first, node: "gateway", ...slotPoolResource("gateway") }];
     rerender(<SummaryTable summary={distinct} />);
-    expect(overview.textContent).toContain("Baseline: first saturation at handlers dependency.");
-    expect(overview.textContent).toContain("No retries: first saturation at handlers gateway.");
+    expect(overview.textContent).toContain("“Baseline”: first saturation at handlers dependency.");
+    expect(overview.textContent).toContain("“No retries”: first saturation at handlers gateway.");
   });
 
   it("marks quantized timeout ceilings using the effective variant and grid parameters", () => {
@@ -502,8 +502,8 @@ describe("Findings conclusions", () => {
     if (reverse) run.variants.reverse();
     render(<SummaryTable summary={run} />);
     const conclusion = screen.getByTestId("comparison-conclusion");
-    expect(conclusion.textContent).toContain("difference within the spread: C");
-    expect(conclusion.textContent).not.toContain("intervals do not overlap with C");
+    expect(conclusion.textContent).toContain("difference within the spread: “C”");
+    expect(conclusion.textContent).not.toContain("intervals do not overlap with “C”");
   });
 
   it("describes numerical timeout matches without asserting they caused successful latency", () => {
@@ -535,7 +535,7 @@ describe("entry populations", () => {
     expect(screen.getByTestId("comparison-conclusion").textContent).toContain("90%");
   });
 
-  it("orders the top three reasons, expands all codes, and compares an absent reason as zero", () => {
+  it("orders nonzero reasons, hides zero rows, and compares against an absent baseline reason", () => {
     const scenario = entryResults();
     render(<SummaryTable {...scenario} catalog={catalog} />);
     const reasons = cells("Failure reasons")[0].querySelector("summary")!;
@@ -546,9 +546,8 @@ describe("entry populations", () => {
     expect(cells("Failure reasons")[0].querySelector('[title="timeout"]')).toBeTruthy();
     fireEvent.click(screen.getByText("By request types", { exact: true }));
     const status = screen.getByRole("table", { name: "Request type · status" });
-    expect(cells("Failure reasons", status)[0].textContent).toContain("No failures");
-    fireEvent.click(cells("Failure reasons", status)[0].querySelector("summary")!);
-    expect(cells("Failure reasons", status)[0].textContent).toContain("timeout0%");
+    expect(cells("Failure reasons", status)[0].textContent).toBe("No failures");
+    expect(cells("Failure reasons", status)[0].querySelector("details")).toBeNull();
     fireEvent.click(cells("Failure reasons", status)[1].querySelector("summary")!);
     expect(cells("Failure reasons", status)[1].textContent).toContain("2 pp");
     expect(cells("Successful with fallback")[1].textContent).toContain("4.6%");
@@ -564,6 +563,72 @@ describe("entry populations", () => {
       ? { "gateway-to-middle.fallback": { on: ["timeout"], processing: "1ms" } } : {} }));
     rerender(<SummaryTable summary={summary} model={model} variants={variants} catalog={outputCatalog as typeof catalog} />);
     expect(cells("Successful with fallback")[0].textContent).toContain("0%");
+  });
+});
+
+describe("variant summary costs and affected populations", () => {
+  it.each(["en", "ru"] as const)("leads with the worst request type for each variant in %s", locale => {
+    setLanguage(locale);
+    const scenario = entryResults();
+    scenario.summary.variants[0].label = "Baseline";
+    scenario.summary.variants[1].label = "С защитой";
+    render(<SummaryTable {...scenario} catalog={catalog} />);
+    const overview = screen.getByRole("region", { name: t("results.answer.variants") });
+    expect(overview.querySelector("p")!.textContent).toBe(locale === "en"
+      ? "Worst affected request type “checkout”: 50% success in “Baseline”, 50% success in “С защитой”."
+      : "Хуже всего — вид запроса «checkout»: 50\u00a0% успешных в «Baseline», 50\u00a0% успешных в «С защитой».");
+    expect(screen.getByText(t("results.entries.byRequestTypes"), { exact: true }).closest("details")!.open).toBe(false);
+  });
+
+  it.each([
+    { rate: 0.951, shown: false }, { rate: 0.95, shown: true }, { rate: 0.949, shown: true },
+    { rate: 1, shown: false }, { rate: null, shown: false }, { rate: NaN, shown: false },
+  ])("reports a slice at least five percentage points below its own total ($rate)", ({ rate, shown }) => {
+    const scenario = entryResults();
+    for (const variant of scenario.summary.variants) {
+      const entries = variant.points[0].aggregate.entries;
+      entries.total.successRate!.mean = 1;
+      entries.clients = {};
+      entries.classes = { checkout: { ...entries.total, successRate: rate === null ? null : { count: 10, mean: rate, min: rate, max: rate } } };
+    }
+    render(<SummaryTable summary={scenario.summary} />);
+    expect(screen.queryByText(/^Worst affected request type/) !== null).toBe(shown);
+  });
+
+  it("reports different worst slices per variant and ignores unavailable total metrics", () => {
+    const scenario = entryResults();
+    const first = scenario.summary.variants[0].points[0].aggregate.entries;
+    first.clients.client = { ...first.clients.client, successRate: { count: 10, mean: 0.1, min: 0.1, max: 0.1 } };
+    const { rerender } = render(<SummaryTable {...scenario} />);
+    expect(screen.getByText(/^Worst affected client/).textContent).toBe("Worst affected client “client”: 10% success in “Baseline”.");
+    expect(screen.getByText(/^Worst affected request type/).textContent).toBe("Worst affected request type “checkout”: 50% success in “No retries”.");
+    for (const variant of scenario.summary.variants) variant.points[0].aggregate.entries.total.successRate = null;
+    rerender(<SummaryTable {...scenario} />);
+    expect(screen.queryByText(/^Worst affected/)).toBeNull();
+  });
+
+  it.each(["en", "ru"] as const)("omits self-comparison but retains quantile notes for one variant in %s", locale => {
+    setLanguage(locale);
+    const run = structuredClone(summary);
+    run.variants = [run.variants[0]];
+    render(<SummaryTable summary={run} />);
+    const caption = screen.getByRole("caption");
+    expect(caption.textContent).not.toMatch(/Differences from|Отличия от/);
+    expect(caption.textContent).toContain(locale === "en" ? "means of individual replication quantiles" : "средние квантилей отдельных повторений");
+  });
+
+  it("puts refusals and the worst affected client beside the winning latency", () => {
+    const scenario = entryResults();
+    const entries = scenario.summary.variants[1].points[0].aggregate.entries;
+    entries.total.successRate!.mean = 0.367;
+    entries.total.p99LatencyMs!.mean = 43.3;
+    entries.total.failuresByReason = { rateLimited: { count: 10, mean: 0.6, min: 0.6, max: 0.6 },
+      circuitOpen: { count: 10, mean: 0.033, min: 0.033, max: 0.033 } };
+    entries.clients = { "mobile-app": { ...entries.total, successRate: { count: 10, mean: 0.2, min: 0.2, max: 0.2 } },
+      partner: { ...entries.total, successRate: { count: 10, mean: 0.5, min: 0.5, max: 0.5 } } };
+    render(<SummaryTable {...scenario} />);
+    const conclusion = screen.getByTestId("comparison-conclusion").textContent!;
+    expect(conclusion).toContain("Lowest observed p99: “No retries” (43.3 ms); successful 36.7%; rejected 63.3%; worst affected client “mobile-app”: 80% unsuccessful");
   });
 });
 

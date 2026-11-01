@@ -5,6 +5,7 @@ import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/a
 import { formatPercent } from "../src/i18n/format";
 import { setLanguage } from "../src/i18n";
 import { cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 test.use({ locale: "ru-RU", viewport: { width: 1440, height: 1600 }, actionTimeout: 10_000 });
 
@@ -53,6 +54,8 @@ test("compares clients, request types and refusal reasons, then selects checkout
     expect(fallback.points[0].aggregate.entries.total.degradedRate!.mean).toBeGreaterThan(0);
     await page.getByRole("tab", { name: "Baseline", exact: true }).click();
     await page.getByRole("button", { name: "Анализ", exact: true }).click();
+    await page.getByRole("region", { name: ru["results.answer.variants"], exact: true })
+      .screenshot({ path: testInfo.outputPath("entry-summary-ru.png") });
     const clients = page.getByText("По клиентам", { exact: true }).locator("..");
     const types = page.getByText("По видам запросов", { exact: true }).locator("..");
     await expect(clients).not.toHaveAttribute("open", "");
@@ -67,15 +70,15 @@ test("compares clients, request types and refusal reasons, then selects checkout
     await clients.locator(":scope > summary").click();
     await types.locator(":scope > summary").click();
     const status = page.getByRole("table", { name: "Вид запроса · status", exact: true });
-    await expect(status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell").first()).toContainText("нет отказов");
+    await expect(status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell").first()).toHaveText(ru["results.entries.noFailures"]);
     await expect(status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell").nth(1)).toContainText("ошибка обработки");
     const checkout = page.getByRole("table", { name: "Вид запроса · checkout", exact: true });
     await expect(checkout.getByRole("row", { name: /Успешные с заглушкой/ }).getByRole("cell").nth(1))
       .toContainText(formatPercent(fallback.points[0].aggregate.entries.classes.checkout.degradedRate!.mean));
     const statusReasons = status.getByRole("row", { name: /Причины отказа/ }).getByRole("cell");
-    await statusReasons.first().locator("summary").click();
+    await expect(statusReasons.first().locator("details")).toHaveCount(0);
     await statusReasons.nth(1).locator("summary").click();
-    await expect(statusReasons.first()).toContainText(formatPercent(0));
+    await expect(statusReasons.first()).toHaveText(ru["results.entries.noFailures"]);
     await types.evaluate(element => element.scrollIntoView({ block: "start" }));
     await page.screenshot({ path: testInfo.outputPath("request-types-ru.png") });
 

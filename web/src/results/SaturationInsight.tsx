@@ -1,5 +1,5 @@
 import { formatNumber } from "../i18n/format";
-import { t } from "../i18n";
+import { currentLanguage, t } from "../i18n";
 import type { SaturationSummary } from "../api/apiTypes";
 import type { CourseFault } from "../experiment/course";
 import { formatSaturation } from "./saturation";
@@ -11,6 +11,8 @@ export function SaturationInsight({ saturation, replications, headroom, faults =
   faults?: readonly CourseFault[]; windowMs?: number; onElement?: (id: string) => void;
 }) {
   const text = formatSaturation(saturation, replications, faults, windowMs);
+  const remaining = text.degradationPaths.length - 3;
+  const plural = new Intl.PluralRules(currentLanguage()).select(remaining);
   const pathContent = (index: number) => {
     const group = text.degradationPathGroups[index];
     return onElement === undefined || group.steps.length === 0 ? text.degradationPaths[index] : <>
@@ -32,7 +34,8 @@ export function SaturationInsight({ saturation, replications, headroom, faults =
         <summary>{t("results.saturation.degradationPaths")}</summary>
         <ul>{text.degradationPaths.slice(0, 3).map((_, index) => <li key={index}>{pathContent(index)}</li>)}</ul>
         {text.degradationPaths.length <= 3 ? null : <details>
-          <summary>{t("results.saturation.morePaths", { count: formatNumber(text.degradationPaths.length - 3) })}</summary>
+          <summary>{t(plural === "one" ? "results.saturation.morePaths.one" : plural === "few"
+            ? "results.saturation.morePaths.few" : "results.saturation.morePaths.other", { count: formatNumber(remaining) })}</summary>
           <ul>{text.degradationPaths.slice(3).map((_, index) => <li key={index}>{pathContent(index + 3)}</li>)}</ul>
         </details>}
       </details>

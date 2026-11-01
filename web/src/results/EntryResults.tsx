@@ -6,19 +6,20 @@ import { useConfidenceLevel } from "../layout/confidenceLevel";
 import { failureMetric, hasUnreliableEntryInterval, sortedFailureReasons, type EntryMetrics } from "./entries";
 import type { MetricSummary } from "../api/apiTypes";
 
-/** Compact top three reasons; expansion compares the full union of codes across variants, including zeros. */
+/** Compact top three reasons; expansion compares this population's nonzero codes against the baseline. */
 export function FailureReasons({ entry, reasons = sortedFailureReasons(entry), renderValue }: {
   entry: EntryMetrics | undefined; reasons?: readonly string[];
   renderValue?: (code: string, value: MetricSummary | undefined) => ReactNode;
 }) {
   if (entry === undefined) return formatNumber(null);
+  const nonzeroReasons = reasons.filter(code => (entry.failuresByReason[code]?.mean ?? 0) > 0);
   const leading = sortedFailureReasons(entry).slice(0, 3);
   const label = (code: string) => Object.hasOwn(messages, `messages.${code}`) ? t(`messages.${code}`) : code;
   const preview = leading.length === 0 ? t("results.entries.noFailures") : leading.map((code, index) =>
     <span key={code} title={code}>{index === 0 ? "" : t("editor.symbols.separator")}{label(code)} {formatPercent(entry.failuresByReason[code].mean)}</span>);
-  return reasons.length === 0 ? <span>{preview}</span> : <details className="entry-failures">
+  return nonzeroReasons.length === 0 ? <span>{preview}</span> : <details className="entry-failures">
     <summary>{preview}</summary>
-    <dl>{reasons.map(code => <div key={code}><dt title={code}>{label(code)}</dt><dd>
+    <dl>{nonzeroReasons.map(code => <div key={code}><dt title={code}>{label(code)}</dt><dd>
       {renderValue === undefined ? formatPercent(failureMetric(entry, code)!.mean) : renderValue(code, failureMetric(entry, code))}
     </dd></div>)}</dl>
   </details>;

@@ -2,6 +2,7 @@ import { cleanupWorkspace, selectExperiment } from "./fixtures";
 import { expect, test } from "./fixtures";
 import { readFile, writeFile } from "node:fs/promises";
 import type { JobView, RunSummary } from "../src/api/apiTypes";
+import ru from "../src/i18n/ru.json" with { type: "json" };
 
 const experiments = ["checkout/checkout.experiment.json", "checkout/checkout-grid.experiment.json"];
 
@@ -74,8 +75,9 @@ test.describe("readable checkout answer", () => {
     const best = [...summary.variants].sort((left, right) =>
       right.points[0].aggregate.entries.total.successRate!.mean - left.points[0].aggregate.entries.total.successRate!.mean)[0];
     expect(best.id).toBe("bigger-payment-pool");
-    await expect(overview.getByTestId("comparison-conclusion")).toContainText("Лучшая наблюдаемая доля успешных запросов: Bigger payment pool");
-    await expect(overview.getByTestId("comparison-conclusion")).toContainText("Наименьший наблюдаемый p99:");
+    await expect(overview.getByTestId("comparison-conclusion")).toContainText(ru["results.answer.bestSuccess"].split("{variants}")[0]
+      + ru["results.answer.variantName"].replace("{variant}", "Bigger payment pool"));
+    await expect(overview.getByTestId("comparison-conclusion")).toContainText(ru["results.answer.bestLatency"].split("{variants}")[0]);
     const table = page.getByRole("table", { name: "Выводы", exact: true });
     await expect(page.getByText("По клиентам", { exact: true })).toHaveCount(0);
     await expect(page.getByText("По видам запросов", { exact: true })).toHaveCount(0);
