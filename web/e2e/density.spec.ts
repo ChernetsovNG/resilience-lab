@@ -1,6 +1,10 @@
 import { selectExperiment } from "./fixtures";
 import { expect, test } from "./fixtures";
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 test("service parameters stay together at the same node height in English and Russian", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");

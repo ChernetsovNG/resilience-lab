@@ -5,6 +5,10 @@ import catalogSnapshot from "../src/test/catalog.json" with { type: "json" };
 
 test.use({ locale: "ru-RU", viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 test("waits for the initial catalog and loads another language only on demand", async ({ page }) => {
   let releaseRussian!: () => void, releaseEnglish!: () => void;
   const russian = new Promise<void>(resolve => { releaseRussian = resolve; });
@@ -129,7 +133,7 @@ test("worker errors follow the explicit UI language instead of the Russian brows
   expect(message).toBe("Unsupported sketch profile: unsupported-test-profile");
 });
 
-test("View remains accessible on narrow screens during a run", async ({ page }) => {
+test("View remains accessible on narrow screens during a run", async ({ page }, testInfo) => {
   let hold = true;
   await page.route("**/api/v1/jobs/*", async route => {
     const response = await route.fetch();
@@ -150,6 +154,7 @@ test("View remains accessible on narrow screens during a run", async ({ page }) 
     await expect(view).toBeFocused();
   }
   hold = false;
+  await expect(page.getByTestId("job-status")).toHaveText("ЗАВЕРШЕНО", { timeout: testInfo.timeout });
   await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
 });
 

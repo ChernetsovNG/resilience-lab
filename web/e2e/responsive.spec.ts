@@ -3,6 +3,10 @@ import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 async function expectDesktopLayout(page: Page, minimumCanvasHeight = 140) {
   expect(await page.evaluate(() => ({
     x: document.documentElement.scrollWidth > document.documentElement.clientWidth,

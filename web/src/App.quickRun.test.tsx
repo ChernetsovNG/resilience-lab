@@ -12,10 +12,13 @@ it("commits a focused field before the Run button saves and submits", async () =
   field.focus();
   fireEvent.change(field, { target: { value: "9" } });
   fireEvent.click(button("Run"));
-  await screen.findByRole("table", { name: "Findings" });
-  const write = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
-  expect(write).toBeDefined();
-  expect(JSON.parse(String(write![1]?.body)).model.blocks.gateway.params.handlers).toBe(9);
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" && init?.method === "POST")).toBe(true));
+  const calls = fetchMock.mock.calls;
+  const save = calls.findIndex(([url, init]) => init?.method === "PUT" && String(url).includes(encodeURIComponent(modelPath)));
+  const submit = calls.findIndex(([url, init]) => url === "/api/v1/jobs" && init?.method === "POST");
+  expect(save).toBeGreaterThanOrEqual(0);
+  expect(save).toBeLessThan(submit);
+  expect(JSON.parse(String(calls[save][1]?.body)).model.blocks.gateway.params.handlers).toBe(9);
 });
 
 it("saves dirty documents before submitting a run", async () => {
@@ -59,8 +62,11 @@ for (const modifier of ["ctrlKey", "metaKey"] as const) {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true));
     const write = fetchMock.mock.calls.find(([url, init]) => init?.method === "PUT" && String(url).includes(encodeURIComponent(modelPath)))!;
     expect(JSON.parse(String(write[1]?.body)).model.blocks.gateway.params.handlers).toBe(7);
-    if (key === "Enter") await screen.findByRole("table", { name: "Findings" });
-    else expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
+    if (key === "Enter") {
+      await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/v1/jobs" && init?.method === "POST")).toBe(true));
+      const submit = fetchMock.mock.calls.findIndex(([url, init]) => url === "/api/v1/jobs" && init?.method === "POST");
+      expect(fetchMock.mock.calls.indexOf(write)).toBeLessThan(submit);
+    } else expect(fetchMock.mock.calls.some(([url]) => url === "/api/v1/jobs")).toBe(false);
   });
 }
 

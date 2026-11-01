@@ -1,7 +1,7 @@
 import { selectExperiment } from "./fixtures";
 import { expect, test } from "./fixtures";
 import { readFile, rm, writeFile } from "node:fs/promises";
-import type { RunSummary } from "../src/api/apiTypes";
+import type { JobView, RunSummary } from "../src/api/apiTypes";
 
 const experiments = ["checkout/checkout.experiment.json", "checkout/checkout-grid.experiment.json"];
 
@@ -108,7 +108,17 @@ test.describe("readable checkout answer", () => {
     try {
       await page.goto("/");
       await selectExperiment(page, "checkout/no-faults.experiment.json");
-      await page.getByRole("button", { name: "Запустить", exact: true }).click();
+      const submitted: Promise<JobView> = page.waitForResponse(response =>
+        response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/jobs",
+      { timeout: testInfo.timeout }).then(response => response.json());
+      const completed = page.waitForResponse(async response => {
+        const path = new URL(response.url()).pathname;
+        return /\/runs\/[^/]+\/summary$/.test(path) && path === `/api/v1/runs/${(await submitted).runId}/summary`;
+      }, { timeout: testInfo.timeout });
+      const [, , summary] = await Promise.all([
+        page.getByRole("button", { name: "Запустить", exact: true }).click(), submitted, completed,
+      ]);
+      expect(summary.ok()).toBe(true);
       await expect(page.getByRole("table", { name: "Выводы", exact: true })).toBeVisible();
       await page.getByRole("tab", { name: "Baseline", exact: true }).click();
       await page.getByRole("button", { name: "Анализ", exact: true }).click();
