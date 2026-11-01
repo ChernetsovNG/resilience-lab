@@ -29,6 +29,7 @@ import kotlin.math.sqrt
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
+ * [lowHeadroomThreshold] is the nominal accepted-utilization threshold, strictly between zero and one.
  * [retryOverloadThreshold] is the positive accepted-utilization threshold for worst-case retries (1 by default).
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
@@ -45,8 +46,12 @@ class ModelLinter(
     private val timeoutLatencyQuantile: Double = 0.99,
     private val queueWaitThreshold: Double = 1.0,
     private val retryOverloadThreshold: Double = 1.0,
+    private val lowHeadroomThreshold: Double = 0.8,
 ) {
     init {
+        require(lowHeadroomThreshold.isFinite() && lowHeadroomThreshold > 0.0 && lowHeadroomThreshold < 1.0) {
+            "lowHeadroomThreshold must be finite and strictly between 0 and 1"
+        }
         require(retryOverloadThreshold.isFinite() && retryOverloadThreshold > 0.0) {
             "retryOverloadThreshold must be finite and positive"
         }
@@ -143,8 +148,8 @@ class ModelLinter(
     private fun lintGraph(graph: GraphIr): List<Diagnostic> {
         val services = graph.services.associateBy { it.path }
         val diagnostics = mutableListOf<Diagnostic>()
-        val demands = mutableMapOf<String, BigDecimal>()
-        val maximumRates = mutableMapOf<String, BigDecimal>()
+        val demands = mutableMapOf<String, Fraction>()
+        val maximumRates = mutableMapOf<String, Fraction>()
         val queuePatience = mutableMapOf<String, QueuePatience>()
         val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
         val normalResponses = mutableMapOf<String, MutableMap<String, NormalResponse>>()
@@ -212,9 +217,9 @@ class ModelLinter(
                 }
             }
             holdingByService.forEach { (path, holdingMs) ->
-                val rate = BigDecimal.valueOf(source.maximumRate * (shares[path] ?: 0.0))
-                demands[path] = (demands[path] ?: BigDecimal.ZERO) + rate * holdingMs
-                maximumRates[path] = (maximumRates[path] ?: BigDecimal.ZERO) + rate
+                val rate = Fraction.of(source.maximumRate) * (shares[path] ?: Fraction.ZERO)
+                demands[path] = (demands[path] ?: Fraction.ZERO) + rate * Fraction.of(holdingMs)
+                maximumRates[path] = (maximumRates[path] ?: Fraction.ZERO) + rate
                 val retryRate = arrivals.worst.getValue(source)[path] ?: Fraction.ZERO
                 retryDemands[path] = (retryDemands[path] ?: Fraction.ZERO) + retryRate * Fraction.of(holdingMs)
                 retryRates[path] = (retryRates[path] ?: Fraction.ZERO) + retryRate
@@ -321,7 +326,7 @@ class ModelLinter(
     )
 
     private data class ArrivalShares(
-        val nominal: Map<ArrivalSource, MutableMap<String, Double>>,
+        val nominal: Map<ArrivalSource, MutableMap<String, Fraction>>,
         val worst: Map<ArrivalSource, MutableMap<String, Fraction>>,
         val factors: Map<String, Fraction>,
         val budgetLimited: Set<String>,
@@ -341,7 +346,7 @@ class ModelLinter(
         graph: GraphIr,
         sources: List<ArrivalSource>,
     ): ArrivalShares {
-        val nominal = sources.associateWith { mutableMapOf(it.client.entry to 1.0) }
+        val nominal = sources.associateWith { mutableMapOf(it.client.entry to Fraction.ONE) }
         val worst = sources.associateWith { mutableMapOf(it.client.entry to Fraction.of(it.maximumRate)) }
         val ceilings = sources.associateWith { mutableMapOf(it.client.entry to Fraction.of(it.maximumRate)) }
         val factors = mutableMapOf<String, Fraction>()
@@ -352,12 +357,12 @@ class ModelLinter(
         fun add(
             source: ArrivalSource,
             path: String,
-            share: Double,
+            share: Fraction,
             rate: Fraction,
             ceiling: Fraction,
         ) {
             val shares = nominal.getValue(source)
-            shares[path] = minOf(1.0, (shares[path] ?: 0.0) + share)
+            shares[path] = minOf(Fraction.ONE, (shares[path] ?: Fraction.ZERO) + share)
             val caps = ceilings.getValue(source)
             caps[path] = maxOf(caps[path] ?: Fraction.ZERO, ceiling)
             val rates = worst.getValue(source)
@@ -368,16 +373,14 @@ class ModelLinter(
             if (router != null) {
                 sources.forEach { source ->
                     val outputs = graph.outgoingRoutes(path, source.requestClass)
-                    val scale = outputs.maxOfOrNull { it.weight } ?: return@forEach
-                    val weights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) it.weight / scale else 1.0 }
-                    val total = weights.sum()
-                    val share = nominal.getValue(source)[path] ?: 0.0
+                    if (outputs.isEmpty()) return@forEach
+                    val share = nominal.getValue(source)[path] ?: Fraction.ZERO
                     val rate = worst.getValue(source)[path] ?: Fraction.ZERO
                     val ceiling = ceilings.getValue(source)[path] ?: Fraction.ZERO
                     val exactWeights = outputs.map { if (router.policy == RoutingPolicy.RANDOM) Fraction.of(it.weight) else Fraction.ONE }
                     val exactTotal = exactWeights.fold(Fraction.ZERO) { sum, weight -> sum + weight }
                     outputs.forEachIndexed { index, route ->
-                        add(source, route.to, share * (weights[index] / total), rate * exactWeights[index] / exactTotal, ceiling)
+                        add(source, route.to, share * exactWeights[index] / exactTotal, rate * exactWeights[index] / exactTotal, ceiling)
                     }
                 }
             } else {
@@ -405,7 +408,7 @@ class ModelLinter(
                         add(
                             source,
                             call.to,
-                            nominal.getValue(source)[path] ?: 0.0,
+                            nominal.getValue(source)[path] ?: Fraction.ZERO,
                             first * factor,
                             (ceilings.getValue(source)[path] ?: Fraction.ZERO) * factor,
                         )
@@ -432,6 +435,39 @@ class ModelLinter(
         val rate = minOf(offeredRate, service.rateLimit?.let { Fraction.of(it.ratePerMs) } ?: offeredRate)
         val holdingMs = demand / offeredRate
         return ServiceLoad(rate, holdingMs, rate * holdingMs / Fraction.of(service.handlers.toBigDecimal()))
+    }
+
+    private fun lowHeadroom(
+        service: ServiceNode,
+        load: ServiceLoad,
+        offeredRate: Fraction,
+    ): Diagnostic? {
+        if (service.pooler != null || load.utilization < Fraction.of(lowHeadroomThreshold) || load.utilization >= Fraction.ONE) return null
+        val rateText = Quantities.plain((load.rate * Fraction.of(BigDecimal(1_000))).decimal())
+        val utilizationText = Quantities.plain(load.utilization.decimal())
+        val holdingText = Quantities.plain(load.holdingMs.decimal())
+        val limitText = service.rateLimit?.let { Quantities.plain(it.ratePerMs * 1_000.0) }
+        val args =
+            mapOf(
+                "target" to JsonPrimitive(service.path.substringBeforeLast('#', service.path)),
+                "ratePerSecond" to JsonPrimitive(rateText),
+                "offeredRatePerSecond" to JsonPrimitive(Quantities.plain((offeredRate * Fraction.of(BigDecimal(1_000))).decimal())),
+                "utilization" to JsonPrimitive(utilizationText),
+                "holdingMs" to JsonPrimitive(holdingText),
+                "handlers" to JsonPrimitive(service.handlers),
+                "threshold" to JsonPrimitive(number(lowHeadroomThreshold)),
+            )
+        return warning(
+            if (limitText == null) CoreMessage.LINT_LOW_HEADROOM else CoreMessage.LINT_LOW_HEADROOM_RATE_LIMIT,
+            "Low headroom of '${service.path}': nominal utilization $utilizationText at threshold ${number(lowHeadroomThreshold)} " +
+                "($rateText requests/s accepted, $holdingText ms mean holding, ${service.handlers} slots). " +
+                (if (limitText == null) "" else "Configured rate limit: $limitText requests/s. ") +
+                "Small load increases may grow queues; increase capacity or reduce load or processing time.",
+            service.origin,
+            service.path,
+            if (service.type == "database") "/params/maxConnections" else "/params/handlers",
+            if (limitText == null) args else args + ("rateLimitPerSecond" to JsonPrimitive(limitText)),
+        )
     }
 
     private fun retryOverload(
@@ -683,23 +719,24 @@ class ModelLinter(
      */
     private fun handlerDemand(
         services: List<ServiceNode>,
-        demands: Map<String, BigDecimal>,
-        maximumRates: Map<String, BigDecimal>,
+        demands: Map<String, Fraction>,
+        maximumRates: Map<String, Fraction>,
         queuePatience: Map<String, QueuePatience>,
     ): List<Diagnostic> =
         buildList {
             services.forEach { service ->
-                val demand = demands[service.path] ?: BigDecimal.ZERO
-                val maximumRate = maximumRates[service.path] ?: BigDecimal.ZERO
-                val holdingMs = serviceLoad(service, Fraction.of(demand), Fraction.of(maximumRate)).holdingMs.decimal().toDouble()
-                if (service.pooler == null && service.handlers.toBigDecimal() < demand) {
+                val demand = demands[service.path] ?: Fraction.ZERO
+                val maximumRate = maximumRates[service.path] ?: Fraction.ZERO
+                val load = serviceLoad(service, demand, maximumRate)
+                val holdingMs = load.holdingMs.decimal().toDouble()
+                if (service.pooler == null && Fraction.of(service.handlers.toBigDecimal()) <= demand) {
                     val database = service.type == "database"
                     val resource = if (database) "Connections" else "Handlers"
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
-                            "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand.toDouble())} at " +
-                                "${number((maximumRate * BigDecimal(1_000)).toDouble())} requests/s. " +
+                            "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand.decimal().toDouble())} at " +
+                                "${number((maximumRate * Fraction.of(BigDecimal(1_000))).decimal().toDouble())} requests/s. " +
                                 "Queues may grow; increase capacity or reduce load or processing time.",
                             service.origin,
                             service.path,
@@ -707,14 +744,15 @@ class ModelLinter(
                             mapOf(
                                 "elementType" to JsonPrimitive(service.type),
                                 "handlers" to JsonPrimitive(service.handlers),
-                                "demand" to messageNumber(demand.toDouble()),
-                                "ratePerSecond" to messageNumber((maximumRate * BigDecimal(1_000)).toDouble()),
+                                "demand" to messageNumber(demand.decimal().toDouble()),
+                                "ratePerSecond" to messageNumber((maximumRate * Fraction.of(BigDecimal(1_000))).decimal().toDouble()),
                                 "holdingMs" to messageNumber(holdingMs),
                             ),
                         ),
                     )
                 }
-                queueWait(service, demand, maximumRate, holdingMs, queuePatience[service.path])?.let(::add)
+                lowHeadroom(service, load, maximumRate)?.let(::add)
+                queueWait(service, demand.decimal(), maximumRate.decimal(), holdingMs, queuePatience[service.path])?.let(::add)
             }
         }
 
