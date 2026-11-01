@@ -290,7 +290,7 @@ test("edits and clears the shared series window with validation, persistence and
   const diagnostic = result.diagnostics.find((item: { pointer: string }) => item.pointer === "/execution/window");
   expect(diagnostic).toBeTruthy();
   await expect(windowField.locator("..")).toContainText(diagnostic.message);
-  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Run", exact: true })).toHaveAttribute("title", "Fix validation errors before running");
 
   await windowField.fill("0.25s");
   await windowField.press("Enter");
@@ -665,7 +665,8 @@ test("measures a new Client before collision checks with its initial values and 
     JSON.stringify({ ...sourceLayout, positions: { client: { x: 0, y: 200 } } }));
   await page.reload();
   await expect(page.getByTestId("block-node")).toHaveCount(1);
-  // Removing the services invalidates the experiment; wait for Problems to resize the canvas before panning.
+  // Removing the services invalidates the experiment; explicitly open Problems and wait for the canvas resize before panning.
+  await page.getByRole("tab", { name: "Problems", exact: true }).click();
   await expect(page.getByRole("tab", { name: /^Problems/ })).toHaveAttribute("aria-selected", "true");
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const canvas = page.getByLabel("Model canvas", { exact: true });
@@ -1012,8 +1013,9 @@ test("inserts a database with explicit initial values and a wiring hint, then co
   await expect(page.getByLabel("Mean", { exact: true })).toHaveValue("5ms");
   await expect(database.locator(".block-wiring-hint")).toHaveText("Connect this block to the model");
   await expect(database.locator(".diagnostic--error")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Problems", exact: true }).click();
   await expect(page.locator(".validation-problems")).not.toContainText("PARAM_");
-  await expect(run).toBeDisabled();
+  await expect(run).toHaveAttribute("title", "Fix validation errors before running");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(database).toHaveCount(0);
   await page.getByRole("button", { name: "Redo", exact: true }).click();

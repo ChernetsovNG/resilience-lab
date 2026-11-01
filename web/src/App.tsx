@@ -79,7 +79,7 @@ export function App() {
   const [problemsElement, setProblemsElement] = useState<string | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<number | null>(null);
   const [launchDocuments, setLaunchDocuments] = useState<RunDocuments | null>(null);
-  const [observedErrors, setObservedErrors] = useState<{ path: string | null; validation: string; run: string }>({ path: null, validation: "[]", run: "[]" });
+  const [observedErrors, setObservedErrors] = useState<{ path: string | null; run: string; estimate: string }>({ path: null, run: "[]", estimate: "[]" });
   const [selection, setSelection] = useState<string[]>([]);
   const [selectionModel, setSelectionModel] = useState<ModelFile | null>(null);
   const [courseHeight, setCourseHeight] = useState(0);
@@ -221,23 +221,22 @@ export function App() {
   const currentRunDiagnostics = mergeDiagnostics(ownRun && !staleResults ? run.job?.diagnostics ?? [] : [],
     launchIsCurrent || (ownRun && launchDocuments === null) ? problemDiagnostics(run.problem) : []);
   const workspaceDiagnostics = problemDiagnostics(workspace.problem);
-  const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics, workspaceDiagnostics);
+  const allDiagnostics = mergeDiagnostics(diagnostics, problemDiagnostics(validation.problem), currentRunDiagnostics, workspaceDiagnostics, estimate.problem?.diagnostics ?? []);
   const path = loaded?.experimentPath ?? null;
-  const previousErrors = observedErrors.path === path ? observedErrors : { validation: "[]", run: "[]" };
-  const validationResponse = validation.report?.diagnostics ?? (validation.problem === null ? null : problemDiagnostics(validation.problem));
-  const validationErrors = validationResponse === null && workspaceDiagnostics.length === 0 ? previousErrors.validation
-    : JSON.stringify(mergeDiagnostics(validationResponse ?? [], workspaceDiagnostics).filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
+  const previousErrors = observedErrors.path === path ? observedErrors : { run: "[]", estimate: "[]" };
   const waitingForSubmission = ownRun && run.running && run.problem === null &&
     (run.job === null || (run.job.status !== "QUEUED" && run.job.status !== "RUNNING"));
   const runErrors = waitingForSubmission ? previousErrors.run
     : JSON.stringify(runDiagnostics.filter((finding) => finding.severity === "ERROR").map(diagnosticKey));
-  if (observedErrors.path !== path || observedErrors.validation !== validationErrors || observedErrors.run !== runErrors) {
-    const previousValidation = new Set<string>(JSON.parse(previousErrors.validation));
+  const estimateErrors = estimate.pending ? previousErrors.estimate
+    : JSON.stringify((estimate.problem?.diagnostics ?? []).filter(finding => finding.severity === "ERROR").map(diagnosticKey));
+  if (observedErrors.path !== path || observedErrors.run !== runErrors || observedErrors.estimate !== estimateErrors) {
     const previousRun = new Set<string>(JSON.parse(previousErrors.run));
+    const previousEstimate = new Set<string>(JSON.parse(previousErrors.estimate));
     const currentRun = new Set(currentRunDiagnostics.map(diagnosticKey));
-    const hasNewError = JSON.parse(validationErrors).some((key: string) => !previousValidation.has(key)) ||
-      (launchDocuments !== null && JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key)));
-    setObservedErrors({ path, validation: validationErrors, run: runErrors });
+    const hasNewError = (launchDocuments !== null && JSON.parse(runErrors).some((key: string) => currentRun.has(key) && !previousRun.has(key))) ||
+      JSON.parse(estimateErrors).some((key: string) => !previousEstimate.has(key));
+    setObservedErrors({ path, run: runErrors, estimate: estimateErrors });
     if (hasNewError) {
       setProblemsElement(null);
       setProblemsRequest((current) => current + 1);
@@ -274,6 +273,12 @@ export function App() {
     : validation.pending ? t("app.validation.pending")
     : validation.problem !== null ? t("app.validation.failed")
       : validation.report?.valid === false ? t("app.validation.invalid") : undefined;
+  const validationFailed = validation.problem !== null || validation.report?.valid === false;
+  const openProblems = useCallback(() => {
+    setProblemsElement(null);
+    setProblemsRequest(current => current + 1);
+    setResultsSize(current => current === "collapsed" ? "normal" : current);
+  }, []);
 
   const onValidity = useCallback((key: string, valid: boolean) => {
     setInvalidFields((current) => {
@@ -366,10 +371,12 @@ export function App() {
   const courseFaults = loaded === null || courseModel === null || catalog === null ? [] : courseData(courseModel, loaded.experiment, catalog).faults;
   const courseTime = ownRun && !staleResults && variant !== undefined && seriesMetadata != null;
 
-  const requestEstimate = () => {
+  const requestEstimate = async () => {
+    if (validationFailed) { openProblems(); return; }
     if (resultsSize === "collapsed") setResultsSize("normal");
     setEstimatePanel({ source: "manual" });
-    return estimate.request();
+    const cost = await estimate.request();
+    if (cost?.problem?.diagnostics.some(finding => finding.severity === "ERROR")) setEstimatePanel(null);
   };
 
   const resetExperimentView = () => {
@@ -388,7 +395,11 @@ export function App() {
 
   const startRun = useCallback(async () => {
     if (loaded === null || invalid || loading || workspace.saving || workspace.conflict || run.running ||
-      runInFlight.current || estimate.pending || runBlockedReason !== undefined || health.error !== null) return;
+      runInFlight.current || estimate.pending || health.error !== null) return;
+    if (runBlockedReason !== undefined) {
+      if (hasClient && validationFailed) openProblems();
+      return;
+    }
     runInFlight.current = true;
     if (resultsSize === "collapsed") setResultsSize("normal");
     setRunPending(true);
@@ -396,6 +407,7 @@ export function App() {
     try {
       const cost = await estimate.request();
       if (cost === null) return;
+      if (cost.problem?.diagnostics.some(finding => finding.severity === "ERROR")) return;
       if (cost.problem !== null || cost.value.warnings.some(warning =>
         warning.code === "ESTIMATE_UI_CACHE" || warning.code === "ESTIMATE_EXTRAPOLATION")) {
         setEstimatePanel({ source: "run", previousJobId: run.job?.id ?? null });
@@ -418,7 +430,7 @@ export function App() {
       runInFlight.current = false;
       setRunPending(false);
     }
-  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize, confirm]);
+  }, [loaded, invalid, loading, workspace, run, estimate, runBlockedReason, health.error, resultsSize, confirm, hasClient, validationFailed, openProblems]);
 
   useEffect(() => {
     if (command === null) return;
@@ -479,6 +491,7 @@ export function App() {
         onRedo={workspace.redo}
         running={run.running || startingRun}
         runBlockedReason={runBlockedReason}
+        onValidationProblems={hasClient && validationFailed ? openProblems : undefined}
         runProblem={workspace.problem === null ? undefined : backendMessage(workspace.problem)}
         estimating={estimate.pending}
         onEstimate={() => void requestEstimate()}
@@ -731,11 +744,7 @@ export function App() {
       <StatusBar job={ownRun ? run.job : null} health={health.health} healthError={health.error}
         diagnostics={allDiagnostics} stale={staleResults} zoom={model === null ? null : canvasZoom}
         cursorMs={ownRun && seriesMetadata != null && results.selection.window !== null ? results.selection.window * windowMs : null}
-        onProblems={() => {
-          setProblemsElement(null);
-          setProblemsRequest((current) => current + 1);
-          if (resultsSize === "collapsed") setResultsSize("normal");
-        }} />
+        onProblems={openProblems} />
     </div>
     </DiagnosticLabelContext>
   );
