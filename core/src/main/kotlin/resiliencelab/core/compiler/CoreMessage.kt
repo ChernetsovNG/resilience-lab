@@ -127,6 +127,11 @@ internal enum class CoreMessage(
         null,
         "Timeout {timeoutMs} ms on connection '{connection}' is at least {threshold} × deadline for clients (deadlines in ms): {clientDeadlines}",
     ),
+    LINT_RETRY_NO_JITTER(
+        "LINT_RETRY_NO_JITTER",
+        null,
+        "Connection '{connection}' allows {attempts} attempts with backoff '{backoff}', above threshold {threshold}; use exponential-full-jitter",
+    ),
     LINT_RETRY_AMPLIFICATION("LINT_RETRY_AMPLIFICATION", null, "Retry amplification {amplification} exceeds threshold {threshold}"),
     LINT_HANDLERS_LITTLE(
         "LINT_HANDLERS_LITTLE",

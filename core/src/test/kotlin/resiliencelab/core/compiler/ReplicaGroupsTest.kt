@@ -219,6 +219,50 @@ class ReplicaGroupsTest {
     }
 
     @Test
+    fun `jitter warnings check group targets once and outgoing replica copies separately`() {
+        val source = model(3, overrides = """, "replicaOverrides":{"2":{"processing":{"mean":"9ms"}}}""")
+        val changed =
+            experiment().copy(
+                variants =
+                    listOf(
+                        Variant(
+                            "candidate",
+                            overrides =
+                                mapOf(
+                                    "gateway-to-worker.attempts" to JsonPrimitive(2),
+                                    "gateway-to-worker.backoff.kind" to JsonPrimitive("fixed"),
+                                    "worker-to-tail.attempts" to JsonPrimitive(3),
+                                    "worker-to-tail.backoff.kind" to JsonPrimitive("none"),
+                                ),
+                        ),
+                    ),
+            )
+        val compiled = compile(source, changed)
+        assertThat(compiled.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(requireNotNull(compiled.experiment)).filter { it.code == "LINT_RETRY_NO_JITTER" }
+
+        assertThat(warnings.map { it.path }).containsExactlyInAnyOrder(
+            "gateway-to-worker",
+            "worker-to-tail#1",
+            "worker-to-tail#2",
+            "worker-to-tail#3",
+        )
+        val incoming = warnings.single { it.path == "gateway-to-worker" }
+        assertThat(incoming.pointer).isEqualTo("/variants/0/overrides/gateway-to-worker.backoff.kind")
+        assertThat(incoming.args).doesNotContainKey("replica")
+        warnings.filter { it.path != "gateway-to-worker" }.forEach { warning ->
+            assertThat(warning.message).contains("Replica '${warning.path}'", "3 attempts", "exponential-full-jitter")
+            assertThat(warning.args).containsEntry("replica", JsonPrimitive(warning.path!!.substringAfterLast('#').toInt()))
+            assertThat(warning.pointer).isEqualTo("/variants/0/overrides/worker-to-tail.backoff.kind")
+        }
+        assertThat(warnings).allSatisfy { warning ->
+            assertThat(warning.document).isEqualTo("e.experiment.json")
+            assertThat(warning.variant).isEqualTo("candidate")
+        }
+    }
+
+    @Test
     fun `incoming calls retain their own policy including the default`() {
         val source =
             model(3).let { model ->

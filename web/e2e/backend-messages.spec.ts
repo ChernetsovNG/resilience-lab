@@ -12,6 +12,24 @@ for (const locale of locales) {
     const catalog = JSON.parse(readFileSync(resolve(`src/i18n/${locale.startsWith("ru") ? "ru" : "en"}.json`), "utf8")) as Record<string, string>;
     const label = (key: string) => catalog[key];
 
+    test("localizes retries without jitter and opens the backoff parameter", async ({ page }) => {
+      await page.goto("/");
+      await selectExperiment(page, "checkout/checkout.experiment.json");
+      await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+      const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_RETRY_NO_JITTER"]');
+
+      await expect(warning).toHaveCount(1);
+      await expect(warning).toContainText("order-service-to-payment-service");
+      await expect(warning).toContainText(locale.startsWith("ru") ? "3 попыток" : "3 attempts");
+      await expect(warning).toContainText("exponential-full-jitter");
+      await warning.click();
+      const kind = page.locator(".inspector").getByLabel(label("catalog.types.call.params.backoff.kind.title"), { exact: true });
+      await expect(kind).toBeFocused();
+      await expect(kind).toHaveValue("fixed");
+      await expect(kind.locator("..").locator(".field-diagnostics")).toContainText("LINT_RETRY_NO_JITTER");
+      await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+    });
+
     test("localizes unreachable timeout warnings and opens the affected connection", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "retry-storm/retry-storm.experiment.json");

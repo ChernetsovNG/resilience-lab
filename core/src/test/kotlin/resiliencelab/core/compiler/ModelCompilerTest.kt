@@ -175,6 +175,86 @@ class ModelCompilerTest {
     }
 
     @Test
+    fun `jitter warnings retain backoff override origins and grid points`() {
+        val base = experiment()
+        val changed =
+            base.copy(
+                variants =
+                    listOf(
+                        base.variants.first().copy(
+                            id = "fixed",
+                            overrides = mapOf("gateway-to-dependency.backoff.kind" to JsonPrimitive("fixed")),
+                        ),
+                    ),
+                grid = listOf(GridAxis("gateway-to-dependency.attempts", listOf(JsonPrimitive(1), JsonPrimitive(2)))),
+            )
+        val result = compiler.compile(model(), "m.model.json", changed, "e.experiment.json")
+        assertThat(result.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(requireNotNull(result.experiment)).single { it.code == "LINT_RETRY_NO_JITTER" }
+
+        assertThat(warning.document).isEqualTo("e.experiment.json")
+        assertThat(warning.pointer).isEqualTo("/variants/0/overrides/gateway-to-dependency.backoff.kind")
+        assertThat(warning.variant).isEqualTo("fixed")
+        assertThat(warning.args).containsEntry("points", JsonPrimitive("p1"))
+        assertThat(warning.message).contains("points: p1")
+    }
+
+    @Test
+    fun `whole backoff overrides retain each variant origin instead of becoming a common warning`() {
+        val backoff = Json.parseToJsonElement("""{"kind":"fixed","base":"2ms","max":"20ms"}""")
+        val source =
+            experiment().let {
+                it.copy(
+                    variants =
+                        it.variants.map { variant ->
+                            variant.copy(overrides = mapOf("gateway-to-dependency.backoff" to backoff))
+                        },
+                )
+            }
+        val result = compiler.compile(model(), "m.model.json", source, "e.experiment.json")
+        assertThat(result.diagnostics).isEmpty()
+
+        val warnings = ModelLinter().lint(requireNotNull(result.experiment)).filter { it.code == "LINT_RETRY_NO_JITTER" }
+
+        assertThat(warnings.map { it.variant to it.pointer }).containsExactly(
+            "baseline" to "/variants/0/overrides/gateway-to-dependency.backoff",
+            "no-retries" to "/variants/1/overrides/gateway-to-dependency.backoff",
+        )
+        assertThat(warnings).allSatisfy { assertThat(it.document).isEqualTo("e.experiment.json") }
+    }
+
+    @Test
+    fun `whole backoff grid values retain their origins and affected points`() {
+        val jitter = Json.parseToJsonElement("""{"kind":"exponential-full-jitter","base":"2ms","max":"20ms"}""")
+        val fixed = Json.parseToJsonElement("""{"kind":"fixed","base":"2ms","max":"20ms"}""")
+        val source = experiment().copy(grid = listOf(GridAxis("gateway-to-dependency.backoff", listOf(jitter, fixed))))
+        val result = compiler.compile(model(), "m.model.json", source, "e.experiment.json")
+        assertThat(result.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(requireNotNull(result.experiment)).single { it.code == "LINT_RETRY_NO_JITTER" }
+
+        assertThat(warning.variant).isEqualTo("baseline")
+        assertThat(warning.pointer).isEqualTo("/grid/0/values/1")
+        assertThat(warning.document).isEqualTo("e.experiment.json")
+        assertThat(warning.args).containsEntry("points", JsonPrimitive("p1"))
+    }
+
+    @Test
+    fun `common jitter warnings are grouped across variants`() {
+        val changed = model.replace("exponential-full-jitter", "fixed")
+        val source = experiment().let { it.copy(variants = it.variants.map { variant -> variant.copy(overrides = emptyMap()) }) }
+        val result = compiler.compile(model(changed), "m.model.json", source, "e.experiment.json")
+        assertThat(result.diagnostics).isEmpty()
+
+        val warning = ModelLinter().lint(requireNotNull(result.experiment)).single { it.code == "LINT_RETRY_NO_JITTER" }
+
+        assertThat(warning.document).isEqualTo("m.model.json")
+        assertThat(warning.pointer).isEqualTo("/connections/1/params/backoff/kind")
+        assertThat(warning.variant).isNull()
+    }
+
+    @Test
     fun `unreachable timeout warnings retain variant override origins`() {
         val source =
             experiment().copy(

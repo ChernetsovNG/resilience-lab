@@ -19,6 +19,7 @@ import kotlin.math.pow
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
+ * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
  */
@@ -27,9 +28,11 @@ class ModelLinter(
     private val minimumReplications: Int = 5,
     private val timeoutBudgetTolerance: Double = 0.05,
     private val timeoutUnreachableThreshold: Double = 1.0,
+    private val retryNoJitterThreshold: Int = 1,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
+        require(retryNoJitterThreshold >= 1) { "retryNoJitterThreshold must be at least 1" }
         require(minimumReplications >= 1) { "minimumReplications must be at least 1" }
         require(timeoutBudgetTolerance.isFinite() && timeoutBudgetTolerance >= 0.0) {
             "timeoutBudgetTolerance must be finite and non-negative"
@@ -51,7 +54,9 @@ class ModelLinter(
                     .flatMap { point ->
                         lintGraph(point.graph).map { diagnostic ->
                             val parameter = diagnostic.pointer?.substringAfter("/params/")?.replace('/', '.')
-                            val origin = point.parameterOrigins["${diagnostic.path}.$parameter"]
+                            val origin =
+                                generateSequence(parameter) { it.substringBeforeLast('.', "").takeIf { parent -> parent.isNotEmpty() } }
+                                    .firstNotNullOfOrNull { point.parameterOrigins["${diagnostic.path}.$it"] }
                             val located =
                                 if (origin == null) {
                                     diagnostic
@@ -126,6 +131,7 @@ class ModelLinter(
                         val ordered = (listOf(entry.path) + calls.map { it.to }).map { services.getValue(it) }
                         calls.forEach { call ->
                             clientsByCall.getOrPut(call.path) { linkedSetOf() }.add(client)
+                            retryNoJitter(call)?.let(diagnostics::add)
                             timeoutBudget(call, processingMs(graph, services.getValue(call.to), requestClass), outgoing[call.to])
                                 ?.let(diagnostics::add)
                         }
@@ -288,6 +294,29 @@ class ModelLinter(
                 "timeoutMs" to JsonPrimitive(number(call.timeoutMs)),
                 "clientDeadlines" to JsonPrimitive(deadlines),
                 "threshold" to JsonPrimitive(number(timeoutUnreachableThreshold)),
+            ),
+        )
+    }
+
+    /** Retry budgets limit volume, but do not stagger NONE or FIXED backoffs on applicable call paths. */
+    private fun retryNoJitter(call: CallEdge): Diagnostic? {
+        if (call.attempts <= retryNoJitterThreshold || call.backoff.kind == BackoffKind.EXPONENTIAL_FULL_JITTER) return null
+        val backoff =
+            call.backoff.kind.name
+                .lowercase()
+        return warning(
+            CoreMessage.LINT_RETRY_NO_JITTER,
+            "Connection '${call.path}' allows ${number(call.attempts.toDouble())} attempts with backoff '$backoff', " +
+                "above the warning threshold of ${number(retryNoJitterThreshold.toDouble())}. " +
+                "Retries may synchronize and overload dependencies; use exponential-full-jitter.",
+            call.origin,
+            call.path,
+            "/params/backoff/kind",
+            mapOf(
+                "connection" to JsonPrimitive(call.path),
+                "attempts" to JsonPrimitive(call.attempts),
+                "backoff" to JsonPrimitive(backoff),
+                "threshold" to JsonPrimitive(retryNoJitterThreshold),
             ),
         )
     }
