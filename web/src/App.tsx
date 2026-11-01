@@ -720,7 +720,7 @@ export function App() {
         onPointChange={(pointId) => results.select({ pointId })}
         runId={ownRun ? resultRunId : null}
         experiment={ownRun ? resultDocuments?.experiment ?? null : null}
-        selectedNodes={selection}
+        selectedNodes={selectedReplica === null ? selection : [selectedReplica.id]}
         replication={results.selection.replication}
         cursorWindow={results.selection.window}
         onCursorChange={playback.seek}
