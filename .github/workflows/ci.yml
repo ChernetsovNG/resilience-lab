@@ -230,7 +230,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     container:
       image: &playwright-image mcr.microsoft.com/playwright:v1.64.1-noble
       options: --ipc=host
@@ -300,7 +300,7 @@ jobs:
         working-directory: web
         env:
           E2E_SERVER_JAR: .e2e-server/e2e-server.jar
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}/3 --reporter=line,html
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=line,html
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v7

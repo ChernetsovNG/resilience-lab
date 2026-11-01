@@ -41,7 +41,8 @@ if (process.env.E2E_PORTS_CHECKED === undefined) {
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./playwright.global-setup.ts",
-  fullyParallel: false,
+  // Shards split individual tests, not whole files; each shard still runs them one at a time on its own backend.
+  fullyParallel: true,
   workers: 1,
   timeout: 120_000,
   use: {
