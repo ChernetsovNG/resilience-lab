@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection } from "./canvasGestures";
 import { expect, selectExperiment, test } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });

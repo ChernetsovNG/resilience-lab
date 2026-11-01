@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures";
 import { selectExperiment } from "./fixtures";
-import { dragConnection } from "./connectionGestures";
+import { dragConnection } from "./canvasGestures";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 

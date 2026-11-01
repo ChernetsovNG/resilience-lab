@@ -1,6 +1,6 @@
 import { copyRetryStorm, selectExperiment } from "./fixtures";
-import { dragConnection, waitForStablePorts } from "./connectionGestures";
-import { expect, test as base, type Locator, type Page } from "./fixtures";
+import { dragCanvas, dragConnection, dragNode, dragPaletteBlock } from "./canvasGestures";
+import { expect, test as base, type Page } from "./fixtures";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -499,24 +499,11 @@ async function save(page: Page) {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator(".dirty-mark")).toBeHidden();
 }
-async function move(page: Page, locator: Locator, dx: number, dy: number) {
-  const header = locator.locator(".block-node > strong");
-  const canvas = page.getByLabel("Model canvas", { exact: true });
-  await waitForStablePorts(header);
-  const box = await header.boundingBox();
-  const bounds = await canvas.boundingBox();
-  expect(box).not.toBeNull();
-  expect(bounds).not.toBeNull();
-  // Resolve the hit target at mousedown: automatic fitting can invalidate sampled screen coordinates.
-  await header.dragTo(canvas, {
-    targetPosition: { x: box!.x + box!.width / 2 + dx - bounds!.x, y: box!.y + box!.height / 2 + dy - bounds!.y },
-    steps: 12,
-  });
-}
 async function connect(page: Page, from: string, to: string, targetPort = "in") {
   const source = page.getByTestId(`rf__node-${from}`).locator('[data-handleid="out"]');
   const target = page.getByTestId(`rf__node-${to}`).locator(`[data-handleid="${targetPort}"]`);
-  await dragConnection(source, target);
+  // React Flow disables other output handles during a drag; this negative case releases on the owning node.
+  await dragConnection(source, target, targetPort === "out" ? { releaseTarget: page.getByTestId(`rf__node-${to}`) } : {});
 }
 
 test("shows one palette tooltip for mouse hover or keyboard focus", async ({ page }) => {
@@ -629,16 +616,16 @@ test("adds a block with Tab and Enter at the panned viewport center, with undo a
   await service.hover();
   await expect(palette.getByRole("tooltip", { name: "Service", exact: true })).toBeVisible();
   await page.locator(".react-flow__controls-zoomout").click();
-  const bounds = (await canvas.boundingBox())!;
   const pan = await canvas.evaluate(element => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
     return { x: matrix.e, y: matrix.f };
   });
   // Move the existing chain above the visible center, leaving a free insertion point after zooming.
-  await page.mouse.move(bounds.x + 80, bounds.y + bounds.height - 40);
-  await page.mouse.down();
-  await page.mouse.move(bounds.x - 70, bounds.y + bounds.height - 280, { steps: 12 });
-  await page.mouse.up();
+  const pane = canvas.locator(".react-flow__pane");
+  await dragCanvas(pane, canvas, {
+    sourcePosition: pane => ({ x: 200, y: pane.height - 40 }),
+    targetPosition: pane => ({ x: 50, y: pane.height - 280 }),
+  });
   await expect.poll(() => canvas.evaluate((element, start) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
     return { x: Math.round(matrix.e - start.x), y: Math.round(matrix.f - start.y) };
@@ -723,16 +710,16 @@ test("measures a new Client before collision checks with its initial values and 
   await expect(page.getByRole("tab", { name: /^Problems/ })).toHaveAttribute("aria-selected", "true");
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const canvas = page.getByLabel("Model canvas", { exact: true });
-  const bounds = (await canvas.boundingBox())!;
   const delta = await canvas.evaluate((element) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element.querySelector(".react-flow__viewport")!).transform);
     const box = element.getBoundingClientRect();
     return { x: box.width / 2 + 180 * matrix.a - matrix.e, y: box.height / 2 - 200 * matrix.d - matrix.f };
   });
-  await page.mouse.move(bounds.x + 20, bounds.y + bounds.height - 40);
-  await page.mouse.down();
-  await page.mouse.move(bounds.x + 20 + delta.x, bounds.y + bounds.height - 40 + delta.y, { steps: 12 });
-  await page.mouse.up();
+  const pane = canvas.locator(".react-flow__pane");
+  await dragCanvas(pane, canvas, {
+    sourcePosition: { x: 20, y: 80 },
+    targetPosition: { x: 20 + delta.x, y: 80 + delta.y },
+  });
   await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Client", exact: true }).dblclick();
   const incoming = page.getByTestId("rf__node-client-1");
   await expect(incoming).toHaveClass(/selected/);
@@ -760,22 +747,18 @@ test("keeps the viewport fixed while a palette block is held over a resizing can
     }, { capture: true, once: true });
     return state;
   });
-  const bounds = (await canvas.boundingBox())!;
-  const target = { x: bounds.x + bounds.width * 0.55, y: bounds.y + bounds.height * 0.5 };
-  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true }).hover();
-  await page.mouse.down();
-  await page.mouse.move(target.x, target.y, { steps: 10 });
-  await page.mouse.move(target.x + 1, target.y);
-  expect(await drag.evaluate(state => state.started)).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect.poll(async () => (await canvas.boundingBox())!.height).not.toBe(bounds.height);
-  await canvas.evaluate(async () => {
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const service = page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true });
+  await dragPaletteBlock(service, canvas, bounds => ({ x: bounds.width * 0.55, y: bounds.height * 0.5 }), async (_, bounds) => {
+    expect(await drag.evaluate(state => state.started)).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect.poll(async () => (await canvas.boundingBox())!.height).not.toBe(bounds.height);
+    await canvas.evaluate(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    const transforms = await drag.evaluate(state => state.transforms);
+    expect(new Set(transforms)).toEqual(new Set([transforms[0]]));
+    await drag.dispose();
   });
-  const transforms = await drag.evaluate(state => state.transforms);
-  expect(new Set(transforms)).toEqual(new Set([transforms[0]]));
-  await drag.dispose();
-  await page.mouse.up();
   await expect(page.getByTestId("rf__node-service-1")).toBeVisible();
   await save(page);
   expect((await stored(page, files.model)).content.model.blocks["service-1"].type).toBe("service");
@@ -783,9 +766,7 @@ test("keeps the viewport fixed while a palette block is held over a resizing can
 
 test("extends the chain through real drag and ports, persists positions and commits a move as one layout-only command", async ({ page, files }) => {
   const canvas = page.getByLabel("Model canvas", { exact: true });
-  const bounds = await canvas.boundingBox();
-  const targetPosition = { x: Math.round(bounds!.width * 0.55), y: Math.round(bounds!.height * 0.7) };
-  // Automatic fitting can finish during dragTo; sample the actual drop before React handles it.
+  // Automatic fitting can finish during a palette drag; sample the actual drop before React handles it.
   const drop = await canvas.evaluateHandle(element => {
     const coordinates = { position: null as { x: number; y: number } | null };
     element.addEventListener("drop", event => {
@@ -797,8 +778,10 @@ test("extends the chain through real drag and ports, persists positions and comm
     }, { capture: true, once: true });
     return coordinates;
   });
-  await page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true })
-    .dragTo(canvas, { targetPosition });
+  await dragPaletteBlock(
+    page.getByRole("complementary", { name: "Palette" }).getByRole("button", { name: "Service", exact: true }),
+    canvas, bounds => ({ x: Math.round(bounds.width * 0.55), y: Math.round(bounds.height * 0.7) }),
+  );
   const expectedDrop = await drop.evaluate(coordinates => coordinates.position);
   await drop.dispose();
   const node = page.getByTestId("rf__node-service-1");
@@ -832,7 +815,7 @@ test("extends the chain through real drag and ports, persists positions and comm
   await page.reload();
   await expect(node).toBeVisible();
   await expect(edge).toBeAttached();
-  await move(page, node, -60, -60);
+  await dragNode(node, { x: -60, y: -60 });
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeHidden();
@@ -959,7 +942,7 @@ test("moves a multi-selection once, copies its internal connection, and keeps va
   await gateway.click();
   await page.getByTestId("rf__node-middle").click({ modifiers: ["ControlOrMeta"] });
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
-  await move(page, gateway, 0, 60);
+  await dragNode(gateway, { x: 0, y: 60 });
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(gateway).not.toHaveCSS("transform", `matrix(1, 0, 0, 1, ${before.positions.gateway.x}, ${before.positions.gateway.y})`);
   await expect(page.getByTestId("rf__node-middle")).not.toHaveCSS("transform", `matrix(1, 0, 0, 1, ${before.positions.middle.x}, ${before.positions.middle.y})`);
