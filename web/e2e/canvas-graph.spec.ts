@@ -1,5 +1,5 @@
-import { expect, test as base, type Page } from "./fixtures";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cleanupWorkspace, expect, test as base, type Page } from "./fixtures";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
@@ -55,7 +55,7 @@ const test = base.extend<{ graph: { directory: string; layout: LayoutFile } }>({
       await expect(page.getByTestId("block-node")).toHaveCount(6);
       await expect(page.getByRole("combobox", { name: "Модель", exact: true })).toBeEnabled();
       await provide({ directory, layout });
-    } finally { await rm(target, { recursive: true }); }
+    } finally { await cleanupWorkspace(page, target); }
   },
 });
 
@@ -157,6 +157,7 @@ test("branch labels follow their edges and node footprints survive a real run", 
     expect.soft(label.bannerOverlap, label.id).toBe(false);
   }
   const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+  expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
   expect((await response.json()).content.layout).toEqual(graph.layout);
 });
 
@@ -206,7 +207,9 @@ for (const count of [1, 2]) {
       page.getByTestId("rf__node-middle").locator('[data-handleid="in"]'));
     await expect(page.locator('.react-flow__edge[data-id="client-to-middle"]')).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(page.locator(".dirty-mark")).toBeHidden();
     const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
     expect((await response.json()).content.layout).toEqual(layout);
   });
 }
@@ -356,7 +359,9 @@ for (const activation of ["enter", "add"] as const) {
     expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(8);
     expect(await page.locator(".react-flow__viewport").getAttribute("style")).toBe(viewport);
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(page.locator(".dirty-mark")).toBeHidden();
     const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
     const saved: LayoutFile = (await response.json()).content.layout;
     for (const [id, position] of Object.entries(graph.layout.positions)) expect(saved.positions[id]).toEqual(position);
     await expect(page.getByRole("button", { name: "Запустить", exact: true }))
@@ -398,7 +403,9 @@ for (const zoom of [0.05, 0.4, 1]) {
     });
     await expect(page.locator('.react-flow__edge[data-id="client-to-gateway"]')).toBeAttached();
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(page.locator(".dirty-mark")).toBeHidden();
     const response = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/graph.layout.json`);
+    expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
     expect((await response.json()).content.layout).toEqual(graph.layout);
     await expect(page.getByRole("button", { name: "Запустить", exact: true }))
       .not.toHaveAttribute("title", "Дождитесь окончания проверки");

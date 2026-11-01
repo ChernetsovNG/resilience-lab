@@ -1,14 +1,14 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { copyRetryStorm, expect, selectExperiment, test, type Page } from "./fixtures";
+import { cleanupWorkspace, copyRetryStorm, expect, selectExperiment, test, type Page } from "./fixtures";
 
 test.use({ actionTimeout: 10_000 });
 
 async function stored(page: Page, path: string): Promise<ModelFile> {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
-  expect(response.ok()).toBe(true);
+  expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
   return (await response.json()).content.model;
 }
 
@@ -97,6 +97,7 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
     expect(await stored(page, modelPath)).toEqual(expected);
     const savedExperiment = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`);
+    expect(savedExperiment.ok(), `HTTP ${savedExperiment.status()}: ${await savedExperiment.text()}`).toBe(true);
     const savedExperimentContent = (await savedExperiment.json()).content.experiment;
     expect(savedExperimentContent.grid).toEqual(experiment.grid);
     const savedOverrides = savedExperimentContent.variants[1].overrides;
@@ -112,6 +113,6 @@ test("preserves v6 clients, classes, filters and policies through editing and sa
     await expect(page.getByTestId("block-node")).toHaveCount(6);
     expect(await stored(page, modelPath)).toEqual(expected);
   } finally {
-    await rm(target, { recursive: true });
+    await cleanupWorkspace(page, target);
   }
 });

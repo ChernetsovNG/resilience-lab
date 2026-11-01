@@ -1,10 +1,10 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
 import { formatPercent } from "../src/i18n/format";
 import { setLanguage } from "../src/i18n";
-import { expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1440, height: 1600 }, actionTimeout: 10_000 });
 
@@ -100,6 +100,6 @@ test("compares clients, request types and refusal reasons, then selects checkout
     await page.screenshot({ path: testInfo.outputPath("client-inspector-ru.png") });
   } finally {
     await setLanguage("en");
-    await rm(target, { recursive: true, force: true });
+    await cleanupWorkspace(page, target);
   }
 });

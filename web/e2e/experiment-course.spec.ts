@@ -1,5 +1,5 @@
-import { expect, test } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cleanupWorkspace, expect, test } from "./fixtures";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { selectExperiment } from "./fixtures";
 import type { ExperimentFile } from "../src/api/apiTypes";
@@ -102,5 +102,5 @@ test("a real checkout result shares the course cursor with Timeline and playback
     await page.getByRole("button", { name: "Experiment course", exact: true }).click();
     await page.getByTestId("rf__node-psp").getByRole("button", { name: /Open fault: psp/ }).click();
     await expect(page.locator('[data-inspector-field="faults.0.target"] select')).toBeFocused();
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, directory); }
 });

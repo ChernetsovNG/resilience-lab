@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -88,7 +88,7 @@ for (const language of ["en", "ru"] as const) {
       await page.getByRole("button", { name: ru ? "Сохранить" : "Save", exact: true }).click();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       const modelURL = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.model.json`)}`;
-      const stored: ModelFile = (await (await page.request.get(modelURL)).json()).content.model;
+      const stored: ModelFile = (await readWorkspaceDocument(page.request, modelURL)).content.model;
       expect(stored.blocks["order-service"].scenario![1].classes).toEqual(["checkout"]);
       expect(stored.connections.find(edge => edge.id === "order-route-v2")!.classes).toEqual(["status", "checkout"]);
       expect(stored.connections.find(edge => edge.id === "order-route-v2")!.params).not.toHaveProperty("classes");
@@ -111,7 +111,7 @@ for (const language of ["en", "ru"] as const) {
       expect(aggregate.connections["order-route-v2"].totals.sentAttempts).toBeGreaterThan(0);
       expect(aggregate.connections["order-to-payment"].totals.sentAttempts).toBe(0);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }

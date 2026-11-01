@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, selectExperiment, test, type Page } from "./fixtures";
+import { cleanupWorkspace, expect, readWorkspaceDocument, selectExperiment, test, type Page } from "./fixtures";
 import { dragByOffset, waitForStableRects } from "./canvasGestures";
 import type { LayoutFile } from "../src/api/apiTypes";
 import ru from "../src/i18n/ru.json" with { type: "json" };
@@ -10,9 +10,7 @@ import ru from "../src/i18n/ru.json" with { type: "json" };
 test.use({ locale: "ru-RU", viewport: { width: 1600, height: 1000 } });
 
 async function stored(page: Page, path: string) {
-  const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
-  expect(response.ok()).toBe(true);
-  return (await response.json()).content;
+  return (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).content;
 }
 
 async function save(page: Page) {
@@ -139,7 +137,6 @@ test("manual node size and edge bends persist independently of model and experim
     expect(await readFile(diskPath("model"), "utf8")).toBe(sourceModel);
     expect(await readFile(diskPath("experiment"), "utf8")).toBe(sourceExperiment);
   } finally {
-    await page.goto("/api/v1/health");
-    await rm(target, { recursive: true });
+    await cleanupWorkspace(page, target);
   }
 });

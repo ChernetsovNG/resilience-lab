@@ -1,7 +1,7 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test as base } from "@playwright/test";
 import { initializeLanguage } from "../src/i18n";
 
@@ -27,6 +27,19 @@ export const test = base.extend<{ expectedPageErrors: RegExp[]; pageErrors: void
       !expectedPageErrors.some(expected => expected.test(error))), "Unexpected browser errors").toEqual([]);
   }, { auto: true }],
 });
+
+/** Stops workspace polling before removing test-owned files; the health page permits localStorage init scripts. */
+export async function cleanupWorkspace(page: Page, path: string): Promise<void> {
+  if (!page.isClosed()) await page.goto("/api/v1/health");
+  await rm(path, { recursive: true, force: true });
+}
+
+/** Checks document reads before parsing so a failed request reports its HTTP status and response body. */
+export async function readWorkspaceDocument(request: APIRequestContext, url: string) {
+  const response = await request.get(url);
+  expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
+  return response.json();
+}
 
 /** Opens a question through its owning model, independent of the remembered model and interface language. */
 export async function selectExperiment(page: Page, path: string): Promise<void> {

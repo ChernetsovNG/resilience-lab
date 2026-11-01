@@ -1,7 +1,7 @@
-import { selectExperiment } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, selectExperiment } from "./fixtures";
 import { expect, test } from "./fixtures";
 import type { Page } from "./fixtures";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ExperimentEstimate, ExperimentFile, JobView, ModelFile } from "../src/api/apiTypes";
 
@@ -27,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 
 test("validates zero handlers without saving and clears diagnostics after correction", async ({ page, request }, testInfo) => {
   const url = `/api/v1/workspace/document?path=${encodeURIComponent(model)}`;
-  const original = await (await request.get(url)).json();
+  const original = await readWorkspaceDocument(request, url);
   const gateway = page.getByTestId("rf__node-gateway");
   await gateway.click();
   const handlers = page.getByLabel("Handlers", { exact: true });
@@ -48,7 +48,7 @@ test("validates zero handlers without saving and clears diagnostics after correc
   await problems.getByRole("button", { name: /PARAM_RANGE/ }).first().click();
   await expect(page.getByRole("tab", { name: "Model", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: "gateway", exact: true })).toBeVisible();
-  expect(await (await request.get(url)).json()).toEqual(original);
+  expect(await readWorkspaceDocument(request, url)).toEqual(original);
   await expectNoPageScroll(page);
   await page.screenshot({ path: testInfo.outputPath("draft-validation.png") });
 
@@ -58,7 +58,7 @@ test("validates zero handlers without saving and clears diagnostics after correc
   await expect(handlers.locator("..").locator(".field-diagnostics")).toBeHidden();
   await expect(problems.getByRole("button", { name: /PARAM_RANGE/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
-  expect(await (await request.get(url)).json()).toEqual(original);
+  expect(await readWorkspaceDocument(request, url)).toEqual(original);
 });
 
 test("summarizes baseline lint warnings on Model and navigates to their full messages from Problems", async ({ page }) => {
@@ -101,7 +101,7 @@ test("summarizes baseline lint warnings on Model and navigates to their full mes
 
 test("summarizes a warning from the only variant override on Model and opens its variant", async ({ page }) => {
   const path = "variant-warning/single.experiment.json";
-  await withExperimentFixture(path, (document) => {
+  await withExperimentFixture(page, path, (document) => {
     document.variants = [{ id: "solo", label: "Solo", overrides: { "gateway.handlers": 1 } }];
   }, async () => {
     await page.reload();
@@ -151,8 +151,8 @@ test("shows each variant with its own overrides and editable parameters", async 
 
 test("validates variant drafts on their own page and blocks Run until errors are fixed", async ({ page, request }) => {
   const path = "variant-validation/drafts.experiment.json";
-  const document = async (path: string) => (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
-  await withExperimentFixture(path, () => {}, async () => {
+  const document = async (path: string) => readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
+  await withExperimentFixture(page, path, () => {}, async () => {
     const original = await document(path);
     const modelPath = "variant-validation/fixture.model.json";
     const originalModel = await document(modelPath);
@@ -201,8 +201,8 @@ test("validates variant drafts on their own page and blocks Run until errors are
 test("saves variant field overrides without changing the model and restores model values", async ({ page, request }) => {
   const path = "variant-editor/edits.experiment.json";
   const modelPath = "variant-editor/fixture.model.json";
-  const document = async (path: string) => (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
-  await withExperimentFixture(path, () => {}, async () => {
+  const document = async (path: string) => readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
+  await withExperimentFixture(page, path, () => {}, async () => {
     const originalModel = (await document(modelPath)).content.model;
     await page.reload();
     await selectExperiment(page, path);
@@ -250,7 +250,7 @@ test("saves variant field overrides without changing the model and restores mode
 
 test("randomizes and saves the seed as one undoable experiment edit", async ({ page, request }) => {
   const path = "random-seed/seed.experiment.json";
-  await withExperimentFixture(path, document => { document.execution.seed = 42; }, async () => {
+  await withExperimentFixture(page, path, document => { document.execution.seed = 42; }, async () => {
     await page.reload();
     await selectExperiment(page, path);
     await page.getByRole("button", { name: "Run settings", exact: true }).click();
@@ -269,7 +269,7 @@ test("randomizes and saves the seed as one undoable experiment edit", async ({ p
     await expect(seed).toHaveValue(randomSeed);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes", { exact: true })).toBeHidden();
-    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    const saved = await readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
     expect(saved.content.experiment.execution.seed).toBe(Number(randomSeed));
     await page.reload();
     await page.getByRole("button", { name: "Run settings", exact: true }).click();
@@ -291,7 +291,7 @@ test("randomizes and saves the seed as one undoable experiment edit", async ({ p
 
 test("adds a variant, edits shared run settings and faults, and runs three variants", async ({ page, request }) => {
   const path = "variant-run/three.experiment.json";
-  await withExperimentFixture(path, () => {}, async () => {
+  await withExperimentFixture(page, path, () => {}, async () => {
     await page.reload();
     await selectExperiment(page, path);
     await page.getByRole("button", { name: "Add variant", exact: true }).click();
@@ -319,7 +319,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
     await expect(page.getByLabel("Seed", { exact: true })).toHaveValue("42");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toBeHidden();
-    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    const saved = await readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
     expect(saved.content.experiment.variants[2]).toMatchObject({ id: "alternative", label: "Alternative", overrides: {} });
     expect(saved.content.experiment.execution).toMatchObject({ seed: 42, replications: 2, maxRealTime: "10s" });
     expect(saved.content.experiment.faults[0]).toEqual({
@@ -338,7 +338,7 @@ test("adds a variant, edits shared run settings and faults, and runs three varia
 
 test("preserves an inapplicable field's absence when editing an existing object override", async ({ page, request }) => {
   const path = "variant-object/processing.experiment.json";
-  await withExperimentFixture(path, (document) => {
+  await withExperimentFixture(page, path, (document) => {
     document.variants[1].overrides["gateway.processing"] = { kind: "fixed", mean: "3ms" };
   }, async () => {
     const modelFile = resolve("../apps/server/build/e2e-workspace/variant-object/fixture.model.json");
@@ -355,7 +355,7 @@ test("preserves an inapplicable field's absence when editing an existing object 
     await expect(page.getByLabel("Standard deviation", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toBeHidden();
-    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    const saved = await readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
     expect(saved.content.experiment.variants[1].overrides).toMatchObject({
       "gateway.processing.kind": "fixed", "gateway.processing.mean": "4ms", "gateway.processing.stdDev": null,
     });
@@ -371,7 +371,7 @@ test("preserves grid axes when saving and shows every point from the real API", 
     { path: "gateway-to-middle.timeout", values: ["40ms", "80ms"] },
     { path: "gateway-to-middle.attempts", values: [1, 2, 3] },
   ];
-  await withExperimentFixture(path, (document) => { document.grid = grid; }, async () => {
+  await withExperimentFixture(page, path, (document) => { document.grid = grid; }, async () => {
     await page.reload();
     await selectExperiment(page, path);
     const seed = page.getByLabel("Seed", { exact: true });
@@ -379,7 +379,7 @@ test("preserves grid axes when saving and shows every point from the real API", 
     await seed.press("Enter");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Unsaved changes")).toBeHidden();
-    const saved = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json();
+    const saved = await readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
     expect(saved.content.experiment.grid).toEqual(grid);
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Run", exact: true }).click();
@@ -423,7 +423,7 @@ test("edits the model, saves it, runs the experiment and shows the summary", asy
   await expect(handlers).toHaveValue("6");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeHidden();
-  const stored = await (await request.get(`/api/v1/workspace/document?path=${encodeURIComponent(model)}`)).json();
+  const stored = await readWorkspaceDocument(request, `/api/v1/workspace/document?path=${encodeURIComponent(model)}`);
   expect(stored.content.model.blocks.gateway.params.handlers).toBe(6);
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
   await page.reload();
@@ -500,7 +500,7 @@ test("shows summary and assumptions in resizable and Analysis layouts without pa
 
 test("cancels a long run from the UI and resumes it to Summary", async ({ page, request }) => {
   const path = "cancel-run/long.experiment.json";
-  await withExperimentFixture(path, (document) => {
+  await withExperimentFixture(page, path, (document) => {
     document.execution.replications = 50;
     document.execution.measurement = "10s";
     document.execution.window = "100ms";
@@ -543,7 +543,7 @@ test("cancels a long run from the UI and resumes it to Summary", async ({ page, 
 });
 
 // Fixtures belong only to bootRunE2e's disposable workspace, never examples/.
-async function withExperimentFixture(path: string, edit: (document: ExperimentFile) => void, exercise: () => Promise<void>) {
+async function withExperimentFixture(page: Page, path: string, edit: (document: ExperimentFile) => void, exercise: () => Promise<void>) {
   const workspace = resolve("../apps/server/build/e2e-workspace");
   const root = resolve(workspace, path.split("/")[0]);
   await mkdir(root); // Refuse to replace a directory owned by another fixture.
@@ -559,7 +559,7 @@ async function withExperimentFixture(path: string, edit: (document: ExperimentFi
     await writeFile(resolve(workspace, path), JSON.stringify(document));
     await exercise();
   } finally {
-    await rm(root, { recursive: true });
+    await cleanupWorkspace(page, root);
   }
 }
 
@@ -583,7 +583,7 @@ async function stationaryPanels(page: Page) {
 
 test("keeps all twelve variant pages reachable inside the canvas column", async ({ page }) => {
   const path = "layout-regression-variants/many.experiment.json";
-  await withExperimentFixture(path, (document) => {
+  await withExperimentFixture(page, path, (document) => {
     document.variants = Array.from({ length: 12 }, (_, index) => ({
       id: `configuration-${index + 1}`, label: `Configuration ${index + 1}`, overrides: {},
     }));
@@ -611,7 +611,7 @@ test("keeps all twelve variant pages reachable inside the canvas column", async 
 
 test("keeps toolbar actions and health visible for a long experiment path in clean and dirty states", async ({ page }) => {
   const path = "experiments/service-chain/degraded-dependency/timeout-and-retry-policy-comparison/production-like-load.experiment.json";
-  await withExperimentFixture(path, () => {}, async () => {
+  await withExperimentFixture(page, path, () => {}, async () => {
     await page.reload();
     const selector = page.getByLabel("Experiment", { exact: true });
     await selectExperiment(page, path);
@@ -677,11 +677,11 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
   await display(savedBody);
 
   const path = "estimate-drafts/drafts.experiment.json";
-  await withExperimentFixture(path, () => {}, async () => {
+  await withExperimentFixture(page, path, () => {}, async () => {
     await page.reload();
     await selectExperiment(page, path);
     const modelUrl = `/api/v1/workspace/document?path=${encodeURIComponent("estimate-drafts/fixture.model.json")}`;
-    const original = await (await request.get(modelUrl)).json();
+    const original = await readWorkspaceDocument(request, modelUrl);
     await page.getByTestId("rf__node-gateway").click();
     const handlers = page.getByLabel("Handlers", { exact: true });
     await handlers.fill("5"); await handlers.press("Enter");
@@ -695,7 +695,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
     const result = await draft.json();
     expect(result).toEqual(await expected.json());
     await display(result);
-    expect(await (await request.get(modelUrl)).json()).toEqual(original);
+    expect(await readWorkspaceDocument(request, modelUrl)).toEqual(original);
     expect(jobs).toBe(0);
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     await expectNoPageScroll(page);
@@ -706,7 +706,7 @@ test("estimates saved documents and unsaved drafts exactly as the API without st
 test("refuses resume after the model changes and suggests a new run", async ({ page, request, expectedPageErrors }) => {
   expectedPageErrors.push(/^console\.error: Failed to load resource: the server responded with a status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/api\/v1\/runs\/[^/]+\/resume\)$/);
   const path = "resume-changed/changed.experiment.json";
-  await withExperimentFixture(path, (document) => {
+  await withExperimentFixture(page, path, (document) => {
     document.execution.replications = 50;
     document.execution.measurement = "10s";
     document.execution.window = "100ms";

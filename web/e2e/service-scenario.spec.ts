@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { cleanupWorkspace, expect, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
 import { copySmallExperiment, selectExperiment } from "./fixtures";
@@ -52,6 +52,7 @@ for (const language of ["en", "ru"] as const) {
       await save.click();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       const stored = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(modelPath)}`);
+      expect(stored.ok(), `HTTP ${stored.status()}: ${await stored.text()}`).toBe(true);
       expect((await stored.json()).content.model.blocks.gateway.scenario).toEqual(expected);
       await page.reload();
       await page.getByTestId("rf__node-gateway").locator(".block-node > strong").click();
@@ -74,7 +75,7 @@ for (const language of ["en", "ru"] as const) {
       expect(calls["gateway-to-dependency"].totals.sentAttempts).toBeGreaterThan(0);
       expect(calls["gateway-to-middle"].totals.sentAttempts).toBeGreaterThan(calls["gateway-to-dependency"].totals.sentAttempts);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }

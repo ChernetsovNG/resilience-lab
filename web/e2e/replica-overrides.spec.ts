@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 900 }, actionTimeout: 10_000 });
 
@@ -21,9 +21,7 @@ for (const language of ["en", "ru"] as const) {
       await writeFile(resolve(root, "retry-storm.experiment.json"), JSON.stringify(experiment));
       await page.goto("/");
       await selectExperiment(page, `${directory}/retry-storm.experiment.json`);
-      const document = async (kind: string) => (await (await page.request.get(
-        `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.${kind}.json`)}`,
-      )).json()).content;
+      const document = async (kind: string) => (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.${kind}.json`)}`)).content;
       const source: ModelFile = (await document("model")).model;
       const node = page.getByTestId("rf__node-gateway");
       await node.locator(".block-node > strong").click();
@@ -102,7 +100,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByTestId("job-status")).toHaveText(ru ? "ЗАВЕРШЕНО" : "COMPLETED");
       expect((await document("model")).model).toEqual(expected);
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }

@@ -1,6 +1,6 @@
-import { expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { cp, rm } from "node:fs/promises";
+import { cp } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExperimentFile } from "../src/api/apiTypes";
 
@@ -31,6 +31,7 @@ test("saves checkout block and automatic link renames into checkout-grid before 
     await expect(page.getByText("Несохранённые изменения", { exact: true })).toBeHidden();
     const gridPath = `${directory}/checkout-grid.experiment.json`;
     const stored = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(gridPath)}`);
+    expect(stored.ok(), `HTTP ${stored.status()}: ${await stored.text()}`).toBe(true);
     const experiment: ExperimentFile = (await stored.json()).content.experiment;
     expect(experiment.grid!.map(axis => axis.path)).toEqual(["order-service-to-payments.timeout", "order-service-to-payments.attempts"]);
     expect(experiment.faults[0].target).toBe("provider");
@@ -46,5 +47,5 @@ test("saves checkout block and automatic link renames into checkout-grid before 
     const response = await estimate;
     expect(response.ok()).toBe(true);
     expect((await response.json()).tasks).toBeGreaterThan(0);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally { await cleanupWorkspace(page, root); }
 });

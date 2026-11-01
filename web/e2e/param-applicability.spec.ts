@@ -1,8 +1,8 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, ModelFile } from "../src/api/apiTypes";
-import { copyRetryStorm, expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, copyRetryStorm, expect, selectExperiment, test } from "./fixtures";
 
 test("confirms dependent sweep and override removal, undoes both documents, then saves and reloads valid documents", async ({ page }) => {
   const directory = `param-dependents-${randomUUID()}`;
@@ -49,8 +49,10 @@ test("confirms dependent sweep and override removal, undoes both documents, then
     await page.reload();
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
     const storedModel = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.model.json`)}`);
+    expect(storedModel.ok(), `HTTP ${storedModel.status()}: ${await storedModel.text()}`).toBe(true);
     expect((await storedModel.json()).content.model.blocks.gateway.params.processing).toEqual({ kind: "fixed", mean: "2ms" });
     const storedExperiment = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(experimentPath)}`);
+    expect(storedExperiment.ok(), `HTTP ${storedExperiment.status()}: ${await storedExperiment.text()}`).toBe(true);
     const saved: ExperimentFile = (await storedExperiment.json()).content.experiment;
     expect(saved.grid).toEqual([]);
     expect(saved.variants[1].overrides).toEqual(unrelatedOverrides);
@@ -58,7 +60,7 @@ test("confirms dependent sweep and override removal, undoes both documents, then
     expect(validation.ok()).toBe(true);
     expect((await validation.json()).valid).toBe(true);
   } finally {
-    await rm(target, { recursive: true });
+    await cleanupWorkspace(page, target);
   }
 });
 
@@ -88,11 +90,11 @@ test("saves and reloads a valid connection after fixed, lognormal and fixed dist
     await expect(network.getByRole("combobox", { name: "Distribution" })).toHaveValue("fixed");
     await expect(network.getByRole("textbox", { name: "Standard deviation" })).toHaveCount(0);
     const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(modelPath)}`);
-    expect(response.ok()).toBe(true);
+    expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
     saved = (await response.json()).content.model;
     expect(saved.connections.find(edge => edge.id === "gateway-to-middle")!.params.network).toEqual({ kind: "fixed", mean });
     await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   } finally {
-    await rm(target, { recursive: true });
+    await cleanupWorkspace(page, target);
   }
 });

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -42,7 +42,7 @@ for (const language of ["en", "ru"] as const) {
       await page.goto("/");
       await selectExperiment(page, `${directory}/retry-storm.experiment.json`);
       const modelURL = `/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.model.json`)}`;
-      const expected: ModelFile = (await (await page.request.get(modelURL)).json()).content.model;
+      const expected: ModelFile = (await readWorkspaceDocument(page.request, modelURL)).content.model;
       const client = page.getByTestId("rf__node-mobile-app");
       await client.locator(".block-node > strong").click();
       await page.getByRole("radio", { name: ru ? "Несколько видов запросов" : "Several request types", exact: true }).check();
@@ -84,7 +84,7 @@ for (const language of ["en", "ru"] as const) {
         { id: "checkout", load: { points: [{ time: "0s", rate: "20/s" }, { time: "30s", rate: "60/s" }, { time: "60s", rate: "20/s" }] } },
       ];
       expected.blocks["mobile-app"].params.classes = types;
-      expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
+      expect((await readWorkspaceDocument(page.request, modelURL)).content.model).toEqual(expected);
       await page.reload();
       await client.locator(".block-node > strong").click();
       await expect(ids.nth(1)).toHaveValue("checkout");
@@ -118,7 +118,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(run).toBeEnabled();
       await expect(save).toBeDisabled();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
-      expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
+      expect((await readWorkspaceDocument(page.request, modelURL)).content.model).toEqual(expected);
       await expect(checkout.locator(".inspector-type")).toContainText("sibling");
       await ids.nth(1).fill("purchase");
       await ids.nth(1).press("Enter");
@@ -127,17 +127,17 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
       const siblingPath = `${directory}/sibling.experiment.json`;
       const siblingURL = `/api/v1/workspace/document?path=${encodeURIComponent(siblingPath)}`;
-      const sibling = (await (await page.request.get(siblingURL)).json()).content.experiment;
+      const sibling = (await readWorkspaceDocument(page.request, siblingURL)).content.experiment;
       expect(sibling.variants[0].overrides["mobile-app.classes"][0].id).toBe("purchase");
       const valid = await page.request.post("/api/v1/validate", { data: { experiment: siblingPath } });
       expect((await valid.json()).valid).toBe(true);
       await page.getByRole("button", { name: ru ? "Отменить действие" : "Undo", exact: true }).click();
       await save.click();
       await expect(page.getByText(ru ? "Несохранённые изменения" : "Unsaved changes", { exact: true })).toBeHidden();
-      expect((await (await page.request.get(modelURL)).json()).content.model).toEqual(expected);
-      expect((await (await page.request.get(siblingURL)).json()).content.experiment.variants[0].overrides["mobile-app.classes"][0].id).toBe("checkout");
+      expect((await readWorkspaceDocument(page.request, modelURL)).content.model).toEqual(expected);
+      expect((await readWorkspaceDocument(page.request, siblingURL)).content.experiment.variants[0].overrides["mobile-app.classes"][0].id).toBe("checkout");
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await cleanupWorkspace(page, root);
     }
   });
 }

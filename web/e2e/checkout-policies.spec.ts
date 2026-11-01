@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary, SeriesIndex } from "../src/api/apiTypes";
 import type { components } from "../src/api/schema";
 import { dragConnection } from "./canvasGestures";
-import { expect, selectExperiment, test } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ locale: "ru-RU", viewport: { width: 1920, height: 1080 }, actionTimeout: 10_000 });
 
@@ -111,7 +110,7 @@ test("builds a new model with two clients, request types and a policy using the 
     }
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
     await expect(page.getByText("Несохранённые изменения", { exact: true })).toBeHidden();
-    const stored = async (): Promise<ModelFile> => (await (await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).json()).content.model;
+    const stored = async (): Promise<ModelFile> => (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${encodeURIComponent(path)}`)).content.model;
     const saved = await stored();
     expect(Object.values(saved.blocks).filter(block => block.type === "client")).toHaveLength(2);
     expect(saved.blocks["client-2"].params.classes).toMatchObject([{ id: "status" }, { id: "checkout" }]);
@@ -132,6 +131,6 @@ test("builds a new model with two clients, request types and a policy using the 
     expect(Object.keys(entries.classes).sort()).toEqual(["checkout", "default", "status"]);
     expect(entries.clients["client-2"].pooledLatency.all!.statistics.count).toBeGreaterThan(0);
   } finally {
-    await rm(resolve("../apps/server/build/e2e-workspace", name), { recursive: true, force: true });
+    await cleanupWorkspace(page, resolve("../apps/server/build/e2e-workspace", name));
   }
 });

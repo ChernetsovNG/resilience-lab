@@ -1,7 +1,7 @@
-import { copyRetryStorm, selectExperiment } from "./fixtures";
+import { cleanupWorkspace, copyRetryStorm, selectExperiment } from "./fixtures";
 import { dragCanvas, dragConnection, dragNode, dragPaletteBlock } from "./canvasGestures";
 import { expect, test as base, type Page } from "./fixtures";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile, RunSummary } from "../src/api/apiTypes";
@@ -22,7 +22,7 @@ const test = base.extend<{ files: Files }>({
       await expect(page.getByTestId("block-node")).toHaveCount(4);
       await provide(files);
     } finally {
-      await rm(target, { recursive: true });
+      await cleanupWorkspace(page, target);
     }
   },
 });
@@ -504,7 +504,7 @@ async function writeHandlers(files: Files, value: number) {
 
 async function stored(page: Page, path: string) {
   const response = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(path)}`);
-  expect(response.ok()).toBe(true);
+  expect(response.ok(), `HTTP ${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
 }
 async function save(page: Page) {

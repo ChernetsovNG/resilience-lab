@@ -1,6 +1,6 @@
-import { expect, test } from "./fixtures";
+import { cleanupWorkspace, expect, test } from "./fixtures";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { copySmallExperiment, selectExperiment } from "./fixtures";
 
@@ -37,6 +37,7 @@ for (const language of ["en", "ru"] as const) {
       await expect(run).toBeEnabled();
       await expect(save).toBeDisabled();
       const stored = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`);
+      expect(stored.ok(), `HTTP ${stored.status()}: ${await stored.text()}`).toBe(true);
       expect((await stored.json()).content.experiment.execution.seed).toBe(42);
       const firstText = await answer.innerText();
 
@@ -65,9 +66,11 @@ for (const language of ["en", "ru"] as const) {
 
       await seed.fill("44");
       await seed.press("ControlOrMeta+s");
+      await expect(page.locator(".dirty-mark")).toBeHidden();
       await expect(save).toBeDisabled();
       const saved = await page.request.get(`/api/v1/workspace/document?path=${encodeURIComponent(`${directory}/retry-storm.experiment.json`)}`);
+      expect(saved.ok(), `HTTP ${saved.status()}: ${await saved.text()}`).toBe(true);
       expect((await saved.json()).content.experiment.execution.seed).toBe(44);
-    } finally { release(); await rm(root, { recursive: true, force: true }); }
+    } finally { release(); await cleanupWorkspace(page, root); }
   });
 }

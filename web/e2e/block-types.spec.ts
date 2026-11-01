@@ -1,9 +1,9 @@
 import { expect, test as base, type Page } from "@playwright/test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import type { ExperimentFile, LayoutFile, ModelFile } from "../src/api/apiTypes";
-import { selectExperiment } from "./fixtures";
+import { readWorkspaceDocument, cleanupWorkspace, selectExperiment } from "./fixtures";
 
 const test = base.extend<{ graph: { directory: string; model: ModelFile } }>({
   graph: async ({ page }, provide) => {
@@ -49,8 +49,9 @@ const test = base.extend<{ graph: { directory: string; model: ModelFile } }>({
       await selectExperiment(page, `${directory}/types.experiment.json`);
       await expect(page.getByTestId("block-node")).toHaveCount(6);
       const stored = await page.request.get(`/api/v1/workspace/document?path=${directory}/types.model.json`);
+      expect(stored.ok(), `HTTP ${stored.status()}: ${await stored.text()}`).toBe(true);
       await provide({ directory, model: (await stored.json()).content.model });
-    } finally { await rm(target, { recursive: true }); }
+    } finally { await cleanupWorkspace(page, target); }
   },
 });
 
@@ -89,6 +90,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   await policy.locator("select").selectOption("leastInFlight");
   await save(page);
   const routed = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
+  expect(routed.ok(), `HTTP ${routed.status()}: ${await routed.text()}`).toBe(true);
   expect((await routed.json()).content.model.blocks.router.params.policy).toBe("leastInFlight");
   const bounds = await policy.evaluate(element => {
     const body = element.closest(".block-shape")!.getBoundingClientRect();
@@ -112,7 +114,7 @@ test("typed nodes preserve document edits, Undo, result overlays and compact foo
   await expect(page.getByRole("button", { name: "Отменить действие", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Повторить", exact: true }).click();
   await save(page);
-  const document = async (name: string) => (await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.${name}.json`)).json();
+  const document = async (name: string) => readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${graph.directory}/types.${name}.json`);
   graph.model.blocks.database.params.maxConnections = 7;
   expect((await document("model")).content.model).toEqual(graph.model);
   await page.reload();
@@ -167,7 +169,7 @@ for (const language of ["en", "ru"] as const) {
     await policy.dblclick();
     await policy.locator("select").selectOption("leastInFlight");
     await save(page, language);
-    const experiment = async () => (await (await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.experiment.json`)).json()).content.experiment;
+    const experiment = async () => (await readWorkspaceDocument(page.request, `/api/v1/workspace/document?path=${graph.directory}/types.experiment.json`)).content.experiment;
     expect((await experiment()).variants[0].overrides).toEqual({ "router.policy": "leastInFlight" });
     const visibleWidth = (selector: string) => policy.locator(selector).evaluate(element => {
       const current = element.getBoundingClientRect();
@@ -185,6 +187,7 @@ for (const language of ["en", "ru"] as const) {
     await save(page, language);
     expect((await experiment()).variants[0].overrides ?? {}).toEqual({});
     const stored = await page.request.get(`/api/v1/workspace/document?path=${graph.directory}/types.model.json`);
+    expect(stored.ok(), `HTTP ${stored.status()}: ${await stored.text()}`).toBe(true);
     expect((await stored.json()).content.model).toEqual(graph.model);
   });
 }

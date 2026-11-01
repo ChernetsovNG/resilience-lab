@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ModelFile, RunSummary } from "../src/api/apiTypes";
-import { copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
+import { cleanupWorkspace, copySmallExperiment, expect, selectExperiment, test } from "./fixtures";
 
 test.use({ viewport: { width: 1440, height: 1000 }, actionTimeout: 10_000 });
 
@@ -89,6 +89,6 @@ for (const language of ["en", "ru"] as const) {
       await expect(page.getByRole("button", { name: ru ? "Сохранить" : "Save", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: ru ? "Отменить действие" : "Undo", exact: true })).toBeDisabled();
       expect(JSON.parse(await readFile(modelPath, "utf8"))).toEqual(model);
-    } finally { await rm(root, { recursive: true, force: true }); }
+    } finally { await cleanupWorkspace(page, root); }
   });
 }
