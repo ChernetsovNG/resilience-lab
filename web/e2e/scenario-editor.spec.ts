@@ -333,6 +333,18 @@ test("edits timeout on the canvas with undo and a persisted variant override", a
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(timeout).toHaveText("80 ms");
 
+  const edge = page.getByTestId("rf__edge-gateway-to-middle");
+  await page.locator(".react-flow__pane").click({ position: { x: 15, y: 100 } });
+  await expect(edge).not.toHaveClass(/selected/);
+  await page.getByTestId("canvas-edge-label-gateway-to-middle").click({ position: { x: 3, y: 3 } });
+  await expect(edge).toHaveClass(/selected/);
+  await timeout.dblclick();
+  await input.fill("95ms");
+  await input.press("Enter");
+  await expect(timeout).toHaveText("95 ms");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(timeout).toHaveText("80 ms");
+
   await page.getByRole("tab", { name: "No retries", exact: true }).click();
   await timeout.dblclick();
   await input.fill("100ms");

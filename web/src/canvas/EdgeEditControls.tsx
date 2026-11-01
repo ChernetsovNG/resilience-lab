@@ -25,7 +25,7 @@ export function EdgeEditControls({ id, path, anchors, identity, toFlow, onPrevie
     const current = gesture.current;
     if (current === null || event.pointerId !== current.pointer) return;
     const cursor = toFlow({ x: event.clientX, y: event.clientY });
-    const position = { x: current.handle.x + cursor.x - current.origin.x, y: current.handle.y + cursor.y - current.origin.y };
+    const position = { x: current.handle.x + (cursor.x - current.origin.x), y: current.handle.y + (cursor.y - current.origin.y) };
     if (current.control.kind === "segment") {
       const horizontal = current.path[current.control.index].y === current.path[current.control.index + 1].y;
       if (horizontal) position.x = current.handle.x; else position.y = current.handle.y;

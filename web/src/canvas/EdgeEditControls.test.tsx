@@ -149,3 +149,14 @@ it("deleting the last authored corner issues one automatic-route reset", () => {
   fireEvent.doubleClick(screen.getByRole("button", { name: "Move bend 1 of rpc" }));
   expect(commit).toHaveBeenCalledExactlyOnceWith([]);
 });
+
+it("keeps an unmoved fractional-coordinate control out of history", () => {
+  const commit = vi.fn();
+  const fractional = [{ x: 0.1, y: 0.1 }, { x: 20.1, y: 0.1 }, { x: 20.1, y: 90.1 }];
+  render(<EdgeEditControls id="fractional" path={fractional} anchors={fractional.slice(1, -1)} identity={{}}
+    toFlow={toFlow} onPreview={vi.fn()} onCommit={commit} />);
+  const handle = screen.getByRole("button", { name: "Move segment 1 of fractional" });
+  pointer("pointerdown", 0.6, 0.6, handle);
+  pointer("pointerup", 0.6, 0.6);
+  expect(commit).not.toHaveBeenCalled();
+});

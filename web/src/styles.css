@@ -1686,6 +1686,8 @@ select {
   pointer-events: all;
   touch-action: none;
 }
+/* Keep the focused parameter above handles throughout its double-click/edit gesture. */
+.canvas-edge-label:has(.inline-param:focus-within) { z-index: 3; }
 .canvas-edge-handle--bend { border-radius: 2px; }
 .canvas-edge-handle:focus-visible { outline: 2px solid #0f172a; outline-offset: 2px; }
 .canvas-edge-edit-limit { position: absolute; z-index: 3; padding: 4px 8px; background: #fff; color: #b91c1c; }
