@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { manualEdgePoints } from "./edgeGeometry";
 import { EdgeEditControls } from "./EdgeEditControls";
 
 const path = [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 90 }, { x: 160, y: 90 }];
@@ -59,7 +60,7 @@ describe("edge edit controls", () => {
     pointer("pointerdown", 120, 20, handle); pointer("pointermove", 140, 40); pointer("pointerup", 140, 40);
     expect(commit).toHaveBeenLastCalledWith([{ x: 70, y: 20 }, path[2]]);
     fireEvent.doubleClick(handle);
-    expect(commit).toHaveBeenLastCalledWith([path[2]]);
+    expect(commit).toHaveBeenLastCalledWith([{ x: 10, y: 90 }, path[2]]);
   });
 });
 
@@ -91,5 +92,60 @@ it("ignores a second pointer and permits keyboard segment movement and bend dele
   fireEvent.keyDown(handle, { key: "ArrowDown" });
   expect(commit).toHaveBeenLastCalledWith([{ x: 10, y: 20 }, { x: 60, y: 20 }, { x: 60, y: 90 }]);
   fireEvent.keyDown(screen.getByRole("button", { name: "Move bend 1 of rpc" }), { key: "Delete" });
-  expect(commit).toHaveBeenLastCalledWith([path[2]]);
+  expect(commit).toHaveBeenLastCalledWith([{ x: 10, y: 90 }, path[2]]);
+});
+
+it("places bend handles on actual corners of a diagonal-anchor route, not on its straight authored point", () => {
+  const anchors = [{ x: 10, y: 10 }];
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 20, y: 20 }, anchors);
+  render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={vi.fn()} onCommit={vi.fn()} />);
+  const handles = screen.getAllByRole("button", { name: /Move bend/ });
+  expect(handles.map(handle => handle.style.transform)).toEqual([
+    "translate(-50%, -50%) translate(10px,0px)",
+    "translate(-50%, -50%) translate(10px,20px)",
+  ]);
+});
+
+
+it.each([1, 2])("drags and double-click deletes generated diagonal corner %s in a single command", bend => {
+  const anchors = [{ x: 10, y: 10 }];
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 20, y: 20 }, anchors);
+  const commit = vi.fn();
+  render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={vi.fn()} onCommit={commit} />);
+  const handle = screen.getByRole("button", { name: `Move bend ${bend} of rpc` });
+  const original = { x: 10, y: bend === 1 ? 0 : 20 };
+  pointer("pointerdown", original.x * 2, original.y * 2, handle);
+  pointer("pointermove", original.x * 2 + 8, original.y * 2 - 8);
+  pointer("pointerup", original.x * 2 + 8, original.y * 2 - 8);
+  expect(commit).toHaveBeenCalledTimes(1);
+  expect(commit.mock.lastCall![0]).toContainEqual({ x: 14, y: original.y - 4 });
+  expect(commit.mock.lastCall![0]).toContainEqual(anchors[0]);
+  commit.mockClear();
+  pointer("pointerdown", original.x * 2, original.y * 2, handle);
+  pointer("pointerup", original.x * 2, original.y * 2);
+  pointer("pointerdown", original.x * 2, original.y * 2, handle);
+  pointer("pointerup", original.x * 2, original.y * 2);
+  fireEvent.doubleClick(handle);
+  expect(commit).toHaveBeenCalledTimes(1);
+  expect(commit.mock.lastCall![0]).toContainEqual(anchors[0]);
+  expect(manualEdgePoints(path[0], path.at(-1)!, commit.mock.lastCall![0])).not.toContainEqual(original);
+});
+
+it("reports a rejected generated-corner deletion instead of silently truncating the saved path", () => {
+  const anchors = Array.from({ length: 26 }, (_, index) => ({ x: index * 20 + 10, y: index * 20 + 10 }));
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 600, y: 600 }, anchors);
+  const commit = vi.fn();
+  render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={vi.fn()} onCommit={commit} />);
+  fireEvent.doubleClick(screen.getByRole("button", { name: "Move bend 1 of rpc" }));
+  expect(screen.getByRole("status").textContent).toContain("at most 50 points");
+  expect(commit).not.toHaveBeenCalled();
+});
+
+it("deleting the last authored corner issues one automatic-route reset", () => {
+  const anchors = [{ x: 20, y: 0 }];
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 20, y: 20 }, anchors);
+  const commit = vi.fn();
+  render(<EdgeEditControls id="rpc" path={path} anchors={anchors} identity={{}} toFlow={toFlow} onPreview={vi.fn()} onCommit={commit} />);
+  fireEvent.doubleClick(screen.getByRole("button", { name: "Move bend 1 of rpc" }));
+  expect(commit).toHaveBeenCalledExactlyOnceWith([]);
 });

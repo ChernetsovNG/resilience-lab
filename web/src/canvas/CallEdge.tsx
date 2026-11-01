@@ -210,7 +210,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
       </EdgeLabelRenderer> : null}
       {selected && data?.routeEditable && geometry !== undefined && data.editIdentity !== undefined && data.onEdgePoints !== undefined ? <EdgeLabelRenderer>
         <EdgeEditControls id={connection.id} path={geometry.points}
-          anchors={data.edgePoints?.length ? data.edgePoints : geometry.points.slice(1, -1)}
+          anchors={data.edgePoints ?? []}
           identity={data.editIdentity} toFlow={screenToFlowPosition} onPreview={previewPoints} onCommit={data.onEdgePoints} onStart={data.onEditStart} />
       </EdgeLabelRenderer> : null}
     </>

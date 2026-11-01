@@ -19,14 +19,40 @@ describe("manual edge gestures", () => {
       : end.x === point.x && routed[i].x === point.x && end.y !== routed[i].y)).toBe(true);
   });
 
-  it("moves and deletes authored bends without moving other anchors", () => {
-    expect(editEdgePoints(path, anchors, { kind: "bend", index: 0 }, { x: 70, y: 20 })).toEqual([{ x: 70, y: 20 }, anchors[1]]);
-    expect(editEdgePoints(path, anchors, { kind: "bend", index: 0 }, null)).toEqual([anchors[1]]);
+  it("moves and deletes rendered bends without moving other authored anchors", () => {
+    expect(editEdgePoints(path, anchors, { kind: "bend", index: 1 }, { x: 70, y: 20 })).toEqual([{ x: 70, y: 20 }, anchors[1]]);
+    expect(editEdgePoints(path, anchors, { kind: "bend", index: 1 }, null)).toEqual([{ x: 10, y: 90 }, anchors[1]]);
   });
 
   it("refuses an edit that would exceed 50 persisted anchors without dropping any", () => {
     const points = Array.from({ length: 52 }, (_, i) => ({ x: Math.floor(i / 2) * 20, y: Math.ceil(i / 2) * 20 }));
     expect(editEdgePoints(points, points.slice(1, -1), { kind: "segment", index: 0 }, { x: 15, y: 15 })).toBeNull();
-    expect(editEdgePoints(path, anchors, { kind: "bend", index: 0 }, { x: Infinity, y: 0 })).toBeNull();
+    expect(editEdgePoints(path, anchors, { kind: "bend", index: 1 }, { x: Infinity, y: 0 })).toBeNull();
   });
+});
+
+it.each([1, 3])("edits the rendered diagonal-anchor corner at path index %s while preserving the authored anchor", index => {
+  const source = { x: 0, y: 0 };
+  const target = { x: 20, y: 20 };
+  const authored = [{ x: 10, y: 10 }];
+  const rendered = manualEdgePoints(source, target, authored);
+  const moved = { x: 14, y: index === 1 ? -4 : 24 };
+  const edited = editEdgePoints(rendered, authored, { kind: "bend", index }, moved)!;
+  expect(edited).toContainEqual(moved);
+  expect(edited).toContainEqual(authored[0]);
+  const deleted = editEdgePoints(rendered, authored, { kind: "bend", index }, null)!;
+  expect(deleted).toContainEqual(authored[0]);
+  expect(manualEdgePoints(source, target, deleted)).not.toContainEqual(rendered[index]);
+});
+
+
+it("restores automatic routing when the final authored corner is deleted", () => {
+  const anchors = [{ x: 20, y: 0 }];
+  const path = manualEdgePoints({ x: 0, y: 0 }, { x: 20, y: 20 }, anchors);
+  expect(editEdgePoints(path, anchors, { kind: "bend", index: 1 }, null)).toEqual([]);
+});
+
+it("deletes a corner on an automatic path by saving the opposite elbow", () => {
+  const path = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }];
+  expect(editEdgePoints(path, [], { kind: "bend", index: 1 }, null)).toEqual([{ x: 0, y: 20 }]);
 });

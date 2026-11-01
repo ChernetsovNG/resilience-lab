@@ -1,7 +1,7 @@
 import { useEffectEvent, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import type { XYPosition } from "@xyflow/react";
 import { t } from "../i18n";
-import { editEdgePoints, type EdgeControl } from "./manualEdge";
+import { edgeBends, editEdgePoints, type EdgeControl } from "./manualEdge";
 
 type Gesture = { control: EdgeControl; path: XYPosition[]; anchors: readonly XYPosition[]; pointer: number;
   origin: XYPosition; handle: XYPosition; position: XYPosition; edited: XYPosition[] | null };
@@ -74,16 +74,15 @@ export function EdgeEditControls({ id, path, anchors, identity, toFlow, onPrevie
     setLimit(false);
   };
   const points = active?.path ?? path;
-  const bends = active?.anchors ?? anchors;
   const controls = [
     ...points.slice(1).flatMap((end, index) => same(points[index], end) ? [] : [{ kind: "segment" as const, index,
-      point: { x: (points[index].x + end.x) / 2, y: (points[index].y + end.y) / 2 } }]),
-    ...bends.map((point, index) => ({ kind: "bend" as const, index, point })),
+      point: { x: (points[index].x + end.x) / 2, y: (points[index].y + end.y) / 2 }, order: index + 1 }]),
+    ...edgeBends(points).map(({ point, index }, order) => ({ kind: "bend" as const, index, point, order: order + 1 })),
   ];
   return <>
-    {controls.map(({ kind, index, point }) => {
+    {controls.map(({ kind, index, point, order }) => {
       const position = active?.control.kind === kind && active.control.index === index ? active.position : point;
-      const label = t(kind === "segment" ? "editor.canvas.moveSegment" : "editor.canvas.moveBend", { index: index + 1, id });
+      const label = t(kind === "segment" ? "editor.canvas.moveSegment" : "editor.canvas.moveBend", { index: order, id });
       return <button key={`${kind}-${index}`} type="button" className={`canvas-edge-handle canvas-edge-handle--${kind} nodrag nopan nowheel`}
         aria-label={label} title={label} data-edge-control={kind}
         style={{ transform: `translate(-50%, -50%) translate(${position.x}px,${position.y}px)`,
@@ -94,6 +93,7 @@ export function EdgeEditControls({ id, path, anchors, identity, toFlow, onPrevie
           event.stopPropagation();
           if (kind === "bend") {
             const edited = editEdgePoints(path, anchors, { kind, index }, null);
+            setLimit(edited === null);
             if (edited !== null) onCommit(edited);
           }
         }}
@@ -101,6 +101,7 @@ export function EdgeEditControls({ id, path, anchors, identity, toFlow, onPrevie
           if (event.key === "Delete" && kind === "bend") {
             event.preventDefault(); event.stopPropagation();
             const edited = editEdgePoints(path, anchors, { kind, index }, null);
+            setLimit(edited === null);
             if (edited !== null) onCommit(edited);
             return;
           }
