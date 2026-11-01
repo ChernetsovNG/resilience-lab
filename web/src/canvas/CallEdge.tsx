@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { formatNumber } from "../i18n/format";
 import { elementLabel } from "../presentation/labels";
 import { observeResize } from "../layout/observeResize";
-import { formatOutput, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
+import { formatOutput, outputNote, outputText, overlayOutputs, selectedOverlayOutput } from "../results/outputs";
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 import type { Edge, EdgeProps } from "@xyflow/react";
 import type { Catalog, ConnectionInstance, Diagnostic } from "../api/apiTypes";
@@ -89,6 +89,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
   const output = selectedOverlayOutput(overlayOutputs(catalog, "CONNECTION"), connectionMetric);
   const metricValue = output?.types.includes(connection.type) ? result?.values[output.id] ?? null : null;
   const metricText = output === undefined ? "" : outputText(output.overlay!.label, { value: formatOutput(output, metricValue) });
+  const metricNote = output === undefined || resultsEmpty ? null : outputNote(output, metricValue, result?.amplificationUnavailableReason);
   const metricTitle = output?.overlay == null ? "" : windowed ? output.overlay.windowDescription ?? output.overlay.description : output.overlay.description;
   const tooltip = resultsPending === undefined ? metricTitle : `${metricTitle} ${t("editor.symbols.separator")} ${resultsPending}`;
   const circuitOpen = isObject(connection.params.circuitBreaker) && (result?.policyState?.circuitOpenShare ?? 0) > 0;
@@ -165,6 +166,7 @@ export function CallEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
             aria-busy={resultsPending === undefined ? undefined : true} aria-hidden={resultsEmpty || undefined}
             title={tooltip}>
             {metricText}
+            {output?.id === "amplification" ? <small className="output-note" aria-hidden={metricNote === null || undefined}>{metricNote}</small> : null}
           </span>}
         </div>
       </EdgeLabelRenderer> : null}

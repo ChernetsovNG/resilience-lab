@@ -9,8 +9,9 @@ import { formatMapValue, gridCells, mapMetric, type MapMetric, type MapValue } f
 import { confidenceInterval } from "./confidence";
 import { useConfidenceLevel } from "../layout/confidenceLevel";
 import { parameterLabel, pointCoordinates, pointLabel, variantLabel, type NamedVariant } from "../presentation/labels";
-import type { Params } from "../workspace/params";
+import { ownEntry, type Params } from "../workspace/params";
 import { formatParameterValue } from "../workspace/parameterValues";
+import { outputNote } from "./outputs";
 
 interface Props {
   summary: RunSummary;
@@ -66,13 +67,20 @@ export function GridMap({ summary, activeVariantId, pointId, onPointChange, cata
     (interval === null ? "" : t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) }));
   const color = (value: MapValue | null) => value === null ? "#f1f5f9" :
     `hsl(213 90% ${96 - 28 * (high === low ? 0.5 : (value.mean - low) / (high - low))}%)`;
-  const pointButton = (cell: typeof cells[number]) => <button type="button" aria-pressed={pointId === cell.id}
-    aria-label={t("results.map.pointReadout", { point: pointName(cell.id), value: readout(cell) })}
-    disabled={cell.point === null} title={readout(cell)} onClick={() => onPointChange?.(cell.id)}
-    style={grid.length === 2 ? { background: color(cell.value) } : undefined}>
-    <strong>{Object.values(pointCoordinates(cell.id, grid)).map(value => formatParameterValue(value)).join(t("editor.symbols.separator"))}</strong>
-    <span>{grid.length === 2 ? cell.value === null ? formatNumber(null) : format(cell.value.mean) : readout(cell)}</span>
-  </button>;
+  const pointButton = (cell: typeof cells[number]) => {
+    const amplification = cell.point === null ? undefined : ownEntry(cell.point.aggregate.services, service)?.admittedAmplification;
+    const note = metric === "admittedAmplification" ? outputNote({ id: "amplification" }, cell.value?.mean,
+      amplification === null ? "noArrivals" : "missingData") : null;
+    const description = note === null ? readout(cell) : t("results.map.readoutNote", { value: readout(cell), note });
+    return <button type="button" aria-pressed={pointId === cell.id}
+      aria-label={t("results.map.pointReadout", { point: pointName(cell.id), value: description })}
+      disabled={cell.point === null} title={description} onClick={() => onPointChange?.(cell.id)}
+      style={grid.length === 2 ? { background: color(cell.value) } : undefined}>
+      <strong>{Object.values(pointCoordinates(cell.id, grid)).map(value => formatParameterValue(value)).join(t("editor.symbols.separator"))}</strong>
+      <span>{grid.length === 2 ? cell.value === null ? formatNumber(null) : format(cell.value.mean) : readout(cell)}</span>
+      {note === null ? null : <small className="output-note">{note}</small>}
+    </button>;
+  };
   const chartData = cells.map((cell, index) => ({ index, mean: cell.value?.mean ?? null,
     interval: cell.value === null || cell.interval === null ? undefined :
       [cell.value.mean - cell.interval[0], cell.interval[1] - cell.value.mean],

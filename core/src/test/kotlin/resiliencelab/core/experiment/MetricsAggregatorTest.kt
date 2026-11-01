@@ -1,6 +1,8 @@
 package resiliencelab.core.experiment
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.jsonObject
 import ksl.utilities.statistic.Statistic
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.data.Offset.offset
@@ -8,6 +10,43 @@ import kotlin.math.sqrt
 import kotlin.test.Test
 
 class MetricsAggregatorTest {
+    @Test
+    fun `pooler amplification is serialized as a mean of defined replication ratios`() {
+        val replications =
+            listOf(4 to 5, 12 to 3, 0 to 0).map { (arrivals, admitted) ->
+                replication(arrivals, arrivals, 0, emptyList(), emptyList(), emptyList(), emptyMap()).copy(
+                    poolers =
+                        mapOf(
+                            "pooler" to
+                                PoolerMetrics(
+                                    offeredAttempts = admitted,
+                                    admittedAttempts = admitted,
+                                    successes = admitted,
+                                    failures = 0,
+                                    measurementMs = 1000.0,
+                                    latency = latencyStatistics(emptyList()),
+                                ),
+                        ),
+                )
+            }
+
+        fun amplification(values: List<ReplicationResult>) =
+            Json
+                .parseToJsonElement(Json.encodeToString(AggregateMetrics.serializer(), MetricsAggregator.aggregate(values)))
+                .jsonObject
+                .getValue("poolers")
+                .jsonObject
+                .getValue("pooler")
+                .jsonObject["admittedAmplification"]
+
+        val encoded = amplification(replications)
+        assertThat(encoded).isNotNull()
+        val metric = Json.decodeFromJsonElement(MetricSummary.serializer(), encoded!!)
+        assertThat(metric.count).isEqualTo(2)
+        assertSummary(metric, mean = 0.75, stdDev = sqrt(0.5), min = 0.25, max = 1.25)
+        assertThat(amplification(listOf(replications.last()))).isEqualTo(JsonNull)
+    }
+
     @Test
     fun `two replications aggregate pooled latency ratios and uncertainty`() {
         val first =

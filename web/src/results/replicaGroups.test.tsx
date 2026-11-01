@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { catalog, layout, manifest } from "../test/fixtures";
 import { replicaFixture } from "../test/replicaResults";
@@ -10,6 +10,7 @@ import { SummaryTable } from "../layout/SummaryTable";
 import { GridMap } from "./GridMap";
 import { canvasResults, utilizationColor } from "./canvasResults";
 import { seriesLoader } from "./series";
+import { recordedWindow } from "../test/series";
 
 beforeAll(mockReactFlowDom);
 afterEach(() => vi.restoreAllMocks());
@@ -59,6 +60,57 @@ it("sorts the replica table in both directions and selects a replica", () => {
   fireEvent.click(within(table).getByRole("button", { name: "Resource utilization" }));
   fireEvent.click(within(table).getByRole("button", { name: "Resource utilization" }));
   expect(within(table).getAllByRole("row")[1].textContent).toContain("#1");
+});
+
+it("follows the selected window in every replica row and labels the measurement summary", async () => {
+  const { run, runModel, runExperiment } = replicaFixture();
+  const nodes = ["gateway", "gateway#1", "gateway#2", "gateway#3"].map((id, replica) => ({ id,
+    windows: [0, 1].map(index => recordedWindow({ startMs: index * 100, durationMs: 100,
+      slotPools: { handlers: { busyIntegralMs: 10 * replica + index * 60, capacityIntegralMs: 100,
+        queueIntegralMs: 0, queueFullCount: 0, waitCount: 0, totalWaitMs: 0, waitLimitCount: 0 } },
+    })),
+  }));
+  vi.spyOn(seriesLoader, "load").mockImplementation(async request => nodes.filter(node => request.nodes.includes(node.id))
+    .map(node => ({ ...node, windows: node.windows.slice(request.fromWindow ?? 0, request.untilWindow) })));
+  const options = { runId: "replica-windows", summary: run, manifest, runModel, currentModel: runModel,
+    experiment: runExperiment, catalog, variantId: "baseline", pointId: "p0", replication: 0,
+    selected: "gateway", onShowTimeline: vi.fn() };
+  const view = render(<ElementResults {...options} window={0} />);
+  const table = () => screen.getByRole("table", { name: "Replicas · gateway" });
+  const utilization = () => within(table()).getByRole("button", { name: "gateway#1" }).closest("tr")!.querySelector("td")!;
+  await waitFor(() => expect(utilization().textContent).toBe("10%"));
+  expect(table().querySelector("caption")!.textContent).toContain("Window 0");
+  view.rerender(<ElementResults {...options} window={1} />);
+  await waitFor(() => expect(utilization().textContent).toBe("70%"));
+  expect(table().querySelector("caption")!.textContent).toContain("Window 1");
+  vi.mocked(seriesLoader.load).mockReturnValue(new Promise(() => {}));
+  view.rerender(<ElementResults {...options} replication={1} window={1} />);
+  expect(utilization().textContent).toBe("n/a");
+  view.rerender(<ElementResults {...options} window={null} />);
+  expect(utilization().textContent).toBe("2%");
+  expect(table().querySelector("caption")!.textContent).toContain("Measurement summary");
+});
+
+it("explains attempts below one in the Findings tables, including individual replicas", () => {
+  const { run } = replicaFixture();
+  run.variants[0].points[0].aggregate.services["gateway#1"].admittedAmplification!.mean = 0.27;
+  render(<SummaryTable summary={run} />);
+  const table = screen.getByRole("table", { name: "Element metrics: gateway#1" });
+  expect(table.textContent).toContain("0.27×");
+  expect(table.textContent).toContain("Not every request reached it");
+});
+
+it("distinguishes an absent replica in another variant from a zero-arrival result", () => {
+  const { run } = replicaFixture();
+  const other = structuredClone(run.variants[0]);
+  other.id = "fewer-replicas";
+  delete other.points[0].aggregate.services["gateway#3"];
+  run.variants.push(other);
+  render(<SummaryTable summary={run} />);
+  const table = screen.getByRole("table", { name: "Element metrics: gateway#3" });
+  const absent = within(table).getByRole("rowheader", { name: "Attempts per request" }).closest("tr")!.querySelectorAll("td")[1];
+  expect(absent.textContent).not.toContain("no original requests");
+  expect(absent.textContent).toContain("no recorded data in the selected context");
 });
 
 it("nests replicas inside Answer groups and links the first saturated instance", () => {

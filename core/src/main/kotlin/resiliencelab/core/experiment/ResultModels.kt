@@ -261,11 +261,15 @@ data class PoolerMetrics(
     @EncodeDefault val slotPools: Map<String, SlotPoolMetrics> = emptyMap(),
 )
 
-/** Pooled transaction-pooler counters, resource time and residence distribution across independent replications. */
+/**
+ * Pooled transaction-pooler counters, resource time and residence distribution across independent replications.
+ * [admittedAmplification] describes admitted attempts per original request across replications with original arrivals.
+ */
 @Serializable
 data class AggregatePoolerMetrics(
     val pooledLatency: LatencyDistribution?,
     val totals: PoolerTotals,
+    val admittedAmplification: MetricSummary?,
 )
 
 /** Capacities are integrated over each replication's measurement interval before pooling. */

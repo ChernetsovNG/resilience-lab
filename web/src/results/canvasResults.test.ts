@@ -4,6 +4,8 @@ import { slotPoolResource, catalog, experiment, experimentPath, layout, layoutPa
 import { editorReducer, initialEditorState, setModelParam } from "../workspace/editor";
 import { addBlock, addConnection, deleteElements, renameElement } from "../workspace/structure";
 import { canvasResults, windowCanvasResults } from "./canvasResults";
+import outputCatalog from "../test/catalog.json";
+import type { Catalog } from "../api/apiTypes";
 
 function fixture() {
   const run = structuredClone(summary);
@@ -27,6 +29,25 @@ it("uses the catalog's disabled-queue default when run parameters omit capacity"
 });
 
 describe("canvasResults", () => {
+  it("uses pooler amplification in Summary and its admitted attempts in Time", () => {
+    const run = fixture();
+    const snapshot = structuredClone(model);
+    snapshot.blocks.middle.type = "pooler";
+    const aggregate = run.variants[0].points[0].aggregate;
+    delete aggregate.services.middle;
+    aggregate.poolers.middle = {
+      pooledLatency: null,
+      admittedAmplification: { mean: 0.75, count: 2, min: 0.25, max: 1.25 },
+      totals: { offeredAttempts: 10, admittedAttempts: 8, successes: 8, failures: 0, measurementMs: 2000, slotPools: {} },
+    };
+    const result = canvasResults(run, snapshot, "baseline", "p0", outputCatalog as Catalog)!;
+    expect(result.connections.get("gateway-to-middle")?.values.amplification).toBe(0.75);
+    const nodes = [...result.services.keys()].map(id => ({ id, windows: [recordedWindow({
+      admittedAttempts: 3, entries: { total: { originalArrivals: 4 } },
+    })] }));
+    expect(windowCanvasResults(result, nodes, 0)?.connections.get("gateway-to-middle")?.values.amplification).toBe(0.75);
+  });
+
   it("uses pooled time and count totals, with amplification from the called service", () => {
     const result = canvasResults(fixture(), model, "baseline", "p0", catalog)!;
     expect(result.services.get("gateway")?.values).toEqual({

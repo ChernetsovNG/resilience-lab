@@ -1901,6 +1901,13 @@
       "AggregatePoolerMetrics" : {
         "type" : "object",
         "properties" : {
+          "admittedAmplification" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/MetricSummary"
+            }, {
+              "type" : "null"
+            } ]
+          },
           "pooledLatency" : {
             "oneOf" : [ {
               "$ref" : "#/components/schemas/LatencyDistribution"

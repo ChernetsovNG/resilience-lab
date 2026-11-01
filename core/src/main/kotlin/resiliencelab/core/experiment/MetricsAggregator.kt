@@ -178,6 +178,14 @@ object MetricsAggregator {
         replications.flatMap { it.poolers.keys }.distinct().sorted().associateWith { id ->
             val values = replications.mapNotNull { it.poolers[id] }
             AggregatePoolerMetrics(
+                admittedAmplification =
+                    metricSummary(
+                        replications.mapNotNull { replication ->
+                            replication.poolers[id]?.let { pooler ->
+                                ratio(pooler.admittedAttempts, replication.entries.total.originalArrivals)
+                            }
+                        },
+                    ),
                 pooledLatency = latencyDistribution(values.map { it.latency }),
                 totals =
                     PoolerTotals(

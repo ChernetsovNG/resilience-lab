@@ -1,5 +1,6 @@
 import type { Catalog, ModelFile, OutputCalculation, OutputDescriptor, TypeDescriptor } from "../api/apiTypes";
 import { formatDuration, formatMultiplier, formatNumber, formatPercent, formatRate } from "../i18n/format";
+import { t } from "../i18n";
 
 export interface OutputValue {
   value: number | null;
@@ -70,6 +71,15 @@ export function formatOutput(output: Pick<OutputDescriptor, "unit">, value: numb
     case "MULTIPLIER": return formatMultiplier(value);
     default: return formatNumber(value);
   }
+}
+
+/** Amplification is relative to all original requests, including those that never reached this destination. */
+export type AmplificationUnavailableReason = "noArrivals" | "unsupportedTarget" | "missingData";
+
+export function outputNote(output: Pick<OutputDescriptor, "id">, value: number | null | undefined, reason: AmplificationUnavailableReason = "missingData"): string | null {
+  if (output.id !== "amplification") return null;
+  if (value == null) return t(`results.amplification.${reason}`);
+  return value < 1 ? t("results.amplification.belowOne") : null;
 }
 
 /** Output prose accepts the same named value/interval placeholders as the message catalogs. */

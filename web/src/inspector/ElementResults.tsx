@@ -4,7 +4,7 @@ import { applyOverrides, ownEntry } from "../workspace/params";
 import type { Catalog, ExperimentFile, ModelFile, RunManifest, RunSummary } from "../api/apiTypes";
 import { t } from "../i18n";
 import { formatDuration, formatInterval, formatNumber } from "../i18n/format";
-import { formatOutput, inspectorOutputs, outputsOf, outputsUseTarget } from "../results/outputs";
+import { formatOutput, inspectorOutputs, outputNote, outputsOf, outputsUseTarget } from "../results/outputs";
 import { seriesLoader } from "../results/series";
 import { downsample, timelineRegions, type TimelinePoint, type TimelineRegion } from "../results/timeline/data";
 import { useConnectionSeries } from "../results/timeline/useConnectionSeries";
@@ -94,6 +94,8 @@ export function ElementResults(props: ElementResultsProps) {
     || outputsUseTarget(inspectorOutputs(outputsOf(catalog, selection.kind), true)));
   const nodeIds = selection?.category === "BLOCK" ? [selection.id] : needsTarget ? [selection.target!] : [];
   const primary = useTimelineSeries(seriesLoader, runId, enabled ? variantId : null, pointId, replication, nodeIds, count);
+  const replicas = useTimelineSeries(seriesLoader, runId, enabled && window !== null && group !== undefined ? variantId : null,
+    pointId, replication, group?.instances.map(instance => instance.id) ?? [], (window ?? 0) + 1, window ?? 0);
   const calls = useConnectionSeries(seriesLoader, runId, enabled && selection?.category === "CONNECTION" ? variantId : null,
     pointId, replication, selection?.category === "CONNECTION" ? [selection.id] : [], count);
   const result = projectElementResults({ ...props, nodes: primary.nodes, connections: calls.connections });
@@ -152,6 +154,7 @@ export function ElementResults(props: ElementResultsProps) {
           replication: formatNumber(replication), mode: t(window === null ? "inspector.results.summaryMode" : "inspector.results.timeMode") })}</p>
         {group === undefined || point === undefined ? null : <ReplicaResults key={group.id} group={group} aggregate={point.aggregate}
           catalog={catalog} replications={variant?.replications ?? 0} models={entryModels(summary, runModel, catalog, experiment.variants)}
+          window={window} frames={new Map(replicas.nodes.map(node => [node.id, node.windows[0]]))}
           selected={selected} onSelect={props.onSelectReplica} />}
         <table aria-label={t("inspector.results.title")}><tbody>
           {inspectorOutputs(result.outputs).map(output => {
@@ -159,11 +162,13 @@ export function ElementResults(props: ElementResultsProps) {
             const format = (value: number | null | undefined) => formatOutput(output, value);
             const value = result.values[key];
             const interval = intervalFor(value);
+            const note = outputNote(output, value.value, result.amplificationUnavailableReason);
             return <tr key={key}><th scope="row">{label}</th><td>{format(value.value)}
               {interval === null ? null : <span className={`summary-interval${(value.count ?? 0) < 5 ? " summary-interval--unreliable" : ""}`}>
                 {t("results.intervalInParens", { interval: formatInterval(interval[0], interval[1], format, level) })}
               </span>}
               <small>{sourceLabel(value)}</small>
+              {note === null || (window !== null && primary.loading) ? null : <small className="output-note">{note}</small>}
               {value.approximate ? <small title={t("editor.canvas.amplificationWindowTitle")}>{t("inspector.results.approximate")}</small> : null}
             </td></tr>;
           })}
@@ -175,9 +180,10 @@ export function ElementResults(props: ElementResultsProps) {
           from: formatDuration(result.latencyCoverage.fromMs), to: formatDuration(result.latencyCoverage.toMs),
         })}</p> : null}
         {result.outputs.some(output => output.inspector?.thresholdParameter != null) ? <p className="element-results-note">{t("inspector.results.latencyNote")}</p> : null}
-        {primary.loading || calls.loading ? <p role="status">{t("inspector.results.loading")}</p> : null}
+        {primary.loading || calls.loading || replicas.loading ? <p role="status">{t("inspector.results.loading")}</p> : null}
         {primary.problem === null ? null : <p role="status">{primary.problem}</p>}
         {calls.problem === null ? null : <p role="status">{calls.problem}</p>}
+        {replicas.problem === null ? null : <p role="status">{replicas.problem}</p>}
         {metadata == null ? <p>{t("results.timeline.metadataUnavailable")}</p> : <div className="element-results-charts">
           {charts.map(chart => <MiniChart key={chart.id} {...chart} element={result.id} replication={replication} regions={regions}
             endMs={endMs} windowMs={windowMs} cursorWindow={window} />)}

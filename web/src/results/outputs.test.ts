@@ -2,11 +2,22 @@ import { describe, expect, it } from "vitest";
 import type { OutputCalculation, TypeDescriptor } from "../api/apiTypes";
 import { localizeCatalog } from "../i18n/catalog";
 import { catalog, model } from "../test/fixtures";
-import { calculateOutput, inspectorOutputs, outputValue, outputWindow, outputsOf, overlayOutputs, selectedOverlayOutput, timelineGroups } from "./outputs";
+import { calculateOutput, inspectorOutputs, outputNote, outputValue, outputWindow, outputsOf, overlayOutputs, selectedOverlayOutput, timelineGroups } from "./outputs";
 import { decodeSeriesPart } from "./series/decode";
 import golden from "./series/fixtures/retry-storm-baseline-rep-0.json";
 
 describe("catalog output contract", () => {
+  it("explains zero and subunit amplification while preserving one and other output kinds", () => {
+    expect(outputNote({ id: "amplification" }, 0)).toBe("Not every request reached it");
+    expect(outputNote({ id: "amplification" }, 0.8)).toBe("Not every request reached it");
+    expect(outputNote({ id: "amplification" }, 1)).toBeNull();
+    expect(outputNote({ id: "amplification" }, 2)).toBeNull();
+    expect(outputNote({ id: "utilization" }, 0.8)).toBeNull();
+    expect(outputNote({ id: "amplification" }, null)).toBe("Undefined: no recorded data in the selected context");
+    expect(outputNote({ id: "amplification" }, null, "noArrivals")).toBe("Undefined: no original requests");
+    expect(outputNote({ id: "amplification" }, null, "unsupportedTarget")).toBe("Undefined: destination does not count admitted attempts");
+  });
+
   it("shares a metric selector across resource-specific labels and help", () => {
     const service = catalog.types.find(type => type.id === "service")!;
     const utilization = service.outputs.find(output => output.id === "utilization")!;

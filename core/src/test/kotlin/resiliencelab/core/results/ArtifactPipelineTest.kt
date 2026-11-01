@@ -59,7 +59,7 @@ class ArtifactPipelineTest {
         ExperimentExecutor(2).use { executor ->
             Lab(workspace, executor = executor).use { lab ->
                 val original = lab.run(experiment, "r", onProgress = { done, total -> summarizing.set(done == total) })
-                assertThat(original.manifest.schemaVersion).isEqualTo(18)
+                assertThat(original.manifest.schemaVersion).isEqualTo(19)
                 val task = "${original.runDirectory}/series/baseline/p0/rep-0/replication.json.gz"
                 val stored =
                     Json
@@ -345,7 +345,7 @@ class ArtifactPipelineTest {
                 "\"rejectionsThreshold\": 0",
             )
         assertThat(first.manifest.complete).isTrue()
-        assertThat(first.manifest.schemaVersion).isEqualTo(18)
+        assertThat(first.manifest.schemaVersion).isEqualTo(19)
         first.summary.variants.forEach { variant ->
             variant.points.forEach { point ->
                 assertThat(point.aggregate.connections.keys).containsExactly("gateway-to-middle", "middle-to-dependency")

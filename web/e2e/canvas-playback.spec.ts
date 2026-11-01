@@ -1,9 +1,10 @@
 import { selectExperiment, copySmallExperiment } from "./fixtures";
 import { expect, test, type APIRequestContext, type Locator } from "./fixtures";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { formatDuration, formatMultiplier, formatNumber } from "../src/i18n/format";
 import type { components } from "../src/api/schema";
+import type { ExperimentFile, RunSummary } from "../src/api/apiTypes";
 
 type Window = components["schemas"]["WindowMetrics"];
 
@@ -23,6 +24,73 @@ async function windows(request: APIRequestContext, runId: string) {
 async function seek(slider: Locator, index: number) {
   await slider.fill(String(index));
 }
+
+test("pooler Summary and replica cursor values agree with recorded results in Russian", async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("resilience-lab.language", "ru"));
+  const directory = resolve("../apps/server/build/e2e-workspace/pooler-replica-windows");
+  const names = ["checkout-replicas.experiment.json", "checkout-replicas.model.json", "checkout-replicas.layout.json"];
+  await mkdir(directory);
+  try {
+    for (const name of names) await copyFile(resolve("../examples/checkout-replicas", name), resolve(directory, name));
+    const path = resolve(directory, names[0]);
+    const experiment: ExperimentFile = JSON.parse(await readFile(path, "utf8"));
+    experiment.execution = { ...experiment.execution, replications: 2, warmup: "200ms", measurement: "2s", window: "100ms" };
+    experiment.variants = [{ id: "baseline", label: "Базовый" }];
+    experiment.faults = [{ kind: "slowdown", target: "order-service-to-pgbouncer#2", from: "800ms", to: "1500ms", delay: "200ms" }];
+    await writeFile(path, JSON.stringify(experiment));
+    await page.goto("/");
+    await selectExperiment(page, "pooler-replica-windows/checkout-replicas.experiment.json");
+    const response = page.waitForResponse(response => /\/runs\/[^/]+\/summary$/.test(response.url()));
+    await page.getByRole("button", { name: "Запустить", exact: true }).click();
+    const summaryResponse = await response;
+    const summary: RunSummary = await summaryResponse.json();
+    const runId = /\/runs\/([^/]+)\/summary$/.exec(summaryResponse.url())![1];
+    const aggregate = summary.variants[0].points[0].aggregate;
+    const amplification = aggregate.poolers.pgbouncer.admittedAmplification;
+    expect(amplification?.count).toBe(2);
+    expect(amplification!.mean).toBeGreaterThan(0);
+    await page.getByRole("tab", { name: "Базовый", exact: true }).click();
+    await page.getByRole("button", { name: "Свернуть результаты", exact: true }).click();
+    await page.locator(".react-flow__controls-fitview").click();
+    const edge = page.getByTestId("canvas-edge-label-order-service-to-pgbouncer");
+    const multiplier = `${new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(amplification!.mean)}×`;
+    await expect(edge).toContainText(multiplier);
+    await edge.locator(".canvas-edge-results").click();
+    const inspector = page.getByRole("complementary", { name: "Инспектор", exact: true });
+    const attempts = inspector.getByRole("row", { name: /^Попытки на запрос/ });
+    await expect(attempts).toContainText(multiplier);
+    await expect(attempts).not.toContainText("нет данных");
+    await page.screenshot({ path: testInfo.outputPath("pooler-summary-ru.png") });
+
+    const recorded = await windows(request, runId);
+    const samples = recorded.get("order-service#2")!;
+    const utilization = (index: number) => samples[index].slotPools.handlers.busyIntegralMs / samples[index].slotPools.handlers.capacityIntegralMs;
+    const candidates = samples.map((_, index) => index).filter(index => samples[index].startMs >= 200);
+    candidates.sort((a, b) => utilization(a) - utilization(b));
+    const before = candidates[0], during = candidates.at(-1)!;
+    expect(utilization(during)).toBeGreaterThan(utilization(before));
+    await page.getByTestId("rf__node-order-service").locator(".block-node > strong").click();
+    const table = inspector.getByRole("table", { name: "Реплики · order-service", exact: true });
+    await expect(table.locator("caption")).toContainText("Итог за измерение");
+    await page.getByRole("button", { name: "Время", exact: true }).click();
+    const slider = page.getByRole("slider", { name: "Окно воспроизведения", exact: true });
+    for (const [name, index] of [["before", before], ["during", during]] as const) {
+      await seek(slider, index);
+      await expect(table.locator("caption")).toContainText(`Окно ${index}`);
+      for (const replica of [1, 2, 3]) {
+        const frame = recorded.get(`order-service#${replica}`)![index];
+        const expected = new Intl.NumberFormat("ru", { style: "percent", maximumFractionDigits: 1 })
+          .format(frame.slotPools.handlers.busyIntegralMs / frame.slotPools.handlers.capacityIntegralMs);
+        const row = table.getByRole("row").filter({ has: page.getByRole("button", { name: `order-service#${replica}`, exact: true }) });
+        await expect(row.locator("td").first()).toHaveText(expected);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`replica-window-${name}-ru.png`) });
+    }
+    await page.getByRole("button", { name: "Итог", exact: true }).click();
+    await expect(table.locator("caption")).toContainText("Итог за измерение");
+  } finally { await rm(directory, { recursive: true }); }
+});
 
 test("retry-storm playback has deterministic window frames and a shared Timeline cursor without document writes", async ({ page, request }, testInfo) => {
   const directory = resolve("../apps/server/build/e2e-workspace/playback");
@@ -69,10 +137,10 @@ test("retry-storm playback has deterministic window frames and a shared Timeline
     await expect(status).toContainText(`Cursor ${formatDuration(dependency[before].startMs)}`);
     await page.getByRole("button", { name: /fit view/i }).click();
     await expect(metrics).toContainText(`Queue ${formatNumber(queue(before))}`);
-    await expect(edge).toHaveText(`Attempts per request ${formatMultiplier(amplification(before))}`);
+    await expect(edge).toContainText(`Attempts per request ${formatMultiplier(amplification(before))}`);
     await seek(slider, during);
     await expect(metrics).toContainText(`Queue ${formatNumber(queue(during))}`);
-    await expect(edge).toHaveText(`Attempts per request ${formatMultiplier(amplification(during))}`);
+    await expect(edge).toContainText(`Attempts per request ${formatMultiplier(amplification(during))}`);
     await expect(edge).toHaveAttribute("title", /Window approximation/);
     const frame = { metrics: await metrics.locator("span").allTextContents(), edge: await edge.innerText() };
     await page.getByRole("button", { name: "Previous window", exact: true }).click();
