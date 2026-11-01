@@ -27,9 +27,10 @@ import kotlin.math.sqrt
 /**
  * Advisory checks on valid, compiled paths from the client (stage-1 design §3.4).
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
- * These static estimates omit queueing and degradation; distribution means cannot bound random tails.
+ * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  * [retryNoJitterThreshold] is the attempt count above which NONE and FIXED backoffs warn (1 by default).
+ * [queueWaitThreshold] scales the caller's patience for full-queue warnings (1 by default, equality allowed).
  * [timeoutBudgetTolerance] allows a relative downstream reserve above the incoming timeout (5% by default).
  * [timeoutUnreachableThreshold] compares a call timeout with this multiple of each reachable client's deadline (1 by default).
  * [timeoutLatencyQuantile] selects the target processing quantile for normal-response estimates (0.99 by default).
@@ -41,6 +42,7 @@ class ModelLinter(
     private val timeoutUnreachableThreshold: Double = 1.0,
     private val retryNoJitterThreshold: Int = 1,
     private val timeoutLatencyQuantile: Double = 0.99,
+    private val queueWaitThreshold: Double = 1.0,
 ) {
     init {
         require(retryAmplificationThreshold >= 1) { "retryAmplificationThreshold must be at least 1" }
@@ -51,6 +53,9 @@ class ModelLinter(
         }
         require(timeoutUnreachableThreshold.isFinite() && timeoutUnreachableThreshold >= 1.0) {
             "timeoutUnreachableThreshold must be finite and at least 1"
+        }
+        require(queueWaitThreshold.isFinite() && queueWaitThreshold >= 1.0) {
+            "queueWaitThreshold must be finite and at least 1"
         }
         require(timeoutLatencyQuantile.isFinite() && timeoutLatencyQuantile > 0.0 && timeoutLatencyQuantile < 1.0) {
             "timeoutLatencyQuantile must be finite and strictly between 0 and 1"
@@ -133,13 +138,14 @@ class ModelLinter(
     private fun lintGraph(graph: GraphIr): List<Diagnostic> {
         val services = graph.services.associateBy { it.path }
         val diagnostics = mutableListOf<Diagnostic>()
-        val demands = mutableMapOf<String, Double>()
-        val maximumRates = mutableMapOf<String, Double>()
+        val demands = mutableMapOf<String, BigDecimal>()
+        val maximumRates = mutableMapOf<String, BigDecimal>()
+        val queuePatience = mutableMapOf<String, QueuePatience>()
         val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
         val normalResponses = mutableMapOf<String, MutableMap<String, NormalResponse>>()
         graph.clients.forEach { client ->
             client.classes.forEach { (requestClass, load) ->
-                val holdingByService = mutableMapOf<String, Double>()
+                val holdingByService = mutableMapOf<String, BigDecimal>()
                 val shares = arrivalShares(graph, client, requestClass)
                 graph.entryServices(client, requestClass).forEach { entry ->
                     graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
@@ -154,10 +160,10 @@ class ModelLinter(
                         }
                         retryAmplification(calls, calls.firstOrNull())?.let(diagnostics::add)
                         deadlineBudget(client, processingMs(graph, entry, requestClass), calls.firstOrNull())?.let(diagnostics::add)
-                        var holdingMs = 0.0
+                        var holdingMs = BigDecimal.ZERO
                         ordered.asReversed().forEach { service ->
-                            val outgoingNetworkMs = 2.0 * (outgoing[service.path]?.network?.meanMs ?: 0.0)
-                            val downstreamMs = holdingMs + outgoingNetworkMs
+                            val outgoingNetworkMs = BigDecimal.valueOf(outgoing[service.path]?.network?.meanMs ?: 0.0) * BigDecimal.TWO
+                            val downstreamMs = (holdingMs + outgoingNetworkMs).toDouble()
                             incoming[service.path]?.let { call ->
                                 val processingQuantile =
                                     graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
@@ -168,22 +174,30 @@ class ModelLinter(
                                 val previous = byClass[requestClass]
                                 if (previous == null || response.ms > previous.ms) byClass[requestClass] = response
                             }
-                            holdingMs += processingMs(graph, service, requestClass) + outgoingNetworkMs
-                            holdingByService[service.path] = maxOf(holdingByService[service.path] ?: 0.0, holdingMs)
+                            holdingMs +=
+                                graph.scenario(service, requestClass).filterIsInstance<ServiceStep.Process>().sumOf {
+                                    BigDecimal.valueOf((it.processing ?: service.processing).meanMs)
+                                } + outgoingNetworkMs
+                            holdingByService[service.path] = maxOf(holdingByService[service.path] ?: BigDecimal.ZERO, holdingMs)
+                            val patience =
+                                incoming[service.path]?.let { QueuePatience(it.timeoutMs, it.path, false) }
+                                    ?: QueuePatience(client.deadlineMs, client.path, true)
+                            val previous = queuePatience[service.path]
+                            if (previous == null || patience.ms < previous.ms) queuePatience[service.path] = patience
                         }
                     }
                 }
                 val maximumRate = load.maximum(graph.run.warmupMs + graph.run.measurementMs)
                 holdingByService.forEach { (path, holdingMs) ->
-                    val rate = maximumRate * (shares[path] ?: 0.0)
-                    demands[path] = (demands[path] ?: 0.0) + rate * holdingMs
-                    maximumRates[path] = (maximumRates[path] ?: 0.0) + rate
+                    val rate = BigDecimal.valueOf(maximumRate * (shares[path] ?: 0.0))
+                    demands[path] = (demands[path] ?: BigDecimal.ZERO) + rate * holdingMs
+                    maximumRates[path] = (maximumRates[path] ?: BigDecimal.ZERO) + rate
                 }
             }
         }
         return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
             graph.calls.flatMap { call -> timeoutBelowLatency(call, normalResponses[call.path].orEmpty()) } +
-            handlerDemand(graph.services, demands, maximumRates) +
+            handlerDemand(graph.services, demands, maximumRates, queuePatience) +
             graph.calls
                 .filter { call ->
                     call.balancing != null &&
@@ -451,25 +465,27 @@ class ModelLinter(
      * The service holds its handler while waiting downstream, and releases it before its own response network delay.
      * Compare handlers with the maximum client profile intensity × W: a conservative estimate before timeout truncation.
      * Sum demand from clients and classes; each source contributes its longest applicable path only once per service.
+     * Use the same rate-weighted holding time to estimate full-queue waiting against the shortest caller patience.
      */
     private fun handlerDemand(
         services: List<ServiceNode>,
-        demands: Map<String, Double>,
-        maximumRates: Map<String, Double>,
+        demands: Map<String, BigDecimal>,
+        maximumRates: Map<String, BigDecimal>,
+        queuePatience: Map<String, QueuePatience>,
     ): List<Diagnostic> =
         buildList {
             services.forEach { service ->
-                val demand = demands[service.path] ?: 0.0
-                val maximumRate = maximumRates[service.path] ?: 0.0
-                val holdingMs = if (maximumRate == 0.0) 0.0 else demand / maximumRate
-                if (service.pooler == null && service.handlers < demand) {
+                val demand = demands[service.path] ?: BigDecimal.ZERO
+                val maximumRate = maximumRates[service.path] ?: BigDecimal.ZERO
+                val holdingMs = if (maximumRate.signum() == 0) 0.0 else demand.divide(maximumRate, MathContext.DECIMAL128).toDouble()
+                if (service.pooler == null && service.handlers.toBigDecimal() < demand) {
                     val database = service.type == "database"
                     val resource = if (database) "Connections" else "Handlers"
                     add(
                         warning(
                             CoreMessage.LINT_HANDLERS_LITTLE,
-                            "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand)} at " +
-                                "${number(maximumRate * 1_000.0)} requests/s. " +
+                            "$resource: ${service.handlers}; estimated simultaneous demand: ${number(demand.toDouble())} at " +
+                                "${number((maximumRate * BigDecimal(1_000)).toDouble())} requests/s. " +
                                 "Queues may grow; increase capacity or reduce load or processing time.",
                             service.origin,
                             service.path,
@@ -477,15 +493,62 @@ class ModelLinter(
                             mapOf(
                                 "elementType" to JsonPrimitive(service.type),
                                 "handlers" to JsonPrimitive(service.handlers),
-                                "demand" to messageNumber(demand),
-                                "ratePerSecond" to messageNumber(maximumRate * 1_000.0),
+                                "demand" to messageNumber(demand.toDouble()),
+                                "ratePerSecond" to messageNumber((maximumRate * BigDecimal(1_000)).toDouble()),
                                 "holdingMs" to messageNumber(holdingMs),
                             ),
                         ),
                     )
                 }
+                queueWait(service, demand, maximumRate, holdingMs, queuePatience[service.path])?.let(::add)
             }
         }
+
+    private data class QueuePatience(
+        val ms: Double,
+        val source: String,
+        val entry: Boolean,
+    )
+
+    /** Full-queue heuristic: queue / handlers × the same mean holding time used by Little's-law demand. */
+    private fun queueWait(
+        service: ServiceNode,
+        demand: BigDecimal,
+        maximumRate: BigDecimal,
+        holdingMs: Double,
+        patience: QueuePatience?,
+    ): Diagnostic? {
+        if (service.pooler != null || service.queueCapacity == 0 || maximumRate.signum() == 0 || patience == null) return null
+        val queuedDemand = service.queueCapacity.toBigDecimal() * demand
+        val capacityRate = service.handlers.toBigDecimal() * maximumRate
+        val scaledLimit = BigDecimal.valueOf(patience.ms) * BigDecimal.valueOf(queueWaitThreshold)
+        // Cross-multiplication preserves exact equality; dividing weighted means can introduce a false warning.
+        if (queuedDemand <= scaledLimit * capacityRate) return null
+        val waitMs = queuedDemand.divide(capacityRate, MathContext.DECIMAL128).toDouble()
+        // Existing routing shares are Double; do not emit a warning that reports equality after conversion.
+        if (waitMs.isFinite() && BigDecimal.valueOf(waitMs) <= scaledLimit) return null
+        val limit = if (patience.entry) "deadline of client '${patience.source}'" else "timeout on connection '${patience.source}'"
+        return warning(
+            if (patience.entry) CoreMessage.LINT_QUEUE_WAIT_DEADLINE else CoreMessage.LINT_QUEUE_WAIT_TIMEOUT,
+            "Full queue of '${service.path}' has estimated wait ${number(waitMs)} ms " +
+                "(${service.queueCapacity} queued / ${service.handlers} slots × ${number(holdingMs)} ms holding), " +
+                "above ${number(queueWaitThreshold)} × $limit ${number(patience.ms)} ms. " +
+                "Queued work may outlast its caller; reduce queue capacity or processing time.",
+            service.origin,
+            service.path,
+            "/params/queue",
+            mapOf(
+                "target" to JsonPrimitive(service.path.substringBeforeLast('#', service.path)),
+                "estimatedMs" to JsonPrimitive(number(waitMs)),
+                "limitMs" to JsonPrimitive(number(patience.ms)),
+                "threshold" to JsonPrimitive(number(queueWaitThreshold)),
+                "queue" to JsonPrimitive(service.queueCapacity),
+                "handlers" to JsonPrimitive(service.handlers),
+                "holdingMs" to JsonPrimitive(number(holdingMs)),
+                (if (patience.entry) "client" else "connection") to JsonPrimitive(patience.source),
+            ),
+        )
+    }
 
     /**
      * Compare the client deadline with entry processing mean + outgoing attempts × timeout + maximum backoffs.

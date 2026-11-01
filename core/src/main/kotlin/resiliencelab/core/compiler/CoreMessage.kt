@@ -143,6 +143,16 @@ internal enum class CoreMessage(
         null,
         "{elementType}: {handlers}; estimated simultaneous demand: {demand} at {ratePerSecond} requests/s",
     ),
+    LINT_QUEUE_WAIT_TIMEOUT(
+        "LINT_QUEUE_WAIT",
+        "timeout",
+        "Full queue of '{target}' has estimated wait {estimatedMs} ms, above {threshold} × timeout {limitMs} ms on connection '{connection}'",
+    ),
+    LINT_QUEUE_WAIT_DEADLINE(
+        "LINT_QUEUE_WAIT",
+        "deadline",
+        "Full queue of '{target}' has estimated wait {estimatedMs} ms, above {threshold} × deadline {limitMs} ms of client '{client}'",
+    ),
     LINT_DEADLINE_BUDGET("LINT_DEADLINE_BUDGET", null, "Deadline {deadlineMs} ms is below the entry call budget {requiredMs} ms"),
     LINT_FEW_REPLICATIONS(
         "LINT_FEW_REPLICATIONS",

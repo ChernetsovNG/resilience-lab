@@ -54,6 +54,31 @@ class ExampleDocumentsTest {
             assertThat(diagnostics.groupingBy { "${it.code}/${it.variant ?: "all"}" }.eachCount())
                 .describedAs(example)
                 .isEqualTo(warnings)
+
+            val (parameter, capacity, waitMs, limitMs) =
+                when (example) {
+                    "retry-storm" -> listOf("gateway.queue", "80", "260", "250")
+                    "checkout" -> listOf("payment-service.queue", "1000", "7000", "3000")
+                    else -> listOf("orders-db.queue", "3000", "150", "100")
+                }
+            val oversized =
+                experiment.copy(
+                    variants =
+                        listOf(
+                            experiment.variants.first().let {
+                                it.copy(
+                                    overrides =
+                                        it.overrides + (parameter to JsonPrimitive(capacity.toInt())),
+                                )
+                            },
+                        ),
+                )
+            val recompiled = ModelCompiler().compile(model, modelPath.toString(), oversized, experimentPath.toString())
+            assertThat(recompiled.diagnostics).describedAs(example).isEmpty()
+            val queue = ModelLinter().lint(requireNotNull(recompiled.experiment)).single { it.code == "LINT_QUEUE_WAIT" }
+            assertThat(queue.args).containsEntry("estimatedMs", JsonPrimitive(waitMs)).containsEntry("limitMs", JsonPrimitive(limitMs))
+            assertThat(queue.pointer).isEqualTo("/variants/0/overrides/$parameter")
+            assertThat(queue.variant).isEqualTo("baseline")
         }
     }
 

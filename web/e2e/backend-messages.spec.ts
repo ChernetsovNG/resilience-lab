@@ -12,6 +12,31 @@ for (const locale of locales) {
     const catalog = JSON.parse(readFileSync(resolve(`src/i18n/${locale.startsWith("ru") ? "ru" : "en"}.json`), "utf8")) as Record<string, string>;
     const label = (key: string) => catalog[key];
 
+    for (const [target, capacity, waitMs, limitMs, source] of [
+      ["gateway", "80", "260", "250", "client"],
+      ["dependency", "20", "80", "60", "middle-to-dependency"],
+    ]) {
+      test(`localizes full queue patience for ${target} and opens the affected queue`, async ({ page }) => {
+        await page.goto("/");
+        await selectExperiment(page, "retry-storm/retry-storm.experiment.json");
+        await page.getByTestId(`rf__node-${target}`).click();
+        const queue = page.getByLabel(label("catalog.types.service.params.queue.title"), { exact: true });
+        await queue.fill(capacity);
+        await queue.press("Enter");
+        await page.getByRole("tab", { name: label("results.problems.title"), exact: true }).click();
+        const warning = page.getByRole("tabpanel").locator('button[data-diagnostic-code="LINT_QUEUE_WAIT"]');
+
+        await expect(warning).toHaveCount(1);
+        await expect(warning).toContainText(locale.startsWith("ru") ? `ожидание ${waitMs} мс` : `wait ${waitMs} ms`);
+        await expect(warning).toContainText(`${limitMs} ${locale.startsWith("ru") ? "мс" : "ms"}`);
+        await expect(warning).toContainText(source);
+        await warning.click();
+        await expect(queue).toBeFocused();
+        await expect(queue.locator("..").locator(".field-diagnostics")).toContainText("LINT_QUEUE_WAIT");
+        await expect(page.getByRole("button", { name: label("app.topBar.run"), exact: true })).toBeEnabled();
+      });
+    }
+
     test("localizes retries without jitter and opens the backoff parameter", async ({ page }) => {
       await page.goto("/");
       await selectExperiment(page, "checkout/checkout.experiment.json");
