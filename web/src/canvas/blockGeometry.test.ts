@@ -88,3 +88,8 @@ it("draws two replica back edges and uses the front card for content and ports",
 it("keeps an unknown block type in the same rounded card as a service", () => {
   expect(blockGeometry("worker", 192, 160)).toEqual(blockGeometry("service", 192, 160));
 });
+
+it("fits extra metric rows inside the router content rectangle", () => {
+  const height = minimumBlockHeight("router", 144, 160);
+  expect(blockGeometry("router", height, height).content.height).toBeGreaterThanOrEqual(160);
+});

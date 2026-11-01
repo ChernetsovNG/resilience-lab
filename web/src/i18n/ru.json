@@ -1,4 +1,5 @@
 {
+  "editor.canvas.resetSize": "Сбросить размер",
   "results.entries.context": "{variant} · {point}",
   "results.entries.byClients": "По клиентам",
   "results.entries.byRequestTypes": "По видам запросов",

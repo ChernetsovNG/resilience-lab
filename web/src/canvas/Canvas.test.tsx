@@ -891,3 +891,84 @@ it("shows block and every connection type description through HelpHint without e
   }
   expect(within(screen.getByTestId("rf__node-client")).queryByRole("button", { name: "More about: client" })).toBeNull();
 });
+
+
+it("renders authored dimensions, selected resize handles and resets the automatic footprint", async () => {
+  const manual = { ...layout, sizes: { gateway: { width: 320, height: 300 } } };
+  const props = { catalog, model, selected: ["gateway"], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+  const { rerender } = render(<Canvas {...props} layout={manual} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.style.width).toBe("320px");
+  expect(gateway.style.height).toBe("300px");
+  expect(gateway.querySelector(".block-shape")?.getAttribute("style")).toContain("width: 320px");
+  expect(gateway.querySelectorAll(".react-flow__resize-control.handle")).toHaveLength(4);
+  expect(screen.getByTestId("rf__node-middle").querySelector(".react-flow__resize-control")).toBeNull();
+  rerender(<Canvas {...props} layout={layout} />);
+  expect(gateway.style.width).toBe("");
+  expect(gateway.style.height).toBe("");
+  expect((gateway.querySelector(".block-shape") as HTMLElement).style.width).toBe("");
+  expect(props.onCommand).not.toHaveBeenCalled();
+});
+
+it.each([{ variant: experiment.variants[0] }, { disabled: true }, { editable: false }])("hides resize actions for read-only or disabled nodes: %s", async state => {
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={vi.fn()} editable {...state} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  expect(gateway.querySelector(".react-flow__resize-control")).toBeNull();
+});
+
+
+function resizeMouse(type: string, target: Element | Window, x: number, y: number) {
+  const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  // Vitest's Window proxy is not accepted by jsdom's UIEvent constructor.
+  Object.defineProperty(event, "view", { value: window });
+  fireEvent(target, event);
+}
+
+it("commits a native left resize once on release and keeps position and dimensions atomic", async () => {
+  const onCommand = vi.fn();
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={onCommand} editable />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  const handle = gateway.querySelector(".react-flow__resize-control.handle.left.top")!;
+  expect(handle).not.toBeNull();
+  resizeMouse("mousedown", handle, 20, 20);
+  resizeMouse("mousemove", window, -180, -180);
+  expect(onCommand).not.toHaveBeenCalled();
+  resizeMouse("mouseup", window, -180, -180);
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  const after = (onCommand.mock.calls[0][0] as EditorCommand)({ model, layout, experiment });
+  expect(after.layout.positions.gateway.x).toBeLessThan(layout.positions.gateway.x);
+  expect(after.layout.positions.gateway.y).toBeLessThan(layout.positions.gateway.y);
+  expect(after.layout.sizes.gateway.width).toBeGreaterThan(180);
+  expect(after.layout.sizes.gateway.height).toBeGreaterThan(80);
+});
+
+it.each(["Escape", "blur", "pointercancel"])("discards a native resize on %s without writing a command", async cancel => {
+  const onCommand = vi.fn();
+  render(<Canvas catalog={catalog} model={model} layout={layout} selected={["gateway"]} onSelect={vi.fn()} onCommand={onCommand} editable />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  const handle = gateway.querySelector(".react-flow__resize-control.handle.right.bottom")!;
+  resizeMouse("mousedown", handle, 20, 20);
+  resizeMouse("mousemove", window, 220, 220);
+  expect(gateway.style.width).not.toBe("");
+  if (cancel === "Escape") fireEvent.keyDown(window, { key: "Escape" });
+  else fireEvent(window, new Event(cancel));
+  expect(gateway.style.width).toBe("");
+  resizeMouse("mouseup", window, 220, 220);
+  expect(onCommand).not.toHaveBeenCalled();
+});
+
+
+it.each(["disabled", "selection", "document"])("cannot resurrect an interrupted resize after %s changes", async interruption => {
+  const props = { catalog, model, layout, selected: ["gateway"], onSelect: vi.fn(), onCommand: vi.fn(), editable: true };
+  const { rerender } = render(<Canvas {...props} />);
+  const gateway = await screen.findByTestId("rf__node-gateway");
+  resizeMouse("mousedown", gateway.querySelector(".react-flow__resize-control.handle.right.bottom")!, 20, 20);
+  resizeMouse("mousemove", window, 220, 220);
+  expect(gateway.style.width).not.toBe("");
+  rerender(<Canvas {...props} {...(interruption === "disabled" ? { disabled: true } : interruption === "selection" ? { selected: [] } : { layout: structuredClone(layout) })} />);
+  expect(gateway.style.width).toBe("");
+  rerender(<Canvas {...props} />);
+  expect(gateway.style.width).toBe("");
+  resizeMouse("mouseup", window, 220, 220);
+  expect(props.onCommand).not.toHaveBeenCalled();
+});

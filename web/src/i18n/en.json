@@ -1,4 +1,5 @@
 {
+  "editor.canvas.resetSize": "Reset size",
   "results.entries.context": "{variant} · {point}",
   "results.entries.byClients": "By clients",
   "results.entries.byRequestTypes": "By request types",

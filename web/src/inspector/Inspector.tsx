@@ -4,11 +4,12 @@ import { setAnnotation } from "../workspace/annotations";
 import { t } from "../i18n";
 import { ReplicaOverrides } from "./ReplicaOverrides";
 import { TypeHelp } from "../help/TypeHelp";
-import type { Catalog, Diagnostic, ExperimentFile, ModelFile } from "../api/apiTypes";
+import type { Catalog, Diagnostic, ExperimentFile, LayoutFile, ModelFile } from "../api/apiTypes";
 import { elementIdentity, type EditorCommand } from "../workspace/editor";
 import { addFault, resetVariantParam, setVariantParam } from "../workspace/experimentCommands";
 import { createFault, faultTargets, type FaultTarget } from "../workspace/faults";
 import { elementOf, isOverridden, ownEntry } from "../workspace/params";
+import { resetBlockSize } from "../workspace/structure";
 import { IdentifierField } from "./IdentifierField";
 import { ParamField } from "./ParamField";
 import { RunSettings } from "./RunSettings";
@@ -36,6 +37,7 @@ export interface InspectorProps {
   hidden?: boolean;
   /** The model as the active variant page sees it. */
   model: ModelFile;
+  layout?: LayoutFile | null;
   /** Shared model, before applying the active variant overrides. */
   baseModel?: ModelFile;
   experiment: ExperimentFile;
@@ -81,7 +83,7 @@ function AddFaultAction({ model, catalog, elementId, initialTarget = elementId, 
 }
 
 /** Context inspector (product vision §5.5): one selected element, variant identity or shared experiment settings. */
-export function Inspector({ catalog, model, baseModel, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
+export function Inspector({ catalog, model, layout, baseModel, experiment, experimentPath, selected, editable, overrides, onRename, onParam, onValidity,
   hidden = false, variantId = null, invalid = false, onCommand, onOpenFault, fieldDiagnostics, variantFieldDiagnostics, onVariantDiagnostic, renameReferences, requestTypeReferences,
   target = selected === null ? "experiment" : "element", focusField, results, variantChanges, resultsFirst = false, resultsOnly = false, selectedReplica, replicaModel }: InspectorProps) {
   const panel = useRef<HTMLElement>(null);
@@ -145,6 +147,9 @@ export function Inspector({ catalog, model, baseModel, experiment, experimentPat
             <IdentifierField key={selected} model={model} identifier={selected} editable={editable && variantId === null}
               onRename={onRename} onValidity={onValidity} references={renameReferences} />
           )}
+          {variantId === null && ownEntry(model.blocks, selected) !== undefined && layout != null && Object.hasOwn(layout.sizes, selected) ?
+            <button type="button" disabled={!editable || invalid || onCommand === undefined}
+              onClick={() => onCommand?.(resetBlockSize(selected))}>{t("editor.canvas.resetSize")}</button> : null}
           <AnnotationFields key={annotationTarget.key} value={ownEntry(model.blocks, selected) ?? connection ?? {}}
             editable={editable && variantId === null && onCommand !== undefined}
             readOnlyHint={variantId === null ? undefined : t("editor.variant.structureHint")}

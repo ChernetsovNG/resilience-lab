@@ -626,3 +626,13 @@ it("shows request type profiles without offering a competing single profile", ()
   expect(screen.getByRole<HTMLInputElement>("radio", { name: "Several request types" }).checked).toBe(true);
   expect(onParam).not.toHaveBeenCalled();
 });
+
+
+it("resets authored node dimensions from the model inspector", () => {
+  const manual = { ...layout, sizes: { gateway: { width: 320, height: 300 } } };
+  const changes: EditorDocuments[] = [];
+  renderInspector({ layout: manual, onCommand: command => changes.push(command({ model, layout: manual, experiment })) });
+  fireEvent.click(screen.getByRole("button", { name: "Reset size" }));
+  expect(changes[0].layout.sizes).toEqual({});
+  expect(changes[0].layout.positions).toEqual(layout.positions);
+});

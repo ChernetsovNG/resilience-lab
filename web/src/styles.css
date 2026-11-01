@@ -459,6 +459,8 @@ select {
   background: #fffbeb;
 }
 
+.react-flow__node-block { min-width: min-content; min-height: min-content; }
+
 .block-node { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3.2px; min-width: 0; }
 .block-shape {
   --node-fill: #fff;

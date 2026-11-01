@@ -1,8 +1,9 @@
-import { useLayoutEffect, type CSSProperties, type ReactNode } from "react";
-import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Handle, NodeResizer, Position, useUpdateNodeInternals } from "@xyflow/react";
 import type { TypeDescriptor } from "../api/apiTypes";
 import { blockGeometry, minimumBlockHeight } from "./blockGeometry";
 import type { PolicyWindowState } from "../results/policyState";
+import { observeResize } from "../layout/observeResize";
 import { policyStateDescription } from "./policyPresentation";
 
 interface BlockShapeProps {
@@ -12,6 +13,11 @@ interface BlockShapeProps {
   height?: number;
   ports: TypeDescriptor["ports"];
   editable: boolean;
+  authoredSize?: boolean;
+  resizable?: boolean;
+  onResizeStart?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
+  onResize?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
+  onResizeEnd?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
   replicas?: number;
   overridden?: boolean;
   fill?: string;
@@ -21,12 +27,23 @@ interface BlockShapeProps {
 }
 
 /** SVG and contour handles use React Flow's measured model coordinates. */
-export function BlockShape({ id, type, width = 0, height = 0, ports, editable, replicas = 1, overridden, fill, children, policyState, instances }: BlockShapeProps) {
-  const w = width > 0 ? width : type === "router" ? 144 : replicas > 1 ? 264 : 192;
-  const h = height > 0 ? height : minimumBlockHeight(type, w, 0, replicas);
+export function BlockShape({ id, type, width = 0, height = 0, ports, editable, replicas = 1, overridden, fill, children, policyState, instances, authoredSize = false, resizable = false, onResizeStart, onResize, onResizeEnd }: BlockShapeProps) {
+  const content = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (content.current === null) return;
+    const element = content.current;
+    const measure = () => setContentHeight(element.offsetHeight);
+    measure();
+    if (typeof ResizeObserver !== "undefined") return observeResize([element], measure);
+  }, []);
+  const minimumWidth = type === "router" ? minimumBlockHeight(type, 144, contentHeight) : replicas > 1 ? 264 : 176;
+  const w = Math.max(minimumWidth, width > 0 ? width : type === "router" ? 144 : replicas > 1 ? 264 : 192);
+  const minimumHeight = minimumBlockHeight(type, w, contentHeight, replicas);
+  const h = Math.max(height, minimumHeight);
   const geometry = blockGeometry(type, w, h, replicas);
   const updateNodeInternals = useUpdateNodeInternals();
-  useLayoutEffect(() => { if (width > 0 && height > 0) updateNodeInternals(id); }, [updateNodeInternals, id, type, replicas, width, height]);
+  useLayoutEffect(() => { updateNodeInternals(id); }, [updateNodeInternals, id, type, replicas, w, h]);
   const area = geometry.content;
   const inactive = (state?: PolicyWindowState) => (state?.ejectedShare ?? 0) > 0 || (state?.notReadyShare ?? 0) > 0;
   const singleInactive = replicas === 1 && inactive(policyState);
@@ -38,11 +55,19 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
     }).join("\n");
   const style = {
     "--node-fill": fill,
+    width: authoredSize ? w : undefined,
+    height: authoredSize ? h : undefined,
+    minWidth: minimumWidth, minHeight: minimumHeight,
     paddingTop: area.y, paddingLeft: area.x,
     paddingRight: w - area.x - area.width,
     paddingBottom: h - area.y - area.height,
   } as CSSProperties;
   return <div className={`block-shape block-shape--${geometry.shape} block-shape--type-${type}${geometry.back.length === 0 ? "" : " block-shape--replicas"}${overridden ? " block-shape--overridden" : ""}${singleInactive ? " block-shape--inactive" : ""}`} style={style} title={description || undefined}>
+    {resizable ? <NodeResizer minWidth={minimumWidth} minHeight={minimumHeight}
+      shouldResize={(_, value) => value.height >= minimumBlockHeight(type, value.width, contentHeight, replicas)}
+      onResizeStart={(_, value) => onResizeStart?.(id, value)}
+      onResize={(_, value) => onResize?.(id, value)}
+      onResizeEnd={(_, value) => onResizeEnd?.(id, value)} /> : null}
     <svg className="block-shape-svg" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" focusable="false">
       <g className="block-shape-back">{geometry.back.map((path, index) => {
         // The existing three-card silhouette represents replicas 1, 2 and the remaining instances.
@@ -62,7 +87,7 @@ export function BlockShape({ id, type, width = 0, height = 0, ports, editable, r
         position={port.direction === "OUT" ? Position.Right : Position.Left} isConnectable={editable}
         style={{ left: point.x, top: point.y, right: "auto", transform: "translate(-50%, -50%)" }} />;
     })}
-    <div className={`block-node block-node--${type}${overridden ? " block-node--overridden" : ""}${frontInactive ? " policy-replica--inactive" : ""}`}
+    <div ref={content} className={`block-node block-node--${type}${overridden ? " block-node--overridden" : ""}${frontInactive ? " policy-replica--inactive" : ""}`}
       data-testid="block-node" style={{ "--node-fill": fill } as CSSProperties}>{children}</div>
   </div>;
 }

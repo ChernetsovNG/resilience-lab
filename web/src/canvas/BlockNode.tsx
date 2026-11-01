@@ -23,6 +23,11 @@ export type BlockNodeType = Node<{
   catalog: Catalog;
   ports: TypeDescriptor["ports"];
   editable: boolean;
+  resizable?: boolean;
+  authoredSize?: { width: number; height: number };
+  onResizeStart?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
+  onResize?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
+  onResizeEnd?: (id: string, value: { x: number; y: number; width: number; height: number }) => void;
   parametersEditable: boolean;
   disabled: boolean;
   overridden?: boolean;
@@ -52,7 +57,7 @@ const keyParameters = new Map<string, readonly [string, string][]>([
 ]);
 
 /** A block of the model with its key parameters; ports follow the catalog (client has an output only). */
-export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
+export function BlockNode({ data, width, height, selected }: NodeProps<BlockNodeType>) {
   const isWiringHint = (diagnostic: Diagnostic) =>
     (diagnostic.code === "TOPOLOGY_GRAPH" && (diagnostic.args?.reason === "unreachable"
       || (diagnostic.args?.reason === "request" && data.outgoingConnections === 0)))
@@ -93,7 +98,9 @@ export function BlockNode({ data, width, height }: NodeProps<BlockNodeType>) {
   return (
     <BlockShape id={data.id} type={data.block.type} replicas={replicas} overridden={data.overridden}
       policyState={data.result?.policyState} instances={data.result?.instances}
-      ports={data.ports} editable={data.editable} width={width} height={height}
+      ports={data.ports} editable={data.editable} width={data.authoredSize?.width ?? width} height={data.authoredSize?.height ?? height}
+      authoredSize={data.authoredSize !== undefined} resizable={selected && data.resizable} onResizeStart={data.onResizeStart}
+      onResize={data.onResize} onResizeEnd={data.onResizeEnd}
       fill={colorValue == null || typeof maximum !== "number" || maximum <= 0 ? undefined : utilizationColor(colorValue / maximum)}>
       <PolicyBadges id={data.id} type={data.block.type} params={data.block.params} catalog={data.catalog}
         replicaOverrides={data.block.replicaOverrides}

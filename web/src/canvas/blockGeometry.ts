@@ -20,7 +20,7 @@ const personContentTop = (width: number) => 2 + 2 * 0.38 * width / 3 + 0.25 * wi
 export function minimumBlockHeight(type: string, width: number, contentHeight: number, replicas = 1): number {
   const offset = stackOffset(type, replicas);
   if (type === "client") return Math.ceil(personContentTop(width) + contentHeight + 10);
-  if (type === "router") return 144;
+  if (type === "router") return Math.max(144, Math.ceil(2 * contentHeight / 0.9 + 2));
   return Math.ceil(contentHeight + (type === "database" ? 22 + verticalPadding : 2 * verticalPadding) + offset);
 }
 

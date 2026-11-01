@@ -13,7 +13,7 @@ import { elementOf, ownEntry } from "../workspace/params";
 import { initialParams } from "../workspace/initialParams";
 import { useViewSettings } from "../layout/viewSettings";
 import type { EditorCommand } from "../workspace/editor";
-import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf } from "../workspace/structure";
+import { addBlock, addConnection, connectionRule, insertionPosition, moveBlocks, nextBlockId, positionOf, resizeBlock } from "../workspace/structure";
 import type { CourseFault } from "../experiment/course";
 import { BlockNode } from "./BlockNode";
 import type { BlockNodeType } from "./BlockNode";
@@ -220,6 +220,48 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     });
     return () => cancelAnimationFrame(frame);
   }, [pending, pendingId, measurement, editable, disabled, catalog, getNodes, getViewport, setViewport, onCommand, gridStep, snapToGrid, width, height, bottomInset]);
+  type Resize = { id: string; x: number; y: number; width: number; height: number; model: ModelFile; layout: LayoutFile | null };
+  const resizing = useRef<Resize | null>(null);
+  const [resizePreview, setResizePreview] = useState<Resize | null>(null);
+  const canResize = editable && !disabled && variant === undefined;
+  const activeResize = canResize && resizePreview?.model === model && resizePreview.layout === layout
+    && selected.includes(resizePreview.id) ? resizePreview : null;
+  if (resizePreview !== null && activeResize === null) setResizePreview(null);
+  useLayoutEffect(() => {
+    const gesture = resizing.current;
+    if (gesture !== null && (!canResize || gesture.model !== model || gesture.layout !== layout || !selected.includes(gesture.id))) resizing.current = null;
+  }, [canResize, model, layout, selected]);
+  const startResize = useCallback((id: string, value: { x: number; y: number; width: number; height: number }) => {
+    if (!canResize) return;
+    resizing.current = { id, ...value, model, layout };
+  }, [canResize, model, layout]);
+  const previewResize = useCallback((id: string, value: { x: number; y: number; width: number; height: number }) => {
+    const gesture = resizing.current;
+    if (!canResize || gesture?.id !== id || gesture.model !== model || gesture.layout !== layout) return;
+    manualViewport.current = true;
+    setResizePreview({ ...gesture, ...value });
+  }, [canResize, model, layout]);
+  const finishResize = useCallback((id: string, value: { x: number; y: number; width: number; height: number }) => {
+    const gesture = resizing.current;
+    resizing.current = null;
+    setResizePreview(null);
+    if (!canResize || gesture?.id !== id || gesture.model !== model || gesture.layout !== layout) return;
+    if (gesture.x !== value.x || gesture.y !== value.y || gesture.width !== value.width || gesture.height !== value.height) {
+      onCommand(resizeBlock(id, { x: value.x, y: value.y }, { width: value.width, height: value.height }));
+    }
+  }, [canResize, model, layout, onCommand]);
+  useEffect(() => {
+    const cancel = () => { if (resizing.current !== null) { resizing.current = null; setResizePreview(null); } };
+    const keydown = (event: KeyboardEvent) => { if (event.key === "Escape") cancel(); };
+    window.addEventListener("keydown", keydown);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("pointercancel", cancel);
+    };
+  }, []);
   const [moving, setMoving] = useState<LayoutFile["positions"]>({});
   const blocks = Object.entries(model.blocks);
   // Measure the actual new node before issuing its single document command; previews never enter history.
@@ -238,7 +280,9 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
   const nodes: BlockNodeType[] = blocks.map(([id, block]) => ({
     id,
     type: "block",
-    position: id === pendingId && pending?.center != null ? pending.center : ownEntry(moving, id) ?? positionOf(model, layout, id),
+    position: activeResize?.id === id ? { x: activeResize.x, y: activeResize.y } : id === pendingId && pending?.center != null ? pending.center : ownEntry(moving, id) ?? positionOf(model, layout, id),
+    width: activeResize?.id === id ? activeResize.width : layout === null ? undefined : ownEntry(layout.sizes, id)?.width,
+    height: activeResize?.id === id ? activeResize.height : layout === null ? undefined : ownEntry(layout.sizes, id)?.height,
     measured: id === pendingId ? pendingSize : ownEntry(sizes, id),
     style: id === pendingId ? { visibility: "hidden" } : undefined,
     selectable: id === pendingId ? false : undefined,
@@ -246,6 +290,11 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     connectable: id === pendingId ? false : undefined,
     focusable: id === pendingId ? false : undefined,
     data: {
+      authoredSize: activeResize?.id === id ? { width: activeResize.width, height: activeResize.height } : layout === null ? undefined : ownEntry(layout.sizes, id),
+      // React Flow invokes these callbacks only from resize events, never during render.
+      // eslint-disable-next-line react-hooks/refs
+      onResizeStart: startResize, onResize: previewResize, onResizeEnd: finishResize,
+      resizable: id !== pendingId && canResize,
       result: results?.services.get(id),
       resultsPending: results?.pending, resultsEmpty: results?.pending !== undefined && results.window === undefined,
       nodeMetric, selectedReplica: replicaSelection?.groupId === id ? replicaSelection.replica : undefined,
@@ -269,7 +318,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
     domAttributes: { "aria-roledescription": t("editor.canvas.nodeRole"), "aria-hidden": id === pendingId ? true : undefined },
   }));
   const nextBounds = new Map(nodes.filter(node => node.id !== pendingId).map(node => [node.id, { ...node.position,
-    width: node.measured?.width ?? 0, height: node.measured?.height ?? 0 }]));
+    width: Math.max(node.width ?? 0, node.measured?.width ?? 0), height: Math.max(node.height ?? 0, node.measured?.height ?? 0) }]));
   const [nodeBounds, setNodeBounds] = useState(nextBounds);
   if (nodeBounds.size !== nextBounds.size || [...nextBounds].some(([id, bounds]) => {
     const previous = nodeBounds.get(id);
@@ -348,7 +397,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
   };
   const onNodesChange = (changes: NodeChange<BlockNodeType>[]) => {
     selectionChanges(changes);
-    const measurements = changes.flatMap((change) => change.type === "dimensions" && change.dimensions !== undefined
+    const measurements = changes.flatMap((change) => change.type === "dimensions" && change.resizing === undefined && change.dimensions !== undefined
       ? [[change.id, change.dimensions] as const] : []);
     if (measurements.length > 0) setSizes((current) => {
       const changed = measurements.filter(([id, size]) => ownEntry(current, id)?.width !== size.width || ownEntry(current, id)?.height !== size.height);
@@ -362,7 +411,9 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, modelResultsHi
       if (changes.some(change => change.type === "position")) structureHint();
       return;
     }
+    const resizeIds = new Set(changes.flatMap(change => change.type === "dimensions" && change.resizing !== undefined ? [change.id] : []));
     const positions = changes.flatMap((change) => change.type === "position" && change.position !== undefined
+      && change.id !== resizing.current?.id && !resizeIds.has(change.id)
       ? [{ id: change.id, position: change.position, dragging: change.dragging }] : []);
     if (positions.length === 0) return;
     manualViewport.current = true;
