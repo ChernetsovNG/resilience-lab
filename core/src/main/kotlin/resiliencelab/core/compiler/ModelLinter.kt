@@ -28,6 +28,7 @@ import kotlin.math.sqrt
  * Advisory checks on valid, compiled paths from the client (stage-1 design §3.4).
  * Durations use milliseconds and arrival rates use requests per millisecond, as in the engine.
  * These static holding-time estimates omit queueing and degradation; distribution means cannot bound random tails.
+ * [poolDemandThreshold] is the finite positive pool occupancy threshold, including equality, defaulting to one.
  * [minimumReplications] is the positive threshold for the experiment-wide confidence-interval warning.
  * [lowHeadroomThreshold] is the nominal accepted-utilization threshold, strictly between zero and one.
  * [rejectionRiskThreshold] is the queue-free Erlang B probability threshold (0.01 by default), in (0, 1].
@@ -49,8 +50,12 @@ class ModelLinter(
     private val retryOverloadThreshold: Double = 1.0,
     private val lowHeadroomThreshold: Double = 0.8,
     private val rejectionRiskThreshold: Double = 0.01,
+    private val poolDemandThreshold: Double = 1.0,
 ) {
     init {
+        require(poolDemandThreshold.isFinite() && poolDemandThreshold > 0.0) {
+            "poolDemandThreshold must be finite and positive"
+        }
         require(rejectionRiskThreshold.isFinite() && rejectionRiskThreshold > 0.0 && rejectionRiskThreshold <= 1.0) {
             "rejectionRiskThreshold must be finite and in (0, 1]"
         }
@@ -155,6 +160,8 @@ class ModelLinter(
         val diagnostics = mutableListOf<Diagnostic>()
         val demands = mutableMapOf<String, Fraction>()
         val maximumRates = mutableMapOf<String, Fraction>()
+        val poolDemands = mutableMapOf<String, Fraction>()
+        val poolRates = mutableMapOf<String, Fraction>()
         val queuePatience = mutableMapOf<String, QueuePatience>()
         val clientsByCall = mutableMapOf<String, MutableSet<ClientNode>>()
         val normalResponses = mutableMapOf<String, MutableMap<String, NormalResponse>>()
@@ -172,6 +179,7 @@ class ModelLinter(
             val client = source.client
             val requestClass = source.requestClass
             val holdingByService = mutableMapOf<String, BigDecimal>()
+            val poolHoldingByCall = mutableMapOf<String, BigDecimal>()
             val shares = arrivals.nominal.getValue(source)
             graph.entryServices(client, requestClass).forEach { entry ->
                 graph.callPaths(client.copy(entry = entry.path), requestClass).forEach { calls ->
@@ -213,6 +221,16 @@ class ModelLinter(
                                 BigDecimal.valueOf((it.processing ?: service.processing).meanMs)
                             } + outgoingNetworkMs
                         holdingByService[service.path] = maxOf(holdingByService[service.path] ?: BigDecimal.ZERO, holdingMs)
+                        incoming[service.path]?.let { call ->
+                            if (call.pool != null || services.getValue(call.from).pooler != null) {
+                                val connectionMs =
+                                    minOf(
+                                        holdingMs + BigDecimal.valueOf(call.network.meanMs) * BigDecimal.TWO,
+                                        BigDecimal.valueOf(call.timeoutMs),
+                                    )
+                                poolHoldingByCall[call.path] = maxOf(poolHoldingByCall[call.path] ?: BigDecimal.ZERO, connectionMs)
+                            }
+                        }
                         val patience =
                             incoming[service.path]?.let { QueuePatience(it.timeoutMs, it.path, false) }
                                 ?: QueuePatience(client.deadlineMs, client.path, true)
@@ -229,10 +247,23 @@ class ModelLinter(
                 retryDemands[path] = (retryDemands[path] ?: Fraction.ZERO) + retryRate * Fraction.of(holdingMs)
                 retryRates[path] = (retryRates[path] ?: Fraction.ZERO) + retryRate
             }
+            poolHoldingByCall.forEach { (path, holdingMs) ->
+                val rate = Fraction.of(source.maximumRate) * (shares[graph.call(path).from] ?: Fraction.ZERO)
+                poolDemands[path] = (poolDemands[path] ?: Fraction.ZERO) + rate * Fraction.of(holdingMs)
+                poolRates[path] = (poolRates[path] ?: Fraction.ZERO) + rate
+            }
         }
         return diagnostics.distinct() + graph.calls.mapNotNull { call -> clientsByCall[call.path]?.let { timeoutUnreachable(call, it) } } +
             graph.calls.flatMap { call -> timeoutBelowLatency(call, normalResponses[call.path].orEmpty()) } +
             handlerDemand(graph.services, demands, maximumRates, queuePatience) +
+            graph.calls.mapNotNull { call ->
+                poolDemand(
+                    call,
+                    services.getValue(call.from),
+                    poolDemands[call.path] ?: Fraction.ZERO,
+                    poolRates[call.path] ?: Fraction.ZERO,
+                )
+            } +
             graph.services.flatMap { service ->
                 retryOverload(
                     service,
@@ -422,6 +453,49 @@ class ModelLinter(
             }
         }
         return ArrivalShares(nominal, worst, factors, limited)
+    }
+
+    /**
+     * Nominal connection occupancy uses the caller's routed rate without retries, summed over clients and request types.
+     * Per source, the longest applicable target path holds a connection for min(2 × network mean + W(target), timeout).
+     * A pooler uses its outgoing call for server-pool demand. Acquisition waiting and stateful policies are excluded.
+     */
+    private fun poolDemand(
+        call: CallEdge,
+        caller: ServiceNode,
+        demand: Fraction,
+        rate: Fraction,
+    ): Diagnostic? {
+        val pooler = caller.pooler != null
+        val size = if (pooler) caller.pooler.poolSize else call.pool?.size ?: return null
+        if (rate.signum() == 0 || demand < Fraction.of(poolDemandThreshold) * Fraction.of(size.toBigDecimal())) return null
+        val path = if (pooler) caller.path else call.path
+        val limitsHandlers = !pooler && size < caller.handlers
+        // Round only display estimates, after the exact comparison; demand rounds up to retain the visible threshold.
+        val demandText = Quantities.plain(demand.decimal().round(MathContext(3, RoundingMode.CEILING)))
+        val rateText = Quantities.plain((rate * Fraction.of(BigDecimal(1_000))).decimal().round(MathContext(3, RoundingMode.HALF_UP)))
+        val holdingText = Quantities.plain((demand / rate).decimal().round(MathContext(3, RoundingMode.HALF_UP)))
+        val args =
+            mapOf(
+                "target" to JsonPrimitive(path.substringBeforeLast('#', path)),
+                "demand" to JsonPrimitive(demandText),
+                "size" to JsonPrimitive(size),
+                "ratePerSecond" to JsonPrimitive(rateText),
+                "holdingMs" to JsonPrimitive(holdingText),
+                "threshold" to JsonPrimitive(number(poolDemandThreshold)),
+            )
+        return warning(
+            if (limitsHandlers) CoreMessage.LINT_POOL_DEMAND_LIMITS_HANDLERS else CoreMessage.LINT_POOL_DEMAND,
+            "Pool of '$path': estimated simultaneous demand $demandText for $size connections at $rateText requests/s " +
+                "(threshold ${number(poolDemandThreshold)} × size). " +
+                (if (limitsHandlers) "Service parallelism is limited by the pool below its ${caller.handlers} handlers. " else "") +
+                "Calls may wait for connections at nominal load; increase the pool or reduce load or holding time.",
+            if (pooler) caller.origin else call.origin,
+            path,
+            if (pooler) "/params/poolSize" else "/params/pool/size",
+            if (limitsHandlers) args + ("handlers" to JsonPrimitive(caller.handlers)) else args,
+            replicaPath = caller.path,
+        )
     }
 
     private data class ServiceLoad(
