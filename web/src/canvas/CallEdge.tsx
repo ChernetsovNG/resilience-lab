@@ -25,7 +25,8 @@ const EdgeLayoutContext = createContext<{ geometries: Map<string, EdgeGeometry>;
 
 /** Edge measurements update edges without sending measured nodes through another React Flow update. */
 export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
-  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[]; onBounds?: (bounds: Rect | null) => void; children: ReactNode;
+  nodes: ReadonlyMap<string, Rect>; connections: readonly ConnectionInstance[];
+  onBounds?: (bounds: Rect | null, geometries: ReadonlyMap<string, EdgeGeometry>) => void; children: ReactNode;
 }) {
   const [measurements, setMeasurements] = useState<Record<string, EdgeMeasurement>>({});
   const onMeasure = useCallback((id: string, measurement: EdgeMeasurement) => {
@@ -47,7 +48,7 @@ export function EdgeLayoutProvider({ nodes, connections, onBounds, children }: {
     ...[...nodes.values()].filter(node => node.width > 0 && node.height > 0),
     ...[...geometries.values()].map(geometry => geometry.bounds),
   ]), [nodes, geometries]);
-  useEffect(() => { onBounds?.(bounds); }, [onBounds, bounds]);
+  useEffect(() => { onBounds?.(bounds, geometries); }, [onBounds, bounds, geometries]);
   return <EdgeLayoutContext value={{ geometries, onMeasure }}>{children}</EdgeLayoutContext>;
 }
 

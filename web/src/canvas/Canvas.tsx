@@ -20,6 +20,7 @@ import type { BlockNodeType } from "./BlockNode";
 import { CallEdge, EdgeLayoutProvider } from "./CallEdge";
 import { VariantChanges } from "./VariantChanges";
 import { canvasPolicyPaths } from "./policyPresentation";
+import type { EdgeGeometry } from "./edgeGeometry";
 import "@xyflow/react/dist/style.css";
 
 const baseFitViewOptions = { padding: { top: "64px" as const, bottom: "80px" as const, left: 0.15, right: 0.15 }, minZoom: 0.05 };
@@ -44,6 +45,8 @@ const ariaLabelConfig = (): AriaLabelConfig => ({
 /** Palette activation uses the current viewport, waiting for its first measurement when necessary. */
 export interface CanvasHandle {
   addBlock: (type: string) => void;
+  /** Centers a result element after measurement, preserving zoom above the readable minimum of 70%. */
+  focusElement: (id: string) => void;
 }
 
 export interface CanvasProps {
@@ -122,6 +125,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
   const overridden = (id: string) => Object.keys(overrides).some((path) => path.startsWith(`${id}.`));
   const { screenToFlowPosition, getViewport, getNodes, setViewport } = useReactFlow();
   const manualViewport = useRef(false);
+  const [focusTarget, setFocusTarget] = useState<{ id: string } | null>(null);
   const width = useStore((state) => state.width);
   const minZoom = useStore(state => state.minZoom);
   const maxZoom = useStore(state => state.maxZoom);
@@ -141,6 +145,7 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
       get message() { return t("editor.variant.structureHint"); } });
   };
   useImperativeHandle(ref, () => ({
+    focusElement: id => { manualViewport.current = true; setFocusTarget({ id }); },
     addBlock: (type) => {
       if (!editable) { structureHint(); return; }
       if (disabled) return;
@@ -159,8 +164,11 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
   }
   const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [bounds, setBounds] = useState<Rect | null>(null);
-  const onBounds = useCallback((next: Rect | null) => setBounds(current =>
-    current?.x === next?.x && current?.y === next?.y && current?.width === next?.width && current?.height === next?.height ? current : next), []);
+  const [edgeGeometries, setEdgeGeometries] = useState<ReadonlyMap<string, EdgeGeometry>>(new Map());
+  const onBounds = useCallback((next: Rect | null, geometries: ReadonlyMap<string, EdgeGeometry>) => {
+    setBounds(current => current?.x === next?.x && current?.y === next?.y && current?.width === next?.width && current?.height === next?.height ? current : next);
+    setEdgeGeometries(geometries);
+  }, []);
   const fitDiagram = useCallback(() => {
     if (bounds !== null && width > 0 && height > 0) {
       void setViewport(getViewportForBounds(bounds, width, height, minZoom, maxZoom, fitViewOptions.padding));
@@ -254,6 +262,25 @@ function ModelCanvas({ ref, model, baseModel, variant, modelInfo, onSelectChange
     return previous === undefined || !Object.is(previous.x, bounds.x) || !Object.is(previous.y, bounds.y) ||
       !Object.is(previous.width, bounds.width) || !Object.is(previous.height, bounds.height);
   })) setNodeBounds(nextBounds);
+  useEffect(() => {
+    if (focusTarget === null || !initialized || width <= 0 || height <= 0) return;
+    const node = nodeBounds.get(focusTarget.id);
+    const center = node === undefined ? edgeGeometries.get(focusTarget.id)?.label
+      : node.width > 0 && node.height > 0 ? { x: node.x + node.width / 2, y: node.y + node.height / 2 } : undefined;
+    if (center === undefined) return;
+    // Edge labels are measured in a frame after node ResizeObserver updates; changes restart this wait.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => {
+          const zoom = Math.max(0.7, getViewport().zoom);
+          const top = variantVisible ? bannerHeight + 16 : 16;
+          void setViewport({ x: width / 2 - center.x * zoom, y: (top + height - bottomInset) / 2 - center.y * zoom, zoom });
+          setFocusTarget(null);
+        });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusTarget, initialized, nodeBounds, edgeGeometries, width, height, variantVisible, bannerHeight, bottomInset, getViewport, setViewport]);
   const policyRows = new Map<string, number>();
   const edges: Edge[] = model.connections.map((connection) => {
     const targetGroup = Number(ownEntry(model.blocks, connection.to)?.params.replicas ?? 1) > 1;

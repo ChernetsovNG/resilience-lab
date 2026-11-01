@@ -116,6 +116,8 @@
   "app.canvas.closeModelInfoSymbol": "×",
   "app.canvas.loading": "Loading workspace…",
   "app.canvas.results": "Results context",
+  "app.canvas.modelResultsHint": "Edit the structure here. Diagram results are on the variant page.",
+  "app.canvas.openVariantResults": "Show results: {variant}",
   "app.canvas.showResults": "Show results on diagram",
   "app.canvas.stale": "Results belong to a previous document version.",
   "app.canvas.summaryContext": "Summary · {variant} · {pointId} · measurement interval",

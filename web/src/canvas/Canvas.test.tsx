@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useLayoutEffect, useRef } from "react";
+import { createRef, useLayoutEffect, useRef } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { catalog, experiment, layout, model } from "../test/fixtures";
 import { mockReactFlowDom } from "../test/reactFlow";
@@ -19,6 +19,49 @@ import * as edgeGeometry from "./edgeGeometry";
 import * as blockGeometry from "./blockGeometry";
 
 beforeAll(mockReactFlowDom);
+
+it("centers a result node at readable zoom and preserves a larger zoom on repeated navigation", async () => {
+  const ref = createRef<CanvasHandle>();
+  const props = { catalog, model, layout, selected: [], onSelect: vi.fn(), onCommand: vi.fn(), bottomInset: 20 };
+  const { container, rerender } = render(<Canvas ref={ref} {...props} />);
+  const viewport = () => {
+    const transform = container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform;
+    const [, x, y, zoom] = transform.match(/translate\(([-\d.]+)px,([-\d.]+)px\) scale\(([\d.]+)\)/)!;
+    return { x: Number(x), y: Number(y), zoom: Number(zoom) };
+  };
+  await waitFor(() => expect(viewport().zoom).toBeLessThan(0.7));
+  act(() => ref.current!.focusElement("dependency"));
+  await waitFor(() => expect(viewport().zoom).toBeGreaterThanOrEqual(0.7));
+  expect(viewport().x + (layout.positions.dependency.x + 90) * viewport().zoom).toBeCloseTo(90);
+  expect(viewport().y + (layout.positions.dependency.y + 40) * viewport().zoom).toBeCloseTo(38);
+  fireEvent.click(screen.getByRole("button", { name: "Zoom In" }));
+  await waitFor(() => expect(viewport().zoom).toBeGreaterThan(0.7));
+  const larger = viewport().zoom;
+  act(() => ref.current!.focusElement("middle"));
+  await waitFor(() => expect(viewport().x + (layout.positions.middle.x + 90) * viewport().zoom).toBeCloseTo(90));
+  expect(viewport().zoom).toBe(larger);
+  const focused = viewport();
+  rerender(<Canvas ref={ref} {...props} results={canvasResults(summary, model, "baseline", "p0", catalog)} />);
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  expect(viewport()).toEqual(focused);
+});
+
+it("centers a connection result on its measured label", async () => {
+  const ref = createRef<CanvasHandle>();
+  const { container } = render(<Canvas ref={ref} catalog={catalog} model={model} layout={layout} selected={[]}
+    onSelect={vi.fn()} onCommand={vi.fn()} />);
+  const label = await screen.findByTestId("canvas-edge-label-middle-to-dependency");
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  act(() => ref.current!.focusElement("middle-to-dependency"));
+  await waitFor(() => {
+    const [, x, y, zoom] = container.querySelector<HTMLElement>(".react-flow__viewport")!.style.transform
+      .match(/translate\(([-\d.]+)px,([-\d.]+)px\) scale\(([\d.]+)\)/)!;
+    const [, labelX, labelY] = label.style.transform.match(/translate\(([-\d.]+)px,([-\d.]+)px\)/)!;
+    expect(Number(zoom)).toBeGreaterThanOrEqual(0.7);
+    expect(Number(x) + Number(labelX) * Number(zoom)).toBeCloseTo(90);
+    expect(Number(y) + Number(labelY) * Number(zoom)).toBeCloseTo(48);
+  });
+});
 
 it("updates zoom without rendering block shapes again", async () => {
   const renders = vi.spyOn(blockGeometry, "blockGeometry");

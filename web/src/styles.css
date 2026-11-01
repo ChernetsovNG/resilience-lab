@@ -372,6 +372,16 @@ select {
   min-height: 0;
 }
 
+.model-results-hint {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .75rem;
+  padding: .35rem .6rem; background: #eff6ff; border-bottom: 1px solid #bfdbfe;
+}
+.model-results-hint button {
+  padding: .2rem .4rem; border: 1px solid #2563eb; border-radius: .25rem;
+  color: #1d4ed8; background: #fff; font: inherit; cursor: pointer;
+}
+.model-results-hint button:disabled { opacity: .5; cursor: not-allowed; }
+
 .model-info-position { z-index: 1001; margin: 1.25rem; max-width: calc(100% - 2.5rem); }
 .model-info { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; max-width: 100%; max-height: inherit; }
 .model-info button { padding: .2rem .4rem; border: 1px solid #9aa5b1; border-radius: .35rem; background: #fff; color: inherit; font: inherit; cursor: pointer; }
